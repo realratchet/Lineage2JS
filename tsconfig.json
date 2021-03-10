@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "outDir": "../bin",
+        "moduleResolution": "node",
+        "target": "ESNext",
+        "module": "ESNext",
+        // "allowJs": true,
+        // "paths": {
+        //     "@three/*": [
+        //         "submodules/coobo-three/*"
+        //     ],
+        //     "@coobo/*": [
+        //         "./src/*"
+        //     ],
+        //     "@three/src/Three": ["/dev/null"]
+        // },
+        
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "declaration": true,
+        "emitDeclarationOnly": true,
+        "isolatedModules": true
+    },
+    "exclude": [
+        "node_modules",
+        "bin"
+    ]
+}

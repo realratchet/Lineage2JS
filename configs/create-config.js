@@ -14,7 +14,8 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
         const plugins = [
             new CopyWebpackPlugin({
                 patterns: [
-                    { from: "../html", to: "" }
+                    { from: "../html", to: "" },
+                    { from: "../assets", to: "assets/" }
                 ],
             })
         ];
