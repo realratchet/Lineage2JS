@@ -1,4 +1,4 @@
-import RenderManager from "./rendering/render-manager";
+// import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
 
 async function startCore() {

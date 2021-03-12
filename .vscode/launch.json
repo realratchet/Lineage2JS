@@ -9,7 +9,10 @@
             "request": "launch",
             "name": "Launch Chrome against localhost",
             "url": "http://ratchet-pc:8080",
-            "webRoot": "${workspaceFolder}"
+            "webRoot": "${workspaceFolder}",
+            "sourceMapPathOverrides": {
+                "webpack:///./*": "*",
+            }
         }
     ]
 }
