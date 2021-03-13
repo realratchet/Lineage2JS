@@ -8,7 +8,7 @@ class AssetBuffer {
     private contentOffset = 0;
 
     constructor(arrayBuffer: ArrayBuffer) {
-        this.buffer = new Buffer(arrayBuffer.slice(0, 512));
+        this.buffer = new Buffer(arrayBuffer.slice(0, 2048));
     }
 
     protected seek(offset: number, origin = SEEK_T.SEEK_CUR) {
@@ -31,6 +31,24 @@ class AssetBuffer {
         return target;
     }
 
+    private dump(lineCount: number) {
+        console.log("--------------------------------------------------------");
+        console.log(`------------------- Dumping lines ----------------------`);
+        console.log("--------------------------------------------------------");
+        for (let i = 0; i < lineCount; i++) {
+            const groups = new Array(8).fill(8).map(() => this.read(2));
+
+            const string1 = groups.map(g => g.hex.slice(2)).join(" ");
+            const string2 = groups.map(g => g.string).join("");
+
+            console.log(
+                string1,
+                string2
+            );
+        }
+        console.log("--------------------------------------------------------");
+    }
+
     public async decode(): Promise<any> {
         const signature = this.read(new Value(uint32));
 
@@ -45,7 +63,7 @@ class AssetBuffer {
 
             this.isEncrypted = true;
             this.contentOffset = 28;
-            this.seek(0, SEEK_T.SEEK_SET)
+            this.seek(0, SEEK_T.SEEK_SET);
             this.read(signature);
         }
 
@@ -65,28 +83,77 @@ class AssetBuffer {
         ACABACA5 E0C3CFCD  D8C5C3C2  ACBCACAB
         */
 
+        // this.contentOffset = 0;
+        // this.seek(0, SEEK_T.SEEK_SET);
+        // for (let i = 0; i < 64; i++) {
+        //     const a = this.read(4);
+        //     const b = this.read(4);
+        //     const c = this.read(4);
+        //     const d = this.read(4);
+
+        //     console.log(
+        //         a.hex.slice(2) + " ",
+        //         b.hex.slice(2) + " ",
+        //         c.hex.slice(2) + " ",
+        //         d.hex.slice(2) + " ",
+        //         a.string +
+        //         b.string +
+        //         c.string +
+        //         d.string,
+        //     );
+        // }
+
+
         this.contentOffset = 0;
         this.seek(0, SEEK_T.SEEK_SET);
-        for (let i = 0; i < 16; i++) {
-            const a = this.read(4);
-            const b = this.read(4);
-            const c = this.read(4);
-            const d = this.read(4);
-
-            console.log(
-                a.hex.slice(2) + " ",
-                b.hex.slice(2) + " ",
-                c.hex.slice(2) + " ",
-                d.hex.slice(2) + " ",
-                a.string +
-                b.string +
-                c.string +
-                d.string,
-            );
-        }
+        this.dump(64);
 
         if (signature.value !== 0x9E2A83C1)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
+
+        const header = new UPkgHeader();
+
+        this.read(header.version);
+        this.read(header.flags);
+        this.read(header.nameCount);
+        this.read(header.nameOffset);
+        this.read(header.exportCount);
+        this.read(header.exportOffset);
+        this.read(header.importCount);
+        this.read(header.importOffset);
+
+        if (header.getVersionLWORD() < 68) {
+            this.read(header.heritageCount);
+            this.read(header.heritageOffset);
+        } else {
+            this.read(header.guid);
+
+            const generationCount = this.read(new Value(uint32));
+
+            for (let i = 0, gc = generationCount.value as number; i < gc; i++) {
+                const gen = new UGeneration();
+
+                this.read(gen.ExportCount);
+                this.read(gen.NameCount);
+
+                header.generations.push(gen);
+            }
+        }
+
+        this.seek(header.nameOffset.value as number, SEEK_T.SEEK_SET);
+
+        const names = [];
+
+        for (let i = 0, nc = header.nameCount.value as number; i < nc; i++) {
+            const uname = new UName();
+
+            this.read(uname.name);
+            this.read(uname.flags);
+
+            names.push(uname);
+        }
+
+        console.log(header);
 
         // const signature = buffer.readInt32LE();
         // let encryptionKey = 0, isEncrypted = false;
@@ -109,24 +176,28 @@ enum SEEK_T {
     // SEEK_END = 2    /* set file offset to EOF plus offset */
 }
 
-const int32 = Object.freeze({ bytes: 4, signed: true, name: "int32" });
-const uint32 = Object.freeze({ bytes: 4, signed: false, name: "uint32" });
-const int8 = Object.freeze({ bytes: 1, signed: true, name: "int8" });
-const uint8 = Object.freeze({ bytes: 1, signed: false, name: "uint8" });
-const uuid = Object.freeze({ bytes: 16, signed: true, name: "uuid" });
+const int32 = { bytes: 4, signed: true, name: "int32" };
+const uint32 = { bytes: 4, signed: false, name: "uint32" };
+const int8 = { bytes: 1, signed: true, name: "int8" };
+const uint8 = { bytes: 1, signed: false, name: "uint8" };
+const uuid = { bytes: 16, signed: true, name: "uuid" };
+const char = { bytes: NaN, signed: true, name: "char" };
 
-type ValidTypes_T = typeof int32 | typeof uint32 | typeof int8 | typeof uint8 | typeof uuid;
+type ValidTypes_T = typeof int32 | typeof uint32 | typeof int8 | typeof uint8 | typeof uuid | typeof char;
+
+const expIsPrintable = /^[\d\w]$/i;
 
 class Value {
     private bytes: Uint8Array;
     private type: ValidTypes_T;
+    private endianess: "big" | "little" = "big";
 
     static allocBytes(bytes: number): Value {
         return new Value(Object.freeze({ bytes: bytes, signed: true, name: "buffer" }));
     }
 
     constructor(type: ValidTypes_T, defaultValue: number = 0) {
-        this.type = type;
+        this.type = Object.assign({}, type);
         this.bytes = new Uint8Array([defaultValue]);
     }
 
@@ -137,26 +208,14 @@ class Value {
             throw new Error("Out of bounds");
         }
 
-        let funcName = null;
-
-        // switch (this.type.name) {
-        //     case "int32": funcName = "readInt32LE"; break;
-        //     case "uint32": funcName = "readUInt32LE"; break;
-        //     case "int8": funcName = "readInt8"; break;
-        //     case "uint8": funcName = "readUInt8"; break;
-        //     case "buffer": break;
-        //     case "uuid": break;
-        //     default:
-        //         throw new Error("Unsupported type.")
-        // }
+        if (this.type.name === "char") {
+            const length = new Value(int32);
+            length.readValue(buffer, offset, isEncrypted, cryptKey);
+            offset = offset + uint32.bytes;
+            this.type.bytes = length.value as number;
+        }
 
         this.bytes = new Uint8Array([...buffer.slice(offset, offset + this.type.bytes)]);
-
-        // if (this.type.name === "buffer" || this.type.name === "uuid") {
-        //     this.bytes = buffer.slice(offset, offset + this.type.bytes);
-
-        //     console.log(this.value)
-        // } else this.value = (buffer as any)[funcName](offset);
 
         if (isEncrypted) {
             for (let i = 0; i < this.type.bytes; i++) {
@@ -176,9 +235,13 @@ class Value {
 
         for (let i = 0; bytes >= 2 && i < bytes; i += 2) {
             // ((0x77694c & 0xFF0000) >> 16).toString(16)
-            const bits = (this.bytes[i + 1] << 1) + this.bytes[i];
-            const char = String.fromCharCode(bits);
-            string += char;
+            const [ia, ib] = this.endianess === "big" ? [i + 1, i] : [i, i + 1];
+
+            const chara = String.fromCharCode(this.bytes[ia]);
+            const charb = String.fromCharCode(this.bytes[ib]);
+
+            string += chara.match(expIsPrintable) ? chara : ".";
+            string += charb.match(expIsPrintable) ? charb : ".";
         }
 
         return string;
@@ -216,13 +279,13 @@ class Value {
             let string = "0x";
 
             for (let i = 0; i < this.bytes.length; i += 2) {
-                const bitA = this.bytes[i + 1].toString(16).toUpperCase();
-                const bitB = this.bytes[i].toString(16).toUpperCase()
+                const [ia, ib] = this.endianess === "big" ? [i + 1, i] : [i, i + 1];
+
+                const bitA = this.bytes[ia].toString(16).toUpperCase();
+                const bitB = this.bytes[ib].toString(16).toUpperCase()
 
                 string += (bitA.length === 1 ? `0${bitA}` : bitA) + (bitB.length === 1 ? `0${bitB}` : bitB);
             }
-
-            // return `0x${[...this.bytes].map(v => v.toString(16).toUpperCase() as any).join("")}`;
 
             return string;
         }
@@ -234,4 +297,35 @@ class Value {
         return `0x${head}${bits}`;
     }
     public toString(...args: any) { return this.value.toString(...args); }
+}
+
+class UName {
+    public name = new Value(char);
+    public flags = new Value(int32);
+}
+
+class UGeneration {
+    public ExportCount = new Value(uint32);
+    public NameCount = new Value(uint32);
+}
+
+class UPkgHeader {
+    public version = new Value(uint32);
+    public flags = new Value(int32);
+
+    public nameCount = new Value(uint32);
+    public nameOffset = new Value(uint32);
+    public exportCount = new Value(uint32);
+    public exportOffset = new Value(uint32);
+    public importCount = new Value(uint32);
+    public importOffset = new Value(uint32);
+
+    public heritageCount = new Value(uint32);
+    public heritageOffset = new Value(uint32);
+
+    //DWORD generation_count;
+    public generations: UGeneration[] = [];
+    public guid = new Value(uuid);
+
+    public getVersionLWORD() { return (this.version.value as number) & 0xffff; }
 }
