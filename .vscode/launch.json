@@ -5,6 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "(gdb) Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": " ${workspaceFolder}/cpp/ue_viewer/umodel",
+            "args": [
+                "../../assets/maps/20_21.unr",
+                // "-list"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/cpp/ue_viewer",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "type": "chrome",
             "request": "launch",
             "name": "Launch Chrome against localhost",

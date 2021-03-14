@@ -1,3 +1,6 @@
 node_modules/
 bin/
 /assets/*
+.vscode/tasks.json
+/build/*
+cpp/

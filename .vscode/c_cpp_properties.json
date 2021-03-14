@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/cpp/l2_viewer/**",
+                "${workspaceFolder}/cpp/l2_viewer/L2Lib/**",
+                "${workspaceFolder}/cpp/ue_viewer/Unreal/**",
+                "${workspaceFolder}/cpp/ue_viewer/Core/**",
+                "${workspaceFolder}/cpp/ue_viewer/**",
+                "${workspaceFolder}/cpp/ue_viewer/Core/**",
+                "${workspaceFolder}/cpp/ue_viewer/Unreal/**",
+                "${workspaceFolder}/cpp/ue_viewer/UmodelTool/**",
+                "${workspaceFolder}/cpp/ue_viewer/libs/**",
+                "${workspaceFolder}/cpp/ue_viewer/libs/include/**",
+                "${workspaceFolder}/cpp/ue_viewer/libs/includewin32/**",
+                "${workspaceFolder}/cpp/ue_viewer/UI/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu18",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
