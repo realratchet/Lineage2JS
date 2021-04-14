@@ -1,9 +1,5 @@
 import AssetBuffer from "./asset-buffer";
-
-/**
- * 00..32 bits signature
- * 24..32 bits encryption key
- */
+import UTerrainSector from "./unreal/un-terrain";
 
 class AssetLoader {
     async load(path: string): Promise<any> {
@@ -12,7 +8,11 @@ class AssetLoader {
         const buffer = new AssetBuffer(arrayBuffer);
 
         const decoded = await buffer.decode();
+        const expTerrainSector = decoded.exports.filter(e => e.name.includes("TerrainSector"));
 
+        const terrain = UTerrainSector.fromAsset(buffer, expTerrainSector[0]);
+
+        debugger;
         return null;
     }
 }
