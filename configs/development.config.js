@@ -12,4 +12,6 @@ const bundleConfigs = {
     dirOutput
 };
 
+console.log(JSON.stringify(createConfigBundle(bundleConfigs)));
+
 module.exports = [createConfigBundle(bundleConfigs)];

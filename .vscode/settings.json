@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.pyx": "python",
-        "cstddef": "cpp"
+        "cstddef": "cpp",
+        "random": "cpp"
     }
 }

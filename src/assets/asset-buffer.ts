@@ -136,7 +136,7 @@ class AssetBuffer {
         const dbgImportOffset = header.importOffset.value.toString(16).toUpperCase();
 
         // Names:40[12165] Exports:FB1BF5[11379] Imports:FB0712[490]
-        console.log(`Names:${dbgNameOffset}[${dbgNameCount}}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
+        console.log(`Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
 
         console.assert(header.getVersionLWORD() === 123);
         console.assert(header.packageFlags.value === 0x1);
@@ -167,6 +167,50 @@ class AssetBuffer {
             }
         }
 
+        const nameTable = this.loadNames(header);
+        const exports = this.loadExports(header, nameTable);
+        const imports = this.loadImports(header, nameTable);
+
+        debugger;
+    }
+
+    loadImports(header: UHeader, nameTable: UName[]) {
+        this.seek(header.importOffset.value as number, SEEK_T.SEEK_SET);
+
+        const imports: UImport[] = [];
+        const index = new Value(compat32);
+
+        for (let i = 0, ic = header.importCount.value; i < ic; i++) {
+            const uimport = new UImport();
+
+            this.read(index);
+            if (i === 0) console.assert(index.value === 5553);
+
+            uimport.classPackage = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            if (i === 0) console.assert(uimport.classPackage === "Core");
+
+            this.read(index);
+            if (i === 0) console.assert(index.value === 11089);
+
+            uimport.className = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            if (i === 0) console.assert(uimport.className === "Package");
+
+            this.read(uimport.packageIndex);
+            if (i === 0) console.assert(uimport.className === "Package");
+
+            this.read(index);
+            if (i === 0) console.assert(index.value === 11086);
+
+            uimport.objectName = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            if (i === 0) console.assert(uimport.objectName === "Engine");
+
+            imports.push(uimport);
+        }
+
+        return imports;
+    }
+
+    loadNames(header: UHeader) {
         this.seek(header.nameOffset.value as number, SEEK_T.SEEK_SET);
 
         const nameTable: UName[] = [];
@@ -182,82 +226,50 @@ class AssetBuffer {
             // console.log(`Name[${i}]: "${(uname.name.value as string).slice(1, -1)}"`);
         }
 
-        //16456693
-        //16456721
+        return nameTable;
+    }
+
+    loadExports(header: UHeader, nameTable: UName[]) {
         this.seek(header.exportOffset.value as number, SEEK_T.SEEK_SET);
 
         const exports: UExport[] = [];
-        const index = new Value(uint8);
+        const index = new Value(compat32);
 
         for (let i = 0, ec = header.exportCount.value as number; i < ec; i++) {
             const uexport = new UExport();
 
             if (i === 0) console.assert(this.offset === 16456721);
+
             this.read(uexport.idClass);
+            if (i === 0) console.assert(uexport.idClass.value === -344);
 
-            if (i === 0) console.assert(this.offset === 16456722);
             this.read(uexport.idSuper);
+            if (i === 0) console.assert(uexport.idSuper.value === 0);
 
-            if (i === 0) console.assert(this.offset === 16456723);
             this.read(uexport.idPackage);
+            if (i === 0) console.assert(uexport.idPackage.value === 0);
 
-            if (i === 0) console.assert(this.offset === 16456727);
             this.read(index);
-
-            if (i === 0) {
-                console.assert(uexport.idClass.value === 216);
-                console.assert(uexport.idSuper.value === 5);
-                console.assert(uexport.idPackage.value === 0);
-                console.assert(index.value === 0);
-            }
+            if (i === 0) console.assert(index.value === 315);
 
             uexport.name = (nameTable[index.value as number].name.value as string).slice(0, -1);
-            this.read(uexport.flags);
-            this.read(uexport.size);
+            if (i === 0) console.assert(uexport.name === "LevelInfo0")
 
-            if (uexport.size.value as number > 0)
+            this.read(uexport.flags);
+            if (i === 0) console.assert(uexport.flags.value === 0x2070001);
+
+            this.read(uexport.size);
+            if (i === 0) console.assert(uexport.size.value === 0xe1)
+
+            if (uexport.size.value as number > 0) {
                 this.read(uexport.offset);
+                if (i === 0) console.assert(uexport.offset.value === 0x47121);
+            }
 
             exports.push(uexport);
         }
 
-        this.seek(header.importOffset.value as number, SEEK_T.SEEK_SET);
-
-        const imports: UImport[] = [];
-
-        for (let i = 0, ic = header.importCount.value; i < ic; i++) {
-            const uimport = new UImport();
-
-            this.read(uimport.classPackage);
-            this.read(uimport.className);
-            this.read(uimport.package);
-            this.read(index);
-            uimport.name = (nameTable[index.value as number].name.value as string).slice(0, -1);
-
-            imports.push(uimport);
-        }
-
-        function indexToName(index: number) {
-            return (
-                index < 0
-                    ? imports[-index - 1]
-                    : exports[index - 1]
-            ).name;
-        }
-
-        for (let i = 0, ec = header.exportCount.value as number; i < ec; i++) {
-            let exp = exports[i];
-
-            while (exp.idSuper.value > 0) {
-                exp = exports[exp.idSuper.value as number];
-            }
-
-            exp = exports[i];
-
-            exp.baseClass = indexToName(exp.idClass.value as number);
-        }
-
-        debugger;
+        return exports;
     }
 }
 
@@ -271,13 +283,14 @@ enum SEEK_T {
 }
 
 const int32: ValidTypes_T<"int32"> = { bytes: 4, signed: true, name: "int32", dtype: Int32Array };
+const compat32: ValidTypes_T<"compat32"> = { bytes: 4, signed: true, name: "compat32" };
 const uint32: ValidTypes_T<"uint32"> = { bytes: 4, signed: false, name: "uint32", dtype: Uint32Array };
 const int8: ValidTypes_T<"int8"> = { bytes: 1, signed: true, name: "int8", dtype: Int8Array };
 const uint8: ValidTypes_T<"uint8"> = { bytes: 1, signed: false, name: "uint8", dtype: Uint8Array };
 const guid: ValidTypes_T<"guid"> = { bytes: 4 * 4, signed: true, name: "guid" };
 const char: ValidTypes_T<"char"> = { bytes: NaN, signed: true, name: "char" };
 
-type ValueTypeNames_T = "int32" | "uint32" | "int8" | "uint8" | "guid" | "char" | "buffer";
+type ValueTypeNames_T = "int32" | "uint32" | "int8" | "uint8" | "guid" | "char" | "buffer" | "compat32";
 type ValidTypes_T<T extends ValueTypeNames_T> = {
     bytes?: number;
     signed: boolean;
@@ -313,6 +326,39 @@ class Value<T extends ValueTypeNames_T = ValueTypeNames_T> {
             byteOffset = length.type.bytes;
             offset = offset + byteOffset;
             this.type.bytes = length.value as number;
+        }
+
+        if (this.type.name === "compat32") {
+            const byte = new Value(uint8);
+            let startOffset = offset;
+
+            byte.readValue(buffer, offset, isEncrypted, cryptKey);
+            offset += byte.bytes.byteLength;
+
+
+            let b = byte.bytes.getUint8(0);
+            const sign = b & 0x80; // sign bit
+            let shift = 6;
+            let r = b & 0x3f;
+
+            if (b & 0x40)   // has 2nd byte
+            {
+                do {
+                    byte.readValue(buffer, offset, isEncrypted, cryptKey);
+                    b = byte.bytes.getUint8(0);
+                    offset += byte.bytes.byteLength;
+                    r |= (b & 0x7F) << shift;
+                    shift += 7
+                } while (b & 0x80); // has more bytes
+            }
+
+            r = sign ? -r : r;
+
+            this.bytes.setInt32(0, r, this.endianess === "little");
+
+
+
+            return offset - startOffset;
         }
 
         this.bytes = new DataView(buffer.slice(offset, offset + this.type.bytes));
@@ -377,7 +423,10 @@ class Value<T extends ValueTypeNames_T = ValueTypeNames_T> {
         let funName: string = null;
 
         switch (this.type.name) {
-            case "int32": funName = "getInt32"; break;
+            case "compat32":
+            case "int32":
+                funName = "getInt32";
+                break;
             case "uint32": funName = "getUint32"; break;
             case "int8": funName = "getInt8"; break;
             case "uint8": funName = "getUint8"; break;
@@ -414,21 +463,20 @@ class Value<T extends ValueTypeNames_T = ValueTypeNames_T> {
         const bits = this.toString(16).toUpperCase();
         const head = new Array(bits.length - this.type.bytes).fill("0").join("");
 
-
         return `0x${head}${bits}`;
     }
     public toString(...args: any) { return this.value.toString(...args); }
 }
 
 class UExport {
-    public idClass = new Value(int8);
-    public idSuper = new Value(uint8);
+    public idClass = new Value(compat32);
+    public idSuper = new Value(compat32);
     public idPackage = new Value(uint32);
     public baseClass: string = null;
     public name: string = null;
     public flags = new Value(uint32);
-    public size = new Value(uint8);
-    public offset = new Value(uint8);
+    public size = new Value(compat32);
+    public offset = new Value(compat32);
 }
 
 class UName {
@@ -442,11 +490,10 @@ class UGeneration {
 }
 
 class UImport {
-    public classPackage = new Value(uint8);
-    public className = new Value(uint8);
-    public package = new Value(int32);
-    public basePackage = new Value(char);
-    public name: string = null;
+    public className: string = null;
+    public packageIndex = new Value(int32);
+    public objectName: string = null;
+    public classPackage: string = null;
 }
 
 class UHeader {
