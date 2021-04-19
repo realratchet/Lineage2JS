@@ -4,6 +4,8 @@ const compat32: ValidTypes_T<"compat32"> = { bytes: 4, signed: true, name: "comp
 const uint32: ValidTypes_T<"uint32"> = { bytes: 4, signed: false, name: "uint32", dtype: Uint32Array };
 const int8: ValidTypes_T<"int8"> = { bytes: 1, signed: true, name: "int8", dtype: Int8Array };
 const uint8: ValidTypes_T<"uint8"> = { bytes: 1, signed: false, name: "uint8", dtype: Uint8Array };
+const int16: ValidTypes_T<"int16"> = { bytes: 2, signed: true, name: "int16", dtype: Int16Array };
+const uint16: ValidTypes_T<"uint16"> = { bytes: 2, signed: false, name: "uint16", dtype: Uint16Array };
 const guid: ValidTypes_T<"guid"> = { bytes: 4 * 4, signed: true, name: "guid" };
 const char: ValidTypes_T<"char"> = { bytes: NaN, signed: true, name: "char" };
 
@@ -13,6 +15,8 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     static uint32 = uint32;
     static int8 = int8;
     static uint8 = uint8;
+    static int16 = int16;
+    static uint16 = uint16;
     static guid = guid;
     static char = char;
 
@@ -97,23 +101,6 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         }
 
         return string;
-
-        // if (this.bytes.byteLength === 1) return String.fromCharCode(this.bytes.getUint8(0));
-
-        // let string = "";
-
-        // for (let i = 0; this.bytes.byteLength >= 2 && i < this.bytes.byteLength; i += 2) {
-        //     // ((0x77694c & 0xFF0000) >> 16).toString(16)
-        //     const [ia, ib] = this.endianess === "big" ? [i + 1, i] : [i, i + 1];
-
-        //     const chara = String.fromCharCode(this.bytes[ia]);
-        //     const charb = String.fromCharCode(this.bytes[ib]);
-
-        //     string += chara.match(expIsPrintable) ? chara : ".";
-        //     string += charb.match(expIsPrintable) ? charb : ".";
-        // }
-
-        // return string;
     }
 
     public set value(bytes: number | string | DataView) {
@@ -123,6 +110,8 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             switch (this.type.name) {
                 case "int32": funName = "setInt32"; break;
                 case "uint32": funName = "setUint32"; break;
+                case "int16": funName = "setInt16"; break;
+                case "uint16": funName = "setUint16"; break;
                 case "int8": funName = "setInt8"; break;
                 case "uint8": funName = "setUint8"; break;
                 default: throw new Error(`Unknown type: ${this.type.name}`);
@@ -145,6 +134,8 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             case "uint32": funName = "getUint32"; break;
             case "int8": funName = "getInt8"; break;
             case "uint8": funName = "getUint8"; break;
+            case "int16": funName = "getInt16"; break;
+            case "uint16": funName = "getUint16"; break;
             case "guid":
             case "char":
             case "buffer": break;

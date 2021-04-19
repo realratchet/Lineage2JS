@@ -19,11 +19,40 @@ const PROPERTY_SIZE_MASK = 0x70;
 const PROPERTY_ARRAY_MASK = 0x80;
 
 class UProperty {
-    // char *Name;
+    public static UNP_ByteProperty = UNP_ByteProperty;
+    public static UNP_IntProperty = UNP_IntProperty;
+    public static UNP_BoolProperty = UNP_BoolProperty;
+    public static UNP_FloatProperty = UNP_FloatProperty;
+    public static UNP_ObjectProperty = UNP_ObjectProperty;
+    public static UNP_NameProperty = UNP_NameProperty;
+    public static UNP_StringProperty = UNP_StringProperty;
+    public static UNP_ClassProperty = UNP_ClassProperty;
+    public static UNP_ArrayProperty = UNP_ArrayProperty;
+    public static UNP_StructProperty = UNP_StructProperty;
+    public static UNP_VectorProperty = UNP_VectorProperty;
+    public static UNP_RotatorProperty = UNP_RotatorProperty;
+    public static UNP_StrProperty = UNP_StrProperty;
+    public static UNP_MapProperty = UNP_MapProperty;
+    public static UNP_FixedArrayProperty = UNP_FixedArrayProperty;
+
+    public static PROPERTY_TYPE_MASK = PROPERTY_TYPE_MASK;
+    public static PROPERTY_SIZE_MASK = PROPERTY_SIZE_MASK;
+    public static PROPERTY_ARRAY_MASK = PROPERTY_ARRAY_MASK;
+
+    public name: string = "None";
+    public isArray: boolean = false;
+    public type: number;
+    public structType?: string;
+    public size: number = 0;
+
+    public setInfo(info: number) {
+        this.isArray = (info & PROPERTY_ARRAY_MASK) !== 0;
+        this.type = info & PROPERTY_TYPE_MASK;
+    }
+
     // char *StructType;
     // uint32 Size;
     // int32 ArrayIndex;
-    // bool IsArray;
     // int32 ArrayLength;
     // int8 Type;
     // uint32 DataLength;
