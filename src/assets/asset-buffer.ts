@@ -3,6 +3,7 @@ import UHeader from "./unreal/un-header";
 import UGeneration from "./unreal/un-generation";
 import UExport from "./unreal/un-export";
 import UName from "./unreal/un-name";
+import UImport from "./unreal/un-import";
 
 class AssetBuffer {
     private buffer: ArrayBuffer;
@@ -13,6 +14,7 @@ class AssetBuffer {
 
     public exports: readonly UExport[];
     public imports: readonly UImport[];
+    public nameTable: readonly UName[];
 
     constructor(arrayBuffer: ArrayBuffer) {
         this.buffer = arrayBuffer;//.slice(0, 20480);
@@ -29,6 +31,7 @@ class AssetBuffer {
             default: throw new Error(`Seek type not supported: ${origin}`);
         }
     }
+
     protected read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
         const cryptKey = this.cryptKey.value as number;
         const _target = typeof (target) === "number" ? BufferValue.allocBytes(target) : target as BufferValue<T>;
@@ -44,16 +47,36 @@ class AssetBuffer {
         console.log("--------------------------------------------------------");
         console.log(`------------------- Dumping lines ----------------------`);
         console.log("--------------------------------------------------------");
+        let constructedString = "";
         for (let i = 0; i < lineCount; i++) {
-            const groups = new Array(8).fill(8).map(() => this.read(2));
+            const bytes = Math.min(this.buffer.byteLength - this.offset, 8);
+            const groups = new Array(bytes).fill('.').map(() => this.read(2));
 
             const string1 = groups.map(g => g.hex.slice(2)).join(" ");
             const string2 = groups.map(g => g.string).join("");
 
-            console.log(
-                string1,
-                string2
-            );
+            constructedString += string2;
+
+            if (constructedString.match(/TerrainMap|TerrainScale/)) {
+                console.log(
+                    i, this.offset,
+                    string1,
+                    string2,
+                    constructedString
+                );
+                constructedString = "";
+            }
+
+            constructedString = constructedString.slice(-100);
+
+            // break
+
+            if (lineCount <= 256) {
+                console.log(
+                    string1,
+                    string2
+                );
+            }
         }
 
         console.log("--------------------------------------------------------");
@@ -138,6 +161,7 @@ class AssetBuffer {
 
         this.exports = Object.freeze(exports);
         this.imports = Object.freeze(imports);
+        this.nameTable = Object.freeze(nameTable);
 
         return this;
     }
@@ -154,13 +178,13 @@ class AssetBuffer {
             this.read(index);
             if (i === 0) console.assert(index.value === 5553);
 
-            uimport.classPackage = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            uimport.classPackage = nameTable[index.value as number].name.string;
             if (i === 0) console.assert(uimport.classPackage === "Core");
 
             this.read(index);
             if (i === 0) console.assert(index.value === 11089);
 
-            uimport.className = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            uimport.className = nameTable[index.value as number].name.string;
             if (i === 0) console.assert(uimport.className === "Package");
 
             this.read(uimport.packageIndex);
@@ -169,7 +193,7 @@ class AssetBuffer {
             this.read(index);
             if (i === 0) console.assert(index.value === 11086);
 
-            uimport.objectName = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            uimport.objectName = nameTable[index.value as number].name.string;
             if (i === 0) console.assert(uimport.objectName === "Engine");
 
             imports.push(uimport);
@@ -191,7 +215,7 @@ class AssetBuffer {
 
             nameTable.push(uname);
 
-            // console.log(`Name[${i}]: "${(uname.name.value as string).slice(1, -1)}"`);
+            // console.log(`Name[${i}]: "${(uname.name.string)}"`);
         }
 
         return nameTable;
@@ -220,7 +244,7 @@ class AssetBuffer {
             this.read(index);
             if (i === 0) console.assert(index.value === 315);
 
-            uexport.name = (nameTable[index.value as number].name.value as string).slice(0, -1);
+            uexport.name = nameTable[index.value as number].name.string;
             if (i === 0) console.assert(uexport.name === "LevelInfo0")
 
             this.read(uexport.flags);
@@ -248,18 +272,6 @@ enum SEEK_T {
     SEEK_SET = 0,   /* set file offset to offset */
     SEEK_CUR = 1,   /* set file offset to current plus offset */
     // SEEK_END = 2    /* set file offset to EOF plus offset */
-}
-
-
-
-
-
-
-class UImport {
-    public className: string = null;
-    public packageIndex = new BufferValue(BufferValue.int32);
-    public objectName: string = null;
-    public classPackage: string = null;
 }
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {

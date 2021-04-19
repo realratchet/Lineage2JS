@@ -1,5 +1,6 @@
 import AssetBuffer from "./asset-buffer";
 import UTerrainSector from "./unreal/un-terrain";
+import UTerrainInfo from "./unreal/un-terrain-info";
 
 class AssetLoader {
     async load(path: string): Promise<any> {
@@ -8,9 +9,8 @@ class AssetLoader {
         const buffer = new AssetBuffer(arrayBuffer);
 
         const decoded = await buffer.decode();
-        const expTerrainSector = decoded.exports.filter(e => e.name.includes("TerrainSector"));
-
-        const terrain = UTerrainSector.fromAsset(buffer, expTerrainSector[0]);
+        const expTerrainSector = decoded.exports.find(e => e.name.includes("TerrainInfo"));
+        const terrain = UTerrainInfo.fromAsset(buffer, expTerrainSector);
 
         debugger;
         return null;

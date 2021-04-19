@@ -38,9 +38,9 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         if (this.type.name === "char") {
             const length = new BufferValue(uint8);
             length.readValue(buffer, offset, isEncrypted, cryptKey);
-            byteOffset = length.type.bytes;
-            offset = offset + byteOffset;
-            this.type.bytes = length.value as number;
+            byteOffset = length.type.bytes+1;
+            offset = offset + byteOffset-1;
+            this.type.bytes = length.value as number - 1;
         }
 
         if (this.type.name === "compat32") {
@@ -79,12 +79,12 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         this.bytes = new DataView(buffer.slice(offset, offset + this.type.bytes));
 
         if (isEncrypted) {
-            for (let i = 0; i < this.type.bytes; i++) {
+            for (let i = 0; i < this.bytes.byteLength; i++) {
                 this.bytes.setUint8(i + this.bytes.byteOffset, this.bytes.getUint8(i + this.bytes.byteOffset) ^ cryptKey);
             }
         }
 
-        return this.type.bytes + byteOffset;
+        return this.bytes.byteLength + byteOffset;
     }
 
     public get string(): string {
