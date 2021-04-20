@@ -116,7 +116,10 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
 module.exports.createConfigBundle = createModuleConfig({
     name: "client",
     resolve: {
-        fallback: { "buffer": false },
+        fallback: {
+            "buffer": false,
+            "path": require.resolve("path-browserify")
+        },
         extensions: [".tsx", ".ts", ".js"],
         alias: {
             "@client": path.resolve(__dirname, "../src")

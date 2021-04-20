@@ -1,10 +1,10 @@
-import AssetBuffer from "../asset-buffer";
+import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
 
 type UExport = import("./un-export").UExport;
 
 class UTerrainInfo {
-    static fromAsset(buffer: AssetBuffer, data: UExport) {
+    static fromAsset(buffer: UPackage, data: UExport) {
         const prop = buffer.loadProperty(data.offset.value as number + 17);
 
         // const compat = new BufferValue(BufferValue.compat32);

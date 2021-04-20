@@ -1,13 +1,18 @@
-import BufferValue from "./buffer-value";
-import UHeader from "./unreal/un-header";
-import UGeneration from "./unreal/un-generation";
-import UExport from "./unreal/un-export";
-import UName from "./unreal/un-name";
-import UImport from "./unreal/un-import";
-import UProperty from "./unreal/un-property";
+import BufferValue from "../buffer-value";
+import UHeader from "./un-header";
+import UGeneration from "./un-generation";
+import UExport from "./un-export";
+import UName from "./un-name";
+import UImport from "./un-import";
+import UProperty from "./un-property";
 
-class AssetBuffer {
-    private buffer: ArrayBuffer;
+type AssetLoader = import("../asset-loader").AssetLoader;
+
+class UPackage {
+    public readonly path: string;
+    public readonly loader: AssetLoader;
+
+    private buffer: ArrayBuffer = null;
     private isEncrypted = false;
     private cryptKey = new BufferValue(BufferValue.uint8);
     private offset = 0;
@@ -17,8 +22,9 @@ class AssetBuffer {
     public imports: readonly UImport[];
     public nameTable: readonly UName[];
 
-    constructor(arrayBuffer: ArrayBuffer) {
-        this.buffer = arrayBuffer;//.slice(0, 20480);
+    constructor(loader: AssetLoader, path: string) {
+        this.path = path;
+        this.loader = loader;
     }
 
     protected seek(offset: number, origin = SEEK_T.SEEK_CUR) {
@@ -86,6 +92,11 @@ class AssetBuffer {
     }
 
     public async decode(): Promise<this> {
+        if (!this.buffer) {
+            const response = await fetch(this.path);
+            this.buffer = await response.arrayBuffer();
+        }
+
         const signature = this.read(new BufferValue(BufferValue.uint32));
         const HEADER_SIZE = 28;
 
@@ -173,8 +184,11 @@ class AssetBuffer {
         this.read(index);
 
         if (index.value as number < 0) {
-            const res = this.imports[-index.value - 1];
-            const name = `${res.className}`;
+            let imp = this.imports[-index.value - 1];
+            while (imp.packageIndex.value as number !== 0)
+                imp = this.imports[-imp.packageIndex.value as number - 1];
+
+            const packageName = `${imp.objectName}`;
         } else {
             throw new Error("Not yet implemented");
         }
@@ -374,8 +388,8 @@ class AssetBuffer {
     }
 }
 
-export default AssetBuffer;
-export { AssetBuffer };
+export default UPackage;
+export { UPackage };
 
 enum SEEK_T {
     SEEK_SET = 0,   /* set file offset to offset */

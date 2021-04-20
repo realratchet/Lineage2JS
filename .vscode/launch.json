@@ -28,7 +28,7 @@
             "request": "launch",
             "program": " ${workspaceFolder}/cpp/ue_viewer/umodel",
             "args": [
-                "../../assets/maps/20_21.unr",
+                "/home/ratchet/Documents/lineage-js/assets/maps/20_21.unr",
                 // "-list"
             ],
             "stopAtEntry": false,
