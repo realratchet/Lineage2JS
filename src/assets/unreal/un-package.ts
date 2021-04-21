@@ -92,10 +92,13 @@ class UPackage {
     }
 
     public async decode(): Promise<this> {
-        if (!this.buffer) {
-            const response = await fetch(this.path);
-            this.buffer = await response.arrayBuffer();
-        }
+        if (this.buffer) return this;
+
+        const response = await fetch(this.path);
+
+        if (!response.ok) throw new Error(response.statusText);
+
+        this.buffer = await response.arrayBuffer();
 
         const signature = this.read(new BufferValue(BufferValue.uint32));
         const HEADER_SIZE = 28;
@@ -105,9 +108,6 @@ class UPackage {
             this.read(this.cryptKey);
 
             this.cryptKey.value = 0xC1 ^ (this.cryptKey.value as number);
-
-            if (this.cryptKey.value !== 0xAC)
-                throw new Error("yo");
 
             this.isEncrypted = true;
             this.contentOffset = HEADER_SIZE;
@@ -138,14 +138,16 @@ class UPackage {
 
         console.log(`Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
 
-        console.assert(header.getVersionLWORD() === 123);
-        console.assert(header.packageFlags.value === 0x1);
-        console.assert(header.nameCount.value === 12165);
-        console.assert(header.nameOffset.value === 0x40);
-        console.assert(header.exportCount.value === 11379);
-        console.assert(header.exportOffset.value === 0xFB1BF5);
-        console.assert(header.importCount.value === 490);
-        console.assert(header.importOffset.value === 0xFB0712);
+        if (this.path === "assets/maps/20_21.unr") {
+            console.assert(header.getVersionLWORD() === 123);
+            console.assert(header.packageFlags.value === 0x1);
+            console.assert(header.nameCount.value === 12165);
+            console.assert(header.nameOffset.value === 0x40);
+            console.assert(header.exportCount.value === 11379);
+            console.assert(header.exportOffset.value === 0xFB1BF5);
+            console.assert(header.importCount.value === 490);
+            console.assert(header.importOffset.value === 0xFB0712);
+        }
 
         if (header.getVersionLWORD() < 68) {
             this.read(header.heritageCount);
@@ -155,7 +157,9 @@ class UPackage {
 
             const generationCount = this.read(new BufferValue(BufferValue.int32));
 
-            console.assert(generationCount.value === 1);
+            if (this.path === "assets/maps/20_21.unr") {
+                console.assert(generationCount.value === 1);
+            }
 
             for (let i = 0, gc = generationCount.value as number; i < gc; i++) {
                 const gen = new UGeneration();
@@ -178,7 +182,7 @@ class UPackage {
         return this;
     }
 
-    fetchObject() {
+    async fetchObject() {
         const index = new BufferValue(BufferValue.compat32);
 
         this.read(index);
@@ -188,6 +192,14 @@ class UPackage {
             while (imp.packageIndex.value as number !== 0)
                 imp = this.imports[-imp.packageIndex.value as number - 1];
 
+            if (!this.loader.hasPackage(imp.objectName))
+                throw new Error(`Unable to locate package: ${imp.objectName}`);
+
+            const pkg = this.loader.getPackage(imp.objectName);
+
+            if (!pkg.buffer)
+                await this.loader.load(pkg);
+
             const packageName = `${imp.objectName}`;
         } else {
             throw new Error("Not yet implemented");
@@ -196,7 +208,7 @@ class UPackage {
         debugger;
     }
 
-    loadProperty(offset: number) {
+    async loadProperty(offset: number) {
         const index = new BufferValue(BufferValue.compat32);
         const info = new BufferValue(BufferValue.int8);
 
@@ -263,7 +275,7 @@ class UPackage {
                     this.read(index);
                 }
                 else {
-                    const obj = this.fetchObject();
+                    const obj = await this.fetchObject();
                     console.log(obj);
                 }
                 break;
@@ -299,25 +311,25 @@ class UPackage {
             const uimport = new UImport();
 
             this.read(index);
-            if (i === 0) console.assert(index.value === 5553);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 5553);
 
             uimport.classPackage = nameTable[index.value as number].name.string;
-            if (i === 0) console.assert(uimport.classPackage === "Core");
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.classPackage === "Core");
 
             this.read(index);
-            if (i === 0) console.assert(index.value === 11089);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 11089);
 
             uimport.className = nameTable[index.value as number].name.string;
-            if (i === 0) console.assert(uimport.className === "Package");
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.className === "Package");
 
             this.read(uimport.packageIndex);
-            if (i === 0) console.assert(uimport.className === "Package");
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.className === "Package");
 
             this.read(index);
-            if (i === 0) console.assert(index.value === 11086);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 11086);
 
             uimport.objectName = nameTable[index.value as number].name.string;
-            if (i === 0) console.assert(uimport.objectName === "Engine");
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.objectName === "Engine");
 
             imports.push(uimport);
         }
@@ -353,32 +365,32 @@ class UPackage {
         for (let i = 0, ec = header.exportCount.value as number; i < ec; i++) {
             const uexport = new UExport();
 
-            if (i === 0) console.assert(this.offset === 16456721);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(this.offset === 16456721);
 
             this.read(uexport.idClass);
-            if (i === 0) console.assert(uexport.idClass.value === -344);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.idClass.value === -344);
 
             this.read(uexport.idSuper);
-            if (i === 0) console.assert(uexport.idSuper.value === 0);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.idSuper.value === 0);
 
             this.read(uexport.idPackage);
-            if (i === 0) console.assert(uexport.idPackage.value === 0);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.idPackage.value === 0);
 
             this.read(index);
-            if (i === 0) console.assert(index.value === 315);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 315);
 
             uexport.name = nameTable[index.value as number].name.string;
-            if (i === 0) console.assert(uexport.name === "LevelInfo0")
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.name === "LevelInfo0")
 
             this.read(uexport.flags);
-            if (i === 0) console.assert(uexport.flags.value === 0x2070001);
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.flags.value === 0x2070001);
 
             this.read(uexport.size);
-            if (i === 0) console.assert(uexport.size.value === 0xe1)
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.size.value === 0xe1)
 
             if (uexport.size.value as number > 0) {
                 this.read(uexport.offset);
-                if (i === 0) console.assert(uexport.offset.value === 0x47121);
+                if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.offset.value === 0x47121);
             }
 
             exports.push(uexport);

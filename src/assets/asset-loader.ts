@@ -1,6 +1,4 @@
 import UPackage from "./unreal/un-package";
-import UTerrainSector from "./unreal/un-terrain";
-import UTerrainInfo from "./unreal/un-terrain-info";
 import * as _path from "path";
 
 class AssetLoader {
@@ -26,13 +24,8 @@ class AssetLoader {
         return this.packages.has(pathToPkgName(path));
     }
 
-    public async load(pkg: UPackage): Promise<any> {
-        const decoded = await pkg.decode();
-        const expTerrainSector = decoded.exports.find(e => e.name.includes("TerrainInfo"));
-        const terrain = UTerrainInfo.fromAsset(pkg, expTerrainSector);
-
-        debugger;
-        return null;
+    public async load(pkg: UPackage) {
+        return await pkg.decode();
     }
 }
 

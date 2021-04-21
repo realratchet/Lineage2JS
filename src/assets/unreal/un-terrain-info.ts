@@ -4,8 +4,8 @@ import BufferValue from "../buffer-value";
 type UExport = import("./un-export").UExport;
 
 class UTerrainInfo {
-    static fromAsset(buffer: UPackage, data: UExport) {
-        const prop = buffer.loadProperty(data.offset.value as number + 17);
+    static async fromAsset(buffer: UPackage, data: UExport) {
+        const prop = await buffer.loadProperty(data.offset.value as number + 17);
 
         // const compat = new BufferValue(BufferValue.compat32);
         // const info = new BufferValue(BufferValue.int8);

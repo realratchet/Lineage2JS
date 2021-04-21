@@ -1,10 +1,14 @@
 // import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
 import assetList from "./assets/asset-list";
+import UTerrainInfo from "./assets/unreal/un-terrain-info";
 
 async function startCore() {
     const assetLoader = new AssetLoader(assetList);
-    const mapData = await assetLoader.load(assetLoader.getPackage("20_21"));
+    const pkg = assetLoader.getPackage("20_21");
+    await assetLoader.load(pkg);
+    const expTerrainSector = pkg.exports.find(e => e.name.includes("TerrainInfo"));
+    const terrain = await UTerrainInfo.fromAsset(pkg, expTerrainSector);
     // const viewport = document.querySelector("viewport") as HTMLViewportElement;
     // const renderManager = new RenderManager(viewport);
 }

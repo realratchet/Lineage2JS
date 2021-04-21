@@ -150,7 +150,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     }
 
     public get hex(): string {
-        if (this.type.name === "buffer") {
+        if (this.type.name === "buffer" || this.type.name === "char") {
             if (this.bytes.byteLength === 1) return `0x${this.bytes.getUint8(this.bytes.byteOffset + 0)}`;
 
             let string = "0x";
