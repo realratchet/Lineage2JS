@@ -1,5 +1,6 @@
 const expIsPrintable = /^[\d\w]$/i;
 const int32: ValidTypes_T<"int32"> = { bytes: 4, signed: true, name: "int32", dtype: Int32Array };
+const float: ValidTypes_T<"float"> = { bytes: 4, signed: true, name: "float", dtype: Float32Array };
 const compat32: ValidTypes_T<"compat32"> = { bytes: 4, signed: true, name: "compat32" };
 const uint32: ValidTypes_T<"uint32"> = { bytes: 4, signed: false, name: "uint32", dtype: Uint32Array };
 const int8: ValidTypes_T<"int8"> = { bytes: 1, signed: true, name: "int8", dtype: Int8Array };
@@ -19,6 +20,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     static uint16 = uint16;
     static guid = guid;
     static char = char;
+    static float = float;
 
     private bytes: DataView;
     private type: ValidTypes_T<T>;
@@ -42,8 +44,8 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         if (this.type.name === "char") {
             const length = new BufferValue(uint8);
             length.readValue(buffer, offset, isEncrypted, cryptKey);
-            byteOffset = length.type.bytes+1;
-            offset = offset + byteOffset-1;
+            byteOffset = length.type.bytes + 1;
+            offset = offset + byteOffset - 1;
             this.type.bytes = length.value as number - 1;
         }
 
@@ -74,8 +76,6 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             r = sign ? -r : r;
 
             this.bytes.setInt32(0, r, this.endianess === "little");
-
-
 
             return offset - startOffset;
         }
@@ -109,6 +109,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
 
             switch (this.type.name) {
                 case "int32": funName = "setInt32"; break;
+                case "float": funName = "setFloat32"; break;
                 case "uint32": funName = "setUint32"; break;
                 case "int16": funName = "setInt16"; break;
                 case "uint16": funName = "setUint16"; break;
@@ -130,6 +131,9 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             case "compat32":
             case "int32":
                 funName = "getInt32";
+                break;
+            case "float":
+                funName = "getFloat32";
                 break;
             case "uint32": funName = "getUint32"; break;
             case "int8": funName = "getInt8"; break;

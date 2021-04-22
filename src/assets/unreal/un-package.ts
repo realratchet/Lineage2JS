@@ -46,6 +46,8 @@ class UPackage {
         return _target;
     }
 
+    public tell() { return this.offset; }
+
     public dump(lineCount: number, restore: boolean = true) {
         let oldHeader = this.offset;
 
@@ -201,7 +203,7 @@ class UPackage {
             if (exp.object)
                 return exp.object;
 
-            exp.object = await this.createObject(exp, mainImp.className as UObjectTypes_T);
+            exp.object = await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
 
             return exp.object;
         } else {
@@ -209,7 +211,7 @@ class UPackage {
         }
     }
 
-    protected async createObject(data: UExport, className: UObjectTypes_T): Promise<UObject> {
+    protected async createObject(pkg: UPackage, data: UExport, className: UObjectTypes_T): Promise<UObject> {
         let Constructor: typeof UObject = null;
 
         switch (className) {
@@ -217,7 +219,7 @@ class UPackage {
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
-        return await new Constructor().load(this, data);
+        return await new Constructor().load(pkg, data);
     }
 
     protected getPackageName(index: number) {

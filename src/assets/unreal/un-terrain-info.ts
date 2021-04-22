@@ -6,7 +6,7 @@ type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
 class UTerrainInfo extends UObject {
-    private terrainMap: UTexture = null;
+    protected terrainMap: UTexture = null;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap()), {
