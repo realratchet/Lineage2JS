@@ -6,9 +6,12 @@ import UTerrainInfo from "./assets/unreal/un-terrain-info";
 async function startCore() {
     const assetLoader = new AssetLoader(assetList);
     const pkg = assetLoader.getPackage("20_21");
+
     await assetLoader.load(pkg);
-    const expTerrainSector = pkg.exports.find(e => e.name.includes("TerrainInfo"));
-    const terrain = await UTerrainInfo.fromAsset(pkg, expTerrainSector);
+
+    const expTerrainSector = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
+    const terrain = await new UTerrainInfo().load(pkg, expTerrainSector);
+
     // const viewport = document.querySelector("viewport") as HTMLViewportElement;
     // const renderManager = new RenderManager(viewport);
 }

@@ -1,13 +1,10 @@
 import UPackage from "./un-package";
+import UObject from "./un-object";
 
 type UExport = import("./un-export").UExport;
 
-class UTerrainSector {
+class UTerrainSector extends UObject {
     static fromAsset(buffer: UPackage, data: UExport) {
-        buffer.seek(0, 0);
-        buffer.dump(Infinity);
-        buffer.seek(data.offset.value as number, 0);
-        buffer.dump(32);
         throw new Error("Method not implemented.");
     }
 

@@ -5,6 +5,8 @@ import UExport from "./un-export";
 import UName from "./un-name";
 import UImport from "./un-import";
 import UProperty from "./un-property";
+import UTexture from "./un-texture";
+import UObject from "./un-object";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -27,19 +29,15 @@ class UPackage {
         this.loader = loader;
     }
 
-    protected seek(offset: number, origin = SEEK_T.SEEK_CUR) {
+    public seek(offset: number, origin: Seek_T = "current") {
         switch (origin) {
-            case SEEK_T.SEEK_CUR:
-                this.offset = this.offset + offset
-                break;
-            case SEEK_T.SEEK_SET:
-                this.offset = offset + this.contentOffset;
-                break;
+            case "current": this.offset = this.offset + offset; break;
+            case "set": this.offset = offset + this.contentOffset; break;
             default: throw new Error(`Seek type not supported: ${origin}`);
         }
     }
 
-    protected read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
+    public read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
         const cryptKey = this.cryptKey.value as number;
         const _target = typeof (target) === "number" ? BufferValue.allocBytes(target) : target as BufferValue<T>;
 
@@ -48,7 +46,7 @@ class UPackage {
         return _target;
     }
 
-    private dump(lineCount: number, restore: boolean = true) {
+    public dump(lineCount: number, restore: boolean = true) {
         let oldHeader = this.offset;
 
         console.log("--------------------------------------------------------");
@@ -104,14 +102,14 @@ class UPackage {
         const HEADER_SIZE = 28;
 
         if (signature.value == 0x0069004C) {
-            this.seek(HEADER_SIZE, SEEK_T.SEEK_SET);
+            this.seek(HEADER_SIZE, "set");
             this.read(this.cryptKey);
 
             this.cryptKey.value = 0xC1 ^ (this.cryptKey.value as number);
 
             this.isEncrypted = true;
             this.contentOffset = HEADER_SIZE;
-            this.seek(0, SEEK_T.SEEK_SET);
+            this.seek(0, "set");
             this.read(signature);
         }
 
@@ -182,15 +180,11 @@ class UPackage {
         return this;
     }
 
-    async fetchObject() {
-        const index = new BufferValue(BufferValue.compat32);
-
-        this.read(index);
-
-        if (index.value as number < 0) {
-            let imp = this.imports[-index.value - 1];
-            while (imp.packageIndex.value as number !== 0)
-                imp = this.imports[-imp.packageIndex.value as number - 1];
+    public async fetchObject(index: number) {
+        if (index < 0) {
+            let imp = this.imports[-index - 1], mainImp = imp;
+            while (imp.idPackage.value as number !== 0)
+                imp = this.imports[-imp.idPackage.value as number - 1];
 
             if (!this.loader.hasPackage(imp.objectName))
                 throw new Error(`Unable to locate package: ${imp.objectName}`);
@@ -200,109 +194,42 @@ class UPackage {
             if (!pkg.buffer)
                 await this.loader.load(pkg);
 
-            const packageName = `${imp.objectName}`;
+            const exp = pkg.exports.find(exp => exp.objectName === mainImp.objectName && pkg.getPackageName(exp.idClass.value as number) === mainImp.className);
+
+            if (!exp) throw new Error("Missing export");
+
+            if (exp.object)
+                return exp.object;
+
+            exp.object = await this.createObject(exp, mainImp.className as UObjectTypes_T);
+
+            return exp.object;
         } else {
             throw new Error("Not yet implemented");
         }
-
-        debugger;
     }
 
-    async loadProperty(offset: number) {
-        const index = new BufferValue(BufferValue.compat32);
-        const info = new BufferValue(BufferValue.int8);
+    protected async createObject(data: UExport, className: UObjectTypes_T): Promise<UObject> {
+        let Constructor: typeof UObject = null;
 
-        this.seek(offset, SEEK_T.SEEK_SET);
-        this.read(index);
-
-        const prop = new UProperty();
-        const propName = index.value as number > 0 && this.nameTable.length
-            ? this.nameTable[index.value as number].name.string
-            : "None";
-
-        prop.name = propName;
-
-        if (propName === "None") return prop;
-
-        this.read(info);
-        prop.setInfo(info.value as number);
-
-        if (prop.type === UProperty.UNP_StructProperty) {
-            this.read(index);
-            prop.structType = this.nameTable[index.value as number].name.string;
+        switch (className) {
+            case "Texture": Constructor = UTexture; break;
+            default: throw new Error(`Unknown object type: ${className}`);
         }
 
-        let size;
-
-        switch ((info.value as number) & UProperty.PROPERTY_SIZE_MASK) {
-            case 0x00: prop.size = 1; break;
-            case 0x10: prop.size = 2; break;
-            case 0x20: prop.size = 4; break;
-            case 0x30: prop.size = 12; break;
-            case 0x40: prop.size = 16; break;
-            case 0x50:
-                size = new BufferValue(BufferValue.uint8);
-                this.read(size);
-                prop.size = size.value as number;
-                break;
-            case 0x60:
-                size = new BufferValue(BufferValue.uint16);
-                this.read(size);
-                prop.size = size.value as number;
-                break;
-            case 0x70:
-                size = new BufferValue(BufferValue.uint32);
-                this.read(size);
-                prop.size = size.value as number;
-                break;
-        }
-
-        if (prop.isArray && prop.type !== UProperty.UNP_BoolProperty)
-            throw new Error("Not yet implemented");
-
-        switch (prop.type) {
-            case UProperty.UNP_ByteProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_IntProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_BoolProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_FloatProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_ObjectProperty:
-                if (prop.name === "StaticMeshLod01" || prop.name === "StaticMeshLod02" || prop.name === "PhysicsVolume") {
-                    //printf("Skipping object property: %s\n", Name);
-                    this.read(index);
-                }
-                else {
-                    const obj = await this.fetchObject();
-                    console.log(obj);
-                }
-                break;
-            case UProperty.UNP_NameProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_StrProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_StringProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_ArrayProperty:
-                break;
-            case UProperty.UNP_ClassProperty:
-            case UProperty.UNP_VectorProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_RotatorProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_MapProperty:
-                throw new Error("Not yet implemented");
-            case UProperty.UNP_FixedArrayProperty:
-                throw new Error("Not yet implemented");
-        }
-
-        return prop;
+        return await new Constructor().load(this, data);
     }
 
-    loadImports(header: UHeader, nameTable: UName[]) {
-        this.seek(header.importOffset.value as number, SEEK_T.SEEK_SET);
+    protected getPackageName(index: number) {
+        return index < 0
+            ? this.imports[-index - 1].objectName as string
+            : index > 0
+                ? this.exports[index].objectName as string
+                : "Class";
+    }
+
+    protected loadImports(header: UHeader, nameTable: UName[]) {
+        this.seek(header.importOffset.value as number, "set");
 
         const imports: UImport[] = [];
         const index = new BufferValue(BufferValue.compat32);
@@ -322,7 +249,7 @@ class UPackage {
             uimport.className = nameTable[index.value as number].name.string;
             if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.className === "Package");
 
-            this.read(uimport.packageIndex);
+            this.read(uimport.idPackage);
             if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.className === "Package");
 
             this.read(index);
@@ -337,8 +264,8 @@ class UPackage {
         return imports;
     }
 
-    loadNames(header: UHeader) {
-        this.seek(header.nameOffset.value as number, SEEK_T.SEEK_SET);
+    protected loadNames(header: UHeader) {
+        this.seek(header.nameOffset.value as number, "set");
 
         const nameTable: UName[] = [];
 
@@ -356,8 +283,8 @@ class UPackage {
         return nameTable;
     }
 
-    loadExports(header: UHeader, nameTable: UName[]) {
-        this.seek(header.exportOffset.value as number, SEEK_T.SEEK_SET);
+    protected loadExports(header: UHeader, nameTable: UName[]) {
+        this.seek(header.exportOffset.value as number, "set");
 
         const exports: UExport[] = [];
         const index = new BufferValue(BufferValue.compat32);
@@ -379,8 +306,8 @@ class UPackage {
             this.read(index);
             if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 315);
 
-            uexport.name = nameTable[index.value as number].name.string;
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.name === "LevelInfo0")
+            uexport.objectName = nameTable[index.value as number].name.string;
+            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.objectName === "LevelInfo0")
 
             this.read(uexport.flags);
             if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.flags.value === 0x2070001);
@@ -402,12 +329,6 @@ class UPackage {
 
 export default UPackage;
 export { UPackage };
-
-enum SEEK_T {
-    SEEK_SET = 0,   /* set file offset to offset */
-    SEEK_CUR = 1,   /* set file offset to current plus offset */
-    // SEEK_END = 2    /* set file offset to EOF plus offset */
-}
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;

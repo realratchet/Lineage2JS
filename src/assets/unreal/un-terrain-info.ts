@@ -1,11 +1,21 @@
-import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
+import UObject from "./un-object";
+import UTexture from "./un-texture";
 
+type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
-class UTerrainInfo {
-    static async fromAsset(buffer: UPackage, data: UExport) {
-        const prop = await buffer.loadProperty(data.offset.value as number + 17);
+class UTerrainInfo extends UObject {
+    private terrainMap: UTexture = null;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap()), {
+            "TerrainMap": "terrainMap"
+        }
+    };
+
+    public async load(pkg: UPackage, exp: UExport) {
+        const prop = await this.loadProperty(pkg, exp.offset.value as number + 17);
 
         // const compat = new BufferValue(BufferValue.compat32);
         // const info = new BufferValue(BufferValue.int8);
@@ -29,6 +39,8 @@ class UTerrainInfo {
         // console.log(info);
         debugger;
         throw new Error("Method not implemented.");
+
+        return this;
     }
 
 }
