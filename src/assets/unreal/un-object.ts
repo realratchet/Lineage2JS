@@ -19,9 +19,6 @@ class UObject {
         const index = new BufferValue(BufferValue.compat32);
         const info = new BufferValue(BufferValue.int8);
 
-        if (offset === 3282989 || offset === 3282996)
-            debugger;
-
         pkg.seek(offset, "set");
         pkg.read(index);
 
@@ -67,8 +64,9 @@ class UObject {
                 break;
         }
 
+        prop.arrayIndex = 0;
         if (prop.isArray && prop.type !== UProperty.UNP_BoolProperty)
-            throw new Error("Not yet implemented");
+            this.readArray(pkg, prop);
 
         switch (prop.type) {
             case UProperty.UNP_ByteProperty:
@@ -128,6 +126,30 @@ class UObject {
         console.log("Setting property:", propName);
 
         return true;
+    }
+
+    protected readArray(pkg: UPackage, prop: UProperty) {
+
+        const b = pkg.read(new BufferValue(BufferValue.int8));
+
+        if (b.value as number < 128) {
+            prop.arrayIndex = b.value as number;
+            return;
+        }
+
+        const b2 = pkg.read(new BufferValue(BufferValue.int8));
+        if (b.value as number & 0x40) { // really, (b & 0xC0) == 0xC0
+            const b3 = pkg.read(new BufferValue(BufferValue.int8));
+            const b4 = pkg.read(new BufferValue(BufferValue.int8));
+            prop.arrayIndex = (
+                (b.value as number << 24) |
+                (b2.value as number << 16) |
+                (b3.value as number << 8) |
+                b4.value as number
+            ) & 0x3FFFFF;
+        } else {
+            prop.arrayIndex = ((b.value as number << 8) | b2.value as number) & 0x3FFF;
+        }
     }
 
     protected readStruct(pkg: UPackage, type: string) {

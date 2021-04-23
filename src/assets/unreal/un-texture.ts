@@ -1,5 +1,6 @@
 import UObject from "./un-object";
 
+type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
@@ -7,7 +8,8 @@ class UTexture extends UObject {
     protected maxColor: number;
     protected width: number;
     protected height: number;
-    protected internalTime: number;
+    protected internalTime: number[];
+    protected format: ETextureFormat;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap()), {

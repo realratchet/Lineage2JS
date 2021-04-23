@@ -44,6 +44,7 @@ class UProperty {
     public type: number;
     public structType?: string;
     public size: number = 0;
+    public arrayIndex: number;
 
     public setInfo(info: number) {
         this.isArray = (info & PROPERTY_ARRAY_MASK) !== 0;
