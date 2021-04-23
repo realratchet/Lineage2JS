@@ -19,11 +19,14 @@ class UObject {
         const index = new BufferValue(BufferValue.compat32);
         const info = new BufferValue(BufferValue.int8);
 
+        if (offset === 3282989 || offset === 3282996)
+            debugger;
+
         pkg.seek(offset, "set");
         pkg.read(index);
 
         const prop = new UProperty();
-        const propName = index.value as number > 0 && pkg.nameTable.length
+        const propName = index.value as number >= 0 && pkg.nameTable.length
             ? pkg.nameTable[index.value as number].name.string
             : "None";
 

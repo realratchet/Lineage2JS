@@ -46,7 +46,7 @@ class UPackage {
         return _target;
     }
 
-    public tell() { return this.offset; }
+    public tell() { return this.offset - this.contentOffset; }
 
     public dump(lineCount: number, restore: boolean = true) {
         let oldHeader = this.offset;

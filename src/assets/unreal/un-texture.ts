@@ -7,12 +7,14 @@ class UTexture extends UObject {
     protected maxColor: number;
     protected width: number;
     protected height: number;
+    protected internalTime: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap()), {
             "MaxColor": "maxColor",
             "VSize": "height",
             "USize": "width",
+            "InternalTime": "internalTime"
         }
     };
 
