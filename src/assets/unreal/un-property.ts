@@ -1,64 +1,132 @@
-const UNP_ByteProperty = 0x1;
-const UNP_IntProperty = 0x2;
-const UNP_BoolProperty = 0x3;
-const UNP_FloatProperty = 0x4;
-const UNP_ObjectProperty = 0x5;
-const UNP_NameProperty = 0x6;
-const UNP_StringProperty = 0x7;
-const UNP_ClassProperty = 0x8;
-const UNP_ArrayProperty = 0x9;
-const UNP_StructProperty = 0xa;
-const UNP_VectorProperty = 0xb;
-const UNP_RotatorProperty = 0xc;
-const UNP_StrProperty = 0xd;
-const UNP_MapProperty = 0xe;
-const UNP_FixedArrayProperty = 0xf;
+import BufferValue from "../buffer-value";
 
-const PROPERTY_TYPE_MASK = 0x0f;
-const PROPERTY_SIZE_MASK = 0x70;
-const PROPERTY_ARRAY_MASK = 0x80;
+type UPackage = import("./un-package").UPackage;
 
-class UProperty {
-    public static UNP_ByteProperty = UNP_ByteProperty;
-    public static UNP_IntProperty = UNP_IntProperty;
-    public static UNP_BoolProperty = UNP_BoolProperty;
-    public static UNP_FloatProperty = UNP_FloatProperty;
-    public static UNP_ObjectProperty = UNP_ObjectProperty;
-    public static UNP_NameProperty = UNP_NameProperty;
-    public static UNP_StringProperty = UNP_StringProperty;
-    public static UNP_ClassProperty = UNP_ClassProperty;
-    public static UNP_ArrayProperty = UNP_ArrayProperty;
-    public static UNP_StructProperty = UNP_StructProperty;
-    public static UNP_VectorProperty = UNP_VectorProperty;
-    public static UNP_RotatorProperty = UNP_RotatorProperty;
-    public static UNP_StrProperty = UNP_StrProperty;
-    public static UNP_MapProperty = UNP_MapProperty;
-    public static UNP_FixedArrayProperty = UNP_FixedArrayProperty;
+enum UNP_PropertyTypes {
+    UNP_ByteProperty = 0x1,
+    UNP_IntProperty = 0x2,
+    UNP_BoolProperty = 0x3,
+    UNP_FloatProperty = 0x4,
+    UNP_ObjectProperty = 0x5,
+    UNP_NameProperty = 0x6,
+    UNP_StringProperty = 0x7,
+    UNP_ClassProperty = 0x8,
+    UNP_ArrayProperty = 0x9,
+    UNP_StructProperty = 0xa,
+    UNP_VectorProperty = 0xb,
+    UNP_RotatorProperty = 0xc,
+    UNP_StrProperty = 0xd,
+    UNP_MapProperty = 0xe,
+    UNP_FixedArrayProperty = 0xf
+};
 
-    public static PROPERTY_TYPE_MASK = PROPERTY_TYPE_MASK;
-    public static PROPERTY_SIZE_MASK = PROPERTY_SIZE_MASK;
-    public static PROPERTY_ARRAY_MASK = PROPERTY_ARRAY_MASK;
+enum UNP_PropertyMasks {
+    PROPERTY_TYPE_MASK = 0x0f,
+    PROPERTY_SIZE_MASK = 0x70,
+    PROPERTY_ARRAY_MASK = 0x80
+};
 
-    public name: string = "None";
-    public isArray: boolean = false;
+class PropertyTag {
+    protected constructor() { }
+
+    public name: string;
     public type: number;
-    public structType?: string;
-    public size: number = 0;
+    public structName: string;
     public arrayIndex: number;
+    public dataSize: number;
+    public boolValue: boolean;
+    public enumName: string;
 
-    public setInfo(info: number) {
-        this.isArray = (info & PROPERTY_ARRAY_MASK) !== 0;
-        this.type = info & PROPERTY_TYPE_MASK;
+    static async from(pkg: UPackage, offset: number): Promise<PropertyTag> {
+        return await new PropertyTag().load(pkg, offset);
     }
 
-    // char *StructType;
-    // uint32 Size;
-    // int32 ArrayIndex;
-    // int32 ArrayLength;
-    // int8 Type;
-    // uint32 DataLength;
-    // int8 *Data;
+    public isValid() { return !this.name || this.name !== "None"; }
+
+    protected async load(pkg: UPackage, offset: number) {
+        pkg.seek(offset, "set");
+
+        const index = pkg.read(new BufferValue(BufferValue.compat32));
+        const propName = index.value as number >= 0 && pkg.nameTable.length
+            ? pkg.nameTable[index.value as number].name.string
+            : "None";
+
+        this.name = propName;
+
+        if (propName === "None") return this;
+
+        const info = pkg.read(new BufferValue(BufferValue.int8)).value as number;
+        const isArray = (info & UNP_PropertyMasks.PROPERTY_ARRAY_MASK) !== 0;
+        this.type = info & UNP_PropertyMasks.PROPERTY_TYPE_MASK;
+
+        if (this.type === UNP_PropertyTypes.UNP_StructProperty) {
+            pkg.read(index);
+            this.structName = pkg.nameTable[index.value as number].name.string;
+        }
+
+        switch (info & UNP_PropertyMasks.PROPERTY_SIZE_MASK) {
+            case 0x00: this.dataSize = 1; break;
+            case 0x10: this.dataSize = 2; break;
+            case 0x20: this.dataSize = 4; break;
+            case 0x30: this.dataSize = 12; break;
+            case 0x40: this.dataSize = 16; break;
+            case 0x50:
+                this.dataSize = pkg
+                    .read(new BufferValue(BufferValue.uint8))
+                    .value as number;
+                break;
+            case 0x60:
+                this.dataSize = pkg
+                    .read(new BufferValue(BufferValue.uint16))
+                    .value as number;
+                break;
+            case 0x70:
+                this.dataSize = pkg
+                    .read(new BufferValue(BufferValue.uint32))
+                    .value as number;
+                break;
+        }
+
+        this.arrayIndex = 0;
+        if (isArray && this.type !== UNP_PropertyTypes.UNP_BoolProperty) {
+            const b = pkg.read(new BufferValue(BufferValue.int8));
+
+            if (b.value as number < 128) {
+                this.arrayIndex = b.value as number;
+            } else {
+                const b2 = pkg.read(new BufferValue(BufferValue.int8));
+
+                if (b.value as number & 0x40) { // really, (b & 0xC0) == 0xC0
+                    const b3 = pkg.read(new BufferValue(BufferValue.int8));
+                    const b4 = pkg.read(new BufferValue(BufferValue.int8));
+                    this.arrayIndex = (
+                        (b.value as number << 24) |
+                        (b2.value as number << 16) |
+                        (b3.value as number << 8) |
+                        b4.value as number
+                    ) & 0x3FFFFF;
+                } else this.arrayIndex = ((b.value as number << 8) | b2.value as number) & 0x3FFF;
+            }
+        }
+
+        this.boolValue = false;
+        if (this.type === UNP_PropertyTypes.UNP_BoolProperty)
+            this.boolValue = isArray;
+
+        return this;
+    }
 }
 
-export default UProperty;
-export { UProperty };
+class PropertyInfo {
+    public name: string; // Field name
+    public typeName: string; // Name of the field type
+    public offset: number; // Offset of this field from the class start
+    /* Number of array items:
+     *  1  for ordinary property
+     *  2+ for static arrays (Type Prop[COUNT])
+     * -1  for Array (Array<Type>)
+     *  0  for PROP_DROP - not linked to a read property
+     */
+    public count: number;
+}
+export { PropertyInfo, PropertyTag, UNP_PropertyTypes, UNP_PropertyMasks };

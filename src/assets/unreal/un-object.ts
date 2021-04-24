@@ -1,8 +1,10 @@
 import BufferValue from "../buffer-value";
-import UProperty from "./un-property";
+import { UNP_PropertyTypes } from "./un-property";
+import { Vector3 } from "three/src/math/Vector3";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
+type PropertyTag = import("./un-property").PropertyTag;
 
 class UObject {
     constructor() {
@@ -15,103 +17,74 @@ class UObject {
         throw new Error("Unresolved");
     }
 
-    protected async loadProperty(pkg: UPackage, offset: number) {
-        const index = new BufferValue(BufferValue.compat32);
-        const info = new BufferValue(BufferValue.int8);
+    protected findProperty(name: string) {
 
-        pkg.seek(offset, "set");
-        pkg.read(index);
+    }
 
-        const prop = new UProperty();
-        const propName = index.value as number >= 0 && pkg.nameTable.length
-            ? pkg.nameTable[index.value as number].name.string
-            : "None";
+    protected getPropCount(propName: string) {
+        const props = this.getPropertyMap();
+        const varName = props[propName];
+        const _var = (this as any)[varName];
 
-        prop.name = propName;
+        return _var instanceof Array ? _var.length : 1;
+    }
 
-        if (propName === "None") return prop;
+    protected async loadProperty(pkg: UPackage, tag: PropertyTag) {
+        const offStart = pkg.tell();
+        const offEnd = offStart + tag.dataSize;
+        const prop = this.findProperty(tag.name);
 
-        pkg.read(info);
-        prop.setInfo(info.value as number);
-
-        if (prop.type === UProperty.UNP_StructProperty) {
-            pkg.read(index);
-            prop.structType = pkg.nameTable[index.value as number].name.string;
+        if (tag.type === UNP_PropertyTypes.UNP_ArrayProperty) {
+            throw new Error("Unsupported yet.");
+        } else if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name)) {
+            throw new Error("Unsupported yet.");
         }
 
-        let size;
-
-        switch ((info.value as number) & UProperty.PROPERTY_SIZE_MASK) {
-            case 0x00: prop.size = 1; break;
-            case 0x10: prop.size = 2; break;
-            case 0x20: prop.size = 4; break;
-            case 0x30: prop.size = 12; break;
-            case 0x40: prop.size = 16; break;
-            case 0x50:
-                size = new BufferValue(BufferValue.uint8);
-                pkg.read(size);
-                prop.size = size.value as number;
+        switch (tag.type) {
+            case UNP_PropertyTypes.UNP_ByteProperty:
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int8)).value as number);
                 break;
-            case 0x60:
-                size = new BufferValue(BufferValue.uint16);
-                pkg.read(size);
-                prop.size = size.value as number;
+            case UNP_PropertyTypes.UNP_IntProperty:
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int32)).value as number);
                 break;
-            case 0x70:
-                size = new BufferValue(BufferValue.uint32);
-                pkg.read(size);
-                prop.size = size.value as number;
+            case UNP_PropertyTypes.UNP_BoolProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_FloatProperty:
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.float)).value as number);
                 break;
-        }
-
-        prop.arrayIndex = 0;
-        if (prop.isArray && prop.type !== UProperty.UNP_BoolProperty)
-            this.readArray(pkg, prop);
-
-        switch (prop.type) {
-            case UProperty.UNP_ByteProperty:
-                this.setProperty(propName, pkg.read(new BufferValue(BufferValue.int8)).value as number);
-                break;
-            case UProperty.UNP_IntProperty:
-                this.setProperty(propName, pkg.read(new BufferValue(BufferValue.int32)).value as number);
-                break;
-            case UProperty.UNP_BoolProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_FloatProperty:
-                this.setProperty(propName, pkg.read(new BufferValue(BufferValue.float)).value as number);
-                break;
-            case UProperty.UNP_ObjectProperty:
-                if (prop.name === "StaticMeshLod01" || prop.name === "StaticMeshLod02" || prop.name === "PhysicsVolume") {
+            case UNP_PropertyTypes.UNP_ObjectProperty:
+                if (tag.name === "StaticMeshLod01" || tag.name === "StaticMeshLod02" || tag.name === "PhysicsVolume") {
+                    throw new Error("Unsupported yet.");
                     //printf("Skipping object property: %s\n", Name);
-                    pkg.read(index);
+                    // pkg.read(index);
                 }
                 else {
-                    const objIndex = new BufferValue(BufferValue.compat32);
-                    pkg.read(objIndex);
-
+                    const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                     const obj = await pkg.fetchObject(objIndex.value as number);
-                    this.setProperty(propName, obj);
+                    this.setProperty(tag, obj);
                 }
                 break;
-            case UProperty.UNP_NameProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_StrProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_StringProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_ArrayProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_ClassProperty:
-            case UProperty.UNP_VectorProperty:
+            case UNP_PropertyTypes.UNP_NameProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_StrProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_ArrayProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_ClassProperty:
+            case UNP_PropertyTypes.UNP_VectorProperty:
                 throw new Error("Not yet implemented");
-            case UProperty.UNP_RotatorProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_MapProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_FixedArrayProperty: throw new Error("Not yet implemented");
-            case UProperty.UNP_StructProperty:
-                this.setProperty(propName, this.readStruct(pkg, prop.structType));
+            case UNP_PropertyTypes.UNP_RotatorProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_MapProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_FixedArrayProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_StructProperty:
+                this.setProperty(tag, await this.readStruct(pkg, tag));
                 break;
+            default: throw new Error("Not yet implemented");;
         }
 
         return prop;
     }
 
-    protected setProperty(propName: string, value: any) {
+    protected setProperty(tag: PropertyTag, value: any) {
         const props = this.getPropertyMap();
+        const { name: propName, arrayIndex } = tag;
 
         if (!(propName in props))
             throw new Error(`Unrecognized property: ${propName}`);
@@ -121,44 +94,22 @@ class UObject {
         if (!this.hasOwnProperty(varName))
             throw new Error(`Cannot map property '${propName}' -> ${varName}`);
 
-        (this as any)[varName] = value;
+        if ((this as any)[varName] instanceof Array) (this as any)[varName][arrayIndex] = value;
+        else (this as any)[varName] = value;
 
-        console.log("Setting property:", propName);
+        console.log(`Setting property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" ? value.constructor.name : value}`);
 
         return true;
     }
 
-    protected readArray(pkg: UPackage, prop: UProperty) {
-
-        const b = pkg.read(new BufferValue(BufferValue.int8));
-
-        if (b.value as number < 128) {
-            prop.arrayIndex = b.value as number;
-            return;
-        }
-
-        const b2 = pkg.read(new BufferValue(BufferValue.int8));
-        if (b.value as number & 0x40) { // really, (b & 0xC0) == 0xC0
-            const b3 = pkg.read(new BufferValue(BufferValue.int8));
-            const b4 = pkg.read(new BufferValue(BufferValue.int8));
-            prop.arrayIndex = (
-                (b.value as number << 24) |
-                (b2.value as number << 16) |
-                (b3.value as number << 8) |
-                b4.value as number
-            ) & 0x3FFFFF;
-        } else {
-            prop.arrayIndex = ((b.value as number << 8) | b2.value as number) & 0x3FFF;
-        }
-    }
-
-    protected readStruct(pkg: UPackage, type: string) {
-        switch (type) {
-            case "Color":
-                const color = new BufferValue(BufferValue.uint32);
-                pkg.read(color);
-                return color.value as number;
-            default: throw new Error(`Unsupported struct type: ${type}`);
+    protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
+        switch (tag.structName) {
+            case "Color": return pkg.read(new BufferValue(BufferValue.uint32)).value as number;
+            case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
+                vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
+                return vec;
+            }, new Vector3());
+            default: throw new Error(`Unsupported struct type: ${tag.structName}`);
         }
     }
 }

@@ -4,7 +4,6 @@ import UGeneration from "./un-generation";
 import UExport from "./un-export";
 import UName from "./un-name";
 import UImport from "./un-import";
-import UProperty from "./un-property";
 import UTexture from "./un-texture";
 import UObject from "./un-object";
 
@@ -136,7 +135,7 @@ class UPackage {
         const dbgImportCount = header.importCount.value;
         const dbgImportOffset = header.importOffset.value.toString(16).toUpperCase();
 
-        console.log(`Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
+        console.log(`'${this.path}' => Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
 
         if (this.path === "assets/maps/20_21.unr") {
             console.assert(header.getVersionLWORD() === 123);

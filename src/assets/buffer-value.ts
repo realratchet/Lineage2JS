@@ -1,4 +1,4 @@
-const expIsPrintable = /^[\d\w]$/i;
+const expIsPrintable = /^[^\x00-\x1F\x80-\x9F]$/i;
 const int32: ValidTypes_T<"int32"> = { bytes: 4, signed: true, name: "int32", dtype: Int32Array };
 const float: ValidTypes_T<"float"> = { bytes: 4, signed: true, name: "float", dtype: Float32Array };
 const compat32: ValidTypes_T<"compat32"> = { bytes: 4, signed: true, name: "compat32" };
