@@ -6,5 +6,5 @@ type ValidTypes_T<T extends ValueTypeNames_T> = {
     dtype?: Int32ArrayConstructor | Uint32ArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int8ArrayConstructor | Uint8ArrayConstructor | Float32ArrayConstructor;
 };
 
-type UObjectTypes_T = "Texture";
+type UObjectTypes_T = "Texture" | "Palette";
 type Seek_T = "current" | "set";

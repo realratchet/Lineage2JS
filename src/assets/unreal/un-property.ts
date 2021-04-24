@@ -47,6 +47,8 @@ class PropertyTag {
         pkg.seek(offset, "set");
 
         const index = pkg.read(new BufferValue(BufferValue.compat32));
+        if (!pkg.nameTable[index.value as number])
+            debugger;
         const propName = index.value as number >= 0 && pkg.nameTable.length
             ? pkg.nameTable[index.value as number].name.string
             : "None";

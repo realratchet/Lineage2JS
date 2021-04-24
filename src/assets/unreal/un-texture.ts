@@ -4,6 +4,7 @@ import { PropertyTag } from "./un-property";
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
+type UPlatte = import("./un-palette").UPlatte;
 
 class UTexture extends UObject {
     protected maxColor: number;
@@ -15,6 +16,7 @@ class UTexture extends UObject {
     protected bitsH: number;
     protected clampW: number;
     protected clampH: number;
+    protected palette: UPlatte;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap()), {
@@ -26,7 +28,8 @@ class UTexture extends UObject {
             "UBits": "bitsW",
             "VBits": "bitsH",
             "UClamp": "clampW",
-            "VClamp": "clampH"
+            "VClamp": "clampH",
+            "Palette": "palette"
         }
     };
 

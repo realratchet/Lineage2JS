@@ -6,6 +6,7 @@ import UName from "./un-name";
 import UImport from "./un-import";
 import UTexture from "./un-texture";
 import UObject from "./un-object";
+import UPlatte from "./un-palette";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -181,33 +182,46 @@ class UPackage {
         return this;
     }
 
+    protected async getImport(index: number) {
+        let imp = this.imports[index], mainImp = imp;
+        while (imp.idPackage.value as number !== 0)
+            imp = this.imports[-imp.idPackage.value as number - 1];
+
+        if (!this.loader.hasPackage(imp.objectName))
+            throw new Error(`Unable to locate package: ${imp.objectName}`);
+
+        const pkg = this.loader.getPackage(imp.objectName);
+
+        if (!pkg.buffer) await this.loader.load(pkg);
+
+        const exp = pkg.exports.find(exp =>
+            exp.objectName === mainImp.objectName &&
+            pkg.getPackageName(exp.idClass.value as number) === mainImp.className
+        );
+
+        if (!exp) throw new Error("Missing export");
+        if (exp.object) return exp.object;
+
+        exp.object = await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
+
+        return exp.object;
+    }
+
+    protected async getExport(index: number) {
+        const exp = this.exports[index];
+
+        if (exp.object) return exp.object;
+
+        const className = this.getPackageName(exp.idClass.value as number) as UObjectTypes_T;
+
+        exp.object = await this.createObject(this, exp, className);
+
+        return exp.object;
+    }
+
     public async fetchObject(index: number) {
-        if (index < 0) {
-            let imp = this.imports[-index - 1], mainImp = imp;
-            while (imp.idPackage.value as number !== 0)
-                imp = this.imports[-imp.idPackage.value as number - 1];
-
-            if (!this.loader.hasPackage(imp.objectName))
-                throw new Error(`Unable to locate package: ${imp.objectName}`);
-
-            const pkg = this.loader.getPackage(imp.objectName);
-
-            if (!pkg.buffer)
-                await this.loader.load(pkg);
-
-            const exp = pkg.exports.find(exp => exp.objectName === mainImp.objectName && pkg.getPackageName(exp.idClass.value as number) === mainImp.className);
-
-            if (!exp) throw new Error("Missing export");
-
-            if (exp.object)
-                return exp.object;
-
-            exp.object = await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
-
-            return exp.object;
-        } else {
-            throw new Error("Not yet implemented");
-        }
+        if (index < 0) return this.getImport(-index - 1);
+        else if (index > 0) return this.getExport(index - 1);
     }
 
     protected async createObject(pkg: UPackage, data: UExport, className: UObjectTypes_T): Promise<UObject> {
@@ -215,6 +229,7 @@ class UPackage {
 
         switch (className) {
             case "Texture": Constructor = UTexture; break;
+            case "Palette": Constructor = UPlatte; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
