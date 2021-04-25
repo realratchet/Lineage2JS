@@ -1,7 +1,10 @@
 import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
-import { Vector3 } from "three/src/math/Vector3";
 import { FColor } from "./un-contructable";
+import { Vector3 } from "three/src/math/Vector3";
+import { MathUtils } from "three/src/math/MathUtils";
+import { Euler } from "three/src/math/Euler";
+import { Matrix4 } from "three/src/math/Matrix4";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -130,6 +133,13 @@ class UObject {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;
             }, new Vector3());
+            case "Rotator": return ["x", "y", "z"].reduce((euler, ax: "x" | "y" | "z") => {
+                euler[ax] = pkg.read(new BufferValue(BufferValue.int32)).value as number * MathUtils.DEG2RAD;
+                return euler;
+            }, new Euler());
+            case "Matrix": return new Matrix4().elements.forEach((_, i, arr) => {
+                arr[i] = pkg.read(new BufferValue(BufferValue.float)).value as number;
+            });
             default: throw new Error(`Unsupported struct type: ${tag.structName}`);
         }
     }

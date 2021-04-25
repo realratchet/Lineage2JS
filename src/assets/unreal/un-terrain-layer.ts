@@ -1,6 +1,8 @@
 import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
 
+type Euler = import("three/src/math/Euler").Euler;
+type Matrix4 = import("three/src/math/Matrix4").Matrix4;
 type UTexture = import("./un-texture").UTexture;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -14,7 +16,9 @@ class UTerrainLayer extends UObject {
     protected panH: number;
     protected mapAxis: number;
     protected mapRotation: number;
-    
+    protected layerRotation: Euler;
+    protected terrainMatrix: Matrix4;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Texture": "map",
@@ -24,7 +28,9 @@ class UTerrainLayer extends UObject {
             "UPan": "panW",
             "VPan": "panH",
             "TextureMapAxis": "mapAxis",
-            "TextureRotation": "mapRotation"
+            "TextureRotation": "mapRotation",
+            "LayerRotation": "layerRotation",
+            "TerrainMatrix": "terrainMatrix"
         });
     }
 
