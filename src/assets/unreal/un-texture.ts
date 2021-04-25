@@ -1,13 +1,11 @@
 import UObject from "./un-object";
-import { PropertyTag } from "./un-property";
 
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
 type UPlatte = import("./un-palette").UPlatte;
+type FColor = import("./un-contructable").FColor;
 
 class UTexture extends UObject {
-    protected maxColor: number;
+    protected maxColor: FColor;
     protected width: number;
     protected height: number;
     protected internalTime: number[] = new Array(2);
@@ -30,30 +28,7 @@ class UTexture extends UObject {
             "UClamp": "clampW",
             "VClamp": "clampH",
             "Palette": "palette"
-        }
-    };
-
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
-
-        let curOffset = exp.offset.value as number;
-        const endOffset = curOffset + (exp.size.value as number);
-
-        do {
-            const tag = await PropertyTag.from(pkg, curOffset);
-
-            if (!tag.isValid())
-                break;
-
-            await this.loadProperty(pkg, tag);
-
-            curOffset = pkg.tell();
-
-        } while (curOffset < endOffset);
-
-        // if (curOffset < endOffset)
-        //     throw new Error(`Unread bytes: ${endOffset - curOffset}`);
-
-        return this;
+        };
     }
 }
 

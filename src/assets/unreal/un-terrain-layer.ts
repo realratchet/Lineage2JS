@@ -8,11 +8,23 @@ type UExport = import("./un-export").UExport;
 class UTerrainLayer extends UObject {
     protected map: UTexture = null;
     protected alphaMap: UTexture = null;
-
+    protected scaleW: number;
+    protected scaleH: number;
+    protected panW: number;
+    protected panH: number;
+    protected mapAxis: number;
+    protected mapRotation: number;
+    
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Texture": "map",
-            "AlphaMap": "alphaMap"
+            "AlphaMap": "alphaMap",
+            "UScale": "scaleW",
+            "VScale": "scaleH",
+            "UPan": "panW",
+            "VPan": "panH",
+            "TextureMapAxis": "mapAxis",
+            "TextureRotation": "mapRotation"
         });
     }
 

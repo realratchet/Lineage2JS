@@ -1,20 +1,41 @@
 import BufferValue from "../buffer-value";
-import { UNP_PropertyTypes } from "./un-property";
+import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import { Vector3 } from "three/src/math/Vector3";
+import { FColor } from "./un-contructable";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
-type PropertyTag = import("./un-property").PropertyTag;
 
 class UObject {
-    constructor() {
+    constructor() { }
 
-    }
+    protected readHead: number = NaN;
+    protected readTail: number = NaN;
+    protected readHeadOffset: number = 0;
 
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
+    protected setReadPointers(exp: UExport) {
+        this.readHead = exp.offset.value as number + this.readHeadOffset;
+        this.readTail = this.readHead + (exp.size.value as number);
+    }
+
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
-        throw new Error("Unresolved");
+        this.setReadPointers(exp);
+
+        do {
+            const tag = await PropertyTag.from(pkg, this.readHead);
+
+            if (!tag.isValid())
+                break;
+
+            await this.loadProperty(pkg, tag);
+
+            this.readHead = pkg.tell();
+
+        } while (this.readHead < this.readTail);
+
+        return this;
     }
 
     protected findProperty(name: string) {
@@ -104,7 +125,7 @@ class UObject {
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
         switch (tag.structName) {
-            case "Color": return pkg.read(new BufferValue(BufferValue.uint32)).value as number;
+            case "Color": return new FColor(pkg.read(BufferValue.allocBytes(4)));
             case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;

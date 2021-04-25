@@ -1,28 +1,21 @@
 import UObject from "./un-object";
-import { PropertyTag } from "./un-property";
+import FArray from "./un-array";
+import { FColor } from "./un-contructable";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
 class UPlatte extends UObject {
+    protected colors: FArray<FColor> = new FArray(FColor);
 
     public async load(pkg: UPackage, exp: UExport) {
-        let curOffset = exp.offset.value as number;
-        const endOffset = curOffset + (exp.size.value as number);
+        super.load(pkg, exp);
 
-        do {
-            const tag = await PropertyTag.from(pkg, curOffset);
+        await this.colors.load(pkg);
 
-            if (!tag.isValid())
-                break;
+        console.assert(this.colors.getElemCount() === 256);
 
-            await this.loadProperty(pkg, tag);
-
-            curOffset = pkg.tell();
-
-            debugger;
-
-        } while (curOffset < endOffset);
+        this.colors.getElem(0).a = 0;
 
         return this;
     }

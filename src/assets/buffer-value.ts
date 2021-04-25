@@ -11,18 +11,19 @@ const guid: ValidTypes_T<"guid"> = { bytes: 4 * 4, signed: true, name: "guid" };
 const char: ValidTypes_T<"char"> = { bytes: NaN, signed: true, name: "char" };
 
 class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
-    static int32 = int32;
-    static compat32 = compat32;
-    static uint32 = uint32;
-    static int8 = int8;
-    static uint8 = uint8;
-    static int16 = int16;
-    static uint16 = uint16;
-    static guid = guid;
-    static char = char;
-    static float = float;
+    public static readonly int32 = int32;
+    public static readonly compat32 = compat32;
+    public static readonly uint32 = uint32;
+    public static readonly int8 = int8;
+    public static readonly uint8 = uint8;
+    public static readonly int16 = int16;
+    public static readonly uint16 = uint16;
+    public static readonly guid = guid;
+    public static readonly char = char;
+    public static readonly float = float;
 
-    private bytes: DataView;
+    public bytes: DataView;
+
     private type: ValidTypes_T<T>;
     private endianess: "big" | "little" = "little";
 
@@ -30,15 +31,21 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         return new BufferValue<"buffer">(Object.freeze({ bytes: bytes, signed: true, name: "buffer" }));
     }
 
-    constructor(type: ValidTypes_T<T>) {
+    constructor(type?: ValidTypes_T<T>) {
         this.type = Object.assign({}, type);
         this.bytes = new DataView(new ArrayBuffer(isFinite(this.type.bytes) ? this.type.bytes : 0));
     }
 
+    public slice(start: number, end: number) {
+        const child = new BufferValue(this.type);
+        child.bytes = new DataView(this.bytes.buffer, start, end - start);
+
+        return child;
+    }
+
     public readValue(buffer: ArrayBuffer, offset: number, isEncrypted: boolean, cryptKey: number) {
-        if (buffer.byteLength <= offset + this.type.bytes) {
+        if (buffer.byteLength <= offset + this.type.bytes)
             throw new Error("Out of bounds");
-        }
 
         let byteOffset = 0;
         if (this.type.name === "char") {
@@ -55,7 +62,6 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
 
             byte.readValue(buffer, offset, isEncrypted, cryptKey);
             offset += byte.bytes.byteLength;
-
 
             let b = byte.bytes.getUint8(0);
             const sign = b & 0x80; // sign bit
