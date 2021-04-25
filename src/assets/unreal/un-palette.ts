@@ -9,8 +9,7 @@ class UPlatte extends UObject {
     protected colors: FArray<FColor> = new FArray(FColor);
 
     public async load(pkg: UPackage, exp: UExport) {
-        super.load(pkg, exp);
-
+        await super.load(pkg, exp);
         await this.colors.load(pkg);
 
         console.assert(this.colors.getElemCount() === 256);

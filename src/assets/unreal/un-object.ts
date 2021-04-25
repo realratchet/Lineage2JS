@@ -114,7 +114,7 @@ class UObject {
         const { name: propName, arrayIndex } = tag;
 
         if (!(propName in props))
-            throw new Error(`Unrecognized property: ${propName}`);
+            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}'`);
 
         const varName = props[propName];
 

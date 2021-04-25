@@ -1,8 +1,12 @@
 import UObject from "./un-object";
+import FArray from "./un-array";
+import { FMipmap } from "./un-contructable";
 
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type UPlatte = import("./un-palette").UPlatte;
 type FColor = import("./un-contructable").FColor;
+type UPackage = import("./un-package").UPackage;
+type UExport = import("./un-export").UExport;
 
 class UTexture extends UObject {
     protected maxColor: FColor;
@@ -15,6 +19,8 @@ class UTexture extends UObject {
     protected clampW: number;
     protected clampH: number;
     protected palette: UPlatte;
+    protected mipZero: FColor;
+    protected mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap()), {
@@ -27,8 +33,19 @@ class UTexture extends UObject {
             "VBits": "bitsH",
             "UClamp": "clampW",
             "VClamp": "clampH",
-            "Palette": "palette"
+            "Palette": "palette",
+            "MipZero": "mipZero",
+            "Mips": "mipmaps"
         };
+    }
+
+    public async load(pkg: UPackage, exp: UExport) {
+        await super.load(pkg, exp);
+
+
+        await this.mipmaps.load(pkg);
+
+        return this;
     }
 }
 

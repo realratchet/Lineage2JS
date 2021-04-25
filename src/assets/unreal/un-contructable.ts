@@ -25,4 +25,15 @@ class FColor extends FConstructable {
     }
 }
 
-export { FConstructable, FColor };
+class FMipmap extends FConstructable {
+    public static readonly fieldCount: number = 9;
+    public static readonly fieldSize: number = 32;
+
+    constructor(buff: BufferValue<"buffer">) {
+        super();
+
+        debugger;
+    }
+}
+
+export { FConstructable, FColor, FMipmap };
