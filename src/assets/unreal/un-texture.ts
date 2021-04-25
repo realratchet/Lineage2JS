@@ -1,10 +1,11 @@
 import UObject from "./un-object";
 import FArray from "./un-array";
-import { FMipmap } from "./un-contructable";
+import { FMipmap } from "./un-mipmap";
+import BufferValue from "../buffer-value";
 
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type UPlatte = import("./un-palette").UPlatte;
-type FColor = import("./un-contructable").FColor;
+type FColor = import("./un-color").FColor;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
@@ -42,6 +43,7 @@ class UTexture extends UObject {
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
 
+        pkg.read(BufferValue.allocBytes(4)); //unknown
 
         await this.mipmaps.load(pkg);
 

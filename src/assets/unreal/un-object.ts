@@ -1,6 +1,6 @@
 import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
-import { FColor } from "./un-contructable";
+import { FColor } from "./un-color";
 import { Vector3 } from "three/src/math/Vector3";
 import { MathUtils } from "three/src/math/MathUtils";
 import { Euler } from "three/src/math/Euler";
@@ -41,10 +41,6 @@ class UObject {
         return this;
     }
 
-    protected findProperty(name: string) {
-
-    }
-
     protected getPropCount(propName: string) {
         const props = this.getPropertyMap();
         const varName = props[propName];
@@ -56,7 +52,6 @@ class UObject {
     protected async loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();
         const offEnd = offStart + tag.dataSize;
-        const prop = this.findProperty(tag.name);
 
         if (tag.type === UNP_PropertyTypes.UNP_ArrayProperty) {
             throw new Error("Unsupported yet.");
@@ -106,7 +101,8 @@ class UObject {
                 break;
         }
 
-        return prop;
+        if (pkg.tell() < offEnd)
+            console.warn(`Unread ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
     }
 
     protected setProperty(tag: PropertyTag, value: any) {
@@ -131,7 +127,7 @@ class UObject {
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
         switch (tag.structName) {
-            case "Color": return new FColor(pkg.read(BufferValue.allocBytes(4)));
+            case "Color": return await new FColor().load(pkg);
             case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;

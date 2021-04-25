@@ -8,3 +8,7 @@ type ValidTypes_T<T extends ValueTypeNames_T> = {
 
 type UObjectTypes_T = "Texture" | "Palette";
 type Seek_T = "current" | "set";
+
+type ValidConstructables_T = typeof import("./unreal/un-color").FColor
+    | typeof import("./unreal/un-mipmap").FMipmap
+    | typeof import("./unreal/un-mipmap").FNumber;
