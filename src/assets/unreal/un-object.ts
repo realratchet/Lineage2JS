@@ -100,7 +100,10 @@ class UObject {
             case UNP_PropertyTypes.UNP_StructProperty:
                 this.setProperty(tag, await this.readStruct(pkg, tag));
                 break;
-            default: throw new Error("Not yet implemented");;
+            default:
+                pkg.seek(tag.dataSize);
+                console.warn(`Unknown data type '${tag.type}' for '${tag.name}' skipping ${tag.dataSize} bytes.`);
+                break;
         }
 
         return prop;

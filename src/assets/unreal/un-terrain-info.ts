@@ -7,14 +7,17 @@ type Vector3 = import("three/src/math/Vector3").Vector3;
 type UPackage = import("./un-package").UPackage;
 
 class UTerrainInfo extends UObject {
-    protected terrainMap: UTexture = null;
-    protected terrainScale: Vector3 = null;
     protected readHeadOffset: number = 17;
+
+    protected terrainMap: UTexture;
+    protected terrainScale: Vector3;
+    protected layer: UTerrainLayer;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
-            "TerrainScale": "terrainScale"
+            "TerrainScale": "terrainScale",
+            "Layers": "layer"
         })
     };
 
