@@ -46,7 +46,11 @@ class UObject {
         const varName = props[propName];
         const _var = (this as any)[varName];
 
-        return _var instanceof Array ? _var.length : 1;
+        return _var instanceof Array
+            ? _var.length
+            : _var instanceof Set
+                ? Infinity
+                : 1;
     }
 
     protected async loadProperty(pkg: UPackage, tag: PropertyTag) {
@@ -117,10 +121,11 @@ class UObject {
         if (!this.hasOwnProperty(varName))
             throw new Error(`Cannot map property '${propName}' -> ${varName}`);
 
-        if ((this as any)[varName] instanceof Array) (this as any)[varName][arrayIndex] = value;
+        if ((this as any)[varName] instanceof Array) ((this as any)[varName] as Array<any>)[arrayIndex] = value;
+        else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        console.log(`Setting property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" ? value.constructor.name : value}`);
+        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" ? value.constructor.name : value}`);
 
         return true;
     }

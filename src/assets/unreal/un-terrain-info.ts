@@ -12,7 +12,7 @@ class UTerrainInfo extends UObject {
 
     protected terrainMap: UTexture;
     protected terrainScale: Vector3;
-    protected layer: UTerrainLayer;
+    protected layer: Set<UTerrainLayer> = new Set<UTerrainLayer>();
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -23,9 +23,27 @@ class UTerrainInfo extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        // debugger;
+        this.readHead = exp.offset.value as number;
+        this.readTail = this.readHead + (exp.size.value as number);
+
+        // const tag = await PropertyTag.from(pkg, this.readHead);
+
+        debugger;
 
         await super.load(pkg, exp);
+
+        debugger;
+
+        // const tag = [
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell()),
+        //     await PropertyTag.from(pkg, pkg.tell())
+        // ];
 
         debugger;
 
@@ -34,7 +52,7 @@ class UTerrainInfo extends UObject {
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
         switch (tag.structName) {
-            case "TerrainLayer": return await new UTerrainLayer().load(pkg, null);
+            case "TerrainLayer": return await new UTerrainLayer(pkg.tell(), pkg.tell() + tag.dataSize).load(pkg, null);
         }
 
         return super.readStruct(pkg, tag);

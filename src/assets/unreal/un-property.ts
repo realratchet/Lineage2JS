@@ -36,6 +36,7 @@ class PropertyTag {
     public dataSize: number;
     public boolValue: boolean;
     public enumName: string;
+    public index : number;
 
     static async from(pkg: UPackage, offset: number): Promise<PropertyTag> {
         return await new PropertyTag().load(pkg, offset);
@@ -47,9 +48,12 @@ class PropertyTag {
         pkg.seek(offset, "set");
 
         const index = pkg.read(new BufferValue(BufferValue.compat32));
-        if (!pkg.nameTable[index.value as number])
-            debugger;
-        const propName = index.value as number >= 0 && pkg.nameTable.length
+        
+        this.index = index.value as number;
+
+        // if (!pkg.nameTable[index.value as number])
+        //     debugger;
+        const propName = index.value as number >= 0 && index.value < pkg.nameTable.length
             ? pkg.nameTable[index.value as number].name.string
             : "None";
 

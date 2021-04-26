@@ -1,5 +1,7 @@
 import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
+import FArray from "./un-array";
+import BufferValue from "../buffer-value";
 
 type Euler = import("three/src/math/Euler").Euler;
 type Matrix4 = import("three/src/math/Matrix4").Matrix4;
@@ -19,6 +21,13 @@ class UTerrainLayer extends UObject {
     protected layerRotation: Euler;
     protected terrainMatrix: Matrix4;
 
+    constructor(readHead: number, readTail: number) {
+        super();
+
+        this.readHead = readHead;
+        this.readTail = readTail;
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Texture": "map",
@@ -35,19 +44,41 @@ class UTerrainLayer extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        let curOffset = pkg.tell();
+        // debugger;
+        // await new FArray({ typeSize: 0 } as any).load(pkg)
+        // debugger;
 
         do {
-            const tag = await PropertyTag.from(pkg, curOffset);
-
-            if (!tag.isValid())
+            const tag = await PropertyTag.from(pkg, this.readHead);
+            // debugger;
+            if (!tag.isValid()) {
+                // debugger;
+                // await new FArray({ typeSize: 0 } as any).load(pkg)
+                // const _tag = [
+                //     await PropertyTag.from(pkg, pkg.tell()),
+                //     await PropertyTag.from(pkg, pkg.tell()),
+                //     await PropertyTag.from(pkg, pkg.tell()),
+                //     await PropertyTag.from(pkg, pkg.tell())
+                // ];
+                // debugger;
                 break;
+            }
 
             await this.loadProperty(pkg, tag);
 
-            curOffset = pkg.tell();
+            this.readHead = pkg.tell();
 
-        } while (true);
+        } while (this.readHead < this.readTail);
+
+        debugger
+        do {
+            const tag = await PropertyTag.from(pkg, pkg.tell());
+            if (tag.name !== "None")
+                console.log(pkg.tell(), tag.name);
+
+            this.readHead = pkg.tell();
+        } while (this.readHead < this.readTail);
+        debugger
 
         return this;
     }
