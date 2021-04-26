@@ -12,6 +12,8 @@ async function startCore() {
     const expTerrainSector = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
     const terrain = await new UTerrainInfo().load(pkg, expTerrainSector);
 
+    console.log("terrain loading done");
+
     // const viewport = document.querySelector("viewport") as HTMLViewportElement;
     // const renderManager = new RenderManager(viewport);
 }

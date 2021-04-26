@@ -9,12 +9,12 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
 
     protected list: T[];
     protected elemCount: number;
-    protected Constructor: { new(): T } & ValidConstructables_T;
+    protected Constructor: { new(...pars: any): T } & ValidConstructables_T;
 
     public getElemCount() { return this.elemCount; }
     public getElem(idx: number) { return this.list[idx]; }
 
-    public constructor(constr: { new(): T } & ValidConstructables_T) {
+    public constructor(constr: { new(...pars: any): T } & ValidConstructables_T) {
         super();
 
         if (!isFinite(constr.typeSize))
@@ -31,8 +31,6 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
 
         if (count.value as number === 0) return this;
 
-        debugger;
-
         for (let i = 0, len = this.elemCount; i < len; i++) {
             this.list[i] = await new this.Constructor().load(pkg);
         }
@@ -44,9 +42,7 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public async load(pkg: UPackage): Promise<this> {
 
-        const skip = pkg.read(new BufferValue(BufferValue.int32)); // skip unknown
-
-        debugger;
+        pkg.read(new BufferValue(BufferValue.int32)); // skip unknown
 
         await super.load(pkg);
 
