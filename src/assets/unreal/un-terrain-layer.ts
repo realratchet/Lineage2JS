@@ -70,7 +70,6 @@ class UTerrainLayer extends UObject {
 
         } while (this.readHead < this.readTail);
 
-        debugger
         do {
             const tag = await PropertyTag.from(pkg, pkg.tell());
             if (tag.name !== "None")
@@ -78,7 +77,6 @@ class UTerrainLayer extends UObject {
 
             this.readHead = pkg.tell();
         } while (this.readHead < this.readTail);
-        debugger
 
         return this;
     }

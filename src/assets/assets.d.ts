@@ -11,4 +11,5 @@ type Seek_T = "current" | "set";
 
 type ValidConstructables_T = typeof import("./unreal/un-color").FColor
     | typeof import("./unreal/un-mipmap").FMipmap
-    | typeof import("./unreal/un-mipmap").FNumber;
+    | typeof import("./unreal/un-mipmap").FNumber
+    | typeof import("./unreal/un-deco-layer").FDecoLayer;

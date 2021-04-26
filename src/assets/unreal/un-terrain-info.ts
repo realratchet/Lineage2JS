@@ -2,6 +2,8 @@ import UObject from "./un-object";
 import UTexture from "./un-texture";
 import { PropertyTag } from "./un-property";
 import UTerrainLayer from "./un-terrain-layer";
+import FArray from "./un-array";
+import FDecoLayer from "./un-deco-layer";
 
 type Vector3 = import("three/src/math/Vector3").Vector3;
 type UExport = import("./un-export").UExport;
@@ -13,39 +15,24 @@ class UTerrainInfo extends UObject {
     protected terrainMap: UTexture;
     protected terrainScale: Vector3;
     protected layer: Set<UTerrainLayer> = new Set<UTerrainLayer>();
+    protected decoLayers: FArray<FDecoLayer> = new FArray(FDecoLayer);
+    protected showOnTerrain: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
             "TerrainScale": "terrainScale",
-            "Layers": "layer"
+            "Layers": "layer",
+            "DecoLayers": "decoLayers",
+            "ShowOnTerrain": "showOnTerrain"
         });
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        this.readHead = exp.offset.value as number;
-        this.readTail = this.readHead + (exp.size.value as number);
-
-        // const tag = await PropertyTag.from(pkg, this.readHead);
-
-        debugger;
+        // this.readHead = exp.offset.value as number;
+        // this.readTail = this.readHead + (exp.size.value as number);
 
         await super.load(pkg, exp);
-
-        debugger;
-
-        // const tag = [
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell()),
-        //     await PropertyTag.from(pkg, pkg.tell())
-        // ];
-
-        debugger;
 
         return this;
     }

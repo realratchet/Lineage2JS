@@ -5,6 +5,7 @@ import { Vector3 } from "three/src/math/Vector3";
 import { MathUtils } from "three/src/math/MathUtils";
 import { Euler } from "three/src/math/Euler";
 import { Matrix4 } from "three/src/math/Matrix4";
+import FArray from "./un-array";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -57,11 +58,9 @@ class UObject {
         const offStart = pkg.tell();
         const offEnd = offStart + tag.dataSize;
 
-        if (tag.type === UNP_PropertyTypes.UNP_ArrayProperty) {
-            throw new Error("Unsupported yet.");
-        } else if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name)) {
-            throw new Error("Unsupported yet.");
-        }
+        if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
+            throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
+
 
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
@@ -89,7 +88,7 @@ class UObject {
             case UNP_PropertyTypes.UNP_NameProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StrProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
-            case UNP_PropertyTypes.UNP_ArrayProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_ArrayProperty: this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty:
             case UNP_PropertyTypes.UNP_VectorProperty:
                 throw new Error("Not yet implemented");
@@ -107,6 +106,27 @@ class UObject {
 
         if (pkg.tell() < offEnd)
             console.warn(`Unread ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
+    }
+    protected readArray(pkg: UPackage, tag: PropertyTag) {
+        const props = this.getPropertyMap();
+        const { name: propName } = tag;
+
+        if (!(propName in props))
+            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}'`);
+
+        const varName = props[propName];
+
+        if (!this.hasOwnProperty(varName))
+            throw new Error(`Cannot map property '${propName}' -> ${varName}`);
+
+        const _var = (this as any)[varName] as FArray;
+
+        if (!(_var instanceof FArray))
+            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
+
+        _var.load(pkg);
+
+        return true;
     }
 
     protected setProperty(tag: PropertyTag, value: any) {

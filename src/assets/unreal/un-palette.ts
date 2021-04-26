@@ -6,7 +6,7 @@ type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
 class UPlatte extends UObject {
-    protected colors: FArray<FColor> = new FArray(FColor) as any;
+    protected colors: FArray<FColor> = new FArray(FColor);
 
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
