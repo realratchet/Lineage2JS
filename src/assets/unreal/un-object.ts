@@ -136,9 +136,15 @@ class UObject {
                 euler[ax] = pkg.read(new BufferValue(BufferValue.int32)).value as number * MathUtils.DEG2RAD;
                 return euler;
             }, new Euler());
-            case "Matrix": return new Matrix4().elements.forEach((_, i, arr) => {
-                arr[i] = pkg.read(new BufferValue(BufferValue.float)).value as number;
-            });
+            case "Matrix": return (function () {
+                const mat = new Matrix4();
+
+                mat.elements.forEach((_, i, arr) => {
+                    arr[i] = pkg.read(new BufferValue(BufferValue.float)).value as number;
+                });
+
+                return mat;
+            })();
             default: throw new Error(`Unsupported struct type: ${tag.structName}`);
         }
     }

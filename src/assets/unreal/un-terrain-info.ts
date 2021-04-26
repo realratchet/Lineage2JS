@@ -4,6 +4,7 @@ import { PropertyTag } from "./un-property";
 import UTerrainLayer from "./un-terrain-layer";
 
 type Vector3 = import("three/src/math/Vector3").Vector3;
+type UExport = import("./un-export").UExport;
 type UPackage = import("./un-package").UPackage;
 
 class UTerrainInfo extends UObject {
@@ -18,8 +19,18 @@ class UTerrainInfo extends UObject {
             "TerrainMap": "terrainMap",
             "TerrainScale": "terrainScale",
             "Layers": "layer"
-        })
-    };
+        });
+    }
+
+    public async load(pkg: UPackage, exp: UExport) {
+        // debugger;
+
+        await super.load(pkg, exp);
+
+        debugger;
+
+        return this;
+    }
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
         switch (tag.structName) {
@@ -28,7 +39,6 @@ class UTerrainInfo extends UObject {
 
         return super.readStruct(pkg, tag);
     }
-
 }
 
 export default UTerrainInfo;

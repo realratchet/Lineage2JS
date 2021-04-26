@@ -2,6 +2,7 @@
 import AssetLoader from "./assets/asset-loader";
 import assetList from "./assets/asset-list";
 import UTerrainInfo from "./assets/unreal/un-terrain-info";
+import UTerrainSector from "./assets/unreal/un-terrain-sector";
 
 async function startCore() {
     const assetLoader = new AssetLoader(assetList);
@@ -9,8 +10,10 @@ async function startCore() {
 
     await assetLoader.load(pkg);
 
-    const expTerrainSector = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
-    const terrain = await new UTerrainInfo().load(pkg, expTerrainSector);
+    const expTerrainInfo = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
+    const expTerrainSector = pkg.exports.filter(e => e.objectName.includes("TerrainSector")).slice(0, 1);
+    const terrain = await new UTerrainInfo().load(pkg, expTerrainInfo);
+    const sectors = await Promise.all(expTerrainSector.map(async exp => await new UTerrainSector().load(pkg, exp)));
 
     console.log("terrain loading done");
 
