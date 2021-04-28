@@ -14,7 +14,7 @@ class UTerrainInfo extends UObject {
 
     protected terrainMap: UTexture;
     protected terrainScale: Vector3;
-    protected layer: Set<UTerrainLayer> = new Set<UTerrainLayer>();
+    protected layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
 
@@ -22,9 +22,8 @@ class UTerrainInfo extends UObject {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
             "TerrainScale": "terrainScale",
-            "Layers": "layer",
-            "DecoLayers": "decoLayers",
-            // "ShowOnTerrain": "showOnTerrain"
+            "Layers": "layers",
+            "DecoLayers": "decoLayers"
         });
     }
 

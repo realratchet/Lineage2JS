@@ -1,43 +1,21 @@
-import UObject from "./un-object";
 import FArray from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
+import UMaterial from "./un-material";
 
-type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type UPlatte = import("./un-palette").UPlatte;
-type FColor = import("./un-color").FColor;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
-class UTexture extends UObject {
-    protected maxColor: FColor;
-    protected width: number;
-    protected height: number;
-    protected internalTime: number[] = new Array(2);
-    protected format: ETextureFormat;
-    protected bitsW: number; // texture size log2 (number of bits in size value)
-    protected bitsH: number;
-    protected clampW: number;
-    protected clampH: number;
+class UTexture extends UMaterial {
     protected palette: UPlatte;
-    protected mipZero: FColor;
     protected mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap()), {
-            "MaxColor": "maxColor",
-            "VSize": "height",
-            "USize": "width",
-            "InternalTime": "internalTime",
-            "Format": "format",
-            "UBits": "bitsW",
-            "VBits": "bitsH",
-            "UClamp": "clampW",
-            "VClamp": "clampH",
+        return Object.assign({}, super.getPropertyMap(), {
             "Palette": "palette",
-            "MipZero": "mipZero",
             "Mips": "mipmaps"
-        };
+        });
     }
 
     public async load(pkg: UPackage, exp: UExport) {

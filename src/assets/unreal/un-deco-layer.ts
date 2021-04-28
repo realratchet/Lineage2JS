@@ -1,24 +1,29 @@
-import BufferValue from "../buffer-value";
 import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 type UTexture = import("./un-texture").UTexture;
+type UStaticMesh = import("./un-static-mesh").UStaticMesh;
+type FRangeVector = import("./un-range").FRangeVector;
 
 class UDecoLayer extends UObject {
-    public static readonly typeSize: number = 1;
+    public static readonly typeSize: number = 128;
     protected showOnTerrain: number;
     protected scaleMap: UTexture;
     protected densityMap: UTexture;
     protected colorMap: UTexture;
+    protected staticMesh: UStaticMesh;
+    protected scaleMultiplier: FRangeVector;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "ShowOnTerrain": "showOnTerrain",
             "ScaleMap": "scaleMap",
             "DensityMap": "densityMap",
-            "ColorMap": "colorMap"
+            "ColorMap": "colorMap",
+            "StaticMesh": "staticMesh",
+            "ScaleMultiplier": "scaleMultiplier"
         });
     }
 

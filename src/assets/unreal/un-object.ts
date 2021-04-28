@@ -6,6 +6,7 @@ import { MathUtils } from "three/src/math/MathUtils";
 import { Euler } from "three/src/math/Euler";
 import { Matrix4 } from "three/src/math/Matrix4";
 import FArray from "./un-array";
+import FRangeVector from "./un-range";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -61,8 +62,6 @@ class UObject {
         if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
             throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
-        if (tag.type === 0 && tag.name === "Vector") debugger;
-
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int8)).value as number);
@@ -70,7 +69,7 @@ class UObject {
             case UNP_PropertyTypes.UNP_IntProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int32)).value as number);
                 break;
-            case UNP_PropertyTypes.UNP_BoolProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_BoolProperty: this.setProperty(tag, tag.boolValue); break;
             case UNP_PropertyTypes.UNP_FloatProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.float)).value as number);
                 break;
@@ -79,8 +78,7 @@ class UObject {
                     throw new Error("Unsupported yet.");
                     //printf("Skipping object property: %s\n", Name);
                     // pkg.read(index);
-                }
-                else {
+                } else {
                     const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                     const obj = await pkg.fetchObject(objIndex.value as number);
                     this.setProperty(tag, obj);
@@ -172,6 +170,7 @@ class UObject {
 
                 return mat;
             })();
+            case "RangeVector": return await new FRangeVector().load(pkg);
             default: throw new Error(`Unsupported struct type: ${tag.structName}`);
         }
     }

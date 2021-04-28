@@ -6,7 +6,7 @@ type ValidTypes_T<T extends ValueTypeNames_T> = {
     dtype?: Int32ArrayConstructor | Uint32ArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int8ArrayConstructor | Uint8ArrayConstructor | Float32ArrayConstructor;
 };
 
-type UObjectTypes_T = "Texture" | "Palette";
+type UObjectTypes_T = "Texture" | "Palette" | "StaticMesh" | "Shader";
 type Seek_T = "current" | "set";
 
 type ValidConstructables_T = typeof import("./unreal/un-color").FColor
