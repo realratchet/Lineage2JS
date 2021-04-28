@@ -4,7 +4,7 @@ const assetList = Object.freeze([
     "textures/T_texture.utx",
     "textures/T_Dion.utx",
     "textures/L2DecoLayer.utx",
-    "textures/field_deco_S.utx"
+    "models/field_deco_S.usx"
 ]);
 
 export default assetList;
