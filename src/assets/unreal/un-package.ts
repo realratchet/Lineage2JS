@@ -222,6 +222,7 @@ class UPackage {
     public async fetchObject(index: number) {
         if (index < 0) return this.getImport(-index - 1);
         else if (index > 0) return this.getExport(index - 1);
+        return null;
     }
 
     protected async createObject(pkg: UPackage, data: UExport, className: UObjectTypes_T): Promise<UObject> {

@@ -44,25 +44,10 @@ class UTerrainLayer extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        // debugger;
-        // await new FArray({ typeSize: 0 } as any).load(pkg)
-        // debugger;
-
         do {
             const tag = await PropertyTag.from(pkg, this.readHead);
-            // debugger;
-            if (!tag.isValid()) {
-                // debugger;
-                // await new FArray({ typeSize: 0 } as any).load(pkg)
-                // const _tag = [
-                //     await PropertyTag.from(pkg, pkg.tell()),
-                //     await PropertyTag.from(pkg, pkg.tell()),
-                //     await PropertyTag.from(pkg, pkg.tell()),
-                //     await PropertyTag.from(pkg, pkg.tell())
-                // ];
-                // debugger;
-                break;
-            }
+
+            if (!tag.isValid()) break;
 
             await this.loadProperty(pkg, tag);
 
@@ -72,11 +57,13 @@ class UTerrainLayer extends UObject {
 
         do {
             const tag = await PropertyTag.from(pkg, pkg.tell());
-            if (tag.name !== "None")
-                console.log(pkg.tell(), tag.name);
+            // if (tag.name !== "None")
+            //     console.log(pkg.tell(), tag.name);
 
             this.readHead = pkg.tell();
         } while (this.readHead < this.readTail);
+
+        pkg.seek(this.readTail, "set");
 
         return this;
     }

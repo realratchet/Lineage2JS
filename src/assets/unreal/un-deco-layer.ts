@@ -1,18 +1,48 @@
-import { FConstructable } from "./un-constructable";
-import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
+import UObject from "./un-object";
+import { PropertyTag } from "./un-property";
 
-class FDecoLayer extends FConstructable {
+type UPackage = import("./un-package").UPackage;
+type UExport = import("./un-export").UExport;
+type UTexture = import("./un-texture").UTexture;
+
+class UDecoLayer extends UObject {
     public static readonly typeSize: number = 1;
+    protected showOnTerrain: number;
+    protected scaleMap: UTexture;
+    protected densityMap: UTexture;
+    protected colorMap: UTexture;
 
-    public async load(pkg: UPackage): Promise<this> {
-        debugger;
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "ShowOnTerrain": "showOnTerrain",
+            "ScaleMap": "scaleMap",
+            "DensityMap": "densityMap",
+            "ColorMap": "colorMap"
+        });
+    }
 
-        pkg.read(BufferValue.allocBytes(182));
+    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        this.readHead = pkg.tell();
+        this.readTail = this.readHead + 182;
+
+        do {
+            const tag = await PropertyTag.from(pkg, this.readHead);
+
+            if (!tag.isValid())
+                break;
+
+            await this.loadProperty(pkg, tag);
+
+            this.readHead = pkg.tell();
+
+        } while (this.readHead < this.readTail);
+
+        pkg.seek(this.readTail, "set");
 
         return this;
     }
 }
 
-export default FDecoLayer;
-export { FDecoLayer };
+export default UDecoLayer;
+export { UDecoLayer };

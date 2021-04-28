@@ -61,6 +61,7 @@ class UObject {
         if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
             throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
+        if (tag.type === 0 && tag.name === "Vector") debugger;
 
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
@@ -88,7 +89,7 @@ class UObject {
             case UNP_PropertyTypes.UNP_NameProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StrProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
-            case UNP_PropertyTypes.UNP_ArrayProperty: this.readArray(pkg, tag); break;
+            case UNP_PropertyTypes.UNP_ArrayProperty: await this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty:
             case UNP_PropertyTypes.UNP_VectorProperty:
                 throw new Error("Not yet implemented");
@@ -107,7 +108,8 @@ class UObject {
         if (pkg.tell() < offEnd)
             console.warn(`Unread ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
     }
-    protected readArray(pkg: UPackage, tag: PropertyTag) {
+
+    protected async readArray(pkg: UPackage, tag: PropertyTag) {
         const props = this.getPropertyMap();
         const { name: propName } = tag;
 
@@ -124,7 +126,7 @@ class UObject {
         if (!(_var instanceof FArray))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
 
-        _var.load(pkg);
+        await _var.load(pkg);
 
         return true;
     }
@@ -134,7 +136,7 @@ class UObject {
         const { name: propName, arrayIndex } = tag;
 
         if (!(propName in props))
-            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}'`);
+            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
         const varName = props[propName];
 
@@ -145,7 +147,7 @@ class UObject {
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" ? value.constructor.name : value}`);
+        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
     }

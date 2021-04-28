@@ -3,7 +3,7 @@ import UTexture from "./un-texture";
 import { PropertyTag } from "./un-property";
 import UTerrainLayer from "./un-terrain-layer";
 import FArray from "./un-array";
-import FDecoLayer from "./un-deco-layer";
+import UDecoLayer from "./un-deco-layer";
 
 type Vector3 = import("three/src/math/Vector3").Vector3;
 type UExport = import("./un-export").UExport;
@@ -15,7 +15,7 @@ class UTerrainInfo extends UObject {
     protected terrainMap: UTexture;
     protected terrainScale: Vector3;
     protected layer: Set<UTerrainLayer> = new Set<UTerrainLayer>();
-    protected decoLayers: FArray<FDecoLayer> = new FArray(FDecoLayer);
+    protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
 
     protected getPropertyMap() {
@@ -24,17 +24,8 @@ class UTerrainInfo extends UObject {
             "TerrainScale": "terrainScale",
             "Layers": "layer",
             "DecoLayers": "decoLayers",
-            "ShowOnTerrain": "showOnTerrain"
+            // "ShowOnTerrain": "showOnTerrain"
         });
-    }
-
-    public async load(pkg: UPackage, exp: UExport) {
-        // this.readHead = exp.offset.value as number;
-        // this.readTail = this.readHead + (exp.size.value as number);
-
-        await super.load(pkg, exp);
-
-        return this;
     }
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {

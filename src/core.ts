@@ -13,7 +13,7 @@ async function startCore() {
     const expTerrainInfo = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
     const expTerrainSector = pkg.exports.filter(e => e.objectName.includes("TerrainSector")).slice(0, 1);
     const terrain = await new UTerrainInfo().load(pkg, expTerrainInfo);
-    const sectors = await Promise.all(expTerrainSector.map(async exp => await new UTerrainSector().load(pkg, exp)));
+    // const sectors = await Promise.all(expTerrainSector.map(async exp => await new UTerrainSector().load(pkg, exp)));
 
     console.log("terrain loading done");
 
