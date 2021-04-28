@@ -4,6 +4,8 @@ import { PropertyTag } from "./un-property";
 import UTerrainLayer from "./un-terrain-layer";
 import FArray from "./un-array";
 import UDecoLayer from "./un-deco-layer";
+import { FNumber } from "./un-mipmap";
+import BufferValue from "../buffer-value";
 
 type Vector3 = import("three/src/math/Vector3").Vector3;
 type UExport = import("./un-export").UExport;
@@ -17,13 +19,31 @@ class UTerrainInfo extends UObject {
     protected layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
+    protected quadVisibilityBitmap: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
+    protected edgeTurnBitmap: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
+    protected mapX: number;
+    protected mapY: number;
+    protected quadVisibilityBitmapOrig: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
+    protected edgeTurnBitmapOrig: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
+    protected generatedSectorCounter: number;
+    protected numIntMap: number;
+    protected autoTimeGeneration: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
             "TerrainScale": "terrainScale",
             "Layers": "layers",
-            "DecoLayers": "decoLayers"
+            "DecoLayers": "decoLayers",
+            "QuadVisibilityBitmap": "quadVisibilityBitmap",
+            "EdgeTurnBitmap": "edgeTurnBitmap",
+            "MapX": "mapX",
+            "MapY": "mapY",
+            "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig",
+            "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
+            "GeneratedSectorCounter": "generatedSectorCounter",
+            "NumIntMap": "numIntMap",
+            "bAutoTimeGeneration": "autoTimeGeneration"
         });
     }
 
