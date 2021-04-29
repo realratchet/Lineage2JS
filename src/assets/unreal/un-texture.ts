@@ -19,11 +19,17 @@ class UTexture extends UMaterial {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
+        pkg.seek(exp.offset.value as number, "set");
+        pkg.dump(128);
+        debugger;
+        
+        
         await super.load(pkg, exp);
-
+        
         pkg.read(BufferValue.allocBytes(4)); //unknown
-
+        
         await this.mipmaps.load(pkg, null);
+        
 
         return this;
     }

@@ -11,6 +11,7 @@ import FUnknownStruct from "./un-unknown-struct";
 type Vector3 = import("three/src/math/Vector3").Vector3;
 type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UPackage = import("./un-package").UPackage;
+type UExport = import("./un-export").UExport;
 
 class UTerrainInfo extends UObject {
     protected readHeadOffset: number = 17;
@@ -62,6 +63,23 @@ class UTerrainInfo extends UObject {
         }
 
         return super.readStruct(pkg, tag);
+    }
+
+    public async load(pkg: UPackage, exp: UExport) {
+        await super.load(pkg, exp);
+
+        // do {
+        //     const tag = await PropertyTag.from(pkg, this.readHead);
+        //     if (tag.name !== "None")
+        //         console.log(pkg.tell(), tag.name);
+
+        //     // this.readHead = pkg.tell();
+        //     this.readHead += 1;
+        // } while (this.readHead < this.readTail);
+
+        // debugger;
+
+        return this;
     }
 }
 

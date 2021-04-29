@@ -28,9 +28,9 @@
             "request": "launch",
             "program": " ${workspaceFolder}/cpp/ue_viewer/umodel",
             "args": [
-                "/home/ratchet/Documents/lineage-js/assets/maps/20_21.unr",
+                // "/home/ratchet/Documents/lineage-js/assets/maps/20_21.unr",
                 // "/home/ratchet/Documents/lineage-js/assets/textures/T_20_21.utx",
-                // "/home/ratchet/Documents/lineage-js/assets/textures/T_texture.utx",
+                "/home/ratchet/Documents/lineage-js/assets/textures/T_Dion.utx",
                 // "-list"
             ],
             "stopAtEntry": false,

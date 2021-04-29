@@ -56,14 +56,17 @@ class UTerrainLayer extends UObject {
         } while (this.readHead < this.readTail);
 
         do {
-            const tag = await PropertyTag.from(pkg, pkg.tell());
+            const tag = await PropertyTag.from(pkg, this.readHead);
             // if (tag.name !== "None")
             //     console.log(pkg.tell(), tag.name);
 
-            this.readHead = pkg.tell();
+            // this.readHead = pkg.tell();
+            this.readHead += 1;
         } while (this.readHead < this.readTail);
 
         pkg.seek(this.readTail, "set");
+
+        // debugger;
 
         return this;
     }
