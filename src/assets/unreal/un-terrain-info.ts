@@ -9,7 +9,7 @@ import { PropertyTag } from "./un-property";
 import FUnknownStruct from "./un-unknown-struct";
 
 type Vector3 = import("three/src/math/Vector3").Vector3;
-type UExport = import("./un-export").UExport;
+type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UPackage = import("./un-package").UPackage;
 
 class UTerrainInfo extends UObject {
@@ -32,6 +32,7 @@ class UTerrainInfo extends UObject {
     protected tIntMap: FArray<FUnknownStruct> = new FArray(FUnknownStruct);
     protected tickTime: number;
     protected dynamicActorFilterState: boolean;
+    protected level: ULevelInfo;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -50,7 +51,8 @@ class UTerrainInfo extends UObject {
             "bAutoTimeGeneration": "autoTimeGeneration",
             "TIntMap": "tIntMap",
             "TickTime": "tickTime",
-            "bDynamicActorFilterState": "dynamicActorFilterState"
+            "bDynamicActorFilterState": "dynamicActorFilterState",
+            "Level": "level"
         });
     }
 

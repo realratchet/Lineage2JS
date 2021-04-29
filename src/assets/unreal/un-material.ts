@@ -1,7 +1,7 @@
 import UObject from "./un-object"
-import UPackage from "./un-package";
 import { PropertyTag } from "./un-property";
 
+type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type FColor = import("./un-color").FColor;

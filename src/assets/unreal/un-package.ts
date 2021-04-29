@@ -9,6 +9,7 @@ import UObject from "./un-object";
 import UPlatte from "./un-palette";
 import UStaticMesh from "./un-static-mesh";
 import { UShader } from "./un-material";
+import ULevelInfo from "./un-level-info";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -235,6 +236,7 @@ class UPackage {
             case "Palette": Constructor = UPlatte; break;
             case "StaticMesh": Constructor = UStaticMesh; break;
             case "Shader": Constructor = UShader; break;
+            case "LevelInfo": Constructor = ULevelInfo; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
