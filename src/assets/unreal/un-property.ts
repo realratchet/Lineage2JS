@@ -36,7 +36,7 @@ class PropertyTag {
     public dataSize: number;
     public boolValue: boolean;
     public enumName: string;
-    public index : number;
+    public index: number;
 
     static async from(pkg: UPackage, offset: number): Promise<PropertyTag> {
         return await new PropertyTag().load(pkg, offset);
@@ -48,7 +48,7 @@ class PropertyTag {
         pkg.seek(offset, "set");
 
         const index = pkg.read(new BufferValue(BufferValue.compat32));
-        
+
         this.index = index.value as number;
 
         // if (!pkg.nameTable[index.value as number])
@@ -123,16 +123,4 @@ class PropertyTag {
     }
 }
 
-class PropertyInfo {
-    public name: string; // Field name
-    public typeName: string; // Name of the field type
-    public offset: number; // Offset of this field from the class start
-    /* Number of array items:
-     *  1  for ordinary property
-     *  2+ for static arrays (Type Prop[COUNT])
-     * -1  for Array (Array<Type>)
-     *  0  for PROP_DROP - not linked to a read property
-     */
-    public count: number;
-}
-export { PropertyInfo, PropertyTag, UNP_PropertyTypes, UNP_PropertyMasks };
+export { PropertyTag, UNP_PropertyTypes, UNP_PropertyMasks };

@@ -1,11 +1,12 @@
 import UObject from "./un-object";
 import UTexture from "./un-texture";
-import { PropertyTag } from "./un-property";
 import UTerrainLayer from "./un-terrain-layer";
 import FArray from "./un-array";
 import UDecoLayer from "./un-deco-layer";
-import { FNumber } from "./un-mipmap";
+import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
+import { PropertyTag } from "./un-property";
+import FUnknownStruct from "./un-unknown-struct";
 
 type Vector3 = import("three/src/math/Vector3").Vector3;
 type UExport = import("./un-export").UExport;
@@ -28,6 +29,9 @@ class UTerrainInfo extends UObject {
     protected generatedSectorCounter: number;
     protected numIntMap: number;
     protected autoTimeGeneration: boolean;
+    protected tIntMap: FArray<FUnknownStruct> = new FArray(FUnknownStruct);
+    protected tickTime: number;
+    protected dynamicActorFilterState: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -43,7 +47,10 @@ class UTerrainInfo extends UObject {
             "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
             "GeneratedSectorCounter": "generatedSectorCounter",
             "NumIntMap": "numIntMap",
-            "bAutoTimeGeneration": "autoTimeGeneration"
+            "bAutoTimeGeneration": "autoTimeGeneration",
+            "TIntMap": "tIntMap",
+            "TickTime": "tickTime",
+            "bDynamicActorFilterState": "dynamicActorFilterState"
         });
     }
 

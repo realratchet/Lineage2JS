@@ -10,7 +10,7 @@ class UPlatte extends UObject {
 
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
-        await this.colors.load(pkg);
+        await this.colors.load(pkg, null);
 
         console.assert(this.colors.getElemCount() === 256);
 

@@ -23,7 +23,7 @@ class UTexture extends UMaterial {
 
         pkg.read(BufferValue.allocBytes(4)); //unknown
 
-        await this.mipmaps.load(pkg);
+        await this.mipmaps.load(pkg, null);
 
         return this;
     }

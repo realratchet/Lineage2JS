@@ -1,31 +1,10 @@
-import { FConstructable } from "./un-constructable";
-import { FArrayLazy } from "./un-array";
-import UPackage from "./un-package";
+import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
+import FNumber from "./un-number";
+import { FArrayLazy } from "./un-array";
 
-class FNumber<T extends ValueTypeNames_T = ValueTypeNames_T> extends FConstructable {
-    public static readonly typeSize: number = 1;
-
-    protected readonly type: ValidTypes_T<T>;
-    public value: number;
-
-    constructor(dtype: ValidTypes_T<T>) {
-        super();
-        this.type = dtype;
-    }
-
-    public async load(pkg: UPackage): Promise<this> {
-        this.value = pkg.read(new BufferValue(this.type)).value as number;
-
-        return this;
-    }
-
-    public static forType<T extends ValueTypeNames_T = ValueTypeNames_T>(dtype: ValidTypes_T<T>): FNumber<T> {
-        return class FNumberExt extends FNumber<T> {
-            constructor() { super(dtype); }
-        } as unknown as FNumber<T>;
-    }
-}
+type UPackage = import("./un-package").UPackage;
+type PropertyTag = import("./un-property").PropertyTag;
 
 class FMipmap extends FConstructable {
     public static readonly typeSize: number = FArrayLazy.typeSize + 16;
@@ -36,8 +15,8 @@ class FMipmap extends FConstructable {
     public bitsW: number;
     public bitsH: number;
 
-    public async load(pkg: UPackage): Promise<this> {
-        await this.dataArray.load(pkg);
+    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+        await this.dataArray.load(pkg, tag);
 
         const int32 = new BufferValue(BufferValue.int32);
         const int8 = new BufferValue(BufferValue.int8);

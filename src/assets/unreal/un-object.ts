@@ -124,7 +124,7 @@ class UObject {
         if (!(_var instanceof FArray))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
 
-        await _var.load(pkg);
+        await _var.load(pkg, tag);
 
         return true;
     }
@@ -152,7 +152,7 @@ class UObject {
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
         switch (tag.structName) {
-            case "Color": return await new FColor().load(pkg);
+            case "Color": return await new FColor().load(pkg, tag);
             case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;

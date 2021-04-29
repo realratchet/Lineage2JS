@@ -1,4 +1,4 @@
-import { FConstructable } from "./un-constructable";
+import FConstructable from "./un-constructable";
 import UPackage from "./un-package";
 import { Vector2 } from "three";
 import BufferValue from "../buffer-value";
