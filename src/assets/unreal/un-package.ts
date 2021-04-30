@@ -17,11 +17,11 @@ class UPackage {
     public readonly path: string;
     public readonly loader: AssetLoader;
 
-    private buffer: ArrayBuffer = null;
-    private isEncrypted = false;
-    private cryptKey = new BufferValue(BufferValue.uint8);
-    private offset = 0;
-    private contentOffset = 0;
+    protected buffer: ArrayBuffer = null;
+    protected isEncrypted = false;
+    protected cryptKey = new BufferValue(BufferValue.uint8);
+    protected offset = 0;
+    protected contentOffset = 0;
 
     public exports: readonly UExport[];
     public imports: readonly UImport[];
@@ -66,20 +66,7 @@ class UPackage {
             const string2 = groups.map(g => g.string).join("");
 
             constructedString += string2;
-
-            if (constructedString.match(/TerrainMap|TerrainScale/)) {
-                console.log(
-                    i, this.offset,
-                    string1,
-                    string2,
-                    constructedString
-                );
-                constructedString = "";
-            }
-
             constructedString = constructedString.slice(-100);
-
-            // break
 
             if (lineCount <= 256) {
                 console.log(
@@ -228,7 +215,7 @@ class UPackage {
         return null;
     }
 
-    protected async createObject(pkg: UPackage, data: UExport, className: UObjectTypes_T): Promise<UObject> {
+    public async createObject(pkg: UPackage, exp: UExport, className: UObjectTypes_T): Promise<UObject> {
         let Constructor: typeof UObject = null;
 
         switch (className) {
@@ -240,7 +227,7 @@ class UPackage {
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
-        return await new Constructor().load(pkg, data);
+        return await new Constructor().load(pkg, exp);
     }
 
     protected getPackageName(index: number) {

@@ -1,5 +1,6 @@
 import UObject from "./un-object"
 import { PropertyTag } from "./un-property";
+import ETextureFormat from "./un-tex-format";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -57,6 +58,22 @@ class UMaterial extends UObject {
             "MipZero": "mipZero",
             "MaxColor": "maxColor",
         });
+    }
+
+    protected getTexturePixelFormat() {
+        switch (this.format) {
+            case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
+            case ETextureFormat.TEXF_DXT1: return ETexturePixelFormat.TPF_DXT1;
+            case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;
+            case ETextureFormat.TEXF_RGBA8: return ETexturePixelFormat.TPF_BGRA8;
+            case ETextureFormat.TEXF_DXT3: return ETexturePixelFormat.TPF_DXT3;
+            case ETextureFormat.TEXF_DXT5: return ETexturePixelFormat.TPF_DXT5;
+            case ETextureFormat.TEXF_L8: return ETexturePixelFormat.TPF_G8;
+            case ETextureFormat.TEXF_CxV8U8: return ETexturePixelFormat.TPF_V8U8_2;
+            case ETextureFormat.TEXF_DXT5N: return ETexturePixelFormat.TPF_DXT5N;
+            case ETextureFormat.TEXF_3DC: return ETexturePixelFormat.TPF_BC5;
+            default: throw new Error(`Unknown UE2 pixel format: ${this.format}`);
+        }
     }
 }
 

@@ -9,7 +9,7 @@ type PropertyTag = import("./un-property").PropertyTag;
 class FMipmap extends FConstructable {
     public static readonly typeSize: number = FArrayLazy.typeSize + 16;
 
-    public dataArray: FArrayLazy<FNumber> = new FArrayLazy(FNumber.forType(BufferValue.int8) as any);
+    protected dataArray: FArrayLazy<FNumber> = new FArrayLazy(FNumber.forType(BufferValue.uint8) as any);
     public sizeW: number;
     public sizeH: number;
     public bitsW: number;
@@ -27,6 +27,16 @@ class FMipmap extends FConstructable {
         this.bitsH = pkg.read(int8).value as number;
 
         return this;
+    }
+
+    public getImageBuffer(): Uint8Array {
+        const elCount = this.dataArray.getElemCount();
+        const elements = new Uint8Array(elCount);
+
+        for (let i = 0; i < elCount; i++)
+            elements[i] = this.dataArray.getElem(i).value;
+
+        return elements;
     }
 }
 

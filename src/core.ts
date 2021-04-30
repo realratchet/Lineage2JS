@@ -3,12 +3,26 @@ import AssetLoader from "./assets/asset-loader";
 import assetList from "./assets/asset-list";
 import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
-import { PixelFormatInfo } from "./assets/unreal/un-tex-format";
+import UTexture from "./assets/unreal/un-texture";
+
+async function loadTexture() {
+    const assetLoader = new AssetLoader(assetList);
+    const pkg = assetLoader.getPackage("T_Dion");
+
+    await assetLoader.load(pkg);
+
+    const texData = pkg.exports.find(exp => exp.objectName === "DI_C5");
+    const texture = await pkg.createObject(pkg, texData, "Texture") as UTexture;
+
+    const data = texture.decodeMipmap(0);
+
+    debugger;
+}
+
+export default loadTexture;
+export { loadTexture as startCore }
 
 async function startCore() {
-    const _y = PixelFormatInfo;
-    debugger
-
     const assetLoader = new AssetLoader(assetList);
     const pkg = assetLoader.getPackage("20_21");
 
@@ -27,6 +41,8 @@ async function startCore() {
 
     const leftoverBytes = (expTerrainInfo.size.value as number) + (expTerrainInfo.offset.value as number) - pkg.tell()
 
+    console.log("leftover:", leftoverBytes);
+
     debugger;
 
     for (let exp of expTerrainSector) {
@@ -42,5 +58,5 @@ async function startCore() {
     // const renderManager = new RenderManager(viewport);
 }
 
-export default startCore;
-export { startCore };
+// export default startCore;
+// export { startCore };

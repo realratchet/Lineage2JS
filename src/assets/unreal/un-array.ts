@@ -38,7 +38,7 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
 
         if (tag !== null) console.assert(dataSize % this.elemCount === 0);
 
-        const elementSize = dataSize / this.elemCount;
+        const elementSize = tag !== null ? dataSize / this.elemCount : null;
 
         for (let i = 0, len = this.elemCount; i < len; i++) {
             this.list[i] = await new this.Constructor(elementSize).load(pkg, tag);

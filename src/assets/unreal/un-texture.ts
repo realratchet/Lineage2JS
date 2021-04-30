@@ -1,7 +1,9 @@
 import FArray from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
-import UMaterial from "./un-material";
+import UMaterial, { ETexturePixelFormat } from "./un-material";
+import decompressDDS from "../dds/dds-decode";
+
 
 type UPlatte = import("./un-palette").UPlatte;
 type UPackage = import("./un-package").UPackage;
@@ -19,19 +21,22 @@ class UTexture extends UMaterial {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        pkg.seek(exp.offset.value as number, "set");
-        pkg.dump(128);
-        debugger;
-        
-        
         await super.load(pkg, exp);
-        
+
         pkg.read(BufferValue.allocBytes(4)); //unknown
-        
+
         await this.mipmaps.load(pkg, null);
-        
 
         return this;
+    }
+
+    public decodeMipmap(level: number) {
+        const mipmap = this.mipmaps.getElem(level);
+        const width = mipmap.sizeW, height = mipmap.sizeH;
+        const data = mipmap.getImageBuffer();
+        const format = this.getTexturePixelFormat();
+
+        return decompressDDS(format, width, height, data)
     }
 }
 
