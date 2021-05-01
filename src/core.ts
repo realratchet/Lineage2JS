@@ -17,6 +17,9 @@ async function loadTexture() {
     const texture = utexture.decodeMipmap(0);
 
     const canvas = document.createElement("canvas");
+    canvas.width = texture.image.width;
+    canvas.height = texture.image.height;
+
     const ctx2d = canvas.getContext("2d");
     const imdata = ctx2d.createImageData(texture.image.width, texture.image.height);
     imdata.data.set(texture.image.data);
