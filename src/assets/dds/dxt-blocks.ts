@@ -18,13 +18,11 @@ class BlockDXT1 {
         this.col1 = new Color16(dataview.getUint16(offset + 2, true));
         this.indices = new Array(4).fill(1).map((_, i) => dataview.getUint8(offset + 4 + i));
 
-        debugger;
-
         return offset + 8;
     }
 
     protected evalPalette() {
-        const data = new DataView(new ArrayBuffer(32 * 4));
+        const data = new DataView(new ArrayBuffer(4 * 4));
 
         const { r: r0, g: g0, b: b0 } = this.col0;
         const { r: r1, g: g1, b: b1 } = this.col1;
@@ -70,17 +68,15 @@ class BlockDXT1 {
     }
 
     public decodeBlock(rgba: Uint8Array) {
-        debugger;
         const colArray = this.evalPalette();
+
         // Write color block.
         for (let j = 0; j < 4; j++) {
             for (let i = 0; i < 4; i++) {
-                const idx = (this.indices[j] >> (2 * i)) & 3;
-                const slice = colArray.slice(idx, idx + 32);
+                const idx = ((this.indices[j] >> (2 * i)) & 3) * 4;
+                const slice = colArray.slice(idx, idx + 4);
 
-                debugger;
-
-                rgba.set(slice, j * 4 + i);
+                rgba.set(slice, (j * 4 + i) * 4);
             }
         }
     }

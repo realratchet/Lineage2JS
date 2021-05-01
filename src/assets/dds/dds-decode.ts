@@ -5,14 +5,12 @@ import { ETexturePixelFormat } from "../unreal/un-material";
 import { RGBFormat, RGBAFormat, DataTexture } from "three";
 import BlockDXT1 from "./dxt-blocks";
 
-function decompressDDS(format: ETexturePixelFormat, texWidth: number, texHeight: number, data: Uint8Array) {
+function decompressDDS(format: ETexturePixelFormat, texWidth: number, texHeight: number, data: Uint8Array): DataTexture {
     const header = new DDSHeader();
     const formatInfo = PixelFormatInfo[format];
     const fourCC = formatInfo.fourCC[0];
     const pixelSize = formatInfo.float ? 16 : 4;
     const size = texWidth * texHeight * pixelSize;
-
-    debugger;
 
     header.setFourCC(fourCC & 0xFF, (fourCC >> 8) & 0xFF, (fourCC >> 16) & 0xFF, (fourCC >> 24) & 0xFF);
     header.setWidth(texWidth);
@@ -48,7 +46,7 @@ function decompressDDS(format: ETexturePixelFormat, texWidth: number, texHeight:
         readBlockImage(headerOffset, header, dataview, dataTexture);
     } else throw new Error("Invalid DDS type");
 
-    return image;
+    return dataTexture;
 }
 
 export default decompressDDS;
@@ -65,21 +63,26 @@ function readBlockImage(offset: number, header: DDSHeader, dataview: DataView, t
     const w = texture.image.width;
     const h = texture.image.height;
 
-    const bw = (w + 3) / 4;
-    const bh = (h + 3) / 4;
-    const pixels = new Uint8Array(32 * 4 * 4);
+    const bw = (w + 3) >> 2;
+    const bh = (h + 3) >> 2;
+    const blockPixels = new Uint8Array(4 * 4 * 4);
 
     for (let by = 0; by < bh; by++) {
         for (let bx = 0; bx < bw; bx++) {
             // ColorBlock block;
 
             // // Read color block.
-            offset = readBlock(offset, header, dataview, pixels);
+            offset = readBlock(offset, header, dataview, blockPixels);
 
             // Write color block.
             for (let y = 0; y < Math.min(4, h - 4 * by); y++) {
                 for (let x = 0; x < Math.min(4, w - 4 * bx); x++) {
-                    // img->pixel(4*bx+x, 4*by+y) = block.color(x, y);
+                    const blockOffset = (4 * y + x) * 4;
+                    const imx = 4 * bx + x, imy = 4 * by + y;
+                    const imi = imy * w + imx;
+                    const color = blockPixels.slice(blockOffset, blockOffset + 4);
+
+                    texture.image.data.set(color, imi * 4)
                 }
             }
         }
@@ -87,7 +90,6 @@ function readBlockImage(offset: number, header: DDSHeader, dataview: DataView, t
 }
 
 function readBlock(offset: number, header: DDSHeader, dataview: DataView, rgba: Uint8Array) {
-    debugger;
     if (header.pf.fourcc === DDSConstants.FOURCC_DXT1) {
         const block = new BlockDXT1();
         offset = block.read(offset, dataview);
