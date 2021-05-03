@@ -8,18 +8,26 @@ import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
+    const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
     const pkg = assetLoader.getPackage("field_deco_S");
 
     await assetLoader.load(pkg);
 
-    const meshData = pkg.exports.find(exp => exp.objectName === "talking_island_rock01_LOD");
-    const umesh = await pkg.createObject(pkg, meshData, "StaticMesh") as UStaticMesh;
-    const mesh = await umesh.decodeMesh();
-
-    const renderManager = new RenderManager(viewport);
-
+    // const meshData = pkg.exports.find(exp => exp.objectName === "talking_island_rock01");
+    const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02_LOD");
     debugger;
+    // for (let exp of pkg.exports) {
+        // if (exp.idClass.value !== -2) continue;
+
+        const umesh = await pkg.createObject(pkg, exp, "StaticMesh") as UStaticMesh;
+        const mesh = await umesh.decodeMesh();
+
+        renderManager.scene.add(mesh);
+    // }
+
+
+    renderManager.startRendering();
 }
 
 export default loadMesh;

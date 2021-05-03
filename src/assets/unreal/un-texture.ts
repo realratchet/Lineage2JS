@@ -3,6 +3,7 @@ import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
 import UMaterial, { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
+import { RepeatWrapping } from "three";
 
 
 type UPlatte = import("./un-palette").UPlatte;
@@ -36,7 +37,12 @@ class UTexture extends UMaterial {
         const data = mipmap.getImageBuffer();
         const format = this.getTexturePixelFormat();
 
-        return decompressDDS(format, width, height, data)
+        const texture = decompressDDS(format, width, height, data)
+
+        texture.wrapS = RepeatWrapping;
+        texture.wrapT = RepeatWrapping;
+
+        return texture;
     }
 }
 

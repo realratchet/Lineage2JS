@@ -1,11 +1,14 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2 } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry } from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 class RenderManager {
     public readonly renderer: WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
-    public readonly camera = new PerspectiveCamera(75);
+    public readonly camera = new PerspectiveCamera(75, 1, 0.1, 10000);
+    public readonly scene = new Scene();
     public readonly lastSize: Vector2 = new Vector2();
+    public readonly controls: OrbitControls;
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
 
@@ -19,6 +22,12 @@ class RenderManager {
             preserveDrawingBuffer: true,
             alpha: true
         });
+
+        this.renderer.setClearColor(0xff00ff);
+        this.controls = new OrbitControls(this.camera, viewport);
+        this.camera.position.set(0, 5, 15);
+        this.camera.lookAt(0, 0, 0);
+        this.scene.add(new Mesh(new BoxBufferGeometry()));
 
         viewport.appendChild(this.renderer.domElement);
 
@@ -34,7 +43,7 @@ class RenderManager {
         this.lastSize.set(width, height);
     }
 
-    public async onHandleResize(): Promise<void> {
+    protected async onHandleResize(): Promise<void> {
         const oldStyle = this.getDomElement().style.display;
         this.getDomElement().style.display = "none";
         const { width, height } = this.viewport.getBoundingClientRect();
@@ -46,7 +55,7 @@ class RenderManager {
         this.needsUpdate = true;
     }
 
-    public async onHandleRender(currentTime: number): Promise<void> {
+    protected onHandleRender(currentTime: number): void {
         const deltaTime = currentTime - this.lastRender
 
         const isFrameDirty = this.isPersistentRendering || this.needsUpdate;
@@ -57,25 +66,29 @@ class RenderManager {
             this._postRender(currentTime, deltaTime);
             this.needsUpdate = false;
         }
+
+        requestAnimationFrame(this.onHandleRender.bind(this));
     }
 
     protected _preRender(currentTime: number, deltaTime: number) {
-
+        this.renderer.clear();
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
-
+        this.renderer.render(this.scene, this.camera);
     }
 
     protected _postRender(currentTime: number, deltaTime: number) {
 
     }
+
+    public startRendering() { this.onHandleRender(0); }
 }
 
 export default RenderManager;
 export { RenderManager }
 
 function addResizeListeners(manager: RenderManager) {
-    global.addEventListener("resize", manager.onHandleResize.bind(manager));
-    manager.onHandleResize();
+    global.addEventListener("resize", (manager as any).onHandleResize.bind(manager));
+    (manager as any).onHandleResize();
 }
