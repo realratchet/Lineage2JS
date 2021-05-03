@@ -16,7 +16,8 @@ async function loadMesh() {
 
     // const meshData = pkg.exports.find(exp => exp.objectName === "talking_island_rock01");
     const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02_LOD");
-    debugger;
+    // const exp = pkg.exports.find(exp => exp.objectName === "inna_underwater_star");
+    // debugger;
     // for (let exp of pkg.exports) {
         // if (exp.idClass.value !== -2) continue;
 

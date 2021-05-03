@@ -82,5 +82,35 @@ class BlockDXT1 {
     }
 }
 
-export default BlockDXT1;
-export { BlockDXT1 };
+class AlphaBlockDXT3 {
+    protected row: number[] = new Array(4).fill(4);
+
+    public read(offset: number, dataview: DataView): number {
+        for (let i = 0; i < 4; i++)
+            this.row[i] = dataview.getUint16(offset + 2 * i, true);
+
+        debugger;
+
+        return offset + 2 * 4;
+    }
+
+    public decodeBlock(rgba: Uint8Array) {
+        debugger;
+    }
+}
+
+class BlockDXT3 {
+    protected color: BlockDXT1 = new BlockDXT1();
+    protected alpha: AlphaBlockDXT3 = new AlphaBlockDXT3();
+
+    public read(offset: number, dataview: DataView): number {
+        offset += this.alpha.read(offset, dataview);
+        return this.color.read(offset, dataview);
+    }
+
+    public decodeBlock(rgba: Uint8Array) {
+        debugger;
+    }
+}
+
+export { BlockDXT1, BlockDXT3 };

@@ -31,13 +31,13 @@ class UTexture extends UMaterial {
         return this;
     }
 
-    public decodeMipmap(level: number) {
+    public async decodeMipmap(level: number) {
         const mipmap = this.mipmaps.getElem(level);
         const width = mipmap.sizeW, height = mipmap.sizeH;
         const data = mipmap.getImageBuffer();
         const format = this.getTexturePixelFormat();
 
-        const texture = decompressDDS(format, width, height, data)
+        const texture = await decompressDDS(format, width, height, data)
 
         texture.wrapS = RepeatWrapping;
         texture.wrapT = RepeatWrapping;
