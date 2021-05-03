@@ -90,7 +90,7 @@ class UShader extends UMaterial {
 }
 
 class UMaterialContainer extends UObject {
-    public static readonly typeSize: number = 1;
+    public static readonly typeSize: number = 16;
 
     protected noDynamicShadowCast: boolean;
     protected collisionforShadow: boolean;

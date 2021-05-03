@@ -1,9 +1,28 @@
-// import RenderManager from "./rendering/render-manager";
+import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
 import assetList from "./assets/asset-list";
 import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
 import UTexture from "./assets/unreal/un-texture";
+import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
+
+async function loadMesh() {
+    const viewport = document.querySelector("viewport") as HTMLViewportElement;
+    const assetLoader = new AssetLoader(assetList);
+    const pkg = assetLoader.getPackage("field_deco_S");
+
+    await assetLoader.load(pkg);
+
+    const meshData = pkg.exports.find(exp => exp.objectName === "talking_island_rock01_LOD");
+    const umesh = await pkg.createObject(pkg, meshData, "StaticMesh") as UStaticMesh;
+    const mesh = await umesh.decodeMesh();
+
+    const renderManager = new RenderManager(viewport);
+
+    debugger;
+}
+
+export default loadMesh;
 
 async function loadTexture() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -28,8 +47,8 @@ async function loadTexture() {
     viewport.appendChild(canvas);
 }
 
-export default loadTexture;
-export { loadTexture as startCore }
+// export default loadTexture;
+// export { loadTexture as startCore }
 
 async function startCore() {
     const assetLoader = new AssetLoader(assetList);
@@ -68,4 +87,4 @@ async function startCore() {
 }
 
 // export default startCore;
-// export { startCore };
+export { startCore };

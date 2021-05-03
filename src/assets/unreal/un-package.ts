@@ -7,7 +7,7 @@ import UImport from "./un-import";
 import UTexture from "./un-texture";
 import UObject from "./un-object";
 import UPlatte from "./un-palette";
-import UStaticMesh from "./un-static-mesh";
+import UStaticMesh from "./static-mesh/un-static-mesh";
 import { UShader } from "./un-material";
 import ULevelInfo from "./un-level-info";
 

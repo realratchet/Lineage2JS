@@ -4,7 +4,7 @@ import { PropertyTag } from "./un-property";
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 type UTexture = import("./un-texture").UTexture;
-type UStaticMesh = import("./un-static-mesh").UStaticMesh;
+type UStaticMesh = import("./static-mesh/un-static-mesh").UStaticMesh;
 type FRangeVector = import("./un-range").FRangeVector;
 
 class UDecoLayer extends UObject {
