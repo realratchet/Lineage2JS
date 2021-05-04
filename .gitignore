@@ -4,3 +4,4 @@ bin/
 .vscode/tasks.json
 /build/*
 cpp/
+*.log

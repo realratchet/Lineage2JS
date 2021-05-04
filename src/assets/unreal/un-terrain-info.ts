@@ -66,7 +66,16 @@ class UTerrainInfo extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
+
+        // likely lightning
+        // pkg.seek(exp.offset.value as number, "set");
+        // const header = pkg.read(BufferValue.allocBytes(17));
+
         await super.load(pkg, exp);
+
+        console.log("sector end:", exp.offset.value as number);
+        const sectorCount = pkg.read(new BufferValue(BufferValue.compat32));
+
 
         // do {
         //     const tag = await PropertyTag.from(pkg, this.readHead);
@@ -77,7 +86,6 @@ class UTerrainInfo extends UObject {
         //     this.readHead += 1;
         // } while (this.readHead < this.readTail);
 
-        // debugger;
 
         return this;
     }

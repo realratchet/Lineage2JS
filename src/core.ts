@@ -19,19 +19,19 @@ async function loadMesh() {
     // const exp = pkg.exports.find(exp => exp.objectName === "inna_underwater_star");
     // debugger;
     // for (let exp of pkg.exports) {
-        // if (exp.idClass.value !== -2) continue;
+    // if (exp.idClass.value !== -2) continue;
 
-        const umesh = await pkg.createObject(pkg, exp, "StaticMesh") as UStaticMesh;
-        const mesh = await umesh.decodeMesh();
+    const umesh = await pkg.createObject(pkg, exp, "StaticMesh") as UStaticMesh;
+    const mesh = await umesh.decodeMesh();
 
-        renderManager.scene.add(mesh);
+    renderManager.scene.add(mesh);
     // }
 
 
     renderManager.startRendering();
 }
 
-export default loadMesh;
+// export default loadMesh;
 
 async function loadTexture() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -60,10 +60,26 @@ async function loadTexture() {
 // export { loadTexture as startCore }
 
 async function startCore() {
+    const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const assetLoader = new AssetLoader(assetList);
     const pkg = assetLoader.getPackage("20_21");
 
     await assetLoader.load(pkg);
+
+    // let str = "";
+    // [...pkg.exports]
+    //     .sort(({ offset: { value: a } }, { offset: { value: b } }) => {
+    //         return (a as number) - (b as number);
+    //     })
+    //     .forEach(exp => {
+    //         str = str + `${exp.objectName}:, ${exp.offset.value as number}, ${exp.size.value as number}\n`;
+    //     });
+
+    // console.log(str);
+
+    // throw new Error("dicks");
+
+    // debugger;
 
     const expTerrainInfo = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
     const expTerrainSector = pkg.exports
@@ -72,28 +88,33 @@ async function startCore() {
             const a = parseInt(na.replace("TerrainSector", ""));
             const b = parseInt(nb.replace("TerrainSector", ""));
             return a - b;
-        })
-        .slice(0, 2);
+        });
+
+    // [...expTerrainSector]
+    //     .sort(({ offset: { value: a } }, { offset: { value: b } }) => {
+    //         return (a as number) - (b as number);
+    //     })
+    //     .forEach(exp => {
+    //         console.log(exp.objectName, exp.offset.value as number, exp.size.value as number);
+    //     })
+    // debugger;
+
     const terrain = await new UTerrainInfo().load(pkg, expTerrainInfo);
 
-    const leftoverBytes = (expTerrainInfo.size.value as number) + (expTerrainInfo.offset.value as number) - pkg.tell()
 
-    console.log("leftover:", leftoverBytes);
+    // debugger;
 
-    debugger;
+    // for (let exp of expTerrainSector.slice(0, 2)) {
+    //     const t = await new UTerrainSector().load(pkg, exp);
+    //     debugger;
+    // }
 
-    for (let exp of expTerrainSector) {
-        const t = await new UTerrainSector().load(pkg, exp);
-        debugger;
-    }
+    // // const sectors = await Promise.all(expTerrainSector.map(async exp => await new UTerrainSector().load(pkg, exp)));
 
-    // const sectors = await Promise.all(expTerrainSector.map(async exp => await new UTerrainSector().load(pkg, exp)));
+    // console.log("terrain loading done");
 
-    console.log("terrain loading done");
-
-    // const viewport = document.querySelector("viewport") as HTMLViewportElement;
     // const renderManager = new RenderManager(viewport);
 }
 
-// export default startCore;
+export default startCore;
 export { startCore };
