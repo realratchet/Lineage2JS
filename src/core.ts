@@ -5,6 +5,7 @@ import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
 import UTexture from "./assets/unreal/un-texture";
 import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
+import { Box3, Vector3 } from "three";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -61,8 +62,9 @@ async function loadTexture() {
 
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
+    const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    const pkg = assetLoader.getPackage("20_21");
+    const pkg = assetLoader.getPackage("21_20");
 
     await assetLoader.load(pkg);
 
@@ -82,7 +84,7 @@ async function startCore() {
     // debugger;
 
     const expTerrainInfo = pkg.exports.find(e => e.objectName.includes("TerrainInfo"));
-    const expTerrainSector = pkg.exports
+    const expTerrainSectors = pkg.exports
         .filter(e => e.objectName.includes("TerrainSector"))
         .sort(({ objectName: na }, { objectName: nb }) => {
             const a = parseInt(na.replace("TerrainSector", ""));
@@ -99,10 +101,19 @@ async function startCore() {
     //     })
     // debugger;
 
-    const terrain = await new UTerrainInfo().load(pkg, expTerrainInfo);
+    const uTerrain = await new UTerrainInfo(expTerrainSectors/*.slice(0, 18)*/).load(pkg, expTerrainInfo);
+    const terrain = await uTerrain.decodeMesh();
+    const boundingBox = new Box3().setFromObject(terrain);
+    const boxSize = boundingBox.getSize(new Vector3());
+    // terrain.scale.set(0.001, 0.001, 0.001);
+    terrain.position.y = -boundingBox.min.y;
 
+    console.log(boxSize.toArray().join(", "));
 
-    // debugger;
+    renderManager.scene.add(terrain);
+    renderManager.startRendering();
+
+    (global as any).renderManager = renderManager;
 
     // for (let exp of expTerrainSector.slice(0, 2)) {
     //     const t = await new UTerrainSector().load(pkg, exp);

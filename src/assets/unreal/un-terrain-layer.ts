@@ -2,6 +2,7 @@ import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
+import { Plane } from "three";
 
 type Euler = import("three/src/math/Euler").Euler;
 type Matrix4 = import("three/src/math/Matrix4").Matrix4;
@@ -20,6 +21,7 @@ class UTerrainLayer extends UObject {
     protected mapRotation: number;
     protected layerRotation: Euler;
     protected terrainMatrix: Matrix4;
+    protected zPlane: Plane;
 
     constructor(readHead: number, readTail: number) {
         super();
@@ -36,6 +38,7 @@ class UTerrainLayer extends UObject {
             "VScale": "scaleH",
             "UPan": "panW",
             "VPan": "panH",
+            "ZPlane": "zPlane",
             "TextureMapAxis": "mapAxis",
             "TextureRotation": "mapRotation",
             "LayerRotation": "layerRotation",

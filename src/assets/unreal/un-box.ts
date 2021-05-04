@@ -11,7 +11,7 @@ class UBox extends FConstructable {
     public max: Vector3 = new Vector3();
     public isValid: number;
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public async load(pkg: UPackage): Promise<this> {
         const f = new BufferValue(BufferValue.float);
         const b = new BufferValue(BufferValue.int8);
 

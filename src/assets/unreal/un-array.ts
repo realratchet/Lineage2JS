@@ -25,20 +25,21 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
         this.Constructor = constr;
     }
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
-        const beginIndex = tag !== null ? pkg.tell() : null;
+    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+        const hasTag = tag !== null && tag !== undefined;
+        const beginIndex = hasTag ? pkg.tell() : null;
         const count = pkg.read(new BufferValue(BufferValue.compat32));
-        const headerOffset = tag !== null ? pkg.tell() - beginIndex : null;
-        const dataSize = tag !== null ? tag.dataSize - headerOffset : null;
+        const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
+        const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
         this.elemCount = count.value as number;
         this.list = new Array(count.value as number);
 
         if (count.value as number === 0) return this;
 
-        if (tag !== null) console.assert(dataSize % this.elemCount === 0);
+        if (hasTag) console.assert(dataSize % this.elemCount === 0);
 
-        const elementSize = tag !== null ? dataSize / this.elemCount : null;
+        const elementSize = hasTag ? dataSize / this.elemCount : null;
 
         for (let i = 0, len = this.elemCount; i < len; i++) {
             this.list[i] = await new this.Constructor(elementSize).load(pkg, tag);

@@ -7,12 +7,13 @@ import { Euler } from "three/src/math/Euler";
 import { Matrix4 } from "three/src/math/Matrix4";
 import FArray from "./un-array";
 import FRangeVector from "./un-range";
+import { Plane } from "three";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
-class UObject {
-    constructor() { }
+abstract class UObject {
+    protected constructor(...params: any[]) { }
 
     protected readHead: number = NaN;
     protected readTail: number = NaN;
@@ -85,7 +86,9 @@ class UObject {
                 }
                 break;
             case UNP_PropertyTypes.UNP_NameProperty: throw new Error("Not yet implemented");
-            case UNP_PropertyTypes.UNP_StrProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_StrProperty:
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.char)).value as string);
+                break;
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_ArrayProperty: await this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty:
@@ -153,6 +156,15 @@ class UObject {
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
         switch (tag.structName) {
             case "Color": return await new FColor().load(pkg, tag);
+            case "Plane": return (function () {
+                const f = new BufferValue(BufferValue.float);
+                const normal = ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
+                    vec[ax] = pkg.read(f).value as number;
+                    return vec;
+                }, new Vector3());
+                const constant = pkg.read(f).value as number;
+                return new Plane(normal, constant);
+            })();
             case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;

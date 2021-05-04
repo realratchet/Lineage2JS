@@ -2,7 +2,7 @@ import BufferValue from "../buffer-value";
 
 type UObject = import("./un-object").UObject;
 
-class UExport {
+class UExport<T extends UObject = UObject> {
     public idClass = new BufferValue(BufferValue.compat32);
     public idSuper = new BufferValue(BufferValue.compat32);
     public idPackage = new BufferValue(BufferValue.uint32);
@@ -11,7 +11,7 @@ class UExport {
     public size = new BufferValue(BufferValue.compat32);
     public offset = new BufferValue(BufferValue.compat32);
 
-    public object: UObject = null;
+    public object: T = null;
 }
 
 export default UExport;

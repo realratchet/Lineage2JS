@@ -15,6 +15,7 @@ class UDecoLayer extends UObject {
     protected colorMap: UTexture;
     protected staticMesh: UStaticMesh;
     protected scaleMultiplier: FRangeVector;
+    protected ambientRandom: string;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -23,7 +24,8 @@ class UDecoLayer extends UObject {
             "DensityMap": "densityMap",
             "ColorMap": "colorMap",
             "StaticMesh": "staticMesh",
-            "ScaleMultiplier": "scaleMultiplier"
+            "ScaleMultiplier": "scaleMultiplier",
+            "AmbientRandom": "ambientRandom"
         });
     }
 

@@ -10,6 +10,7 @@ import UPlatte from "./un-palette";
 import UStaticMesh from "./static-mesh/un-static-mesh";
 import { UShader } from "./un-material";
 import ULevelInfo from "./un-level-info";
+import UTerrainSector from "./un-terrain-sector";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -203,8 +204,7 @@ class UPackage {
         if (exp.object) return exp.object;
 
         const className = this.getPackageName(exp.idClass.value as number) as UObjectTypes_T;
-
-        exp.object = await this.createObject(this, exp, className);
+        const object = await this.createObject(this, exp, className);
 
         return exp.object;
     }
@@ -215,7 +215,9 @@ class UPackage {
         return null;
     }
 
-    public async createObject(pkg: UPackage, exp: UExport, className: UObjectTypes_T): Promise<UObject> {
+    public async createObject<T extends UObject = UObject>(pkg: UPackage, exp: UExport<T>, className: UObjectTypes_T, ...params: any[]): Promise<T> {
+        if (exp.object) return exp.object;
+
         let Constructor: typeof UObject = null;
 
         switch (className) {
@@ -224,10 +226,13 @@ class UPackage {
             case "StaticMesh": Constructor = UStaticMesh; break;
             case "Shader": Constructor = UShader; break;
             case "LevelInfo": Constructor = ULevelInfo; break;
+            case "TerrainSector": Constructor = UTerrainSector; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
-        return await new Constructor().load(pkg, exp);
+        exp.object = await (new (Constructor as any)(...params) as T).load(pkg, exp);
+
+        return exp.object;
     }
 
     protected getPackageName(index: number) {

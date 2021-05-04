@@ -5,7 +5,7 @@ class RenderManager {
     public readonly renderer: WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
-    public readonly camera = new PerspectiveCamera(75, 1, 0.1, 10000);
+    public readonly camera = new PerspectiveCamera(75, 1, 1, 1000000);
     public readonly scene = new Scene();
     public readonly lastSize: Vector2 = new Vector2();
     public readonly controls: OrbitControls;
@@ -23,7 +23,7 @@ class RenderManager {
             alpha: true
         });
 
-        this.renderer.setClearColor(0xff00ff);
+        this.renderer.setClearColor(0x000000);
         this.controls = new OrbitControls(this.camera, viewport);
         this.camera.position.set(0, 5, 15);
         this.camera.lookAt(0, 0, 0);
