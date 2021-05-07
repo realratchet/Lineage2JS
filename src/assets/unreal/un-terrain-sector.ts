@@ -20,6 +20,14 @@ class UTerrainSector extends UObject {
     protected cellNum: number;
     protected sectorWidth: number;
 
+    protected unkArr8: FArray<FNumber> = new FArray(class FUnknownStructExt extends FUnknownStruct {
+        public static readonly typeSize = 40;
+
+        constructor() {
+            super(40);
+        }
+    });
+
     // likely lightning
     protected unkArr0: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
     protected unkArr1: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
@@ -55,8 +63,8 @@ class UTerrainSector extends UObject {
                 const offset = Math.min(hmy, 255) * width + Math.min(hmx, 255);
                 const height = data[offset];
 
-                if (y === 0 && x === 0 || y === 16 && x === 16)
-                    console.log(this.offsetX, this.offsetY, hmx, hmy, offset);
+                // if (y === 0 && x === 0 || y === 16 && x === 16)
+                //     console.log(this.offsetX, this.offsetY, hmx, hmy, offset);
 
                 vertices[(y * 17 + x) * 3 + 0] = hmx * scale;
                 vertices[(y * 17 + x) * 3 + 1] = height * this.info.terrainScale.z / 2 + this.info.location.y;
@@ -111,8 +119,12 @@ class UTerrainSector extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
+        pkg.seek(exp.offset.value as number, "set");
+        console.info(exp.objectName);
+        // pkg.dump(10);
+
         this.setReadPointers(exp);
-        pkg.seek(this.readHead as number, "set");
+        pkg.seek(this.readHead, "set");
 
         // if (exp.objectName === "TerrainSector119")
         //     debugger;
@@ -124,12 +136,50 @@ class UTerrainSector extends UObject {
         this.offsetY = pkg.read(int32).value as number;
 
         await this.boundingBox.load(pkg);
+        
+        // debugger;
+        
+        await this.unkArr8.load(pkg);
+        
+        // debugger;
+
         this.cellNum = pkg.read(uint32).value as number;
         this.sectorWidth = pkg.read(uint32).value as number;
+        // pkg.dump(3);
 
-        const unknown = pkg.read(new BufferValue(BufferValue.int8)).value as number; // unknown (is this Lazy Array?)
+        // const ba = pkg.tell();
+        // const bytes = new Array(8).fill(0).map((_, i) => {
+        //     pkg.seek(ba + i, "set");
+        //     return pkg.read(new BufferValue(BufferValue.compat32)).value;
+        // });
+        // // const unk_0 = pkg.read(new BufferValue(BufferValue.compat32));
+        // // const bo = 8 - (pkg.tell() - ba);
+        // // const unk_1 = pkg.read(BufferValue.allocBytes(bo));
 
+        // // 0001 0000 0008 0000 0061 04
+        // // [0,   1, 0,  0, 0, 8, 0, 0] => 1
+        // // C501 0001 0000 0008 0000 0061 049C
+        // // 00 6104
+
+        // // 0164 0525 0000 0000 0000 0000 0000 0000
+        // // [1, 100, 5, 37, 0, 0, 0, 0] => 21
+        // // [1, 356, 5, 37]
+        // // 0000 0000 0000 0000 0000 0000 0000 8001
+        // // 8002 8007 000F 000E 003C 0078 00E0 0080
+        // // 0101 0000 0008 0000 0061 049C
+        // debugger;
+
+        // // const unk = pkg.read(BufferValue.allocBytes(8));
+        // // await this.unkArr8.load(pkg);
+
+        // debugger;
+
+        // pkg.dump(2);
+        // const unknown = pkg.read(new BufferValue(BufferValue.int8)).value as number; // unknown (is this Lazy Array?)
+// debugger;
         await this.unkArr0.load(pkg);
+// debugger;
+        // pkg.dump(2);
 
         // if (this.unkArr0.getElemCount() === 0)
         //     debugger;
