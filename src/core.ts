@@ -64,7 +64,8 @@ async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    const pkg = assetLoader.getPackage("20_21");
+    const pkg = assetLoader.getPackage("21_20");
+    // const pkg = assetLoader.getPackage("20_21");
 
     await assetLoader.load(pkg);
 
@@ -101,14 +102,14 @@ async function startCore() {
     //     })
     // debugger;
 
-    const uTerrain = await new UTerrainInfo(expTerrainSectors).load(pkg, expTerrainInfo);
+    const uTerrain = await new UTerrainInfo(expTerrainSectors/*.filter(exp => exp.objectName === "TerrainSector69" || exp.objectName === "TerrainSector42" || exp.objectName === "TerrainSector13" || exp.objectName === "TerrainSector0" || exp.objectName === "TerrainSector1")*/).load(pkg, expTerrainInfo);
     const terrain = await uTerrain.decodeMesh();
     const boundingBox = new Box3().setFromObject(terrain);
     const boxSize = boundingBox.getSize(new Vector3());
     // terrain.scale.set(0.001, 0.001, 0.001);
     terrain.position.y = -boundingBox.min.y;
 
-    console.log(boxSize.toArray().join(", "));
+    // console.log(boxSize.toArray().join(", "));
 
     renderManager.scene.add(terrain);
     renderManager.startRendering();

@@ -12,8 +12,9 @@ type UExport = import("./un-export").UExport;
 type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
 
 class UTerrainSector extends UObject {
-    protected readHeadOffset = 11;
+    protected readHeadOffset = 0;
     protected boundingBox: UBox = new UBox();
+    protected unkNum0: number;
     protected offsetX: number;
     protected offsetY: number;
     protected info: UTerrainInfo;
@@ -121,13 +122,26 @@ class UTerrainSector extends UObject {
     public async load(pkg: UPackage, exp: UExport) {
         pkg.seek(exp.offset.value as number, "set");
         console.info(exp.objectName);
-        // pkg.dump(10);
 
         this.setReadPointers(exp);
         pkg.seek(this.readHead, "set");
 
-        // if (exp.objectName === "TerrainSector119")
-        //     debugger;
+        pkg.seek(1);
+        this.readHead = pkg.tell();
+
+        do {
+            const tag = await PropertyTag.from(pkg, this.readHead);
+
+            if (!tag.isValid())
+                break;
+
+            await this.loadProperty(pkg, tag);
+
+            this.readHead = pkg.tell();
+
+        } while (this.readHead < this.readTail);
+
+        this.unkNum0 = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
         const int32 = new BufferValue(BufferValue.int32);
         const uint32 = new BufferValue(BufferValue.uint32);
@@ -136,54 +150,14 @@ class UTerrainSector extends UObject {
         this.offsetY = pkg.read(int32).value as number;
 
         await this.boundingBox.load(pkg);
-        
-        // debugger;
-        
+
         await this.unkArr8.load(pkg);
-        
-        // debugger;
 
         this.cellNum = pkg.read(uint32).value as number;
         this.sectorWidth = pkg.read(uint32).value as number;
-        // pkg.dump(3);
-
-        // const ba = pkg.tell();
-        // const bytes = new Array(8).fill(0).map((_, i) => {
-        //     pkg.seek(ba + i, "set");
-        //     return pkg.read(new BufferValue(BufferValue.compat32)).value;
-        // });
-        // // const unk_0 = pkg.read(new BufferValue(BufferValue.compat32));
-        // // const bo = 8 - (pkg.tell() - ba);
-        // // const unk_1 = pkg.read(BufferValue.allocBytes(bo));
-
-        // // 0001 0000 0008 0000 0061 04
-        // // [0,   1, 0,  0, 0, 8, 0, 0] => 1
-        // // C501 0001 0000 0008 0000 0061 049C
-        // // 00 6104
-
-        // // 0164 0525 0000 0000 0000 0000 0000 0000
-        // // [1, 100, 5, 37, 0, 0, 0, 0] => 21
-        // // [1, 356, 5, 37]
-        // // 0000 0000 0000 0000 0000 0000 0000 8001
-        // // 8002 8007 000F 000E 003C 0078 00E0 0080
-        // // 0101 0000 0008 0000 0061 049C
-        // debugger;
-
-        // // const unk = pkg.read(BufferValue.allocBytes(8));
-        // // await this.unkArr8.load(pkg);
-
-        // debugger;
-
-        // pkg.dump(2);
-        // const unknown = pkg.read(new BufferValue(BufferValue.int8)).value as number; // unknown (is this Lazy Array?)
-// debugger;
+   
         await this.unkArr0.load(pkg);
-// debugger;
-        // pkg.dump(2);
-
-        // if (this.unkArr0.getElemCount() === 0)
-        //     debugger;
-
+     
         await this.unkArr1.load(pkg);
         await this.unkArr2.load(pkg);
         await this.unkArr3.load(pkg);
