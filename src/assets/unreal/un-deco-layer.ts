@@ -1,5 +1,6 @@
 import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
+import { Euler } from "three";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -16,6 +17,9 @@ class UDecoLayer extends UObject {
     protected staticMesh: UStaticMesh;
     protected scaleMultiplier: FRangeVector;
     protected ambientRandom: string;
+    protected rotator: Euler;
+    protected leaf: number;
+    protected ambientSoundType: number[];
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -25,7 +29,10 @@ class UDecoLayer extends UObject {
             "ColorMap": "colorMap",
             "StaticMesh": "staticMesh",
             "ScaleMultiplier": "scaleMultiplier",
-            "AmbientRandom": "ambientRandom"
+            "AmbientRandom": "ambientRandom",
+            "Rotator": "rotator",
+            "iLeaf": "leaf",
+            "AmbientSoundType": "ambientSoundType"
         });
     }
 
@@ -33,17 +40,7 @@ class UDecoLayer extends UObject {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + 182;
 
-        do {
-            const tag = await PropertyTag.from(pkg, this.readHead);
-
-            if (!tag.isValid())
-                break;
-
-            await this.loadProperty(pkg, tag);
-
-            this.readHead = pkg.tell();
-
-        } while (this.readHead < this.readTail);
+        await this.readNamedProps(pkg);
 
         pkg.seek(this.readTail, "set");
 

@@ -52,12 +52,15 @@ class UPackage {
 
     public tell() { return this.offset - this.contentOffset; }
 
-    public dump(lineCount: number, restore: boolean = true) {
+    public dump(lineCount: number, restore: boolean = true, printHeaders: boolean = true) {
         let oldHeader = this.offset;
 
-        console.log("--------------------------------------------------------");
-        console.log(`------------------- Dumping lines ----------------------`);
-        console.log("--------------------------------------------------------");
+        if (printHeaders) {
+            console.log("--------------------------------------------------------");
+            console.log(`------------------- Dumping lines ----------------------`);
+            console.log("--------------------------------------------------------");
+        }
+
         let constructedString = "";
         for (let i = 0; i < lineCount; i++) {
             const bytes = Math.min(this.buffer.byteLength - this.offset, 8);
@@ -70,14 +73,57 @@ class UPackage {
             constructedString = constructedString.slice(-100);
 
             if (lineCount <= 256) {
-                console.log(
-                    string1,
-                    string2
-                );
+                if (true || string1.match(/(^0005)|(^0077)|(^0007)/)) {
+
+                    const extraArgs = [];
+
+                    let finalString = string1;
+
+                    if (finalString.match(/(^0005)|(^0077)|(^0007)/)) {
+                        finalString = finalString
+                            .replace(/^0005/, "%c0005%c")
+                            .replace(/^0077/, "%c0077%c")
+                            .replace(/^0007/, "%c0007%c");
+                        extraArgs.push("color: red; font-weight:bold", "color: black");
+                    }
+
+                    if (finalString.match(/((?<=\ )10)|(10(?=\ ))/)) {
+                        finalString = finalString
+                            .replace(/((?<=\ )10)|(10(?=\ ))/, "%c10%c");
+                        extraArgs.push("color: blue; font-weight:bold", "color: black");
+                    }
+
+                    if (finalString.match(/((?<=\ )0F)|(0F(?=\ ))/)) {
+                        finalString = finalString
+                            .replace(/((?<=\ )0F)|(0F(?=\ ))/, "%c0F%c");
+                        extraArgs.push("color: green; font-weight:bold", "color: black");
+                    }
+
+                    // if (finalString.match(/(00 00)|((?<=\ )0000(?=\ ))/)) {
+                    //     finalString = finalString
+                    //         .replace(/00 00/, "%c00 00%c")
+                    //         .replace(/(?<=\ )0000(?=\ )/, "%c0000%c");
+                    //     extraArgs.push("color: purple; font-weight:bold", "color: black");
+                    // }
+
+                    console.log(
+                        [
+                            finalString,
+                            string2
+                        ].join(" "),
+                        ...extraArgs
+                    );
+                } else {
+                    console.log(
+                        string1,
+                        string2
+                    );
+                }
             }
         }
 
-        console.log("--------------------------------------------------------");
+        if (printHeaders)
+            console.log("--------------------------------------------------------");
 
         if (restore) this.offset = oldHeader;
     }

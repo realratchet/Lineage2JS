@@ -26,9 +26,7 @@ abstract class UObject {
         this.readTail = this.readHead + (exp.size.value as number);
     }
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
-        this.setReadPointers(exp);
-
+    public async readNamedProps(pkg: UPackage) {
         do {
             const tag = await PropertyTag.from(pkg, this.readHead);
 
@@ -40,6 +38,14 @@ abstract class UObject {
             this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
+
+        this.readHead = pkg.tell();
+    }
+
+    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        this.setReadPointers(exp);
+
+        await this.readNamedProps(pkg);
 
         return this;
     }
@@ -93,7 +99,16 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_ArrayProperty: await this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty:
             case UNP_PropertyTypes.UNP_VectorProperty:
-                throw new Error("Not yet implemented");
+                this.setProperty(tag, (function () {
+                    const f = new BufferValue(BufferValue.float);
+                    const out = new Array<number>(3);
+
+                    for (let i = 0; i < 3; i++)
+                        out[i] = pkg.read(f).value as number;
+
+                    return out;
+                })());
+                break;
             case UNP_PropertyTypes.UNP_RotatorProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_MapProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_FixedArrayProperty: throw new Error("Not yet implemented");

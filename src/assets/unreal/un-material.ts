@@ -34,8 +34,8 @@ enum ETexturePixelFormat {
 
 class UMaterial extends UObject {
     protected internalTime: number[] = new Array(2);
-    protected width: number;
-    protected height: number;
+    public width: number;
+    public height: number;
     protected format: ETextureFormat;
     protected bitsW: number; // texture size log2 (number of bits in size value)
     protected bitsH: number;
@@ -110,17 +110,7 @@ class UMaterialContainer extends UObject {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + 14;
 
-        do {
-            const tag = await PropertyTag.from(pkg, this.readHead);
-
-            if (!tag.isValid())
-                break;
-
-            await this.loadProperty(pkg, tag);
-
-            this.readHead = pkg.tell();
-
-        } while (this.readHead < this.readTail);
+        await this.readNamedProps(pkg);
 
         pkg.seek(this.readTail, "set");
 

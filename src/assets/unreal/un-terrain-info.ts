@@ -25,7 +25,7 @@ class UTerrainInfo extends UObject {
     protected terrainMap: UTexture;
     public terrainScale: Vector3;
     public readonly location: Vector3 = new Vector3();
-    protected layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
+    public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
     public readonly quadVisibilityBitmap: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
@@ -116,7 +116,6 @@ class UTerrainInfo extends UObject {
         // debugger;
 
         for (let exp of this.sectors) {
-            console.log("--------------------------");
             if (exp.object) terrain.add(await exp.object.decodeMesh(terrainMap));
             // debugger;
         }
