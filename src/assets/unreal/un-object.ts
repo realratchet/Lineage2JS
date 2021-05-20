@@ -1,13 +1,14 @@
 import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
-import { FColor } from "./un-color";
-import { Vector3 } from "three/src/math/Vector3";
-import { MathUtils } from "three/src/math/MathUtils";
-import { Euler } from "three/src/math/Euler";
-import { Matrix4 } from "three/src/math/Matrix4";
+// import { FColor } from "./un-color";
+// import { Vector3 } from "three/src/math/Vector3";
+// import { MathUtils } from "three/src/math/MathUtils";
+// import { Euler } from "three/src/math/Euler";
+// import { Matrix4 } from "three/src/math/Matrix4";
 import FArray from "./un-array";
-import FRangeVector from "./un-range";
-import { Plane } from "three";
+// import FRangeVector from "./un-range";
+// import { Plane } from "three";
+// import UPointRegion from "./un-point-region";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -30,12 +31,11 @@ abstract class UObject {
         do {
             const tag = await PropertyTag.from(pkg, this.readHead);
 
-            if (!tag.isValid())
-                break;
+            if (!tag.isValid()) break;
 
             await this.loadProperty(pkg, tag);
 
-            this.readHead = pkg.tell();
+            this.readHead = pkg.tell()
 
         } while (this.readHead < this.readTail);
 
@@ -89,6 +89,7 @@ abstract class UObject {
                     const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                     const obj = await pkg.fetchObject(objIndex.value as number);
                     this.setProperty(tag, obj);
+                    pkg.seek(offEnd, "set");
                 }
                 break;
             case UNP_PropertyTypes.UNP_NameProperty: throw new Error("Not yet implemented");
@@ -122,7 +123,7 @@ abstract class UObject {
         }
 
         if (pkg.tell() < offEnd)
-            console.warn(`Unread ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
+            console.warn(`Unread '${tag.name}' ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
     }
 
     protected async readArray(pkg: UPackage, tag: PropertyTag) {
@@ -169,37 +170,7 @@ abstract class UObject {
     }
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
-        switch (tag.structName) {
-            case "Color": return await new FColor().load(pkg, tag);
-            case "Plane": return (function () {
-                const f = new BufferValue(BufferValue.float);
-                const normal = ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
-                    vec[ax] = pkg.read(f).value as number;
-                    return vec;
-                }, new Vector3());
-                const constant = pkg.read(f).value as number;
-                return new Plane(normal, constant);
-            })();
-            case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
-                vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
-                return vec;
-            }, new Vector3());
-            case "Rotator": return ["x", "y", "z"].reduce((euler, ax: "x" | "y" | "z") => {
-                euler[ax] = pkg.read(new BufferValue(BufferValue.int32)).value as number * MathUtils.DEG2RAD;
-                return euler;
-            }, new Euler());
-            case "Matrix": return (function () {
-                const mat = new Matrix4();
-
-                mat.elements.forEach((_, i, arr) => {
-                    arr[i] = pkg.read(new BufferValue(BufferValue.float)).value as number;
-                });
-
-                return mat;
-            })();
-            case "RangeVector": return await new FRangeVector().load(pkg);
-            default: throw new Error(`Unsupported struct type: ${tag.structName}`);
-        }
+        throw new Error("Mixin not loaded.");
     }
 }
 

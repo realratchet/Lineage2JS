@@ -5,6 +5,7 @@ import UMaterial, { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
 import { RepeatWrapping, Texture } from "three";
 import decodeG16 from "../decode-g16";
+import { PropertyTag } from "./un-property";
 
 
 type UPlatte = import("./un-palette").UPlatte;
@@ -25,9 +26,25 @@ class UTexture extends UMaterial {
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
 
+        // this.setReadPointers(exp);
+        // do {
+        //     const tag = await PropertyTag.from(pkg, this.readHead);
+
+        //     if (!tag.isValid()) break;
+
+        //     await this.loadProperty(pkg, tag);
+
+        //     this.readHead = pkg.tell()
+
+        // } while (this.readHead < this.readTail);
+
+        this.readHead = pkg.tell();
+
         pkg.read(BufferValue.allocBytes(4)); //unknown
 
         await this.mipmaps.load(pkg, null);
+
+        // debugger;
 
         return this;
     }

@@ -123,7 +123,7 @@ class UTerrainSector extends UObject {
             const layer = itLayer.next().value as UTerrainLayer;
             const { uv } = uvs[k] = {
                 uv: new Array(17 * 17 * 2),
-                map: await layer.map.decodeMipmap(0)
+                map: null//await layer.map.decodeMipmap(0)
             };
 
             // const usx = layer.scaleW * sx * 2.0;

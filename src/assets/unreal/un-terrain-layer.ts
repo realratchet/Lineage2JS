@@ -1,6 +1,5 @@
 import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
-import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import { Plane, Vector3 } from "three";
 
@@ -94,7 +93,7 @@ class UTerrainLayer extends UObject {
         this.readHead = this.readTail;
         pkg.seek(this.readTail, "set");
 
-        debugger;
+        // debugger;
 
         return this;
     }

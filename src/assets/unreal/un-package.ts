@@ -11,6 +11,8 @@ import UStaticMesh from "./static-mesh/un-static-mesh";
 import { UShader } from "./un-material";
 import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
+import "./un-object-mixin";
+import UZoneInfo from "./un-zone-info";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -273,6 +275,7 @@ class UPackage {
             case "Shader": Constructor = UShader; break;
             case "LevelInfo": Constructor = ULevelInfo; break;
             case "TerrainSector": Constructor = UTerrainSector; break;
+            case "ZoneInfo": Constructor = UZoneInfo; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

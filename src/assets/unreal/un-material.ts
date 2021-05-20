@@ -80,11 +80,13 @@ class UMaterial extends UObject {
 class UShader extends UMaterial {
     protected diffuse: UMaterial;
     protected opacity: UMaterial;
+    protected doubleSide: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Diffuse": "diffuse",
-            "Opacity": "opacity"
+            "Opacity": "opacity",
+            "TwoSided": "doubleSide"
         });
     }
 }

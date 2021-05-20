@@ -7,14 +7,14 @@ import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
 import { PropertyTag } from "./un-property";
 import FUnknownStruct from "./un-unknown-struct";
-import UTerrainSector from "./un-terrain-sector";
-import { Group, Vector3 } from "three";
+import { Vector3 } from "three/src/math/Vector3";
+import { Group } from "three/src/objects/Group";
 
 type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
-type Vector3 = import("three/src/math/Vector3").Vector3;
 type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UPackage = import("./un-package").UPackage;
 type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
+type UPointRegion = import("./un-point-region").UPointRegion;
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -47,6 +47,7 @@ class UTerrainInfo extends UObject {
     protected disregardTerrainLighting: boolean;
     protected randomYaw: boolean;
     protected bForceRender: boolean;
+    protected region: UPointRegion;
 
     constructor(sectors: UExport<UTerrainSector>[]) {
         super();
@@ -77,7 +78,8 @@ class UTerrainInfo extends UObject {
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
-            "bForceRender": "bForceRender"
+            "bForceRender": "bForceRender",
+            "Region": "region"
         });
     }
 
