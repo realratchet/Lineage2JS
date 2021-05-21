@@ -1,14 +1,6 @@
 import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
-// import { FColor } from "./un-color";
-// import { Vector3 } from "three/src/math/Vector3";
-// import { MathUtils } from "three/src/math/MathUtils";
-// import { Euler } from "three/src/math/Euler";
-// import { Matrix4 } from "three/src/math/Matrix4";
 import FArray from "./un-array";
-// import FRangeVector from "./un-range";
-// import { Plane } from "three";
-// import UPointRegion from "./un-point-region";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -81,18 +73,20 @@ abstract class UObject {
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.float)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_ObjectProperty:
-                if (tag.name === "StaticMeshLod01" || tag.name === "StaticMeshLod02" || tag.name === "PhysicsVolume") {
-                    throw new Error("Unsupported yet.");
-                    //printf("Skipping object property: %s\n", Name);
-                    // pkg.read(index);
-                } else {
+                // if (tag.name === "StaticMeshLod01" || tag.name === "StaticMeshLod02" || tag.name === "PhysicsVolume") {
+                //     throw new Error("Unsupported yet.");
+                //     //printf("Skipping object property: %s\n", Name);
+                //     // pkg.read(index);
+                // } else {
                     const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                     const obj = await pkg.fetchObject(objIndex.value as number);
                     this.setProperty(tag, obj);
                     pkg.seek(offEnd, "set");
-                }
+                // }
                 break;
-            case UNP_PropertyTypes.UNP_NameProperty: throw new Error("Not yet implemented");
+            case UNP_PropertyTypes.UNP_NameProperty:
+                this.setProperty(tag, pkg.nameTable[pkg.read(new BufferValue(BufferValue.compat32)).value as number].name.value);
+                break;
             case UNP_PropertyTypes.UNP_StrProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.char)).value as string);
                 break;

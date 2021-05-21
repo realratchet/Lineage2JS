@@ -15,6 +15,8 @@ type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UPackage = import("./un-package").UPackage;
 type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
 type UPointRegion = import("./un-point-region").UPointRegion;
+type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
+type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -48,6 +50,11 @@ class UTerrainInfo extends UObject {
     protected randomYaw: boolean;
     protected bForceRender: boolean;
     protected region: UPointRegion;
+    protected tag: string;
+    protected sunAffect: boolean;
+    protected physicsVolume: UPhysicsVolume;
+    protected drawScale: number;
+    protected texModifyInfo: UTextureModifyInfo;
 
     constructor(sectors: UExport<UTerrainSector>[]) {
         super();
@@ -79,7 +86,13 @@ class UTerrainInfo extends UObject {
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
             "bForceRender": "bForceRender",
-            "Region": "region"
+            "Region": "region",
+            "Tag": "tag",
+            "bSunAffect": "sunAffect",
+            "PhysicsVolume": "physicsVolume",
+            "Location": "location",
+            "DrawScale": "drawScale",
+            "TexModifyInfo": "texModifyInfo"
         });
     }
 

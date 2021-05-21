@@ -8,6 +8,7 @@ import { Matrix4 } from "three/src/math/Matrix4";
 import FRangeVector from "./un-range";
 import { Plane } from "three";
 import UPointRegion from "./un-point-region";
+import UTextureModifyInfo from "./un-texture-modify-info";
 
 type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
@@ -43,6 +44,7 @@ Object.assign(UObject.prototype, {
                 return mat;
             })();
             case "PointRegion": return await new UPointRegion(tag.dataSize).load(pkg);
+            case "TextureModifyinfo": return await new UTextureModifyInfo(tag.dataSize).load(pkg);
             case "RangeVector": return await new FRangeVector().load(pkg);
             default: throw new Error(`Unsupported struct type: ${tag.structName}`);
         }

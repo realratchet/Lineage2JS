@@ -13,6 +13,7 @@ import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
 import "./un-object-mixin";
 import UZoneInfo from "./un-zone-info";
+import UPhysicsVolume from "./un-physics-volume";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -276,6 +277,7 @@ class UPackage {
             case "LevelInfo": Constructor = ULevelInfo; break;
             case "TerrainSector": Constructor = UTerrainSector; break;
             case "ZoneInfo": Constructor = UZoneInfo; break;
+            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
