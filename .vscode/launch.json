@@ -30,8 +30,8 @@
             "args": [
                 // "/home/ratchet/Documents/lineage-js/assets/maps/20_21.unr",
                 // "/home/ratchet/Documents/lineage-js/assets/textures/T_20_21.utx",
-                // "/home/ratchet/Documents/lineage-js/assets/textures/T_Dion.utx",
-                "/home/ratchet/Documents/lineage-js/assets/models/field_deco_S.usx",
+                "/home/ratchet/Documents/lineage-js/assets/textures/T_Dion.utx",
+                // "/home/ratchet/Documents/lineage-js/assets/models/field_deco_S.usx",
                 // "-list"
             ],
             "stopAtEntry": false,

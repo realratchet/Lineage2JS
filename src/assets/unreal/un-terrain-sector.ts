@@ -121,9 +121,15 @@ class UTerrainSector extends UObject {
 
         for (let k = 0; k < layerCount; k++) {
             const layer = itLayer.next().value as UTerrainLayer;
+
+            if (layer.map.mipmaps.getElemCount() === 0) {
+                uvs[k] = null;
+                continue;
+            }
+
             const { uv } = uvs[k] = {
                 uv: new Array(17 * 17 * 2),
-                map: null//await layer.map.decodeMipmap(0)
+                map: await layer.map.decodeMipmap(0)
             };
 
             // const usx = layer.scaleW * sx * 2.0;
@@ -149,7 +155,7 @@ class UTerrainSector extends UObject {
 
         geometry.setIndex(attrIndices);
         geometry.setAttribute("position", attrPosition);
-        uvs.forEach(({ uv, map }, index) => {
+        uvs.filter(x => x).forEach(({ uv, map }, index) => {
             const attr = new Float32BufferAttribute(uv, 2);
 
             geometry.setAttribute(`uv${index === 0 ? "" : (index + 1)}`, attr);

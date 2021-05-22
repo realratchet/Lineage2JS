@@ -44,7 +44,7 @@ async function loadTexture() {
 
     const texData = pkg.exports.find(exp => exp.objectName === "DI_C5");
     const utexture = await pkg.createObject(pkg, texData, "Texture") as UTexture;
-    const texture = utexture.decodeMipmap(0);
+    const texture = await utexture.decodeMipmap(0);
 
     const canvas = document.createElement("canvas");
     canvas.width = texture.image.width;

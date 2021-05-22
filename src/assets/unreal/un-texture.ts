@@ -14,7 +14,7 @@ type UExport = import("./un-export").UExport;
 
 class UTexture extends UMaterial {
     protected palette: UPlatte;
-    protected mipmaps: FArray<FMipmap> = new FArray(FMipmap);
+    public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -24,19 +24,19 @@ class UTexture extends UMaterial {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        await super.load(pkg, exp);
+        // await super.load(pkg, exp);
 
-        // this.setReadPointers(exp);
-        // do {
-        //     const tag = await PropertyTag.from(pkg, this.readHead);
+        this.setReadPointers(exp);
+        do {
+            const tag = await PropertyTag.from(pkg, this.readHead);
 
-        //     if (!tag.isValid()) break;
+            if (!tag.isValid()) break;
 
-        //     await this.loadProperty(pkg, tag);
+            await this.loadProperty(pkg, tag);
 
-        //     this.readHead = pkg.tell()
+            this.readHead = pkg.tell()
 
-        // } while (this.readHead < this.readTail);
+        } while (this.readHead < this.readTail);
 
         this.readHead = pkg.tell();
 
@@ -56,6 +56,8 @@ class UTexture extends UMaterial {
         const format = this.getTexturePixelFormat();
 
         let texture: Texture;
+
+        // debugger;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:

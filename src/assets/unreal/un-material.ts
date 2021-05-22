@@ -1,36 +1,10 @@
 import UObject from "./un-object"
 import { PropertyTag } from "./un-property";
-import ETextureFormat from "./un-tex-format";
+import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 type FColor = import("./un-color").FColor;
-
-enum ETexturePixelFormat {
-    TPF_UNKNOWN,
-    TPF_P8,                // 8-bit paletted
-    TPF_G8,                // 8-bit grayscale
-    TPF_G16,               // 16-bit grayscale (terrain heightmaps)
-    TPF_RGB8,
-    TPF_RGBA8,             // 32-bit texture
-    TPF_BGRA8,             // 32-bit texture
-    TPF_DXT1,
-    TPF_DXT3,
-    TPF_DXT5,
-    TPF_DXT5N,
-    TPF_V8U8,
-    TPF_V8U8_2,            // different decoding, has color offset compared to TPF_V8U8
-    TPF_BC4,            // alias names: 3Dc+, ATI1, BC4
-    TPF_BC5,            // alias names: 3Dc, ATI2, BC5
-    TPF_BC6H,
-    TPF_BC7,
-    TPF_A1,                // 8 monochrome pixels per byte
-    TPF_RGBA4,
-    TPF_FLOAT_RGBA,
-    TPF_PNG_BGRA,        // UE3+ SourceArt format
-    TPF_PNG_RGBA,
-    TPF_MAX
-};
 
 class UMaterial extends UObject {
     protected internalTime: number[] = new Array(2);
