@@ -171,7 +171,7 @@ class UTerrainSector extends UObject {
 
     public async load(pkg: UPackage, exp: UExport) {
         // pkg.seek(exp.offset.value as number, "set");
-        console.info(exp.objectName);
+        // console.info(exp.objectName);
 
         this.setReadPointers(exp);
         pkg.seek(this.readHead, "set");

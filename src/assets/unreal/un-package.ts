@@ -286,7 +286,7 @@ class UPackage {
         return exp.object;
     }
 
-    protected getPackageName(index: number) {
+    public getPackageName(index: number) {
         return index < 0
             ? this.imports[-index - 1].objectName as string
             : index > 0

@@ -5,8 +5,9 @@ import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
 import UTexture from "./assets/unreal/un-texture";
 import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3 } from "three";
+import { Box3, Vector3, Object3D } from "three";
 import BufferValue from "./assets/buffer-value";
+import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -59,7 +60,6 @@ async function loadTexture() {
 }
 
 // export default loadTexture;
-// export { loadTexture as startCore }
 
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -67,10 +67,10 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList);
     // const pkg_20_19 = assetLoader.getPackage("20_19");
     // const pkg_20_20 = assetLoader.getPackage("20_20");
-    // const pkg_20_21 = assetLoader.getPackage("20_21");
+    const pkg_20_21 = assetLoader.getPackage("20_21");
     const pkg_20_22 = assetLoader.getPackage("20_22");
 
-    const pkgLoad = pkg_20_22;
+    const pkgLoad = pkg_20_21;
 
     await assetLoader.load(pkgLoad);
 
@@ -93,9 +93,23 @@ async function startCore() {
 
     // debugger;
 
-    const expTerrainInfo = pkgLoad.exports.find(e => e.objectName.includes("TerrainInfo"));
+    const expGroups = pkgLoad.exports.reduce((accum, exp) => {
+
+        const expType = pkgLoad.getPackageName(exp.idClass.value as number);
+        const list = accum[expType] = accum[expType] || [];
+
+        list.push(exp);
+
+        return accum;
+    }, {});
+
+    debugger;
+
+    const expMeshesInstances = pkgLoad.exports.filter(e => pkgLoad.getPackageName(e.idClass.value as number) === "StaticMeshInstance");
+    const expMeshes = pkgLoad.exports.filter(e => pkgLoad.getPackageName(e.idClass.value as number) === "StaticMesh");
+    const expTerrainInfo = pkgLoad.exports.find(e => pkgLoad.getPackageName(e.idClass.value as number) === "TerrainInfo");
     const expTerrainSectors = pkgLoad.exports
-        .filter(e => e.objectName.includes("TerrainSector"))
+        .filter(e => pkgLoad.getPackageName(e.idClass.value as number) === "TerrainSector")
         .sort(({ objectName: na }, { objectName: nb }) => {
             const a = parseInt(na.replace("TerrainSector", ""));
             const b = parseInt(nb.replace("TerrainSector", ""));
@@ -177,16 +191,36 @@ async function startCore() {
     //     exp.objectName === "TerrainSector15" ||
     //     exp.objectName === "TerrainSector25"
     // );
+    const objectGroup = new Object3D();
+
+    for (let exp of expMeshesInstances) {
+        const uMeshInstance = await new UStaticMeshIsntance().load(pkgLoad, exp);
+
+        debugger;
+    }
+
+    for (let exp of expMeshes) {
+        const uMesh = await new UStaticMesh().load(pkgLoad, exp);
+        const mesh = await uMesh.decodeMesh();
+
+        objectGroup.add(mesh);
+
+        debugger;
+    }
+
     const uTerrain = await new UTerrainInfo(filteredSectors).load(pkgLoad, expTerrainInfo);
     const terrain = await uTerrain.decodeMesh();
-    const boundingBox = new Box3().setFromObject(terrain);
+    objectGroup.add(terrain);
+
+
+    const boundingBox = new Box3().setFromObject(boundingBox);
     const boxSize = boundingBox.getSize(new Vector3());
     // terrain.scale.set(0.001, 0.001, 0.001);
     terrain.position.y = -boundingBox.min.y;
 
     // console.log(boxSize.toArray().join(", "));
 
-    renderManager.scene.add(terrain);
+    renderManager.scene.add(objectGroup);
     renderManager.startRendering();
 
     (global as any).renderManager = renderManager;

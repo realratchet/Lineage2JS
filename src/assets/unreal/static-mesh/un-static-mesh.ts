@@ -23,11 +23,13 @@ class UStaticMesh extends UPrimitive {
     protected indexStream1 = new FRawIndexBuffer();
     protected indexStream2 = new FRawIndexBuffer();
 
+    public constructor() { super(); }
+
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
 
         await this.sections.load(pkg, null);
-        await this.boundingBox.load(pkg, null);
+        await this.boundingBox.load(pkg);
         await this.vertexStream.load(pkg, null);
         await this.colorStream.load(pkg, null);
         await this.alphaStream.load(pkg, null);
@@ -35,12 +37,17 @@ class UStaticMesh extends UPrimitive {
         await this.indexStream1.load(pkg, null);
         await this.indexStream2.load(pkg, null);
 
+        this.name = exp.objectName;
+
         return this;
     }
 
     public async decodeMesh() {
         const section = this.sections.getElem(0);
         const materials = this.materials.getElem(0);
+
+        if (this.sections.getElemCount() > 1)
+            debugger;
 
         const countVerts = this.vertexStream.vert.getElemCount();
         const countFaces = this.indexStream1.indices.getElemCount();

@@ -145,16 +145,14 @@ class UTerrainInfo extends UObject {
             terrain.add(segment);
         }
 
-        for (let i = 1, len = this.decoLayers.getElemCount(); i < len; i++) {
-            const layer = this.decoLayers.getElem(i);
-            const mesh = await layer.staticMesh.decodeMesh();
+        // for (let i = 1, len = this.decoLayers.getElemCount(); i < len; i++) {
+        //     const layer = this.decoLayers.getElem(i);
+        //     const mesh = await layer.staticMesh.decodeMesh();
 
-            terrain.add(mesh);
+        //     terrain.add(mesh);
 
-            mesh.material.wireframe = true;
-
-            break;
-        }
+        //     mesh.material.wireframe = true;
+        // }
 
         return terrain;
     }
