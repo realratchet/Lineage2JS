@@ -19,7 +19,7 @@ abstract class UObject {
         this.readTail = this.readHead + (exp.size.value as number);
     }
 
-    public async readNamedProps(pkg: UPackage) {
+    protected async readNamedProps(pkg: UPackage) {
         do {
             const tag = await PropertyTag.from(pkg, this.readHead);
 
@@ -158,7 +158,7 @@ abstract class UObject {
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
+        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
     }

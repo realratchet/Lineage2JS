@@ -10,6 +10,7 @@ import FUnknownStruct from "./un-unknown-struct";
 import { Vector3 } from "three/src/math/Vector3";
 import { Group } from "three/src/objects/Group";
 
+type Euler = import("three").Euler;
 type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
 type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UPackage = import("./un-package").UPackage;
@@ -55,6 +56,9 @@ class UTerrainInfo extends UObject {
     protected physicsVolume: UPhysicsVolume;
     protected drawScale: number;
     protected texModifyInfo: UTextureModifyInfo;
+    protected rotation: Euler;
+    protected swayRotationOrig: Euler;
+    protected isSelected: boolean;
 
     constructor(sectors: UExport<UTerrainSector>[]) {
         super();
@@ -92,7 +96,10 @@ class UTerrainInfo extends UObject {
             "PhysicsVolume": "physicsVolume",
             "Location": "location",
             "DrawScale": "drawScale",
-            "TexModifyInfo": "texModifyInfo"
+            "TexModifyInfo": "texModifyInfo",
+            "Rotation": "rotation",
+            "SwayRotationOrig": "swayRotationOrig",
+            "bSelected": "isSelected"
         });
     }
 
@@ -131,8 +138,22 @@ class UTerrainInfo extends UObject {
         // debugger;
 
         for (let exp of this.sectors) {
-            if (exp.object) terrain.add(await exp.object.decodeMesh(terrainMap));
-            // debugger;
+            if (!exp.object) continue;
+
+            const segment = await exp.object.decodeMesh(terrainMap);
+
+            terrain.add(segment);
+        }
+
+        for (let i = 1, len = this.decoLayers.getElemCount(); i < len; i++) {
+            const layer = this.decoLayers.getElem(i);
+            const mesh = await layer.staticMesh.decodeMesh();
+
+            terrain.add(mesh);
+
+            mesh.material.wireframe = true;
+
+            break;
         }
 
         return terrain;

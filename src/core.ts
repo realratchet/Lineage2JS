@@ -65,13 +65,18 @@ async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    const pkg_20_19 = assetLoader.getPackage("20_19");
-    const pkg_20_20 = assetLoader.getPackage("20_20");
-    const pkg_20_21 = assetLoader.getPackage("20_21");
+    // const pkg_20_19 = assetLoader.getPackage("20_19");
+    // const pkg_20_20 = assetLoader.getPackage("20_20");
+    // const pkg_20_21 = assetLoader.getPackage("20_21");
+    const pkg_20_22 = assetLoader.getPackage("20_22");
 
-    await assetLoader.load(pkg_20_19);
-    await assetLoader.load(pkg_20_20);
-    await assetLoader.load(pkg_20_21);
+    const pkgLoad = pkg_20_22;
+
+    await assetLoader.load(pkgLoad);
+
+    // await assetLoader.load(pkg_20_19);
+    // await assetLoader.load(pkg_20_20);
+    // await assetLoader.load(pkg_20_21);
 
     // let str = "";
     // [...pkg.exports]
@@ -88,28 +93,36 @@ async function startCore() {
 
     // debugger;
 
-    const expTerrainInfo = pkg_20_21.exports.find(e => e.objectName.includes("TerrainInfo"));
-    const expTerrainSectors_20_21 = pkg_20_21.exports
+    const expTerrainInfo = pkgLoad.exports.find(e => e.objectName.includes("TerrainInfo"));
+    const expTerrainSectors = pkgLoad.exports
         .filter(e => e.objectName.includes("TerrainSector"))
         .sort(({ objectName: na }, { objectName: nb }) => {
             const a = parseInt(na.replace("TerrainSector", ""));
             const b = parseInt(nb.replace("TerrainSector", ""));
             return a - b;
         });
-    const expTerrainSectors_20_19 = pkg_20_19.exports
-        .filter(e => e.objectName.includes("TerrainSector"))
-        .sort(({ objectName: na }, { objectName: nb }) => {
-            const a = parseInt(na.replace("TerrainSector", ""));
-            const b = parseInt(nb.replace("TerrainSector", ""));
-            return a - b;
-        });
-    const expTerrainSectors_20_20 = pkg_20_20.exports
-        .filter(e => e.objectName.includes("TerrainSector"))
-        .sort(({ objectName: na }, { objectName: nb }) => {
-            const a = parseInt(na.replace("TerrainSector", ""));
-            const b = parseInt(nb.replace("TerrainSector", ""));
-            return a - b;
-        });
+
+    // const expTerrainSectors_20_21 = pkgLoad.exports
+    //     .filter(e => e.objectName.includes("TerrainSector"))
+    //     .sort(({ objectName: na }, { objectName: nb }) => {
+    //         const a = parseInt(na.replace("TerrainSector", ""));
+    //         const b = parseInt(nb.replace("TerrainSector", ""));
+    //         return a - b;
+    //     });
+    // const expTerrainSectors_20_19 = pkg_20_19.exports
+    //     .filter(e => e.objectName.includes("TerrainSector"))
+    //     .sort(({ objectName: na }, { objectName: nb }) => {
+    //         const a = parseInt(na.replace("TerrainSector", ""));
+    //         const b = parseInt(nb.replace("TerrainSector", ""));
+    //         return a - b;
+    //     });
+    // const expTerrainSectors_20_20 = pkg_20_20.exports
+    //     .filter(e => e.objectName.includes("TerrainSector"))
+    //     .sort(({ objectName: na }, { objectName: nb }) => {
+    //         const a = parseInt(na.replace("TerrainSector", ""));
+    //         const b = parseInt(nb.replace("TerrainSector", ""));
+    //         return a - b;
+    //     });
 
     // [...expTerrainSectors_20_19]
     //     .sort(({ offset: { value: a } }, { offset: { value: b } }) => {
@@ -156,15 +169,15 @@ async function startCore() {
 
     // debugger;
 
-    const filteredSectors = expTerrainSectors_20_21
+    const filteredSectors = expTerrainSectors
     // .slice(0, 16)
-        // .filter(exp =>
-        //     exp.objectName === "TerrainSector0" ||
-        //     exp.objectName === "TerrainSector10" ||
-        //     exp.objectName === "TerrainSector15" ||
-        //     exp.objectName === "TerrainSector25"
-        // );
-    const uTerrain = await new UTerrainInfo(filteredSectors).load(pkg_20_21, expTerrainInfo);
+    // .filter(exp =>
+    //     exp.objectName === "TerrainSector0" ||
+    //     exp.objectName === "TerrainSector10" ||
+    //     exp.objectName === "TerrainSector15" ||
+    //     exp.objectName === "TerrainSector25"
+    // );
+    const uTerrain = await new UTerrainInfo(filteredSectors).load(pkgLoad, expTerrainInfo);
     const terrain = await uTerrain.decodeMesh();
     const boundingBox = new Box3().setFromObject(terrain);
     const boxSize = boundingBox.getSize(new Vector3());

@@ -14,12 +14,19 @@ class UDecoLayer extends UObject {
     protected scaleMap: UTexture;
     protected densityMap: UTexture;
     protected colorMap: UTexture;
-    protected staticMesh: UStaticMesh;
+    public staticMesh: UStaticMesh;
     protected scaleMultiplier: FRangeVector;
     protected ambientRandom: string;
     protected rotator: Euler;
     protected leaf: number;
     protected ambientSoundType: number[];
+    protected size: number;
+
+    public constructor(size: number) {
+        super();
+
+        this.size = size;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -38,7 +45,7 @@ class UDecoLayer extends UObject {
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
         this.readHead = pkg.tell();
-        this.readTail = this.readHead + 182;
+        this.readTail = this.readHead + this.size;
 
         await this.readNamedProps(pkg);
 

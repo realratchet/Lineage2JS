@@ -31,6 +31,7 @@ class UTerrainLayer extends UObject {
     protected toMaskmap = new Set();
     protected useAlpha: boolean;
     protected unkNum0: number;
+    protected z: number;
 
     constructor(readHead: number, readTail: number) {
         super();
@@ -60,7 +61,8 @@ class UTerrainLayer extends UObject {
             "Scale": "scale",
             "ToWorld": "toWorld",
             "ToMaskmap": "toMaskmap",
-            "bUseAlpha": "useAlpha"
+            "bUseAlpha": "useAlpha",
+            "Z": "z"
         });
     }
 

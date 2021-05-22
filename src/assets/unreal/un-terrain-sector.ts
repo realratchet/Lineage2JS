@@ -54,7 +54,7 @@ class UTerrainSector extends UObject {
         this.info = terrainInfo;
     }
 
-    public async decodeMesh(heightMap: DataTexture) {
+    public async decodeMesh(heightMap: Texture) {
         // const [sectorX, sectorY] = [this.offsetX, this.offsetY].map(v => v / 256);
         const vertices = new Float32Array(17 * 17 * 3);
         const { data, width, height } = heightMap.image;
@@ -122,8 +122,8 @@ class UTerrainSector extends UObject {
         for (let k = 0; k < layerCount; k++) {
             const layer = itLayer.next().value as UTerrainLayer;
 
-            if (layer.map.mipmaps.getElemCount() === 0) {
-                uvs[k] = null;
+            if (!layer.map || layer.map.mipmaps.getElemCount() === 0) {
+                uvs[k] = { uv: null, map: null };
                 continue;
             }
 
@@ -155,13 +155,16 @@ class UTerrainSector extends UObject {
 
         geometry.setIndex(attrIndices);
         geometry.setAttribute("position", attrPosition);
-        uvs.filter(x => x).forEach(({ uv, map }, index) => {
-            const attr = new Float32BufferAttribute(uv, 2);
+        uvs
+            .forEach(({ uv, map }, index) => {
+                if (map === null) return;
 
-            geometry.setAttribute(`uv${index === 0 ? "" : (index + 1)}`, attr);
+                const attr = new Float32BufferAttribute(uv, 2);
 
-            (material as any)[`map${index === 0 ? "" : (index + 1)}`] = map;
-        });
+                geometry.setAttribute(`uv${index === 0 ? "" : (index + 1)}`, attr);
+
+                (material as any)[`map${index === 0 ? "" : (index + 1)}`] = map;
+            });
 
         return mesh;
     }
