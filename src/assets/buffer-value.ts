@@ -3,6 +3,8 @@ const int32: ValidTypes_T<"int32"> = { bytes: 4, signed: true, name: "int32", dt
 const float: ValidTypes_T<"float"> = { bytes: 4, signed: true, name: "float", dtype: Float32Array };
 const compat32: ValidTypes_T<"compat32"> = { bytes: 4, signed: true, name: "compat32" };
 const uint32: ValidTypes_T<"uint32"> = { bytes: 4, signed: false, name: "uint32", dtype: Uint32Array };
+const int64: ValidTypes_T<"int64"> = { bytes: 8, signed: true, name: "int64", dtype: BigInt64Array };
+const uint64: ValidTypes_T<"uint64"> = { bytes: 8, signed: false, name: "uint64", dtype: BigUint64Array };
 const int8: ValidTypes_T<"int8"> = { bytes: 1, signed: true, name: "int8", dtype: Int8Array };
 const uint8: ValidTypes_T<"uint8"> = { bytes: 1, signed: false, name: "uint8", dtype: Uint8Array };
 const int16: ValidTypes_T<"int16"> = { bytes: 2, signed: true, name: "int16", dtype: Int16Array };
@@ -11,9 +13,11 @@ const guid: ValidTypes_T<"guid"> = { bytes: 4 * 4, signed: true, name: "guid" };
 const char: ValidTypes_T<"char"> = { bytes: NaN, signed: true, name: "char" };
 
 class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
-    public static readonly int32 = int32;
+    public static readonly uint64 = uint64;
+    public static readonly int64 = int64;
     public static readonly compat32 = compat32;
     public static readonly uint32 = uint32;
+    public static readonly int32 = int32;
     public static readonly int8 = int8;
     public static readonly uint8 = uint8;
     public static readonly int16 = int16;
@@ -114,6 +118,8 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             let funName: string = null;
 
             switch (this.type.name) {
+                case "int64": funName = "setBigInt64"; break;
+                case "uint64": funName = "setBigUint64"; break;
                 case "int32": funName = "setInt32"; break;
                 case "float": funName = "setFloat32"; break;
                 case "uint32": funName = "setUint32"; break;
@@ -129,18 +135,18 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         else throw new Error("Invalid action.");
     }
 
-    public get value(): number | string | DataView {
+    public get value(): BigInt | number | string | DataView {
         const buffer = this.bytes;
         let funName: string = null;
 
         switch (this.type.name) {
+            case "int64": funName = "getBigInt64"; break;
+            case "uint64": funName = "getBigUint64"; break;
             case "compat32":
             case "int32":
                 funName = "getInt32";
                 break;
-            case "float":
-                funName = "getFloat32";
-                break;
+            case "float": funName = "getFloat32"; break;
             case "uint32": funName = "getUint32"; break;
             case "int8": funName = "getInt8"; break;
             case "uint8": funName = "getUint8"; break;

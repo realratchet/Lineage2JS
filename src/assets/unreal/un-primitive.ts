@@ -3,6 +3,7 @@ import FArray from "./un-array";
 import { UMaterialContainer } from "./un-material";
 import UBox from "./un-box";
 import USphere from "./un-sphere";
+import { Sphere, Box3 } from "three";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -23,8 +24,8 @@ class UPrimitive extends UObject {
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
 
-        await this.boundingBox.load(pkg, null);
-        await this.boundingSphere.load(pkg, null);
+        await this.boundingBox.load(pkg);
+        await this.boundingSphere.load(pkg);
 
         return this;
     }

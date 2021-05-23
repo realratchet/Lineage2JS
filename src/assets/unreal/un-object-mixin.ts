@@ -26,6 +26,7 @@ Object.assign(UObject.prototype, {
                 const constant = pkg.read(f).value as number;
                 return new Plane(normal, constant);
             })();
+            case "Scale":
             case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;

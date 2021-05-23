@@ -1,14 +1,13 @@
 import FConstructable from "./un-constructable";
-import { Vector3 } from "three";
+import { Vector3, Box3 } from "three";
 import BufferValue from "../buffer-value";
 
-type PropertyTag = import("./un-property").PropertyTag;
 type UPackage = import("./un-package").UPackage;
 
-
 class UBox extends FConstructable {
-    public min: Vector3 = new Vector3();
-    public max: Vector3 = new Vector3();
+    public readonly box: Box3 = new Box3();
+    public readonly min: Vector3 = this.box.min;
+    public readonly max: Vector3 = this.box.max;
     public isValid: number;
 
     public async load(pkg: UPackage): Promise<this> {
