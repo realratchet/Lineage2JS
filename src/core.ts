@@ -102,6 +102,20 @@ async function startCore() {
     const filteredSectors = expTerrainSectors
     const objectGroup = new Object3D();
 
+    // expGroups.Brush
+    //     .sort(({ objectName: na }, { objectName: nb }) => {
+    //         const a = parseInt(na.replace("Brush", ""));
+    //         const b = parseInt(nb.replace("Brush", ""));
+    //         return a - b;
+    //     })
+    //     .slice(0, 3).forEach(exp => {
+    //         console.log(exp.objectName);
+    //         pkgLoad.seek(exp.offset.value as number + 10, "set");
+    //         pkgLoad.dump(1, true, false)
+    //     });
+
+    // debugger;
+
     for (let exp of expGroups.Brush) {
         const uBrush = await new UBrush().load(pkgLoad, exp);
 

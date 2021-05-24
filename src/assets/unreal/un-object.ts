@@ -27,7 +27,7 @@ abstract class UObject {
 
             await this.loadProperty(pkg, tag);
 
-            this.readHead = pkg.tell()
+            this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
 

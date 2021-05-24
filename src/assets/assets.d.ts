@@ -6,7 +6,16 @@ type ValidTypes_T<T extends ValueTypeNames_T> = {
     dtype?: BigInt64ArrayConstructor | BigUint64ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int8ArrayConstructor | Uint8ArrayConstructor | Float32ArrayConstructor;
 };
 
-type UObjectTypes_T = "Texture" | "Palette" | "StaticMesh" | "Shader" | "LevelInfo" | "TerrainSector" | "ZoneInfo" | "PhysicsVolume";
+type UObjectTypes_T = "Texture" |
+    "Palette" |
+    "StaticMesh" |
+    "Shader" |
+    "LevelInfo" |
+    "TerrainSector" |
+    "ZoneInfo" |
+    "PhysicsVolume" |
+    "SkyZoneInfo" |
+    "Model";
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;

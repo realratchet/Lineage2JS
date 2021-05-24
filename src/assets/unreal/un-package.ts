@@ -14,6 +14,8 @@ import UTerrainSector from "./un-terrain-sector";
 import "./un-object-mixin";
 import UZoneInfo from "./un-zone-info";
 import UPhysicsVolume from "./un-physics-volume";
+import USkyZoneInfo from "./un-sky-zone-info";
+import UModel from "./model/un-model";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -278,6 +280,8 @@ class UPackage {
             case "TerrainSector": Constructor = UTerrainSector; break;
             case "ZoneInfo": Constructor = UZoneInfo; break;
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
+            case "Model": Constructor = UModel; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

@@ -24,6 +24,8 @@ class UModel extends UPrimitive {
     public async load(pkg: UPackage, exp: UExport) {
         const uint32 = new BufferValue(BufferValue.uint32);
 
+        debugger;
+
         pkg.seek(exp.offset.value as number, "set");
         const endPos = (exp.offset.value as number) + (exp.size.value as number);
 
