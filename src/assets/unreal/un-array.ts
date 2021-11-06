@@ -1,6 +1,7 @@
 import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
 import FUnknownStruct from "./un-unknown-struct";
+import UObject from "./un-object";
 
 type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
@@ -26,6 +27,7 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
     }
 
     public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+        // debugger;
         const hasTag = tag !== null && tag !== undefined;
         const beginIndex = hasTag ? pkg.tell() : null;
         const count = pkg.read(new BufferValue(BufferValue.compat32));
@@ -37,13 +39,24 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
 
         if (count.value as number === 0) return this;
 
-        if (hasTag) console.assert(dataSize % this.elemCount === 0);
+        if (hasTag) {
+            const isCorrectSize = dataSize % this.elemCount === 0;
+
+            if (!isCorrectSize) {
+                if ((this.Constructor as any).__proto__ === UObject) console.warn(`Potentially invalid array size for constructor '${this.Constructor.name}' is misaligned by ${dataSize % this.elemCount} bytes.`)
+                else console.assert(isCorrectSize);
+            }
+        }
+
+        // debugger;
 
         const elementSize = hasTag ? dataSize / this.elemCount : null;
 
         for (let i = 0, len = this.elemCount; i < len; i++) {
             this.list[i] = await new this.Constructor(elementSize).load(pkg, tag);
         }
+        
+        // debugger;
 
         return this;
     }

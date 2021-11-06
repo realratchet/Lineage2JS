@@ -16,6 +16,7 @@ import UZoneInfo from "./un-zone-info";
 import UPhysicsVolume from "./un-physics-volume";
 import USkyZoneInfo from "./un-sky-zone-info";
 import UModel from "./model/un-model";
+import UPolys from "./un-polys";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -282,6 +283,7 @@ class UPackage {
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
             case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
             case "Model": Constructor = UModel; break;
+            case "Polys": Constructor = UPolys; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
@@ -308,25 +310,17 @@ class UPackage {
             const uimport = new UImport();
 
             this.read(index);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 5553);
 
             uimport.classPackage = nameTable[index.value as number].name.string;
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.classPackage === "Core");
 
             this.read(index);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 11089);
 
             uimport.className = nameTable[index.value as number].name.string;
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.className === "Package");
 
             this.read(uimport.idPackage);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.className === "Package");
-
             this.read(index);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 11086);
 
             uimport.objectName = nameTable[index.value as number].name.string;
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uimport.objectName === "Engine");
 
             imports.push(uimport);
         }
@@ -362,33 +356,18 @@ class UPackage {
         for (let i = 0, ec = header.exportCount.value as number; i < ec; i++) {
             const uexport = new UExport();
 
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(this.offset === 16456721);
-
             this.read(uexport.idClass);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.idClass.value === -344);
-
             this.read(uexport.idSuper);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.idSuper.value === 0);
-
             this.read(uexport.idPackage);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.idPackage.value === 0);
-
             this.read(index);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(index.value === 315);
 
             uexport.objectName = nameTable[index.value as number].name.string;
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.objectName === "LevelInfo0")
 
             this.read(uexport.flags);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.flags.value === 0x2070001);
-
             this.read(uexport.size);
-            if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.size.value === 0xe1)
 
-            if (uexport.size.value as number > 0) {
+            if (uexport.size.value as number > 0)
                 this.read(uexport.offset);
-                if (this.path === "assets/maps/20_21.unr" && i === 0) console.assert(uexport.offset.value === 0x47121);
-            }
 
             exports.push(uexport);
         }

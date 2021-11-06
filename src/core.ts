@@ -20,10 +20,11 @@ async function loadMesh() {
 
     await assetLoader.load(pkg);
 
-    // const meshData = pkg.exports.find(exp => exp.objectName === "talking_island_rock01");
-    const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02_LOD");
-    // const exp = pkg.exports.find(exp => exp.objectName === "inna_underwater_star");
-    // debugger;
+    // const exp = pkg.exports.find(exp => exp.objectName === "Skeleton01");
+    // const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02");
+    // const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02_LOD");
+    const exp = pkg.exports.find(exp => exp.objectName === "inna_underwater_star");
+    debugger;
     // for (let exp of pkg.exports) {
     // if (exp.idClass.value !== -2) continue;
 
@@ -102,25 +103,35 @@ async function startCore() {
     const filteredSectors = expTerrainSectors
     const objectGroup = new Object3D();
 
-    // expGroups.Brush
-    //     .sort(({ objectName: na }, { objectName: nb }) => {
-    //         const a = parseInt(na.replace("Brush", ""));
-    //         const b = parseInt(nb.replace("Brush", ""));
-    //         return a - b;
-    //     })
-    //     .slice(0, 3).forEach(exp => {
-    //         console.log(exp.objectName);
-    //         pkgLoad.seek(exp.offset.value as number + 10, "set");
-    //         pkgLoad.dump(1, true, false)
-    //     });
+    // debugger;
+
+    expGroups.Model
+        .sort(({ objectName: na }, { objectName: nb }) => {
+            const a = parseInt(na.replace("Model", ""));
+            const b = parseInt(nb.replace("Model", ""));
+            return a - b;
+        })
+        .slice(0, 10).forEach(exp => {
+            console.log(exp.objectName);
+            pkgLoad.seek(exp.offset.value as number + 0, "set");
+            pkgLoad.dump(5, true, false)
+        });
 
     // debugger;
 
-    for (let exp of expGroups.Brush) {
-        const uBrush = await new UBrush().load(pkgLoad, exp);
+    for (let exp of expGroups.Model/*.filter(exp=>exp.size.value > 73)*/) {
+        // console.assert(exp.offset.value as number !== 72);
 
-        debugger;
+        // pkgLoad.seek(exp.offset.value as number, "set");
+
+        // pkgLoad.dump()
+
+        const uBrush = await new UModel().load(pkgLoad, exp);
+
+        // debugger;
     }
+
+    debugger;
 
     for (let exp of expMeshes) {
         const uMesh = await new UStaticMesh().load(pkgLoad, exp);

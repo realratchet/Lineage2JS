@@ -11,6 +11,10 @@ import FZoneProperties from "../un-zone-properties";
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
 
+const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
+const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
+const MAX_ZONES = 64;               // Max zones per level.
+
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
     protected points = new FArray(FVector);
@@ -18,55 +22,101 @@ class UModel extends UPrimitive {
     protected bspNodes = new FArray(FBSPNode);
     protected bspSurfs = new FArray(FBSPSurf);
     protected numSharedSides: number;
-    protected polys: UPolys = new UPolys();
+    protected polys: UPolys;
     protected zones: FZoneProperties[];
 
     public async load(pkg: UPackage, exp: UExport) {
-        const uint32 = new BufferValue(BufferValue.uint32);
+        const int32 = new BufferValue(BufferValue.int32);
 
-        debugger;
+        // if (exp.objectName === "Model325")
+        //     debugger;
 
         pkg.seek(exp.offset.value as number, "set");
         const endPos = (exp.offset.value as number) + (exp.size.value as number);
 
         console.log("offset:", endPos - pkg.tell());
 
+        // debugger
+
+        // this.setReadPointers(exp);
+
+        // await this.readNamedProps(pkg);
+
+        // debugger
+
         await super.load(pkg, exp);
 
+        // debugger
+
+        // await this.readNamedProps(pkg);
+
+        // debugger
+
         console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
+
+        // debugger;
 
         await this.vectors.load(pkg);
 
         console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
 
         await this.points.load(pkg);
 
         console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
 
         await this.bspNodes.load(pkg);
 
         console.log("offset:", endPos - pkg.tell());
+        if (exp.objectName === "Model325")
+            debugger;
 
         await this.bspSurfs.load(pkg);
 
         console.log("offset:", endPos - pkg.tell());
+        if (exp.objectName === "Model325")
+            debugger;
 
         await this.vertices.load(pkg);
 
         console.log("offset:", endPos - pkg.tell());
+        if (exp.objectName === "Model325")
+            debugger;
 
-        this.numSharedSides = pkg.read(uint32).value as number;
+        this.numSharedSides = pkg.read(int32).value as number;
         console.log("offset:", endPos - pkg.tell());
-        const numZones = pkg.read(uint32).value as number;
+        if (exp.objectName === "Model325")
+            debugger;
+        const numZones = pkg.read(int32).value as number;
+
+        console.assert(numZones <= MAX_ZONES);
 
         this.zones = new Array(numZones);
 
         for (let i = 0; i < numZones; i++)
             this.zones[i] = await new FZoneProperties().load(pkg);
 
-        await this.polys.load(pkg, exp);
+        this.readHead = pkg.tell();
+        const polysId = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        const polyExp = pkg.exports[polysId - 1];
+        const className = pkg.getPackageName(polyExp.idClass.value as number)
 
-        debugger;
+        console.assert(className === "Polys");
+
+        this.readHead = pkg.tell();
+
+        // debugger;
+
+        console.log(exp.objectName, "->", polyExp.objectName);
+
+        // this.polys = await pkg.fetchObject(polysId) as UPolys;
+
+        // debugger;
 
         return this;
     }

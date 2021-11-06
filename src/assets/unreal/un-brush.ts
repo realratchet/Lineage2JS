@@ -6,6 +6,8 @@ import FScale from "../un-scale";
 import ULevelInfo from "./un-level-info";
 import UPointRegion from "./un-point-region";
 import UPhysicsVolume from "./un-physics-volume";
+import UModel from "./model/un-model";
+import UTextureModifyInfo from "./un-texture-modify-info";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -23,6 +25,10 @@ class UBrush extends UObject {
     protected sunAffect: boolean;
     protected physicsVolume: UPhysicsVolume;
     protected location: Vector3;
+    protected brush: UModel;
+    protected prePivot: Vector3;
+    protected texModifyInfo: UTextureModifyInfo;
+    protected group: string;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -36,16 +42,12 @@ class UBrush extends UObject {
             "Tag": "tag",
             "bSunAffect": "sunAffect",
             "PhysicsVolume": "physicsVolume",
-            "Location": "location"
+            "Location": "location",
+            "Brush": "brush",
+            "PrePivot": "prePivot",
+            "TexModifyInfo": "texModifyInfo",
+            "Group": "group"
         });
-    }
-
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
-        this.setReadPointers(exp);
-
-        await this.readNamedProps(pkg);
-
-        return this;
     }
 }
 

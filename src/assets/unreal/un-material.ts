@@ -88,7 +88,8 @@ class UMaterialContainer extends UObject {
 
         await this.readNamedProps(pkg);
 
-        pkg.seek(this.readTail, "set");
+        // pkg.seek(this.readTail, "set");
+        this.readTail = pkg.tell();
 
         return this;
     }

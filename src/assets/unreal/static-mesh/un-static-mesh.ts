@@ -7,7 +7,7 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-import { Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Mesh } from "three";
+import { Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Mesh, FrontSide, BackSide, DoubleSide } from "three";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -22,8 +22,23 @@ class UStaticMesh extends UPrimitive {
     protected uvStream: FArray<FStaticMeshUVStream> = new FArray(FStaticMeshUVStream);
     protected indexStream1 = new FRawIndexBuffer();
     protected indexStream2 = new FRawIndexBuffer();
+    protected staticMeshLod2: UStaticMesh;
+    protected staticMeshLod1: UStaticMesh;
+    protected lodRange1: number;
+    protected lodRange2: number;
+    protected hasStaticMeshLod: boolean;
 
     public constructor() { super(); }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "StaticMeshLod02": "staticMeshLod2",
+            "LodRange02": "lodRange2",
+            "StaticMeshLod01": "staticMeshLod1",
+            "LodRange01": "lodRange1",
+            "bStaticMeshLod": "hasStaticMeshLod"
+        });
+    }
 
     public async load(pkg: UPackage, exp: UExport) {
         await super.load(pkg, exp);
@@ -91,7 +106,7 @@ class UStaticMesh extends UPrimitive {
         geometry.boundingBox = new Box3(min, max);
 
         const texture = materials.material.decodeMipmap ? await materials.material.decodeMipmap(0) : null;
-        const material = new MeshBasicMaterial({ map: texture });
+        const material = new MeshBasicMaterial({ map: texture, side: DoubleSide, transparent: true });
         const mesh = new Mesh(geometry, material);
 
         return mesh;

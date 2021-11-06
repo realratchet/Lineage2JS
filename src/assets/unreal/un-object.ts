@@ -21,9 +21,13 @@ abstract class UObject {
 
     protected async readNamedProps(pkg: UPackage) {
         do {
+            // const propTagPos = pkg.tell();
             const tag = await PropertyTag.from(pkg, this.readHead);
 
-            if (!tag.isValid()) break;
+            // console.log(`(${tag.name}) ${propTagPos} -> ${pkg.tell()}`);
+
+            if (!tag.isValid())
+                break;
 
             await this.loadProperty(pkg, tag);
 
@@ -78,10 +82,10 @@ abstract class UObject {
                 //     //printf("Skipping object property: %s\n", Name);
                 //     // pkg.read(index);
                 // } else {
-                    const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-                    const obj = await pkg.fetchObject(objIndex.value as number);
-                    this.setProperty(tag, obj);
-                    pkg.seek(offEnd, "set");
+                const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
+                const obj = await pkg.fetchObject(objIndex.value as number);
+                this.setProperty(tag, obj);
+                pkg.seek(offEnd, "set");
                 // }
                 break;
             case UNP_PropertyTypes.UNP_NameProperty:
