@@ -35,7 +35,12 @@ type UObjectTypes_T = "Texture" |
     "MusicVolume" |
     "Mover" |
     "BlockingVolume" |
-    "Camera";
+    "Camera" |
+    "FadeColor" |
+    "StaticMeshInstance" |
+    "TexRotator" |
+    "TexPanner" |
+    "ColorModifier";
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;

@@ -8,7 +8,7 @@ import UTexture from "./un-texture";
 import UObject from "./un-object";
 import UPlatte from "./un-palette";
 import UStaticMesh from "./static-mesh/un-static-mesh";
-import { UShader } from "./un-material";
+import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier } from "./un-material";
 import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
 import "./un-object-mixin";
@@ -36,6 +36,7 @@ import UMusicVolume from "./un-music-volume";
 import UMover from "./un-mover";
 import UBlockingVolume from "./un-blocking-volume";
 import UCamera from "./un-camera";
+import UStaticMeshIsntance from "./static-mesh/un-static-mesh-instance";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -323,6 +324,11 @@ class UPackage {
             case "Mover": Constructor = UMover; break;
             case "BlockingVolume": Constructor = UBlockingVolume; break;
             case "Camera": Constructor = UCamera; break;
+            case "FadeColor": Constructor = UFadeColor; break;
+            case "StaticMeshInstance": Constructor = UStaticMeshIsntance; break;
+            case "TexRotator": Constructor = UTexRotator; break;
+            case "TexPanner": Constructor = UTexPanner; break;
+            case "ColorModifier": Constructor = UColorModifier; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

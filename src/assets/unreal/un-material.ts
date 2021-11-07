@@ -1,6 +1,7 @@
 import UObject from "./un-object"
-import { PropertyTag } from "./un-property";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
+import UTexture from "./un-texture";
+import { Matrix4 } from "three";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -55,12 +56,80 @@ class UShader extends UMaterial {
     protected diffuse: UMaterial;
     protected opacity: UMaterial;
     protected doubleSide: boolean;
+    protected specular: UFadeColor;
+    protected specularMask: UTexture;
+    protected outputBlending: number;
+    protected isTreatingDoubleSided: boolean;
+    protected depthWrite: boolean;
+    protected alphaTest: boolean;
+    protected alphaRef: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Diffuse": "diffuse",
             "Opacity": "opacity",
-            "TwoSided": "doubleSide"
+            "TwoSided": "doubleSide",
+            "Specular": "specular",
+            "SpecularityMask": "specularMask",
+            "OutputBlending": "outputBlending",
+            "TreatAsTwoSided": "isTreatingDoubleSided",
+            "ZWrite": "depthWrite",
+            "AlphaTest": "alphaTest",
+            "AlphaRef": "alphaRef"
+        });
+    }
+}
+
+class UFadeColor extends UMaterial {
+    protected color1: FColor;
+    protected color2: FColor;
+    protected fadePeriod: number;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Color1": "color1",
+            "Color2": "color2",
+            "FadePeriod": "fadePeriod"
+        });
+    }
+}
+
+class UColorModifier extends UMaterial {
+    protected color: FColor;
+    protected doubleSide: boolean;
+    protected material: UShader;
+    protected alphaBlend: boolean;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Color": "color",
+            "RenderTwoSided": "doubleSide",
+            "Material": "material",
+            "AlphaBlend": "alphaBlend"
+        });
+    }
+}
+
+class UTexRotator extends UMaterial {
+    protected matrix: Matrix4;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "M": "matrix"
+        });
+    }
+}
+
+class UTexPanner extends UMaterial {
+    protected rate: number;
+    protected z: number;
+    protected matrix: Matrix4;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "PanRate": "rate",
+            "M": "matrix",
+            "Z": "z"
         });
     }
 }
@@ -96,4 +165,4 @@ class UMaterialContainer extends UObject {
 }
 
 export default UMaterial;
-export { UMaterial, UMaterialContainer, UShader, ETexturePixelFormat };
+export { UMaterial, UMaterialContainer, UShader, ETexturePixelFormat, UFadeColor, UTexRotator, UTexPanner, UColorModifier };

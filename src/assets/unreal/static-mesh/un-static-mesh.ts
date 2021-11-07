@@ -27,6 +27,10 @@ class UStaticMesh extends UPrimitive {
     protected lodRange1: number;
     protected lodRange2: number;
     protected hasStaticMeshLod: boolean;
+    protected isMadeTwoSideMesh: boolean;
+    protected isStaticMeshLodBlend: boolean;
+    protected isUsingBillboard: boolean;
+    protected frequency: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -34,7 +38,11 @@ class UStaticMesh extends UPrimitive {
             "LodRange02": "lodRange2",
             "StaticMeshLod01": "staticMeshLod1",
             "LodRange01": "lodRange1",
-            "bStaticMeshLod": "hasStaticMeshLod"
+            "bStaticMeshLod": "hasStaticMeshLod",
+            "bMakeTwoSideMesh": "isMadeTwoSideMesh",
+            "bStaticMeshLodBlend": "isStaticMeshLodBlend",
+            "bUseBillBoard": "isUsingBillboard",
+            "Frequency": "frequency"
         });
     }
 

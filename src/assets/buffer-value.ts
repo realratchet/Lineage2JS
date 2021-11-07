@@ -55,7 +55,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         if (this.type.name === "char") {
             const length = new BufferValue(uint8);
             length.readValue(buffer, offset, isEncrypted, cryptKey);
-            byteOffset = length.type.bytes + 1;
+            byteOffset = length.value as number > 0 ? length.type.bytes + 1 : 1;
             offset = offset + byteOffset - 1;
             this.type.bytes = length.value as number - 1;
         }

@@ -114,7 +114,11 @@ class UModel extends UPrimitive {
 
         // console.log(exp.objectName, "->", polyExp.objectName);
 
-        // this.polys = await pkg.fetchObject(polysId) as UPolys;
+        // debugger;
+
+        this.polys = await pkg.fetchObject(polysId) as UPolys;
+
+        pkg.seek(this.readHead, "set");
 
         // debugger;
 

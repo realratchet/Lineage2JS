@@ -9,25 +9,21 @@ import { PropertyTag } from "./un-property";
 import FUnknownStruct from "./un-unknown-struct";
 import { Vector3 } from "three/src/math/Vector3";
 import { Group } from "three/src/objects/Group";
+import UAActor from "./un-aactor";
 
-type Euler = import("three").Euler;
 type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
-type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UPackage = import("./un-package").UPackage;
 type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
-type UPointRegion = import("./un-point-region").UPointRegion;
-type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
-type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
-class UTerrainInfo extends UObject {
+class UTerrainInfo extends UAActor {
     protected readHeadOffset: number = 17;
 
     protected terrainMap: UTexture;
     public terrainScale: Vector3;
-    public readonly location: Vector3 = new Vector3();
+
     public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
@@ -42,22 +38,13 @@ class UTerrainInfo extends UObject {
     protected autoTimeGeneration: boolean;
     protected tIntMap: FArray<FUnknownStruct> = new FArray(FUnknownStruct);
     protected tickTime: number;
-    protected dynamicActorFilterState: boolean;
-    protected level: ULevelInfo;
     protected sectors: UExport<UTerrainSector>[];
     protected showOnInvisibleTerrain: boolean;
     protected litDirectional: boolean;
     protected disregardTerrainLighting: boolean;
     protected randomYaw: boolean;
     protected bForceRender: boolean;
-    protected region: UPointRegion;
-    protected tag: string;
-    protected sunAffect: boolean;
-    protected physicsVolume: UPhysicsVolume;
-    protected drawScale: number;
-    protected texModifyInfo: UTextureModifyInfo;
-    protected rotation: Euler;
-    protected swayRotationOrig: Euler;
+    
     protected isSelected: boolean;
 
     constructor(sectors: UExport<UTerrainSector>[]) {
@@ -83,22 +70,11 @@ class UTerrainInfo extends UObject {
             "bAutoTimeGeneration": "autoTimeGeneration",
             "TIntMap": "tIntMap",
             "TickTime": "tickTime",
-            "bDynamicActorFilterState": "dynamicActorFilterState",
-            "Level": "level",
             "ShowOnInvisibleTerrain": "showOnInvisibleTerrain",
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
             "bForceRender": "bForceRender",
-            "Region": "region",
-            "Tag": "tag",
-            "bSunAffect": "sunAffect",
-            "PhysicsVolume": "physicsVolume",
-            "Location": "location",
-            "DrawScale": "drawScale",
-            "TexModifyInfo": "texModifyInfo",
-            "Rotation": "rotation",
-            "SwayRotationOrig": "swayRotationOrig",
             "bSelected": "isSelected"
         });
     }
