@@ -111,12 +111,7 @@ class UStaticMesh extends UPrimitive {
         geometry.boundingSphere = new Sphere(center, radius);
         geometry.boundingBox = new Box3(min, max);
 
-        const texture = await (materials instanceof UTexture ? materials.decodeMipmap(0) : materials?.material?.diffuse?.decodeMipmap(0)) || null;
-        const opacity = await materials instanceof UMaterial
-            ? (materials.material ? materials.material.opacity : materials.opacity)?.decodeMipmap(0) || null
-            : null;
-
-        const material = new MeshBasicMaterial({ map: texture, alphaMap: opacity, side: DoubleSide, transparent: true });
+        const material = await materials?.decodeMaterial();
         const mesh = new Mesh(geometry, material);
 
         return mesh;

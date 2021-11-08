@@ -137,21 +137,10 @@ class FPoly extends FConstructable {
         geometry.setAttribute("normal", attrNormals);
         geometry.setAttribute("position", attrPositions);
 
-        // debugger;
-
         const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
+        const materials = await this.texture?.decodeMaterial();
 
-        const texture = await (this.texture instanceof UTexture ? this.texture.decodeMipmap(0) : this.texture?.material?.diffuse?.decodeMipmap(0)) || null;
-        const opacity = await this.texture instanceof UMaterial
-            ? (this.texture.material ? this.texture.material.opacity : this.texture.opacity)?.decodeMipmap(0) || null
-            : null;
-
-        const mesh = new Mesh(fanGeo, new MeshBasicMaterial({
-            side: BackSide,
-            transparent: true,
-            map: texture,
-            alphaMap: opacity
-        }));
+        const mesh = new Mesh(fanGeo, materials);
 
         mesh.name = this.name || "";
 

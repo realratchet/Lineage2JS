@@ -111,12 +111,12 @@ async function startCore() {
             const a = parseInt(na.replace("Model", ""));
             const b = parseInt(nb.replace("Model", ""));
             return a - b;
-        })
-        .slice(0, 10).forEach(exp => {
-            console.log(exp.objectName);
-            pkgLoad.seek(exp.offset.value as number + 0, "set");
-            pkgLoad.dump(5, true, false)
         });
+        // .slice(0, 10).forEach(exp => {
+        //     console.log(exp.objectName);
+        //     pkgLoad.seek(exp.offset.value as number + 0, "set");
+        //     pkgLoad.dump(5, true, false)
+        // });
 
     // debugger;
 

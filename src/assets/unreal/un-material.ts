@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler } from "three";
+import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -10,49 +10,31 @@ type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 type FColor = import("./un-color").FColor;
 
-class UMaterial extends UObject {
+abstract class UBaseMaterial extends UObject {
+    public abstract async decodeMaterial(): Promise<Material>;
+}
+abstract class UBaseModifier extends UBaseMaterial { }
+
+abstract class UMaterial extends UBaseMaterial {
     protected internalTime: number[] = new Array(2);
-    public width: number;
-    public height: number;
-    protected format: ETextureFormat;
-    protected bitsW: number; // texture size log2 (number of bits in size value)
-    protected bitsH: number;
-    protected clampW: number;
-    protected clampH: number;
+    // public width: number;
+    // public height: number;
+    // protected bitsW: number; // texture size log2 (number of bits in size value)
+    // protected bitsH: number;
+    // protected clampW: number;
+    // protected clampH: number;
     protected mipZero: FColor;
-    protected maxColor: FColor;
+    // protected maxColor: FColor;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "InternalTime": "internalTime",
-            "VSize": "height",
-            "USize": "width",
-            "Format": "format",
-            "UBits": "bitsW",
-            "VBits": "bitsH",
-            "UClamp": "clampW",
-            "VClamp": "clampH",
-            "MipZero": "mipZero",
-            "MaxColor": "maxColor",
+            // "InternalTime": "internalTime",
+            // "MipZero": "mipZero",
+            // "MaxColor": "maxColor",
         });
     }
 
-    protected getTexturePixelFormat(): ETexturePixelFormat {
-        switch (this.format) {
-            case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
-            case ETextureFormat.TEXF_DXT1: return ETexturePixelFormat.TPF_DXT1;
-            case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;
-            case ETextureFormat.TEXF_RGBA8: return ETexturePixelFormat.TPF_BGRA8;
-            case ETextureFormat.TEXF_DXT3: return ETexturePixelFormat.TPF_DXT3;
-            case ETextureFormat.TEXF_DXT5: return ETexturePixelFormat.TPF_DXT5;
-            case ETextureFormat.TEXF_L8: return ETexturePixelFormat.TPF_G8;
-            case ETextureFormat.TEXF_CxV8U8: return ETexturePixelFormat.TPF_V8U8_2;
-            case ETextureFormat.TEXF_DXT5N: return ETexturePixelFormat.TPF_DXT5N;
-            case ETextureFormat.TEXF_3DC: return ETexturePixelFormat.TPF_BC5;
-            case ETextureFormat.TEXF_G16: return ETexturePixelFormat.TPF_G16;
-            default: throw new Error(`Unknown UE2 pixel format: ${this.format}`);
-        }
-    }
+
 }
 
 class UShader extends UMaterial {
@@ -83,12 +65,28 @@ class UShader extends UMaterial {
             "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
         });
     }
+
+    public async decodeMaterial(): Promise<Material> {
+        const diffuse = await this.diffuse?.decodeMipmap(0) || null;
+        const opacity = await this.opacity?.decodeMipmap(0) || null;
+
+        const material = new MeshBasicMaterial({
+            map: diffuse,
+            alphaMap: opacity,
+            side: DoubleSide,
+            transparent: true
+        });
+
+        return material;
+    }
 }
 
-class UFadeColor extends UMaterial {
+class UFadeColor extends UBaseMaterial {
     protected color1: FColor;
     protected color2: FColor;
     protected fadePeriod: number;
+
+    public async decodeMaterial(): Promise<Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -99,11 +97,13 @@ class UFadeColor extends UMaterial {
     }
 }
 
-class UColorModifier extends UMaterial {
+class UColorModifier extends UBaseMaterial {
     protected color: FColor;
     protected doubleSide: boolean;
     protected material: UShader;
     protected alphaBlend: boolean;
+
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -115,13 +115,15 @@ class UColorModifier extends UMaterial {
     }
 }
 
-class UTexRotator extends UMaterial {
+class UTexRotator extends UBaseModifier {
     protected matrix: Matrix4;
     protected type: number;
     protected rotation: Euler;
     protected offsetU: number;
     protected offsetV: number;
     protected material: UMaterial;
+
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -135,7 +137,7 @@ class UTexRotator extends UMaterial {
     }
 }
 
-class UTexOscillator extends UMaterial {
+class UTexOscillator extends UBaseModifier {
     protected matrix: Matrix4;
     protected rateU: number;
     protected rateV: number;
@@ -144,6 +146,8 @@ class UTexOscillator extends UMaterial {
     protected amplitudeU: number;
     protected amplitudeV: number;
     protected material: UMaterial;
+
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -159,29 +163,27 @@ class UTexOscillator extends UMaterial {
     }
 }
 
-class UTexPanner extends UMaterial {
+class UTexPanner extends UBaseModifier {
     protected rate: number;
     protected z: number;
     protected matrix: Matrix4;
     protected material: UMaterial;
+    protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
-    constructor() {
-        super(...arguments);
-        this.internalTime = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
-    }
-
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "PanRate": "rate",
             "M": "matrix",
+            "InternalTime": "internalTime",
             "Z": "z",
             "Material": "material"
         });
     }
 }
 
-class UMaterialContainer extends UObject {
+class UMaterialContainer extends UBaseMaterial {
     public static readonly typeSize: number = 16;
 
     protected noDynamicShadowCast: boolean;
@@ -209,6 +211,8 @@ class UMaterialContainer extends UObject {
 
         return this;
     }
+
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 }
 
 export default UMaterial;

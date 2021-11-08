@@ -120,23 +120,12 @@ class UModel extends UPrimitive {
             geometry.setAttribute("position", attrPositions);
 
             const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
+            const material = await surf.material?.decodeMaterial();
 
-            const texture = await surf.material.diffuse?.decodeMipmap(0) || null;
-            const opacity = await surf.material.opacity?.decodeMipmap(0) || null;
-
-            const mesh = new Mesh(fanGeo, new MeshBasicMaterial({
-                side: BackSide,
-                transparent: true,
-                map: texture,
-                alphaMap: opacity
-            }));
+            const mesh = new Mesh(fanGeo, material);
 
             polyGroup.add(mesh);
-
-            // debugger;
         }
-
-        // debugger;
 
         return polyGroup;
     }

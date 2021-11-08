@@ -39,7 +39,7 @@ class ULevel extends UObject {
 
         await this.readNamedProps(pkg);
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
 
         let dbNum = await pkg.read(int32).value as number;
         let dbMax = await pkg.read(int32).value as number;
@@ -51,19 +51,19 @@ class ULevel extends UObject {
 
         const objectIds2 = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
         // debugger;
 
         await this.url.load(pkg, null);
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
 
         // debugger;
         // await this.readNamedProps(pkg);
 
         pkg.seek(7);
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
         // debugger;
 
         await this.reachSpecs.load(pkg);
