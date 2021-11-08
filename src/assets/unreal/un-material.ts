@@ -16,23 +16,23 @@ abstract class UBaseMaterial extends UObject {
 abstract class UBaseModifier extends UBaseMaterial { }
 
 abstract class UMaterial extends UBaseMaterial {
-    protected internalTime: number[] = new Array(2);
-    // public width: number;
-    // public height: number;
-    // protected bitsW: number; // texture size log2 (number of bits in size value)
-    // protected bitsH: number;
-    // protected clampW: number;
-    // protected clampH: number;
-    protected mipZero: FColor;
-    // protected maxColor: FColor;
+    // // protected internalTime: number[] = new Array(2);
+    // // public width: number;
+    // // public height: number;
+    // // protected bitsW: number; // texture size log2 (number of bits in size value)
+    // // protected bitsH: number;
+    // // protected clampW: number;
+    // // protected clampH: number;
+    // // protected mipZero: FColor;
+    // // protected maxColor: FColor;
 
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            // "InternalTime": "internalTime",
-            // "MipZero": "mipZero",
-            // "MaxColor": "maxColor",
-        });
-    }
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         // "InternalTime": "internalTime",
+    //         // "MipZero": "mipZero",
+    //         // "MaxColor": "maxColor",
+    //     });
+    // }
 
 
 }

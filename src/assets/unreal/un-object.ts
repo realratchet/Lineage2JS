@@ -21,16 +21,9 @@ abstract class UObject {
 
     protected async readNamedProps(pkg: UPackage) {
         do {
-            // const propTagPos = pkg.tell();
             const tag = await PropertyTag.from(pkg, this.readHead);
 
-            // console.log(`(${tag.name}) ${propTagPos} -> ${pkg.tell()}`);
-
-            if (!tag.isValid())
-                break;
-
-            // if (this.constructor.name === "UTerrainLayer" && (tag.structName === "Matrix" || tag.structName === "Plane"))
-            //     debugger
+            if (!tag.isValid()) break;
 
             await this.loadProperty(pkg, tag);
 
