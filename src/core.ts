@@ -128,29 +128,33 @@ async function startCore() {
 
         const uBrush = await new UModel().load(pkgLoad, exp);
 
-        // debugger;
-    }
-
-    debugger;
-
-    for (let exp of expMeshes) {
-        const uMesh = await new UStaticMesh().load(pkgLoad, exp);
-        const mesh = await uMesh.decodeMesh();
+        const mesh = await uBrush.decodeMesh();
 
         objectGroup.add(mesh);
 
-        debugger;
+        // debugger;
     }
 
-    const uTerrain = await new UTerrainInfo(filteredSectors).load(pkgLoad, expTerrainInfo);
-    const terrain = await uTerrain.decodeMesh();
-    objectGroup.add(terrain);
+    // debugger;
+
+    // for (let exp of expMeshes) {
+    //     const uMesh = await new UStaticMesh().load(pkgLoad, exp);
+    //     const mesh = await uMesh.decodeMesh();
+
+    //     objectGroup.add(mesh);
+
+    //     debugger;
+    // }
+
+    // const uTerrain = await new UTerrainInfo(filteredSectors).load(pkgLoad, expTerrainInfo);
+    // const terrain = await uTerrain.decodeMesh();
+    // objectGroup.add(terrain);
 
 
-    const boundingBox = new Box3().setFromObject(boundingBox);
+    const boundingBox = new Box3().setFromObject(objectGroup);
     const boxSize = boundingBox.getSize(new Vector3());
     // terrain.scale.set(0.001, 0.001, 0.001);
-    terrain.position.y = -boundingBox.min.y;
+    // terrain.position.y = -boundingBox.min.y;
 
     // console.log(boxSize.toArray().join(", "));
 

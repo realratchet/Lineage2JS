@@ -17,7 +17,21 @@ class FVector extends FConstructable {
 
         return this;
     }
+
+    public add(other: FVector) { return wrapOperation(this, other, "addVectors"); }
+    public sub(other: FVector) { return wrapOperation(this, other, "subVectors"); }
+    public dot(other: FVector) { return this.vector.dot(other.vector); }
 }
 
 export default FVector;
 export { FVector };
+
+type ValidOps_T = "addVectors" | "subVectors";
+
+function wrapOperation(a: FVector, b: FVector, operation: ValidOps_T) {
+    const out = new FVector();
+
+    out.vector[operation](a.vector, b.vector);
+
+    return out;
+}

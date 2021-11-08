@@ -28,77 +28,20 @@ class UModel extends UPrimitive {
     public async load(pkg: UPackage, exp: UExport) {
         const int32 = new BufferValue(BufferValue.int32);
 
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
-        pkg.seek(exp.offset.value as number, "set");
-        const endPos = (exp.offset.value as number) + (exp.size.value as number);
-
-        console.log("offset:", endPos - pkg.tell());
-
-        // debugger
-
-        // this.setReadPointers(exp);
-
-        // await this.readNamedProps(pkg);
-
-        // debugger
-
         await super.load(pkg, exp);
-
-        // debugger
-
-        // await this.readNamedProps(pkg);
-
-        // debugger
-
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
-        // debugger;
-
         await this.vectors.load(pkg);
-
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
         await this.points.load(pkg);
-
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
         await this.bspNodes.load(pkg);
-
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
         await this.bspSurfs.load(pkg);
-
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
         await this.vertices.load(pkg);
 
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
-
         this.numSharedSides = pkg.read(int32).value as number;
-        console.log("offset:", endPos - pkg.tell());
-        // if (exp.objectName === "Model325")
-        //     debugger;
+
         const numZones = pkg.read(int32).value as number;
 
         console.assert(numZones <= MAX_ZONES);
 
         this.zones = new Array(numZones);
-
-        if (numZones > 0) debugger;
 
         for (let i = 0; i < numZones; i++)
             this.zones[i] = await new FZoneProperties().load(pkg);
@@ -112,19 +55,19 @@ class UModel extends UPrimitive {
 
         this.readHead = pkg.tell();
 
-        // debugger;
-
-        console.log(exp.objectName, "->", polyExp.objectName);
-
-        // debugger;
+        // console.log(exp.objectName, "->", polyExp.objectName);
 
         this.polys = await pkg.fetchObject(polysId) as UPolys;
 
         pkg.seek(this.readHead, "set");
 
-        // debugger;
-
         return this;
+    }
+
+    public async decodeMesh() {
+        const polys = await this.polys.decodePolys();
+        
+        return polys;
     }
 }
 

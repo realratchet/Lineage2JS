@@ -56,8 +56,8 @@ class UMaterial extends UObject {
 }
 
 class UShader extends UMaterial {
-    protected diffuse: UMaterial;
-    protected opacity: UMaterial;
+    protected diffuse: UTexture;
+    protected opacity: UTexture;
     protected doubleSide: boolean;
     protected specular: UFadeColor;
     protected specularMask: UTexture;
