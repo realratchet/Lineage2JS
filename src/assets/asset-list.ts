@@ -23,8 +23,10 @@ const assetList = Object.freeze([
     "textures/T_Dion.utx",
     "textures/T_oren.utx",
     "textures/L2DecoLayer.utx",
-    "models/field_deco_S.usx",
     "textures/field_deco_T.utx",
+    "models/field_deco_S.usx",
+    "sounds2/AmbSound.uax",
+    "engine/Engine.u",
 ]);
 
 export default assetList;

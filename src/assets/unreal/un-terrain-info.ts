@@ -122,6 +122,27 @@ class UTerrainInfo extends UObject {
         this.location.x = (this.mapX - 20) * MAP_SIZE_X;
         this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
 
+        if (!this.sectors) {
+            const expTerrainSectors = pkg.exports
+                .filter(exp => {
+                    const expType = pkg.getPackageName(exp.idClass.value as number);
+
+                    return expType === "TerrainSector";
+                })
+                .sort(({ objectName: na }, { objectName: nb }) => {
+                    const a = parseInt(na.replace("TerrainSector", ""));
+                    const b = parseInt(nb.replace("TerrainSector", ""));
+                    return a - b;
+                });
+
+            // debugger;
+
+            this.sectors = expTerrainSectors as UExport<UTerrainSector>[];
+        } else {
+            console.warn("Terrain already has sectors?");
+            debugger;
+        }
+
         for (let exp of this.sectors) {
             try {
                 await pkg.createObject(pkg, exp, "TerrainSector", this);

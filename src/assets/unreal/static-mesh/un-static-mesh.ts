@@ -28,8 +28,6 @@ class UStaticMesh extends UPrimitive {
     protected lodRange2: number;
     protected hasStaticMeshLod: boolean;
 
-    public constructor() { super(); }
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMeshLod02": "staticMeshLod2",

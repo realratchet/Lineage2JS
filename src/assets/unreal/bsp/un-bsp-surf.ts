@@ -4,6 +4,8 @@ import { PropertyTag } from "../un-property";
 import UMaterial, { UMaterialContainer, UShader } from "../un-material";
 import FPlane from "../un-plane";
 import BufferValue from "../../buffer-value";
+import UBrush from "../un-brush";
+import FArray from "../un-array";
 
 class FBSPSurf extends FConstructable {
     public static readonly typeSize = 1;
@@ -19,15 +21,16 @@ class FBSPSurf extends FConstructable {
     protected iBrushPoly: number;       // 4 bytes editor brush polygon index.
     protected panU: number;             // 2 bytes u-panning value.
     protected panV: number;             // 2 bytes v-panning value.
+    protected lightMapScale: number;
 
-    protected plane: FPlane;
+    protected plane: FPlane = new FPlane();
 
-    // AActor /*ABrush**/		*Actor;			// 4 Brush actor owning this Bsp surface.
-    // //jfArray<UDecal, uint32>	Decals; // TArray // 12 Array decals on this surface
-    // jfArray2<int32, uint32>	Nodes; // TArray // 12 Nodes which make up this surface
+    protected actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
+    // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
     public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
         const uint64 = new BufferValue(BufferValue.uint64);
+        const float = new BufferValue(BufferValue.float);
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint8 = new BufferValue(BufferValue.uint8);
@@ -46,7 +49,18 @@ class FBSPSurf extends FConstructable {
 
         this.iBrushPoly = await pkg.read(compat32).value as number;
 
-        debugger;
+        const ownerId = await pkg.read(compat32).value as number;
+
+        this.actor = await pkg.fetchObject(ownerId) as UBrush;
+        this.plane.load(pkg);
+
+        this.lightMapScale = await pkg.read(float).value as number;
+
+        const unkInt32 = await pkg.read(uint32).value as number;
+
+        this.panU = this.panV = 0;
+
+        // debugger;
 
         return this;
     }

@@ -34,7 +34,7 @@ class UModel extends UPrimitive {
         pkg.seek(exp.offset.value as number, "set");
         const endPos = (exp.offset.value as number) + (exp.size.value as number);
 
-        console.log("offset:", endPos - pkg.tell());
+        // console.log("offset:", endPos - pkg.tell());
 
         // debugger
 
@@ -52,7 +52,7 @@ class UModel extends UPrimitive {
 
         // debugger
 
-        console.log("offset:", endPos - pkg.tell());
+        // console.log("offset:", endPos - pkg.tell());
         // if (exp.objectName === "Model325")
         //     debugger;
 
@@ -60,38 +60,38 @@ class UModel extends UPrimitive {
 
         await this.vectors.load(pkg);
 
-        console.log("offset:", endPos - pkg.tell());
+        // console.log("offset:", endPos - pkg.tell());
         // if (exp.objectName === "Model325")
         //     debugger;
 
         await this.points.load(pkg);
 
-        console.log("offset:", endPos - pkg.tell());
+        // console.log("offset:", endPos - pkg.tell());
         // if (exp.objectName === "Model325")
         //     debugger;
 
         await this.bspNodes.load(pkg);
 
-        console.log("offset:", endPos - pkg.tell());
-        if (exp.objectName === "Model325")
-            debugger;
+        // console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
 
         await this.bspSurfs.load(pkg);
 
-        console.log("offset:", endPos - pkg.tell());
-        if (exp.objectName === "Model325")
-            debugger;
+        // console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
 
         await this.vertices.load(pkg);
 
-        console.log("offset:", endPos - pkg.tell());
-        if (exp.objectName === "Model325")
-            debugger;
+        // console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
 
         this.numSharedSides = pkg.read(int32).value as number;
-        console.log("offset:", endPos - pkg.tell());
-        if (exp.objectName === "Model325")
-            debugger;
+        // console.log("offset:", endPos - pkg.tell());
+        // if (exp.objectName === "Model325")
+        //     debugger;
         const numZones = pkg.read(int32).value as number;
 
         console.assert(numZones <= MAX_ZONES);
@@ -112,7 +112,7 @@ class UModel extends UPrimitive {
 
         // debugger;
 
-        console.log(exp.objectName, "->", polyExp.objectName);
+        // console.log(exp.objectName, "->", polyExp.objectName);
 
         // this.polys = await pkg.fetchObject(polysId) as UPolys;
 

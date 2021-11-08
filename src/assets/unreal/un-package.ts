@@ -17,6 +17,25 @@ import UPhysicsVolume from "./un-physics-volume";
 import USkyZoneInfo from "./un-sky-zone-info";
 import UModel from "./model/un-model";
 import UPolys from "./un-polys";
+import UBrush from "./un-brush";
+import ULevel from "./un-level";
+import UAmbientSoundObject from "./un-ambient-sound";
+import USound from "./un-sound";
+import ULight from "./un-light";
+import { UClass } from "./un-class";
+import UTerrainInfo from "./un-terrain-info";
+import UNMovableSunLight from "./un-movable-sunlight";
+import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UWaterVolume from "./un-water-volume";
+import UEmitter from "./un-emitter";
+import UNSun from "./un-nsun";
+import UNMoon from "./un-nmoon";
+import UFogInfo from "./un-fog-info";
+import UPlayerStart from "./un-player-start";
+import UMusicVolume from "./un-music-volume";
+import UMover from "./un-mover";
+import UBlockingVolume from "./un-blocking-volume";
+import UCamera from "./un-camera";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -240,6 +259,7 @@ class UPackage {
         const exp = pkg.exports.find(exp =>
             exp.objectName === mainImp.objectName &&
             pkg.getPackageName(exp.idClass.value as number) === mainImp.className
+            // pkg.getPackageName(exp.idClass.value as number) === pkg.getPackageName(mainImp.idPackage.value as number)
         );
 
         if (!exp) throw new Error("Missing export");
@@ -284,6 +304,25 @@ class UPackage {
             case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
             case "Model": Constructor = UModel; break;
             case "Polys": Constructor = UPolys; break;
+            case "Brush": Constructor = UBrush; break;
+            case "Level": Constructor = ULevel; break;
+            case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
+            case "Sound": Constructor = USound; break;
+            case "Light": Constructor = ULight; break;
+            case "Class": Constructor = UClass; break
+            case "TerrainInfo": Constructor = UTerrainInfo; break;
+            case "NMovableSunLight": Constructor = UNMovableSunLight; break;
+            case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+            case "WaterVolume": Constructor = UWaterVolume; break;
+            case "Emitter": Constructor = UEmitter; break;
+            case "NSun": Constructor = UNSun; break;
+            case "NMoon": Constructor = UNMoon; break;
+            case "L2FogInfo": Constructor = UFogInfo; break;
+            case "PlayerStart": Constructor = UPlayerStart; break;
+            case "MusicVolume": Constructor = UMusicVolume; break;
+            case "Mover": Constructor = UMover; break;
+            case "BlockingVolume": Constructor = UBlockingVolume; break;
+            case "Camera": Constructor = UCamera; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

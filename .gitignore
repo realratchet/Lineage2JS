@@ -3,7 +3,7 @@ bin/
 /assets/*
 .vscode/tasks.json
 /build/*
-cpp/
+*cpp/
 # cpp/l2_viewer/
 # cpp/ue_viewer/
 *.log

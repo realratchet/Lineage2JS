@@ -16,7 +16,26 @@ type UObjectTypes_T = "Texture" |
     "PhysicsVolume" |
     "SkyZoneInfo" |
     "Model" |
-    "Polys";
+    "Polys" |
+    "Brush" |
+    "Level" |
+    "AmbientSoundObject" |
+    "Sound" |
+    "Light" |
+    "Class" |
+    "TerrainInfo" |
+    "NMovableSunLight" |
+    "StaticMeshActor" |
+    "WaterVolume" |
+    "Emitter" |
+    "NSun" |
+    "NMoon" |
+    "L2FogInfo" |
+    "PlayerStart" |
+    "MusicVolume" |
+    "Mover" |
+    "BlockingVolume" |
+    "Camera";
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;
