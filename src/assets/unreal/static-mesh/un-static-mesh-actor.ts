@@ -81,7 +81,7 @@ class UStaticMeshActor extends UAActor {
             // -yaw / 32768 * Math.PI
         );
 
-        console.log(group.rotation);
+        // console.log(group.rotation);
 
         return group;
     }

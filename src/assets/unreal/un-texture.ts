@@ -3,7 +3,7 @@ import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
 import { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
-import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide } from "three";
+import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping } from "three";
 import decodeG16 from "../decode-g16";
 import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
@@ -15,6 +15,19 @@ type UPlatte = import("./un-palette").UPlatte;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
+function getClamping(mode: number) {
+    // console.warn(`Clamping mode: ${mode}`);
+
+    return ClampToEdgeWrapping;
+    
+    // switch (mode) {
+    //     case 0: return ClampToEdgeWrapping;
+    //     case 512: return RepeatWrapping;
+    //     default: throw new Error(`Unknown clamping mode: ${mode}`);
+    // }
+}
+
+
 class UTexture extends UObject {
     protected palette: UPlatte;
     protected internalTime: number[] = new Array(2);
@@ -24,8 +37,8 @@ class UTexture extends UObject {
     public height: number;
     protected bitsW: number; // texture size log2 (number of bits in size value)
     protected bitsH: number;
-    protected clampW: number;
-    protected clampH: number;
+    protected wrapS: number;
+    protected wrapT: number;
 
     protected maxColor: FColor;
     protected mipZero: FColor;
@@ -45,8 +58,8 @@ class UTexture extends UObject {
 
             "UBits": "bitsW",
             "VBits": "bitsH",
-            "UClamp": "clampW",
-            "VClamp": "clampH",
+            "UClamp": "wrapS",
+            "VClamp": "wrapT",
 
             "MaxColor": "maxColor",
 
@@ -56,7 +69,7 @@ class UTexture extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        // await super.load(pkg, exp);
+        // await super.load(pkg, exp);g
 
         this.setReadPointers(exp);
         do {
@@ -86,16 +99,16 @@ class UTexture extends UObject {
 
     protected getTexturePixelFormat(): ETexturePixelFormat {
         switch (this.format) {
-            case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
+            // case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
             case ETextureFormat.TEXF_DXT1: return ETexturePixelFormat.TPF_DXT1;
-            case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;
+            // case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;
             case ETextureFormat.TEXF_RGBA8: return ETexturePixelFormat.TPF_BGRA8;
             case ETextureFormat.TEXF_DXT3: return ETexturePixelFormat.TPF_DXT3;
             case ETextureFormat.TEXF_DXT5: return ETexturePixelFormat.TPF_DXT5;
-            case ETextureFormat.TEXF_L8: return ETexturePixelFormat.TPF_G8;
-            case ETextureFormat.TEXF_CxV8U8: return ETexturePixelFormat.TPF_V8U8_2;
-            case ETextureFormat.TEXF_DXT5N: return ETexturePixelFormat.TPF_DXT5N;
-            case ETextureFormat.TEXF_3DC: return ETexturePixelFormat.TPF_BC5;
+            // case ETextureFormat.TEXF_L8: return ETexturePixelFormat.TPF_G8;
+            // case ETextureFormat.TEXF_CxV8U8: return ETexturePixelFormat.TPF_V8U8_2;
+            // case ETextureFormat.TEXF_DXT5N: return ETexturePixelFormat.TPF_DXT5N;
+            // case ETextureFormat.TEXF_3DC: return ETexturePixelFormat.TPF_BC5;
             case ETextureFormat.TEXF_G16: return ETexturePixelFormat.TPF_G16;
             default: throw new Error(`Unknown UE2 pixel format: ${this.format}`);
         }
@@ -132,6 +145,9 @@ class UTexture extends UObject {
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
+        texture.wrapS = getClamping(this.wrapS);
+        texture.wrapT = getClamping(this.wrapT);
+
         return texture;
     }
 
@@ -141,7 +157,7 @@ class UTexture extends UObject {
         const material = new MeshBasicMaterial({
             map: texture,
             side: DoubleSide,
-            transparent: true
+            transparent: true,
         });
 
         return material;

@@ -17,6 +17,12 @@ enum ETextureFormat {
     TEXF_CxV8U8,
     TEXF_DXT5N,            // Note: in Bioshock this value has name 3DC, but really DXT5N is used
     TEXF_3DC,            // BC5 compression
+
+    // TEXF_DXT1 = 0x03,
+    // TEXF_RGBA8 = 0x05,
+    // TEXF_DXT3 = 0x06,
+    // TEXF_DXT5 = 0x07,
+    // TEXF_G16 = 0x0A
 };
 
 type DTOPixelFormatInfo = {

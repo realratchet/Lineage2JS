@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color } from "three";
+import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -69,12 +69,16 @@ class UShader extends UMaterial {
     public async decodeMaterial(): Promise<Material> {
         const diffuse = await this.diffuse?.decodeMipmap(0) || null;
         const opacity = await this.opacity?.decodeMipmap(0) || null;
+        const specular = await this.specularMask?.decodeMipmap(0) || null;
+        // const side = this.doubleSide ? DoubleSide : FrontSide;
+        const side = DoubleSide;
 
         const material = new MeshBasicMaterial({
             map: diffuse,
             alphaMap: opacity,
-            side: DoubleSide,
-            transparent: true
+            side,
+            transparent: true,
+            specularMap: specular
         });
 
         return material;
@@ -103,7 +107,14 @@ class UColorModifier extends UBaseMaterial {
     protected material: UShader;
     protected alphaBlend: boolean;
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<Material> {
+        const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
+
+        material.color.setRGB(this.color.r, this.color.g, this.color.b);
+        material.opacity = this.color.a;
+
+        return material;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

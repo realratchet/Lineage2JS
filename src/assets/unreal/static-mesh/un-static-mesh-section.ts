@@ -4,12 +4,12 @@ import { PropertyTag } from "../un-property";
 import BufferValue from "../../buffer-value";
 
 class FStaticMeshSection extends FConstructable {
-    public f4: number;
-    public firstIndex: number;
-    public firstVertex: number;
-    public lastVertex: number;
-    public fE: number;
-    public numFaces: number;
+    public f4: number;              // always 0 ??
+    public firstIndex: number;      // first index
+    public firstVertex: number;     // first used vertex
+    public lastVertex: number;      // last used vertex
+    public fE: number;              // ALMOST always equals to f10
+    public numFaces: number;        // number of faces in section
 
     public static readonly typeSize = 16;
 

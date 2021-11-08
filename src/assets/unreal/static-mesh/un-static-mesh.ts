@@ -60,12 +60,16 @@ class UStaticMesh extends UPrimitive {
         await this.indexStream1.load(pkg, null);
         await this.indexStream2.load(pkg, null);
 
+        console.assert(this.sections.getElemCount() === this.materials.getElemCount());
+
         return this;
     }
 
     public async decodeMesh() {
-        const section = this.sections.getElem(0);
-        const materials = this.materials.getElem(0);
+        // debugger;
+
+        // const section = this.sections.getElem(0);
+        // const materials = this.materials.getElem(0);
 
         // if (this.sections.getElemCount() > 1)
         //     debugger;
@@ -111,8 +115,16 @@ class UStaticMesh extends UPrimitive {
         geometry.boundingSphere = new Sphere(center, radius);
         geometry.boundingBox = new Box3(min, max);
 
-        const material = await materials?.decodeMaterial();
-        const mesh = new Mesh(geometry, material);
+        const materials = [];
+
+        for(let i = 0, len = this.sections.getElemCount(); i < len; i++) {
+            const section = this.sections.getElem(i);
+            geometry.addGroup(section.firstIndex, section.numFaces, i);
+            materials.push(await this.materials.getElem(i).decodeMaterial());
+        }
+
+        // const material = await materials?.decodeMaterial();
+        const mesh = new Mesh(geometry, materials);
 
         return mesh;
     }
