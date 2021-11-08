@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4 } from "three";
+import { Matrix4, Euler } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -117,10 +117,20 @@ class UColorModifier extends UMaterial {
 
 class UTexRotator extends UMaterial {
     protected matrix: Matrix4;
+    protected type: number;
+    protected rotation: Euler;
+    protected offsetU: number;
+    protected offsetV: number;
+    protected material: UMaterial;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "M": "matrix"
+            "M": "matrix",
+            "TexRotationType": "type",
+            "Rotation": "rotation",
+            "UOffset": "offsetU",
+            "VOffset": "offsetV",
+            "Material": "material"
         });
     }
 }

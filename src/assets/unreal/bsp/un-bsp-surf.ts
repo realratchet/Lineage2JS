@@ -10,20 +10,20 @@ import FArray from "../un-array";
 class FBSPSurf extends FConstructable {
     public static readonly typeSize = 1;
 
-    protected material: UShader;
+    public material: UShader;
 
-    protected polyFlags: number;        // 4 bytes polygon flags.
-    protected pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
-    protected vNormal: number;          // 4 bytes index to polygon normal.
-    protected vTextureU: number;        // 4 bytes texture U-vector index.
-    protected vTextureV: number;        // 4 bytes texture V-vector index.
-    protected iLightMap: number;        // 4 bytes light mesh.
-    protected iBrushPoly: number;       // 4 bytes editor brush polygon index.
-    protected panU: number;             // 2 bytes u-panning value.
-    protected panV: number;             // 2 bytes v-panning value.
-    protected lightMapScale: number;
+    public flags: number;            // 4 bytes polygon flags.
+    public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
+    public vNormal: number;          // 4 bytes index to polygon normal.
+    public vTextureU: number;        // 4 bytes texture U-vector index.
+    public vTextureV: number;        // 4 bytes texture V-vector index.
+    public iLightMap: number;        // 4 bytes light mesh.
+    public iBrushPoly: number;       // 4 bytes editor brush polygon index.
+    public panU: number;             // 2 bytes u-panning value.
+    public panV: number;             // 2 bytes v-panning value.
+    public lightMapScale: number;
 
-    protected plane: FPlane = new FPlane();
+    public plane: FPlane = new FPlane();
 
     protected actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
@@ -37,7 +37,7 @@ class FBSPSurf extends FConstructable {
 
         const materialId = await pkg.read(compat32).value as number;
 
-        this.polyFlags = await pkg.read(uint32).value as number;
+        this.flags = await pkg.read(uint32).value as number;
         this.pBase = await pkg.read(compat32).value as number;
         this.vNormal = await pkg.read(compat32).value as number;
         this.vTextureU = await pkg.read(compat32).value as number;

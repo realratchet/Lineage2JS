@@ -29,6 +29,9 @@ abstract class UObject {
             if (!tag.isValid())
                 break;
 
+            // if (this.constructor.name === "UTerrainLayer" && (tag.structName === "Matrix" || tag.structName === "Plane"))
+            //     debugger
+
             await this.loadProperty(pkg, tag);
 
             this.readHead = pkg.tell();
@@ -163,7 +166,7 @@ abstract class UObject {
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
+        // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
     }

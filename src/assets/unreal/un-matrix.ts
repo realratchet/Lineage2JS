@@ -1,13 +1,13 @@
 import { PropertyTag } from "./un-property";
 import UPackage from "./un-package";
 import UObject from "./un-object";
-import { Plane } from "three";
+import { UPlane } from "./un-plane";
 
 class UMatrix extends UObject {
-    protected planeX: Plane;
-    protected planeY: Plane;
-    protected planeZ: Plane;
-    protected planeW: Plane;
+    protected planeX: UPlane;
+    protected planeY: UPlane;
+    protected planeZ: UPlane;
+    protected planeW: UPlane;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

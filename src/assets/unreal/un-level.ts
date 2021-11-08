@@ -5,15 +5,21 @@ import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import FArray from "./un-array";
 import FNumber from "./un-number";
+import { Group } from "three";
+import UModel from "./model/un-model";
+import UTerrainInfo from "./un-terrain-info";
+import UBrush from "./un-brush";
+import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
     protected url: FURL = new FURL;
     protected reachSpecs: FArray = new FArray(FNumber.forType(BufferValue.uint32) as any);
+    protected baseModel: UModel;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-          
+
         });
     }
 
@@ -23,10 +29,12 @@ class ULevel extends UObject {
 
         // await super.load(pkg, exp);
 
+        // debugger;
+
         this.setReadPointers(exp);
 
         pkg.seek(this.readHead, "set");
-        
+
         const startOffset = pkg.tell();
 
         await this.readNamedProps(pkg);
@@ -48,56 +56,86 @@ class ULevel extends UObject {
 
         await this.url.load(pkg, null);
 
-        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
 
         // debugger;
-        // // await this.readNamedProps(pkg);
-        
-        // pkg.seek(7);
-        
-        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // await this.readNamedProps(pkg);
+
+        pkg.seek(7);
+
+        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
         // debugger;
 
-        // await this.reachSpecs.load(pkg);
-
-        // debugger;
-
-        // const baseModelId = await pkg.read(compat32).value as number;
-        // const baseModel = await pkg.fetchObject(baseModelId);
-
-        // // const pkgTell = pkg.tell();
-
-        // // await this.readNamedProps(pkg);
-
-        // // console.log(`offset: ${pkg.tell() - pkgTell}`);
+        await this.reachSpecs.load(pkg);
 
         // debugger;
 
-        // for (let objectId of objectIds) {
-        //     const object = await pkg.fetchObject(objectId);
+        const baseModelId = await pkg.read(compat32).value as number;
+        this.baseModel = await pkg.fetchObject(baseModelId) as UModel;
 
-        //     if (object) {
-        //         this.objectList.push(object);
-        //         console.log(`Added object of type: '${object.constructor.name}'`);
-        //     }
-        // }
+        const pkgTell = pkg.tell();
 
-        // // debugger;
+        // await this.readNamedProps(pkg);
 
-        // for (let objectId of objectIds2) {
-        //     const object = await pkg.fetchObject(objectId);
+        console.log(`offset: ${pkg.tell() - pkgTell}`);
 
-        //     if (object) {
-        //         this.objectList.push(object);
-        //         console.log(`Added object of type: '${object.constructor.name}'`);
-        //     }
-        // }
+        // debugger;
+
+        for (let objectId of objectIds) {
+            const object = await pkg.fetchObject(objectId);
+
+            if (object) {
+                this.objectList.push(object);
+                // console.log(`Added object of type: '${object.constructor.name}'`);
+            }
+        }
+
+        // debugger;
+
+        for (let objectId of objectIds2) {
+            const object = await pkg.fetchObject(objectId);
+
+            if (object) {
+                this.objectList.push(object);
+                // console.log(`Added object of type: '${object.constructor.name}'`);
+            }
+        }
 
         // debugger;
 
         this.readHead = this.readTail;
 
         return this;
+    }
+
+    public async decodeLevel(): Promise<Group> {
+        const group = new Group();
+
+        group.name = this.url.map;
+
+        const groupedObjectList = this.objectList.reduce((accum, obj) => {
+
+            accum[obj.constructor.name] = accum[obj.constructor.name] || [];
+            accum[obj.constructor.name].push(obj);
+
+            return accum;
+        }, {} as { [key: string]: UObject[] });
+
+        for (let type of ["UBrush", "UTerrainInfo", "UStaticMeshActor"]) {
+            for (let object of groupedObjectList[type]) {
+                switch (type) {
+                    case "UBrush": group.add(await (object as UBrush).decodeMesh()); break;
+                    case "UStaticMeshActor": group.add(await (object as UStaticMeshActor).decodeMesh()); break;
+                    case "UTerrainInfo": group.add(await (object as UTerrainInfo).decodeMesh()); break
+                }
+            }
+        }
+
+        // const levelMesh = await this.baseModel.decodeMesh();
+
+        // group.add(levelMesh);
+
+        return group;
     }
 }
 

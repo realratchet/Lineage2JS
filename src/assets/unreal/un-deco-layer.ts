@@ -6,7 +6,8 @@ type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 type UTexture = import("./un-texture").UTexture;
 type UStaticMesh = import("./static-mesh/un-static-mesh").UStaticMesh;
-type FRangeVector = import("./un-range").FRangeVector;
+type URangeVector = import("./un-range").URangeVector;
+type URange = import("./un-range").URange;
 
 class UDecoLayer extends UObject {
     public static readonly typeSize: number = 128;
@@ -15,12 +16,20 @@ class UDecoLayer extends UObject {
     protected densityMap: UTexture;
     protected colorMap: UTexture;
     public staticMesh: UStaticMesh;
-    protected scaleMultiplier: FRangeVector;
-    protected ambientRandom: string;
-    protected rotator: Euler;
-    protected leaf: number;
+    protected scaleMultiplier: URangeVector;
     protected ambientSoundType: number[];
     protected size: number;
+    protected fadeoutRadius: URange;
+    protected densityMultiplier: URange;
+    protected maxPerQuad: number;
+    protected seed: number;
+    protected alignToTerrain: number;
+    protected drawOrder: number;
+    protected isShowOnInvisibleTerrain: number;
+    protected dirLightning: number;
+    protected disregardTerrainLighting: number;
+    protected randomYaw: number;
+    protected isForcingRender: number;
 
     public constructor(size: number) {
         super();
@@ -36,10 +45,18 @@ class UDecoLayer extends UObject {
             "ColorMap": "colorMap",
             "StaticMesh": "staticMesh",
             "ScaleMultiplier": "scaleMultiplier",
-            "AmbientRandom": "ambientRandom",
-            "Rotator": "rotator",
-            "iLeaf": "leaf",
-            "AmbientSoundType": "ambientSoundType"
+            "Seed": "seed",
+            "AlignToTerrain": "alignToTerrain",
+            "AmbientSoundType": "ambientSoundType",
+            "FadeoutRadius": "fadeoutRadius",
+            "DensityMultiplier": "densityMultiplier",
+            "MaxPerQuad": "maxPerQuad",
+            "DrawOrder": "drawOrder",
+            "ShowOnInvisibleTerrain": "isShowOnInvisibleTerrain",
+            "LitDirectional": "dirLightning",
+            "DisregardTerrainLighting": "disregardTerrainLighting",
+            "RandomYaw": "randomYaw",
+            "bForceRender": "isForcingRender"
         });
     }
 

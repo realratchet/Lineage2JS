@@ -2,7 +2,7 @@ import UExport from "../un-export";
 import UPackage from "../un-package";
 import UAActor from "../un-aactor";
 import UStaticMesh from "./un-static-mesh";
-import { Vector3 } from "three";
+import { Vector3, Mesh, Group } from "three";
 import UStaticMeshIsntance from "./un-static-mesh-instance";
 import FArray from "../un-array";
 import BufferValue from "../../buffer-value";
@@ -52,6 +52,21 @@ class UStaticMeshActor extends UAActor {
             "L2LodViewDuration": "lodViewDuration",
             "L2CurrentLod": "currentLod"
         });
+    }
+
+    public async decodeMesh(): Promise<Group> {
+        const group = new Group();
+
+        const instance = await this.mesh.decodeMesh();
+
+        console.assert(!instance.parent)
+
+        group.add(instance);
+        group.position.set(this.location.x, this.location.z, this.location.y);
+
+        // debugger;
+
+        return group;
     }
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {

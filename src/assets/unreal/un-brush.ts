@@ -46,7 +46,10 @@ class UBrush extends UAActor {
 
         brush.name = this.group || "";
 
-        brush.position.subVectors(this.location, this.prePivot);
+        const position = new Vector3().subVectors(this.location, this.prePivot);
+
+        brush.position.set(position.x, position.z, position.y);
+
         // brush.scale.set(this.mainScale.x, this.mainScale.y, this.mainScale.z);
 
         // if (brush.children.length > 0)

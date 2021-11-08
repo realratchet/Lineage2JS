@@ -10,6 +10,7 @@ import FUnknownStruct from "./un-unknown-struct";
 import { Vector3 } from "three/src/math/Vector3";
 import { Group } from "three/src/objects/Group";
 import UAActor from "./un-aactor";
+import FColor from "./un-color";
 
 type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
 type UPackage = import("./un-package").UPackage;
@@ -49,6 +50,8 @@ class UTerrainInfo extends UAActor {
 
     constructor(sectors: UExport<UTerrainSector>[]) {
         super();
+
+        // debugger;
 
         this.sectors = sectors;
     }
@@ -93,12 +96,14 @@ class UTerrainInfo extends UAActor {
         // pkg.seek(exp.offset.value as number, "set");
         // const header = pkg.read(BufferValue.allocBytes(17));
 
-        debugger;
+        // debugger;
 
         await super.load(pkg, exp);
 
         this.location.x = (this.mapX - 20) * MAP_SIZE_X;
         this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
+
+        // debugger;
 
         if (!this.sectors) {
             const expTerrainSectors = pkg.exports
@@ -112,8 +117,6 @@ class UTerrainInfo extends UAActor {
                     const b = parseInt(nb.replace("TerrainSector", ""));
                     return a - b;
                 });
-
-            // debugger;
 
             this.sectors = expTerrainSectors as UExport<UTerrainSector>[];
         } else {

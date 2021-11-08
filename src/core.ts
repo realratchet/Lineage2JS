@@ -11,6 +11,7 @@ import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-inst
 import UModel from "./assets/unreal/model/un-model";
 import UExport from "./assets/unreal/un-export";
 import UBrush from "./assets/unreal/un-brush";
+import ULevel from "./assets/unreal/un-level";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -119,23 +120,30 @@ async function startCore() {
 
     // debugger;
 
-    for (let exp of expGroups.Brush/*.filter(exp=>exp.size.value > 73)*/) {
-        // console.assert(exp.offset.value as number !== 72);
+    const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
+    const level = await uLevel.decodeLevel();
 
-        // pkgLoad.seek(exp.offset.value as number, "set");
+    objectGroup.add(level);
 
-        // pkgLoad.dump()
+    // debugger;
 
-        const uBrush = await new UBrush().load(pkgLoad, exp);
+    // for (let exp of expGroups.Brush/*.filter(exp=>exp.size.value > 73)*/) {
+    //     // console.assert(exp.offset.value as number !== 72);
 
-        // debugger;
+    //     // pkgLoad.seek(exp.offset.value as number, "set");
 
-        const mesh = await uBrush.decodeMesh();
+    //     // pkgLoad.dump()
 
-        objectGroup.add(mesh);
+    //     const uBrush = await new UBrush().load(pkgLoad, exp);
 
-        // debugger;
-    }
+    //     // debugger;
+
+    //     const mesh = await uBrush.decodeMesh();
+
+    //     objectGroup.add(mesh);
+
+    //     // debugger;
+    // }
 
     // for (let exp of expGroups.Model/*.filter(exp=>exp.size.value > 73)*/) {
     //     // console.assert(exp.offset.value as number !== 72);

@@ -6,13 +6,13 @@ import FArray from "./un-array";
 import FNumber from "./un-number";
 
 class FURL extends FConstructable {
-    protected protocol: string;
-    protected host: string;
-    protected port: number = 0;
-    protected map: string;
-    protected portal: string;
-    protected op: FArray = new FArray(FNumber.forType(BufferValue.uint32) as any);
-    protected isValid: boolean = false;
+    public protocol: string;
+    public host: string;
+    public port: number = 0;
+    public map: string;
+    public portal: string;
+    public op: FArray = new FArray(FNumber.forType(BufferValue.uint32) as any);
+    public isValid: boolean = false;
 
     public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
         this.isValid = true;

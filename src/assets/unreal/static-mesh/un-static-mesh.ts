@@ -8,6 +8,8 @@ import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import { Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Mesh, FrontSide, BackSide, DoubleSide } from "three";
+import UTexture from "../un-texture";
+import UMaterial from "../un-material";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -67,8 +69,8 @@ class UStaticMesh extends UPrimitive {
         const section = this.sections.getElem(0);
         const materials = this.materials.getElem(0);
 
-        if (this.sections.getElemCount() > 1)
-            debugger;
+        // if (this.sections.getElemCount() > 1)
+        //     debugger;
 
         const countVerts = this.vertexStream.vert.getElemCount();
         const countFaces = this.indexStream1.indices.getElemCount();
@@ -111,8 +113,12 @@ class UStaticMesh extends UPrimitive {
         geometry.boundingSphere = new Sphere(center, radius);
         geometry.boundingBox = new Box3(min, max);
 
-        const texture = materials.material.decodeMipmap ? await materials.material.decodeMipmap(0) : null;
-        const material = new MeshBasicMaterial({ map: texture, side: DoubleSide, transparent: true });
+        const texture = await (materials instanceof UTexture ? materials.decodeMipmap(0) : materials?.material?.diffuse?.decodeMipmap(0)) || null;
+        const opacity = await materials instanceof UMaterial
+            ? (materials.material ? materials.material.opacity : materials.opacity)?.decodeMipmap(0) || null
+            : null;
+
+        const material = new MeshBasicMaterial({ map: texture, alphaMap: opacity, side: DoubleSide, transparent: true });
         const mesh = new Mesh(geometry, material);
 
         return mesh;

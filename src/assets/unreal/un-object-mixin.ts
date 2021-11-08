@@ -4,7 +4,7 @@ import { FColor } from "./un-color";
 import { Vector3 } from "three/src/math/Vector3";
 import { MathUtils } from "three/src/math/MathUtils";
 import { Euler } from "three/src/math/Euler";
-import FRangeVector from "./un-range";
+import { URange, URangeVector } from "./un-range";
 import UPointRegion from "./un-point-region";
 import UTextureModifyInfo from "./un-texture-modify-info";
 import FScale from "../un-scale";
@@ -31,7 +31,8 @@ Object.assign(UObject.prototype, {
             case "Matrix": return await new UMatrix().load(pkg, tag);
             case "PointRegion": return await new UPointRegion(tag.dataSize).load(pkg);
             case "TextureModifyinfo": return await new UTextureModifyInfo(tag.dataSize).load(pkg);
-            case "RangeVector": return await new FRangeVector().load(pkg);
+            case "RangeVector": return await new URangeVector().load(pkg, tag);
+            case "Range": return await new URange().load(pkg, tag);
             default: throw new Error(`Unsupported struct type: ${tag.structName}`);
         }
     }

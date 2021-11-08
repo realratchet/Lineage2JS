@@ -5,26 +5,37 @@ import BufferValue from "../../buffer-value";
 import { FPlane } from "../un-plane";
 import FVector from "../un-vector";
 
+// Flags associated with a Bsp node.
+enum BspNodeFlags_T {
+    // Flags.
+    NF_NotCsg = 0x01,           // Node is not a Csg splitter, i.e. is a transparent poly.
+    NF_NotVisBlocking = 0x04,   // Node does not block visibility, i.e. is an invisible collision hull.
+    NF_BrightCorners = 0x10,    // Temporary.
+    NF_IsNew = 0x20,            // Editor: Node was newly-added.
+    NF_IsFront = 0x40,          // Filter operation bounding-sphere precomputed and guaranteed to be front.
+    NF_IsBack = 0x80,           // Guaranteed back.
+};
+
 class FBSPNode extends FConstructable {
     public static readonly typeSize = 1;
 
-    protected readonly plane = new FPlane();    // 16 byte plane the node falls into (X, Y, Z, W).
-    protected zoneMask: number;                 // 8  byte mask for all zones at or below this node (up to 64).
-    protected iVertPool: number;                // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
-    protected iSurf: number;                    // 4  byte index to surface information.
+    public readonly plane = new FPlane();    // 16 byte plane the node falls into (X, Y, Z, W).
+    public zoneMask: number;                 // 8  byte mask for all zones at or below this node (up to 64).
+    public iVertPool: number;                // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
+    public iSurf: number;                    // 4  byte index to surface information.
 
-    protected iBack: number;                    // 4  byte index to node in front (in direction of Normal).
-    protected iFront: number;                   // 4  byte index to node in back  (opposite direction as Normal).
-    protected iPlane: number;                   // 4  byte index to next coplanar poly in coplanar list.
+    public iBack: number;                    // 4  byte index to node in front (in direction of Normal).
+    public iFront: number;                   // 4  byte index to node in back  (opposite direction as Normal).
+    public iPlane: number;                   // 4  byte index to next coplanar poly in coplanar list.
 
-    protected iCollisionBound: number;          // 4  byte collision bound.
-    protected iRenderBound: number;             // 4  byte rendering bound.
-    protected iZone: number[] = new Array(2);   // 2  byte visibility zone in 1=front, 0=back.
-    protected numVertices: number;              // 1  byte number of vertices in node.
-    protected nodeFlags: number;                // 1  byte node flags.
-    protected iLeaf: number[] = new Array(2);   // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
+    public iCollisionBound: number;          // 4  byte collision bound.
+    public iRenderBound: number;             // 4  byte rendering bound.
+    public iZone: number[] = new Array(2);   // 2  byte visibility zone in 1=front, 0=back.
+    public numVertices: number;              // 1  byte number of vertices in node.
+    public flags: number;                // 1  byte node flags.
+    public iLeaf: number[] = new Array(2);   // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
-    protected baseIndex: number;
+    public baseIndex: number;
 
     public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
         const uint64 = new BufferValue(BufferValue.uint64);
@@ -34,7 +45,7 @@ class FBSPNode extends FConstructable {
 
         this.plane.load(pkg);
         this.zoneMask = pkg.read(uint64).value as number;
-        this.nodeFlags = pkg.read(uint8).value as number;
+        this.flags = pkg.read(uint8).value as number;
         this.iVertPool = pkg.read(compat32).value as number;
         this.iSurf = pkg.read(compat32).value as number;
 
@@ -76,4 +87,4 @@ class FBSPNode extends FConstructable {
 }
 
 export default FBSPNode;
-export { FBSPNode };
+export { FBSPNode, BspNodeFlags_T };

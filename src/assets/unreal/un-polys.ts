@@ -39,6 +39,7 @@ enum PolyFlags_T {
     PF_NoAddToBSP = PF_EdCut | PF_EdProcessed | PF_Selected | PF_Memorized
 };
 
+
 class FPoly extends FConstructable {
     public static readonly typeSize = 1;
     public base: FVector = new FVector();
@@ -141,8 +142,16 @@ class FPoly extends FConstructable {
         const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
 
         const texture = await (this.texture instanceof UTexture ? this.texture.decodeMipmap(0) : this.texture?.material?.diffuse?.decodeMipmap(0)) || null;
+        const opacity = await this.texture instanceof UMaterial
+            ? (this.texture.material ? this.texture.material.opacity : this.texture.opacity)?.decodeMipmap(0) || null
+            : null;
 
-        const mesh = new Mesh(fanGeo, new MeshBasicMaterial({ side: BackSide, transparent: true, map: texture }));
+        const mesh = new Mesh(fanGeo, new MeshBasicMaterial({
+            side: BackSide,
+            transparent: true,
+            map: texture,
+            alphaMap: opacity
+        }));
 
         mesh.name = this.name || "";
 
@@ -214,4 +223,4 @@ class UPolys extends UObject {
 }
 
 export default UPolys;
-export { UPolys };
+export { UPolys, PolyFlags_T };

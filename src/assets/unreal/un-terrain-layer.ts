@@ -2,6 +2,7 @@ import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
 import { Plane, Vector3 } from "three";
+import FColor from "./un-color";
 
 type Euler = import("three/src/math/Euler").Euler;
 type Matrix4 = import("three/src/math/Matrix4").Matrix4;
@@ -67,33 +68,50 @@ class UTerrainLayer extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
+        // debugger;
+
+        // const startOffset = pkg.tell();
+
+        pkg.seek(this.readHead, "set");
         await this.readNamedProps(pkg);
 
-        const uint16 = new BufferValue(BufferValue.uint16);
+        // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
 
-        this.unkNum0 = pkg.read(uint16).value as number;
+        console.assert((this.readTail - pkg.tell()) === 0);
 
-        this.readHead = pkg.tell();
+        // const uint16 = new BufferValue(BufferValue.uint16);
 
-        do {
-            const tag = await PropertyTag.from(pkg, this.readHead);
+        // this.unkNum0 = await pkg.read(uint16).value as number;
 
-            if (!tag.isValid()) break;
+        // this.readHead = pkg.tell();
 
-            const postState = pkg.tell() + tag.dataSize;
+        // debugger;
 
-            await this.loadProperty(pkg, tag);
+        // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
 
-            this.readHead = postState;
+        // do {
+        //     const tag = await PropertyTag.from(pkg, this.readHead);
 
-        } while (this.readHead < this.readTail);
+        //     if (!tag.isValid()) break;
 
-        this.readHead = pkg.tell();
+        //     const postState = pkg.tell() + tag.dataSize;
 
-        await this.readNamedProps(pkg);
+        //     await this.loadProperty(pkg, tag);
 
-        this.readHead = this.readTail;
-        pkg.seek(this.readTail, "set");
+        //     this.readHead = postState;
+
+        //     console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
+
+        // } while (this.readHead < this.readTail);
+
+        // this.readHead = pkg.tell();
+
+        // await this.readNamedProps(pkg);
+
+        // this.readHead = this.readTail;
+        // pkg.seek(this.readTail, "set");
+
+        // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
 
         // debugger;
 

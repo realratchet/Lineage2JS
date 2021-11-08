@@ -51,6 +51,8 @@ class UTerrainSector extends UObject {
     public constructor(terrainInfo: UTerrainInfo) {
         super();
 
+        // debugger;
+
         this.info = terrainInfo;
     }
 
