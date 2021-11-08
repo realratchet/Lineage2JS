@@ -2,6 +2,9 @@ import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
 import { Matrix4 } from "three";
+import FArray from "./un-array";
+import BufferValue from "../buffer-value";
+import FNumber from "./un-number";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -63,6 +66,7 @@ class UShader extends UMaterial {
     protected depthWrite: boolean;
     protected alphaTest: boolean;
     protected alphaRef: number;
+    protected isPerformingLightningOnSpecularPass: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -75,7 +79,8 @@ class UShader extends UMaterial {
             "TreatAsTwoSided": "isTreatingDoubleSided",
             "ZWrite": "depthWrite",
             "AlphaTest": "alphaTest",
-            "AlphaRef": "alphaRef"
+            "AlphaRef": "alphaRef",
+            "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
         });
     }
 }
@@ -120,16 +125,48 @@ class UTexRotator extends UMaterial {
     }
 }
 
+class UTexOscillator extends UMaterial {
+    protected matrix: Matrix4;
+    protected rateU: number;
+    protected rateV: number;
+    protected phaseU: number;
+    protected phaseV: number;
+    protected amplitudeU: number;
+    protected amplitudeV: number;
+    protected material: UMaterial;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "M": "matrix",
+            "UOscillationRate": "rateU",
+            "VOscillationRate": "rateV",
+            "UOscillationPhase": "phaseU",
+            "VOscillationPhase": "phaseV",
+            "UOscillationAmplitude": "amplitudeU",
+            "VOscillationAmplitude": "amplitudeV",
+            "Material": "material"
+        });
+    }
+}
+
 class UTexPanner extends UMaterial {
     protected rate: number;
     protected z: number;
     protected matrix: Matrix4;
+    protected material: UMaterial;
+
+    constructor() {
+        super(...arguments);
+        this.internalTime = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
+    }
+
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "PanRate": "rate",
             "M": "matrix",
-            "Z": "z"
+            "Z": "z",
+            "Material": "material"
         });
     }
 }
@@ -165,4 +202,4 @@ class UMaterialContainer extends UObject {
 }
 
 export default UMaterial;
-export { UMaterial, UMaterialContainer, UShader, ETexturePixelFormat, UFadeColor, UTexRotator, UTexPanner, UColorModifier };
+export { UMaterial, UMaterialContainer, UShader, ETexturePixelFormat, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator };

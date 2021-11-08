@@ -40,7 +40,8 @@ type UObjectTypes_T = "Texture" |
     "StaticMeshInstance" |
     "TexRotator" |
     "TexPanner" |
-    "ColorModifier";
+    "ColorModifier" |
+    "TexOscillator";
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;

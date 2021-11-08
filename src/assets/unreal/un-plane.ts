@@ -1,6 +1,8 @@
 import FConstructable from "./un-constructable";
 import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
+import UObject from "./un-object";
+import { PropertyTag } from "./un-property";
 
 class FPlane extends FConstructable {
     public static readonly typeSize: number = 16;
@@ -21,5 +23,31 @@ class FPlane extends FConstructable {
     }
 }
 
-export default FPlane;
-export { FPlane };
+class UPlane extends UObject {
+    protected x: number;
+    protected y: number;
+    protected z: number;
+    protected w: number;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "X": "x",
+            "Y": "y",
+            "Z": "z",
+            "W": "w",
+        });
+    }
+
+    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+
+        this.readHead = pkg.tell();
+        this.readTail = this.readHead + tag.dataSize;
+
+
+        await this.readNamedProps(pkg);
+
+        return this;
+    }
+}
+
+export { FPlane, UPlane };

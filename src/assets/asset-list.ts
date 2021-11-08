@@ -8,6 +8,7 @@ const assetList = Object.freeze([
     "maps/21_20.unr",
     "maps/21_21.unr",
     "maps/22_21.unr",
+
     "textures/T_17_22.utx",
     "textures/T_20_19.utx",
     "textures/T_20_20.utx",
@@ -29,6 +30,8 @@ const assetList = Object.freeze([
     "textures/Dion_tree_T.utx",
     "textures/dion_curumadungeon_t.utx",
     "textures/cruma_tr_t.utx",
+    "textures/FX_E_T.utx",
+
     "models/field_deco_S.usx",
     "models/Dion_Cruma_Tower_S.usx",
     "models/Dion_tree_S.usx",
@@ -36,8 +39,10 @@ const assetList = Object.freeze([
     "models/dion_curumadungeon_s.usx",
     "models/dion_curumadungeon_boss_s.usx",
     "models/cruma_s.usx",
+
     "sounds2/AmbSound.uax",
     "sounds2/ChrSound.uax",
+
     "engine/Engine.u",
 ]);
 

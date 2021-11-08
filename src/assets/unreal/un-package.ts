@@ -8,7 +8,7 @@ import UTexture from "./un-texture";
 import UObject from "./un-object";
 import UPlatte from "./un-palette";
 import UStaticMesh from "./static-mesh/un-static-mesh";
-import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier } from "./un-material";
+import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator } from "./un-material";
 import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
 import "./un-object-mixin";
@@ -329,6 +329,7 @@ class UPackage {
             case "TexRotator": Constructor = UTexRotator; break;
             case "TexPanner": Constructor = UTexPanner; break;
             case "ColorModifier": Constructor = UColorModifier; break;
+            case "TexOscillator": Constructor = UTexOscillator; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

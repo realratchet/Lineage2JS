@@ -2,7 +2,7 @@ import FConstructable from "../un-constructable";
 import UPackage from "../un-package";
 import { PropertyTag } from "../un-property";
 import UMaterial, { UMaterialContainer, UShader } from "../un-material";
-import FPlane from "../un-plane";
+import { FPlane } from "../un-plane";
 import BufferValue from "../../buffer-value";
 import UBrush from "../un-brush";
 import FArray from "../un-array";
@@ -37,8 +37,6 @@ class FBSPSurf extends FConstructable {
 
         const materialId = await pkg.read(compat32).value as number;
 
-        this.material = await pkg.fetchObject(materialId) as UShader;
-
         this.polyFlags = await pkg.read(uint32).value as number;
         this.pBase = await pkg.read(compat32).value as number;
         this.vNormal = await pkg.read(compat32).value as number;
@@ -51,7 +49,6 @@ class FBSPSurf extends FConstructable {
 
         const ownerId = await pkg.read(compat32).value as number;
 
-        this.actor = await pkg.fetchObject(ownerId) as UBrush;
         this.plane.load(pkg);
 
         this.lightMapScale = await pkg.read(float).value as number;
@@ -59,6 +56,11 @@ class FBSPSurf extends FConstructable {
         const unkInt32 = await pkg.read(uint32).value as number;
 
         this.panU = this.panV = 0;
+
+        const offset = pkg.tell();
+        this.material = await pkg.fetchObject(materialId) as UShader;
+        this.actor = await pkg.fetchObject(ownerId) as UBrush;
+        pkg.seek(offset, "set");
 
         // debugger;
 

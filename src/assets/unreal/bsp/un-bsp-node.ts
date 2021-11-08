@@ -2,7 +2,7 @@ import FConstructable from "../un-constructable";
 import UPackage from "../un-package";
 import { PropertyTag } from "../un-property";
 import BufferValue from "../../buffer-value";
-import FPlane from "../un-plane";
+import { FPlane } from "../un-plane";
 import FVector from "../un-vector";
 
 class FBSPNode extends FConstructable {

@@ -9,13 +9,17 @@ class FZoneProperties extends FConstructable {
 
     public connectivity: BigInt;
     public visibility: BigInt;
+    public lastRenderTime: number;
+    public index: number;
 
     public async load(pkg: UPackage): Promise<this> {
         const uint64 = new BufferValue(BufferValue.uint64);
-        const index = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        const float = new BufferValue(BufferValue.float);
         
-        this.connectivity = pkg.read(uint64).value as BigInt;
-        this.visibility = pkg.read(uint64).value as BigInt;
+        this.index = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        this.connectivity = await pkg.read(uint64).value as BigInt;
+        this.visibility = await pkg.read(uint64).value as BigInt;
+        this.lastRenderTime = await pkg.read(float).value as number;
 
         return this;
     }

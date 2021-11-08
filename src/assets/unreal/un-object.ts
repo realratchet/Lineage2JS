@@ -98,6 +98,8 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_ArrayProperty: await this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty:
             case UNP_PropertyTypes.UNP_VectorProperty:
+            case UNP_PropertyTypes.UNP_RotatorProperty:
+                debugger;
                 this.setProperty(tag, (function () {
                     const f = new BufferValue(BufferValue.float);
                     const out = new Array<number>(3);
@@ -108,7 +110,6 @@ abstract class UObject {
                     return out;
                 })());
                 break;
-            case UNP_PropertyTypes.UNP_RotatorProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_MapProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_FixedArrayProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StructProperty:

@@ -89,7 +89,7 @@ class UPolys extends UObject {
 
         await this.readNamedProps(pkg);
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
 
 
         // super.load(pkg, exp);
@@ -99,7 +99,7 @@ class UPolys extends UObject {
         const dbNum = pkg.read(int32).value as number;
         const dbMax = pkg.read(int32).value as number;
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
 
         this.polyList = new Array(dbMax);
 
@@ -107,10 +107,12 @@ class UPolys extends UObject {
 
         for (let i = 0; i < dbMax; i++) {
             this.polyList[i] = await new FPoly().load(pkg);
-            console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+            // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
         }
 
-        console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
+
+        console.assert((exp.size.value as number - (pkg.tell() - startOffset)) === 0);
 
         // debugger;
 
