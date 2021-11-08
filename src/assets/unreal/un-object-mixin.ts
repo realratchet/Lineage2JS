@@ -24,10 +24,14 @@ Object.assign(UObject.prototype, {
                 vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
                 return vec;
             }, new Vector3());
-            case "Rotator": return ["x", "y", "z"].reduce((euler, ax: "x" | "y" | "z") => {
-                euler[ax] = pkg.read(new BufferValue(BufferValue.int32)).value as number * MathUtils.DEG2RAD;
-                return euler;
-            }, new Euler());
+            case "Rotator":
+                return ["x", "y", "z"].reduce((euler, ax: "x" | "y" | "z") => {
+                    const ang = pkg.read(new BufferValue(BufferValue.int32)).value as number;
+
+                    euler[ax] = ang;
+
+                    return euler;
+                }, new Euler());
             case "Matrix": return await new UMatrix().load(pkg, tag);
             case "PointRegion": return await new UPointRegion(tag.dataSize).load(pkg);
             case "TextureModifyinfo": return await new UTextureModifyInfo(tag.dataSize).load(pkg);

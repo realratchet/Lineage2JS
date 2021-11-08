@@ -60,8 +60,6 @@ class UStaticMesh extends UPrimitive {
         await this.indexStream1.load(pkg, null);
         await this.indexStream2.load(pkg, null);
 
-        this.name = exp.objectName;
-
         return this;
     }
 

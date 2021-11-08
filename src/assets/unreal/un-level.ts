@@ -77,7 +77,7 @@ class ULevel extends UObject {
 
         // await this.readNamedProps(pkg);
 
-        console.log(`offset: ${pkg.tell() - pkgTell}`);
+        // console.log(`offset: ${pkg.tell() - pkgTell}`);
 
         // debugger;
 

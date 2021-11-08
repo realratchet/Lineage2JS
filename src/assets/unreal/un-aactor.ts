@@ -37,38 +37,6 @@ class UAActor extends UObject {
             "DrawScale3D": "scale"
         });
     };
-
-    // public async load(pkg: UPackage, exp: UExport): Promise<this> {
-    //     const compat32 = new BufferValue(BufferValue.compat32);
-
-
-    //     this.setReadPointers(exp);
-    //     pkg.seek(this.readHead, "set");
-    //     // debugger;
-
-    //     // const objectId = await pkg.read(compat32).value as number;
-    //     // const object = await pkg.fetchObject(objectId);
-
-    //     // debugger;
-
-    //     await this.readNamedProps(pkg);
-
-    //     // await super.load(pkg, exp);
-
-    //     // debugger;
-
-    //     // this.readNamedProps(pkg);
-
-    //     // debugger;
-    //     // this.readNamedProps(pkg);
-
-    //     // debugger;
-    //     // this.readNamedProps(pkg);
-
-    //     debugger;
-
-    //     return this;
-    // }
 }
 
 export default UAActor;
