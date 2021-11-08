@@ -93,6 +93,8 @@ class UTerrainInfo extends UAActor {
         // pkg.seek(exp.offset.value as number, "set");
         // const header = pkg.read(BufferValue.allocBytes(17));
 
+        debugger;
+
         await super.load(pkg, exp);
 
         this.location.x = (this.mapX - 20) * MAP_SIZE_X;

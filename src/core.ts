@@ -5,7 +5,7 @@ import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
 import UTexture from "./assets/unreal/un-texture";
 import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D } from "three";
+import { Box3, Vector3, Object3D, BoxHelper } from "three";
 import BufferValue from "./assets/buffer-value";
 import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 import UModel from "./assets/unreal/model/un-model";
@@ -69,8 +69,8 @@ async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    // const pkg_20_19 = assetLoader.getPackage("20_19");
-    // const pkg_20_20 = assetLoader.getPackage("20_20");
+    const pkg_20_19 = assetLoader.getPackage("20_19");
+    const pkg_20_20 = assetLoader.getPackage("20_20");
     const pkg_20_21 = assetLoader.getPackage("20_21");
     const pkg_20_22 = assetLoader.getPackage("20_22");
 
@@ -119,14 +119,16 @@ async function startCore() {
 
     // debugger;
 
-    for (let exp of expGroups.Model/*.filter(exp=>exp.size.value > 73)*/) {
+    for (let exp of expGroups.Brush/*.filter(exp=>exp.size.value > 73)*/) {
         // console.assert(exp.offset.value as number !== 72);
 
         // pkgLoad.seek(exp.offset.value as number, "set");
 
         // pkgLoad.dump()
 
-        const uBrush = await new UModel().load(pkgLoad, exp);
+        const uBrush = await new UBrush().load(pkgLoad, exp);
+
+        // debugger;
 
         const mesh = await uBrush.decodeMesh();
 
@@ -134,6 +136,22 @@ async function startCore() {
 
         // debugger;
     }
+
+    // for (let exp of expGroups.Model/*.filter(exp=>exp.size.value > 73)*/) {
+    //     // console.assert(exp.offset.value as number !== 72);
+
+    //     // pkgLoad.seek(exp.offset.value as number, "set");
+
+    //     // pkgLoad.dump()
+
+    //     const uBrush = await new UModel().load(pkgLoad, exp);
+
+    //     const mesh = await uBrush.decodeMesh();
+
+    //     objectGroup.add(mesh);
+
+    //     // debugger;
+    // }
 
     // debugger;
 
@@ -151,14 +169,22 @@ async function startCore() {
     // objectGroup.add(terrain);
 
 
+    // objectGroup.scale.set(0.001, 0.001, 0.001);
+
     const boundingBox = new Box3().setFromObject(objectGroup);
     const boxSize = boundingBox.getSize(new Vector3());
+
+    console.log(boxSize);
+
+
+
     // terrain.scale.set(0.001, 0.001, 0.001);
     // terrain.position.y = -boundingBox.min.y;
 
     // console.log(boxSize.toArray().join(", "));
 
     renderManager.scene.add(objectGroup);
+    renderManager.scene.add(new BoxHelper(objectGroup));
     renderManager.startRendering();
 
     (global as any).renderManager = renderManager;

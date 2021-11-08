@@ -1,5 +1,5 @@
 import UObject from "./un-object";
-import { Vector3 } from "three";
+import { Vector3, Group } from "three";
 import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
 import FScale from "../un-scale";
@@ -8,27 +8,23 @@ import UPointRegion from "./un-point-region";
 import UPhysicsVolume from "./un-physics-volume";
 import UModel from "./model/un-model";
 import UTextureModifyInfo from "./un-texture-modify-info";
+import UAActor from "./un-aactor";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
-class UBrush extends UObject {
+class UBrush extends UAActor {
     protected readHeadOffset = 15;
+
     protected csgOper: number;
     protected mainScale: FScale;
     protected postScale: FScale;
     protected polyFlags: number;
-    protected dynamicActorFilterState: boolean;
-    protected level: ULevelInfo;
-    protected region: UPointRegion;
-    protected tag: string;
-    protected sunAffect: boolean;
-    protected physicsVolume: UPhysicsVolume;
-    protected location: Vector3;
     protected brush: UModel;
-    protected prePivot: Vector3;
+    protected prePivot: Vector3 = new Vector3();
     protected texModifyInfo: UTextureModifyInfo;
     protected group: string;
+    protected isRangeIgnored: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -36,18 +32,27 @@ class UBrush extends UObject {
             "MainScale": "mainScale",
             "PostScale": "postScale",
             "PolyFlags": "polyFlags",
-            "bDynamicActorFilterState": "dynamicActorFilterState",
-            "Level": "level",
-            "Region": "region",
-            "Tag": "tag",
-            "bSunAffect": "sunAffect",
-            "PhysicsVolume": "physicsVolume",
-            "Location": "location",
             "Brush": "brush",
             "PrePivot": "prePivot",
             "TexModifyInfo": "texModifyInfo",
-            "Group": "group"
+            "Group": "group",
+            "bIgnoredRange": "isRangeIgnored"
         });
+    }
+
+    public async decodeMesh(): Promise<Group> {
+
+        const brush = await this.brush.decodeMesh();
+
+        brush.name = this.group || "";
+
+        brush.position.subVectors(this.location, this.prePivot);
+        // brush.scale.set(this.mainScale.x, this.mainScale.y, this.mainScale.z);
+
+        // if (brush.children.length > 0)
+        //     debugger;
+
+        return brush;
     }
 }
 

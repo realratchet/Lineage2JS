@@ -66,7 +66,10 @@ class UModel extends UPrimitive {
 
     public async decodeMesh() {
         const polys = await this.polys.decodePolys();
-        
+
+
+        // debugger;
+
         return polys;
     }
 }

@@ -3,7 +3,8 @@ import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
 import FVector from "./un-vector";
 import UTexture from "./un-texture";
-import { Group, Mesh, BufferGeometry, MeshBasicMaterial, Float32BufferAttribute, DoubleSide } from "three";
+import { Group, Mesh, BufferGeometry, MeshBasicMaterial, Float32BufferAttribute, DoubleSide, TriangleFanDrawMode, BackSide } from "three";
+import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils";
 import UMaterial from "./un-material";
 
 type UPackage = import("./un-package").UPackage;
@@ -97,7 +98,7 @@ class FPoly extends FConstructable {
         this.texture = await pkg.fetchObject(textureId) as UTexture;
         pkg.seek(offset, "set");
 
-        debugger;
+        // debugger;
 
         return this;
     }
@@ -122,8 +123,8 @@ class FPoly extends FConstructable {
             const [tu, tv] = [this.textureU, this.textureV].map(vtex => vertex.sub(this.base).dot(vtex) / 128);
 
             uvs.push(tu, tv);
-            normals.push(...this.normal.vector.toArray());
-            positions.push(...vertex.vector.toArray());
+            normals.push(this.normal.vector.x, this.normal.vector.z, this.normal.vector.y);
+            positions.push(vertex.vector.x, vertex.vector.z, vertex.vector.y);
         }
 
         const attrUvs = new Float32BufferAttribute(uvs, 2);
@@ -135,9 +136,15 @@ class FPoly extends FConstructable {
         geometry.setAttribute("normal", attrNormals);
         geometry.setAttribute("position", attrPositions);
 
+        // debugger;
+
+        const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
+
         const texture = await (this.texture instanceof UTexture ? this.texture.decodeMipmap(0) : this.texture?.material?.diffuse?.decodeMipmap(0)) || null;
 
-        const mesh = new Mesh(geometry, new MeshBasicMaterial({ side: DoubleSide, transparent: true, map: texture }));
+        const mesh = new Mesh(fanGeo, new MeshBasicMaterial({ side: BackSide, transparent: true, map: texture }));
+
+        mesh.name = this.name || "";
 
         return mesh;
     }
