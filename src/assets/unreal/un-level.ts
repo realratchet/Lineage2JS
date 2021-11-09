@@ -121,7 +121,7 @@ class ULevel extends UObject {
             return accum;
         }, {} as { [key: string]: UObject[] });
 
-        for (let type of ["UBrush", "UTerrainInfo", "UStaticMeshActor"]) {
+        for (let type of [/*"UBrush", */"UTerrainInfo", "UStaticMeshActor"]) {
             for (let object of groupedObjectList[type]) {
                 switch (type) {
                     case "UBrush": group.add(await (object as UBrush).decodeMesh()); break;

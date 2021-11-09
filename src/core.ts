@@ -12,6 +12,7 @@ import UModel from "./assets/unreal/model/un-model";
 import UExport from "./assets/unreal/un-export";
 import UBrush from "./assets/unreal/un-brush";
 import ULevel from "./assets/unreal/un-level";
+import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -112,11 +113,11 @@ async function startCore() {
             const b = parseInt(nb.replace("Model", ""));
             return a - b;
         });
-        // .slice(0, 10).forEach(exp => {
-        //     console.log(exp.objectName);
-        //     pkgLoad.seek(exp.offset.value as number + 0, "set");
-        //     pkgLoad.dump(5, true, false)
-        // });
+    // .slice(0, 10).forEach(exp => {
+    //     console.log(exp.objectName);
+    //     pkgLoad.seek(exp.offset.value as number + 0, "set");
+    //     pkgLoad.dump(5, true, false)
+    // });
 
     // debugger;
 
@@ -124,6 +125,15 @@ async function startCore() {
     const level = await uLevel.decodeLevel();
 
     objectGroup.add(level);
+
+    // const towerIndex = 2301;
+
+    // for (let exp of expGroups.StaticMeshActor/*.slice(towerIndex, towerIndex + 1)*/) {
+    //     const uActor = await new UStaticMeshActor().load(pkgLoad, exp);
+    //     const actor = await uActor.decodeMesh();
+
+    //     objectGroup.add(actor);
+    // }
 
     // debugger;
 

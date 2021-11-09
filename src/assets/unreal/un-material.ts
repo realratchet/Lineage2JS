@@ -5,6 +5,7 @@ import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSid
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
+import UMatrix from "./un-matrix";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -71,14 +72,18 @@ class UShader extends UMaterial {
         const opacity = await this.opacity?.decodeMipmap(0) || null;
         const specular = await this.specularMask?.decodeMipmap(0) || null;
         // const side = this.doubleSide ? DoubleSide : FrontSide;
-        const side = DoubleSide;
+        // const side = DoubleSide;
+
+        // debugger;
 
         const material = new MeshBasicMaterial({
             map: diffuse,
             alphaMap: opacity,
-            side,
+            side: DoubleSide,
+            // side,
             transparent: true,
-            specularMap: specular
+            specularMap: specular,
+            // color: Math.round(Math.random() * 0xffffff)
         });
 
         return material;
@@ -127,14 +132,22 @@ class UColorModifier extends UBaseMaterial {
 }
 
 class UTexRotator extends UBaseModifier {
-    protected matrix: Matrix4;
+    protected matrix: UMatrix;
     protected type: number;
     protected rotation: Euler;
     protected offsetU: number;
     protected offsetV: number;
     protected material: UMaterial;
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<Material> {
+        const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
+
+        if (!material) return null;
+
+        debugger;
+
+        return material;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -149,7 +162,7 @@ class UTexRotator extends UBaseModifier {
 }
 
 class UTexOscillator extends UBaseModifier {
-    protected matrix: Matrix4;
+    protected matrix: UMatrix;
     protected rateU: number;
     protected rateV: number;
     protected phaseU: number;
@@ -177,7 +190,7 @@ class UTexOscillator extends UBaseModifier {
 class UTexPanner extends UBaseModifier {
     protected rate: number;
     protected z: number;
-    protected matrix: Matrix4;
+    protected matrix: UMatrix;
     protected material: UMaterial;
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 

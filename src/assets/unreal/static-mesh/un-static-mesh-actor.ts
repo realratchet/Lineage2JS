@@ -63,6 +63,7 @@ class UStaticMeshActor extends UAActor {
 
         group.add(instance);
         group.position.set(this.location.x, this.location.z, this.location.y);
+        // group.scale.set(0.001, 0.001, 0.001);
 
         // roll (x) | pitch (y) | yaw (z)
 
@@ -72,14 +73,14 @@ class UStaticMeshActor extends UAActor {
         // const pitch = -(this.rotation.z) / 32768 * Math.PI;
         // const yaw = -(this.rotation.y) / 32768 * Math.PI;
 
-        group.rotation.set(
-            -Math.PI * 0.5,
-            0,
-            0
-            // 2 * Math.PI - (65535 - roll) / 32768 * Math.PI,
-            // 2 * Math.PI - pitch / 32768 * Math.PI,
-            // -yaw / 32768 * Math.PI
-        );
+        // group.rotation.set(
+        //     // -Math.PI * 0.5,
+        //     // 0,
+        //     // 0
+        //     2 * Math.PI - (65535 - roll) / 32768 * Math.PI,
+        //     2 * Math.PI - pitch / 32768 * Math.PI,
+        //     -yaw / 32768 * Math.PI
+        // );
 
         // console.log(group.rotation);
 

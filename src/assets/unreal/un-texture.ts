@@ -3,7 +3,7 @@ import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
 import { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
-import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping } from "three";
+import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide } from "three";
 import decodeG16 from "../decode-g16";
 import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
@@ -11,20 +11,30 @@ import ETextureFormat from "./un-tex-format";
 import FColor from "./un-color";
 
 
+/*
+
+    1000000000 (512)
+    0100000000 (256)
+    0010000000 (128)
+    0001000000 ( 64)
+    0000100000 ( 32)
+*/
+
 type UPlatte = import("./un-palette").UPlatte;
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
 function getClamping(mode: number) {
-    // console.warn(`Clamping mode: ${mode}`);
 
-    return ClampToEdgeWrapping;
-    
-    // switch (mode) {
-    //     case 0: return ClampToEdgeWrapping;
-    //     case 512: return RepeatWrapping;
-    //     default: throw new Error(`Unknown clamping mode: ${mode}`);
-    // }
+    switch (mode) {
+        case 512: return RepeatWrapping;
+        case 256: return RepeatWrapping;
+        case 128: return RepeatWrapping;
+        case 64: return RepeatWrapping;
+        default:
+            console.warn(`Unknown clamping mode: ${mode}`);
+            return ClampToEdgeWrapping;
+    }
 }
 
 
@@ -154,11 +164,19 @@ class UTexture extends UObject {
     public async decodeMaterial(): Promise<Material> {
         const texture = await this.decodeMipmap(0);
 
+        // if(texture) {
+        //     texture.wrapS = RepeatWrapping;
+        //     texture.wrapT = RepeatWrapping;
+        // }
+
         const material = new MeshBasicMaterial({
             map: texture,
             side: DoubleSide,
             transparent: true,
+            // color: Math.round(Math.random() * 0xffffff)
         });
+
+        // debugger;
 
         return material;
     }
