@@ -5,7 +5,7 @@ class RenderManager {
     public readonly renderer: WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
-    public readonly camera = new PerspectiveCamera(75, 1, 1, 1000000);
+    public readonly camera = new PerspectiveCamera(75, 1, 0.1, 100000);
     public readonly scene = new Scene();
     public readonly lastSize: Vector2 = new Vector2();
     public readonly controls: OrbitControls;
@@ -28,6 +28,10 @@ class RenderManager {
         this.camera.position.set(0, 5, 15);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxBufferGeometry()));
+
+        this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
+        this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
+        this.controls.update();
 
         viewport.appendChild(this.renderer.domElement);
 

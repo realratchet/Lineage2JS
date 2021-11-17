@@ -4,6 +4,8 @@ import UTextureModifyInfo from "./un-texture-modify-info";
 import ULevelInfo from "./un-level-info";
 import UPointRegion from "./un-point-region";
 import UPhysicsVolume from "./un-physics-volume";
+import FVector from "./un-vector";
+import FRotator from "./un-rotator";
 
 class UAActor extends UObject {
     protected readHeadOffset: number = 15;
@@ -16,10 +18,10 @@ class UAActor extends UObject {
     protected tag: string;
     protected isSunAffected: boolean;
     protected physicsVolume: UPhysicsVolume;
-    public readonly location: Vector3 = new Vector3();
-    public readonly rotation: Euler = new Euler();
-    public readonly scale: Vector3 = new Vector3(1, 1, 1);
-    protected swayRotationOrig: Euler = new Euler();
+    public readonly location: FVector = new FVector();
+    public readonly rotation: FRotator = new FRotator();
+    public readonly scale: FVector = new FVector(1, 1, 1);
+    protected swayRotationOrig: FRotator = new FRotator();
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

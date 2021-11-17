@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide } from "three";
+import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -14,7 +14,9 @@ type FColor = import("./un-color").FColor;
 abstract class UBaseMaterial extends UObject {
     public abstract async decodeMaterial(): Promise<Material>;
 }
-abstract class UBaseModifier extends UBaseMaterial { }
+abstract class UBaseModifier extends UBaseMaterial {
+    public async decodeMipmap(level: number): Promise<Texture> { return null; }
+}
 
 abstract class UMaterial extends UBaseMaterial {
     // // protected internalTime: number[] = new Array(2);

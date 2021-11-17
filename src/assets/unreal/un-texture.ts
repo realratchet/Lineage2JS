@@ -3,7 +3,7 @@ import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
 import { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
-import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide } from "three";
+import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide, MirroredRepeatWrapping } from "three";
 import decodeG16 from "../decode-g16";
 import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
@@ -27,10 +27,12 @@ type UExport = import("./un-export").UExport;
 function getClamping(mode: number) {
 
     switch (mode) {
+        case 1024: return RepeatWrapping;
         case 512: return RepeatWrapping;
-        case 256: return RepeatWrapping;
+        case 256: return MirroredRepeatWrapping;
         case 128: return RepeatWrapping;
         case 64: return RepeatWrapping;
+        case 32: return RepeatWrapping;
         default:
             console.warn(`Unknown clamping mode: ${mode}`);
             return ClampToEdgeWrapping;
@@ -128,7 +130,7 @@ class UTexture extends UObject {
         const mipmap = this.mipmaps.getElem(level);
 
         if (!mipmap) {
-            console.warn("Missing mipmap.");
+            // console.warn("Missing mipmap.");
             return null;
         }
 
@@ -172,7 +174,8 @@ class UTexture extends UObject {
         const material = new MeshBasicMaterial({
             map: texture,
             side: DoubleSide,
-            transparent: true,
+            visible: texture !== null
+            // transparent: true,
             // color: Math.round(Math.random() * 0xffffff)
         });
 

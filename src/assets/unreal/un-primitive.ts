@@ -1,7 +1,7 @@
 import UObject from "./un-object";
 import FArray from "./un-array";
 import { UMaterialContainer } from "./un-material";
-import UBox from "./un-box";
+import FBox from "./un-box";
 import USphere from "./un-sphere";
 import { Sphere, Box3 } from "three";
 
@@ -11,7 +11,7 @@ type UExport = import("./un-export").UExport;
 class UPrimitive extends UObject {
     protected materials: FArray<UMaterialContainer> = new FArray(UMaterialContainer);
     protected swayObject: boolean;
-    protected boundingBox: UBox = new UBox();
+    protected boundingBox: FBox = new FBox();
     protected boundingSphere: USphere = new USphere();
 
     protected getPropertyMap() {

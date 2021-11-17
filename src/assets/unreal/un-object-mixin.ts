@@ -10,6 +10,8 @@ import UTextureModifyInfo from "./un-texture-modify-info";
 import FScale from "../un-scale";
 import UMatrix from "./un-matrix";
 import { UPlane } from "./un-plane";
+import FVector from "./un-vector";
+import FRotator from "./un-rotator";
 
 type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
@@ -20,18 +22,20 @@ Object.assign(UObject.prototype, {
             case "Color": return await new FColor().load(pkg, tag);
             case "Plane": return await new UPlane().load(pkg, tag);
             case "Scale": return new FScale().load(pkg, tag);
-            case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
-                vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
-                return vec;
-            }, new Vector3());
-            case "Rotator":
-                return ["x", "y", "z"].reduce((euler, ax: "x" | "y" | "z") => {
-                    const ang = pkg.read(new BufferValue(BufferValue.int32)).value as number;
+            // case "Vector": return ["x", "y", "z"].reduce((vec, ax: "x" | "y" | "z") => {
+            //     vec[ax] = pkg.read(new BufferValue(BufferValue.float)).value as number;
+            //     return vec;
+            // }, new Vector3());
+            // case "Rotator":
+            //     return ["x", "y", "z"].reduce((euler, ax: "x" | "y" | "z") => {
+            //         const ang = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
-                    euler[ax] = ang;
+            //         euler[ax] = ang;
 
-                    return euler;
-                }, new Euler());
+            //         return euler;
+            //     }, new Euler());
+            case "Vector": return await new FVector().load(pkg);
+            case "Rotator": return new FRotator().load(pkg);
             case "Matrix": return await new UMatrix().load(pkg, tag);
             case "PointRegion": return await new UPointRegion(tag.dataSize).load(pkg);
             case "TextureModifyinfo": return await new UTextureModifyInfo(tag.dataSize).load(pkg);

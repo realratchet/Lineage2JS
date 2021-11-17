@@ -4,28 +4,29 @@ import BufferValue from "../buffer-value";
 
 type UPackage = import("./un-package").UPackage;
 
-class UBox extends FConstructable {
+class FBox extends FConstructable {
+    public static readonly typeSize = 13;
+
     public readonly box: Box3 = new Box3();
     public readonly min: Vector3 = this.box.min;
     public readonly max: Vector3 = this.box.max;
-    public isValid: number;
+    public isValid: boolean;
 
     public async load(pkg: UPackage): Promise<this> {
         const f = new BufferValue(BufferValue.float);
         const b = new BufferValue(BufferValue.int8);
 
-        [this.min, this.max].forEach(vec => {
-            ["x", "y", "z"].forEach((ax: "x" | "y" | "z") => {
-                vec[ax] = pkg.read(f).value as number;
-            });
-        });
+        for (let vec of [this.min, this.max]) {
+            for (let ax of ["x", "y", "z"]) {
+                vec[ax as "x" | "y" | "z"] = await pkg.read(f).value as number;
+            }
+        }
 
-        this.isValid = pkg.read(b).value as number;
+        this.isValid = (pkg.read(b).value as number) !== 0;
 
         return this;
     }
-
 }
 
-export default UBox;
-export { UBox };
+export default FBox;
+export { FBox };

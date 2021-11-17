@@ -1,12 +1,12 @@
 import UPackage from "./un-package";
 import UObject from "./un-object";
-import UBox from "./un-box";
+import FBox from "./un-box";
 import BufferValue from "../buffer-value";
 import { PropertyTag } from "./un-property";
 import FArray from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import FNumber from "./un-number";
-import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide } from "three";
+import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide, Sphere } from "three";
 
 type UExport = import("./un-export").UExport;
 type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
@@ -14,7 +14,7 @@ type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer;
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
-    protected boundingBox: UBox = new UBox();
+    protected boundingBox: FBox = new FBox();
     protected offsetX: number;
     protected offsetY: number;
     protected info: UTerrainInfo;
@@ -65,7 +65,7 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        const { x: sx, y: sy, z: sz } = this.info.terrainScale;
+        const { x: sx, y: sy, z: sz } = this.info.terrainScale.vector;
 
         // debugger;
 
@@ -149,13 +149,14 @@ class UTerrainSector extends UObject {
             }
         }
 
-        const material = new MeshBasicMaterial({ /*color: Math.round(0xffffff * Math.random()), wireframe: true*/ });
+        const material = new MeshBasicMaterial({ /*color: Math.round(0xffffff * Math.random()), wireframe: true*/ color: 0xff00ff });
         const geometry = new BufferGeometry();
         const attrPosition = new Float32BufferAttribute(vertices, 3);
         const attrIndices = new Uint16BufferAttribute(indices, 1);
         const mesh = new Mesh(geometry, material);
 
         geometry.setIndex(attrIndices);
+        geometry.computeBoundingSphere();
         geometry.setAttribute("position", attrPosition);
         uvs
             .forEach(({ uv, map }, index) => {

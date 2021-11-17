@@ -11,6 +11,7 @@ import { Vector3 } from "three/src/math/Vector3";
 import { Group } from "three/src/objects/Group";
 import UAActor from "./un-aactor";
 import FColor from "./un-color";
+import FVector from "./un-vector";
 
 type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
 type UPackage = import("./un-package").UPackage;
@@ -23,7 +24,7 @@ class UTerrainInfo extends UAActor {
     protected readHeadOffset: number = 17;
 
     protected terrainMap: UTexture;
-    public terrainScale: Vector3;
+    public terrainScale: FVector;
 
     public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
@@ -100,8 +101,8 @@ class UTerrainInfo extends UAActor {
 
         await super.load(pkg, exp);
 
-        this.location.x = (this.mapX - 20) * MAP_SIZE_X;
-        this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
+        this.location.vector.x = (this.mapX - 20) * MAP_SIZE_X;
+        this.location.vector.z = (this.mapY - 18) * MAP_SIZE_Y;
 
         // debugger;
 
@@ -147,7 +148,7 @@ class UTerrainInfo extends UAActor {
             terrain.add(segment);
         }
 
-        terrain.position.set(this.location.x, 0, this.location.z);
+        terrain.position.set(this.location.vector.x, 0, this.location.vector.z);
 
         // for (let i = 1, len = this.decoLayers.getElemCount(); i < len; i++) {
         //     const layer = this.decoLayers.getElem(i);

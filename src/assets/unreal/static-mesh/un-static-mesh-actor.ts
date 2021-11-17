@@ -62,12 +62,13 @@ class UStaticMeshActor extends UAActor {
         console.assert(!instance.parent)
 
         group.add(instance);
-        group.position.set(this.location.x, this.location.z, this.location.y);
+        group.position.set(this.location.vector.x, this.location.vector.z, this.location.vector.y)
         // group.scale.set(0.001, 0.001, 0.001);
 
         // roll (x) | pitch (y) | yaw (z)
 
-        const [pitch, yaw, roll] = this.rotation.toArray();
+        this.rotation.getEuler(group.rotation);
+
 
         // const roll = -(65535 - this.rotation.x) / 32768 * Math.PI;
         // const pitch = -(this.rotation.z) / 32768 * Math.PI;
