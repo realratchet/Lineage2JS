@@ -18,40 +18,65 @@ abstract class UBaseModifier extends UBaseMaterial {
     public async decodeMipmap(level: number): Promise<Texture> { return null; }
 }
 
-abstract class UMaterial extends UBaseMaterial {
-    // // protected internalTime: number[] = new Array(2);
-    // // public width: number;
-    // // public height: number;
-    // // protected bitsW: number; // texture size log2 (number of bits in size value)
-    // // protected bitsH: number;
-    // // protected clampW: number;
-    // // protected clampH: number;
-    // // protected mipZero: FColor;
-    // // protected maxColor: FColor;
+abstract class UMaterial extends UBaseMaterial { }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         // "InternalTime": "internalTime",
-    //         // "MipZero": "mipZero",
-    //         // "MaxColor": "maxColor",
-    //     });
-    // }
+enum OutputBlending_T
+{
+	OB_Normal,
+	OB_Masked,
+	OB_Modulate,
+	OB_Translucent,
+	OB_Invisible,
+	OB_Brighten,
+	OB_Darken
+};
 
-
-}
+/**
+	// blending
+	if (OutputBlending == OB_Normal && !Opacity)
+		glDisable(GL_BLEND);
+	else
+		glEnable(GL_BLEND);
+	switch (OutputBlending)
+	{
+	case OB_Normal:
+		if (Opacity) glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		break;
+	case OB_Masked:
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glAlphaFunc(GL_GREATER, 0.0f);
+		glEnable(GL_ALPHA_TEST);
+		break;
+	case OB_Modulate:
+		glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);	// src*dst*2
+		break;
+	case OB_Translucent:
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+		break;
+	case OB_Invisible:
+		glBlendFunc(GL_ZERO, GL_ONE);				// dst
+		break;
+	case OB_Brighten:
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);			// src*srcA + dst
+		break;
+	case OB_Darken:
+		glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR); // dst - src
+		break;
+	}
+ */
 
 class UShader extends UMaterial {
-    protected diffuse: UTexture;
-    protected opacity: UTexture;
-    protected doubleSide: boolean;
-    protected specular: UFadeColor;
-    protected specularMask: UTexture;
-    protected outputBlending: number;
-    protected isTreatingDoubleSided: boolean;
-    protected depthWrite: boolean;
-    protected alphaTest: boolean;
-    protected alphaRef: number;
-    protected isPerformingLightningOnSpecularPass: boolean;
+    protected diffuse: UTexture = null;
+    protected opacity: UTexture = null;
+    protected doubleSide: boolean = false;
+    protected specular: UFadeColor = null;
+    protected specularMask: UTexture = null;
+    protected outputBlending: OutputBlending_T = OutputBlending_T.OB_Normal;
+    protected isTreatingDoubleSided: boolean = false;
+    protected depthWrite: boolean = true;
+    protected transparent: boolean = false;
+    protected alphaTest: number = 0;
+    protected isPerformingLightningOnSpecularPass: boolean = false;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -63,8 +88,8 @@ class UShader extends UMaterial {
             "OutputBlending": "outputBlending",
             "TreatAsTwoSided": "isTreatingDoubleSided",
             "ZWrite": "depthWrite",
-            "AlphaTest": "alphaTest",
-            "AlphaRef": "alphaRef",
+            "AlphaTest": "transparent",
+            "AlphaRef": "alphaTest",
             "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
         });
     }
@@ -73,17 +98,18 @@ class UShader extends UMaterial {
         const diffuse = await this.diffuse?.decodeMipmap(0) || null;
         const opacity = await this.opacity?.decodeMipmap(0) || null;
         const specular = await this.specularMask?.decodeMipmap(0) || null;
-        // const side = this.doubleSide ? DoubleSide : FrontSide;
-        // const side = DoubleSide;
-
-        // debugger;
+        const depthWrite = this.depthWrite;
+        const side = this.doubleSide ? DoubleSide : FrontSide;
+        const transparent = this.transparent;
+        const alphaTest = this.alphaTest / 255;
 
         const material = new MeshBasicMaterial({
             map: diffuse,
             alphaMap: opacity,
-            side: DoubleSide,
-            // side,
-            transparent: true,
+            alphaTest,
+            side,
+            depthWrite,
+            transparent,
             specularMap: specular,
             // color: Math.round(Math.random() * 0xffffff)
         });
@@ -173,7 +199,15 @@ class UTexOscillator extends UBaseModifier {
     protected amplitudeV: number;
     protected material: UMaterial;
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<Material> {
+        const material = await this.material?.decodeMaterial();
+
+        if (!material) return null;
+
+        material.color.setHex(0xff00ff);
+
+        return material;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
