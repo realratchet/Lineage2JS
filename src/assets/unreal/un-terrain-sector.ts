@@ -6,7 +6,7 @@ import { PropertyTag } from "./un-property";
 import FArray from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import FNumber from "./un-number";
-import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide, Sphere } from "three";
+import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide, Sphere, Box3 } from "three";
 
 type UExport = import("./un-export").UExport;
 type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
@@ -156,7 +156,14 @@ class UTerrainSector extends UObject {
         const mesh = new Mesh(geometry, material);
 
         geometry.setIndex(attrIndices);
-        geometry.computeBoundingSphere();
+
+        if (this.boundingBox.isValid) {
+            geometry.boundingBox = new Box3(this.boundingBox.min, this.boundingBox.max);
+            geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new Sphere());
+        } else {
+            mesh.frustumCulled = false;
+        }
+
         geometry.setAttribute("position", attrPosition);
         uvs
             .forEach(({ uv, map }, index) => {

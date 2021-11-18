@@ -241,6 +241,7 @@ class UPackage {
         this.exports = Object.freeze(exports);
         this.imports = Object.freeze(imports);
         this.nameTable = Object.freeze(nameTable);
+        this.header = header;
 
         return this;
     }
@@ -266,7 +267,7 @@ class UPackage {
         if (!exp) throw new Error("Missing export");
         if (exp.object) return exp.object;
 
-        exp.object = await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
+        await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
 
         return exp.object;
     }
@@ -277,7 +278,8 @@ class UPackage {
         if (exp.object) return exp.object;
 
         const className = this.getPackageName(exp.idClass.value as number) as UObjectTypes_T;
-        const object = await this.createObject(this, exp, className);
+
+        await this.createObject(this, exp, className);
 
         return exp.object;
     }

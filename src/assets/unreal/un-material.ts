@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture } from "three";
+import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -16,19 +16,26 @@ abstract class UBaseMaterial extends UObject {
 }
 abstract class UBaseModifier extends UBaseMaterial {
     public async decodeMipmap(level: number): Promise<Texture> { return null; }
+
+    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        await super.load(pkg, exp);
+        
+        // debugger;
+
+        return this;
+    }
 }
 
 abstract class UMaterial extends UBaseMaterial { }
 
-enum OutputBlending_T
-{
-	OB_Normal,
-	OB_Masked,
-	OB_Modulate,
-	OB_Translucent,
-	OB_Invisible,
-	OB_Brighten,
-	OB_Darken
+enum OutputBlending_T {
+    OB_Normal,
+    OB_Masked,
+    OB_Modulate,
+    OB_Translucent,
+    OB_Invisible,
+    OB_Brighten,
+    OB_Darken
 };
 
 /**
@@ -94,6 +101,27 @@ class UShader extends UMaterial {
         });
     }
 
+    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        await super.load(pkg, exp);
+
+        // debugger;
+
+        switch (this.outputBlending) {
+            case OutputBlending_T.OB_Normal: break; // default
+            case OutputBlending_T.OB_Masked: break; // default
+            default:
+                console.log("Unknown blending mode.");
+                debugger;
+                break;
+        }
+
+        // debugger;
+        
+        // console.assert((this.readTail - pkg.tell()) === 0);
+
+        return this;
+    }
+
     public async decodeMaterial(): Promise<Material> {
         const diffuse = await this.diffuse?.decodeMipmap(0) || null;
         const opacity = await this.opacity?.decodeMipmap(0) || null;
@@ -105,23 +133,39 @@ class UShader extends UMaterial {
 
         const material = new MeshBasicMaterial({
             map: diffuse,
+            // map: diffuse,
             alphaMap: opacity,
             alphaTest,
             side,
             depthWrite,
             transparent,
             specularMap: specular,
+            // wireframe: true,
             // color: Math.round(Math.random() * 0xffffff)
+            // color: new Color(this.specular.color1.r / 255, this.specular.color1.g / 255, this.specular.color1.b / 255)
         });
+
+        // debugger;
+
+        switch (this.outputBlending) {
+            case OutputBlending_T.OB_Masked:
+                material.blending = CustomBlending;
+                material.blendSrc = SrcAlphaFactor;
+                material.blendDst = OneMinusSrcAlphaFactor;
+                material.alphaTest = 0;
+                material.transparent = true;
+                break;
+            case OutputBlending_T.OB_Normal: break;
+        }
 
         return material;
     }
 }
 
 class UFadeColor extends UBaseMaterial {
-    protected color1: FColor;
-    protected color2: FColor;
-    protected fadePeriod: number;
+    public color1: FColor;
+    public color2: FColor;
+    public fadePeriod: number;
 
     public async decodeMaterial(): Promise<Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
 
@@ -143,8 +187,10 @@ class UColorModifier extends UBaseMaterial {
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
 
-        material.color.setRGB(this.color.r, this.color.g, this.color.b);
-        material.opacity = this.color.a;
+        material.color.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
+        material.opacity = this.color.a / 255;
+
+        if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
 
         return material;
     }
@@ -170,9 +216,11 @@ class UTexRotator extends UBaseModifier {
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
 
+        // debugger;
+
         if (!material) return null;
 
-        debugger;
+        // debugger;
 
         return material;
     }
@@ -202,7 +250,11 @@ class UTexOscillator extends UBaseModifier {
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial();
 
+        debugger;
+
         if (!material) return null;
+
+        debugger;
 
         material.color.setHex(0xff00ff);
 
@@ -230,7 +282,15 @@ class UTexPanner extends UBaseModifier {
     protected material: UMaterial;
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<Material> {
+        const material = await this.material?.decodeMaterial();
+
+        // debugger;
+
+        // if (!material) debugger;
+
+        return material;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -244,17 +304,17 @@ class UTexPanner extends UBaseModifier {
 }
 
 class UMaterialContainer extends UBaseMaterial {
-    public static readonly typeSize: number = 16;
+    public static readonly typeSize: number = 14;
 
     protected noDynamicShadowCast: boolean;
-    protected collisionforShadow: boolean;
+    protected collisionForShadow: boolean;
     protected enableCollision: boolean;
     protected material: UMaterial;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "bNoDynamicShadowCast": "noDynamicShadowCast",
-            "EnableCollisionforShadow": "collisionforShadow",
+            "EnableCollisionforShadow": "collisionForShadow",
             "EnableCollision": "enableCollision",
             "Material": "material"
         });
@@ -262,12 +322,16 @@ class UMaterialContainer extends UBaseMaterial {
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
         this.readHead = pkg.tell();
-        this.readTail = this.readHead + 14;
+        this.readTail = this.readHead + UMaterialContainer.typeSize;
 
         await this.readNamedProps(pkg);
 
+        // console.assert((this.readTail - pkg.tell()) === 0);
+
         // pkg.seek(this.readTail, "set");
-        this.readTail = pkg.tell();
+        // this.readTail = pkg.tell();
+
+        // debugger;
 
         return this;
     }

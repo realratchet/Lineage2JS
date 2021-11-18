@@ -121,10 +121,14 @@ async function startCore() {
 
     // debugger;
 
-    const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
-    const level = await uLevel.decodeLevel();
+    // const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
+    // const level = await uLevel.decodeLevel();
+    // objectGroup.add(level);
 
-    objectGroup.add(level);
+    const uMesh = await pkgLoad.fetchObject(1804) as UStaticMeshActor;
+    const mesh = await uMesh.decodeMesh();
+    objectGroup.add(mesh);
+
 
     // const towerIndex = 2301;
 
@@ -189,10 +193,10 @@ async function startCore() {
 
     // objectGroup.scale.set(0.001, 0.001, 0.001);
 
-    const boundingBox = new Box3().setFromObject(objectGroup);
-    const boxSize = boundingBox.getSize(new Vector3());
+    // const boundingBox = new Box3().setFromObject(objectGroup);
+    // const boxSize = boundingBox.getSize(new Vector3());
 
-    console.log(boxSize);
+    console.info("System has loaded!");
 
 
 

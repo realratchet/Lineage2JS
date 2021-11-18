@@ -46,6 +46,10 @@ type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;
 
+interface IConstructable {
+    load(pkg: import("../assets/unreal/un-package").UPackage, tag?: import("../assets/unreal/un-property").PropertyTag): Promise<this>;
+}
+
 type ValidConstructables_T<T> = typeof import("./unreal/un-color").FColor
     | typeof import("./unreal/un-vector").FVector
     | typeof import("./unreal/un-mipmap").FMipmap

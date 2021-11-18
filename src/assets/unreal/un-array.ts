@@ -7,15 +7,13 @@ type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
 // type FConstructable = import("./un-contructable").FConstructable;
 
-class FArray<T extends FConstructable = FConstructable> extends FConstructable {
+class FArray<T extends FConstructable = FConstructable> extends Array implements IConstructable {
     public static readonly typeSize: number = 16;
 
-    protected list: T[];
-    protected elemCount: number;
     protected Constructor: { new(...pars: any): T } & ValidConstructables_T<T>;
 
-    public getElemCount() { return this.elemCount; }
-    public getElem(idx: number) { return this.list[idx]; }
+    public getElemCount() { return this.length; }
+    public getElem(idx: number) { return this[idx]; }
 
     public constructor(constr: { new(...pars: any): T } & ValidConstructables_T<T>) {
         super();
@@ -33,15 +31,14 @@ class FArray<T extends FConstructable = FConstructable> extends FConstructable {
         const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
         const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
-        this.elemCount = count.value as number;
-        this.list = new Array(count.value as number);
+        this.length = count.value as number;
 
         if (count.value as number === 0) return this;
 
-        const elementSize = hasTag ? dataSize / this.elemCount : null;
+        const elementSize = hasTag ? dataSize / this.length : null;
 
-        for (let i = 0, len = this.elemCount; i < len; i++) {
-            this.list[i] = await new this.Constructor(elementSize).load(pkg, tag);
+        for (let i = 0, len = this.length; i < len; i++) {
+            this[i] = await new this.Constructor(elementSize).load(pkg, tag);
         }
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);

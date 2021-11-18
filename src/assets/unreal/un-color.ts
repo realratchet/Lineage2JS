@@ -15,7 +15,7 @@ class FColor extends FConstructable {
     public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
         const b = new BufferValue(BufferValue.uint8);
 
-        for (let ax of ["r", "g", "b", "a"])
+        for (let ax of ["b", "g", "r", "a"])
             this[ax as ("r" | "g" | "b" | "a")] = await pkg.read(b).value as number;
 
         return this;

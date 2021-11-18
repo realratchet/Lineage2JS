@@ -1,5 +1,5 @@
 import UObject from "./un-object";
-import { Vector3, Group } from "three";
+import { Vector3, Group, Object3D } from "three";
 import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
 import FScale from "../un-scale";
@@ -9,6 +9,7 @@ import UPhysicsVolume from "./un-physics-volume";
 import UModel from "./model/un-model";
 import UTextureModifyInfo from "./un-texture-modify-info";
 import UAActor from "./un-aactor";
+import FVector from "./un-vector";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -21,7 +22,7 @@ class UBrush extends UAActor {
     protected postScale: FScale;
     protected polyFlags: number;
     protected brush: UModel;
-    protected prePivot: Vector3 = new Vector3();
+    protected prePivot: FVector = new FVector();
     protected texModifyInfo: UTextureModifyInfo;
     protected group: string;
     protected isRangeIgnored: boolean;
@@ -40,13 +41,13 @@ class UBrush extends UAActor {
         });
     }
 
-    public async decodeMesh(): Promise<Group> {
+    public async decodeMesh(): Promise<Object3D> {
 
-        const brush = await this.brush.decodeMesh();
+        const brush = await this.brush.decodeModel();
 
-        brush.name = this.group || "";
+        brush.name = this.group || this.objectName;
 
-        const position = new Vector3().subVectors(this.location, this.prePivot);
+        const position = new Vector3().subVectors(this.location.vector, this.prePivot.vector);
 
         brush.position.set(position.x, position.z, position.y);
 

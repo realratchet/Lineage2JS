@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Intersection, Raycaster } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 class RenderManager {
@@ -11,6 +11,7 @@ class RenderManager {
     public readonly controls: OrbitControls;
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
+    public readonly raycaster = new Raycaster();
 
     protected lastRender: number = 0;
     protected pixelRatio: number = global.devicePixelRatio;
@@ -23,19 +24,49 @@ class RenderManager {
             alpha: true
         });
 
+        viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));
+
         this.renderer.setClearColor(0x000000);
-        this.controls = new OrbitControls(this.camera, viewport);
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 5, 15);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxBufferGeometry()));
 
-        this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
-        this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
+        this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
+        this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
+        // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
+        // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
         this.controls.update();
 
         viewport.appendChild(this.renderer.domElement);
 
         addResizeListeners(this);
+    }
+
+    public toScreenSpaceCoords(point: Vector2) {
+        const { width, height } = this.renderer.getSize(new Vector2());
+
+        return new Vector2(
+            point.x / width * 2 - 1,
+            1 - point.y / height * 2
+        );
+    }
+
+    public onHandleMouseUp(event: MouseEvent) {
+        // debugger;
+
+        const position = new Vector2(event.pageX, event.pageY);
+        const ssPosition = this.toScreenSpaceCoords(position);
+        const intersections: Intersection[] = [];
+
+        this.raycaster.setFromCamera(ssPosition, this.camera);
+        this.raycaster.intersectObject(this.scene, true, intersections);
+
+        if (intersections.length === 0) return;
+
+        const intersection = intersections[0];
+
+        console.log(intersection.object);
     }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {

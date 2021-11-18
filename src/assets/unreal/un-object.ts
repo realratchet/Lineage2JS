@@ -11,6 +11,7 @@ abstract class UObject {
     protected readHead: number = NaN;
     protected readTail: number = NaN;
     protected readHeadOffset: number = 0;
+    protected objectName = "Exp_None";
 
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
@@ -35,6 +36,8 @@ abstract class UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        this.objectName = `Exp_${exp.objectName}`;
+
         this.setReadPointers(exp);
 
         await this.readNamedProps(pkg);
@@ -47,7 +50,7 @@ abstract class UObject {
         const varName = props[propName];
         const _var = (this as any)[varName];
 
-        return _var instanceof Array
+        return _var instanceof Array && !(_var instanceof FArray)
             ? _var.length
             : _var instanceof Set
                 ? Infinity

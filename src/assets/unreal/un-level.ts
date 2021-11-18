@@ -9,6 +9,7 @@ import { Group } from "three";
 import UModel from "./model/un-model";
 import UTerrainInfo from "./un-terrain-info";
 import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UBrush from "./un-brush";
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
@@ -47,16 +48,36 @@ class ULevel extends UObject {
         this.baseModel = await pkg.fetchObject(baseModelId) as UModel;
 
         for (let objectId of objectIds) {
+            const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
+
+            // debugger;
+
+            // if (pkgName !== "UStaticMeshActor" && pkgName !== "UTerrainInfo") continue;
+
             const object = await pkg.fetchObject(objectId);
 
             if (object) this.objectList.push(object);
         }
 
-        for (let objectId of objectIds2) {
+        // for (let objectId of [1804]) {
+            for (let objectId of objectIds2) {
+            const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
+
+            // debugger;
+
+            // if (pkgName !== "StaticMeshActor" && pkgName !== "TerrainInfo") continue;
+
             const object = await pkg.fetchObject(objectId);
+
+            // if (object && object.objectName === "StaticMeshActor688") {
+            //     console.log(objectId)
+            //     debugger;
+            // }
 
             if (object) this.objectList.push(object);
         }
+
+        // debugger;
 
         this.readHead = this.readTail;
 
@@ -76,12 +97,15 @@ class ULevel extends UObject {
             return accum;
         }, {} as { [key: string]: UObject[] });
 
-        group.add(await this.baseModel.decodeModel());
+        debugger;
+
+        // group.add(await this.baseModel.decodeModel());
 
         for (let type of [/*"UBrush", */"UTerrainInfo", "UStaticMeshActor"]) {
+            if (!(type in groupedObjectList)) continue;
             for (let object of groupedObjectList[type]) {
                 switch (type) {
-                    // case "UBrush": group.add(await (object as UBrush).decodeMesh()); break;
+                    case "UBrush": group.add(await (object as UBrush).decodeMesh()); break;
                     case "UStaticMeshActor": group.add(await (object as UStaticMeshActor).decodeMesh()); break;
                     case "UTerrainInfo": group.add(await (object as UTerrainInfo).decodeMesh()); break
                 }
