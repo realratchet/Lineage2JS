@@ -55,6 +55,8 @@ class UStaticMeshActor extends UAActor {
     }
 
     public async decodeMesh(): Promise<Group> {
+        // debugger;
+
         const group = new Group();
 
         const instance = await this.mesh.decodeMesh();
@@ -92,6 +94,28 @@ class UStaticMeshActor extends UAActor {
         // debugger;
 
         await super.load(pkg, exp);
+
+        // const unk1 = await pkg.read(BufferValue.allocBytes(10)).value as DataView;
+        
+        // const unk2 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk3 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk4 = await pkg.read(new BufferValue(BufferValue.uint8)).value as number;
+
+        // this.readHead = pkg.tell();
+
+        // // const obj2 = await pkg.fetchObject(unk2);
+        // // debugger;
+        // // const obj3 = await pkg.fetchObject(unk3);
+        // // debugger;
+        // // const obj4 = await pkg.fetchObject(unk4);
+
+        // debugger;
+
+        // // await this.readNamedProps(pkg);
+
+        // // const prop2 = await pkg.read(BufferValue.allocBytes(5)).value as DataView;
+
+        // debugger;
 
         return this;
     }

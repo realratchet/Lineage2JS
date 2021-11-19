@@ -9,6 +9,7 @@ abstract class UObject {
     public constructor(...params: any[]) { }
 
     protected readHead: number = NaN;
+    protected readStart: number = NaN;
     protected readTail: number = NaN;
     protected readHeadOffset: number = 0;
     protected objectName = "Exp_None";
@@ -16,9 +17,12 @@ abstract class UObject {
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
     protected setReadPointers(exp: UExport) {
-        this.readHead = exp.offset.value as number + this.readHeadOffset;
+        this.readStart = this.readHead = exp.offset.value as number + this.readHeadOffset;
         this.readTail = this.readHead + (exp.size.value as number);
     }
+
+    public get byteCount() { return this.readTail - this.readStart; }
+    public get bytesUnread() { return this.readTail - this.readHead; }
 
     protected async readNamedProps(pkg: UPackage) {
         do {

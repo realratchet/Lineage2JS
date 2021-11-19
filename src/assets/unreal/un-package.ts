@@ -78,16 +78,25 @@ class UPackage {
 
     public tell() { return this.offset - this.contentOffset; }
 
-    public dump(lineCount: number, restore: boolean = true, printHeaders: boolean = true) {
+    public dump(lineCount: number = 1, restore: boolean = true, printHeaders: boolean = true) {
         let oldHeader = this.offset;
+        let constructedString = "";
+        let divisor = 0XF, lineCountHex = 1;
+
+        do {
+            if ((lineCount / divisor) < 1) break;
+            divisor = divisor * 0X10 + 0XF; // shift divisor
+            lineCountHex++;
+        } while (true);
+
+        const offsetHeader = printHeaders ? new Array(5 + lineCountHex).fill("-").join("") : null;
 
         if (printHeaders) {
-            console.log("--------------------------------------------------------");
-            console.log(`------------------- Dumping lines ----------------------`);
-            console.log("--------------------------------------------------------");
+            console.log(`${offsetHeader}--------------------------------------------------------`);
+            console.log(`${offsetHeader}------------------- Dumping lines ----------------------`);
+            console.log(`${offsetHeader}--------------------------------------------------------`);
         }
 
-        let constructedString = "";
         for (let i = 0; i < lineCount; i++) {
             const bytes = Math.min(this.buffer.byteLength - this.offset, 8);
             const groups = new Array(bytes).fill('.').map(() => this.read(2));
@@ -132,10 +141,14 @@ class UPackage {
                     //     extraArgs.push("color: purple; font-weight:bold", "color: black");
                     // }
 
+                    const bits = i.toString(16).toUpperCase();
+                    const head = new Array(lineCountHex - bits.length).fill("0").join("");
+
                     console.log(
                         [
+                            `(0x${head}${bits})`,
                             finalString,
-                            string2
+                            string2,
                         ].join(" "),
                         ...extraArgs
                     );
@@ -149,7 +162,7 @@ class UPackage {
         }
 
         if (printHeaders)
-            console.log("--------------------------------------------------------");
+            console.log(`${offsetHeader}--------------------------------------------------------`);
 
         if (restore) this.offset = oldHeader;
     }

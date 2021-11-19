@@ -30,7 +30,7 @@ class PropertyTag {
     protected constructor() { }
 
     public name: string;
-    public type: number;
+    public type: UNP_PropertyTypes;
     public structName: string;
     public arrayIndex: number;
     public dataSize: number;

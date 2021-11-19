@@ -10,6 +10,10 @@ import FZoneProperties from "../un-zone-properties";
 import { Float32BufferAttribute, BufferGeometry, TriangleFanDrawMode, BackSide, Mesh, MeshBasicMaterial, Uint16BufferAttribute, Matrix4, Material, Group, Object3D, Sphere, Box3 } from "three";
 import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils";
 import UMaterial from "../un-material";
+import FBox from "../un-box";
+import FNumber from "../un-number";
+import ULight from "../un-light";
+import FLeaf from "../un-leaf";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -27,6 +31,12 @@ class UModel extends UPrimitive {
     protected numSharedSides: number;
     protected polys: UPolys;
     protected zones: FZoneProperties[];
+    protected bounds = new FArray(FBox);
+    protected leafHulls = new FArray(FNumber.forType(BufferValue.int32) as any);
+    protected leaves = new FArray(FLeaf)
+    protected lights = new FArray(ULight);
+    protected rootOutside: boolean;
+    protected linked: boolean;
 
     public async load(pkg: UPackage, exp: UExport) {
         const int32 = new BufferValue(BufferValue.int32);
@@ -72,9 +82,32 @@ class UModel extends UPrimitive {
 
         this.readHead = pkg.tell();
 
+        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+
+        await this.bounds.load(pkg, null);
+
+        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+
+        await this.leafHulls.load(pkg, null);
+
+        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+
+        await this.leaves.load(pkg, null);
+
+        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+
+        await this.lights.load(pkg, null);
+
+        this.readHead = pkg.tell();
+
         // console.log(exp.objectName, "->", polyExp.objectName);
 
         this.polys = await pkg.fetchObject(polysId) as UPolys;
+
+        this.rootOutside = (await pkg.read(uint8).value as number) !== 0;
+        this.linked = (await pkg.read(uint8).value as number) !== 0;
+
+        debugger;
 
         pkg.seek(this.readHead, "set");
 

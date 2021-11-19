@@ -13,6 +13,7 @@ import UExport from "./assets/unreal/un-export";
 import UBrush from "./assets/unreal/un-brush";
 import ULevel from "./assets/unreal/un-level";
 import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
+import ULight from "./assets/unreal/un-light";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -93,6 +94,18 @@ async function startCore() {
 
         return accum;
     }, {} as { [key: string]: UExport[] });
+
+    // const lights = [];
+
+    // for (let expLight of expGroups["Light"]) {
+    //     const uLight = await new ULight().load(pkgLoad, expLight);
+
+    //     lights.push(uLight);
+    // }
+
+    // const nonDirectional = lights.filter(x => !x.isDirectional);
+
+    // debugger;
 
     const expTerrainInfo = expGroups.TerrainInfo[0];
     const expTerrainSectors = expGroups.TerrainSector

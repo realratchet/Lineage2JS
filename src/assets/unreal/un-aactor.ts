@@ -16,6 +16,7 @@ class UAActor extends UObject {
     protected region: UPointRegion;
     protected drawScale: number;
     protected tag: string;
+    protected group: string;
     protected isSunAffected: boolean;
     protected physicsVolume: UPhysicsVolume;
     public readonly location: FVector = new FVector();
@@ -36,7 +37,8 @@ class UAActor extends UObject {
             "SwayRotationOrig": "swayRotationOrig",
             "DrawScale": "drawScale",
             "TexModifyInfo": "texModifyInfo",
-            "DrawScale3D": "scale"
+            "DrawScale3D": "scale",
+            "Group": "group"
         });
     };
 }
