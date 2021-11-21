@@ -4,7 +4,7 @@ import FConstructable from "./un-constructable";
 import FVector from "./un-vector";
 import UTexture from "./un-texture";
 import { Group, Mesh, BufferGeometry, MeshBasicMaterial, Float32BufferAttribute, DoubleSide, TriangleFanDrawMode, BackSide } from "three";
-import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils";
+// import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils";
 import UMaterial from "./un-material";
 
 type UPackage = import("./un-package").UPackage;

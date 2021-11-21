@@ -16,6 +16,7 @@ import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-sta
 import { PropertyTag, UNP_PropertyTypes } from "../un-property";
 import FVector from "../un-vector";
 import { FPlane } from "../un-plane";
+import MeshUVMaterial from "../../../materials/uv-material/mesh-uv-material";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -104,6 +105,13 @@ class UStaticMesh extends UPrimitive {
         console.log(this.vertexStream.vert[this.indexStream1.indices[0].value].position);
         console.log(this.vertexStream.vert[this.indexStream1.indices[1].value].position);
         console.log(this.vertexStream.vert[this.indexStream1.indices[2].value].position);
+
+        const count = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        // debugger;
+
+        const dview = await pkg.read(BufferValue.allocBytes(this.readTail - pkg.tell() - 3)).value as DataView;
+        const fview = new Float32Array(dview.buffer);
 
         // debugger;
 
@@ -467,7 +475,13 @@ class UStaticMesh extends UPrimitive {
 
             geometry.addGroup(section.firstIndex, section.numFaces * 3, i);
             materials.push(material);
+
+            // debugger;
         }
+
+        materials[0].uniforms.map2.value = materials[3].map;
+
+        // debugger;
 
         // const materials = await this.materials.getElem(0)?.decodeMaterial();
         const mesh = new Mesh(geometry, materials);

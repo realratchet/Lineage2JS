@@ -6,6 +6,7 @@ import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
 import UMatrix from "./un-matrix";
+import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -131,7 +132,9 @@ class UShader extends UMaterial {
         const transparent = this.transparent;
         const alphaTest = this.alphaTest / 255;
 
-        const material = new MeshBasicMaterial({
+        // debugger;
+
+        const material = new MeshStaticMaterial({
             map: diffuse,
             // map: diffuse,
             alphaMap: opacity,

@@ -5,7 +5,7 @@ import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
 import UTexture from "./assets/unreal/un-texture";
 import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D, BoxHelper } from "three";
+import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh } from "three";
 import BufferValue from "./assets/buffer-value";
 import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 import UModel from "./assets/unreal/model/un-model";
@@ -14,6 +14,9 @@ import UBrush from "./assets/unreal/un-brush";
 import ULevel from "./assets/unreal/un-level";
 import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
 import ULight from "./assets/unreal/un-light";
+import UImport from "./assets/unreal/un-import";
+import { UShader } from "./assets/unreal/un-material";
+import ULevelInfo from "./assets/unreal/un-level-info";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -69,6 +72,7 @@ async function loadTexture() {
 // export default loadTexture;
 
 async function startCore() {
+    const objectGroup = new Object3D();
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
@@ -76,6 +80,7 @@ async function startCore() {
     const pkg_20_20 = assetLoader.getPackage("20_20");
     const pkg_20_21 = assetLoader.getPackage("20_21");
     const pkg_20_22 = assetLoader.getPackage("20_22");
+    const pkg_shader = assetLoader.getPackage("T_SHADER");
 
     const pkgLoad = pkg_20_21;
 
@@ -84,6 +89,15 @@ async function startCore() {
     // await assetLoader.load(pkg_20_19);
     // await assetLoader.load(pkg_20_20);
     // await assetLoader.load(pkg_20_21);
+
+    const impGroups = pkgLoad.imports.reduce((accum, imp, index) => {
+        const impType = imp.className;
+        const list = accum[impType] = accum[impType] || [];
+
+        list.push({ import: imp, index: -index - 1 });
+
+        return accum;
+    }, {} as { [key: string]: { import: UImport, index: number }[] });
 
     const expGroups = pkgLoad.exports.reduce((accum, exp) => {
 
@@ -94,6 +108,7 @@ async function startCore() {
 
         return accum;
     }, {} as { [key: string]: UExport[] });
+
 
     // const lights = [];
 
@@ -107,6 +122,35 @@ async function startCore() {
 
     // debugger;
 
+
+    // let index = 0;
+    // const geometry = new PlaneBufferGeometry(100, 100);
+    // for (let impShader of impGroups["Shader"]) {
+    //     const uMaterial = await pkgLoad.fetchObject(impShader.index) as UShader;
+    //     const material = await uMaterial.decodeMaterial();
+
+    //     const mesh = new Mesh(geometry, material);
+
+    //     mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500, 114151.68197851974 - 500);
+
+    //     objectGroup.add(mesh);
+    // }
+
+    // index = 0;
+    // for (let impShader of impGroups["Texture"]) {
+    //     try {
+    //         const uMaterial = await pkgLoad.fetchObject(impShader.index) as UTexture;
+    //         const material = await uMaterial.decodeMaterial();
+
+    //         const mesh = new Mesh(geometry, material);
+
+    //         mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
+
+    //         objectGroup.add(mesh);
+    //     } catch (e) { }
+    // }
+
+
     const expTerrainInfo = expGroups.TerrainInfo[0];
     const expTerrainSectors = expGroups.TerrainSector
         .sort(({ objectName: na }, { objectName: nb }) => {
@@ -116,7 +160,6 @@ async function startCore() {
         });
 
     const filteredSectors = expTerrainSectors
-    const objectGroup = new Object3D();
 
     // debugger;
 

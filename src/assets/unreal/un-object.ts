@@ -30,6 +30,8 @@ abstract class UObject {
 
             if (!tag.isValid()) break;
 
+            // if (tag.name === "Materials") debugger;
+
             await this.loadProperty(pkg, tag);
 
             this.readHead = pkg.tell();

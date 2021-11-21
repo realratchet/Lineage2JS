@@ -9,6 +9,7 @@ const assetList = Object.freeze([
     "maps/21_21.unr",
     "maps/22_21.unr",
 
+    "textures/T_SHADER.utx",
     "textures/T_17_22.utx",
     "textures/T_20_19.utx",
     "textures/T_20_20.utx",

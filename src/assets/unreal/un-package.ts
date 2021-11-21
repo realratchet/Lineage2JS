@@ -37,6 +37,7 @@ import UMover from "./un-mover";
 import UBlockingVolume from "./un-blocking-volume";
 import UCamera from "./un-camera";
 import UStaticMeshIsntance from "./static-mesh/un-static-mesh-instance";
+import ULevelSummary from "./un-level-summary";
 
 type AssetLoader = import("../asset-loader").AssetLoader;
 
@@ -345,10 +346,13 @@ class UPackage {
             case "TexPanner": Constructor = UTexPanner; break;
             case "ColorModifier": Constructor = UColorModifier; break;
             case "TexOscillator": Constructor = UTexOscillator; break;
+            case "LevelSummary": Constructor = ULevelSummary; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
-        exp.object = await (new (Constructor as any)(...params) as T).load(pkg, exp);
+        const object = exp.object = (new (Constructor as any)(...params) as T);
+        
+        await object.load(pkg, exp);
 
         return exp.object;
     }
