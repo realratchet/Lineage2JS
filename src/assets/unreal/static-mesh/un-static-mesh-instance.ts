@@ -39,35 +39,46 @@ class UStaticMeshIsntance extends UObject {
 
         // // const unk2 = await pkg.read(compat32).value as number;
 
-        // let offset = pkg.tell();
-        // let bytesLeft = this.readTail - pkg.tell();
+        let offset = pkg.tell();
+        let bytesLeft = this.readTail - pkg.tell();
 
-        // for (let i = 0; i < bytesLeft; i++) {
+        // debugger;
 
-        //     const tag = await PropertyTag.from(pkg, offset + i);
+        for (let i = 0; i < bytesLeft; i++) {
 
-        //     if (!tag.isValid()) continue;
+            const objectId = await pkg.read(compat32).value as number;
 
-        //     if (
-        //         true
-        //         && tag.name !== "None"
-        //         && tag.dataSize > 0
-        //         && tag.type >= 0x1 && tag.type <= 0xf
-        //         && tag.arrayIndex >= 0
-        //         && !tag.name.startsWith("None,")
-        //         // && tag.structName !== "EnableCollision" && tag.structName !== "EnableCollisionforShadow" && tag.structName !== "Material" && tag.structName !== "Cm_dg_inner_deco5" && tag.structName !== "Cm_dg_statue3"
-        //         && (tag.type !== UNP_PropertyTypes.UNP_StructProperty || tag.type === UNP_PropertyTypes.UNP_StructProperty && tag.structName)
-        //         // && (tag.type !== UNP_PropertyTypes.UNP_ArrayProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty && tag.arrayIndex === 0 && tag.dataSize > 1)
-        //         // && (tag.type === UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty /*|| tag.type === UNP_PropertyTypes.UNP_ClassProperty*/)
-        //         && !tag.name.startsWith("Cm_") && !tag.name.startsWith("oren_") && !tag.name.startsWith("cm_") && !tag.name.startsWith("dion_")
-        //         && (tag.dataSize < bytesLeft)
-        //         // && (tag.type !== UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ObjectProperty && tag.dataSize <= 4)
-        //         // && tag.name !== "EnableCollisionforShadow" && tag.name !== "EnableCollision" && tag.name !== "bNoDynamicShadowCast"
-        //     ) {
-        //         console.log(i, tag);
-        //     }
+            if (objectId !== 0) {
+                try {
+                    const pkgName = pkg.getPackageName(objectId);
+                    console.log(`${objectId} -> ${pkgName}`);
+                } catch (e) { }
+            }
 
-        // }
+            // const tag = await PropertyTag.from(pkg, offset + i);
+
+            // if (!tag.isValid()) continue;
+
+            // if (
+            //     true
+            //     && tag.name !== "None"
+            //     && tag.dataSize > 0
+            //     && tag.type >= 0x1 && tag.type <= 0xf
+            //     && tag.arrayIndex >= 0
+            //     && !tag.name.startsWith("None,")
+            //     // && tag.structName !== "EnableCollision" && tag.structName !== "EnableCollisionforShadow" && tag.structName !== "Material" && tag.structName !== "Cm_dg_inner_deco5" && tag.structName !== "Cm_dg_statue3"
+            //     && (tag.type !== UNP_PropertyTypes.UNP_StructProperty || tag.type === UNP_PropertyTypes.UNP_StructProperty && tag.structName)
+            //     // && (tag.type !== UNP_PropertyTypes.UNP_ArrayProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty && tag.arrayIndex === 0 && tag.dataSize > 1)
+            //     // && (tag.type === UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty /*|| tag.type === UNP_PropertyTypes.UNP_ClassProperty*/)
+            //     && !tag.name.startsWith("Cm_") && !tag.name.startsWith("oren_") && !tag.name.startsWith("cm_") && !tag.name.startsWith("dion_")
+            //     && (tag.dataSize < bytesLeft)
+            //     // && (tag.type !== UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ObjectProperty && tag.dataSize <= 4)
+            //     // && tag.name !== "EnableCollisionforShadow" && tag.name !== "EnableCollision" && tag.name !== "bNoDynamicShadowCast"
+            // ) {
+            //     console.log(i, tag);
+            // }
+
+        }
 
         // debugger;
 

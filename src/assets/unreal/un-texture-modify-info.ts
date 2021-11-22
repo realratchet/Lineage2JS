@@ -38,6 +38,8 @@ class UTextureModifyInfo extends UObject {
 
         await this.readNamedProps(pkg);
 
+        // debugger;
+
         return this;
     }
 }

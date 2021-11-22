@@ -30,15 +30,25 @@ class MeshStaticMaterial extends ShaderMaterial {
     public wireframeLinecap: "round" = 'round';
     public wireframeLinejoin: "round" = 'round';
 
+    // @ts-ignore
     constructor(parameters: MeshStaticMaterialParameters) {
+        const defines: { [key: string]: any } = {};
+        const uniforms: { [key: string]: Uniform } = UniformsUtils.merge([{}, ShaderLib.basic.uniforms, {
+            map2: new Uniform(null),
+        }]);
+
+        if (parameters.fade) {
+            defines["USE_FADE"] = "";
+            uniforms["globalTime"] = new Uniform(0);
+            uniforms["fade"] = new Uniform(parameters.fade)
+        }
+
+
         super({
             vertexShader: VERTEX_SHADER,
             fragmentShader: FRAGMENT_SHADER,
-            defines: {
-            },
-            uniforms: UniformsUtils.merge([{}, ShaderLib.basic.uniforms, {
-                map2: new Uniform(null),
-            }])
+            defines,
+            uniforms
         });
 
 
@@ -50,5 +60,9 @@ export default MeshStaticMaterial;
 export { MeshStaticMaterial };
 
 type MeshStaticMaterialParameters = MeshBasicMaterialParameters & {
-    
+    fade?: {
+        color1: Color,
+        color2: Color,
+        period: number
+    }
 };

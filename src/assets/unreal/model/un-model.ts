@@ -39,78 +39,86 @@ class UModel extends UPrimitive {
     protected linked: boolean;
 
     public async load(pkg: UPackage, exp: UExport) {
-        const int32 = new BufferValue(BufferValue.int32);
-        const uint8 = new BufferValue(BufferValue.uint8);
+        try {
+            const int32 = new BufferValue(BufferValue.int32);
+            const uint8 = new BufferValue(BufferValue.uint8);
+            const compat32 = new BufferValue(BufferValue.compat32);
 
-        this.setReadPointers(exp);
+            this.setReadPointers(exp);
 
-        pkg.seek(this.readHead, "set");
+            pkg.seek(this.readHead, "set");
 
-        const startOffset = pkg.tell();
-        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+            const startOffset = pkg.tell();
+            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-        // debugger;
+            // debugger;
 
-        await super.load(pkg, exp);
+            await super.load(pkg, exp);
 
-        await this.vectors.load(pkg);
-        await this.points.load(pkg);
-        await this.bspNodes.load(pkg);
-        await this.bspSurfs.load(pkg);
-        await this.vertices.load(pkg);
+            await this.vectors.load(pkg);
+            await this.points.load(pkg);
+            await this.bspNodes.load(pkg);
+            await this.bspSurfs.load(pkg);
+            await this.vertices.load(pkg);
 
-        // console.assert(this.bspNodes.getElemCount() === this.bspSurfs.getElemCount());
+            // console.assert(this.bspNodes.getElemCount() === this.bspSurfs.getElemCount());
 
-        this.numSharedSides = await pkg.read(int32).value as number;
+            this.numSharedSides = await pkg.read(int32).value as number;
 
-        const numZones = await pkg.read(int32).value as number;
+            const numZones = await pkg.read(int32).value as number;
 
-        console.assert(numZones <= MAX_ZONES);
+            console.assert(numZones <= MAX_ZONES);
 
-        this.zones = new Array(numZones);
+            this.zones = new Array(numZones);
 
-        for (let i = 0; i < numZones; i++)
-            this.zones[i] = await new FZoneProperties().load(pkg);
+            for (let i = 0; i < numZones; i++)
+                this.zones[i] = await new FZoneProperties().load(pkg);
 
-        this.readHead = pkg.tell();
-        const polysId = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+            this.readHead = pkg.tell();
+            const polysId = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
 
-        const polyExp = pkg.exports[polysId - 1];
-        const className = pkg.getPackageName(polyExp.idClass.value as number)
+            const polyExp = pkg.exports[polysId - 1];
+            const className = pkg.getPackageName(polyExp.idClass.value as number)
 
-        console.assert(className === "Polys");
+            console.assert(className === "Polys");
 
-        this.readHead = pkg.tell();
+            this.readHead = pkg.tell();
 
-        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-        await this.bounds.load(pkg, null);
+            await this.bounds.load(pkg, null);
 
-        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-        await this.leafHulls.load(pkg, null);
+            await this.leafHulls.load(pkg, null);
 
-        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-        await this.leaves.load(pkg, null);
+            await this.leaves.load(pkg, null);
 
-        // console.log(`offset: ${(this.readTail - pkg.tell())}`);
+            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-        await this.lights.load(pkg, null);
+            await this.lights.load(pkg, null);
 
-        this.readHead = pkg.tell();
+            const unk = await pkg.read(compat32).value as number;
+            
+            this.readHead = pkg.tell();
 
-        // console.log(exp.objectName, "->", polyExp.objectName);
+            debugger;
 
-        this.polys = await pkg.fetchObject(polysId) as UPolys;
+            // console.log(exp.objectName, "->", polyExp.objectName);
+            this.rootOutside = (await pkg.read(uint8).value as number) !== 0;
+            this.linked = (await pkg.read(uint8).value as number) !== 0;
 
-        this.rootOutside = (await pkg.read(uint8).value as number) !== 0;
-        this.linked = (await pkg.read(uint8).value as number) !== 0;
+            this.readHead = pkg.tell();
 
-        debugger;
+            debugger;
 
-        pkg.seek(this.readHead, "set");
+            this.polys = await pkg.fetchObject(polysId) as UPolys;
 
+
+            pkg.seek(this.readHead, "set");
+        } catch (e) { }
         return this;
     }
 

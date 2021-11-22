@@ -12,7 +12,6 @@ import USound from "../un-sound";
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
     protected instance: UStaticMeshIsntance;
-    protected group: string;
     protected isRangeIgnored: boolean;
     protected colLocation: Vector3;
     protected touching: FArray = new FArray(FNumber.forType(BufferValue.int16) as any);
@@ -33,7 +32,6 @@ class UStaticMeshActor extends UAActor {
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMesh": "mesh",
-            "Group": "group",
             "StaticMeshInstance": "instance",
             "bIgnoredRange": "isRangeIgnored",
             "ColLocation": "colLocation",
@@ -70,6 +68,7 @@ class UStaticMeshActor extends UAActor {
         // roll (x) | pitch (y) | yaw (z)
 
         this.rotation.getEuler(group.rotation);
+        group.scale.set(Math.abs(this.scale.vector.x), Math.abs(this.scale.vector.z), Math.abs(this.scale.vector.y));
 
 
         // const roll = -(65535 - this.rotation.x) / 32768 * Math.PI;
@@ -95,8 +94,10 @@ class UStaticMeshActor extends UAActor {
 
         await super.load(pkg, exp);
 
+        // if (this.scale.vector.x !== 1 || this.scale.vector.y !== 1 || this.scale.vector.z !== 1) debugger;
+
         // const unk1 = await pkg.read(BufferValue.allocBytes(10)).value as DataView;
-        
+
         // const unk2 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         // const unk3 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         // const unk4 = await pkg.read(new BufferValue(BufferValue.uint8)).value as number;

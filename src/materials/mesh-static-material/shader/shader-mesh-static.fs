@@ -23,6 +23,17 @@ uniform float opacity;
 
 uniform sampler2D map2;
 
+#ifdef USE_FADE
+struct FadeData {
+    vec3 color1;
+    vec3 color2;
+    float period;
+};
+
+uniform float globalTime;
+uniform FadeData fade;
+#endif
+
 vec4 layer(vec4 foreground, vec4 background) {
     return foreground * foreground.a + background * (1.0 - foreground.a);
 }
@@ -36,9 +47,16 @@ void main() {
     vec4 texelColor = texture2D( map, vUv );
 	texelColor = mapTexelToLinear( texelColor );
 
+    #ifdef USE_FADE
+    float mixValue = sin(globalTime) + 1.0 / 2.0;
+    texelColor = texelColor * vec4(mix(fade.color1, fade.color2, mixValue), 1.0);
+    #endif
+
     vec4 texelColor2 = texture2D( map2, vUv );
 	texelColor2 = mapTexelToLinear( texelColor2 );
-	diffuseColor *= layer(texelColor, texelColor2);
+	
+    // diffuseColor *= texelColor;
+    diffuseColor *= layer(texelColor, texelColor2);
 
     #include <color_fragment>
     #include <alphamap_fragment>

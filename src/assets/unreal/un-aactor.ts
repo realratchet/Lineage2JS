@@ -6,13 +6,14 @@ import UPointRegion from "./un-point-region";
 import UPhysicsVolume from "./un-physics-volume";
 import FVector from "./un-vector";
 import FRotator from "./un-rotator";
+import ULevel from "./un-level";
 
 class UAActor extends UObject {
     protected readHeadOffset: number = 15;
 
     protected texModifyInfo: UTextureModifyInfo;
     protected isDynamicActorFilterState: boolean;
-    protected level: ULevelInfo;
+    protected level: ULevel;
     protected region: UPointRegion;
     protected drawScale: number;
     protected tag: string;

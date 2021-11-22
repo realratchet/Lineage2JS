@@ -37,28 +37,33 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
         const elementSize = hasTag ? dataSize / this.length : null;
 
-        let startOffset = pkg.tell();
+        // let startOffset = pkg.tell();
 
-        if (tag?.name === "Materials") {
-            const data = await pkg.read(BufferValue.allocBytes(52)).value as DataView;
-            
-            console.log(data);
-            pkg.seek(-52);
+        // if (tag?.name === "Materials") {
+        //     const data = await pkg.read(BufferValue.allocBytes(52)).value as DataView;
 
-            debugger;
-        }
+        //     console.log(data);
+        //     pkg.seek(-52);
+
+        //     debugger;
+        // }
 
         for (let i = 0, len = this.length; i < len; i++) {
-            if (tag?.name === "Materials") pkg.dump(2);
+            // if (tag?.name === "Materials") {
+            //     let finalOffset = pkg.tell() - startOffset;
+
+            //     console.log(finalOffset);
+            //     pkg.dump(2);
+            // }
             this[i] = await new this.Constructor(elementSize).load(pkg, tag);
         }
 
-        if (tag?.name === "Materials") {
-            let finalOffset = pkg.tell() - startOffset;
+        // if (tag?.name === "Materials") {
+        //     let finalOffset = pkg.tell() - startOffset;
 
-            console.log(finalOffset);
-            debugger;
-        }
+        //     console.log(finalOffset);
+        //     debugger;
+        // }
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
 

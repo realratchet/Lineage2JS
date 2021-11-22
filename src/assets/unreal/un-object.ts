@@ -12,7 +12,7 @@ abstract class UObject {
     protected readStart: number = NaN;
     protected readTail: number = NaN;
     protected readHeadOffset: number = 0;
-    protected objectName = "Exp_None";
+    public objectName = "Exp_None";
 
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
@@ -30,7 +30,10 @@ abstract class UObject {
 
             if (!tag.isValid()) break;
 
-            // if (tag.name === "Materials") debugger;
+            // if (tag.name === "Diffuse" || tag.name === "SpecularityMask")
+            //     debugger;
+
+            // if (tag.name === "Material") debugger;
 
             await this.loadProperty(pkg, tag);
 

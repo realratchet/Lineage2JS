@@ -104,6 +104,8 @@ class UTexture extends UObject {
         // if (this.mipmaps.getElemCount() === 0)
         //     debugger;
 
+        this.readHead = pkg.tell();
+
         // debugger;
 
         return this;

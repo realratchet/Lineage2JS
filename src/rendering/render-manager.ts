@@ -107,6 +107,19 @@ class RenderManager {
 
     protected _preRender(currentTime: number, deltaTime: number) {
         this.renderer.clear();
+        this.scene.traverse((object: any) => {
+
+            if (object.material) {
+                const materials = object.material instanceof Array ? object.material : [object.material];
+
+                materials.forEach((material: any) => {
+                    if (material?.uniforms?.globalTime) {
+                        material.uniforms.globalTime.value = currentTime / 600;
+                    }
+                });
+
+            }
+        });
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {

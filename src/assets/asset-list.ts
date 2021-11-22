@@ -1,4 +1,5 @@
 const assetList = Object.freeze([
+    "maps/Entry.unr",
     "maps/17_22.unr",
     "maps/20_19.unr",
     "maps/20_20.unr",
@@ -41,24 +42,27 @@ const assetList = Object.freeze([
     "textures/Oren_HEV_LOD_T.utx",
     "textures/Field_Deco_Artifact_T.utx",
 
-    "models/Oren_HED_enterance.usx",
-    "models/Oren_HED_S.usx",
-    "models/Field_Deco_Artifact_S.usx",
-    "models/Oren_HEV_LOD_S.usx",
-    "models/Oren_HEV_S.usx",
-    "models/field_deco_S.usx",
-    "models/Oren_tree_S.usx",
-    "models/Dion_Cruma_Tower_S.usx",
-    "models/Dion_tree_S.usx",
-    "models/gludio_tree_S.usx",
-    "models/dion_curumadungeon_s.usx",
-    "models/dion_curumadungeon_boss_s.usx",
-    "models/cruma_s.usx",
+    "staticmeshes/Oren_HED_enterance.usx",
+    "staticmeshes/Oren_HED_S.usx",
+    "staticmeshes/Field_Deco_Artifact_S.usx",
+    "staticmeshes/Oren_HEV_LOD_S.usx",
+    "staticmeshes/Oren_HEV_S.usx",
+    "staticmeshes/field_deco_S.usx",
+    "staticmeshes/Oren_tree_S.usx",
+    "staticmeshes/Dion_Cruma_Tower_S.usx",
+    "staticmeshes/Dion_tree_S.usx",
+    "staticmeshes/gludio_tree_S.usx",
+    "staticmeshes/dion_curumadungeon_s.usx",
+    "staticmeshes/dion_curumadungeon_boss_s.usx",
+    "staticmeshes/cruma_s.usx",
 
-    "sounds2/AmbSound.uax",
-    "sounds2/ChrSound.uax",
+    "sounds/AmbSound.uax",
+    "sounds/ChrSound.uax",
 
-    "engine/Engine.u",
+    "system/Engine.u",
+    "system/Core.u",
+
+    "animations/LineageEffectMeshes.ukx"
 ]);
 
 export default assetList;

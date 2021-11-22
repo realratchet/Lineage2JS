@@ -17,6 +17,7 @@ import ULight from "./assets/unreal/un-light";
 import UImport from "./assets/unreal/un-import";
 import { UShader } from "./assets/unreal/un-material";
 import ULevelInfo from "./assets/unreal/un-level-info";
+import UEncodedFile from "./assets/unreal/un-encoded-file";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -78,13 +79,37 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList);
     const pkg_20_19 = assetLoader.getPackage("20_19");
     const pkg_20_20 = assetLoader.getPackage("20_20");
-    const pkg_20_21 = assetLoader.getPackage("20_21");
+    const pkg_20_21 = assetLoader.getPackage("20_21"); // cruma tower
     const pkg_20_22 = assetLoader.getPackage("20_22");
     const pkg_shader = assetLoader.getPackage("T_SHADER");
+    const pkg_engine = assetLoader.getPackage("Engine");
+    const pkg_core = assetLoader.getPackage("Core");
+    const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
+    const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
+
+    // const engineData = await new UEncodedFile("assets/system/l2.ini").decode();
+
+    // debugger;
 
     const pkgLoad = pkg_20_21;
 
+    
+    // await assetLoader.load(pkg_meffects);
+
+    // const d = await pkg_meffects.fetchObject(4);
+
+    // debugger;
+
     await assetLoader.load(pkgLoad);
+    // await assetLoader.load(pkg_engine);
+    // await assetLoader.load(pkg_core);
+    // await assetLoader.load(pkg_entry);
+
+    // debugger;
+
+    // await pkg_engine.fetchObject(-41)
+
+    // debugger;
 
     // await assetLoader.load(pkg_20_19);
     // await assetLoader.load(pkg_20_20);
@@ -151,15 +176,15 @@ async function startCore() {
     // }
 
 
-    const expTerrainInfo = expGroups.TerrainInfo[0];
-    const expTerrainSectors = expGroups.TerrainSector
-        .sort(({ objectName: na }, { objectName: nb }) => {
-            const a = parseInt(na.replace("TerrainSector", ""));
-            const b = parseInt(nb.replace("TerrainSector", ""));
-            return a - b;
-        });
+    // const expTerrainInfo = expGroups.TerrainInfo[0];
+    // const expTerrainSectors = expGroups.TerrainSector
+    //     .sort(({ objectName: na }, { objectName: nb }) => {
+    //         const a = parseInt(na.replace("TerrainSector", ""));
+    //         const b = parseInt(nb.replace("TerrainSector", ""));
+    //         return a - b;
+    //     });
 
-    const filteredSectors = expTerrainSectors
+    // const filteredSectors = expTerrainSectors
 
     // debugger;
 
@@ -181,9 +206,19 @@ async function startCore() {
     // const level = await uLevel.decodeLevel();
     // objectGroup.add(level);
 
-    const uMesh = await pkgLoad.fetchObject(1804) as UStaticMeshActor;
-    const mesh = await uMesh.decodeMesh();
-    objectGroup.add(mesh);
+    const uModel = await pkgLoad.fetchObject(7364) as UModel; // base model
+    const model = await uModel.decodeModel();
+    objectGroup.add(model);
+
+    // debugger;
+
+    // debugger;
+
+    // Exp_oren_curumadungeon17
+    // Exp_oren_curumadungeon20
+    // const uMesh = await pkgLoad.fetchObject(1804) as UStaticMeshActor;
+    // const mesh = await uMesh.decodeMesh();
+    // objectGroup.add(mesh);
 
 
     // const towerIndex = 2301;

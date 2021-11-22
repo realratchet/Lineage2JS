@@ -12,6 +12,8 @@ import FUnknownStruct from "./un-unknown-struct";
 import FNumber from "./un-number";
 
 class ULight extends UAActor {
+    public static readonly typeSize: number = 1;
+
     public effect: number;
     public brightness: number;
     public radius: number;

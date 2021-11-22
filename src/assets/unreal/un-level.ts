@@ -27,25 +27,48 @@ class ULevel extends UObject {
 
         await this.readNamedProps(pkg);
 
+        // debugger;
+
         let dbNum = await pkg.read(int32).value as number;
         let dbMax = await pkg.read(int32).value as number;
 
-        const objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
+        const objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
 
-        dbNum = await pkg.read(int32).value as number;
-        dbMax = await pkg.read(int32).value as number;
+        this.readHead = pkg.tell();
 
-        const objectIds2 = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
+        // debugger;
+
+        let objectIds2: number[];
+        if (objectIds.length === dbMax) {
+            dbNum = await pkg.read(int32).value as number;
+            dbMax = await pkg.read(int32).value as number;
+
+            objectIds2 = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
+        } else {
+            debugger;
+            objectIds2 = [];
+        }
 
         await this.url.load(pkg, null);
 
+
         pkg.seek(7);
+        this.readHead = pkg.tell();
 
         await this.reachSpecs.load(pkg);
 
+        this.readHead = pkg.tell();
+
         const baseModelId = await pkg.read(compat32).value as number;
 
+        this.readHead = pkg.tell();
+
+        // debugger;
+
         this.baseModel = await pkg.fetchObject(baseModelId) as UModel;
+
+
+        // debugger;
 
         for (let objectId of objectIds) {
             const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
@@ -60,7 +83,7 @@ class ULevel extends UObject {
         }
 
         // for (let objectId of [1804]) {
-            for (let objectId of objectIds2) {
+        for (let objectId of objectIds2) {
             const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
 
             // debugger;
@@ -97,11 +120,11 @@ class ULevel extends UObject {
             return accum;
         }, {} as { [key: string]: UObject[] });
 
-        debugger;
+        // debugger;
 
-        // group.add(await this.baseModel.decodeModel());
+        group.add(await this.baseModel.decodeModel());
 
-        for (let type of [/*"UBrush", */"UTerrainInfo", "UStaticMeshActor"]) {
+        for (let type of ["UBrush", "UTerrainInfo", "UStaticMeshActor"]) {
             if (!(type in groupedObjectList)) continue;
             for (let object of groupedObjectList[type]) {
                 switch (type) {

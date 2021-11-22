@@ -7,6 +7,7 @@ import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
 import UMatrix from "./un-matrix";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
+import FColor from "./un-color";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -20,7 +21,7 @@ abstract class UBaseModifier extends UBaseMaterial {
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
         await super.load(pkg, exp);
-        
+
         // debugger;
 
         return this;
@@ -117,7 +118,7 @@ class UShader extends UMaterial {
         }
 
         // debugger;
-        
+
         // console.assert((this.readTail - pkg.tell()) === 0);
 
         return this;
@@ -132,9 +133,12 @@ class UShader extends UMaterial {
         const transparent = this.transparent;
         const alphaTest = this.alphaTest / 255;
 
+        // if (this.specular && !(this.specular instanceof UFadeColor))
+        //     throw new Error(`Unknown specular type.`);
+
         // debugger;
 
-        const material = new MeshStaticMaterial({
+        const material = new MeshBasicMaterial({
             map: diffuse,
             // map: diffuse,
             alphaMap: opacity,
@@ -143,6 +147,7 @@ class UShader extends UMaterial {
             depthWrite,
             transparent,
             specularMap: specular,
+            // fade: this.specular?.getParameters()
             // wireframe: true,
             // color: Math.round(Math.random() * 0xffffff)
             // color: new Color(this.specular.color1.r / 255, this.specular.color1.g / 255, this.specular.color1.b / 255)
@@ -166,17 +171,25 @@ class UShader extends UMaterial {
 }
 
 class UFadeColor extends UBaseMaterial {
-    public color1: FColor;
-    public color2: FColor;
-    public fadePeriod: number;
+    public color1: FColor = new FColor();
+    public color2: FColor = new FColor();
+    public period: number = 0;
 
     public async decodeMaterial(): Promise<Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
+
+    public getParameters() {
+        return {
+            color1: new Color(this.color1.r / 255, this.color1.b / 255, this.color1.b / 255),
+            color2: new Color(this.color2.r / 255, this.color2.b / 255, this.color2.b / 255),
+            period: this.period
+        };
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Color1": "color1",
             "Color2": "color2",
-            "FadePeriod": "fadePeriod"
+            "FadePeriod": "period"
         });
     }
 }

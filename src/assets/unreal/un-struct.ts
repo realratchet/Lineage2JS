@@ -1,21 +1,17 @@
 import UObject from "./un-object";
 import UPackage from "./un-package";
 import UExport from "./un-export";
+import BufferValue from "../buffer-value";
 
-class UClass extends UObject {
+class UStruct extends UObject {
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        super.load(pkg, exp);
 
         debugger;
-
-        this.objectName = `Exp_${exp.objectName}`;
-
-        this.setReadPointers(exp);
-
-        await this.readNamedProps(pkg);
 
         return this;
     }
 }
 
-export default UClass;
-export { UClass };
+export default UStruct;
+export { UStruct };

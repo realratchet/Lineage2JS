@@ -95,8 +95,8 @@ class FPoly extends FConstructable {
         if (actorId !== 0) debugger;
 
         const offset = pkg.tell();
-        this.actor = await pkg.fetchObject(actorId);
-        this.texture = await pkg.fetchObject(textureId) as UTexture;
+        this.actor = actorId !== 0 ? await pkg.fetchObject(actorId) : null;
+        this.texture = textureId !== 0 ? await pkg.fetchObject(textureId) as UTexture : null;
         pkg.seek(offset, "set");
 
         // debugger;
@@ -182,7 +182,7 @@ class UPolys extends UObject {
         // debugger;
 
         for (let i = 0; i < dbMax; i++) {
-            this.polyList[i] = await new FPoly().load(pkg);
+            // this.polyList[i] = await new FPoly().load(pkg);
             // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
         }
 
