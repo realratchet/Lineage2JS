@@ -93,7 +93,7 @@ async function startCore() {
 
     const pkgLoad = pkg_20_21;
 
-    
+
     // await assetLoader.load(pkg_meffects);
 
     // const d = await pkg_meffects.fetchObject(4);
@@ -159,6 +159,8 @@ async function startCore() {
     //     mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500, 114151.68197851974 - 500);
 
     //     objectGroup.add(mesh);
+
+    //     break;
     // }
 
     // index = 0;
@@ -216,6 +218,15 @@ async function startCore() {
 
     // Exp_oren_curumadungeon17
     // Exp_oren_curumadungeon20
+
+    // debugger;
+
+    // for (let id of [1802, 1804]) {
+    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+    //     const mesh = await uMesh.decodeMesh();
+    //     objectGroup.add(mesh);
+    // }
+
     // const uMesh = await pkgLoad.fetchObject(1804) as UStaticMeshActor;
     // const mesh = await uMesh.decodeMesh();
     // objectGroup.add(mesh);

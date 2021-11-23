@@ -65,6 +65,8 @@ class UStaticMesh extends UPrimitive {
         const float = new BufferValue(BufferValue.float);
         const int8 = new BufferValue(BufferValue.int8);
 
+        // if (exp.objectName === "oren_curumadungeon17") debugger;
+
         await super.load(pkg, exp);
 
         // debugger;

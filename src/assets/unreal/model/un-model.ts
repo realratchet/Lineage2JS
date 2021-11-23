@@ -104,7 +104,7 @@ class UModel extends UPrimitive {
             
             this.readHead = pkg.tell();
 
-            debugger;
+            // debugger;
 
             // console.log(exp.objectName, "->", polyExp.objectName);
             this.rootOutside = (await pkg.read(uint8).value as number) !== 0;
@@ -112,7 +112,7 @@ class UModel extends UPrimitive {
 
             this.readHead = pkg.tell();
 
-            debugger;
+            // debugger;
 
             this.polys = await pkg.fetchObject(polysId) as UPolys;
 

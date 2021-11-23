@@ -70,6 +70,7 @@ class UStaticMeshActor extends UAActor {
         this.rotation.getEuler(group.rotation);
         group.scale.set(Math.abs(this.scale.vector.x), Math.abs(this.scale.vector.z), Math.abs(this.scale.vector.y));
 
+        // debugger;
 
         // const roll = -(65535 - this.rotation.x) / 32768 * Math.PI;
         // const pitch = -(this.rotation.z) / 32768 * Math.PI;
@@ -91,18 +92,42 @@ class UStaticMeshActor extends UAActor {
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
         // debugger;
+        // this.readHeadOffset = 15;
+        // pkg.seek(exp.offset.value as number, "set");
 
+        // pkg.dump(1);
+
+        // const unk02 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        // pkg.seek(5);
+        // const unk03 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // // const unk03 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        
+        // debugger;
+        
         await super.load(pkg, exp);
 
+        this.readHead = pkg.tell();
+        
         // if (this.scale.vector.x !== 1 || this.scale.vector.y !== 1 || this.scale.vector.z !== 1) debugger;
 
         // const unk1 = await pkg.read(BufferValue.allocBytes(10)).value as DataView;
 
+        // pkg.dump(1);
+
+        // debugger;
+
         // const unk2 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         // const unk3 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const unk4 = await pkg.read(new BufferValue(BufferValue.uint8)).value as number;
+        // // const unk4 = await pkg.read(new BufferValue(BufferValue.uint8)).value as number;
 
-        // this.readHead = pkg.tell();
+        // pkg.seek(8);
+
+        // const unk4 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        this.readHead = pkg.tell();
+
+        // debugger;
 
         // // const obj2 = await pkg.fetchObject(unk2);
         // // debugger;

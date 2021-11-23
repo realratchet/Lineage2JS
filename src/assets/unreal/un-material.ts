@@ -104,6 +104,8 @@ class UShader extends UMaterial {
     }
 
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
+        // debugger;
+
         await super.load(pkg, exp);
 
         // debugger;
@@ -138,7 +140,7 @@ class UShader extends UMaterial {
 
         // debugger;
 
-        const material = new MeshBasicMaterial({
+        const material = new MeshStaticMaterial({
             map: diffuse,
             // map: diffuse,
             alphaMap: opacity,

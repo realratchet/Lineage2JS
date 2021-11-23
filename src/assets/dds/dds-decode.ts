@@ -27,6 +27,8 @@ async function decompressDDS(format: ETexturePixelFormat, texWidth: number, texH
     const buffer = new ArrayBuffer(headerOffset + data.byteLength);
     const view = new Uint8Array(buffer);
 
+    // debugger;
+
     view.set(headerBuffer, 0);
     view.set(data, headerOffset);
 
@@ -37,6 +39,7 @@ async function decompressDDS(format: ETexturePixelFormat, texWidth: number, texH
     if (mipmapCount === 1) tex.minFilter = LinearFilter;
 
     tex.needsUpdate = true;
+    tex.flipY = false;
 
     return tex;
 }

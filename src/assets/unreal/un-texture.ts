@@ -9,6 +9,7 @@ import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
 import ETextureFormat from "./un-tex-format";
 import FColor from "./un-color";
+import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 
 
 /*
@@ -81,7 +82,13 @@ class UTexture extends UObject {
     }
 
     public async load(pkg: UPackage, exp: UExport) {
-        // await super.load(pkg, exp);g
+        // await super.load(pkg, exp);
+
+        // debugger;
+
+        this.objectName = `Exp_${exp.objectName}`;
+
+        // console.log(this.objectName);
 
         this.setReadPointers(exp);
         do {
@@ -128,7 +135,7 @@ class UTexture extends UObject {
         }
     }
 
-    public async decodeMipmap(level: number) {
+    public async decodeMipmap(level: number): Promise<Texture> {
         const mipmap = this.mipmaps.getElem(level);
 
         if (!mipmap) {
@@ -173,7 +180,7 @@ class UTexture extends UObject {
         //     texture.wrapT = RepeatWrapping;
         // }
 
-        const material = new MeshBasicMaterial({
+        const material = new MeshStaticMaterial({
             map: texture,
             side: DoubleSide,
             visible: texture !== null

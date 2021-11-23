@@ -51,7 +51,7 @@ class UStaticMeshIsntance extends UObject {
             if (objectId !== 0) {
                 try {
                     const pkgName = pkg.getPackageName(objectId);
-                    console.log(`${objectId} -> ${pkgName}`);
+                    // console.log(`${objectId} -> ${pkgName}`);
                 } catch (e) { }
             }
 

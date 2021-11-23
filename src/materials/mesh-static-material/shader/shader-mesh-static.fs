@@ -42,21 +42,19 @@ void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
+    
     // #include <map_fragment>
-
-    vec4 texelColor = texture2D( map, vUv );
-	texelColor = mapTexelToLinear( texelColor );
-
-    #ifdef USE_FADE
-    float mixValue = sin(globalTime) + 1.0 / 2.0;
-    texelColor = texelColor * vec4(mix(fade.color1, fade.color2, mixValue), 1.0);
+    // boomer tech
+    #ifdef USE_MAP
+        vec4 texelColor = texture2D( map, vUv );
+        texelColor = mapTexelToLinear( texelColor );
+        diffuseColor.rgb *= texelColor.rgb;
     #endif
 
-    vec4 texelColor2 = texture2D( map2, vUv );
-	texelColor2 = mapTexelToLinear( texelColor2 );
-	
-    // diffuseColor *= texelColor;
-    diffuseColor *= layer(texelColor, texelColor2);
+    // #ifdef USE_FADE
+    // float mixValue = sin(globalTime) + 1.0 / 2.0;
+    // texelColor = texelColor * vec4(mix(fade.color1, fade.color2, mixValue), 1.0);
+    // #endif
 
     #include <color_fragment>
     #include <alphamap_fragment>
