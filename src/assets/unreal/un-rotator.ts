@@ -32,7 +32,7 @@ class FRotator extends FConstructable {
 
         // if (zAxis !== 0 || xAxis !== 0 || yAxis !== 0) debugger;
 
-        return output.set(xAxis, yAxis, zAxis, "XZY");
+        return output.set(xAxis, yAxis, zAxis, "XYZ");
     }
 }
 
