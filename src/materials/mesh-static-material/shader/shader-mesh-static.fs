@@ -21,8 +21,6 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
-uniform sampler2D map2;
-
 #ifdef USE_FADE
 struct FadeData {
     vec3 color1;
@@ -51,15 +49,15 @@ void main() {
         diffuseColor.rgb *= texelColor.rgb;
     #endif
 
-    // #ifdef USE_FADE
-    // float mixValue = sin(globalTime) + 1.0 / 2.0;
-    // texelColor = texelColor * vec4(mix(fade.color1, fade.color2, mixValue), 1.0);
-    // #endif
+    #ifdef USE_FADE
+    float mixValue = (sin(globalTime) + 1.0) / 2.0;
+    diffuseColor.rgb += texelColor.a * mix(fade.color1, fade.color2, mixValue) * 2.0;
+    #endif
 
     #include <color_fragment>
-    #include <alphamap_fragment>
+    // #include <alphamap_fragment>
     #include <alphatest_fragment>
-    #include <specularmap_fragment>
+    // #include <specularmap_fragment>
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     // accumulation (baked indirect lighting only)
     #ifdef USE_LIGHTMAP

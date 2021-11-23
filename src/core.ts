@@ -208,9 +208,9 @@ async function startCore() {
     // const level = await uLevel.decodeLevel();
     // objectGroup.add(level);
 
-    const uModel = await pkgLoad.fetchObject(7364) as UModel; // base model
-    const model = await uModel.decodeModel();
-    objectGroup.add(model);
+    // const uModel = await pkgLoad.fetchObject(7364) as UModel; // base model
+    // const model = await uModel.decodeModel();
+    // objectGroup.add(model);
 
     // debugger;
 
@@ -221,11 +221,11 @@ async function startCore() {
 
     // debugger;
 
-    // for (let id of [1802, 1804]) {
-    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-    //     const mesh = await uMesh.decodeMesh();
-    //     objectGroup.add(mesh);
-    // }
+    for (let id of [1770/*, 1802, 1804*/]) {
+        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+        const mesh = await uMesh.decodeMesh();
+        objectGroup.add(mesh);
+    }
 
     // const uMesh = await pkgLoad.fetchObject(1804) as UStaticMeshActor;
     // const mesh = await uMesh.decodeMesh();

@@ -138,7 +138,7 @@ class UShader extends UMaterial {
         // if (this.specular && !(this.specular instanceof UFadeColor))
         //     throw new Error(`Unknown specular type.`);
 
-        // debugger;
+        debugger;
 
         const material = new MeshStaticMaterial({
             map: diffuse,
@@ -149,7 +149,7 @@ class UShader extends UMaterial {
             depthWrite,
             transparent,
             specularMap: specular,
-            // fade: this.specular?.getParameters()
+            fade: this.specular?.getParameters()
             // wireframe: true,
             // color: Math.round(Math.random() * 0xffffff)
             // color: new Color(this.specular.color1.r / 255, this.specular.color1.g / 255, this.specular.color1.b / 255)
@@ -343,13 +343,6 @@ class UMaterialContainer extends UBaseMaterial {
         this.readTail = this.readHead + UMaterialContainer.typeSize;
 
         await this.readNamedProps(pkg);
-
-        // console.assert((this.readTail - pkg.tell()) === 0);
-
-        // pkg.seek(this.readTail, "set");
-        // this.readTail = pkg.tell();
-
-        // debugger;
 
         return this;
     }
