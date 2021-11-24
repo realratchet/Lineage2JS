@@ -21,8 +21,8 @@ class RenderManager {
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
-            premultipliedAlpha: false,
-            alpha: false
+            // premultipliedAlpha: false,
+            alpha: true
         });
 
         viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));

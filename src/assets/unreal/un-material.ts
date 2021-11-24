@@ -159,14 +159,13 @@ class UShader extends UMaterial {
         // debugger;
 
         switch (this.outputBlending) {
+            case OutputBlending_T.OB_Normal:
             case OutputBlending_T.OB_Masked:
                 material.blending = CustomBlending;
                 material.blendSrc = SrcAlphaFactor;
                 material.blendDst = OneMinusSrcAlphaFactor;
                 material.alphaTest = 0;
-                material.transparent = true;
                 break;
-            case OutputBlending_T.OB_Normal: break;
         }
 
         return material;
