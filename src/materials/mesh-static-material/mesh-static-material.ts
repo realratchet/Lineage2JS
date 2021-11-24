@@ -15,6 +15,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         const hasTransparent = "transparent" in parameters && parameters.transparent !== null && parameters.transparent !== undefined;
         const hasFadeColors = "fadeColors" in parameters && parameters.fadeColors !== null && parameters.fadeColors !== undefined;
         const hasVisible = "visible" in parameters && parameters.visible !== null && parameters.visible !== undefined;
+        const hasTransformedTexture = "transformedTexture" in parameters && parameters.transformedTexture !== null && parameters.transformedTexture !== undefined;
 
         const defines: { [key: string]: any } = {};
         const uniforms: { [key: string]: Uniform } = {
@@ -29,6 +30,10 @@ class MeshStaticMaterial extends ShaderMaterial {
             uvTransform: new Uniform(new Matrix3())
         };
 
+        if(hasTransformedTexture) {
+            defines["USE_GLOBAL_TIME"] = "";
+            defines["USE_TRANSFORMED_TEXTURE"] = "";
+        }
 
         if (hasMapDiffuse || hasMapSpecularMask || hasMapOpacity) {
             if (hasMapDiffuse) defines["USE_MAP_DIFFUSE"] = "";
@@ -79,5 +84,10 @@ type MeshStaticMaterialParameters = {
         color2: Color,
         period: number
     },
-    visible?: boolean
+    visible?: boolean,
+    transformedTexture?: {
+        texture: Texture,
+        matrix: Matrix3,
+        rate: number
+    }
 };

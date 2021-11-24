@@ -24,10 +24,10 @@ class FPlane extends FConstructable {
 }
 
 class UPlane extends UObject {
-    protected x: number;
-    protected y: number;
-    protected z: number;
-    protected w: number;
+    public x: number;
+    public y: number;
+    public z: number;
+    public w: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

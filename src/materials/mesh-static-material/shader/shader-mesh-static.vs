@@ -9,6 +9,14 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+#ifdef USE_GLOBAL_TIME
+uniform float globalTime;
+#endif
+
+#ifdef USE_TRANSFORMED_TEXTURE
+
+#endif
+
 void main() {
     #include <uv_vertex>
     #include <uv2_vertex>

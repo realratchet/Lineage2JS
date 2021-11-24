@@ -64,7 +64,9 @@ void main() {
     vec4 texelSpecularMask = texture2D(mapSpecularMask, vUv);
     #ifdef USE_FADE
     float mixValue = (sin(globalTime) + 1.0) / 2.0;
-    diffuseColor.rgb += texelSpecularMask.a * mix(fadeColors.color1, fadeColors.color2, mixValue) * 2.0;
+        diffuseColor.rgb += texelSpecularMask.a * mix(fadeColors.color1, fadeColors.color2, mixValue) * 2.0;
+    #else
+        // diffuseColor.rgb = vec3(texelSpecularMask.a);
     #endif
     #endif
 

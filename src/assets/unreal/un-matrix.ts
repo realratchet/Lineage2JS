@@ -4,10 +4,10 @@ import UObject from "./un-object";
 import { UPlane } from "./un-plane";
 
 class UMatrix extends UObject {
-    protected planeX: UPlane;
-    protected planeY: UPlane;
-    protected planeZ: UPlane;
-    protected planeW: UPlane;
+    public planeX: UPlane;
+    public planeY: UPlane;
+    public planeZ: UPlane;
+    public planeW: UPlane;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

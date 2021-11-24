@@ -221,11 +221,17 @@ async function startCore() {
 
     // debugger;
 
-    for (let id of [1770/*, 1802, 1804*/]) {
+    for (let id of [1441, /*1770, 1802, 1804*/]) {
         const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
         const mesh = await uMesh.decodeMesh();
         objectGroup.add(mesh);
     }
+
+    // for (let exp of expGroups.StaticMeshActor.slice(150, 200)) {
+    //     const uMesh = await new UStaticMeshActor().load(pkgLoad, exp);
+    //     const mesh = await uMesh.decodeMesh();
+    //     objectGroup.add(mesh);
+    // }
 
     // const uMesh = await pkgLoad.fetchObject(1804) as UStaticMeshActor;
     // const mesh = await uMesh.decodeMesh();

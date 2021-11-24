@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor } from "three";
+import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3 } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -17,15 +17,7 @@ abstract class UBaseMaterial extends UObject {
     public abstract async decodeMaterial(): Promise<Material>;
 }
 abstract class UBaseModifier extends UBaseMaterial {
-    public async decodeMipmap(level: number): Promise<Texture> { return null; }
-
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
-        await super.load(pkg, exp);
-
-        // debugger;
-
-        return this;
-    }
+    public abstract getParameters(): Promise<{ [key: string]: any }>;
 }
 
 abstract class UMaterial extends UBaseMaterial { }
@@ -78,7 +70,7 @@ class UShader extends UMaterial {
     protected diffuse: UTexture = null;
     protected opacity: UTexture = null;
     protected doubleSide: boolean = false;
-    protected specular: UFadeColor = null;
+    protected specular: UBaseModifier = null;
     protected specularMask: UTexture = null;
     protected outputBlending: OutputBlending_T = OutputBlending_T.OB_Normal;
     protected isTreatingDoubleSided: boolean = false;
@@ -140,7 +132,7 @@ class UShader extends UMaterial {
 
         // debugger;
 
-        const material = new MeshStaticMaterial({
+        const material = new MeshStaticMaterial(Object.assign({
             mapDiffuse: diffuse,
             // map: diffuse,
             mapOpacity: opacity,
@@ -149,12 +141,11 @@ class UShader extends UMaterial {
             depthWrite,
             transparent,
             mapSpecularMask: specular,
-            fadeColors: this.specular?.getParameters?.(),
             visible: true
             // wireframe: true,
             // color: Math.round(Math.random() * 0xffffff)
             // color: new Color(this.specular.color1.r / 255, this.specular.color1.g / 255, this.specular.color1.b / 255)
-        });
+        }, await this.specular?.getParameters()));
 
         // debugger;
 
@@ -166,24 +157,27 @@ class UShader extends UMaterial {
                 material.blendDst = OneMinusSrcAlphaFactor;
                 material.alphaTest = 0;
                 break;
+            default: console.warn("Unknown blending mode:", this.outputBlending); break;
         }
 
         return material;
     }
 }
 
-class UFadeColor extends UBaseMaterial {
+class UFadeColor extends UBaseModifier {
     public color1: FColor = new FColor();
     public color2: FColor = new FColor();
     public period: number = 0;
 
     public async decodeMaterial(): Promise<Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
 
-    public getParameters() {
+    public async getParameters() {
         return {
-            color1: new Color(this.color1.r / 255, this.color1.b / 255, this.color1.b / 255),
-            color2: new Color(this.color2.r / 255, this.color2.b / 255, this.color2.b / 255),
-            period: this.period
+            fadeColors: {
+                color1: new Color(this.color1.r / 255, this.color1.b / 255, this.color1.b / 255),
+                color2: new Color(this.color2.r / 255, this.color2.b / 255, this.color2.b / 255),
+                period: this.period
+            }
         };
     }
 
@@ -234,13 +228,18 @@ class UTexRotator extends UBaseModifier {
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
 
-        // debugger;
+        debugger;
 
         if (!material) return null;
 
         // debugger;
 
         return material;
+    }
+
+    public async getParameters() {
+        // debugger;
+        return {};
     }
 
     protected getPropertyMap() {
@@ -265,10 +264,15 @@ class UTexOscillator extends UBaseModifier {
     protected amplitudeV: number;
     protected material: UMaterial;
 
+    public async getParameters() {
+        // debugger;
+        return {};
+    }
+
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial();
 
-        // debugger;
+        debugger;
 
         if (!material) return null;
 
@@ -300,10 +304,28 @@ class UTexPanner extends UBaseModifier {
     protected material: UMaterial;
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
+    public async getParameters() {
+        const matrix = new Matrix3();
+
+        matrix.set(
+            this.matrix.planeX.x, this.matrix.planeY.x, this.matrix.planeZ.x,
+            this.matrix.planeX.y, this.matrix.planeY.y, this.matrix.planeZ.y,
+            this.matrix.planeX.z, this.matrix.planeY.z, this.matrix.planeZ.z,
+        );
+
+        return {
+            transformedTexture: {
+                texture: await (this.material as UTexture).decodeMipmap(0),
+                matrix,
+                rate: this.rate
+            }
+        };
+    }
+
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial();
 
-        // debugger;
+        debugger;
 
         // if (!material) debugger;
 
