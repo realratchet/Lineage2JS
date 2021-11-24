@@ -181,9 +181,8 @@ class UTexture extends UObject {
         // }
 
         const material = new MeshStaticMaterial({
-            map: texture,
-            side: DoubleSide,
-            visible: texture !== null
+            mapDiffuse: texture,
+            side: DoubleSide
             // transparent: true,
             // color: Math.round(Math.random() * 0xffffff)
         });

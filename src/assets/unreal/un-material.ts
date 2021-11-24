@@ -138,18 +138,19 @@ class UShader extends UMaterial {
         // if (this.specular && !(this.specular instanceof UFadeColor))
         //     throw new Error(`Unknown specular type.`);
 
-        debugger;
+        // debugger;
 
         const material = new MeshStaticMaterial({
-            map: diffuse,
+            mapDiffuse: diffuse,
             // map: diffuse,
-            alphaMap: opacity,
+            mapOpacity: opacity,
             alphaTest,
             side,
             depthWrite,
             transparent,
-            specularMap: specular,
-            fade: this.specular?.getParameters()
+            mapSpecularMask: specular,
+            fadeColors: this.specular?.getParameters?.(),
+            visible: true
             // wireframe: true,
             // color: Math.round(Math.random() * 0xffffff)
             // color: new Color(this.specular.color1.r / 255, this.specular.color1.g / 255, this.specular.color1.b / 255)
@@ -205,8 +206,8 @@ class UColorModifier extends UBaseMaterial {
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
 
-        material.color.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
-        material.opacity = this.color.a / 255;
+        material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
+        material.uniforms.opacity.value = this.color.a / 255;
 
         if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
 
@@ -268,13 +269,13 @@ class UTexOscillator extends UBaseModifier {
     public async decodeMaterial(): Promise<Material> {
         const material = await this.material?.decodeMaterial();
 
-        debugger;
+        // debugger;
 
         if (!material) return null;
 
-        debugger;
+        // debugger;
 
-        material.color.setHex(0xff00ff);
+        // material.color.setHex(0xff00ff);
 
         return material;
     }

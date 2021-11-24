@@ -21,7 +21,8 @@ class RenderManager {
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
-            alpha: true
+            premultipliedAlpha: false,
+            alpha: false
         });
 
         viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));
@@ -53,20 +54,22 @@ class RenderManager {
     }
 
     public onHandleMouseUp(event: MouseEvent) {
-        // debugger;
+        try {
+            // debugger;
 
-        const position = new Vector2(event.pageX, event.pageY);
-        const ssPosition = this.toScreenSpaceCoords(position);
-        const intersections: Intersection[] = [];
+            const position = new Vector2(event.pageX, event.pageY);
+            const ssPosition = this.toScreenSpaceCoords(position);
+            const intersections: Intersection[] = [];
 
-        this.raycaster.setFromCamera(ssPosition, this.camera);
-        this.raycaster.intersectObject(this.scene, true, intersections);
+            this.raycaster.setFromCamera(ssPosition, this.camera);
+            this.raycaster.intersectObject(this.scene, true, intersections);
 
-        if (intersections.length === 0) return;
+            if (intersections.length === 0) return;
 
-        const intersection = intersections[0];
+            const intersection = intersections[0];
 
-        console.log(intersection.object);
+            console.log(intersection.object);
+        } catch (e) { }
     }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {

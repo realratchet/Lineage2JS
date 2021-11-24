@@ -8,8 +8,8 @@ uniform float opacity;
 #include <color_pars_fragment>
 #include <uv_pars_fragment>
 #include <uv2_pars_fragment>
-#include <map_pars_fragment>
-#include <alphamap_pars_fragment>
+// #include <map_pars_fragment>
+// #include <alphamap_pars_fragment>
 #include <alphatest_pars_fragment>
 #include <aomap_pars_fragment>
 #include <lightmap_pars_fragment>
@@ -17,7 +17,7 @@ uniform float opacity;
 #include <envmap_pars_fragment>
 #include <cube_uv_reflection_fragment>
 #include <fog_pars_fragment>
-#include <specularmap_pars_fragment>
+// #include <specularmap_pars_fragment>
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
@@ -28,13 +28,24 @@ struct FadeData {
     float period;
 };
 
-uniform float globalTime;
-uniform FadeData fade;
+uniform FadeData fadeColors;
 #endif
 
-vec4 layer(vec4 foreground, vec4 background) {
-    return foreground * foreground.a + background * (1.0 - foreground.a);
-}
+#ifdef USE_MAP_DIFFUSE
+uniform sampler2D mapDiffuse;
+#endif
+
+#ifdef USE_MAP_OPACITY
+uniform sampler2D mapOpacity;
+#endif
+
+#ifdef USE_MAP_SPECULAR_MASK
+uniform sampler2D mapSpecularMask;
+#endif
+
+#ifdef USE_GLOBAL_TIME
+uniform float globalTime;
+#endif
 
 void main() {
     #include <clipping_planes_fragment>
@@ -43,19 +54,31 @@ void main() {
     
     // #include <map_fragment>
     // boomer tech
-    #ifdef USE_MAP
-        vec4 texelColor = texture2D( map, vUv );
-        texelColor = mapTexelToLinear( texelColor );
-        diffuseColor.rgb *= texelColor.rgb;
+    #ifdef USE_MAP_DIFFUSE
+        vec4 texelDiffuse = texture2D(mapDiffuse, vUv);
+        // texelDiffuse = mapTexelToLinear(texelDiffuse);
+        diffuseColor.rgb *= texelDiffuse.rgb;
     #endif
 
+    #ifdef USE_MAP_SPECULAR_MASK
+    vec4 texelSpecularMask = texture2D(mapSpecularMask, vUv);
     #ifdef USE_FADE
     float mixValue = (sin(globalTime) + 1.0) / 2.0;
-    diffuseColor.rgb += texelColor.a * mix(fade.color1, fade.color2, mixValue) * 2.0;
+    diffuseColor.rgb += texelSpecularMask.a * mix(fadeColors.color1, fadeColors.color2, mixValue) * 2.0;
+    #endif
+    #endif
+
+    #ifdef USE_MAP_OPACITY
+    vec4 texelOpacity = texture2D(mapOpacity, vUv);
+    diffuseColor.rgba *= texelOpacity.a;
     #endif
 
     #include <color_fragment>
+    
+
     // #include <alphamap_fragment>
+
+
     #include <alphatest_fragment>
     // #include <specularmap_fragment>
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
