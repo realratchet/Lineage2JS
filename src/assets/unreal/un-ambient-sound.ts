@@ -1,7 +1,4 @@
 import UObject from "./un-object";
-import USound from "./un-sound";
-import { Vector3 } from "three";
-import UPointRegion from "./un-point-region";
 
 class UAmbientSoundObject extends UObject {
     protected sound: USound;
@@ -12,7 +9,7 @@ class UAmbientSoundObject extends UObject {
     protected isHiddenEdGroup: boolean;
     protected isHiddenEd: boolean;
     protected group: string;
-    protected location: Vector3;
+    protected location: FVector;
     protected region: UPointRegion;
     protected startTime: number;
     protected soundType: number;

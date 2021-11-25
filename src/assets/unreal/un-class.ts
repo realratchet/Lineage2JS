@@ -1,12 +1,10 @@
 import UObject from "./un-object";
-import UPackage from "./un-package";
-import UExport from "./un-export";
+
+type UPackage = import("./un-package").UPackage;
+type UExport = import("./un-export").UExport;
 
 class UClass extends UObject {
     public async load(pkg: UPackage, exp: UExport): Promise<this> {
-
-        debugger;
-
         this.objectName = `Exp_${exp.objectName}`;
 
         this.setReadPointers(exp);

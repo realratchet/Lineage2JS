@@ -1,20 +1,13 @@
 import UObject from "./un-object";
-import BufferValue from "../buffer-value";
 import { FColor } from "./un-color";
-import { Vector3 } from "three/src/math/Vector3";
-import { MathUtils } from "three/src/math/MathUtils";
-import { Euler } from "three/src/math/Euler";
 import { URange, URangeVector } from "./un-range";
 import UPointRegion from "./un-point-region";
 import UTextureModifyInfo from "./un-texture-modify-info";
-import FScale from "../un-scale";
+import FScale from "./un-scale";
 import UMatrix from "./un-matrix";
 import { UPlane } from "./un-plane";
 import FVector from "./un-vector";
 import FRotator from "./un-rotator";
-
-type UPackage = import("./un-package").UPackage;
-type PropertyTag = import("./un-property").PropertyTag;
 
 Object.assign(UObject.prototype, {
     async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {

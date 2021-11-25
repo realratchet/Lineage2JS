@@ -7,7 +7,6 @@ import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
 import { PropertyTag } from "./un-property";
 import FUnknownStruct from "./un-unknown-struct";
-import { Vector3 } from "three/src/math/Vector3";
 import { Group } from "three/src/objects/Group";
 import UAActor from "./un-aactor";
 import FColor from "./un-color";

@@ -1,11 +1,9 @@
 import BufferValue from "../buffer-value";
-import FConstructable from "./un-constructable";
 import FUnknownStruct from "./un-unknown-struct";
-import UObject from "./un-object";
 
 type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
-// type FConstructable = import("./un-contructable").FConstructable;
+type FConstructable = import("./un-constructable").FConstructable;
 
 class FArray<T extends FConstructable = FConstructable> extends Array implements IConstructable {
     public static readonly typeSize: number = 16;

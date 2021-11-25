@@ -3,14 +3,12 @@ import { FMipmap } from "./un-mipmap";
 import BufferValue from "../buffer-value";
 import { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
-import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide, MirroredRepeatWrapping } from "three";
+// import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide, MirroredRepeatWrapping } from "three";
 import decodeG16 from "../decode-g16";
 import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
 import ETextureFormat from "./un-tex-format";
 import FColor from "./un-color";
-import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
-
 
 /*
 

@@ -2,7 +2,6 @@ import { PropertyTag } from "./un-property";
 import UPackage from "./un-package";
 import UObject from "./un-object";
 import { UPlane } from "./un-plane";
-import { Matrix3, Matrix4 } from "three";
 
 class UMatrix extends UObject {
     public planeX: UPlane;
@@ -28,7 +27,7 @@ class UMatrix extends UObject {
         return this;
     }
 
-    public getMatrix3(output: Matrix3): Matrix3 {
+    public getMatrix3(output: THREE.Matrix3): THREE.Matrix3 {
         return output.set(
             this.planeX.x, this.planeY.x, this.planeZ.x,
             this.planeX.y, this.planeY.y, this.planeZ.y,
@@ -36,7 +35,7 @@ class UMatrix extends UObject {
         );
     }
 
-    public getMatrix4(output: Matrix4): Matrix4 {
+    public getMatrix4(output: THREE.Matrix4): THREE.Matrix4 {
         return output.set(
             this.planeX.x, this.planeY.x, this.planeZ.x, this.planeW.x,
             this.planeX.y, this.planeY.y, this.planeZ.y, this.planeW.y,

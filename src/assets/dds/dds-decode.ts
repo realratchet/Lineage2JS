@@ -1,13 +1,13 @@
 import DDSHeader from "./dds-header";
 import { PixelFormatInfo } from "../unreal/un-tex-format";
 import { ETexturePixelFormat } from "../unreal/un-material";
-import { CompressedTexture, LinearFilter } from "three";
-import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
+// import { CompressedTexture, LinearFilter } from "three";
+// import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 
 type CompressedPixelFormat = import("three").CompressedPixelFormat;
 type Texture = import("three").Texture;
 
-const ddsLoader = new DDSLoader();
+// const ddsLoader = new DDSLoader();
 
 async function decompressDDS(format: ETexturePixelFormat, texWidth: number, texHeight: number, data: Uint8Array): Promise<Texture> {
     const header = new DDSHeader();

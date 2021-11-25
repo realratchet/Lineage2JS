@@ -1,16 +1,9 @@
-import UObject from "./un-object";
-import UPackage from "./un-package";
-import UExport from "./un-export";
 import BufferValue from "../buffer-value";
-import ULevelInfo from "./un-level-info";
-import UPointRegion from "./un-point-region";
-import UPhysicsVolume from "./un-physics-volume";
-import FVector from "./un-vector";
 import UAActor from "./un-aactor";
 import FArray from "./un-array";
-import FUnknownStruct from "./un-unknown-struct";
 import FNumber from "./un-number";
-import { Color } from "three";
+
+type Color = import("three").Color;
 
 class ULight extends UAActor {
     public static readonly typeSize: number = 1;
@@ -55,17 +48,14 @@ class ULight extends UAActor {
         return this;
     }
 
-    public getColor(): Color {
+    public getColor(color: Color): Color {
         let h = this.hue, s = this.saturation, l = this.lightness;
-
 
         if (h === undefined || s === undefined || l === undefined)
             debugger;
 
         let offsetLightness;
         let offsetSaturation;
-
-        const color = new Color();
 
         if (h < 0) h = (240 - h) % 240;
         else h = h % 240;
@@ -96,32 +86,6 @@ class ULight extends UAActor {
 
         return color.multiplyScalar(1 / 255);
     }
-
-    // public async load(pkg: UPackage, exp: UExport): Promise<this> {
-
-    //     this.objectName = `Exp_${exp.objectName}`;
-
-    //     this.setReadPointers(exp);
-    //     pkg.seek(this.readHead, "set");
-
-    //     // const unkBuffer = await pkg.read(BufferValue.allocBytes(15)).value as DataView;
-
-    //     // this.readHead = pkg.tell();
-
-    //     debugger;
-
-    //     await this.readNamedProps(pkg);
-
-    //     debugger;
-
-    //     return this;
-
-    //     // await super.load(pkg, exp);
-
-    //     // debugger;
-
-    //     // return this;
-    // }
 }
 
 export default ULight;

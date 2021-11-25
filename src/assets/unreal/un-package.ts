@@ -6,26 +6,27 @@ import UName from "./un-name";
 import UImport from "./un-import";
 import UTexture from "./un-texture";
 import UObject from "./un-object";
-import UPlatte from "./un-palette";
-import UStaticMesh from "./static-mesh/un-static-mesh";
-import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator } from "./un-material";
-import ULevelInfo from "./un-level-info";
-import UTerrainSector from "./un-terrain-sector";
 import "./un-object-mixin";
+import UClass from "./un-class";
+import UStruct from "./un-struct";
+import UPlatte from "./un-palette";
+// import UStaticMesh from "./static-mesh/un-static-mesh";
+// import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator } from "./un-material";
+// import ULevelInfo from "./un-level-info";
+// import UTerrainSector from "./un-terrain-sector";
 import UZoneInfo from "./un-zone-info";
-import UPhysicsVolume from "./un-physics-volume";
+// import UPhysicsVolume from "./un-physics-volume";
 import USkyZoneInfo from "./un-sky-zone-info";
-import UModel from "./model/un-model";
-import UPolys from "./un-polys";
-import UBrush from "./un-brush";
-import ULevel from "./un-level";
+// import UModel from "./model/un-model";
+// import UPolys from "./un-polys";
+// import UBrush from "./un-brush";
+// import ULevel from "./un-level";
 import UAmbientSoundObject from "./un-ambient-sound";
 import USound from "./un-sound";
 import ULight from "./un-light";
-import { UClass } from "./un-class";
-import UTerrainInfo from "./un-terrain-info";
+// import UTerrainInfo from "./un-terrain-info";
 import UNMovableSunLight from "./un-movable-sunlight";
-import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+// import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
 import UWaterVolume from "./un-water-volume";
 import UEmitter from "./un-emitter";
 import UNSun from "./un-nsun";
@@ -36,14 +37,11 @@ import UMusicVolume from "./un-music-volume";
 import UMover from "./un-mover";
 import UBlockingVolume from "./un-blocking-volume";
 import UCamera from "./un-camera";
-import UStaticMeshIsntance from "./static-mesh/un-static-mesh-instance";
+import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
 import ULevelSummary from "./un-level-summary";
 import UDefaultPhysicsVolume from "./un-physics";
 import UEncodedFile from "./un-encoded-file";
-import UStruct from "./un-struct";
 import UTextBuffer from "./un-text-buffer";
-
-type AssetLoader = import("../asset-loader").AssetLoader;
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -60,8 +58,16 @@ class UPackage extends UEncodedFile {
 
     public async decode(): Promise<this> {
         if (this.buffer) return this;
+        if (this.promiseDecoding) {
+            await this.promiseDecoding;
+            return this;
+        }
+        
+        const readable = this.asReadable();
+        debugger;
+        const signature = await readable._doDecode();
 
-        const signature = await this._doDecode();
+        debugger;
 
         if (signature.value !== 0x9E2A83C1)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
@@ -131,7 +137,7 @@ class UPackage extends UEncodedFile {
         return this;
     }
 
-    protected async getImport(index: number) {
+    protected async getImport(index: number): Promise<UObject> {
         let imp = this.imports[index], mainImp = imp;
         while (imp.idPackage.value as number !== 0)
             imp = this.imports[-imp.idPackage.value as number - 1];
@@ -139,7 +145,7 @@ class UPackage extends UEncodedFile {
         if (!this.loader.hasPackage(imp.objectName))
             throw new Error(`Unable to locate package: ${imp.objectName}`);
 
-        const pkg = this.loader.getPackage(imp.objectName);
+        const pkg = await this.loader.getPackage(imp.objectName);
 
         if (!pkg.buffer) await this.loader.load(pkg);
 
@@ -157,7 +163,7 @@ class UPackage extends UEncodedFile {
         return exp.object;
     }
 
-    protected async getExport(index: number) {
+    protected async getExport(index: number): Promise<UObject> {
         const exp = this.exports[index];
 
         if (exp.object) return exp.object;
@@ -169,7 +175,7 @@ class UPackage extends UEncodedFile {
         return exp.object;
     }
 
-    public async fetchObject(index: number) {
+    public async fetchObject<T extends UObject = UObject>(index: number): Promise<T> {
         const object = index < 0
             ? await this.getImport(-index - 1)
             : index > 0
@@ -179,7 +185,7 @@ class UPackage extends UEncodedFile {
         // if (object)
         //     console.log(`Fetch object: ${index} -> ${object.objectName}`);
 
-        return object;
+        return object as T;
     }
 
     public async createObject<T extends UObject = UObject>(pkg: UPackage, exp: UExport<T>, className: UObjectTypes_T, ...params: any[]): Promise<T> {
@@ -220,7 +226,7 @@ class UPackage extends UEncodedFile {
             case "BlockingVolume": Constructor = UBlockingVolume; break;
             case "Camera": Constructor = UCamera; break;
             case "FadeColor": Constructor = UFadeColor; break;
-            case "StaticMeshInstance": Constructor = UStaticMeshIsntance; break;
+            case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
             case "TexRotator": Constructor = UTexRotator; break;
             case "TexPanner": Constructor = UTexPanner; break;
             case "ColorModifier": Constructor = UColorModifier; break;

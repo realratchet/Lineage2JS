@@ -176,9 +176,7 @@ abstract class UObject {
         return true;
     }
 
-    protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
-        throw new Error("Mixin not loaded.");
-    }
+    protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }
 }
 
 export default UObject;

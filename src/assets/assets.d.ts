@@ -1,3 +1,4 @@
+type AssetLoader = import("./asset-loader").AssetLoader;
 type ValueTypeNames_T = "int64" | "uint64" | "int32" | "uint32" | "int16" | "uint16" | "int8" | "uint8" | "guid" | "char" | "buffer" | "compat32" | "float";
 type ValidTypes_T<T extends ValueTypeNames_T> = {
     bytes?: number;

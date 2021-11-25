@@ -1,25 +1,21 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3, Vector2, Vector3 } from "three";
+// import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3, Vector2, Vector3 } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
 import UMatrix from "./un-matrix";
-import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
+// import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import FColor from "./un-color";
 import FRotator from "./un-rotator";
 
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
-type FColor = import("./un-color").FColor;
-
 abstract class UBaseMaterial extends UObject {
-    public abstract async decodeMaterial(): Promise<Material>;
+    public abstract async decodeMaterial(): Promise<THREE.Material>;
 }
 abstract class UBaseModifier extends UBaseMaterial {
     public abstract getParameters(): Promise<{ [key: string]: any }>;
-    public async decodeMipmap(level: number): Promise<Texture> { return await ((this as any).material as UTexture).decodeMipmap(level); };
+    public async decodeMipmap(level: number): Promise<THREE.Texture> { return await ((this as any).material as UTexture).decodeMipmap(level); };
 }
 
 abstract class UMaterial extends UBaseMaterial { }

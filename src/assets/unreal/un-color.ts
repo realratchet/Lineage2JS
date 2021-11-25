@@ -1,8 +1,5 @@
 import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
-
-type PropertyTag = import("./un-property").PropertyTag;
 
 class FColor extends FConstructable {
     public static readonly typeSize: number = 4;

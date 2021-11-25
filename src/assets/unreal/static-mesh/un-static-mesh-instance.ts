@@ -2,10 +2,6 @@ import UObject from "../un-object";
 import BufferValue from "../../buffer-value";
 import FArray from "../un-array";
 import FNumber from "../un-number";
-import { PropertyTag, UNP_PropertyTypes } from "../un-property";
-
-type UPackage = import("../un-package").UPackage;
-type UExport = import("../un-export").UExport;
 
 class UStaticMeshIsntance extends UObject {
     protected unk: number; // unk compat
@@ -102,3 +98,4 @@ class UStaticMeshIsntance extends UObject {
 }
 
 export default UStaticMeshIsntance;
+export { UStaticMeshIsntance };

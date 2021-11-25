@@ -2,7 +2,10 @@ import BufferValue from "../buffer-value";
 
 class UEncodedFile {
     public readonly path: string;
+    public readonly isReadable = false;
 
+    protected handle: this = null;
+    protected promiseDecoding: Promise<BufferValue>;
     protected buffer: ArrayBuffer = null;
     protected isEncrypted = false;
     protected cryptKey = new BufferValue(BufferValue.uint8);
@@ -13,7 +16,25 @@ class UEncodedFile {
         this.path = path;
     }
 
+    public asReadable(): this {
+        class Readable { }
+
+        Object.assign(Readable.prototype, UEncodedFile.prototype);
+        
+        const instance = Object.assign(new Readable(), this, { isReadable: true, handle: this });
+
+
+        return instance;
+    }
+
+    public ensureReadable() {
+        if (!this.isReadable)
+            throw new Error("Stream is not readable!");
+    }
+
     public seek(offset: number, origin: Seek_T = "current") {
+        this.ensureReadable();
+
         switch (origin) {
             case "current": this.offset = this.offset + offset; break;
             case "set": this.offset = offset + this.contentOffset; break;
@@ -22,6 +43,8 @@ class UEncodedFile {
     }
 
     public read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
+        this.ensureReadable();
+
         const cryptKey = this.cryptKey.value as number;
         const _target = typeof (target) === "number" ? BufferValue.allocBytes(target) : target as BufferValue<T>;
 
@@ -33,6 +56,8 @@ class UEncodedFile {
     public tell() { return this.offset - this.contentOffset; }
 
     public dump(lineCount: number = 1, restore: boolean = true, printHeaders: boolean = true) {
+        this.ensureReadable();
+
         let oldHeader = this.offset;
         let constructedString = "";
         let divisor = 0XF, lineCountHex = 1;
@@ -123,35 +148,41 @@ class UEncodedFile {
 
     public async decode(): Promise<this> {
         if (this.buffer) return this;
-
-        await this._doDecode();
+        if (!this.promiseDecoding) await this._doDecode();
+        else await this.promiseDecoding;
 
         return this;
     }
 
-    protected async _doDecode(): Promise<BufferValue> {
-        const response = await fetch(this.path);
+    protected _doDecode(): Promise<BufferValue> {
+        this.ensureReadable();
 
-        if (!response.ok) throw new Error(response.statusText);
+        if (this.promiseDecoding) return this.promiseDecoding;
 
-        this.buffer = await response.arrayBuffer();
-        
-        const signature = this.read(new BufferValue(BufferValue.uint32));
-        const HEADER_SIZE = 28;
+        return this.handle.promiseDecoding = this.promiseDecoding = new Promise(async resolve => {
+            const response = await fetch(this.path);
 
-        if (signature.value == 0x0069004C) {
-            this.seek(HEADER_SIZE, "set");
-            this.read(this.cryptKey);
+            if (!response.ok) throw new Error(response.statusText);
 
-            this.cryptKey.value = 0xC1 ^ (this.cryptKey.value as number);
+            this.buffer = await response.arrayBuffer();
 
-            this.isEncrypted = true;
-            this.contentOffset = HEADER_SIZE;
-            this.seek(0, "set");
-            this.read(signature);
-        }
+            const signature = this.read(new BufferValue(BufferValue.uint32));
+            const HEADER_SIZE = 28;
 
-        return signature;
+            if (signature.value == 0x0069004C) {
+                this.seek(HEADER_SIZE, "set");
+                this.read(this.cryptKey);
+
+                this.cryptKey.value = 0xC1 ^ (this.cryptKey.value as number);
+
+                this.isEncrypted = true;
+                this.contentOffset = HEADER_SIZE;
+                this.seek(0, "set");
+                this.read(signature);
+            }
+
+            resolve(signature);
+        });
     }
 }
 

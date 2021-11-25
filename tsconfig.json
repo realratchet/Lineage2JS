@@ -6,16 +6,14 @@
         "target": "ESNext",
         "module": "ESNext",
         // "allowJs": true,
-        // "paths": {
-        //     "@three/*": [
-        //         "submodules/coobo-three/*"
-        //     ],
-        //     "@coobo/*": [
-        //         "./src/*"
-        //     ],
-        //     "@three/src/Three": ["/dev/null"]
-        // },
-        
+        "paths": {
+            "@client/*": [
+                "./src/*"
+            ],
+            "@unreal/*": [
+                "./src/assets/unreal/*"
+            ],
+        },
         "noImplicitAny": true,
         "noImplicitReturns": true,
         "noImplicitThis": true,

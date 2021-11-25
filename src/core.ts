@@ -1,23 +1,23 @@
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
 import assetList from "./assets/asset-list";
-import UTerrainInfo from "./assets/unreal/un-terrain-info";
-import UTerrainSector from "./assets/unreal/un-terrain-sector";
-import UTexture from "./assets/unreal/un-texture";
-import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
+// import UTerrainInfo from "./assets/unreal/un-terrain-info";
+// import UTerrainSector from "./assets/unreal/un-terrain-sector";
+// import UTexture from "./assets/unreal/un-texture";
+// import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial } from "three";
 import BufferValue from "./assets/buffer-value";
-import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
-import UModel from "./assets/unreal/model/un-model";
-import UExport from "./assets/unreal/un-export";
-import UBrush from "./assets/unreal/un-brush";
-import ULevel from "./assets/unreal/un-level";
+// import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
+// import UModel from "./assets/unreal/model/un-model";
+// import UExport from "./assets/unreal/un-export";
+// import UBrush from "./assets/unreal/un-brush";
+// import ULevel from "./assets/unreal/un-level";
 import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
-import ULight from "./assets/unreal/un-light";
-import UImport from "./assets/unreal/un-import";
-import { UShader } from "./assets/unreal/un-material";
-import ULevelInfo from "./assets/unreal/un-level-info";
-import UEncodedFile from "./assets/unreal/un-encoded-file";
+// import ULight from "./assets/unreal/un-light";
+// import UImport from "./assets/unreal/un-import";
+// import { UShader } from "./assets/unreal/un-material";
+// import ULevelInfo from "./assets/unreal/un-level-info";
+// import UEncodedFile from "./assets/unreal/un-encoded-file";
 
 async function loadMesh() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -87,11 +87,13 @@ async function startCore() {
     const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
     const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 
+    // debugger;
+
     // const engineData = await new UEncodedFile("assets/system/l2.ini").decode();
 
     // debugger;
 
-    const pkgLoad = pkg_20_21;
+    const pkgLoadPromise = pkg_20_21;
 
 
     // await assetLoader.load(pkg_meffects);
@@ -100,12 +102,10 @@ async function startCore() {
 
     // debugger;
 
-    await assetLoader.load(pkgLoad);
-    // await assetLoader.load(pkg_engine);
-    // await assetLoader.load(pkg_core);
-    // await assetLoader.load(pkg_entry);
-
-    // debugger;
+    const pkgLoad = await assetLoader.load(pkgLoadPromise);
+    // // await assetLoader.load(pkg_engine);
+    // // await assetLoader.load(pkg_core);
+    // // await assetLoader.load(pkg_entry);
 
     // await pkg_engine.fetchObject(-41)
 
@@ -134,6 +134,10 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: UExport[] });
 
+    // debugger;
+
+    // return;
+
 
     // const lights = [];
     // const geoHelper = new SphereBufferGeometry();
@@ -142,7 +146,7 @@ async function startCore() {
     //     const uLight = await new ULight().load(pkgLoad, expLight);
 
     //     lights.push(uLight);
-        
+
     //     const color = uLight.getColor();
     //     const matHelper = new MeshBasicMaterial({ wireframe: true, color });
     //     const helper = new Mesh(geoHelper, matHelper);
@@ -165,8 +169,8 @@ async function startCore() {
     // debugger;
 
 
-    // let index = 0;
-    // const geometry = new PlaneBufferGeometry(100, 100);
+    let index = 0;
+    const geometry = new PlaneBufferGeometry(100, 100);
     // for (let impShader of impGroups["Shader"]) {
     //     const uMaterial = await pkgLoad.fetchObject(impShader.index) as UShader;
     //     const material = await uMaterial.decodeMaterial();
@@ -180,10 +184,20 @@ async function startCore() {
     //     break;
     // }
 
-    // index = 0;
+    // debugger;
+
+    index = 0;
+
+    const textures = await Promise.all(impGroups["Texture"].map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
+
+    debugger;
+
     // for (let impShader of impGroups["Texture"]) {
     //     try {
-    //         const uMaterial = await pkgLoad.fetchObject(impShader.index) as UTexture;
+    //         const uMaterial = await pkgLoad.fetchObject<UTexture>(impShader.index);
+
+    //         debugger;
+
     //         const material = await uMaterial.decodeMaterial();
 
     //         const mesh = new Mesh(geometry, material);
@@ -191,8 +205,12 @@ async function startCore() {
     //         mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
 
     //         objectGroup.add(mesh);
+
+    //         break;
     //     } catch (e) { }
     // }
+
+    debugger;
 
 
     // const expTerrainInfo = expGroups.TerrainInfo[0];

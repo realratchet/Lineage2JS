@@ -1,7 +1,7 @@
-import FConstructable from "./unreal/un-constructable";
-import UPackage from "./unreal/un-package";
-import { PropertyTag } from "./unreal/un-property";
-import BufferValue from "./buffer-value";
+import FConstructable from "./un-constructable";
+import UPackage from "./un-package";
+import { PropertyTag } from "./un-property";
+import BufferValue from "../buffer-value";
 
 class FScale extends FConstructable {
     public static readonly typeSize = 25;
