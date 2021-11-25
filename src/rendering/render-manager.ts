@@ -33,8 +33,15 @@ class RenderManager {
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxBufferGeometry()));
 
-        this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
-        this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
+
+        // tower planes
+        // this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
+        // this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
+        
+        // blinking roof
+        this.camera.position.set(20532.18926265955, -11863.06999059111, 117553.43156512016);
+        this.controls.target.set(20532.191127608294, -9998.087698878093, 117553.4315763069);
+        
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
         this.controls.update();

@@ -24,9 +24,8 @@ void main() {
     #include <uv2_vertex>
 
     #ifdef USE_TRANSFORMED_SPECULAR
-        vUvSpecular = (uvTransform * vec3(uv, 1)).xy;
-        vUvSpecular += vec2(0.1 * globalTime, 0.0);
-        // vUvSpecular = (uvSpecularTransform * vec3(uv, 1)).xy;// * (specularTransformRate * globalTime);
+        vUvSpecular = uv;
+        vUvSpecular = (uvSpecularTransform * vec3(uv, 1)).xy;
     #endif
 
     #include <color_vertex>

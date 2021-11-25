@@ -1,7 +1,7 @@
 import UObject from "./un-object"
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
-import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3, Vector2 } from "three";
+import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3, Vector2, Vector3 } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
@@ -309,46 +309,20 @@ class UTexPanner extends UBaseModifier {
         const texture = await (this.material as UTexture).decodeMipmap(0);
 
         matrix.set(
-            // 1, 0, 0,
-            // 0, 1, 0,
-            // 0, 0, 1
+            this.matrix.planeX.x, this.matrix.planeY.x, this.matrix.planeZ.x,
+            this.matrix.planeX.y, this.matrix.planeY.y, this.matrix.planeZ.y,
+            this.matrix.planeX.z, this.matrix.planeY.z, this.matrix.planeZ.z
+        );
 
-            this.matrix.planeZ.x, 0, 0,
-            this.matrix.planeZ.y, 1, 0,
-            this.matrix.planeZ.z, 0, 1,
-
-            // this.matrix.planeX.x, this.matrix.planeY.x, this.matrix.planeZ.x,
-            // this.matrix.planeX.y, this.matrix.planeY.y, this.matrix.planeZ.y,
-            // this.matrix.planeX.z, this.matrix.planeY.z, this.matrix.planeZ.z,
-        )//.transpose();
-
-        console.log(matrix.elements.slice(0, 3));
-        console.log(matrix.elements.slice(3, 6));
-        console.log(matrix.elements.slice(6, 9));
-
-        texture.matrixAutoUpdate = false;
-        texture.matrix.copy(matrix);
-
-        // let global = 0;
-        // setInterval(() => {
-        //     texture.matrix.set(
-        //         (global * this.rate) * this.matrix.planeZ.x, 0, 0,
-        //         this.matrix.planeZ.y, 1, 0,
-        //         this.matrix.planeZ.z, 0, 1,
-        //     );
-
-        //     // const uv = new Vector2(1, 1).applyMatrix3(matrix);
-
-        //     // console.log((this.rate * global), uv.toArray());
-
-        //     global++;
-
-
-        //     texture.needsUpdate = true;
-        // }, 100)
-
-        // debugger;
-
+        let global = 0;
+        setInterval(() => {
+            matrix.set(
+                this.matrix.planeX.x, this.matrix.planeY.x, this.matrix.planeZ.x * (global * 0.05) / texture.image.width,
+                this.matrix.planeX.y, this.matrix.planeY.y, this.matrix.planeZ.y,
+                this.matrix.planeX.z, this.matrix.planeY.z, this.matrix.planeZ.z
+            )
+            global++;
+        }, 50)
 
         return {
             transformedTexture: {
