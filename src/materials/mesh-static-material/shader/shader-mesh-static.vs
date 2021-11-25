@@ -13,13 +13,22 @@
 uniform float globalTime;
 #endif
 
-#ifdef USE_TRANSFORMED_TEXTURE
-
+#ifdef USE_TRANSFORMED_SPECULAR
+uniform mat3 uvSpecularTransform;
+uniform float specularTransformRate;
+varying vec2 vUvSpecular;
 #endif
 
 void main() {
     #include <uv_vertex>
     #include <uv2_vertex>
+
+    #ifdef USE_TRANSFORMED_SPECULAR
+        vUvSpecular = (uvTransform * vec3(uv, 1)).xy;
+        vUvSpecular += vec2(0.1 * globalTime, 0.0);
+        // vUvSpecular = (uvSpecularTransform * vec3(uv, 1)).xy;// * (specularTransformRate * globalTime);
+    #endif
+
     #include <color_vertex>
     #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING )
         #include <beginnormal_vertex>

@@ -39,12 +39,20 @@ uniform sampler2D mapDiffuse;
 uniform sampler2D mapOpacity;
 #endif
 
+#ifdef USE_MAP_SPECULAR
+uniform sampler2D mapSpecular;
+#endif
+
 #ifdef USE_MAP_SPECULAR_MASK
 uniform sampler2D mapSpecularMask;
 #endif
 
 #ifdef USE_GLOBAL_TIME
 uniform float globalTime;
+#endif
+
+#ifdef USE_TRANSFORMED_SPECULAR
+varying vec2 vUvSpecular;
 #endif
 
 void main() {
@@ -61,13 +69,17 @@ void main() {
     #endif
 
     #ifdef USE_MAP_SPECULAR_MASK
-    vec4 texelSpecularMask = texture2D(mapSpecularMask, vUv);
-    #ifdef USE_FADE
-    float mixValue = (sin(globalTime) + 1.0) / 2.0;
-        diffuseColor.rgb += texelSpecularMask.a * mix(fadeColors.color1, fadeColors.color2, mixValue) * 2.0;
-    #else
-        // diffuseColor.rgb = vec3(texelSpecularMask.a);
-    #endif
+        vec4 texelSpecularMask = texture2D(mapSpecularMask, vUv);
+        #ifdef USE_FADE
+            float mixValue = (sin(globalTime) + 1.0) / 2.0;
+            vec3 specularColor = mix(fadeColors.color1, fadeColors.color2, mixValue) * 2.0;
+        #else
+            #ifdef USE_MAP_SPECULAR
+                vec4 texelSpecular = texture2D(mapSpecular, vUvSpecular);
+                vec3 specularColor = texelSpecular.rgb;
+            #endif
+        #endif
+            diffuseColor.rgb += texelSpecularMask.a * specularColor;
     #endif
 
     #ifdef USE_MAP_OPACITY
@@ -102,4 +114,8 @@ void main() {
     #include <fog_fragment>
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
+
+    // #ifdef USE_MAP_SPECULAR
+    // gl_FragColor = vec4(vUvSpecular.x, vUvSpecular.y, 0.0, 1.0);
+    // #endif
 }

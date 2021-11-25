@@ -20,6 +20,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         const defines: { [key: string]: any } = {};
         const uniforms: { [key: string]: Uniform } = {
             mapDiffuse: new Uniform(hasMapDiffuse ? parameters.mapDiffuse : null),
+            mapSpecular: new Uniform(hasTransformedTexture ? parameters.transformedTexture.texture : null),
             mapSpecularMask: new Uniform(hasMapSpecularMask ? parameters.mapSpecularMask : null),
             mapOpacity: new Uniform(hasMapOpacity ? parameters.mapOpacity : null),
             alphaTest: new Uniform((hasAlphaTest ? parameters.alphaTest : 0) + 1e-3),
@@ -27,12 +28,15 @@ class MeshStaticMaterial extends ShaderMaterial {
             fadeColors: new Uniform(hasFadeColors ? parameters.fadeColors : null),
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),
-            uvTransform: new Uniform(new Matrix3())
+            uvTransform: new Uniform(new Matrix3()),
+            uvSpecularTransform: new Uniform(hasTransformedTexture ? parameters.transformedTexture.matrix : new Matrix3()),
+            specularTransformRate: new Uniform(hasTransformedTexture ? parameters.transformedTexture.rate : 0),
         };
 
         if(hasTransformedTexture) {
             defines["USE_GLOBAL_TIME"] = "";
-            defines["USE_TRANSFORMED_TEXTURE"] = "";
+            defines["USE_MAP_SPECULAR"] = "";
+            defines["USE_TRANSFORMED_SPECULAR"] = "";
         }
 
         if (hasMapDiffuse || hasMapSpecularMask || hasMapOpacity) {
