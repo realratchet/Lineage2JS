@@ -31,10 +31,29 @@ void main() {
 
     #ifdef USE_TRANSFORMED_SPECULAR
         mat3 matrix = transformSpecular.uvSpecularTransform;
+        vUvSpecular = uv;
         #ifdef USE_SPECULAR_PAN
             matrix[2].xy *= (transformSpecular.specularTransformRate * globalTime) / transformSpecular.mapSpecularSize;
         #endif
-        vUvSpecular = (matrix * vec3(uv, 1)).xy;
+        #ifdef USE_SPECULAR_ROTATE
+        // matrix = mat3(
+        //     1, 1, 0,
+        //     0, 1, 0,
+        //     0, 0, 1
+        // );
+        // matrix[2].xy *= (10.0 * globalTime) / transformSpecular.mapSpecularSize;
+        // vUvSpecular = uv * globalTime;
+        vUvSpecular -= vec2(25) / transformSpecular.mapSpecularSize;
+
+        vec2 xy = globalTime / transformSpecular.mapSpecularSize;
+
+        matrix[0].xy += vec2(+cos(xy.x), -sin(xy.y));
+        matrix[1].xy += vec2(+sin(xy.x), +cos(xy.y));
+
+        vUvSpecular = (matrix * vec3(vUvSpecular, 1)).xy;
+        vUvSpecular += vec2(25) / transformSpecular.mapSpecularSize;
+        #endif
+        vUvSpecular = (matrix * vec3(vUvSpecular, 1)).xy;
     #endif
 
     #include <color_vertex>

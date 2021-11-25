@@ -26,6 +26,7 @@ class RenderManager {
         });
 
         viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));
+        window.addEventListener("keydown", this.onHandleKeyDown.bind(this));
 
         this.renderer.setClearColor(0x000000);
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -37,7 +38,7 @@ class RenderManager {
         // tower planes
         // this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
         // this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
-        
+
         // blinking roof
         // this.camera.position.set(20532.18926265955, -11863.06999059111, 117553.43156512016);
         // this.controls.target.set(20532.191127608294, -9998.087698878093, 117553.4315763069);
@@ -45,7 +46,7 @@ class RenderManager {
         // rotating crystal
         this.camera.position.set(12503.665976183796, -1081.0665384462375, 116917.6052756099);
         this.controls.target.set(11939.418010659865, -1153.9097602263002, 116384.32683375604);
-        
+
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
         this.controls.update();
@@ -62,6 +63,36 @@ class RenderManager {
             point.x / width * 2 - 1,
             1 - point.y / height * 2
         );
+    }
+
+    public onHandleKeyDown(event: KeyboardEvent) {
+        switch (event.key) {
+            case "1":
+                this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
+                this.controls.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+                this.controls.update();
+                break;
+            case "2":
+                this.camera.position.set(17635.20575146492, -11784.939422516854, 116150.5713219522);
+                this.controls.target.set(18067.654677822546, -10987.479065394222, 113781.22799780089);
+                this.controls.update();
+                break;
+            case "3":
+                this.camera.position.set(15072.881710902564, -11862.167696361777, 110387.91067628124);
+                this.controls.target.set(14711.102749053878, -11434.303788147914, 110872.50292405237);
+                this.controls.update();
+                break;
+            case "4":
+                this.camera.position.set(12918.803737500606, -11769.26992456535, 109998.28664096774);
+                this.controls.target.set(12961.940094338941, -11789.664021556502, 110631.6332572824);
+                this.controls.update();
+                break;
+            case "5":
+                this.camera.position.set(23756.20212599347, -8869.681711370744, 116491.99214326135);
+                this.controls.target.set(23706.65317650355, -9178.136467533635, 118330.62193563695);
+                this.controls.update();
+                break;
+        }
     }
 
     public onHandleMouseUp(event: MouseEvent) {

@@ -8,6 +8,7 @@ import FNumber from "./un-number";
 import UMatrix from "./un-matrix";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import FColor from "./un-color";
+import FRotator from "./un-rotator";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
@@ -18,6 +19,7 @@ abstract class UBaseMaterial extends UObject {
 }
 abstract class UBaseModifier extends UBaseMaterial {
     public abstract getParameters(): Promise<{ [key: string]: any }>;
+    public async decodeMipmap(level: number): Promise<Texture> { return await ((this as any).material as UTexture).decodeMipmap(level); };
 }
 
 abstract class UMaterial extends UBaseMaterial { }
@@ -226,7 +228,7 @@ class UColorModifier extends UBaseMaterial {
 class UTexRotator extends UBaseModifier {
     protected matrix: UMatrix;
     protected type: TexRotationType_T;
-    protected rotation: Euler;
+    protected rotation: FRotator;
     protected offsetU: number;
     protected offsetV: number;
     protected material: UMaterial;
@@ -234,18 +236,24 @@ class UTexRotator extends UBaseModifier {
     public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
     public async getParameters() {
+        // const matrix = this.matrix.getMatrix3(new Matrix3());
         const matrix = new Matrix3();
+        this.matrix.getMatrix3(matrix);
         const texture = await (this.material as UTexture).decodeMipmap(0);
 
-        // const object = {
-        //     transformedTexture: {
-        //         texture,
-        //         matrix,
-        //         rate: this.rate
-        //     }
-        // };
+        // console.log(matrix.elements.slice(0, 3));
+        // console.log(matrix.elements.slice(3, 6));
+        // console.log(matrix.elements.slice(6, 9));
 
-        return {};
+        // debugger;
+
+        return {
+            transformedTexture: {
+                transformRotate: true,
+                texture,
+                matrix
+            }
+        };
     }
 
     protected getPropertyMap() {
@@ -299,13 +307,14 @@ class UTexPanner extends UBaseModifier {
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
     public async getParameters() {
+        const matrix = this.matrix.getMatrix3(new Matrix3());
         const texture = await (this.material as UTexture).decodeMipmap(0);
 
         return {
             transformedTexture: {
                 transformPan: true,
                 texture,
-                matrix: this.matrix.getMatrix3(new Matrix3()),
+                matrix,
                 rate: this.rate
             }
         };

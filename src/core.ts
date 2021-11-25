@@ -5,7 +5,7 @@ import UTerrainInfo from "./assets/unreal/un-terrain-info";
 import UTerrainSector from "./assets/unreal/un-terrain-sector";
 import UTexture from "./assets/unreal/un-texture";
 import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh } from "three";
+import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial } from "three";
 import BufferValue from "./assets/buffer-value";
 import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 import UModel from "./assets/unreal/model/un-model";
@@ -136,12 +136,29 @@ async function startCore() {
 
 
     // const lights = [];
+    // const geoHelper = new SphereBufferGeometry();
 
     // for (let expLight of expGroups["Light"]) {
     //     const uLight = await new ULight().load(pkgLoad, expLight);
 
     //     lights.push(uLight);
+        
+    //     const color = uLight.getColor();
+    //     const matHelper = new MeshBasicMaterial({ wireframe: true, color });
+    //     const helper = new Mesh(geoHelper, matHelper);
+
+    //     helper.position.set(uLight.location.vector.x, uLight.location.vector.z, uLight.location.vector.y);
+    //     // debugger;
+
+
+
+    //     if (uLight.radius !== undefined) helper.scale.set(uLight.radius, uLight.radius, uLight.radius);
+    //     else matHelper.color.setHex(0xff00ff);
+
+    //     objectGroup.add(helper);
     // }
+
+    // debugger;
 
     // const nonDirectional = lights.filter(x => !x.isDirectional);
 
@@ -204,9 +221,9 @@ async function startCore() {
 
     // debugger;
 
-    // const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
-    // const level = await uLevel.decodeLevel();
-    // objectGroup.add(level);
+    const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
+    const level = await uLevel.decodeLevel();
+    objectGroup.add(level);
 
     // const uModel = await pkgLoad.fetchObject(7364) as UModel; // base model
     // const model = await uModel.decodeModel();
@@ -221,11 +238,11 @@ async function startCore() {
 
     // debugger;
 
-    for (let id of [1441, 1770, 1802, 1804, 4284]) {
-        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-        const mesh = await uMesh.decodeMesh();
-        objectGroup.add(mesh);
-    }
+    // for (let id of [/*1441, 1770, 1802, 1804,*/ 4284]) {
+    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+    //     const mesh = await uMesh.decodeMesh();
+    //     objectGroup.add(mesh);
+    // }
 
     // for (let exp of expGroups.StaticMeshActor) {
     //     const uMesh = await new UStaticMeshActor().load(pkgLoad, exp);
