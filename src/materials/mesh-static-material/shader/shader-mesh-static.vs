@@ -14,9 +14,15 @@ uniform float globalTime;
 #endif
 
 #ifdef USE_TRANSFORMED_SPECULAR
-uniform mat3 uvSpecularTransform;
-uniform float specularTransformRate;
+struct TransformedSpecular {
+    mat3 uvSpecularTransform;
+    float specularTransformRate;
+    vec2 mapSpecularSize;
+};
+
+uniform TransformedSpecular transformSpecular;
 varying vec2 vUvSpecular;
+
 #endif
 
 void main() {
@@ -24,8 +30,11 @@ void main() {
     #include <uv2_vertex>
 
     #ifdef USE_TRANSFORMED_SPECULAR
-        vUvSpecular = uv;
-        vUvSpecular = (uvSpecularTransform * vec3(uv, 1)).xy;
+        mat3 matrix = transformSpecular.uvSpecularTransform;
+        #ifdef USE_SPECULAR_PAN
+            matrix[2].xy *= (transformSpecular.specularTransformRate * globalTime) / transformSpecular.mapSpecularSize;
+        #endif
+        vUvSpecular = (matrix * vec3(uv, 1)).xy;
     #endif
 
     #include <color_vertex>

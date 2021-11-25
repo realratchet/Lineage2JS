@@ -32,6 +32,12 @@ enum OutputBlending_T {
     OB_Darken
 };
 
+enum TexRotationType_T {
+    TR_FixedRotation,
+    TR_ConstantlyRotating,
+    TR_OscillatingRotation,
+};
+
 /**
 	// blending
 	if (OutputBlending == OB_Normal && !Opacity)
@@ -219,26 +225,26 @@ class UColorModifier extends UBaseMaterial {
 
 class UTexRotator extends UBaseModifier {
     protected matrix: UMatrix;
-    protected type: number;
+    protected type: TexRotationType_T;
     protected rotation: Euler;
     protected offsetU: number;
     protected offsetV: number;
     protected material: UMaterial;
 
-    public async decodeMaterial(): Promise<Material> {
-        const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
-
-        debugger;
-
-        if (!material) return null;
-
-        // debugger;
-
-        return material;
-    }
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
     public async getParameters() {
-        // debugger;
+        const matrix = new Matrix3();
+        const texture = await (this.material as UTexture).decodeMipmap(0);
+
+        // const object = {
+        //     transformedTexture: {
+        //         texture,
+        //         matrix,
+        //         rate: this.rate
+        //     }
+        // };
+
         return {};
     }
 
@@ -269,19 +275,7 @@ class UTexOscillator extends UBaseModifier {
         return {};
     }
 
-    public async decodeMaterial(): Promise<Material> {
-        const material = await this.material?.decodeMaterial();
-
-        debugger;
-
-        if (!material) return null;
-
-        // debugger;
-
-        // material.color.setHex(0xff00ff);
-
-        return material;
-    }
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -305,43 +299,19 @@ class UTexPanner extends UBaseModifier {
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
     public async getParameters() {
-        const matrix = new Matrix3();
         const texture = await (this.material as UTexture).decodeMipmap(0);
-
-        matrix.set(
-            this.matrix.planeX.x, this.matrix.planeY.x, this.matrix.planeZ.x,
-            this.matrix.planeX.y, this.matrix.planeY.y, this.matrix.planeZ.y,
-            this.matrix.planeX.z, this.matrix.planeY.z, this.matrix.planeZ.z
-        );
-
-        let global = 0;
-        setInterval(() => {
-            matrix.set(
-                this.matrix.planeX.x, this.matrix.planeY.x, this.matrix.planeZ.x * (global * 0.05) / texture.image.width,
-                this.matrix.planeX.y, this.matrix.planeY.y, this.matrix.planeZ.y,
-                this.matrix.planeX.z, this.matrix.planeY.z, this.matrix.planeZ.z
-            )
-            global++;
-        }, 50)
 
         return {
             transformedTexture: {
+                transformPan: true,
                 texture,
-                matrix,
+                matrix: this.matrix.getMatrix3(new Matrix3()),
                 rate: this.rate
             }
         };
     }
 
-    public async decodeMaterial(): Promise<Material> {
-        const material = await this.material?.decodeMaterial();
-
-        debugger;
-
-        // if (!material) debugger;
-
-        return material;
-    }
+    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

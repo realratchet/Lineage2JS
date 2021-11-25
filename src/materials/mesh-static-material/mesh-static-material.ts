@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Matrix3, MeshBasicMaterialParameters, Color, Texture, MultiplyOperation, Combine, UniformsUtils, UniformsLib, ShaderLib, Side, FrontSide } from "three";
+import { ShaderMaterial, Uniform, Matrix3, MeshBasicMaterialParameters, Color, Texture, MultiplyOperation, Combine, UniformsUtils, UniformsLib, ShaderLib, Side, FrontSide, Vector2 } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
@@ -29,14 +29,23 @@ class MeshStaticMaterial extends ShaderMaterial {
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),
             uvTransform: new Uniform(new Matrix3()),
-            uvSpecularTransform: new Uniform(hasTransformedTexture ? parameters.transformedTexture.matrix : new Matrix3()),
-            specularTransformRate: new Uniform(hasTransformedTexture ? parameters.transformedTexture.rate : 0),
+            transformSpecular: new Uniform(hasTransformedTexture ? {
+                uvSpecularTransform: parameters.transformedTexture.matrix,
+                specularTransformRate: parameters.transformedTexture.rate,
+                mapSpecularSize: new Vector2(parameters.transformedTexture.texture.image.width, parameters.transformedTexture.texture.image.height)
+            } : null),
         };
 
-        if(hasTransformedTexture) {
+        if (hasTransformedTexture) {
             defines["USE_GLOBAL_TIME"] = "";
             defines["USE_MAP_SPECULAR"] = "";
             defines["USE_TRANSFORMED_SPECULAR"] = "";
+
+            if (parameters.transformedTexture.transformPan)
+                defines["USE_SPECULAR_PAN"] = "";
+
+            if (parameters.transformedTexture.transformRotate)
+                defines["USE_SPECULAR_ROTATE"] = "";
         }
 
         if (hasMapDiffuse || hasMapSpecularMask || hasMapOpacity) {
@@ -90,6 +99,8 @@ type MeshStaticMaterialParameters = {
     },
     visible?: boolean,
     transformedTexture?: {
+        transformPan: boolean,
+        transformRotate: boolean,
         texture: Texture,
         matrix: Matrix3,
         rate: number

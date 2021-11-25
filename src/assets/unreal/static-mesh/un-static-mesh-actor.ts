@@ -61,6 +61,7 @@ class UStaticMeshActor extends UAActor {
 
         console.assert(!instance.parent)
 
+        group.name = this.objectName;
         group.add(instance);
         group.position.set(this.location.vector.x, this.location.vector.z, this.location.vector.y)
         // group.scale.set(0.001, 0.001, 0.001);
