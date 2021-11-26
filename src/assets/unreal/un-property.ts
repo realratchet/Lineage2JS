@@ -38,13 +38,13 @@ class PropertyTag {
     public enumName: string;
     public index: number;
 
-    static async from(pkg: UPackage, offset: number): Promise<PropertyTag> {
-        return await new PropertyTag().load(pkg, offset);
+    static from(pkg: UPackage, offset: number): PropertyTag {
+        return new PropertyTag().load(pkg, offset);
     }
 
     public isValid() { return !this.name || this.name !== "None"; }
 
-    protected async load(pkg: UPackage, offset: number) {
+    protected load(pkg: UPackage, offset: number) {
         pkg.seek(offset, "set");
 
         const index = pkg.read(new BufferValue(BufferValue.compat32));

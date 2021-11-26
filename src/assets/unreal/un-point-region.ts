@@ -1,20 +1,9 @@
 import UObject from "./un-object";
 
-type UPackage = import("./un-package").UPackage;
-type UZoneInfo = import("./un-zone-info").UZoneInfo;
-
 class UPointRegion extends UObject {
-
-    protected size: number;
     protected zone: UZoneInfo;
     protected indexLeaf: number;
     protected zoneNumber: number;
-
-    public constructor(size: number) {
-        super();
-
-        this.size = size;
-    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -24,12 +13,12 @@ class UPointRegion extends UObject {
         });
     }
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
 
         this.readHead = pkg.tell();
-        this.readTail = this.readHead + this.size;
+        this.readTail = this.readHead + tag.dataSize;
 
-        await this.readNamedProps(pkg);
+        this.readNamedProps(pkg);
 
         return this;
     }

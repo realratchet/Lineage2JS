@@ -79,6 +79,8 @@ class UTexture extends UObject {
         });
     }
 
+    protected promiseLoading: Promise<this>;
+
     public async load(pkg: UPackage, exp: UExport) {
         // await super.load(pkg, exp);
 
@@ -88,13 +90,14 @@ class UTexture extends UObject {
 
         // console.log(this.objectName);
 
+        const promises: Promise<any>[] = [];
         this.setReadPointers(exp);
         do {
-            const tag = await PropertyTag.from(pkg, this.readHead);
+            const tag = PropertyTag.from(pkg, this.readHead);
 
             if (!tag.isValid()) break;
 
-            await this.loadProperty(pkg, tag);
+            promises.push(this.loadProperty(pkg, tag));
 
             this.readHead = pkg.tell()
 
@@ -104,14 +107,18 @@ class UTexture extends UObject {
 
         // pkg.read(BufferValue.allocBytes(4)); //unknown
 
-        await this.mipmaps.load(pkg, null);
+        // debugger;
+        promises.push(this.mipmaps.load(pkg, null));
 
         // if (this.mipmaps.getElemCount() === 0)
         //     debugger;
 
         this.readHead = pkg.tell();
 
-        // debugger;
+        this.promiseLoading = new Promise(async resolve => {
+            await Promise.all(promises);
+            resolve(this);
+        });
 
         return this;
     }

@@ -9,11 +9,11 @@ class FColor extends FConstructable {
     public b: number = 0;
     public a: number = 0;
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         const b = new BufferValue(BufferValue.uint8);
 
         for (let ax of ["b", "g", "r", "a"])
-            this[ax as ("r" | "g" | "b" | "a")] = await pkg.read(b).value as number;
+            this[ax as ("r" | "g" | "b" | "a")] = pkg.read(b).value as number;
 
         return this;
     }

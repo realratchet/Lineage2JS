@@ -190,7 +190,7 @@ async function startCore() {
 
     const textures = await Promise.all(impGroups["Texture"].map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
 
-    debugger;
+    // debugger;
 
     // for (let impShader of impGroups["Texture"]) {
     //     try {
@@ -211,6 +211,7 @@ async function startCore() {
     // }
 
     debugger;
+    return;
 
 
     // const expTerrainInfo = expGroups.TerrainInfo[0];

@@ -10,12 +10,12 @@ class FRotator extends FConstructable {
     public yaw = 0;
     public roll = 0;
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage): this {
         const int32 = new BufferValue(BufferValue.int32);
 
-        for (let key of ["pitch", "yaw", "roll"]) {
-            this[key as ("pitch" | "yaw" | "roll")] = await pkg.read(int32).value as number;
-        }
+        for (let key of ["pitch", "yaw", "roll"])
+            this[key as ("pitch" | "yaw" | "roll")] = pkg.read(int32).value as number;
+
 
         return this;
     }

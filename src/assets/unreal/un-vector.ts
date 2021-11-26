@@ -9,12 +9,11 @@ class FVector extends FConstructable {
     public y: number = 0;
     public z: number = 0;
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage): this {
         const f = new BufferValue(BufferValue.float);
 
-        for (let ax of ["x", "y", "z"]) {
-            this[ax as "x" | "y" | "z"] = await pkg.read(f).value as number;
-        }
+        for (let ax of ["x", "y", "z"])
+            this[ax as "x" | "y" | "z"] = pkg.read(f).value as number;
 
         return this;
     }

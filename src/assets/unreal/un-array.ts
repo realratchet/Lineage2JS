@@ -29,6 +29,8 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
         const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
         const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
+        // debugger;
+
         this.length = count.value as number;
 
         if (count.value as number === 0) return this;
@@ -72,7 +74,7 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
 
-        const unkData = await pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
+        const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
 
         // debugger;
 

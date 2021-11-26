@@ -17,14 +17,16 @@ class UEncodedFile {
     }
 
     public asReadable(): this {
-        class Readable { }
 
-        Object.assign(Readable.prototype, UEncodedFile.prototype);
-        
-        const instance = Object.assign(new Readable(), this, { isReadable: true, handle: this });
+        // if (this.isReadable)
+        //     throw new Error("Already readable!");
 
+        const readable = new class Readable { }
 
-        return instance;
+        Object.setPrototypeOf(readable, this);
+        Object.assign(readable, this, { isReadable: true, handle: this });
+
+        return readable as this;
     }
 
     public ensureReadable() {

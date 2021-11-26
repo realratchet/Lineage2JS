@@ -18,11 +18,11 @@ class UMatrix extends UObject {
         });
     }
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
 
-        await this.readNamedProps(pkg);
+        this.readNamedProps(pkg);
 
         return this;
     }

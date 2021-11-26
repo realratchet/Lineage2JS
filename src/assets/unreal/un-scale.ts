@@ -15,7 +15,7 @@ class FScale extends FConstructable {
 
     public unk0: BufferValue;
 
-    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
 
         const float = new BufferValue(BufferValue.float);
         const int32 = new BufferValue(BufferValue.int32);

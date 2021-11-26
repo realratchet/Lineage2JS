@@ -103,7 +103,7 @@ abstract class UObject {
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.char)).value as string);
                 break;
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
-            case UNP_PropertyTypes.UNP_ArrayProperty: await this.readArray(pkg, tag); break;
+            case UNP_PropertyTypes.UNP_ArrayProperty: this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty:
             case UNP_PropertyTypes.UNP_VectorProperty:
             case UNP_PropertyTypes.UNP_RotatorProperty:
@@ -121,7 +121,7 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_MapProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_FixedArrayProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StructProperty:
-                this.setProperty(tag, await this.readStruct(pkg, tag));
+                this.setProperty(tag, this.readStruct(pkg, tag));
                 break;
             default:
                 pkg.seek(tag.dataSize);

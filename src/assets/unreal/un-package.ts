@@ -62,26 +62,23 @@ class UPackage extends UEncodedFile {
             await this.promiseDecoding;
             return this;
         }
-        
-        const readable = this.asReadable();
-        debugger;
-        const signature = await readable._doDecode();
 
-        debugger;
+        const readable = this.asReadable();
+        const signature = await readable._doDecode();
 
         if (signature.value !== 0x9E2A83C1)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
 
         const header = new UHeader();
 
-        this.read(header.version);
-        this.read(header.packageFlags);
-        this.read(header.nameCount);
-        this.read(header.nameOffset);
-        this.read(header.exportCount);
-        this.read(header.exportOffset);
-        this.read(header.importCount);
-        this.read(header.importOffset);
+        readable.read(header.version);
+        readable.read(header.packageFlags);
+        readable.read(header.nameCount);
+        readable.read(header.nameOffset);
+        readable.read(header.exportCount);
+        readable.read(header.exportOffset);
+        readable.read(header.importCount);
+        readable.read(header.importOffset);
 
         const dbgNameCount = header.nameCount.value;
         const dbgNameOffset = header.nameOffset.value.toString(16).toUpperCase();
@@ -90,9 +87,9 @@ class UPackage extends UEncodedFile {
         const dbgImportCount = header.importCount.value;
         const dbgImportOffset = header.importOffset.value.toString(16).toUpperCase();
 
-        console.log(`'${this.path}' => Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
+        console.log(`'${readable.path}' => Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
 
-        if (this.path === "assets/maps/20_21.unr") {
+        if (readable.path === "assets/maps/20_21.unr") {
             console.assert(header.getVersionLWORD() === 123);
             console.assert(header.packageFlags.value === 0x1);
             console.assert(header.nameCount.value === 12165);
@@ -104,35 +101,37 @@ class UPackage extends UEncodedFile {
         }
 
         if (header.getVersionLWORD() < 68) {
-            this.read(header.heritageCount);
-            this.read(header.heritageOffset);
+            readable.read(header.heritageCount);
+            readable.read(header.heritageOffset);
         } else {
-            this.read(header.guid);
+            readable.read(header.guid);
 
-            const generationCount = this.read(new BufferValue(BufferValue.int32));
+            const generationCount = readable.read(new BufferValue(BufferValue.int32));
 
-            if (this.path === "assets/maps/20_21.unr") {
+            if (readable.path === "assets/maps/20_21.unr") {
                 console.assert(generationCount.value === 1);
             }
 
             for (let i = 0, gc = generationCount.value as number; i < gc; i++) {
                 const gen = new UGeneration();
 
-                this.read(gen.exportCount);
-                this.read(gen.nameCount);
+                readable.read(gen.exportCount);
+                readable.read(gen.nameCount);
 
                 header.generations.push(gen);
             }
         }
 
-        const nameTable = this.loadNames(header);
-        const exports = this.loadExports(header, nameTable);
-        const imports = this.loadImports(header, nameTable);
+        const nameTable = readable.loadNames(header);
+        const exports = readable.loadExports(header, nameTable);
+        const imports = readable.loadImports(header, nameTable);
 
-        this.exports = Object.freeze(exports);
-        this.imports = Object.freeze(imports);
-        this.nameTable = Object.freeze(nameTable);
-        this.header = header;
+        readable.exports = Object.freeze(exports);
+        readable.imports = Object.freeze(imports);
+        readable.nameTable = Object.freeze(nameTable);
+        readable.header = header;
+
+        Object.assign(this, readable, { isReadable: false });
 
         return this;
     }
@@ -176,10 +175,11 @@ class UPackage extends UEncodedFile {
     }
 
     public async fetchObject<T extends UObject = UObject>(index: number): Promise<T> {
+        const readable = this.asReadable();
         const object = index < 0
-            ? await this.getImport(-index - 1)
+            ? await readable.getImport(-index - 1)
             : index > 0
-                ? await this.getExport(index - 1)
+                ? await readable.getExport(index - 1)
                 : null;
 
         // if (object)
@@ -239,7 +239,7 @@ class UPackage extends UEncodedFile {
 
         const object = exp.object = (new (Constructor as any)(...params) as T);
 
-        await object.load(pkg, exp);
+        await object.load(pkg.asReadable(), exp);
 
         return exp.object;
     }

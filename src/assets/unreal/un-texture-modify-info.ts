@@ -1,8 +1,5 @@
 import UObject from "./un-object";
 
-type FColor = import("./un-color").FColor;
-type UPackage = import("./un-package").UPackage;
-
 enum AlphaOperation_T {
     AO_Use_Mask,
     AO_Multiply,
@@ -23,7 +20,6 @@ enum ColorOperation_T {
 };
 
 class UTextureModifyInfo extends UObject {
-    protected size: number;
     protected useModify: boolean;
     protected doubleSide: boolean;
     protected alphaBlend: boolean;
@@ -31,12 +27,6 @@ class UTextureModifyInfo extends UObject {
     protected color: FColor;
     protected alphaOp: AlphaOperation_T;
     protected colorOp: ColorOperation_T;
-
-    public constructor(size: number) {
-        super();
-
-        this.size = size;
-    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -50,11 +40,11 @@ class UTextureModifyInfo extends UObject {
         });
     }
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         this.readHead = pkg.tell();
-        this.readTail = this.readHead + this.size;
+        this.readTail = this.readHead + tag.dataSize;
 
-        await this.readNamedProps(pkg);
+        this.readNamedProps(pkg);
 
         return this;
     }
