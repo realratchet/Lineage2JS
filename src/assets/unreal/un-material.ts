@@ -1,5 +1,4 @@
 import UObject from "./un-object"
-import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import UTexture from "./un-texture";
 // import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3, Vector2, Vector3 } from "three";
 import FArray from "./un-array";
@@ -359,4 +358,4 @@ class UMaterialContainer extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, UMaterialContainer, UShader, ETexturePixelFormat, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator };
+export { UMaterial, UMaterialContainer, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator };

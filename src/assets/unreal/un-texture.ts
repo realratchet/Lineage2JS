@@ -1,13 +1,12 @@
-import FArray, { FArrayLazy } from "./un-array";
+import { FArrayLazy } from "./un-array";
 import { FMipmap } from "./un-mipmap";
-import BufferValue from "../buffer-value";
-import { ETexturePixelFormat } from "./un-material";
+// import { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
 // import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide, MirroredRepeatWrapping } from "three";
-import decodeG16 from "../decode-g16";
+// import decodeG16 from "../decode-g16";
 import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
-import ETextureFormat from "./un-tex-format";
+import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 
 /*
@@ -18,10 +17,6 @@ import FColor from "./un-color";
     0001000000 ( 64)
     0000100000 ( 32)
 */
-
-type UPlatte = import("./un-palette").UPlatte;
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
 
 function getClamping(mode: number) {
 
@@ -74,8 +69,7 @@ class UTexture extends UObject {
 
             "MaxColor": "maxColor",
 
-            "MipZero": "mipZero",
-
+            "MipZero": "mipZero"
         });
     }
 
@@ -140,7 +134,60 @@ class UTexture extends UObject {
         }
     }
 
-    public async decodeMipmap(level: number): Promise<Texture> {
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<UTextureDecodeInfo_T> {
+        const firstMipmap = this.mipmaps[0] as FMipmap;
+        const mipCount = loadMipmaps ? this.mipmaps.length : 1;
+
+        let byteOffset = 0;
+        let imSize = firstMipmap.getByteLength();
+
+        for (let i = 1; i < mipCount; i++) {
+            imSize += (this.mipmaps[i] as FMipmap).getByteLength();
+        }
+
+        const data = new Uint8Array(imSize);
+
+        firstMipmap.getImageBuffer(data, 0);
+        byteOffset += firstMipmap.getByteLength();
+
+        for (let i = 1, len = mipCount; i < len; i++) {
+            const mipmap = this.mipmaps[i] as FMipmap;
+
+            mipmap.getImageBuffer(data, byteOffset);
+            byteOffset += mipmap.getByteLength();
+        }
+
+        const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
+        const format = this.getTexturePixelFormat();
+        let decodedBuffer: ArrayBuffer;
+        let textureType: UDecodableTexture_T;
+
+        switch (format) {
+            case ETexturePixelFormat.TPF_DXT1:
+            case ETexturePixelFormat.TPF_DXT3:
+            case ETexturePixelFormat.TPF_DXT5:
+            case ETexturePixelFormat.TPF_DXT5N:
+                textureType = "dds";
+                decodedBuffer = await decompressDDS(format, mipCount, width, height, data);
+                // texture.wrapS = RepeatWrapping;
+                // texture.wrapT = RepeatWrapping;
+                break;
+            case ETexturePixelFormat.TPF_G16:
+                textureType = "g16";
+                decodedBuffer = await decodeG16(width, height, data);
+                break;
+            default: throw new Error(`Unsupported texture format: ${format}`);
+        }
+
+        return {
+            textureType,
+            buffer: decodedBuffer,
+            wrapS: this.wrapS,
+            wrapT: this.wrapT
+        };
+    }
+
+    public async decodeMipmap(level: number): Promise<THREE.Texture> {
         const mipmap = this.mipmaps.getElem(level);
 
         if (!mipmap) {
@@ -152,7 +199,7 @@ class UTexture extends UObject {
         const data = mipmap.getImageBuffer();
         const format = this.getTexturePixelFormat();
 
-        let texture: Texture;
+        let texture: THREE.Texture;
 
         // debugger;
 

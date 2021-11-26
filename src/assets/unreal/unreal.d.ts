@@ -58,3 +58,13 @@ type FUnknownStruct = import("./un-unknown-struct").FUnknownStruct;
 type FBSPNode = import("./bsp/un-bsp-node").FBSPNode;
 type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
 type FVert = import("./model/un-vert").FVert;
+
+type ETextureFormat = import("./un-tex-format").ETextureFormat;
+type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
+
+type UDecodableTexture_T = "dds" | "g16";
+type UTextureDecodeInfo_T = {
+    textureType: UDecodableTexture_T,
+    buffer: ArrayBuffer,
+    wrapS: number, wrapT: number
+};

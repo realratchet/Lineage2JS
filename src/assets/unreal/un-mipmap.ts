@@ -29,12 +29,13 @@ class FMipmap extends FConstructable {
         return this;
     }
 
-    public getImageBuffer(): Uint8Array {
+    public getByteLength() { return this.dataArray.length; }
+
+    public getImageBuffer(elements: Uint8Array, offset: number): Uint8Array {
         const elCount = this.dataArray.getElemCount();
-        const elements = new Uint8Array(elCount);
 
         for (let i = 0; i < elCount; i++)
-            elements[i] = this.dataArray.getElem(i).value;
+            elements[offset + i] = this.dataArray.getElem(i).value;
 
         return elements;
     }

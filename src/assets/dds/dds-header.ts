@@ -197,6 +197,11 @@ class DDSHeader {
         this.pf.amask = 0;
     }
 
+    public setMipmapCount(mipCount: number) {
+        this.flags |= DDSConstants.DDSD_MIPMAPCOUNT;
+        this.mipmapcount = mipCount;
+    }
+
     public setWidth(w: number) {
         this.flags |= DDSConstants.DDSD_WIDTH;
         this.width = w;

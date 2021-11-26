@@ -1,20 +1,19 @@
 import DDSHeader from "./dds-header";
-import { PixelFormatInfo } from "../unreal/un-tex-format";
-import { ETexturePixelFormat } from "../unreal/un-material";
+import { PixelFormatInfo, ETexturePixelFormat } from "../unreal/un-tex-format";
+// import { ETexturePixelFormat } from "../unreal/un-material";
 // import { CompressedTexture, LinearFilter } from "three";
 // import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 
-type CompressedPixelFormat = import("three").CompressedPixelFormat;
-type Texture = import("three").Texture;
-
 // const ddsLoader = new DDSLoader();
 
-async function decompressDDS(format: ETexturePixelFormat, texWidth: number, texHeight: number, data: Uint8Array): Promise<Texture> {
+
+function decodeDDS(format: ETexturePixelFormat, mipCount: number, texWidth: number, texHeight: number, data: Uint8Array): ArrayBuffer {
     const header = new DDSHeader();
     const formatInfo = PixelFormatInfo[format];
     const fourCC = formatInfo.fourCC[0];
 
     header.setFourCC(fourCC & 0xFF, (fourCC >> 8) & 0xFF, (fourCC >> 16) & 0xFF, (fourCC >> 24) & 0xFF);
+    header.setMipmapCount(mipCount);
     header.setWidth(texWidth);
     header.setHeight(texHeight);
     header.setNormalFlag(
@@ -32,17 +31,21 @@ async function decompressDDS(format: ETexturePixelFormat, texWidth: number, texH
     view.set(headerBuffer, 0);
     view.set(data, headerOffset);
 
-    const dds = ddsLoader.parse(view.buffer, true);
-    const { mipmaps, width, height, format: _format, mipmapCount } = dds;
-    const tex = new CompressedTexture(mipmaps as ImageData[], width, height, _format as CompressedPixelFormat);
+    // debugger;
 
-    if (mipmapCount === 1) tex.minFilter = LinearFilter;
+    // const dds = ddsLoader.parse(view.buffer, true);
+    // const { mipmaps, width, height, format: _format, mipmapCount } = dds;
+    // const tex = new CompressedTexture(mipmaps as ImageData[], width, height, _format as CompressedPixelFormat);
 
-    tex.needsUpdate = true;
-    tex.flipY = false;
+    // if (mipmapCount === 1) tex.minFilter = LinearFilter;
 
-    return tex;
+    // tex.needsUpdate = true;
+    // tex.flipY = false;
+
+    // return tex;
+
+    return buffer;
 }
 
-export default decompressDDS;
-export { decompressDDS };
+export default decodeDDS;
+export { decodeDDS };

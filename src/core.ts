@@ -13,6 +13,7 @@ import BufferValue from "./assets/buffer-value";
 // import UBrush from "./assets/unreal/un-brush";
 // import ULevel from "./assets/unreal/un-level";
 import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
+import decodeTexture from "./assets/decoders/texture-decoder";
 // import ULight from "./assets/unreal/un-light";
 // import UImport from "./assets/unreal/un-import";
 // import { UShader } from "./assets/unreal/un-material";
@@ -189,6 +190,17 @@ async function startCore() {
     index = 0;
 
     const textures = await Promise.all(impGroups["Texture"].map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
+    const textureInfo = await textures[0].getDecodeInfo(true);
+    const texture = decodeTexture(textureInfo);
+
+    const material = new MeshBasicMaterial({ map: texture });
+    const mesh = new Mesh(geometry, material);
+
+    mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
+
+    objectGroup.add(mesh);
+
+    // debugger;
 
     // debugger;
 
@@ -210,8 +222,8 @@ async function startCore() {
     //     } catch (e) { }
     // }
 
-    debugger;
-    return;
+    // debugger;
+    // return;
 
 
     // const expTerrainInfo = expGroups.TerrainInfo[0];
@@ -240,9 +252,9 @@ async function startCore() {
 
     // debugger;
 
-    const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
-    const level = await uLevel.decodeLevel();
-    objectGroup.add(level);
+    // const uLevel = await new ULevel().load(pkgLoad, expGroups.Level[0]);
+    // const level = await uLevel.decodeLevel();
+    // objectGroup.add(level);
 
     // const uModel = await pkgLoad.fetchObject(7364) as UModel; // base model
     // const model = await uModel.decodeModel();
