@@ -1,6 +1,4 @@
 import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-// import { Vector3 } from "three";
 import BufferValue from "../buffer-value";
 
 class FVector extends FConstructable {

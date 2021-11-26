@@ -6,13 +6,15 @@ type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
 abstract class UObject {
-    public constructor(...params: any[]) { }
+    public objectName = "Exp_None";
 
+    protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
     protected readHeadOffset: number = 0;
-    public objectName = "Exp_None";
+
+    public constructor(...params: any[]) { }
 
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
@@ -24,19 +26,13 @@ abstract class UObject {
     public get byteCount() { return this.readTail - this.readStart; }
     public get bytesUnread() { return this.readTail - this.readHead; }
 
-    protected async readNamedProps(pkg: UPackage) {
+    protected readNamedProps(pkg: UPackage) {
         do {
-            const tag = await PropertyTag.from(pkg, this.readHead);
+            const tag = PropertyTag.from(pkg, this.readHead);
 
             if (!tag.isValid()) break;
 
-            // if (tag.name === "Diffuse" || tag.name === "SpecularityMask")
-            //     debugger;
-
-            // if (tag.name === "Material") debugger;
-
-            await this.loadProperty(pkg, tag);
-
+            this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
@@ -44,12 +40,12 @@ abstract class UObject {
         this.readHead = pkg.tell();
     }
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+    public load(pkg: UPackage, exp: UExport): this {
         this.objectName = `Exp_${exp.objectName}`;
 
         this.setReadPointers(exp);
 
-        await this.readNamedProps(pkg);
+        this.readNamedProps(pkg);
 
         return this;
     }

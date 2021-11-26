@@ -33,7 +33,7 @@ const decodeDDS = (function () {
     };
 })();
 
-function decodeTexture(info: UTextureDecodeInfo_T) {
+function decodeTexture(info: ITextureDecodeInfo) {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
@@ -48,3 +48,4 @@ function decodeTexture(info: UTextureDecodeInfo_T) {
 }
 
 export default decodeTexture;
+export { decodeTexture };

@@ -2,7 +2,7 @@ import UExport from "../un-export";
 import UPackage from "../un-package";
 import UAActor from "../un-aactor";
 import UStaticMesh from "./un-static-mesh";
-import { Vector3, Mesh, Group } from "three";
+// import { Vector3, Mesh, Group } from "three";
 import UStaticMeshIsntance from "./un-static-mesh-instance";
 import FArray from "../un-array";
 import BufferValue from "../../buffer-value";
@@ -13,7 +13,7 @@ class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
     protected instance: UStaticMeshIsntance;
     protected isRangeIgnored: boolean;
-    protected colLocation: Vector3;
+    protected colLocation: FVector;
     protected touching: FArray = new FArray(FNumber.forType(BufferValue.int16) as any);
     protected isUpdatingShadow: boolean;
     protected stepSound1: USound;
@@ -52,7 +52,7 @@ class UStaticMeshActor extends UAActor {
         });
     }
 
-    public async decodeMesh(): Promise<Group> {
+    public async decodeMesh(): Promise<THREE.Group> {
         // debugger;
 
         const group = new Group();
@@ -63,13 +63,13 @@ class UStaticMeshActor extends UAActor {
 
         group.name = this.objectName;
         group.add(instance);
-        group.position.set(this.location.vector.x, this.location.vector.z, this.location.vector.y)
+        group.position.set(this.location.x, this.location.z, this.location.y)
         // group.scale.set(0.001, 0.001, 0.001);
 
         // roll (x) | pitch (y) | yaw (z)
 
         this.rotation.getEuler(group.rotation);
-        group.scale.set(Math.abs(this.scale.vector.x), Math.abs(this.scale.vector.z), Math.abs(this.scale.vector.y));
+        group.scale.set(Math.abs(this.scale.x), Math.abs(this.scale.z), Math.abs(this.scale.y));
 
         // debugger;
 
@@ -91,7 +91,7 @@ class UStaticMeshActor extends UAActor {
         return group;
     }
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+    public load(pkg: UPackage, exp: UExport): this {
         // debugger;
         // this.readHeadOffset = 15;
         // pkg.seek(exp.offset.value as number, "set");
@@ -106,7 +106,7 @@ class UStaticMeshActor extends UAActor {
         
         // debugger;
         
-        await super.load(pkg, exp);
+        super.load(pkg, exp);
 
         this.readHead = pkg.tell();
         

@@ -49,8 +49,10 @@ type UColorModifier = import("./un-material").UColorModifier;
 type UTexOscillator = import("./un-material").UTexOscillator;
 type PropertyTag = import("./un-property").PropertyTag;
 type FColor = import("./un-color").FColor;
+type UMatrix = import("./un-matrix").UMatrix;
 type UPointRegion = import("./un-point-region").UPointRegion;
 type FVector = import("./un-vector").FVector;
+type FRotator = import("./un-rotator").FRotator;
 
 type FMipmap = import("./un-mipmap").FMipmap;
 type UDecoLayer = import("./un-deco-layer").UDecoLayer;
@@ -62,9 +64,33 @@ type FVert = import("./model/un-vert").FVert;
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
-type UDecodableTexture_T = "dds" | "g16";
-type UTextureDecodeInfo_T = {
-    textureType: UDecodableTexture_T,
+type DecodableTexture_T = "dds" | "g16";
+type DecodableMaterial_T = "modifier" | "texture" | "shader";
+type DecodableMaterialModifier_T = "fadeColor";
+interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
+interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo { modifierType: DecodableMaterialModifier_T }
+interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
+    textureType: DecodableTexture_T,
     buffer: ArrayBuffer,
     wrapS: number, wrapT: number
-};
+}
+
+interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
+    diffuse: IBaseMaterialDecodeInfo,
+    opacity: IBaseMaterialDecodeInfo,
+    specular: IBaseMaterialDecodeInfo,
+    specularMask: IBaseMaterialDecodeInfo,
+    depthWrite: boolean,
+    doubleSide: boolean,
+    transparent: boolean,
+    alphaTest: number,
+    visible: boolean
+}
+
+interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+    fadeColors: {
+        color1: number[],
+        color2: number[],
+        period: number
+    }
+}

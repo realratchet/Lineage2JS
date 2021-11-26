@@ -1,5 +1,3 @@
-import { PropertyTag } from "./un-property";
-import UPackage from "./un-package";
 import UObject from "./un-object";
 import { UPlane } from "./un-plane";
 

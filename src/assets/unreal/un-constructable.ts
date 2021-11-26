@@ -3,7 +3,7 @@ abstract class FConstructable implements IConstructable {
      * @obsolete this is no longer user, was used to guide parsing
      */
     public static readonly typeSize: number;
-    public abstract async load(pkg: UPackage, tag?: PropertyTag): Promise<this>;
+    public abstract load(pkg: UPackage, tag?: PropertyTag): this;
 }
 
 export default FConstructable;

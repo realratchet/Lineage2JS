@@ -73,7 +73,6 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
-
         const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
 
         // debugger;

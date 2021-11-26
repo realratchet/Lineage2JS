@@ -1,20 +1,15 @@
 import UObject from "./un-object"
-import UTexture from "./un-texture";
-// import { Matrix4, Euler, Material, MeshBasicMaterial, DoubleSide, Color, BackSide, FrontSide, Texture, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Matrix3, Vector2, Vector3 } from "three";
 import FArray from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
-import UMatrix from "./un-matrix";
-// import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import FColor from "./un-color";
-import FRotator from "./un-rotator";
 
 abstract class UBaseMaterial extends UObject {
-    public abstract async decodeMaterial(): Promise<THREE.Material>;
+    public abstract async getDecodeInfo(loadMipmaps: boolean): Promise<IBaseMaterialDecodeInfo>;
 }
 abstract class UBaseModifier extends UBaseMaterial {
-    public abstract getParameters(): Promise<{ [key: string]: any }>;
-    public async decodeMipmap(level: number): Promise<THREE.Texture> { return await ((this as any).material as UTexture).decodeMipmap(level); };
+    // public abstract getParameters(): Promise<{ [key: string]: any }>;
+    // public async decodeMipmap(level: number): Promise<THREE.Texture> { return await ((this as any).material as UTexture).decodeMipmap(level); };
 }
 
 abstract class UMaterial extends UBaseMaterial { }
@@ -70,11 +65,11 @@ enum TexRotationType_T {
  */
 
 class UShader extends UMaterial {
-    protected diffuse: UTexture = null;
-    protected opacity: UTexture = null;
+    protected diffuse: UMaterial = null;
+    protected opacity: UMaterial = null;
     protected doubleSide: boolean = false;
-    protected specular: UBaseModifier = null;
-    protected specularMask: UTexture = null;
+    protected specular: UMaterial = null;
+    protected specularMask: UMaterial = null;
     protected outputBlending: OutputBlending_T = OutputBlending_T.OB_Normal;
     protected isTreatingDoubleSided: boolean = false;
     protected depthWrite: boolean = true;
@@ -98,12 +93,8 @@ class UShader extends UMaterial {
         });
     }
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
-        // debugger;
-
-        await super.load(pkg, exp);
-
-        // debugger;
+    public load(pkg: UPackage, exp: UExport): this {
+        super.load(pkg, exp);
 
         switch (this.outputBlending) {
             case OutputBlending_T.OB_Normal: break; // default
@@ -114,14 +105,36 @@ class UShader extends UMaterial {
                 break;
         }
 
-        // debugger;
-
-        // console.assert((this.readTail - pkg.tell()) === 0);
-
         return this;
     }
 
-    public async decodeMaterial(): Promise<Material> {
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<IShaderDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+
+        const diffuse = await this.diffuse?.getDecodeInfo(loadMipmaps) || null;
+        const opacity = await this.opacity?.getDecodeInfo(loadMipmaps) || null;
+        const specular = await this.specular?.getDecodeInfo(loadMipmaps) || null;
+        const specularMask = await this.specularMask?.getDecodeInfo(loadMipmaps) || null;
+        const depthWrite = this.depthWrite;
+        const doubleSide = this.doubleSide
+        const transparent = this.transparent;
+        const alphaTest = this.alphaTest / 255;
+
+        return {
+            materialType: "shader",
+            diffuse,
+            opacity,
+            specular,
+            specularMask,
+            depthWrite,
+            doubleSide,
+            transparent,
+            alphaTest,
+            visible: true,
+        };
+    }
+
+    public async decodeMaterial(): Promise<THREE.Material> {
         const diffuse = await this.diffuse?.decodeMipmap(0) || null;
         const opacity = await this.opacity?.decodeMipmap(0) || null;
         const specular = await this.specularMask?.decodeMipmap(0) || null;
@@ -172,13 +185,15 @@ class UFadeColor extends UBaseModifier {
     public color2: FColor = new FColor();
     public period: number = 0;
 
-    public async decodeMaterial(): Promise<Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
+    public async decodeMaterial(): Promise<THREE.Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
 
-    public async getParameters() {
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<IFadeColorDecodeInfo> {
         return {
+            materialType: "modifier",
+            modifierType: "fadeColor",
             fadeColors: {
-                color1: new Color(this.color1.r / 255, this.color1.b / 255, this.color1.b / 255),
-                color2: new Color(this.color2.r / 255, this.color2.b / 255, this.color2.b / 255),
+                color1: [this.color1.r / 255, this.color1.b / 255, this.color1.b / 255],
+                color2: [this.color2.r / 255, this.color2.b / 255, this.color2.b / 255],
                 period: this.period
             }
         };
@@ -199,8 +214,8 @@ class UColorModifier extends UBaseMaterial {
     protected material: UShader;
     protected alphaBlend: boolean;
 
-    public async decodeMaterial(): Promise<Material> {
-        const material = await this.material?.decodeMaterial() as MeshBasicMaterial;
+    public async decodeMaterial(): Promise<THREE.Material> {
+        const material = await this.material?.decodeMaterial() as THREE.MeshBasicMaterial;
 
         material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
         material.uniforms.opacity.value = this.color.a / 255;
@@ -228,7 +243,7 @@ class UTexRotator extends UBaseModifier {
     protected offsetV: number;
     protected material: UMaterial;
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
+    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
     public async getParameters() {
         // const matrix = this.matrix.getMatrix3(new Matrix3());
@@ -278,7 +293,7 @@ class UTexOscillator extends UBaseModifier {
         return {};
     }
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -315,7 +330,7 @@ class UTexPanner extends UBaseModifier {
         };
     }
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -345,16 +360,16 @@ class UMaterialContainer extends UBaseMaterial {
         });
     }
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+    public load(pkg: UPackage, exp: UExport): this {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + UMaterialContainer.typeSize;
 
-        await this.readNamedProps(pkg);
+        this.readNamedProps(pkg);
 
         return this;
     }
 
-    public async decodeMaterial(): Promise<Material> { return await this.material?.decodeMaterial(); }
+    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial(); }
 }
 
 export default UMaterial;

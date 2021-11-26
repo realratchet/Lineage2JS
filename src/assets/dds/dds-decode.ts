@@ -1,11 +1,5 @@
 import DDSHeader from "./dds-header";
 import { PixelFormatInfo, ETexturePixelFormat } from "../unreal/un-tex-format";
-// import { ETexturePixelFormat } from "../unreal/un-material";
-// import { CompressedTexture, LinearFilter } from "three";
-// import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-
-// const ddsLoader = new DDSLoader();
-
 
 function decodeDDS(format: ETexturePixelFormat, mipCount: number, texWidth: number, texHeight: number, data: Uint8Array): ArrayBuffer {
     const header = new DDSHeader();
@@ -26,23 +20,8 @@ function decodeDDS(format: ETexturePixelFormat, mipCount: number, texWidth: numb
     const buffer = new ArrayBuffer(headerOffset + data.byteLength);
     const view = new Uint8Array(buffer);
 
-    // debugger;
-
     view.set(headerBuffer, 0);
     view.set(data, headerOffset);
-
-    // debugger;
-
-    // const dds = ddsLoader.parse(view.buffer, true);
-    // const { mipmaps, width, height, format: _format, mipmapCount } = dds;
-    // const tex = new CompressedTexture(mipmaps as ImageData[], width, height, _format as CompressedPixelFormat);
-
-    // if (mipmapCount === 1) tex.minFilter = LinearFilter;
-
-    // tex.needsUpdate = true;
-    // tex.flipY = false;
-
-    // return tex;
 
     return buffer;
 }

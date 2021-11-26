@@ -73,7 +73,7 @@ class UStaticMesh extends UPrimitive {
 
         // debugger;
 
-        await this.sections.load(pkg, null);        // 0400 0000 0000 00BE 00ED 0022 0022 0000
+        this.sections.load(pkg, null);        // 0400 0000 0000 00BE 00ED 0022 0022 0000
         await this.boundingBox.load(pkg);           // 6666 A2C3 FAED EBC0 889D 06C4 6666 A243
         await this.vertexStream.load(pkg, null);    // 6E03 6666 A243 0000 0C42 8A2E F343 0000
         await this.colorStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF

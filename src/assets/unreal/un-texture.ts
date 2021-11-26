@@ -1,10 +1,6 @@
 import { FArrayLazy } from "./un-array";
 import { FMipmap } from "./un-mipmap";
-// import { ETexturePixelFormat } from "./un-material";
 import decompressDDS from "../dds/dds-decode";
-// import { RepeatWrapping, Texture, MeshBasicMaterial, Material, DoubleSide, Wrapping, ClampToEdgeWrapping, BackSide, FrontSide, MirroredRepeatWrapping } from "three";
-// import decodeG16 from "../decode-g16";
-import { PropertyTag } from "./un-property";
 import UObject from "./un-object";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
@@ -17,22 +13,6 @@ import FColor from "./un-color";
     0001000000 ( 64)
     0000100000 ( 32)
 */
-
-function getClamping(mode: number) {
-
-    switch (mode) {
-        case 1024: return RepeatWrapping;
-        case 512: return RepeatWrapping;
-        case 256: return MirroredRepeatWrapping;
-        case 128: return RepeatWrapping;
-        case 64: return RepeatWrapping;
-        case 32: return RepeatWrapping;
-        default:
-            console.warn(`Unknown clamping mode: ${mode}`);
-            return ClampToEdgeWrapping;
-    }
-}
-
 
 class UTexture extends UObject {
     protected palette: UPlatte;
@@ -73,46 +53,12 @@ class UTexture extends UObject {
         });
     }
 
-    protected promiseLoading: Promise<this>;
+    public load(pkg: UPackage, exp: UExport): this {
+        super.load(pkg, exp);
 
-    public async load(pkg: UPackage, exp: UExport) {
-        // await super.load(pkg, exp);
-
-        // debugger;
-
-        this.objectName = `Exp_${exp.objectName}`;
-
-        // console.log(this.objectName);
-
-        const promises: Promise<any>[] = [];
-        this.setReadPointers(exp);
-        do {
-            const tag = PropertyTag.from(pkg, this.readHead);
-
-            if (!tag.isValid()) break;
-
-            promises.push(this.loadProperty(pkg, tag));
-
-            this.readHead = pkg.tell()
-
-        } while (this.readHead < this.readTail);
+        this.promisesLoading.push(this.mipmaps.load(pkg, null));
 
         this.readHead = pkg.tell();
-
-        // pkg.read(BufferValue.allocBytes(4)); //unknown
-
-        // debugger;
-        promises.push(this.mipmaps.load(pkg, null));
-
-        // if (this.mipmaps.getElemCount() === 0)
-        //     debugger;
-
-        this.readHead = pkg.tell();
-
-        this.promiseLoading = new Promise(async resolve => {
-            await Promise.all(promises);
-            resolve(this);
-        });
 
         return this;
     }
@@ -134,7 +80,10 @@ class UTexture extends UObject {
         }
     }
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<UTextureDecodeInfo_T> {
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITextureDecodeInfo> {
+
+        await Promise.all(this.promisesLoading);
+
         const firstMipmap = this.mipmaps[0] as FMipmap;
         const mipCount = loadMipmaps ? this.mipmaps.length : 1;
 
@@ -160,7 +109,7 @@ class UTexture extends UObject {
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         const format = this.getTexturePixelFormat();
         let decodedBuffer: ArrayBuffer;
-        let textureType: UDecodableTexture_T;
+        let textureType: DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -180,6 +129,7 @@ class UTexture extends UObject {
         }
 
         return {
+            materialType: "texture",
             textureType,
             buffer: decodedBuffer,
             wrapS: this.wrapS,
@@ -187,44 +137,7 @@ class UTexture extends UObject {
         };
     }
 
-    public async decodeMipmap(level: number): Promise<THREE.Texture> {
-        const mipmap = this.mipmaps.getElem(level);
-
-        if (!mipmap) {
-            // console.warn("Missing mipmap.");
-            return null;
-        }
-
-        const width = mipmap.sizeW, height = mipmap.sizeH;
-        const data = mipmap.getImageBuffer();
-        const format = this.getTexturePixelFormat();
-
-        let texture: THREE.Texture;
-
-        // debugger;
-
-        switch (format) {
-            case ETexturePixelFormat.TPF_DXT1:
-            case ETexturePixelFormat.TPF_DXT3:
-            case ETexturePixelFormat.TPF_DXT5:
-            case ETexturePixelFormat.TPF_DXT5N:
-                texture = await decompressDDS(format, width, height, data);
-                texture.wrapS = RepeatWrapping;
-                texture.wrapT = RepeatWrapping;
-                break;
-            case ETexturePixelFormat.TPF_G16:
-                texture = await decodeG16(width, height, data);
-                break;
-            default: throw new Error(`Unsupported texture format: ${format}`);
-        }
-
-        texture.wrapS = getClamping(this.wrapS);
-        texture.wrapT = getClamping(this.wrapT);
-
-        return texture;
-    }
-
-    public async decodeMaterial(): Promise<Material> {
+    public async decodeMaterial(): Promise<THREE.Material> {
         const texture = await this.decodeMipmap(0);
 
         // if(texture) {

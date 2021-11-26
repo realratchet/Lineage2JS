@@ -19,7 +19,7 @@ class FStaticMeshSection extends FConstructable {
 
     public static readonly typeSize = 16;
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         const uint32 = new BufferValue(BufferValue.uint32);
         const uint16 = new BufferValue(BufferValue.uint16);
 
@@ -29,12 +29,12 @@ class FStaticMeshSection extends FConstructable {
         // this.numFaces = await pkg.read(uint16).value as number;
         // this.triMax = await pkg.read(uint16).value as number;
 
-        this.f4 = await pkg.read(uint32).value as number;
-        this.firstIndex = await pkg.read(uint16).value as number;
-        this.firstVertex = await pkg.read(uint16).value as number;
-        this.lastVertex = await pkg.read(uint16).value as number;
-        this.fE = await pkg.read(uint16).value as number;
-        this.numFaces = await pkg.read(uint16).value as number;
+        this.f4 = pkg.read(uint32).value as number;
+        this.firstIndex = pkg.read(uint16).value as number;
+        this.firstVertex = pkg.read(uint16).value as number;
+        this.lastVertex = pkg.read(uint16).value as number;
+        this.fE = pkg.read(uint16).value as number;
+        this.numFaces = pkg.read(uint16).value as number;
 
         return this;
     }

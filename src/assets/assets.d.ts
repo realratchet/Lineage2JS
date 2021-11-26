@@ -52,7 +52,7 @@ type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;
 
 interface IConstructable {
-    load(pkg: import("../assets/unreal/un-package").UPackage, tag?: import("../assets/unreal/un-property").PropertyTag): Promise<this>;
+    load(pkg: import("../assets/unreal/un-package").UPackage, tag?: import("../assets/unreal/un-property").PropertyTag): this;
 }
 
 type ValidConstructables_T<T> = typeof import("./unreal/un-color").FColor

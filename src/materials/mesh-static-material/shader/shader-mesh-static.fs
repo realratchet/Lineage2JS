@@ -21,18 +21,35 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
-#ifdef USE_FADE
-struct FadeData {
-    vec3 color1;
-    vec3 color2;
-    float period;
-};
+#ifdef USE_SPECULAR
+    #ifdef USE_FADE
+        struct FadeData {
+            vec3 color1;
+            vec3 color2;
+            float period;
+        };
+    #endif
 
-uniform FadeData fadeColors;
+    struct SpecularData {
+        #ifdef USE_FADE
+            FadeData fadeColors;
+        #endif
+        #ifdef USE_MAP_SPECULAR
+            uniform sampler2D map;
+        #endif
+    };
+
+    uniform SpecularData shSpecular;
 #endif
 
-#ifdef USE_MAP_DIFFUSE
-uniform sampler2D mapDiffuse;
+#ifdef USE_DIFFUSE
+    struct DiffuseData {
+        #ifdef USE_MAP_DIFFUSE
+            uniform sampler2D map;
+        #endif
+    };
+
+    uniform DiffuseData shDiffuse;
 #endif
 
 #ifdef USE_MAP_OPACITY
@@ -62,24 +79,27 @@ void main() {
     
     // #include <map_fragment>
     // boomer tech
-    #ifdef USE_MAP_DIFFUSE
+    #ifdef USE_MAP_DIFFUSEs
         vec4 texelDiffuse = texture2D(mapDiffuse, vUv);
         // texelDiffuse = mapTexelToLinear(texelDiffuse);
         diffuseColor.rgb *= texelDiffuse.rgb;
     #endif
 
 
-    #ifdef USE_FADE
-        float mixValue = (sin(globalTime) + 1.0) / 2.0;
-        vec3 specularColor = mix(fadeColors.color1, fadeColors.color2, mixValue) * 2.0;
-    #else
-        #ifdef USE_MAP_SPECULAR
-            vec4 texelSpecular = texture2D(mapSpecular, vUvSpecular);
-            vec3 specularColor = texelSpecular.rgb;
+    #ifdef USE_SPECULAR
+        vec3 specularColor = vec3(1.0);
+
+        #ifdef USE_FADE
+            float mixValue = (sin(globalTime) + 1.0) / 2.0;
+            specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
+        #else
+            #ifdef USE_MAP_SPECULAR
+                vec4 texelSpecular = texture2D(mapSpecular, vUvSpecular);
+                specularColor = texelSpecular.rgb;
+            #endif
         #endif
-    #endif
-    
-    #if defined(USE_FADE) || defined(USE_MAP_SPECULAR)
+
+        
         #ifdef USE_MAP_SPECULAR_MASK
             vec4 texelSpecularMask = texture2D(mapSpecularMask, vUv);
             diffuseColor.rgb += texelSpecularMask.a * specularColor;
@@ -121,9 +141,9 @@ void main() {
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
 
-    #ifdef USE_MAP_SPECULAR
-    // gl_FragColor = vec4(vUvSpecular.x, vUvSpecular.y, 0.0, 1.0);
-    // vec4 texelSpecular = texture2D(mapSpecular, vUv).aaaa;
-    // gl_FragColor = vec4(specularColor.rgb, 1.0);
-    #endif
+    // #ifdef USE_MAP_SPECULAR
+    // // gl_FragColor = vec4(vUvSpecular.x, vUvSpecular.y, 0.0, 1.0);
+    // // vec4 texelSpecular = texture2D(mapSpecular, vUv).aaaa;
+    // // gl_FragColor = vec4(specularColor.rgb, 1.0);
+    // #endif
 }

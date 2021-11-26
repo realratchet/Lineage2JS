@@ -1,7 +1,4 @@
 import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-import { PropertyTag } from "./un-property";
-import { Vector3, Euler } from "three";
 import BufferValue from "../buffer-value";
 
 class FRotator extends FConstructable {
@@ -20,7 +17,7 @@ class FRotator extends FConstructable {
         return this;
     }
 
-    public getEuler(output: Euler): Euler {
+    public getEuler(output: THREE.Euler): THREE.Euler {
         const _PI = Math.PI;
         const yAxis = (-this.yaw / 32768. * _PI) % (_PI * 2);
         const xAxis = (2 * _PI - this.roll / 32768. * _PI) % (_PI * 2);
