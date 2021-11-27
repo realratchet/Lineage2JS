@@ -35,7 +35,7 @@ function decodeTexPannerModifer(info: ITexPannerDecodeInfo): IDecodedParameter {
             USE_GLOBAL_TIME: ""
         },
         uniforms: Object.assign({
-            map: isUsingMap ? decodeMaterial(info.transform.map).uniforms : null,
+            map: isUsingMap ? decodeTexture(info.transform.map).uniforms : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: info.transform.rate,
@@ -52,12 +52,27 @@ function decodeModifier(info: IBaseMaterialModifierDecodeInfo): IDecodedParamete
     }
 }
 
+function decodeParameter(info: IBaseMaterialDecodeInfo): IDecodedParameter {
+    if (!info) return null;
+
+    switch (info.materialType) {
+        case "modifier": return decodeModifier(info as IBaseMaterialModifierDecodeInfo);
+        case "texture": return {
+            uniforms: { map: decodeTexture(info as ITextureDecodeInfo).uniforms },
+            defines: {},
+            isUsingMap: true,
+            transformType: "none"
+        }
+        default: throw new Error(`Unsupported decoder parameter: ${info.materialType}`);
+    }
+}
+
 function decodeShader(info: IShaderDecodeInfo) {
     return new MeshStaticMaterial({
-        diffuse: info.diffuse ? decodeMaterial(info.diffuse) : null,
-        opacity: info.opacity ? decodeMaterial(info.opacity) : null,
-        specular: info.specular ? decodeMaterial(info.specular) : null,
-        specularMask: info.specularMask ? decodeMaterial(info.specularMask) : null,
+        diffuse: decodeParameter(info.diffuse),
+        opacity: decodeParameter(info.opacity),
+        specular: decodeParameter(info.specular),
+        specularMask: decodeParameter(info.specularMask),
         side: info.doubleSide ? DoubleSide : FrontSide,
         blendingMode: info.blendingMode,
         transparent: info.transparent,
@@ -66,11 +81,12 @@ function decodeShader(info: IShaderDecodeInfo) {
     });
 }
 
-function decodeTexture(info: ITextureDecodeInfo) {
+function decodeTexture(info: ITextureDecodeInfo): IDecodedParameter {
     return {
         uniforms: _decodeTexture(info),
         defines: {},
-        isUsingMap: true
+        isUsingMap: true,
+        transformType: "none"
     };
 }
 

@@ -68,12 +68,10 @@ void main() {
         vUvTransformedDiffuse = uv;
 
         #if USE_MAP_DIFFUSE_TRANSFORM == PAN
-            transformDiffuseMatrix[2].xy *= (shDiffuse.transform.rate * globalTime);// / shDiffuse.map.size;
+            transformDiffuseMatrix[2].xy *= (shDiffuse.transform.rate * globalTime) / shDiffuse.map.size;
         #endif
 
         vUvTransformedDiffuse = (transformDiffuseMatrix * vec3(vUvTransformedDiffuse, 1)).xy;
-
-        // vUvTransformedDiffuse.xy += globalTime * shDiffuse.transform.rate / shDiffuse.map.size;
     #endif
 
     // #ifdef USE_TRANSFORMED_SPECULAR

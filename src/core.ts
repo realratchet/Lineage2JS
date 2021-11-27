@@ -191,7 +191,7 @@ async function startCore() {
 
     // index = 0;
 
-    const shaders = await Promise.all(impGroups["Shader"].slice(3, 4).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
+    const shaders = await Promise.all(impGroups["Shader"].slice(0, 4).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
     shaders.forEach(async shader => {
         const shaderInfo = await shader.getDecodeInfo(true);
