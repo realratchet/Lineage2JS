@@ -36,12 +36,35 @@
                 TextureData map;
 
                 #ifdef USE_MAP_DIFFUSE_TRANSFORM
-                TransformDiffuseData transform;
+                    TransformDiffuseData transform;
                 #endif
             #endif
         };
 
         uniform DiffuseData shDiffuse;
+    #endif
+
+    #ifdef USE_MAP_OPACITY_TRANSFORM
+        varying vec2 vUvTransformedOpacity;
+        
+        struct TransformOpacityData {
+            #if USE_MAP_OPACITY_TRANSFORM == PAN
+                mat3 matrix;
+                float rate;
+            #endif
+        };
+
+        struct OpacityData {
+            #ifdef USE_MAP_OPACITY
+                TextureData map;
+
+                #ifdef USE_MAP_OPACITY_TRANSFORM
+                TransformOpacityData transform;
+                #endif
+            #endif
+        };
+
+        uniform OpacityData shOpacity;
     #endif
 #endif
 
@@ -72,6 +95,18 @@ void main() {
         #endif
 
         vUvTransformedDiffuse = (transformDiffuseMatrix * vec3(vUvTransformedDiffuse, 1)).xy;
+    #endif
+
+    #if defined(USE_UV) && defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
+        mat3 transformOpacityMatrix = shOpacity.transform.matrix;
+        
+        vUvTransformedOpacity = uv;
+
+        #if USE_MAP_OPACITY_TRANSFORM == PAN
+            transformOpacityMatrix[2].xy *= (shOpacity.transform.rate * globalTime) / shOpacity.map.size;
+        #endif
+
+        vUvTransformedOpacity = (transformOpacityMatrix * vec3(vUvTransformedOpacity, 1)).xy;
     #endif
 
     // #ifdef USE_TRANSFORMED_SPECULAR

@@ -88,13 +88,36 @@ uniform float opacity;
 
 #ifdef USE_OPACITY
     #if defined(USE_MAP_OPACITY)
+        #ifdef USE_MAP_OPACITY_TRANSFORM
+            varying vec2 vUvTransformedOpacity;
+            
+            struct TransformOpacityData {
+                #if USE_MAP_OPACITY_TRANSFORM == PAN
+                    mat3 matrix;
+                    float rate;
+                #endif
+            };
+        #endif
+
+
         struct OpacityData {
             #ifdef USE_MAP_OPACITY
                 TextureData map;
             #endif
+            #ifdef USE_MAP_OPACITY_TRANSFORM
+                TransformOpacityData transform;
+            #endif
         };
 
         uniform OpacityData shOpacity;
+    #endif
+
+    #ifdef USE_UV
+        #if defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
+            #define UV_OPACITY vUvTransformedOpacity
+        #else
+            #define UV_OPACITY vUv
+        #endif
     #endif
 #endif
 
@@ -159,7 +182,7 @@ void main() {
 
     #ifdef USE_OPACITY
         #ifdef USE_MAP_OPACITY
-            vec4 texelOpacity = texture2D(shOpacity.map.texture, vUv);
+            vec4 texelOpacity = texture2D(shOpacity.map.texture, UV_OPACITY);
             diffuseColor.rgba *= texelOpacity.a;
         #endif
     #endif
