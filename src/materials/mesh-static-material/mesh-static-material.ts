@@ -1,12 +1,48 @@
-import { ShaderMaterial, Uniform, Matrix3, Color, Texture, MultiplyOperation, Combine, UniformsUtils, UniformsLib, ShaderLib, Side, FrontSide, Vector2, DoubleSide } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, Texture, MultiplyOperation, Combine, UniformsUtils, UniformsLib, ShaderLib, Side, FrontSide, Vector2, DoubleSide, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import decodeMaterial from "@client/assets/decoders/material-decoder";
 
+type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
+type ApplyParams_T = {
+    name: SupportedShaderParams_T,
+    parameters: IDecodedParameter,
+    uniforms: { [key: string]: Uniform },
+    defines: { [key: string]: any }
+}
+
+function applyParameters({ name, parameters, uniforms, defines }: ApplyParams_T): void {
+
+    let defName;
+
+    switch (name) {
+        case "shDiffuse": defName = "DIFFUSE"; break;
+        case "shOpacity": defName = "OPACITY"; break;
+        case "shSpecular": defName = "SPECULAR"; break;
+        case "shSpecularMask": defName = "SPECULAR_MASK"; break;
+    }
+
+    defines[`USE_${defName}`] = "";
+
+    Object.assign(uniforms[name].value = {}, parameters.uniforms);
+    Object.assign(defines, parameters.defines);
+
+    if (parameters.isUsingMap) {
+        defines["USE_UV"] = "";
+        defines[`USE_MAP_${defName}`] = "";
+
+        if (parameters.transformType !== "none") {
+            defines["PAN"] = 0;
+            defines["ROTATE"] = 1;
+            defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
+        }
+    }
+}
+
 class MeshStaticMaterial extends ShaderMaterial {
     // @ts-ignore
-    constructor(info: IShaderDecodeInfo) {
+    constructor(info: MeshStaticMaterialParameters) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -20,10 +56,6 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         const defines: { [key: string]: any } = {};
         const uniforms: { [key: string]: Uniform } = {
-            // mapDiffuse: new Uniform(null),
-            // mapSpecular: new Uniform(null),
-            // mapSpecularMask: new Uniform(null),
-            // mapOpacity: new Uniform(null),
             alphaTest: new Uniform(1e-3),
             globalTime: new Uniform(0),
             diffuse: new Uniform(new Color(1, 1, 1)),
@@ -32,59 +64,30 @@ class MeshStaticMaterial extends ShaderMaterial {
             transformSpecular: new Uniform(null),
 
             shDiffuse: new Uniform(null),
+            shOpacity: new Uniform(null),
             shSpecular: new Uniform(null),
             shSpecularMask: new Uniform(null)
         };
 
-        if (info.diffuse) {
-            const params = info.diffuse;
+        function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
+            if (!parameters) return;
 
-            defines["USE_DIFFUSE"] = "";
-            Object.assign(uniforms["shDiffuse"].value = {}, params.uniforms);
-            Object.assign(defines, params.defines);
-            if (params.isUsingMap) {
-                defines["USE_UV"] = "";
-                defines["USE_MAP_DIFFUSE"] = "";
-            }
+            applyParameters({
+                name,
+                defines,
+                uniforms,
+                parameters
+            });
         }
 
-        if (info.opacity) {
-            debugger;
-            // uniforms["mapOpacity"].value = decodeMaterial(info.opacity);
-            // defines["USE_UV"] = "";
-            // defines["USE_MAP_DIFFUSE"] = "";
-            // defines["USE_MAP_OPACITY"] = "";
-            // defines["USE_ALPHATEST"] = "";
-        }
+        apply("shDiffuse", info.diffuse);
+        apply("shOpacity", info.opacity);
+        apply("shSpecular", info.specular);
+        apply("shSpecularMask", info.specularMask);
 
-        if (info.specular) {
-            // debugger;
-            const params = info.specular;
+        // debugger;
 
-            defines["USE_SPECULAR"] = "";
-            Object.assign(uniforms["shSpecular"].value = {}, params.uniforms);
-            Object.assign(defines, params.defines);
-            if (params.isUsingMap) {
-                defines["USE_UV"] = "";
-                defines["USE_MAP_SPECULAR"] = "";
-            }
-
-            // debugger;
-        }
-
-        if (info.specularMask) {
-            const params = info.specularMask;
-
-            defines["USE_SPECULAR_MASK"] = "";
-            Object.assign(uniforms["shSpecularMask"].value = {}, params.uniforms);
-            Object.assign(defines, params.defines);
-            if (params.isUsingMap) {
-                defines["USE_UV"] = "";
-                defines["USE_MAP_SPECULAR_MASK"] = "";
-            }
-        }
-
-        debugger;
+        // debugger;
 
         // if (hasTransformedTexture) {
         //     defines["USE_GLOBAL_TIME"] = "";
@@ -128,6 +131,17 @@ class MeshStaticMaterial extends ShaderMaterial {
             depthWrite: info.depthWrite,
             visible: info.visible
         });
+
+        switch (info.blendingMode) {
+            case "normal":
+            case "masked":
+                this.blending = CustomBlending;
+                this.blendSrc = SrcAlphaFactor;
+                this.blendDst = OneMinusSrcAlphaFactor;
+                this.alphaTest = 0;
+                break;
+            default: console.warn("Unknown blending mode:", info.blendingMode); break;
+        }
     }
 }
 
@@ -135,24 +149,13 @@ export default MeshStaticMaterial;
 export { MeshStaticMaterial };
 
 type MeshStaticMaterialParameters = {
-    mapDiffuse?: Texture,
-    mapSpecularMask?: Texture,
-    mapOpacity?: Texture,
-    alphaTest?: number,
-    side?: Side,
-    depthWrite?: boolean,
-    transparent?: boolean,
-    fadeColors?: {
-        color1: Color,
-        color2: Color,
-        period: number
-    },
-    visible?: boolean,
-    transformedTexture?: {
-        transformPan: boolean,
-        transformRotate: boolean,
-        texture: Texture,
-        matrix: Matrix3,
-        rate: number
-    }
+    diffuse: IDecodedParameter,
+    opacity: IDecodedParameter,
+    specular: IDecodedParameter,
+    specularMask: IDecodedParameter,
+    side: THREE.Side,
+    blendingMode: SupportedBlendingTypes_T,
+    transparent: boolean,
+    depthWrite: boolean,
+    visible: boolean
 };

@@ -1,5 +1,5 @@
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping } from "three";
+import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2 } from "three";
 
 function getClamping(mode: number): THREE.Wrapping {
 
@@ -24,7 +24,8 @@ const decodeDDS = (function () {
         const { mipmaps, width, height, format: _format, mipmapCount } = dds;
         const texture = new CompressedTexture(mipmaps as ImageData[], width, height, _format as THREE.CompressedPixelFormat);
 
-        if (mipmapCount === 1) texture.minFilter = LinearFilter;
+        // if (mipmapCount === 1) texture.minFilter = LinearFilter;
+        texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
 
         texture.needsUpdate = true;
         texture.flipY = false;
@@ -33,7 +34,7 @@ const decodeDDS = (function () {
     };
 })();
 
-function decodeTexture(info: ITextureDecodeInfo) {
+function decodeTexture(info: ITextureDecodeInfo): { texture: THREE.Texture, size: THREE.Vector2 } {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
@@ -44,7 +45,7 @@ function decodeTexture(info: ITextureDecodeInfo) {
     texture.wrapS = getClamping(info.wrapS);
     texture.wrapT = getClamping(info.wrapT);
 
-    return texture;
+    return { texture, size: new Vector2(texture.image.width, texture.image.height) };
 }
 
 export default decodeTexture;

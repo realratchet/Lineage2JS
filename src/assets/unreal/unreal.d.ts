@@ -41,12 +41,18 @@ type ULevelSummary = import("./un-level-summary").ULevelSummary;
 type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
 type UEncodedFile = import("./un-encoded-file").UEncodedFile;
 type UTextBuffer = import("./un-text-buffer").UTextBuffer;
+
+type UMaterial = import("./un-material").UMaterial;
+type UMaterialContainer = import("./un-material").UMaterialContainer;
+type OutputBlending_T = import("./un-material").OutputBlending_T;
+
 type UShader = import("./un-material").UShader;
 type UFadeColor = import("./un-material").UFadeColor;
 type UTexRotator = import("./un-material").UTexRotator;
 type UTexPanner = import("./un-material").UTexPanner;
 type UColorModifier = import("./un-material").UColorModifier;
 type UTexOscillator = import("./un-material").UTexOscillator;
+
 type PropertyTag = import("./un-property").PropertyTag;
 type FColor = import("./un-color").FColor;
 type UMatrix = import("./un-matrix").UMatrix;
@@ -66,7 +72,7 @@ type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "dds" | "g16";
 type DecodableMaterial_T = "modifier" | "texture" | "shader";
-type DecodableMaterialModifier_T = "fadeColor";
+type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo { modifierType: DecodableMaterialModifier_T }
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -80,11 +86,20 @@ interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
     opacity: IBaseMaterialDecodeInfo,
     specular: IBaseMaterialDecodeInfo,
     specularMask: IBaseMaterialDecodeInfo,
+    blendingMode: SupportedBlendingTypes_T,
     depthWrite: boolean,
     doubleSide: boolean,
     transparent: boolean,
     alphaTest: number,
     visible: boolean
+}
+
+interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+    transform: {
+        matrix: number[],
+        rate: number,
+        map: ITextureDecodeInfo
+    }
 }
 
 interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
@@ -94,3 +109,12 @@ interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
         period: number
     }
 }
+
+interface IDecodedParameter {
+    uniforms: { [key: string]: any },
+    defines: { [key: string]: any },
+    isUsingMap: boolean,
+    transformType: "none" | "pan" | "rotate",
+}
+
+type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";

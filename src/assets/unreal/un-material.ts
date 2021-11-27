@@ -120,8 +120,22 @@ class UShader extends UMaterial {
         const transparent = this.transparent;
         const alphaTest = this.alphaTest / 255;
 
+        let blendingMode: SupportedBlendingTypes_T;
+
+        switch (this.outputBlending) {
+            case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
+            case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
+            case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;
+            case OutputBlending_T.OB_Translucent: blendingMode = "translucent"; break;
+            case OutputBlending_T.OB_Invisible: blendingMode = "invisible"; break;
+            case OutputBlending_T.OB_Brighten: blendingMode = "brighten"; break;
+            case OutputBlending_T.OB_Darken: blendingMode = "darken"; break;
+            default: console.warn("Unknown blending mode:", this.outputBlending); break;
+        }
+
         return {
             materialType: "shader",
+            blendingMode,
             diffuse,
             opacity,
             specular,
@@ -313,7 +327,7 @@ class UTexPanner extends UBaseModifier {
     protected rate: number;
     protected z: number;
     protected matrix: UMatrix;
-    protected material: UMaterial;
+    protected material: UTexture;
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
     public async getParameters() {
@@ -330,7 +344,17 @@ class UTexPanner extends UBaseModifier {
         };
     }
 
-    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial(); }
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+        return {
+            materialType: "modifier",
+            modifierType: "panTexture",
+            transform: {
+                matrix: this.matrix.getElements3x3(),
+                map: await this.material?.getDecodeInfo(loadMipmaps) || null,
+                rate: this.rate
+            }
+        };
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -373,4 +397,4 @@ class UMaterialContainer extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, UMaterialContainer, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator };
+export { UMaterial, UMaterialContainer, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, OutputBlending_T };

@@ -25,6 +25,23 @@ class UMatrix extends UObject {
         return this;
     }
 
+    public getElements3x3() {
+        return [
+            this.planeX.x, this.planeY.x, this.planeZ.x,
+            this.planeX.y, this.planeY.y, this.planeZ.y,
+            this.planeX.z, this.planeY.z, this.planeZ.z
+        ];
+    }
+
+    public getElements4x4() {
+        return [
+            this.planeX.x, this.planeY.x, this.planeZ.x, this.planeW.x,
+            this.planeX.y, this.planeY.y, this.planeZ.y, this.planeW.y,
+            this.planeX.z, this.planeY.z, this.planeZ.z, this.planeW.z,
+            this.planeX.w, this.planeY.w, this.planeZ.w, this.planeW.w
+        ];
+    }
+
     public getMatrix3(output: THREE.Matrix3): THREE.Matrix3 {
         return output.set(
             this.planeX.x, this.planeY.x, this.planeZ.x,

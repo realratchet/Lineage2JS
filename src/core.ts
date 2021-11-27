@@ -191,19 +191,21 @@ async function startCore() {
 
     // index = 0;
 
-    const shaders = await Promise.all(impGroups["Shader"].slice(0, 1).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
+    const shaders = await Promise.all(impGroups["Shader"].slice(3, 4).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
-    const shaderInfo = await shaders[0].getDecodeInfo(true);
-    const texture = decodeTexture(shaderInfo.diffuse);
-    const material = new MeshBasicMaterial({ map: texture });
-    // const material = decodeMaterial(shaderInfo) as MeshStaticMaterial;
-    const mesh = new Mesh(geometry, material);
+    shaders.forEach(async shader => {
+        const shaderInfo = await shader.getDecodeInfo(true);
+        // const texture = decodeTexture(shaderInfo.diffuse);
+        // const material = new MeshBasicMaterial({ map: texture });
+        const material = decodeMaterial(shaderInfo) as MeshStaticMaterial;
+        const mesh = new Mesh(geometry, material);
 
-    debugger;
+        // debugger;
 
-    mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
+        mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
 
-    objectGroup.add(mesh);
+        objectGroup.add(mesh);
+    });
 
     // const textures = await Promise.all(impGroups["Texture"].slice(0, 1).map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
     // const textureInfo = await textures[0].getDecodeInfo(true);
