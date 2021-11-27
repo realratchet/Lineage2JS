@@ -302,12 +302,9 @@ class UTexOscillator extends UBaseModifier {
     protected amplitudeV: number;
     protected material: UMaterial;
 
-    public async getParameters() {
-        // debugger;
-        return {};
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+        return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
     }
-
-    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial(); }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
