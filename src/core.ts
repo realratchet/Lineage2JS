@@ -128,15 +128,15 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { import: UImport, index: number }[] });
 
-    const expGroups = pkgLoad.exports.reduce((accum, exp) => {
+    const expGroups = pkgLoad.exports.reduce((accum, exp, index) => {
 
         const expType = pkgLoad.getPackageName(exp.idClass.value as number);
         const list = accum[expType] = accum[expType] || [];
 
-        list.push(exp);
+        list.push({ index, export: exp });
 
         return accum;
-    }, {} as { [key: string]: UExport[] });
+    }, {} as { [key: string]: { index: number, export: UExport }[] });
 
     // debugger;
 
@@ -173,8 +173,8 @@ async function startCore() {
     // debugger;
 
 
-    let index = 0;
-    const geometry = new PlaneBufferGeometry(100, 100);
+    // let index = 0;
+    // const geometry = new PlaneBufferGeometry(100, 100);
     // for (let impShader of impGroups["Shader"]) {
     //     const uMaterial = await pkgLoad.fetchObject(impShader.index) as UShader;
     //     const material = await uMaterial.decodeMaterial();
@@ -260,7 +260,7 @@ async function startCore() {
     // debugger;
 
     expGroups.Model
-        .sort(({ objectName: na }, { objectName: nb }) => {
+        .sort(({ export: { objectName: na } }, { export: { objectName: nb } }) => {
             const a = parseInt(na.replace("Model", ""));
             const b = parseInt(nb.replace("Model", ""));
             return a - b;
@@ -302,15 +302,27 @@ async function startCore() {
     //     objectGroup.add(mesh);
     // }
 
-    const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1804);
-    const mesh = await uMesh.getDecodeInfo();
+    // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1804);
+    // const mesh = await uMesh.getDecodeInfo();
 
-    const group = decodeObject3D(mesh);
+    // const group = decodeObject3D(mesh);
 
-    // debugger;
+    // // debugger;
 
-    objectGroup.add(group);
+    // objectGroup.add(group);
 
+    expGroups["StaticMeshActor"].forEach(async exp => {
+        const uStaticMeshActor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);;
+        const iStaticMeshActor = await uStaticMeshActor.getDecodeInfo();
+        const oStaticMeshActor = decodeObject3D(iStaticMeshActor);
+
+        objectGroup.add(oStaticMeshActor);
+    });
+
+    // const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
+    // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo()));
+
+    // iStaticMeshActors.forEach(info => objectGroup.add(decodeObject3D(info)));
 
     // const towerIndex = 2301;
 

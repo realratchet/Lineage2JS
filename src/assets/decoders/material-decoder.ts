@@ -91,6 +91,7 @@ function decodeTexture(info: ITextureDecodeInfo): IDecodedParameter {
 }
 
 function decodeMaterial(info: IBaseMaterialDecodeInfo): any {
+    if (!info) return null;
     switch (info.materialType) {
         case "shader": return decodeShader(info as IShaderDecodeInfo);
         case "texture": return decodeTexture(info as ITextureDecodeInfo);

@@ -84,6 +84,8 @@ class UTexture extends UObject {
 
         await Promise.all(this.promisesLoading);
 
+        if (this.mipmaps.length === 0) return null;
+
         const firstMipmap = this.mipmaps[0] as FMipmap;
         const mipCount = loadMipmaps ? this.mipmaps.length : 1;
 

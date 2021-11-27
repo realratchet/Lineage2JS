@@ -237,6 +237,11 @@ class UColorModifier extends UBaseMaterial {
         return material;
     }
 
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+        return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Color": "color",
@@ -278,6 +283,11 @@ class UTexRotator extends UBaseModifier {
         };
     }
 
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+        return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "M": "matrix",
@@ -301,6 +311,7 @@ class UTexOscillator extends UBaseModifier {
     protected material: UMaterial;
 
     public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+        await Promise.all(this.promisesLoading);
         return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
     }
 
