@@ -51,6 +51,7 @@ function decodeTexture(info: ITextureDecodeInfo) {
         uniforms: {
             map: _decodeTexture(info)
         },
+        defines: {},
         isUsingMap: true
     };
 }

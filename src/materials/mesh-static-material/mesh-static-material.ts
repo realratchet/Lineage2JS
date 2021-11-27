@@ -6,7 +6,7 @@ import decodeMaterial from "@client/assets/decoders/material-decoder";
 
 class MeshStaticMaterial extends ShaderMaterial {
     // @ts-ignore
-    constructor(params: IShaderDecodeInfo) {
+    constructor(info: IShaderDecodeInfo) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -17,8 +17,6 @@ class MeshStaticMaterial extends ShaderMaterial {
         // const hasFadeColors = "fadeColors" in parameters && parameters.fadeColors !== null && parameters.fadeColors !== undefined;
         // const hasVisible = "visible" in parameters && parameters.visible !== null && parameters.visible !== undefined;
         // const hasTransformedTexture = "transformedTexture" in parameters && parameters.transformedTexture !== null && parameters.transformedTexture !== undefined;
-
-        debugger;
 
         const defines: { [key: string]: any } = {};
         const uniforms: { [key: string]: Uniform } = {
@@ -33,12 +31,13 @@ class MeshStaticMaterial extends ShaderMaterial {
             uvTransform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
 
+            shDiffuse: new Uniform(null),
             shSpecular: new Uniform(null),
-            shDiffuse: new Uniform(null)
+            shSpecularMask: new Uniform(null)
         };
 
         if (info.diffuse) {
-            const params = decodeMaterial(info.diffuse);
+            const params = info.diffuse;
 
             defines["USE_DIFFUSE"] = "";
             Object.assign(uniforms["shDiffuse"].value = {}, params.uniforms);
@@ -50,16 +49,17 @@ class MeshStaticMaterial extends ShaderMaterial {
         }
 
         if (info.opacity) {
-            uniforms["mapOpacity"].value = decodeMaterial(info.opacity);
-            defines["USE_UV"] = "";
-            defines["USE_MAP_DIFFUSE"] = "";
-            defines["USE_MAP_OPACITY"] = "";
-            defines["USE_ALPHATEST"] = "";
+            debugger;
+            // uniforms["mapOpacity"].value = decodeMaterial(info.opacity);
+            // defines["USE_UV"] = "";
+            // defines["USE_MAP_DIFFUSE"] = "";
+            // defines["USE_MAP_OPACITY"] = "";
+            // defines["USE_ALPHATEST"] = "";
         }
 
         if (info.specular) {
             // debugger;
-            const params = decodeMaterial(info.specular);
+            const params = info.specular;
 
             defines["USE_SPECULAR"] = "";
             Object.assign(uniforms["shSpecular"].value = {}, params.uniforms);
@@ -73,12 +73,18 @@ class MeshStaticMaterial extends ShaderMaterial {
         }
 
         if (info.specularMask) {
-            uniforms["mapSpecularMask"].value = decodeMaterial(info.diffuse);
-            defines["USE_MAP_SPECULAR_MASK"] = "";
-            defines["USE_UV"] = "";
+            const params = info.specularMask;
+
+            defines["USE_SPECULAR_MASK"] = "";
+            Object.assign(uniforms["shSpecularMask"].value = {}, params.uniforms);
+            Object.assign(defines, params.defines);
+            if (params.isUsingMap) {
+                defines["USE_UV"] = "";
+                defines["USE_MAP_SPECULAR_MASK"] = "";
+            }
         }
 
-        // debugger;
+        debugger;
 
         // if (hasTransformedTexture) {
         //     defines["USE_GLOBAL_TIME"] = "";
@@ -117,10 +123,10 @@ class MeshStaticMaterial extends ShaderMaterial {
             fragmentShader: FRAGMENT_SHADER,
             defines,
             uniforms,
-            side: params.doubleSide ? DoubleSide : FrontSide,
-            transparent: params.transparent,
-            depthWrite: params.depthWrite,
-            visible: params.visible
+            side: info.side,
+            transparent: info.transparent,
+            depthWrite: info.depthWrite,
+            visible: info.visible
         });
     }
 }

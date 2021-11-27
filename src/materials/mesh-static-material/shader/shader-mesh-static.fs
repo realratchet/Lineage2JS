@@ -35,7 +35,7 @@ uniform float opacity;
             FadeData fadeColors;
         #endif
         #ifdef USE_MAP_SPECULAR
-            uniform sampler2D map;
+            sampler2D map;
         #endif
     };
 
@@ -45,7 +45,7 @@ uniform float opacity;
 #ifdef USE_DIFFUSE
     struct DiffuseData {
         #ifdef USE_MAP_DIFFUSE
-            uniform sampler2D map;
+            sampler2D map;
         #endif
     };
 
@@ -56,12 +56,14 @@ uniform float opacity;
 uniform sampler2D mapOpacity;
 #endif
 
-#ifdef USE_MAP_SPECULAR
-uniform sampler2D mapSpecular;
-#endif
+#ifdef USE_DIFFUSE
+    struct SpecularMaskData {
+        #ifdef USE_MAP_SPECULAR_MASK
+            sampler2D map;
+        #endif
+    };
 
-#ifdef USE_MAP_SPECULAR_MASK
-uniform sampler2D mapSpecularMask;
+    uniform SpecularMaskData shSpecularMask;
 #endif
 
 #ifdef USE_GLOBAL_TIME
@@ -79,10 +81,13 @@ void main() {
     
     // #include <map_fragment>
     // boomer tech
-    #ifdef USE_MAP_DIFFUSEs
-        vec4 texelDiffuse = texture2D(mapDiffuse, vUv);
-        // texelDiffuse = mapTexelToLinear(texelDiffuse);
-        diffuseColor.rgb *= texelDiffuse.rgb;
+    #ifdef USE_DIFFUSE
+        #ifdef USE_MAP_DIFFUSE
+            vec4 texelDiffuse = texture2D(shDiffuse.map, vUv);
+            // texelDiffuse = mapTexelToLinear(texelDiffuse);
+            diffuseColor.rgb *= texelDiffuse.rgb;
+            // dicks;
+        #endif
     #endif
 
 
@@ -94,14 +99,14 @@ void main() {
             specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
         #else
             #ifdef USE_MAP_SPECULAR
-                vec4 texelSpecular = texture2D(mapSpecular, vUvSpecular);
+                vec4 texelSpecular = texture2D(shSpecular.map, vUvSpecular);
                 specularColor = texelSpecular.rgb;
             #endif
         #endif
 
         
         #ifdef USE_MAP_SPECULAR_MASK
-            vec4 texelSpecularMask = texture2D(mapSpecularMask, vUv);
+            vec4 texelSpecularMask = texture2D(shSpecularMask.map, vUv);
             diffuseColor.rgb += texelSpecularMask.a * specularColor;
         #else
             diffuseColor.rgb *= specularColor;
@@ -146,4 +151,6 @@ void main() {
     // // vec4 texelSpecular = texture2D(mapSpecular, vUv).aaaa;
     // // gl_FragColor = vec4(specularColor.rgb, 1.0);
     // #endif
+
+    gl_FragColor = vec4(texture2D(shDiffuse.map, vUv).rgb, 1.0);
 }

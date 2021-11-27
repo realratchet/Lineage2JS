@@ -194,8 +194,12 @@ async function startCore() {
     const shaders = await Promise.all(impGroups["Shader"].slice(0, 1).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
     const shaderInfo = await shaders[0].getDecodeInfo(true);
-    const material = decodeMaterial(shaderInfo) as MeshStaticMaterial;
+    const texture = decodeTexture(shaderInfo.diffuse);
+    const material = new MeshBasicMaterial({ map: texture });
+    // const material = decodeMaterial(shaderInfo) as MeshStaticMaterial;
     const mesh = new Mesh(geometry, material);
+
+    debugger;
 
     mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
 
