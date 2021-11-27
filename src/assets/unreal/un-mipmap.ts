@@ -15,8 +15,8 @@ class FMipmap extends FConstructable {
     public bitsW: number;
     public bitsH: number;
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
-        await this.dataArray.load(pkg, tag);
+    public load(pkg: UPackage, tag: PropertyTag): this {
+        this.dataArray.load(pkg, tag);
 
         const int32 = new BufferValue(BufferValue.int32);
         const int8 = new BufferValue(BufferValue.int8);

@@ -52,6 +52,19 @@ class UStaticMeshActor extends UAActor {
         });
     }
 
+    public async getDecodeInfo(): Promise<IBaseObjectDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+
+        return {
+            type: "StaticMeshActor",
+            name: this.objectName,
+            position: [this.location.x, this.location.z, this.location.y],
+            scale: [this.scale.x, this.scale.z, this.scale.y],
+            rotation: this.rotation.getEulerElements(),
+            children: [await this.mesh.getDecodeInfo()]
+        };
+    }
+
     public async decodeMesh(): Promise<THREE.Group> {
         // debugger;
 
@@ -103,13 +116,13 @@ class UStaticMeshActor extends UAActor {
         // pkg.seek(5);
         // const unk03 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         // // const unk03 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        
+
         // debugger;
-        
+
         super.load(pkg, exp);
 
         this.readHead = pkg.tell();
-        
+
         // if (this.scale.vector.x !== 1 || this.scale.vector.y !== 1 || this.scale.vector.z !== 1) debugger;
 
         // const unk1 = await pkg.read(BufferValue.allocBytes(10)).value as DataView;

@@ -74,14 +74,19 @@ type DecodableTexture_T = "dds" | "g16";
 type DecodableMaterial_T = "modifier" | "texture" | "shader";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
-interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo { modifierType: DecodableMaterialModifier_T }
+interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "modifier",
+    modifierType: DecodableMaterialModifier_T
+}
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "texture",
     textureType: DecodableTexture_T,
     buffer: ArrayBuffer,
     wrapS: number, wrapT: number
 }
 
 interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "shader",
     diffuse: IBaseMaterialDecodeInfo,
     opacity: IBaseMaterialDecodeInfo,
     specular: IBaseMaterialDecodeInfo,
@@ -95,6 +100,7 @@ interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
 }
 
 interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+    modifierType: "panTexture",
     transform: {
         matrix: number[],
         rate: number,
@@ -103,6 +109,7 @@ interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
 }
 
 interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+    modifierType: "fadeColor",
     fadeColors: {
         color1: number[],
         color2: number[],
@@ -118,3 +125,42 @@ interface IDecodedParameter {
 }
 
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+
+type DecodableObject_T = "StaticMeshActor" | "StaticMesh";
+
+type Vector3Arr = [number, number, number];
+type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
+type EulerArr = [number, number, number, EulerOrder];
+type ArrGeometryGroup = [number, number, number];
+
+interface IBaseObjectDecodeInfo {
+    type: DecodableObject_T,
+    name?: string,
+    position?: Vector3Arr,
+    rotation?: EulerArr,
+    scale?: Vector3Arr,
+    children?: IBaseObjectDecodeInfo[]
+}
+
+interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+    geometry: {
+        attributes: {
+            positions: Float32Array;
+            normals: Float32Array;
+            uvs: Float32Array;
+        };
+        indices: Uint16Array;
+        groups: ArrGeometryGroup[],
+        bounds: {
+            sphere: {
+                center: Vector3Arr;
+                radius: number;
+            };
+            box: {
+                min: Vector3Arr;
+                max: Vector3Arr;
+            };
+        }
+    },
+    materials: IBaseMaterialDecodeInfo[]
+}

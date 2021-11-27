@@ -1,31 +1,15 @@
-import FArray, { FArrayLazy } from "../un-array";
-import FBox from "../un-box";
-import USphere from "../un-sphere";
+import FArray from "../un-array";
 import UPrimitive from "../un-primitive";
 import FStaticMeshSection from "./un-static-mesh-section";
 import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-import { Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Mesh, FrontSide, BackSide, DoubleSide, SphereBufferGeometry, Vector3, Color, Plane, PlaneHelper } from "three";
-import UTexture from "../un-texture";
-import UMaterial from "../un-material";
-import FUnknownStruct from "../un-unknown-struct";
+
 import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
-import { PropertyTag, UNP_PropertyTypes } from "../un-property";
-import FVector from "../un-vector";
-import { FPlane } from "../un-plane";
-import MeshUVMaterial from "../../../materials/uv-material/mesh-uv-material";
-import UModel from "../model/un-model";
-import FBSPNode from "../bsp/un-bsp-node";
-
-type UPackage = import("../un-package").UPackage;
-type UExport = import("../un-export").UExport;
 
 class UStaticMesh extends UPrimitive {
-    protected boundingBox: FBox = new FBox();
-    protected boundingSphere: USphere = new USphere();
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
     protected vertexStream: FStaticMeshVertexStream = new FStaticMeshVertexStream();
     protected colorStream: FRawColorStream = new FRawColorStream();
@@ -60,33 +44,28 @@ class UStaticMesh extends UPrimitive {
         });
     }
 
-    public async load(pkg: UPackage, exp: UExport) {
+    public load(pkg: UPackage, exp: UExport): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
         const int8 = new BufferValue(BufferValue.int8);
 
         // if (exp.objectName === "oren_curumadungeon17") debugger;
         // if (exp.objectName === "oren_curumadungeon33") debugger;
-        
 
-        await super.load(pkg, exp);
-
-        // debugger;
+        super.load(pkg, exp);
 
         this.sections.load(pkg, null);        // 0400 0000 0000 00BE 00ED 0022 0022 0000
-        await this.boundingBox.load(pkg);           // 6666 A2C3 FAED EBC0 889D 06C4 6666 A243
-        await this.vertexStream.load(pkg, null);    // 6E03 6666 A243 0000 0C42 8A2E F343 0000
-        await this.colorStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        await this.alphaStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        await this.uvStream.load(pkg, null);        // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        await this.indexStream.load(pkg, null);     // 4606 E500 E400 E000 DE00 DF00 E000 E100
-        await this.edgesStream.load(pkg, null);     // 7409 E500 E400 E400 E000 E000 E500 DE00
-
-        // debugger;
+        this.boundingBox.load(pkg);           // 6666 A2C3 FAED EBC0 889D 06C4 6666 A243
+        this.vertexStream.load(pkg, null);    // 6E03 6666 A243 0000 0C42 8A2E F343 0000
+        this.colorStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
+        this.alphaStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
+        this.uvStream.load(pkg, null);        // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
+        this.indexStream.load(pkg, null);     // 4606 E500 E400 E000 DE00 DF00 E000 E100
+        this.edgesStream.load(pkg, null);     // 7409 E500 E400 E400 E000 E000 E500 DE00
 
         // pkg.seek(1);
 
-        const unk = await pkg.read(compat32).value as number;
+        const unk = pkg.read(compat32).value as number;
 
         if (unk !== 0) debugger;
 
@@ -401,6 +380,78 @@ class UStaticMesh extends UPrimitive {
         // console.assert((this.readTail - pkg.tell()) === 0);
 
         return this;
+    }
+
+    public async getDecodeInfo(): Promise<IStaticMeshObjectDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+
+        // debugger;
+
+        // const section = this.sections.getElem(0);
+        // const materials = this.materials.getElem(0);
+
+        // if (this.sections.getElemCount() > 1)
+        //     debugger;
+
+        const countVerts = this.vertexStream.vert.getElemCount();
+        const countFaces = this.indexStream.indices.getElemCount();
+        const countUvs = this.uvStream.getElemCount();
+
+        if (countUvs > 1) debugger;
+
+        const positions = new Float32Array(countVerts * 3);
+        const normals = new Float32Array(countVerts * 3);
+        const uvs = new Float32Array(countVerts * 2);
+        const indices = new Uint16Array(countFaces);
+
+        for (let i = 0; i < countVerts; i++) {
+            const { position, normal } = this.vertexStream.vert.getElem(i);
+            const { u, v } = this.uvStream.getElem(0).data.getElem(i);
+
+
+            // position.toArray(positions, i * 3);
+            // normal.toArray(normals, i * 3);
+
+            positions[i * 3 + 0] = position.x;
+            positions[i * 3 + 1] = position.z;
+            positions[i * 3 + 2] = position.y;
+
+            normals[i * 3 + 0] = normal.x;
+            normals[i * 3 + 1] = normal.z;
+            normals[i * 3 + 2] = normal.y;
+
+            uvs[i * 2 + 0] = u;
+            uvs[i * 2 + 1] = v;
+        }
+
+        for (let i = 0; i < countFaces; i++) {
+            indices[i] = this.indexStream.indices.getElem(i).value;
+        }
+
+        return {
+            type: "StaticMesh",
+            name: this.objectName,
+            geometry: {
+                attributes: {
+                    positions,
+                    normals,
+                    uvs,
+                },
+                indices,
+                groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
+                bounds: {
+                    sphere: {
+                        center: [this.boundingSphere.center.x, this.boundingSphere.center.z, this.boundingSphere.center.y],
+                        radius: this.boundingSphere.radius
+                    },
+                    box: this.boundingBox.isValid ? {
+                        min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
+                        max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
+                    } : null
+                }
+            },
+            materials: await Promise.all(this.materials.map((mat: UMaterialContainer) => mat.getDecodeInfo(true)))
+        }
     }
 
     public async decodeMesh() {

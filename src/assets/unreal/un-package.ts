@@ -10,7 +10,7 @@ import "./un-object-mixin";
 import UClass from "./un-class";
 import UStruct from "./un-struct";
 import UPlatte from "./un-palette";
-// import UStaticMesh from "./static-mesh/un-static-mesh";
+import UStaticMesh from "./static-mesh/un-static-mesh";
 import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator } from "./un-material";
 import ULevelInfo from "./un-level-info";
 // import UTerrainSector from "./un-terrain-sector";

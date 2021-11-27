@@ -8,8 +8,6 @@ abstract class UBaseMaterial extends UObject {
     public abstract async getDecodeInfo(loadMipmaps: boolean): Promise<IBaseMaterialDecodeInfo>;
 }
 abstract class UBaseModifier extends UBaseMaterial {
-    // public abstract getParameters(): Promise<{ [key: string]: any }>;
-    // public async decodeMipmap(level: number): Promise<THREE.Texture> { return await ((this as any).material as UTexture).decodeMipmap(level); };
 }
 
 abstract class UMaterial extends UBaseMaterial { }
@@ -390,7 +388,10 @@ class UMaterialContainer extends UBaseMaterial {
         return this;
     }
 
-    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial(); }
+    public async getDecodeInfo(loadMipmaps: boolean): Promise<IBaseMaterialDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+        return this.material?.getDecodeInfo(loadMipmaps) || null;
+    }
 }
 
 export default UMaterial;

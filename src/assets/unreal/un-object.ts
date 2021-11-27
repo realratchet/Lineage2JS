@@ -125,6 +125,8 @@ abstract class UObject {
                 break;
         }
 
+        pkg.seek(offEnd, "set");
+
         if (pkg.tell() < offEnd)
             console.warn(`Unread '${tag.name}' ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
     }

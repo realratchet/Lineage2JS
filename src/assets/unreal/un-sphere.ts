@@ -1,14 +1,12 @@
 import FConstructable from "./un-constructable";
-import { Vector3 } from "three";
 import BufferValue from "../buffer-value";
-
-type UPackage = import("./un-package").UPackage;
+import FVector from "./un-vector";
 
 class USphere extends FConstructable {
-    public center: Vector3 = new Vector3();
+    public center: FVector = new FVector();
     public radius: number;
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage): this {
         const f = new BufferValue(BufferValue.float);
 
         ["x", "y", "z"].forEach((ax: "x" | "y" | "z") => {

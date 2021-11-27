@@ -17,6 +17,15 @@ class FRotator extends FConstructable {
         return this;
     }
 
+    public getEulerElements(): EulerArr {
+        const _PI = Math.PI;
+        const yAxis = (-this.yaw / 32768. * _PI) % (_PI * 2);
+        const xAxis = (2 * _PI - this.roll / 32768. * _PI) % (_PI * 2);
+        const zAxis = (2 * _PI - this.pitch / 32768. * _PI) % (_PI * 2);
+
+        return [xAxis, yAxis, zAxis, "XYZ"];
+    }
+
     public getEuler(output: THREE.Euler): THREE.Euler {
         const _PI = Math.PI;
         const yAxis = (-this.yaw / 32768. * _PI) % (_PI * 2);

@@ -24,6 +24,8 @@ class FVector extends FConstructable {
         this.z = z;
     }
 
+    public getElements(): number[] { return [this.x, this.y, this.z]; }
+
     public multiplyScalar(scalar: number): FVector {
         return new FVector(this.x * scalar, this.y * scalar, this.z * scalar);
     }

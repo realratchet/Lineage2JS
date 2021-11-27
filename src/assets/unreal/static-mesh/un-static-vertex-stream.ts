@@ -1,9 +1,7 @@
 import FConstructable from "../un-constructable";
-import UPackage from "../un-package";
-import { PropertyTag } from "../un-property";
 import FArray from "../un-array";
-import { Vector3 } from "three";
 import BufferValue from "../../buffer-value";
+import FVector from "../un-vector";
 
 class FStaticMeshVertexStream extends FConstructable {
     public static readonly typeSize = 24;
@@ -11,8 +9,8 @@ class FStaticMeshVertexStream extends FConstructable {
     public readonly vert: FArray<FStaticMeshVertex> = new FArray(FStaticMeshVertex);
     public revision: number;
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
-        await this.vert.load(pkg, null);
+    public load(pkg: UPackage, tag: PropertyTag): this {
+        this.vert.load(pkg, null);
 
         this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
@@ -23,10 +21,10 @@ class FStaticMeshVertexStream extends FConstructable {
 class FStaticMeshVertex extends FConstructable {
     public static readonly typeSize = 24;
 
-    public readonly position = new Vector3();
-    public readonly normal = new Vector3();
+    public readonly position = new FVector();
+    public readonly normal = new FVector();
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         const f = new BufferValue(BufferValue.float);
 
         [this.position, this.normal].forEach(vec => {

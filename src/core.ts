@@ -16,6 +16,7 @@ import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
 import decodeTexture from "./assets/decoders/texture-decoder";
 import decodeMaterial from "./assets/decoders/material-decoder";
 import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
+import decodeObject3D from "./assets/decoders/object3d-decoder";
 // import ULight from "./assets/unreal/un-light";
 // import UImport from "./assets/unreal/un-import";
 // import { UShader } from "./assets/unreal/un-material";
@@ -191,21 +192,21 @@ async function startCore() {
 
     // index = 0;
 
-    const shaders = await Promise.all(impGroups["Shader"].map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
+    // const shaders = await Promise.all(impGroups["Shader"].map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
-    shaders.forEach(async shader => {
-        const shaderInfo = await shader.getDecodeInfo(true);
-        // const texture = decodeTexture(shaderInfo.diffuse);
-        // const material = new MeshBasicMaterial({ map: texture });
-        const material = decodeMaterial(shaderInfo) as MeshStaticMaterial;
-        const mesh = new Mesh(geometry, material);
+    // shaders.forEach(async shader => {
+    //     const shaderInfo = await shader.getDecodeInfo(true);
+    //     // const texture = decodeTexture(shaderInfo.diffuse);
+    //     // const material = new MeshBasicMaterial({ map: texture });
+    //     const material = decodeMaterial(shaderInfo) as MeshStaticMaterial;
+    //     const mesh = new Mesh(geometry, material);
 
-        // debugger;
+    //     // debugger;
 
-        mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
+    //     mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
 
-        objectGroup.add(mesh);
-    });
+    //     objectGroup.add(mesh);
+    // });
 
     // const textures = await Promise.all(impGroups["Texture"].slice(0, 1).map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
     // const textureInfo = await textures[0].getDecodeInfo(true);
@@ -301,12 +302,14 @@ async function startCore() {
     //     objectGroup.add(mesh);
     // }
 
-    // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1804);
-    // const mesh = await uMesh.getDecodeInfo();
+    const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1804);
+    const mesh = await uMesh.getDecodeInfo();
+
+    const group = decodeObject3D(mesh);
 
     // debugger;
 
-    // objectGroup.add(mesh);
+    objectGroup.add(group);
 
 
     // const towerIndex = 2301;

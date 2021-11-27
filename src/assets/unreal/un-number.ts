@@ -13,7 +13,7 @@ class FNumber<T extends ValueTypeNames_T = ValueTypeNames_T> extends FConstructa
         this.type = dtype;
     }
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         this.value = pkg.read(new BufferValue(this.type)).value as number;
 
         return this;

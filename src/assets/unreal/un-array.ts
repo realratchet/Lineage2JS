@@ -16,13 +16,15 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
     public constructor(constr: { new(...pars: any): T } & ValidConstructables_T<T>) {
         super();
 
-        if (!isFinite((constr as any).typeSize) && constr !== FUnknownStruct)
+        if (constr && !isFinite((constr as any).typeSize) && constr !== FUnknownStruct)
             throw new Error(`Invalid fields for FConstructable: ${constr.name}`);
 
         this.Constructor = constr;
     }
 
-    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...this].map(fnMap); }
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         const hasTag = tag !== null && tag !== undefined;
         const beginIndex = hasTag ? pkg.tell() : null;
         const count = pkg.read(new BufferValue(BufferValue.compat32));
@@ -55,7 +57,7 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
             //     console.log(finalOffset);
             //     pkg.dump(2);
             // }
-            this[i] = await new this.Constructor(elementSize).load(pkg, tag);
+            this[i] = new this.Constructor(elementSize).load(pkg, tag);
         }
 
         // if (tag?.name === "Materials") {
@@ -72,12 +74,12 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 }
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
 
         // debugger;
 
-        await super.load(pkg, tag);
+        super.load(pkg, tag);
 
         return this;
     }

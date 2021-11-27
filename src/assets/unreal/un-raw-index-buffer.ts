@@ -10,8 +10,8 @@ class FRawIndexBuffer extends FConstructable {
     public readonly indices: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint16));
     public revision: number;
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
-        await this.indices.load(pkg, tag);
+    public load(pkg: UPackage, tag: PropertyTag): this {
+        this.indices.load(pkg, tag);
 
         this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
