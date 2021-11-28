@@ -29,44 +29,52 @@ class FBSPSurf extends FConstructable {
     protected actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
-    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         const uint64 = new BufferValue(BufferValue.uint64);
         const float = new BufferValue(BufferValue.float);
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint8 = new BufferValue(BufferValue.uint8);
 
-        const materialId = await pkg.read(compat32).value as number;
+        const materialId = pkg.read(compat32).value as number;
 
-        this.flags = await pkg.read(uint32).value as number;
-        this.pBase = await pkg.read(compat32).value as number;
-        this.vNormal = await pkg.read(compat32).value as number;
-        this.vTextureU = await pkg.read(compat32).value as number;
-        this.vTextureV = await pkg.read(compat32).value as number;
+        this.flags = pkg.read(uint32).value as number;
+        this.pBase = pkg.read(compat32).value as number;
+        this.vNormal = pkg.read(compat32).value as number;
+        this.vTextureU = pkg.read(compat32).value as number;
+        this.vTextureV = pkg.read(compat32).value as number;
 
         this.iLightMap = -1;
 
-        this.iBrushPoly = await pkg.read(compat32).value as number;
+        this.iBrushPoly = pkg.read(compat32).value as number;
 
-        const ownerId = await pkg.read(compat32).value as number;
+        const ownerId = pkg.read(compat32).value as number;
 
         this.plane.load(pkg);
 
-        this.lightMapScale = await pkg.read(float).value as number;
+        this.lightMapScale = pkg.read(float).value as number;
 
-        const unkInt32 = await pkg.read(uint32).value as number;
+        const unkInt32 = pkg.read(uint32).value as number;
 
         this.panU = this.panV = 0;
 
         const offset = pkg.tell();
-        this.material = await pkg.fetchObject(materialId) as UShader;
-        this.actor = await pkg.fetchObject(ownerId) as UBrush;
-        pkg.seek(offset, "set");
 
-        // debugger;
+        this.promisesLoading.push(new Promise(async resolve => {
+            this.material = await pkg.fetchObject<UShader>(materialId);
+            resolve();
+        }));
+
+        this.promisesLoading.push(new Promise(async resolve => {
+            this.actor = await pkg.fetchObject<UBrush>(ownerId);
+            resolve();
+        }));
+        pkg.seek(offset, "set");
 
         return this;
     }
+
+    
 
 }
 

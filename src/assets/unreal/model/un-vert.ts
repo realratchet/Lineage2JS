@@ -8,7 +8,7 @@ class FVert extends FConstructable {
     public pVertex: number;
     public side: number;
 
-    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.pVertex = pkg.read(compat32).value as number;

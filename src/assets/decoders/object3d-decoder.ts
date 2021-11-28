@@ -56,6 +56,7 @@ function decodeStaticMesh(info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
 function decodeObject3D(info: IBaseObjectDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "StaticMeshActor": return decodeSimpleObject(Object3D, info);
+        case "Model":
         case "StaticMesh": return decodeStaticMesh(info as IStaticMeshObjectDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }

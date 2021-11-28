@@ -53,12 +53,10 @@ class UTexture extends UObject {
         });
     }
 
-    public load(pkg: UPackage, exp: UExport): this {
-        super.load(pkg, exp);
+    public doLoad(pkg: UPackage, exp: UExport) {
+        super.doLoad(pkg, exp);
 
         this.promisesLoading.push(this.mipmaps.load(pkg, null));
-
-        this.readHead = pkg.tell();
 
         return this;
     }

@@ -12,7 +12,7 @@ class FPlane extends FConstructable {
     public z: number;
     public w: number;
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage): this {
         const f = new BufferValue(BufferValue.float);
 
         ["x", "y", "z", "w"].forEach((ax: "x" | "y" | "z" | "w") => {

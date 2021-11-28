@@ -68,6 +68,16 @@ class FVector extends FConstructable {
      * @param other 
      */
     public dot(other: FVector) { return this.x * other.x + this.y * other.y + this.z * other.z; }
+
+    toArray( array: number[] | ArrayLike<number> = [], offset = 0 ) {
+
+		(array as number[])[ offset ] = this.x;
+		(array as number[])[ offset + 1 ] = this.y;
+		(array as number[])[ offset + 2 ] = this.z;
+
+		return array;
+
+	}
 }
 
 export default FVector;

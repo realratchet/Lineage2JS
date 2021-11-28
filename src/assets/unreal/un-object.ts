@@ -25,6 +25,7 @@ abstract class UObject {
 
     public get byteCount() { return this.readTail - this.readStart; }
     public get bytesUnread() { return this.readTail - this.readHead; }
+    public get byteOffset() { return this.readHead - this.readStart; }
 
     protected readNamedProps(pkg: UPackage) {
         do {
@@ -37,15 +38,22 @@ abstract class UObject {
 
         } while (this.readHead < this.readTail);
 
-        this.readHead = pkg.tell();
+
     }
 
-    public load(pkg: UPackage, exp: UExport): this {
+    protected preLoad(pkg: UPackage, exp: UExport): void {
         this.objectName = `Exp_${exp.objectName}`;
-
         this.setReadPointers(exp);
+    }
 
-        this.readNamedProps(pkg);
+    protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
+
+    protected postLoad(pkg: UPackage, exp: UExport): void { this.readHead = pkg.tell(); }
+
+    public load(pkg: UPackage, exp: UExport): this {
+        this.preLoad(pkg, exp);
+        this.doLoad(pkg, exp);
+        this.postLoad(pkg, exp);
 
         return this;
     }

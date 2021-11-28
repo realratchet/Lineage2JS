@@ -1,18 +1,8 @@
-import UObject from "./un-object";
-import { Vector3, Group, Object3D } from "three";
-import { PropertyTag } from "./un-property";
-import BufferValue from "../buffer-value";
-import FScale from "../un-scale";
-import ULevelInfo from "./un-level-info";
-import UPointRegion from "./un-point-region";
-import UPhysicsVolume from "./un-physics-volume";
+import FScale from "./un-scale";
 import UModel from "./model/un-model";
 import UTextureModifyInfo from "./un-texture-modify-info";
 import UAActor from "./un-aactor";
 import FVector from "./un-vector";
-
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
 
 class UBrush extends UAActor {
     protected readHeadOffset = 15;

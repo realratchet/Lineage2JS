@@ -277,9 +277,14 @@ async function startCore() {
     // const level = await uLevel.decodeLevel();
     // objectGroup.add(level);
 
-    // const uModel = await pkgLoad.fetchObject(7364) as UModel; // base model
-    // const model = await uModel.decodeModel();
-    // objectGroup.add(model);
+    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    const iModel = await uModel.getDecodeInfo();
+
+    const mModel = decodeObject3D(iModel);
+
+    // debugger;
+
+    objectGroup.add(mModel);
 
     // debugger;
 
@@ -313,20 +318,20 @@ async function startCore() {
 
     // objectGroup.add(group);
 
-    const loadedObjects: THREE.Object3D[] = [];
+    // const loadedObjects: THREE.Object3D[] = [];
 
-    expGroups["StaticMeshActor"].slice(0, 100).forEach(async exp => {
-        const uStaticMeshActor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);;
-        const iStaticMeshActor = await uStaticMeshActor.getDecodeInfo();
-        const oStaticMeshActor = decodeObject3D(iStaticMeshActor);
+    // expGroups["StaticMeshActor"].forEach(async exp => {
+    //     const uStaticMeshActor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);;
+    //     const iStaticMeshActor = await uStaticMeshActor.getDecodeInfo();
+    //     const oStaticMeshActor = decodeObject3D(iStaticMeshActor);
 
-        // objectGroup.add(oStaticMeshActor);
-        loadedObjects.push(oStaticMeshActor);
-    });
+    //     // objectGroup.add(oStaticMeshActor);
+    //     loadedObjects.push(oStaticMeshActor);
+    // });
 
-    setInterval(function () {
-        loadedObjects.splice(0, 100).forEach(actor => objectGroup.add(actor));
-    }, 1000);
+    // setInterval(function () {
+    //     loadedObjects.splice(0, 100).forEach(actor => objectGroup.add(actor));
+    // }, 1000);
 
     // const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
     // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo()));

@@ -3,12 +3,7 @@ import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
 import FVector from "./un-vector";
 import UTexture from "./un-texture";
-import { Group, Mesh, BufferGeometry, MeshBasicMaterial, Float32BufferAttribute, DoubleSide, TriangleFanDrawMode, BackSide } from "three";
-// import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils";
 import UMaterial from "./un-material";
-
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
 
 enum PolyFlags_T {
     // Regular in-game flags.
@@ -48,45 +43,47 @@ class FPoly extends FConstructable {
     public textureV: FVector = new FVector();
     public vertices: FVector[];
     public flags: number;
-    public actor: UObject;
-    public texture: UMaterial;
+    public actor: UObject = null;
+    public texture: UMaterial = null;
     public link: number;
     public brushPoly: number;
     public name: string;
     public panU: number;
     public panV: number;
 
-    public async load(pkg: UPackage): Promise<this> {
+    public load(pkg: UPackage): this {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
         const int16 = new BufferValue(BufferValue.int16);
 
-        const vcount = await pkg.read(compat).value as number;
+        const vcount = pkg.read(compat).value as number;
+
+        debugger;
 
         console.assert(vcount >= 0);
 
-        await this.base.load(pkg);
-        await this.normal.load(pkg);
-        await this.textureU.load(pkg);
-        await this.textureV.load(pkg);
+        this.base.load(pkg);
+        this.normal.load(pkg);
+        this.textureU.load(pkg);
+        this.textureV.load(pkg);
 
         this.vertices = new Array(vcount);
 
         for (let i = 0; i < vcount; i++)
-            this.vertices[i] = await new FVector().load(pkg);
+            this.vertices[i] = new FVector().load(pkg);
 
-        this.flags = await pkg.read(uint32).value as number;
+        this.flags = pkg.read(uint32).value as number;
 
-        const actorId = await pkg.read(compat).value as number;
-        const textureId = await pkg.read(compat).value as number;
-        const nameId = await pkg.read(compat).value as number;
+        const actorId = pkg.read(compat).value as number;
+        const textureId = pkg.read(compat).value as number;
+        const nameId = pkg.read(compat).value as number;
 
         this.name = pkg.nameTable[nameId].name.value as string;
-        this.link = await pkg.read(compat).value as number;
-        this.brushPoly = await pkg.read(compat).value as number;
+        this.link = pkg.read(compat).value as number;
+        this.brushPoly = pkg.read(compat).value as number;
 
-        this.panU = await pkg.read(int16).value as number;
-        this.panV = await pkg.read(int16).value as number;
+        this.panU = pkg.read(int16).value as number;
+        this.panV = pkg.read(int16).value as number;
 
         pkg.seek(4);
 
@@ -95,8 +92,14 @@ class FPoly extends FConstructable {
         if (actorId !== 0) debugger;
 
         const offset = pkg.tell();
-        this.actor = actorId !== 0 ? await pkg.fetchObject(actorId) : null;
-        this.texture = textureId !== 0 ? await pkg.fetchObject(textureId) as UTexture : null;
+        if (actorId !== 0) this.promisesLoading.push(new Promise(async resolve => {
+            this.actor = await pkg.fetchObject<UObject>(actorId);
+            resolve();
+        }));
+        if (textureId !== 0) this.promisesLoading.push(new Promise(async resolve => {
+            this.texture = await pkg.fetchObject<UTexture>(textureId);
+            resolve();
+        }));
         pkg.seek(offset, "set");
 
         // debugger;
@@ -152,18 +155,11 @@ class FPoly extends FConstructable {
 class UPolys extends UObject {
     protected polyList: FPoly[];
 
-    public async load(pkg: UPackage, exp: UExport) {
-        // this.readHead = pkg.tell();
-        // this.readTail = (exp.offset.value as number) + (exp.size.value as number);
-
-        this.setReadPointers(exp);
+    protected doLoad(pkg: UPackage, exp: UExport): this {
         pkg.seek(this.readHead, "set");
 
-        // const startOffset = pkg.tell();
 
-        // debugger;
-
-        await this.readNamedProps(pkg);
+        super.doLoad(pkg, exp);
 
         // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size.value as number - (pkg.tell() - startOffset)}`);
 

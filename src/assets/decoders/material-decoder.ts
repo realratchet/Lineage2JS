@@ -76,7 +76,7 @@ function decodeShader(info: IShaderDecodeInfo): MeshStaticMaterial {
         specularMask: decodeParameter(info.specularMask),
         side: info.doubleSide ? DoubleSide : FrontSide,
         blendingMode: info.blendingMode,
-        transparent: info.transparent || !!info.opacity,
+        transparent: info.transparent,
         depthWrite: info.depthWrite,
         visible: info.visible
     });

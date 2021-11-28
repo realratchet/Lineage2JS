@@ -91,21 +91,6 @@ class UShader extends UMaterial {
         });
     }
 
-    public load(pkg: UPackage, exp: UExport): this {
-        super.load(pkg, exp);
-
-        switch (this.outputBlending) {
-            case OutputBlending_T.OB_Normal: break; // default
-            case OutputBlending_T.OB_Masked: break; // default
-            default:
-                console.log("Unknown blending mode.");
-                debugger;
-                break;
-        }
-
-        return this;
-    }
-
     public async getDecodeInfo(loadMipmaps: boolean): Promise<IShaderDecodeInfo> {
         await Promise.all(this.promisesLoading);
 
@@ -390,13 +375,9 @@ class UMaterialContainer extends UBaseMaterial {
         });
     }
 
-    public load(pkg: UPackage, exp: UExport): this {
+    protected preLoad(pkg: UPackage, exp: UExport) {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + UMaterialContainer.typeSize;
-
-        this.readNamedProps(pkg);
-
-        return this;
     }
 
     public async getDecodeInfo(loadMipmaps: boolean): Promise<IBaseMaterialDecodeInfo> {

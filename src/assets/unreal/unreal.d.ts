@@ -126,7 +126,7 @@ interface IDecodedParameter {
 
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "StaticMeshActor" | "StaticMesh";
+type DecodableObject_T = "StaticMeshActor" | "StaticMesh" | "Model";
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
@@ -142,6 +142,17 @@ interface IBaseObjectDecodeInfo {
     children?: IBaseObjectDecodeInfo[]
 }
 
+type IBoundsDecodeInfo = {
+    sphere: {
+        center: Vector3Arr;
+        radius: number;
+    };
+    box: {
+        min: Vector3Arr;
+        max: Vector3Arr;
+    };
+}
+
 interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     geometry: {
         attributes: {
@@ -149,18 +160,9 @@ interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
             normals: Float32Array;
             uvs: Float32Array;
         };
-        indices: Uint16Array;
+        indices: number[] | Uint8Array | Uint16Array | Uint32Array;
         groups: ArrGeometryGroup[],
-        bounds: {
-            sphere: {
-                center: Vector3Arr;
-                radius: number;
-            };
-            box: {
-                min: Vector3Arr;
-                max: Vector3Arr;
-            };
-        }
+        bounds: IBoundsDecodeInfo
     },
     materials: IBaseMaterialDecodeInfo[]
 }

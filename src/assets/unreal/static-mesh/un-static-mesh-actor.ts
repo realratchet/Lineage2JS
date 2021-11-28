@@ -104,7 +104,7 @@ class UStaticMeshActor extends UAActor {
         return group;
     }
 
-    public load(pkg: UPackage, exp: UExport): this {
+    public doLoad(pkg: UPackage, exp: UExport) {
         // debugger;
         // this.readHeadOffset = 15;
         // pkg.seek(exp.offset.value as number, "set");
@@ -119,7 +119,7 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        super.load(pkg, exp);
+        super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
 

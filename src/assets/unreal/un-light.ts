@@ -3,8 +3,6 @@ import UAActor from "./un-aactor";
 import FArray from "./un-array";
 import FNumber from "./un-number";
 
-type Color = import("three").Color;
-
 class ULight extends UAActor {
     public static readonly typeSize: number = 1;
 
@@ -40,15 +38,7 @@ class ULight extends UAActor {
         });
     }
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
-        await super.load(pkg, exp);
-
-        // debugger;
-
-        return this;
-    }
-
-    public getColor(color: Color): Color {
+    public getColor(color: THREE.Color): THREE.Color {
         let h = this.hue, s = this.saturation, l = this.lightness;
 
         if (h === undefined || s === undefined || l === undefined)
@@ -88,5 +78,22 @@ class ULight extends UAActor {
     }
 }
 
+class FLight extends ULight {
+
+    public load(pkg: UPackage, exp: UExport): this {
+        debugger;
+        this.readStart = this.readHead = pkg.tell() + this.readHeadOffset;
+        this.readTail = this.readHead + Infinity;
+
+        debugger;
+
+        this.readNamedProps(pkg);
+
+        // debugger;
+
+        return this;
+    }
+}
+
 export default ULight;
-export { ULight };
+export { ULight, FLight };

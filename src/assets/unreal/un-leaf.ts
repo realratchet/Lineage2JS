@@ -12,14 +12,14 @@ class FLeaf extends FConstructable {
     public iVolumetric: number;
     public visibleZones: BigInt;
 
-    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint64 = new BufferValue(BufferValue.uint64);
 
-        this.iZone = await pkg.read(compat32).value as number;
-        this.iPermeating = await pkg.read(compat32).value as number;
-        this.iVolumetric = await pkg.read(compat32).value as number;
-        this.visibleZones = await pkg.read(uint64).value as BigInt;
+        this.iZone = pkg.read(compat32).value as number;
+        this.iPermeating = pkg.read(compat32).value as number;
+        this.iVolumetric = pkg.read(compat32).value as number;
+        this.visibleZones = pkg.read(uint64).value as BigInt;
 
         return this;
     }

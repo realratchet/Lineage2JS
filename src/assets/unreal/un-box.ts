@@ -2,8 +2,6 @@ import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
 import FVector from "./un-vector";
 
-type UPackage = import("./un-package").UPackage;
-
 class FBox extends FConstructable {
     public static readonly typeSize = 13;
 

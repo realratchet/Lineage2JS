@@ -44,7 +44,7 @@ class UStaticMesh extends UPrimitive {
         });
     }
 
-    public load(pkg: UPackage, exp: UExport): this {
+    public doLoad(pkg: UPackage, exp: UExport) {
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
         const int8 = new BufferValue(BufferValue.int8);
@@ -52,7 +52,7 @@ class UStaticMesh extends UPrimitive {
         // if (exp.objectName === "oren_curumadungeon17") debugger;
         // if (exp.objectName === "oren_curumadungeon33") debugger;
 
-        super.load(pkg, exp);
+        super.doLoad(pkg, exp);
 
         this.sections.load(pkg, null);        // 0400 0000 0000 00BE 00ED 0022 0022 0000
         this.boundingBox.load(pkg);           // 6666 A2C3 FAED EBC0 889D 06C4 6666 A243
@@ -378,8 +378,6 @@ class UStaticMesh extends UPrimitive {
         // debugger;
 
         // console.assert((this.readTail - pkg.tell()) === 0);
-
-        return this;
     }
 
     public async getDecodeInfo(): Promise<IStaticMeshObjectDecodeInfo> {
@@ -439,16 +437,7 @@ class UStaticMesh extends UPrimitive {
                 },
                 indices,
                 groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
-                bounds: {
-                    sphere: {
-                        center: [this.boundingSphere.center.x, this.boundingSphere.center.z, this.boundingSphere.center.y],
-                        radius: this.boundingSphere.radius
-                    },
-                    box: this.boundingBox.isValid ? {
-                        min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
-                        max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
-                    } : null
-                }
+                bounds: this.decodeBoundsInfo()
             },
             materials: await Promise.all(this.materials.map((mat: UMaterialContainer) => mat.getDecodeInfo(true)))
         }

@@ -1,4 +1,6 @@
 abstract class FConstructable implements IConstructable {
+    public promisesLoading: Promise<any>[] = [];
+   
     /**
      * @obsolete this is no longer user, was used to guide parsing
      */
