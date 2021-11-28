@@ -66,20 +66,65 @@
 
         uniform OpacityData shOpacity;
     #endif
+
+    #ifdef USE_MAP_SPECULAR_TRANSFORM
+        varying vec2 vUvTransformedSpecular;
+
+        #ifdef USE_FADE
+            struct FadeData {
+                vec3 color1;
+                vec3 color2;
+                float period;
+            };
+        #endif
+        
+        struct TransformSpecularData {
+            #if USE_MAP_SPECULAR_TRANSFORM == PAN
+                mat3 matrix;
+                float rate;
+            #endif
+        };
+
+        struct SpecularData {
+            #ifdef USE_MAP_SPECULAR
+                TextureData map;
+
+                #ifdef USE_FADE
+                    FadeData fadeColors;
+                #endif
+
+                #ifdef USE_MAP_SPECULAR_TRANSFORM
+                    TransformSpecularData transform;
+                #endif
+            #endif
+        };
+
+        uniform SpecularData shSpecular;
+    #endif
+
+    #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+        varying vec2 vUvTransformedSpecularMask;
+        
+        struct TransformSpecularMaskData {
+            #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
+                mat3 matrix;
+                float rate;
+            #endif
+        };
+
+        struct SpecularMaskData {
+            #ifdef USE_MAP_SPECULAR_MASK
+                TextureData map;
+
+                #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+                TransformSpecularMaskData transform;
+                #endif
+            #endif
+        };
+
+        uniform SpecularMaskData shSpecularMask;
+    #endif
 #endif
-
-// USE_MAP_${defName}_TRANSFORM
-
-// #ifdef USE_TRANSFORMED_SPECULAR
-// struct TransformedSpecular {
-//     mat3 uvSpecularTransform;
-//     float specularTransformRate;
-//     vec2 mapSpecularSize;
-// };
-
-// uniform TransformedSpecular transformSpecular;
-// varying vec2 vUvSpecular;
-// #endif
 
 void main() {
     #include <uv_vertex>
@@ -108,6 +153,32 @@ void main() {
 
         vUvTransformedOpacity = (transformOpacityMatrix * vec3(vUvTransformedOpacity, 1)).xy;
     #endif
+
+    #if defined(USE_UV) && defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
+        mat3 transformSpecularMatrix = shSpecular.transform.matrix;
+        
+        vUvTransformedSpecular = uv;
+
+        #if USE_MAP_SPECULAR_TRANSFORM == PAN
+            transformSpecularMatrix[2].xy *= (shSpecular.transform.rate * globalTime) / shSpecular.map.size;
+        #endif
+
+        vUvTransformedSpecular = (transformSpecularMatrix * vec3(vUvTransformedSpecular, 1)).xy;
+    #endif
+
+    #if defined(USE_UV) && defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
+        mat3 transformSpecularMaskMatrix = shSpecularMask.transform.matrix;
+        
+        vUvTransformedSpecularMask = uv;
+
+        #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
+            transformSpecularMaskMatrix[2].xy *= (shSpecularMask.transform.rate * globalTime) / shSpecularMask.map.size;
+        #endif
+
+        vUvTransformedSpecularMask = (transformSpecularMaskMatrix * vec3(vUvTransformedSpecularMask, 1)).xy;
+    #endif
+
+
 
     // #ifdef USE_TRANSFORMED_SPECULAR
     //     mat3 matrix = transformSpecular.uvSpecularTransform;

@@ -1,6 +1,6 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, Vector3, DoubleSide, FrontSide, Matrix3 } from "three";
+import { Color, DoubleSide, FrontSide, Matrix3 } from "three";
 
 function decodeFadeColorModifier(info: IFadeColorDecodeInfo): IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
@@ -35,7 +35,7 @@ function decodeTexPannerModifer(info: ITexPannerDecodeInfo): IDecodedParameter {
             USE_GLOBAL_TIME: ""
         },
         uniforms: Object.assign({
-            map: isUsingMap ? decodeTexture(info.transform.map).uniforms : null,
+            map: isUsingMap ? _decodeTexture(info.transform.map) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: info.transform.rate,
@@ -44,7 +44,7 @@ function decodeTexPannerModifer(info: ITexPannerDecodeInfo): IDecodedParameter {
     };
 }
 
-function decodeModifier(info: IBaseMaterialModifierDecodeInfo): IDecodedParameter {
+function _decodeModifier(info: IBaseMaterialModifierDecodeInfo): IDecodedParameter {
     switch (info.modifierType) {
         case "fadeColor": return decodeFadeColorModifier(info as IFadeColorDecodeInfo);
         case "panTexture": return decodeTexPannerModifer(info as ITexPannerDecodeInfo);
@@ -56,9 +56,9 @@ function decodeParameter(info: IBaseMaterialDecodeInfo): IDecodedParameter {
     if (!info) return null;
 
     switch (info.materialType) {
-        case "modifier": return decodeModifier(info as IBaseMaterialModifierDecodeInfo);
+        case "modifier": return _decodeModifier(info as IBaseMaterialModifierDecodeInfo);
         case "texture": return {
-            uniforms: { map: decodeTexture(info as ITextureDecodeInfo).uniforms },
+            uniforms: { map: _decodeTexture(info as ITextureDecodeInfo) },
             defines: {},
             isUsingMap: true,
             transformType: "none"
@@ -67,7 +67,7 @@ function decodeParameter(info: IBaseMaterialDecodeInfo): IDecodedParameter {
     }
 }
 
-function decodeShader(info: IShaderDecodeInfo) {
+function decodeShader(info: IShaderDecodeInfo): MeshStaticMaterial {
     return new MeshStaticMaterial({
         diffuse: decodeParameter(info.diffuse),
         opacity: decodeParameter(info.opacity),
@@ -81,16 +81,27 @@ function decodeShader(info: IShaderDecodeInfo) {
     });
 }
 
-function decodeTexture(info: ITextureDecodeInfo): IDecodedParameter {
-    return {
-        uniforms: _decodeTexture(info),
-        defines: {},
-        isUsingMap: true,
-        transformType: "none"
-    };
+function decodeTexture(info: ITextureDecodeInfo): MeshStaticMaterial {
+    return new MeshStaticMaterial({
+        diffuse: decodeParameter(info),
+        opacity: null,
+        specular: null,
+        specularMask: null,
+        side: DoubleSide,
+        blendingMode: "normal",
+        transparent: false,
+        depthWrite: true,
+        visible: true
+    });
 }
 
-function decodeMaterial(info: IBaseMaterialDecodeInfo): any {
+function decodeModifier(info: IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
+    debugger;
+    
+    return null;
+}
+
+function decodeMaterial(info: IBaseMaterialDecodeInfo): MeshStaticMaterial {
     if (!info) return null;
     switch (info.materialType) {
         case "shader": return decodeShader(info as IShaderDecodeInfo);

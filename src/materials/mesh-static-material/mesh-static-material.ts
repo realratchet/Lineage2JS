@@ -1,8 +1,7 @@
-import { ShaderMaterial, Uniform, Matrix3, Color, Texture, MultiplyOperation, Combine, UniformsUtils, UniformsLib, ShaderLib, Side, FrontSide, Vector2, DoubleSide, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
-import decodeMaterial from "@client/assets/decoders/material-decoder";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
 type ApplyParams_T = {

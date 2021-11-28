@@ -28,29 +28,6 @@ uniform float opacity;
     };
 #endif
 
-#ifdef USE_SPECULAR
-    #if defined(USE_MAP_SPECULAR) || defined(USE_FADE)
-        #ifdef USE_FADE
-            struct FadeData {
-                vec3 color1;
-                vec3 color2;
-                float period;
-            };
-        #endif
-
-        struct SpecularData {
-            #ifdef USE_FADE
-                FadeData fadeColors;
-            #endif
-            #ifdef USE_MAP_SPECULAR
-                TextureData map;
-            #endif
-        };
-
-        uniform SpecularData shSpecular;
-    #endif
-#endif
-
 #ifdef USE_DIFFUSE
     #if defined(USE_UV) && defined(USE_MAP_DIFFUSE)
         #ifdef USE_MAP_DIFFUSE_TRANSFORM
@@ -122,23 +99,89 @@ uniform float opacity;
 #endif
 
 #ifdef USE_SPECULAR
+    #if defined(USE_MAP_SPECULAR) || defined(USE_FADE)
+        #ifdef USE_FADE
+            struct FadeData {
+                vec3 color1;
+                vec3 color2;
+                float period;
+            };
+        #endif
+
+        #ifdef USE_MAP_SPECULAR_TRANSFORM
+            varying vec2 vUvTransformedSpecular;
+            
+            struct TransformSpecularData {
+                #if USE_MAP_SPECULAR_TRANSFORM == PAN
+                    mat3 matrix;
+                    float rate;
+                #endif
+            };
+        #endif
+
+        struct SpecularData {
+            #ifdef USE_FADE
+                FadeData fadeColors;
+            #endif
+
+            #ifdef USE_MAP_SPECULAR
+                TextureData map;
+            #endif
+
+            #ifdef USE_MAP_SPECULAR_TRANSFORM
+                TransformSpecularData transform;
+            #endif
+        };
+
+        uniform SpecularData shSpecular;
+    #endif
+
+    #ifdef USE_UV
+        #if defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
+            #define UV_SPECULAR vUvTransformedSpecular
+        #else
+            #define UV_SPECULAR vUv
+        #endif
+    #endif
+#endif
+
+#ifdef USE_SPECULAR_MASK
     #if defined(USE_MAP_SPECULAR_MASK)
+
+        #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+            varying vec2 vUvTransformedSpecularMask;
+            
+            struct TransformSpecularMaskData {
+                #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
+                    mat3 matrix;
+                    float rate;
+                #endif
+            };
+        #endif
+
         struct SpecularMaskData {
             #ifdef USE_MAP_SPECULAR_MASK
                 TextureData map;
+            #endif
+            #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+                TransformSpecularMaskData transform;
             #endif
         };
 
         uniform SpecularMaskData shSpecularMask;
     #endif
+
+    #ifdef USE_UV
+        #if defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
+            #define UV_SPECULAR_MASK vUvTransformedSpecularMask
+        #else
+            #define UV_SPECULAR_MASK vUv
+        #endif
+    #endif
 #endif
 
 #ifdef USE_GLOBAL_TIME
-uniform float globalTime;
-#endif
-
-#ifdef USE_TRANSFORMED_SPECULAR
-varying vec2 vUvSpecular;
+    uniform float globalTime;
 #endif
 
 void main() {
@@ -166,14 +209,14 @@ void main() {
             specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
         #else
             #ifdef USE_MAP_SPECULAR
-                vec4 texelSpecular = texture2D(shSpecular.map.texture, vUvSpecular);
+                vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
                 specularColor = texelSpecular.rgb;
             #endif
         #endif
 
         
         #ifdef USE_MAP_SPECULAR_MASK
-            vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, vUv);
+            vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
             diffuseColor.rgb += texelSpecularMask.a * specularColor;
         #else
             diffuseColor.rgb *= specularColor;
