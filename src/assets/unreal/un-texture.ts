@@ -81,7 +81,6 @@ class UTexture extends UObject {
     }
 
     public async getDecodeInfo(loadMipmaps: boolean): Promise<ITextureDecodeInfo> {
-
         await Promise.all(this.promisesLoading);
 
         if (this.mipmaps.length === 0) return null;

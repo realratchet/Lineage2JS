@@ -84,6 +84,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
 
+        if (info.opacity) {
+            defines["USE_ALPHATEST"] = "";
+        }
+
         // debugger;
 
         // debugger;
