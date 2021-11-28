@@ -54,11 +54,19 @@ class UTexture extends UObject {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
+        debugger;
+        
         super.doLoad(pkg, exp);
 
-        this.promisesLoading.push(this.mipmaps.load(pkg, null));
+        // pkg.seek(this.readHead, "set");
+
+        this.mipmaps.load(pkg, null);
 
         return this;
+    }
+
+    public postLoad(pkg: UPackage, exp: UExport) {
+        this.readHead = pkg.tell();
     }
 
     protected getTexturePixelFormat(): ETexturePixelFormat {
@@ -78,13 +86,17 @@ class UTexture extends UObject {
         }
     }
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITextureDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.uuid;
+
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
 
         if (this.mipmaps.length === 0) return null;
 
         const firstMipmap = this.mipmaps[0] as FMipmap;
-        const mipCount = loadMipmaps ? this.mipmaps.length : 1;
+        const mipCount = library.loadMipmaps ? this.mipmaps.length : 1;
 
         let byteOffset = 0;
         let imSize = firstMipmap.getByteLength();
@@ -127,33 +139,15 @@ class UTexture extends UObject {
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
-        return {
+        library.materials[this.uuid] = {
             materialType: "texture",
             textureType,
             buffer: decodedBuffer,
             wrapS: this.wrapS,
             wrapT: this.wrapT
-        };
-    }
+        } as ITextureDecodeInfo;
 
-    public async decodeMaterial(): Promise<THREE.Material> {
-        const texture = await this.decodeMipmap(0);
-
-        // if(texture) {
-        //     texture.wrapS = RepeatWrapping;
-        //     texture.wrapT = RepeatWrapping;
-        // }
-
-        const material = new MeshStaticMaterial({
-            mapDiffuse: texture,
-            side: DoubleSide
-            // transparent: true,
-            // color: Math.round(Math.random() * 0xffffff)
-        });
-
-        // debugger;
-
-        return material;
+        return this.uuid;
     }
 }
 

@@ -138,6 +138,8 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { index: number, export: UExport }[] });
 
+    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, objects: [] };
+
     // debugger;
 
     // return;
@@ -173,26 +175,10 @@ async function startCore() {
     // debugger;
 
 
-    // let index = 0;
-    // const geometry = new PlaneBufferGeometry(100, 100);
-    // for (let impShader of impGroups["Shader"]) {
-    //     const uMaterial = await pkgLoad.fetchObject(impShader.index) as UShader;
-    //     const material = await uMaterial.decodeMaterial();
-
-    //     const mesh = new Mesh(geometry, material);
-
-    //     mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500, 114151.68197851974 - 500);
-
-    //     objectGroup.add(mesh);
-
-    //     break;
-    // }
+    let index = 0;
+    const shaders = await Promise.all(impGroups["Shader"].slice(0, 1).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
     // debugger;
-
-    // index = 0;
-
-    // const shaders = await Promise.all(impGroups["Shader"].map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
     // shaders.forEach(async shader => {
     //     const shaderInfo = await shader.getDecodeInfo(true);
@@ -209,6 +195,9 @@ async function startCore() {
     // });
 
     // const textures = await Promise.all(impGroups["Texture"].slice(0, 1).map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
+    
+    // debugger;
+    
     // const textureInfo = await textures[0].getDecodeInfo(true);
     // const texture = decodeTexture(textureInfo);
 
@@ -277,14 +266,17 @@ async function startCore() {
     // const level = await uLevel.decodeLevel();
     // objectGroup.add(level);
 
-    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
-    const iModel = await uModel.getDecodeInfo();
+    // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    // await uModel.getDecodeInfo(decodeLibrary);
 
-    const mModel = decodeObject3D(iModel);
+    // decodeLibrary.objects.forEach(info => {
+    //     const mModel = decodeObject3D(decodeLibrary, info);
+    //     objectGroup.add(mModel);
+
+    // });
 
     // debugger;
 
-    objectGroup.add(mModel);
 
     // debugger;
 

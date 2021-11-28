@@ -87,10 +87,10 @@ interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
 
 interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "shader",
-    diffuse: IBaseMaterialDecodeInfo,
-    opacity: IBaseMaterialDecodeInfo,
-    specular: IBaseMaterialDecodeInfo,
-    specularMask: IBaseMaterialDecodeInfo,
+    diffuse: string,
+    opacity: string,
+    specular: string,
+    specularMask: string,
     blendingMode: SupportedBlendingTypes_T,
     depthWrite: boolean,
     doubleSide: boolean,
@@ -104,7 +104,7 @@ interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
     transform: {
         matrix: number[],
         rate: number,
-        map: ITextureDecodeInfo
+        map: string
     }
 }
 
@@ -153,16 +153,25 @@ type IBoundsDecodeInfo = {
     };
 }
 
+interface IGeometryDecodeInfo {
+    attributes: {
+        positions: Float32Array;
+        normals: Float32Array;
+        uvs: Float32Array;
+    };
+    indices: number[] | Uint8Array | Uint16Array | Uint32Array;
+    groups: ArrGeometryGroup[],
+    bounds?: IBoundsDecodeInfo
+}
+
 interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
-    geometry: {
-        attributes: {
-            positions: Float32Array;
-            normals: Float32Array;
-            uvs: Float32Array;
-        };
-        indices: number[] | Uint8Array | Uint16Array | Uint32Array;
-        groups: ArrGeometryGroup[],
-        bounds?: IBoundsDecodeInfo
-    },
-    materials: IBaseMaterialDecodeInfo[]
+    geometry: string,
+    materials: string[]
+}
+
+interface IDecodeLibrary {
+    loadMipmaps: boolean,
+    materials: { [key: string]: IBaseMaterialDecodeInfo },
+    geometries: { [key: string]: IGeometryDecodeInfo },
+    objects: IBaseObjectDecodeInfo[]
 }

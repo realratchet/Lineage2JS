@@ -5,7 +5,7 @@ import FNumber from "./un-number";
 import FColor from "./un-color";
 
 abstract class UBaseMaterial extends UObject {
-    public abstract async getDecodeInfo(loadMipmaps: boolean): Promise<IBaseMaterialDecodeInfo>;
+    public abstract async getDecodeInfo(library: IDecodeLibrary): Promise<string>;
 }
 abstract class UBaseModifier extends UBaseMaterial {
 }
@@ -75,6 +75,11 @@ class UShader extends UMaterial {
     protected alphaTest: number = 0;
     protected isPerformingLightningOnSpecularPass: boolean = false;
 
+    public doLoad(pkg: UPackage, exp: UExport) {
+        debugger;
+        super.doLoad(pkg, exp);
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Diffuse": "diffuse",
@@ -91,13 +96,17 @@ class UShader extends UMaterial {
         });
     }
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<IShaderDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.uuid;
+
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
 
-        const diffuse = await this.diffuse?.getDecodeInfo(loadMipmaps) || null;
-        const opacity = await this.opacity?.getDecodeInfo(loadMipmaps) || null;
-        const specular = await this.specular?.getDecodeInfo(loadMipmaps) || null;
-        const specularMask = await this.specularMask?.getDecodeInfo(loadMipmaps) || null;
+        const diffuse = await this.diffuse?.getDecodeInfo(library) || null;
+        const opacity = await this.opacity?.getDecodeInfo(library) || null;
+        const specular = await this.specular?.getDecodeInfo(library) || null;
+        const specularMask = await this.specularMask?.getDecodeInfo(library) || null;
         const depthWrite = this.depthWrite;
         const doubleSide = this.doubleSide
         const transparent = this.transparent;
@@ -116,7 +125,7 @@ class UShader extends UMaterial {
             default: console.warn("Unknown blending mode:", this.outputBlending); break;
         }
 
-        return {
+        library.materials[this.uuid] = {
             materialType: "shader",
             blendingMode,
             diffuse,
@@ -128,52 +137,9 @@ class UShader extends UMaterial {
             transparent,
             alphaTest,
             visible: true,
-        };
-    }
+        } as IShaderDecodeInfo;
 
-    public async decodeMaterial(): Promise<THREE.Material> {
-        const diffuse = await this.diffuse?.decodeMipmap(0) || null;
-        const opacity = await this.opacity?.decodeMipmap(0) || null;
-        const specular = await this.specularMask?.decodeMipmap(0) || null;
-        const depthWrite = this.depthWrite;
-        const side = this.doubleSide ? DoubleSide : FrontSide;
-        const transparent = this.transparent;
-        const alphaTest = this.alphaTest / 255;
-
-        // if (this.specular && !(this.specular instanceof UFadeColor))
-        //     throw new Error(`Unknown specular type.`);
-
-        // debugger;
-
-        const material = new MeshStaticMaterial(Object.assign({
-            mapDiffuse: diffuse,
-            // map: diffuse,
-            mapOpacity: opacity,
-            alphaTest,
-            side,
-            depthWrite,
-            transparent,
-            mapSpecularMask: specular,
-            visible: true
-            // wireframe: true,
-            // color: Math.round(Math.random() * 0xffffff)
-            // color: new Color(this.specular.color1.r / 255, this.specular.color1.g / 255, this.specular.color1.b / 255)
-        }, await this.specular?.getParameters()));
-
-        // debugger;
-
-        switch (this.outputBlending) {
-            case OutputBlending_T.OB_Normal:
-            case OutputBlending_T.OB_Masked:
-                material.blending = CustomBlending;
-                material.blendSrc = SrcAlphaFactor;
-                material.blendDst = OneMinusSrcAlphaFactor;
-                material.alphaTest = 0;
-                break;
-            default: console.warn("Unknown blending mode:", this.outputBlending); break;
-        }
-
-        return material;
+        return this.uuid;
     }
 }
 
@@ -182,10 +148,14 @@ class UFadeColor extends UBaseModifier {
     public color2: FColor = new FColor();
     public period: number = 0;
 
-    public async decodeMaterial(): Promise<THREE.Material> { return new MeshBasicMaterial({ color: new Color(this.color1.r, this.color1.g, this.color1.b) }); }
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.uuid;
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<IFadeColorDecodeInfo> {
-        return {
+        library.materials[this.uuid] = null;
+
+        await Promise.all(this.promisesLoading);
+
+        library.materials[this.uuid] = {
             materialType: "modifier",
             modifierType: "fadeColor",
             fadeColors: {
@@ -193,7 +163,9 @@ class UFadeColor extends UBaseModifier {
                 color2: [this.color2.r / 255, this.color2.b / 255, this.color2.b / 255],
                 period: this.period
             }
-        };
+        } as IFadeColorDecodeInfo;
+
+        return this.uuid;
     }
 
     protected getPropertyMap() {
@@ -222,9 +194,16 @@ class UColorModifier extends UBaseMaterial {
         return material;
     }
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
-        return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
+
+        await this.material.getDecodeInfo(library);
+
+        return this.material.uuid;
     }
 
     protected getPropertyMap() {
@@ -268,9 +247,16 @@ class UTexRotator extends UBaseModifier {
         };
     }
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
-        return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
+
+        await this.material.getDecodeInfo(library);
+
+        return this.material.uuid;
     }
 
     protected getPropertyMap() {
@@ -295,9 +281,16 @@ class UTexOscillator extends UBaseModifier {
     protected amplitudeV: number;
     protected material: UMaterial;
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
-        return this.material.getDecodeInfo(loadMipmaps) as any as ITexPannerDecodeInfo;
+
+        await this.material.getDecodeInfo(library);
+
+        return this.material.uuid;
     }
 
     protected getPropertyMap() {
@@ -321,30 +314,24 @@ class UTexPanner extends UBaseModifier {
     protected material: UTexture;
     protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
 
-    public async getParameters() {
-        const matrix = this.matrix.getMatrix3(new Matrix3());
-        const texture = await (this.material as UTexture).decodeMipmap(0);
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.uuid;
 
-        return {
-            transformedTexture: {
-                transformPan: true,
-                texture,
-                matrix,
-                rate: this.rate
-            }
-        };
-    }
+        library.materials[this.uuid] = null;
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<ITexPannerDecodeInfo> {
-        return {
+        await Promise.all(this.promisesLoading);
+
+        library.materials[this.uuid] = {
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {
                 matrix: this.matrix.getElements3x3(),
-                map: await this.material?.getDecodeInfo(loadMipmaps) || null,
+                map: await this.material?.getDecodeInfo(library) || null,
                 rate: this.rate
             }
-        };
+        } as ITexPannerDecodeInfo;
+
+        return this.material.uuid;
     }
 
     protected getPropertyMap() {
@@ -380,9 +367,16 @@ class UMaterialContainer extends UBaseMaterial {
         this.readTail = this.readHead + UMaterialContainer.typeSize;
     }
 
-    public async getDecodeInfo(loadMipmaps: boolean): Promise<IBaseMaterialDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
-        return this.material?.getDecodeInfo(loadMipmaps) || null;
+
+        await this.material.getDecodeInfo(library);
+
+        return this.material.uuid;
     }
 }
 

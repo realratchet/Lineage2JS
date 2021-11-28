@@ -131,11 +131,16 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.geometries) return this.uuid;
+
+        library.geometries[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
 
+
         const globalBSPTexelScale = 128;
-        const materials: IBaseMaterialDecodeInfo[] = [];
+        const materials: string[] = [];
         const objectMap = new Map<UMaterial, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf }[] }>();
 
         // Calculate the size of the vertex buffer and the base vertex index of each node.
@@ -187,7 +192,7 @@ class UModel extends UPrimitive {
             for (let material of [...objectMap.keys()]) {
                 const { numVertices, nodes } = objectMap.get(material);
                 const startGroupOffset = groupOffset;
-                materials.push(await material.getDecodeInfo(true));
+                materials.push(await material.getDecodeInfo(library));
 
                 for (let { node, surf } of nodes) {
                     const textureBase: FVector = this.points.getElem(surf.pBase);
@@ -249,21 +254,25 @@ class UModel extends UPrimitive {
             }
         }
 
-        return {
+        library.geometries[this.uuid] = {
+            groups,
+            indices,
+            // bounds: this.decodeBoundsInfo(),
+            attributes: {
+                normals,
+                positions,
+                uvs
+            },
+        };
+
+        library.objects.push({
             name: this.objectName,
             type: "Model",
-            geometry: {
-                groups,
-                indices,
-                // bounds: this.decodeBoundsInfo(),
-                attributes: {
-                    normals,
-                    positions,
-                    uvs
-                },
-            },
+            geometry: this.uuid,
             materials
-        };
+        } as IStaticMeshObjectDecodeInfo);
+
+        return this.uuid;
     }
 
     // public async decodeModel(): Promise<Object3D> {

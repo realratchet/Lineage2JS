@@ -35,6 +35,8 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
         this.length = count.value as number;
 
+        debugger;
+
         if (count.value as number === 0) return this;
 
         const elementSize = hasTag ? dataSize / this.length : null;
@@ -74,7 +76,7 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 }
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public ITextureDecodeInfoload(pkg: UPackage, tag: PropertyTag): this {
         const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
 
         // debugger;

@@ -1,12 +1,14 @@
 import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import FArray from "./un-array";
+import { generateUUID } from "three/src/math/MathUtils";
 
 type UPackage = import("./un-package").UPackage;
 type UExport = import("./un-export").UExport;
 
 abstract class UObject {
     public objectName = "Exp_None";
+    public readonly uuid = generateUUID();
 
     protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
@@ -38,7 +40,7 @@ abstract class UObject {
 
         } while (this.readHead < this.readTail);
 
-
+        this.readHead = pkg.tell();
     }
 
     protected preLoad(pkg: UPackage, exp: UExport): void {
@@ -177,7 +179,7 @@ abstract class UObject {
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
+        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
     }
