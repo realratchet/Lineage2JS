@@ -34,7 +34,7 @@ const decodeDDS = (function () {
     };
 })();
 
-function decodeTexture(info: ITextureDecodeInfo): { texture: THREE.Texture, size: THREE.Vector2 } {
+function decodeTexture(info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {

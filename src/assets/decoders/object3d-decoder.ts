@@ -1,6 +1,44 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3 } from "three";
 import decodeMaterial from "./material-decoder";
 
+const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
+
+function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
+    if (cacheGeometries.has(info)) return cacheGeometries.get(info);
+
+    const attrPosition = new Float32BufferAttribute(info.attributes.positions, 3);
+    const attrNormal = new Float32BufferAttribute(info.attributes.normals, 3);
+    const attrUv = new Float32BufferAttribute(info.attributes.uvs, 2);
+    const attrIndices = new Uint16BufferAttribute(info.indices, 1);
+
+    const geometry = new BufferGeometry();
+
+    geometry.setAttribute("position", attrPosition);
+    geometry.setAttribute("normal", attrNormal);
+    geometry.setAttribute("uv", attrUv);
+    geometry.setIndex(attrIndices);
+
+    info.groups.forEach(group => geometry.addGroup(...group));
+
+    if (info.bounds) {
+        if (info.bounds.sphere) {
+            geometry.boundingSphere = new Sphere();
+            geometry.boundingSphere.center.fromArray(info.bounds.sphere.center);
+            geometry.boundingSphere.radius = info.bounds.sphere.radius;
+        }
+
+        if (info.bounds.box) {
+            geometry.boundingBox = geometry.boundingBox || new Box3();
+            geometry.boundingBox.min.fromArray(info.bounds.box.min);
+            geometry.boundingBox.max.fromArray(info.bounds.box.max);
+        }
+    }
+
+    cacheGeometries.set(info, geometry);
+
+    return geometry;
+}
+
 function applySimpleProperties<T extends THREE.Object3D>(library: IDecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
 
     if (info.name) object.name = info.name;
@@ -21,38 +59,8 @@ function decodeSimpleObject(library: IDecodeLibrary, Constructor: (typeof Object
 }
 
 function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
-    const infoGeometry = library.geometries[info.geometry];
-
-    const attrPosition = new Float32BufferAttribute(infoGeometry.attributes.positions, 3);
-    const attrNormal = new Float32BufferAttribute(infoGeometry.attributes.normals, 3);
-    const attrUv = new Float32BufferAttribute(infoGeometry.attributes.uvs, 2);
-    const attrIndices = new Uint16BufferAttribute(infoGeometry.indices, 1);
-
-    const geometry = new BufferGeometry();
-
-    geometry.setAttribute("position", attrPosition);
-    geometry.setAttribute("normal", attrNormal);
-    geometry.setAttribute("uv", attrUv);
-    geometry.setIndex(attrIndices);
-
-    infoGeometry.groups.forEach(group => geometry.addGroup(...group));
-
-    if (infoGeometry.bounds) {
-        if (infoGeometry.bounds.sphere) {
-            geometry.boundingSphere = new Sphere();
-            geometry.boundingSphere.center.fromArray(infoGeometry.bounds.sphere.center);
-            geometry.boundingSphere.radius = infoGeometry.bounds.sphere.radius;
-        }
-
-        if (infoGeometry.bounds.box) {
-            geometry.boundingBox = geometry.boundingBox || new Box3();
-            geometry.boundingBox.min.fromArray(infoGeometry.bounds.box.min);
-            geometry.boundingBox.max.fromArray(infoGeometry.bounds.box.max);
-        }
-    }
-
-    const materials = info.materials.map(infoMaterial => decodeMaterial(library, library.materials[infoMaterial]));
-    const mesh = new Mesh(geometry, materials);
+    const materials = decodeMaterial(library, library.materials[info.materials]);
+    const mesh = new Mesh(fetchGeometry(library.geometries[info.geometry] as IGeometryDecodeInfo), materials);
 
     applySimpleProperties(library, mesh, info);
 

@@ -131,13 +131,18 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
-        if (this.uuid in library.geometries) return this.uuid;
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
+        if (this.uuid in library.geometries) return {
+            name: this.objectName,
+            type: "Model",
+            geometry: this.uuid,
+            materials: this.uuid,
+        } as IStaticMeshObjectDecodeInfo
 
         library.geometries[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
         await Promise.all(this.promisesLoading);
-
 
         const globalBSPTexelScale = 128;
         const materials: string[] = [];
@@ -265,14 +270,14 @@ class UModel extends UPrimitive {
             },
         };
 
-        library.objects.push({
+        library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        return {
             name: this.objectName,
             type: "Model",
             geometry: this.uuid,
-            materials
-        } as IStaticMeshObjectDecodeInfo);
-
-        return this.uuid;
+            materials: this.uuid,
+        } as IStaticMeshObjectDecodeInfo;
     }
 
     // public async decodeModel(): Promise<Object3D> {

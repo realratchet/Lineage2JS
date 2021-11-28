@@ -71,18 +71,24 @@ type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "dds" | "g16";
-type DecodableMaterial_T = "modifier" | "texture" | "shader";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "modifier",
     modifierType: DecodableMaterialModifier_T
 }
+
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "texture",
     textureType: DecodableTexture_T,
     buffer: ArrayBuffer,
     wrapS: number, wrapT: number
+}
+
+interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "group",
+    materials: string[]
 }
 
 interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -166,12 +172,13 @@ interface IGeometryDecodeInfo {
 
 interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     geometry: string,
-    materials: string[]
+    materials: string
 }
 
 interface IDecodeLibrary {
     loadMipmaps: boolean,
     materials: { [key: string]: IBaseMaterialDecodeInfo },
-    geometries: { [key: string]: IGeometryDecodeInfo },
-    objects: IBaseObjectDecodeInfo[]
+    geometries: { [key: string]: IGeometryDecodeInfo }
 }
+
+type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };

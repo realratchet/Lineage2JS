@@ -138,7 +138,7 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { index: number, export: UExport }[] });
 
-    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, objects: [] };
+    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {} };
 
     // debugger;
 
@@ -175,8 +175,8 @@ async function startCore() {
     // debugger;
 
 
-    let index = 0;
-    const shaders = await Promise.all(impGroups["Shader"].slice(0, 1).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
+    // let index = 0;
+    // const shaders = await Promise.all(impGroups["Shader"].slice(0, 1).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
 
     // debugger;
 
@@ -195,9 +195,9 @@ async function startCore() {
     // });
 
     // const textures = await Promise.all(impGroups["Texture"].slice(0, 1).map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
-    
+
     // debugger;
-    
+
     // const textureInfo = await textures[0].getDecodeInfo(true);
     // const texture = decodeTexture(textureInfo);
 
@@ -302,7 +302,13 @@ async function startCore() {
     // // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1804); // tower plane
     // // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(4284); // rotating crystal
     // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1441); // blinkig roof
-    // const mesh = await uMesh.getDecodeInfo();
+
+    // (await Promise.all([await uMesh.getDecodeInfo(decodeLibrary)])).forEach(info => {
+    //     const mModel = decodeObject3D(decodeLibrary, info);
+    //     objectGroup.add(mModel);
+    // });
+
+    // debugger;
 
     // const group = decodeObject3D(mesh);
 
@@ -314,8 +320,8 @@ async function startCore() {
 
     // expGroups["StaticMeshActor"].forEach(async exp => {
     //     const uStaticMeshActor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);;
-    //     const iStaticMeshActor = await uStaticMeshActor.getDecodeInfo();
-    //     const oStaticMeshActor = decodeObject3D(iStaticMeshActor);
+    //     const iStaticMeshActor = await uStaticMeshActor.getDecodeInfo(decodeLibrary);
+    //     const oStaticMeshActor = decodeObject3D(decodeLibrary, iStaticMeshActor);
 
     //     // objectGroup.add(oStaticMeshActor);
     //     loadedObjects.push(oStaticMeshActor);
@@ -325,8 +331,16 @@ async function startCore() {
     //     loadedObjects.splice(0, 100).forEach(actor => objectGroup.add(actor));
     // }, 1000);
 
-    // const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
-    // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo()));
+    const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
+
+    for (let uStaticMeshActor of uStaticMeshActors) {
+        const info = await uStaticMeshActor.getDecodeInfo(decodeLibrary);
+        const mModel = decodeObject3D(decodeLibrary, info);
+
+        objectGroup.add(mModel);
+    }
+
+    // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 
     // iStaticMeshActors.forEach(info => objectGroup.add(decodeObject3D(info)));
 

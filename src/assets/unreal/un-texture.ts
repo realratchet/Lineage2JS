@@ -54,11 +54,8 @@ class UTexture extends UObject {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-        debugger;
         
         super.doLoad(pkg, exp);
-
-        // pkg.seek(this.readHead, "set");
 
         this.mipmaps.load(pkg, null);
 

@@ -75,11 +75,6 @@ class UShader extends UMaterial {
     protected alphaTest: number = 0;
     protected isPerformingLightningOnSpecularPass: boolean = false;
 
-    public doLoad(pkg: UPackage, exp: UExport) {
-        debugger;
-        super.doLoad(pkg, exp);
-    }
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Diffuse": "diffuse",
@@ -368,15 +363,17 @@ class UMaterialContainer extends UBaseMaterial {
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
-        if (this.uuid in library.materials) return this.material.uuid;
+        
+        if (this.uuid in library.materials) return this.material?.uuid || null;
 
         library.materials[this.uuid] = null;
 
         await Promise.all(this.promisesLoading);
 
-        await this.material.getDecodeInfo(library);
+        if (this.material)
+            await this.material.getDecodeInfo(library);
 
-        return this.material.uuid;
+        return this.material?.uuid || null;
     }
 }
 

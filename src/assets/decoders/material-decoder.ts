@@ -2,6 +2,19 @@ import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-stat
 import _decodeTexture from "./texture-decoder";
 import { Color, DoubleSide, FrontSide, Matrix3 } from "three";
 
+const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
+
+function fetchTexture(info: ITextureDecodeInfo): MapData_T {
+    if (cacheTextures.has(info))
+        return cacheTextures.get(info);
+
+    const data = _decodeTexture(info);
+
+    cacheTextures.set(info, data);
+
+    return data;
+}
+
 function decodeFadeColorModifier(library: IDecodeLibrary, info: IFadeColorDecodeInfo): IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
@@ -27,7 +40,6 @@ function decodeFadeColorModifier(library: IDecodeLibrary, info: IFadeColorDecode
 function decodeTexPannerModifer(library: IDecodeLibrary, info: ITexPannerDecodeInfo): IDecodedParameter {
     const isUsingMap = info.transform.map !== null;
 
-
     return {
         isUsingMap,
         transformType: "pan",
@@ -36,7 +48,7 @@ function decodeTexPannerModifer(library: IDecodeLibrary, info: ITexPannerDecodeI
             USE_GLOBAL_TIME: ""
         },
         uniforms: Object.assign({
-            map: isUsingMap ? _decodeTexture(library.materials[info.transform.map] as ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchTexture(library.materials[info.transform.map] as ITextureDecodeInfo) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: info.transform.rate,
@@ -59,7 +71,7 @@ function decodeParameter(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo)
     switch (info.materialType) {
         case "modifier": return _decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
         case "texture": return {
-            uniforms: { map: _decodeTexture(info as ITextureDecodeInfo) },
+            uniforms: { map: fetchTexture(info as ITextureDecodeInfo) },
             defines: {},
             isUsingMap: true,
             transformType: "none"
@@ -98,13 +110,17 @@ function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MeshS
 
 function decodeModifier(library: IDecodeLibrary, info: IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
     debugger;
-
-    return null;
+    throw new Error("Does this ever happen?");
 }
 
-function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): MeshStaticMaterial {
+function decodeGroup(library: IDecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
+    return info.materials.map(info => decodeMaterial(library, library.materials[info]) as MeshStaticMaterial);
+}
+
+function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): MeshStaticMaterial | MeshStaticMaterial[] {
     if (!info) return null;
     switch (info.materialType) {
+        case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);
         case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
         case "modifier": return decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);

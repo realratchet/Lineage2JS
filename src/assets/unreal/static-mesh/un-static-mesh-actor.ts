@@ -52,56 +52,19 @@ class UStaticMeshActor extends UAActor {
         });
     }
 
-    public async getDecodeInfo(): Promise<IBaseObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
         await Promise.all(this.promisesLoading);
 
-        return {
+        const info = {
             type: "StaticMeshActor",
             name: this.objectName,
             position: [this.location.x, this.location.z, this.location.y],
             scale: [this.scale.x, this.scale.z, this.scale.y],
             rotation: this.rotation.getEulerElements(),
-            children: [await this.mesh.getDecodeInfo()]
-        };
-    }
+            children: [await this.mesh.getDecodeInfo(library)]
+        } as IBaseObjectDecodeInfo;
 
-    public async decodeMesh(): Promise<THREE.Group> {
-        // debugger;
-
-        const group = new Group();
-
-        const instance = await this.mesh.decodeMesh();
-
-        console.assert(!instance.parent)
-
-        group.name = this.objectName;
-        group.add(instance);
-        group.position.set(this.location.x, this.location.z, this.location.y)
-        // group.scale.set(0.001, 0.001, 0.001);
-
-        // roll (x) | pitch (y) | yaw (z)
-
-        this.rotation.getEuler(group.rotation);
-        group.scale.set(Math.abs(this.scale.x), Math.abs(this.scale.z), Math.abs(this.scale.y));
-
-        // debugger;
-
-        // const roll = -(65535 - this.rotation.x) / 32768 * Math.PI;
-        // const pitch = -(this.rotation.z) / 32768 * Math.PI;
-        // const yaw = -(this.rotation.y) / 32768 * Math.PI;
-
-        // group.rotation.set(
-        //     // -Math.PI * 0.5,
-        //     // 0,
-        //     // 0
-        //     2 * Math.PI - (65535 - roll) / 32768 * Math.PI,
-        //     2 * Math.PI - pitch / 32768 * Math.PI,
-        //     -yaw / 32768 * Math.PI
-        // );
-
-        // console.log(group.rotation);
-
-        return group;
+        return info;
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {

@@ -380,7 +380,18 @@ class UStaticMesh extends UPrimitive {
         // console.assert((this.readTail - pkg.tell()) === 0);
     }
 
-    public async getDecodeInfo(): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
+
+        if (this.uuid in library.geometries) return {
+            type: "StaticMesh",
+            name: this.objectName,
+            geometry: this.uuid,
+            materials: this.uuid,
+        } as IStaticMeshObjectDecodeInfo;
+
+        library.geometries[this.uuid] = null;
+        library.materials[this.uuid] = null;
+
         await Promise.all(this.promisesLoading);
 
         // debugger;
@@ -426,164 +437,28 @@ class UStaticMesh extends UPrimitive {
             indices[i] = this.indexStream.indices.getElem(i).value;
         }
 
+        const materials = await Promise.all(this.materials.map((mat: UMaterialContainer) => mat.getDecodeInfo(library)));
+
+        library.geometries[this.uuid] = {
+            attributes: {
+                positions,
+                normals,
+                uvs,
+            },
+            indices,
+            groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
+            bounds: this.decodeBoundsInfo()
+        };
+
+        library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
         return {
             type: "StaticMesh",
             name: this.objectName,
-            geometry: {
-                attributes: {
-                    positions,
-                    normals,
-                    uvs,
-                },
-                indices,
-                groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
-                bounds: this.decodeBoundsInfo()
-            },
-            materials: await Promise.all(this.materials.map((mat: UMaterialContainer) => mat.getDecodeInfo(true)))
-        }
+            geometry: this.uuid,
+            materials: this.uuid
+        };
     }
-
-    public async decodeMesh() {
-        // debugger;
-
-        // const section = this.sections.getElem(0);
-        // const materials = this.materials.getElem(0);
-
-        // if (this.sections.getElemCount() > 1)
-        //     debugger;
-
-        const countVerts = this.vertexStream.vert.getElemCount();
-        const countFaces = this.indexStream.indices.getElemCount();
-        const countUvs = this.uvStream.getElemCount();
-        const hasColors = false;
-        // const hasColors = this.colorStream.color.getElemCount() > 0;
-
-        // if (this.objectName === "oren_curumadungeon20")
-        //     debugger;
-
-        if (countUvs > 1) debugger;
-
-        // debugger;
-
-        const positions = new Float32Array(countVerts * 3);
-        const normals = new Float32Array(countVerts * 3);
-        const uvs = new Float32Array(countVerts * 2);
-        const indices = new Uint16Array(countFaces);
-        const colors = hasColors ? new Float32Array(countVerts * 3) : null;
-
-        for (let i = 0; i < countVerts; i++) {
-            const { position, normal } = this.vertexStream.vert.getElem(i);
-            const { u, v } = this.uvStream.getElem(0).data.getElem(i);
-
-
-            // position.toArray(positions, i * 3);
-            // normal.toArray(normals, i * 3);
-
-            positions[i * 3 + 0] = position.x;
-            positions[i * 3 + 1] = position.z;
-            positions[i * 3 + 2] = position.y;
-
-            normals[i * 3 + 0] = normal.x;
-            normals[i * 3 + 1] = normal.z;
-            normals[i * 3 + 2] = normal.y;
-
-            if (hasColors) {
-                const { r, g, b } = this.colorStream.color.getElem(i);
-
-                colors[i * 3 + 0] = r / 255;
-                colors[i * 3 + 1] = g / 255;
-                colors[i * 3 + 2] = b / 255;
-            }
-
-            uvs[i * 2 + 0] = u;
-            uvs[i * 2 + 1] = v;
-        }
-
-        for (let i = 0; i < countFaces; i++) {
-            indices[i] = this.indexStream.indices.getElem(i).value;
-        }
-
-        const attrPosition = new Float32BufferAttribute(positions, 3);
-        const attrNormal = new Float32BufferAttribute(normals, 3);
-        const attrUv = new Float32BufferAttribute(uvs, 2);
-        const attrIndices = new Uint16BufferAttribute(indices, 1);
-
-        const geometry = new BufferGeometry();
-
-        geometry.setAttribute("position", attrPosition);
-        geometry.setAttribute("normal", attrNormal);
-        geometry.setAttribute("uv", attrUv);
-
-        if (hasColors) {
-            const attrColors = new Float32BufferAttribute(colors, 3);
-
-            geometry.setAttribute("color", attrColors);
-        }
-
-        geometry.setIndex(attrIndices);
-
-
-        geometry.boundingSphere = new Sphere();
-        geometry.boundingSphere.center.set(this.boundingSphere.center.x, this.boundingSphere.center.z, this.boundingSphere.center.y);
-        geometry.boundingSphere.radius = this.boundingSphere.radius;
-
-        if (this.boundingBox.isValid) {
-            geometry.boundingBox = geometry.boundingBox || new Box3();
-            geometry.boundingBox.min.set(this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y);
-            geometry.boundingBox.max.set(this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y);
-        }
-
-        const materials = [];
-
-        // debugger;
-
-        for (let i = 0, len = this.sections.getElemCount(); i < len; i++) {
-            const section = this.sections.getElem(i);
-            const material = await this.materials.getElem(i).decodeMaterial();
-
-            if (material && hasColors) material.vertexColors = true;
-
-            geometry.addGroup(section.firstIndex, section.numFaces * 3, i);
-            materials.push(material);
-
-            // debugger;
-        }
-
-        // materials[0].uniforms.map2.value = materials[3].map;
-
-        // debugger;
-
-        // const materials = await this.materials.getElem(0)?.decodeMaterial();
-        const mesh = new Mesh(geometry, materials);
-
-        mesh.name = this.objectName;
-
-        // debugger;
-
-        // this.ptest.forEach(plane => {
-        //     const phelper = new PlaneHelper(plane, 500);
-
-        //     mesh.add(phelper);
-        // });
-
-        // this.vtest.forEach((v, i) => {
-        //     const redness = i / (this.vtest.length - 1);
-        //     const vertex = new Mesh(new SphereBufferGeometry(10), new MeshBasicMaterial({
-        //         color: new Color(redness, 0, 1),
-        //         transparent: true,
-        //         depthTest: false
-        //     }));
-
-
-        //     vertex.position.set(v.x, v.z, v.y);
-
-        //     mesh.add(vertex);
-        // });
-
-        return mesh;
-    }
-    public vtest: Vector3[];
-    public ptest: Plane[];
 }
 
 export default UStaticMesh;
