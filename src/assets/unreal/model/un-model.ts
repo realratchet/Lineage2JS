@@ -159,7 +159,7 @@ class UModel extends UPrimitive {
                 });
             }
 
-            debugger;
+            // debugger;
 
             const gData = objectMap.get(surf.material);
             const vcount = node.numVertices;
@@ -255,7 +255,7 @@ class UModel extends UPrimitive {
             geometry: {
                 groups,
                 indices,
-                bounds: this.decodeBoundsInfo(),
+                // bounds: this.decodeBoundsInfo(),
                 attributes: {
                     normals,
                     positions,

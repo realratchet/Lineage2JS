@@ -143,11 +143,11 @@ interface IBaseObjectDecodeInfo {
 }
 
 type IBoundsDecodeInfo = {
-    sphere: {
+    sphere?: {
         center: Vector3Arr;
         radius: number;
     };
-    box: {
+    box?: {
         min: Vector3Arr;
         max: Vector3Arr;
     };
@@ -162,7 +162,7 @@ interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
         };
         indices: number[] | Uint8Array | Uint16Array | Uint32Array;
         groups: ArrGeometryGroup[],
-        bounds: IBoundsDecodeInfo
+        bounds?: IBoundsDecodeInfo
     },
     materials: IBaseMaterialDecodeInfo[]
 }

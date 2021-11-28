@@ -35,14 +35,18 @@ function decodeStaticMesh(info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
 
     info.geometry.groups.forEach(group => geometry.addGroup(...group));
 
-    geometry.boundingSphere = new Sphere();
-    geometry.boundingSphere.center.fromArray(info.geometry.bounds.sphere.center);
-    geometry.boundingSphere.radius = info.geometry.bounds.sphere.radius;
+    if (info.geometry.bounds) {
+        if (info.geometry.bounds.sphere) {
+            geometry.boundingSphere = new Sphere();
+            geometry.boundingSphere.center.fromArray(info.geometry.bounds.sphere.center);
+            geometry.boundingSphere.radius = info.geometry.bounds.sphere.radius;
+        }
 
-    if (info.geometry.bounds.box) {
-        geometry.boundingBox = geometry.boundingBox || new Box3();
-        geometry.boundingBox.min.fromArray(info.geometry.bounds.box.min);
-        geometry.boundingBox.max.fromArray(info.geometry.bounds.box.max);
+        if (info.geometry.bounds.box) {
+            geometry.boundingBox = geometry.boundingBox || new Box3();
+            geometry.boundingBox.min.fromArray(info.geometry.bounds.box.min);
+            geometry.boundingBox.max.fromArray(info.geometry.bounds.box.max);
+        }
     }
 
     const materials = info.materials.map(info => decodeMaterial(info));
