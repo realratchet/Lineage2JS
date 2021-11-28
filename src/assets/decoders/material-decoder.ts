@@ -27,6 +27,7 @@ function decodeFadeColorModifier(info: IFadeColorDecodeInfo): IDecodedParameter 
 function decodeTexPannerModifer(info: ITexPannerDecodeInfo): IDecodedParameter {
     const isUsingMap = info.transform.map !== null;
 
+
     return {
         isUsingMap,
         transformType: "pan",

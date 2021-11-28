@@ -156,7 +156,7 @@ void main() {
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
         mat3 transformSpecularMatrix = shSpecular.transform.matrix;
-        
+
         vUvTransformedSpecular = uv;
 
         #if USE_MAP_SPECULAR_TRANSFORM == PAN

@@ -26,10 +26,11 @@ class UMatrix extends UObject {
     }
 
     public getElements3x3() {
+        debugger;
         return [
-            this.planeX.x, this.planeY.x, this.planeZ.x,
-            this.planeX.y, this.planeY.y, this.planeZ.y,
-            this.planeX.z, this.planeY.z, this.planeZ.z
+            this.planeX.x, this.planeX.y, this.planeX.z,
+            this.planeY.x, this.planeY.y, this.planeY.z,
+            this.planeZ.x, this.planeZ.y, this.planeZ.z
         ];
     }
 
