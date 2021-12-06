@@ -332,13 +332,13 @@ async function startCore() {
     // }, 1000);
 
     const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
+    const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 
-    for (let uStaticMeshActor of uStaticMeshActors) {
-        const info = await uStaticMeshActor.getDecodeInfo(decodeLibrary);
+    iStaticMeshActors.forEach(info => {
         const mModel = decodeObject3D(decodeLibrary, info);
 
         objectGroup.add(mModel);
-    }
+    });
 
     // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 
