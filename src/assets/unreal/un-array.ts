@@ -75,9 +75,9 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public load(pkg: UPackage, tag: PropertyTag): this {
-        const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
+        // const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
 
-        // debugger;
+        pkg.seek(4);
 
         super.load(pkg, tag);
 
@@ -85,5 +85,83 @@ class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     }
 }
 
+class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements IConstructable {
+    public static readonly typeSize: number = 16;
+    // BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T>
+    protected Constructor: ValidTypes_T<T>;
+
+    public getElemCount() { return this.array.byteLength / this.Constructor.bytes; }
+    public getElem(idx: number) {
+        let funName: string = null;
+
+        switch (this.Constructor.name) {
+            case "int64": funName = "getBigInt64"; break;
+            case "uint64": funName = "getBigUint64"; break;
+            case "compat32":
+            case "int32":
+                funName = "getInt32";
+                break;
+            case "float": funName = "getFloat32"; break;
+            case "uint32": funName = "getUint32"; break;
+            case "int8": funName = "getInt8"; break;
+            case "uint8": funName = "getUint8"; break;
+            case "int16": funName = "getInt16"; break;
+            case "uint16": funName = "getUint16"; break;
+            default: throw new Error(`Unknown type: ${this.Constructor.name}`);
+        }
+
+        return (this.array as any)[funName](idx);
+
+    }
+
+    protected array: DataView;
+    public constructor(constr: ValidTypes_T<T>) { this.Constructor = constr; }
+
+    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...this].map(fnMap); }
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        const hasTag = tag !== null && tag !== undefined;
+        const beginIndex = hasTag ? pkg.tell() : null;
+        const count = pkg.read(new BufferValue(BufferValue.compat32));
+        const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
+        const dataSize = hasTag ? tag.dataSize - headerOffset : null;
+
+        const elementCount = count.value as number;
+
+        if (elementCount === 0) {
+            this.array = new DataView(new ArrayBuffer(0));
+            return this;
+        }
+
+        // const elementSize = hasTag ? dataSize / elementCount : null;
+        const byteLength = elementCount * this.Constructor.bytes;
+
+        this.array = pkg.readPrimitive(pkg.tell(), byteLength);
+
+        pkg.seek(byteLength);
+
+        if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
+
+        return this;
+    }
+
+    getTypedArray() { return new this.Constructor.dtype(this.array.buffer, this.array.byteOffset, this.getElemCount()); }
+    getByteLength() { return this.array.byteLength; }
+}
+
+class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends FPrimitiveArray<T> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
+        // const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
+
+        pkg.seek(4);
+
+        super.load(pkg, tag);
+
+        return this;
+    }
+}
+
+
+
 export default FArray;
-export { FArray, FArrayLazy };
+export { FArray, FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy };

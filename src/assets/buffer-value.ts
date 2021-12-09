@@ -113,7 +113,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         return string;
     }
 
-    public set value(bytes: number | string | DataView) {
+    public set value(bytes: BigInt | number | string | DataView) {
         if (typeof bytes === "number") {
             let funName: string = null;
 

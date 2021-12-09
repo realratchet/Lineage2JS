@@ -1,15 +1,15 @@
 import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
-import { FArrayLazy } from "./un-array";
+import { FPrimitiveArrayLazy } from "./un-array";
 
 type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
 
 class FMipmap extends FConstructable {
-    public static readonly typeSize: number = FArrayLazy.typeSize + 16;
+    public static readonly typeSize: number = FPrimitiveArrayLazy.typeSize + 16;
+    protected dataArray: FPrimitiveArrayLazy<"uint8"> = new FPrimitiveArrayLazy(BufferValue.uint8);
 
-    protected dataArray: FArrayLazy<FNumber> = new FArrayLazy(FNumber.forType(BufferValue.uint8) as any);
     public sizeW: number;
     public sizeH: number;
     public bitsW: number;
@@ -29,13 +29,10 @@ class FMipmap extends FConstructable {
         return this;
     }
 
-    public getByteLength() { return this.dataArray.length; }
+    public getByteLength() { return this.dataArray.getByteLength(); }
 
     public getImageBuffer(elements: Uint8Array, offset: number): Uint8Array {
-        const elCount = this.dataArray.getElemCount();
-
-        for (let i = 0; i < elCount; i++)
-            elements[offset + i] = this.dataArray.getElem(i).value;
+        elements.set(this.dataArray.getTypedArray() as Uint8Array, offset);
 
         return elements;
     }

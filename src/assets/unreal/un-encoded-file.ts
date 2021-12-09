@@ -44,6 +44,10 @@ class UEncodedFile {
         }
     }
 
+    public readPrimitive<DataView>(byteOffset: number, byteLength: number) {
+        return new DataView(this.buffer, byteOffset + this.contentOffset, byteLength)
+    }
+
     public read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
         this.ensureReadable();
 
@@ -181,6 +185,18 @@ class UEncodedFile {
                 this.contentOffset = HEADER_SIZE;
                 this.seek(0, "set");
                 this.read(signature);
+
+                const tStart = performance.now();
+
+                const buffer = new Uint8Array(this.buffer, HEADER_SIZE);
+                for (let i = 0, len = buffer.length; i < len; i++) {
+                    Atomics.xor(buffer, i, this.cryptKey.value as number);
+                }
+
+                console.log(`'${this.path}' loaded in ${performance.now() - tStart} ms`);
+                this.isEncrypted = false;
+
+                // debugger;
             }
 
             resolve(signature);

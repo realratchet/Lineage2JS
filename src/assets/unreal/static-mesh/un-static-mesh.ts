@@ -408,6 +408,8 @@ class UStaticMesh extends UPrimitive {
 
         if (countUvs > 1) debugger;
 
+        debugger;
+
         const positions = new Float32Array(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
