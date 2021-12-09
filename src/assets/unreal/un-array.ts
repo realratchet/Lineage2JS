@@ -110,7 +110,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
             default: throw new Error(`Unknown type: ${this.Constructor.name}`);
         }
 
-        return (this.array as any)[funName](idx);
+        return (this.array as any)[funName](idx * this.Constructor.bytes);
 
     }
 
