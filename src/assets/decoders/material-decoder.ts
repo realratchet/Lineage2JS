@@ -123,8 +123,7 @@ function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo
         layers: info.layers.map(({ map, alphaMap }) => {
             return {
                 map: map ? decodeParameter(library, library.materials[map]) : null,
-                alphaMap: null
-                // alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
+                alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
             };
         })
     });

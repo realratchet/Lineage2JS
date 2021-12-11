@@ -1,5 +1,5 @@
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2 } from "three";
+import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2, DataTexture, PixelFormat, RGBAFormat } from "three";
 
 function getClamping(mode: number): THREE.Wrapping {
 
@@ -34,11 +34,26 @@ const decodeDDS = (function () {
     };
 })();
 
+function decodeRGBA(info: ITextureDecodeInfo): DataTexture {
+    const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);
+    const texture = new DataTexture(image, info.width, info.height);
+
+    // let width = info.width, height = info.height;
+
+    texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+
+    texture.needsUpdate = true;
+    texture.flipY = false;
+
+    return texture;
+}
+
 function decodeTexture(info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
         case "dds": texture = decodeDDS(info.buffer); break;
+        case "rgba": texture = decodeRGBA(info); break;
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
     }
 

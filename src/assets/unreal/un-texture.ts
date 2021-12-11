@@ -138,7 +138,7 @@ class UTexture extends UObject {
 
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         const format = this.getTexturePixelFormat();
-        let decodedBuffer: Uint16Array | Uint8Array | ArrayBuffer;
+        let decodedBuffer: ArrayBuffer;
         let textureType: DecodableTexture_T;
 
         switch (format) {
@@ -153,24 +153,26 @@ class UTexture extends UObject {
                 break;
             case ETexturePixelFormat.TPF_G16:
                 textureType = "g16";
-                decodedBuffer = new Uint16Array(data.buffer);
+                decodedBuffer = data.buffer;
                 break;
             case ETexturePixelFormat.TPF_BGRA8:
-            case ETexturePixelFormat.TPF_RGBA8:
+            case ETexturePixelFormat.TPF_RGBA8: {
                 if (!this.palette) throw new Error("This format should have palette?");
 
                 textureType = "rgba";
-                decodedBuffer = new Uint8Array(imSize * 4);
+                const buff = new Uint8Array(imSize * 4);
 
                 for (let i = 0, len = imSize; i < len; i++) {
                     const c = this.palette.colors.getElem(data[i]);
                     const ii = i * 4;
 
-                    (decodedBuffer as Uint8Array)[ii + 0] = c.r;
-                    (decodedBuffer as Uint8Array)[ii + 1] = c.g;
-                    (decodedBuffer as Uint8Array)[ii + 2] = c.b;
-                    (decodedBuffer as Uint8Array)[ii + 3] = c.a;
+                    buff[ii + 0] = c.r;
+                    buff[ii + 1] = c.g;
+                    buff[ii + 2] = c.b;
+                    buff[ii + 3] = c.a;
                 }
+
+                decodedBuffer = buff.buffer;
 
                 // debugger;
 
@@ -189,7 +191,7 @@ class UTexture extends UObject {
                 //     }
                 // }
 
-                break;
+            } break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
@@ -200,7 +202,8 @@ class UTexture extends UObject {
             width,
             height,
             wrapS: this.wrapS,
-            wrapT: this.wrapT
+            wrapT: this.wrapT,
+            useMipmaps: mipCount > 0
         } as ITextureDecodeInfo;
 
         return this.uuid;

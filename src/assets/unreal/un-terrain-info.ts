@@ -140,35 +140,6 @@ class UTerrainInfo extends UAActor {
             children: await Promise.all(this.sectors.map(sector => (sector.object as UTerrainSector).getDecodeInfo(library)))
         };
     }
-
-    public async decodeMesh() {
-
-        const terrain = new Group();
-        const terrainMap = await this.terrainMap.decodeMipmap(0);
-
-        // debugger;
-
-        for (let exp of this.sectors) {
-            if (!exp.object) continue;
-
-            const segment = await exp.object.decodeMesh(terrainMap);
-
-            terrain.add(segment);
-        }
-
-        terrain.position.set(this.location.x, 0, this.location.z);
-
-        // for (let i = 1, len = this.decoLayers.getElemCount(); i < len; i++) {
-        //     const layer = this.decoLayers.getElem(i);
-        //     const mesh = await layer.staticMesh.decodeMesh();
-
-        //     terrain.add(mesh);
-
-        //     mesh.material.wireframe = true;
-        // }
-
-        return terrain;
-    }
 }
 
 export default UTerrainInfo;

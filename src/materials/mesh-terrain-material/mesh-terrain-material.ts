@@ -28,12 +28,20 @@ class MeshTerrainMaterial extends ShaderMaterial {
             if (!layer.map && !layer.alphaMap) return;
 
             defines[`USE_UV${i === 0 ? "" : i + 1}`] = "";
+            defines[`USE_LAYER_${i + 1}`] = "";
+
+            const u = uniforms[`layer${i + 1}`].value = { map: {}, alphaMap: {} };
 
             // if (i > 0) debugger;
 
             if (layer.map) {
-                defines[`USE_LAYER_${i + 1}`] = "";
-                Object.assign(uniforms[`layer${i + 1}`].value = {}, layer.map.uniforms);
+                defines[`USE_LAYER_${i + 1}_DIFFUSE`] = "";
+                Object.assign(u.map, layer.map.uniforms.map);
+            }
+
+            if (layer.alphaMap) {
+                defines[`USE_LAYER_${i + 1}_OPACITY`] = "";
+                Object.assign(u.alphaMap, layer.alphaMap.uniforms.map);
             }
 
             // if (layer.alphaMap) {
@@ -42,9 +50,9 @@ class MeshTerrainMaterial extends ShaderMaterial {
             // }
 
             // if (i > 0) debugger;
-        });
 
-        // debugger;
+            // if(i === 2) debugger;
+        });
 
         super({
             defines,

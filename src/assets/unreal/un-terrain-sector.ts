@@ -70,7 +70,7 @@ class UTerrainSector extends UObject {
 
         const iTerrainMap = library.materials[this.info.terrainMap.uuid] as ITextureDecodeInfo;
         const width = iTerrainMap.width;
-        const data = iTerrainMap.buffer as Uint16Array;
+        const data = new Uint16Array(iTerrainMap.buffer);
         const vertices = new Float32Array(17 * 17 * 3), indices = new Uint16Array(16 * 16 * 6);
         const { x: sx, y: sy, z: sz } = this.info.terrainScale;
 
@@ -198,129 +198,6 @@ class UTerrainSector extends UObject {
             } : null
         };
     }
-
-    // public async decodeMesh(heightMap: Texture) {
-    //     // const [sectorX, sectorY] = [this.offsetX, this.offsetY].map(v => v / 256);
-    //     const vertices = new Float32Array(17 * 17 * 3);
-    //     const { data, width, height } = heightMap.image;
-
-    //     // console.log(sectorX, sectorY, this.offsetX, this.offsetY);
-
-    //     // debugger;
-
-    //     const { x: sx, y: sy, z: sz } = this.info.terrainScale;
-
-    //     // debugger;
-
-    //     for (let y = 0; y < 17; y++) {
-    //         for (let x = 0; x < 17; x++) {
-    //             const hmx = x + this.offsetX;
-    //             const hmy = y + this.offsetY;
-    //             const offset = Math.min(hmy, 255) * width + Math.min(hmx, 255);
-    //             const height = (data[offset] - 32768) / 128;
-    //             const idxOffset = (y * 17 + x) * 3;
-
-    //             vertices[idxOffset + 0] = hmx * sx;
-    //             vertices[idxOffset + 1] = height * sz / 2;
-    //             vertices[idxOffset + 2] = hmy * sy;
-    //         }
-    //     }
-
-    //     const indices = new Uint16Array(16 * 16 * 6);
-
-    //     for (let y = 0; y < 16; y++) {
-    //         for (let x = 0; x < 16; x++) {
-    //             // const quadX = sectorX * 16 + x;
-    //             // const quadZ = sectorY * 16 + y;
-    //             // const quadIndex = quadZ * 256 + quadX;
-    //             // const quadValue = this.info.quadVisibilityBitmap.getElem(quadIndex >> 3).value;
-    //             // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
-    //             const isVisible = true;
-    //             const idxOffset = (y * 16 + x) * 6;
-
-    //             if (!isVisible) {
-
-    //                 indices[idxOffset + 0] = y * 17 + x;
-    //                 indices[idxOffset + 1] = y * 17 + x;
-    //                 indices[idxOffset + 2] = y * 17 + x;
-
-    //                 indices[idxOffset + 3] = y * 17 + x;
-    //                 indices[idxOffset + 4] = y * 17 + x;
-    //                 indices[idxOffset + 5] = y * 17 + x;
-    //                 continue;
-    //             }
-
-    //             indices[idxOffset + 0] = (y * 17 + x);
-    //             indices[idxOffset + 1] = ((y + 1) * 17 + x);
-    //             indices[idxOffset + 2] = (y * 17 + (x + 1));
-
-    //             indices[idxOffset + 3] = (y * 17 + (x + 1));
-    //             indices[idxOffset + 4] = ((y + 1) * 17 + x);
-    //             indices[idxOffset + 5] = ((y + 1) * 17 + (x + 1));
-    //         }
-    //     }
-
-    //     const itLayer = this.info.layers.values();
-    //     const layerCount = this.info.layers.size;
-    //     const uvs = new Array(layerCount);
-
-    //     for (let k = 0; k < layerCount; k++) {
-    //         const layer = itLayer.next().value as UTerrainLayer;
-
-    //         if (!layer.map || layer.map.mipmaps.getElemCount() === 0) {
-    //             uvs[k] = { uv: null, map: null };
-    //             continue;
-    //         }
-
-    //         const { uv } = uvs[k] = {
-    //             uv: new Array(17 * 17 * 2),
-    //             map: await layer.map.decodeMipmap(0)
-    //         };
-
-    //         // const usx = layer.scaleW * sx * 2.0;
-    //         // const usy = layer.scaleH * sy * 2.0;
-
-    //         for (let y = 0; y < 17; y++) {
-    //             for (let x = 0; x < 17; x++) {
-    //                 const hmx = x + this.offsetX;
-    //                 const hmy = y + this.offsetY;
-    //                 const idxOffset = (y * 17 + x) * 2;
-
-    //                 uv[idxOffset + 0] = hmx / layer.map.width;
-    //                 uv[idxOffset + 1] = hmy / layer.map.height;
-    //             }
-    //         }
-    //     }
-
-    //     const material = new MeshBasicMaterial({ /*color: Math.round(0xffffff * Math.random()), wireframe: true*/ color: 0xff00ff });
-    //     const geometry = new BufferGeometry();
-    //     const attrPosition = new Float32BufferAttribute(vertices, 3);
-    //     const attrIndices = new Uint16BufferAttribute(indices, 1);
-    //     const mesh = new Mesh(geometry, material);
-
-    //     geometry.setIndex(attrIndices);
-
-    //     if (this.boundingBox.isValid) {
-    //         geometry.boundingBox = new Box3(this.boundingBox.min, this.boundingBox.max);
-    //         geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new Sphere());
-    //     } else {
-    //         mesh.frustumCulled = false;
-    //     }
-
-    //     geometry.setAttribute("position", attrPosition);
-    //     uvs
-    //         .forEach(({ uv, map }, index) => {
-    //             if (map === null) return;
-
-    //             const attr = new Float32BufferAttribute(uv, 2);
-
-    //             geometry.setAttribute(`uv${index === 0 ? "" : (index + 1)}`, attr);
-
-    //             (material as any)[`map${index === 0 ? "" : (index + 1)}`] = map;
-    //         });
-
-    //     return mesh;
-    // }
 
     public doLoad(pkg: UPackage, exp: UExport) {
         // pkg.seek(exp.offset.value as number, "set");
