@@ -14,22 +14,22 @@ class FURL extends FConstructable {
     public op: FArray = new FArray(FNumber.forType(BufferValue.uint32) as any);
     public isValid: boolean = false;
 
-    public async load(pkg: UPackage, tag?: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         this.isValid = true;
 
         const uint32 = new BufferValue(BufferValue.uint32);
 
-        this.protocol = await pkg.read(new BufferValue(BufferValue.char)).value as string;
-        this.host = await pkg.read(new BufferValue(BufferValue.char)).value as string;
+        this.protocol = pkg.read(new BufferValue(BufferValue.char)).value as string;
+        this.host = pkg.read(new BufferValue(BufferValue.char)).value as string;
 
         if (this.host.length > 0)
-            this.port = await pkg.read(uint32).value as number;
+            this.port = pkg.read(uint32).value as number;
 
-        this.map = await pkg.read(new BufferValue(BufferValue.char)).value as string;
+        this.map = pkg.read(new BufferValue(BufferValue.char)).value as string;
 
-        await this.op.load(pkg, tag);
+        this.op.load(pkg, tag);
 
-        this.portal = await pkg.read(new BufferValue(BufferValue.char)).value as string;
+        this.portal = pkg.read(new BufferValue(BufferValue.char)).value as string;
 
         return this;
     }

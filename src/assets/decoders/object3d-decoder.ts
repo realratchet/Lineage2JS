@@ -6,19 +6,26 @@ const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>()
 function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
     if (cacheGeometries.has(info)) return cacheGeometries.get(info);
 
+    const arrUvs = info.attributes.uvs instanceof Array ? info.attributes.uvs : [info.attributes.uvs];
+
     const attrPosition = new Float32BufferAttribute(info.attributes.positions, 3);
-    const attrNormal = new Float32BufferAttribute(info.attributes.normals, 3);
-    const attrUv = new Float32BufferAttribute(info.attributes.uvs, 2);
     const attrIndices = new Uint16BufferAttribute(info.indices, 1);
 
     const geometry = new BufferGeometry();
 
+    arrUvs.forEach((arrUv, i) => {
+        if (!arrUv) return;
+
+        geometry.setAttribute(`uv${i === 0 ? "" : i + 1}`, new Float32BufferAttribute(arrUv, 2));
+    });
+
+    if (info.attributes.normals)
+        geometry.setAttribute("normal", new Float32BufferAttribute(info.attributes.normals, 3));
+
     geometry.setAttribute("position", attrPosition);
-    geometry.setAttribute("normal", attrNormal);
-    geometry.setAttribute("uv", attrUv);
     geometry.setIndex(attrIndices);
 
-    info.groups.forEach(group => geometry.addGroup(...group));
+    if (info.groups) info.groups.forEach(group => geometry.addGroup(...group));
 
     if (info.bounds) {
         if (info.bounds.sphere) {
@@ -69,8 +76,11 @@ function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecode
 
 function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectDecodeInfo): THREE.Object3D {
     switch (info.type) {
+        case "Level":
+        case "TerrainInfo":
         case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info);
         case "Model":
+        case "TerrainSegment":
         case "StaticMesh": return decodeStaticMesh(library, info as IStaticMeshObjectDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }

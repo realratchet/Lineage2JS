@@ -1,6 +1,7 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
 import { Color, DoubleSide, FrontSide, Matrix3 } from "three";
+import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
 
@@ -117,6 +118,14 @@ function decodeGroup(library: IDecodeLibrary, info: IMaterialGroupDecodeInfo): M
     return info.materials.map(info => decodeMaterial(library, library.materials[info]) as MeshStaticMaterial);
 }
 
+function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo): any {
+    return new MeshTerrainMaterial({
+        layers: info.layers.map(map => {
+            return map ? decodeParameter(library, library.materials[map]) : null
+        })
+    });
+}
+
 function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): MeshStaticMaterial | MeshStaticMaterial[] {
     if (!info) return null;
     switch (info.materialType) {
@@ -124,6 +133,7 @@ function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo):
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);
         case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
         case "modifier": return decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
+        case "terrain": return decodeTerrain(library, info as IMaterialTerrainDecodeInfo);
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
 }

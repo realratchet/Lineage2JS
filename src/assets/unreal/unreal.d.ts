@@ -2,7 +2,7 @@ type UPackage = import("./un-package").UPackage;
 type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
 type UHeader = import("./un-header").UHeader;
 type UGeneration = import("./un-generation").UGeneration;
-type UExport = import("./un-export").UExport;
+type UExport<T extends UObject = UObject> = import("./un-export").UExport;
 type UName = import("./un-name").UName;
 type UImport = import("./un-import").UImport;
 type UTexture = import("./un-texture").UTexture;
@@ -13,6 +13,7 @@ type UPlatte = import("./un-palette").UPlatte;
 type UStaticMesh = import("./static-mesh/un-static-mesh").UStaticMesh;
 type ULevelInfo = import("./un-level-info").ULevelInfo;
 type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
+type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer
 type UZoneInfo = import("./un-zone-info").UZoneInfo;
 type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
 type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
@@ -52,6 +53,10 @@ type UTexRotator = import("./un-material").UTexRotator;
 type UTexPanner = import("./un-material").UTexPanner;
 type UColorModifier = import("./un-material").UColorModifier;
 type UTexOscillator = import("./un-material").UTexOscillator;
+type URangeVector = import("./un-range").URangeVector;
+type URange = import("./un-range").URange;
+type FPlane = import("./un-plane").FPlane;
+type UPlane = import("./un-plane").UPlane;
 
 type PropertyTag = import("./un-property").PropertyTag;
 type FColor = import("./un-color").FColor;
@@ -71,7 +76,7 @@ type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "dds" | "g16";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -79,11 +84,18 @@ interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     modifierType: DecodableMaterialModifier_T
 }
 
+interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "terrain";
+    layers: string[]
+}
+
+
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "texture",
     textureType: DecodableTexture_T,
     buffer: ArrayBuffer,
-    wrapS: number, wrapT: number
+    wrapS: number, wrapT: number,
+    width: number, height: number
 }
 
 interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -132,7 +144,7 @@ interface IDecodedParameter {
 
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "StaticMeshActor" | "StaticMesh" | "Model";
+type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model";
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
@@ -161,12 +173,12 @@ type IBoundsDecodeInfo = {
 
 interface IGeometryDecodeInfo {
     attributes: {
-        positions: Float32Array;
-        normals: Float32Array;
-        uvs: Float32Array;
+        positions?: Float32Array;
+        normals?: Float32Array;
+        uvs?: Float32Array | Float32Array[];
     };
     indices: number[] | Uint8Array | Uint16Array | Uint32Array;
-    groups: ArrGeometryGroup[],
+    groups?: ArrGeometryGroup[],
     bounds?: IBoundsDecodeInfo
 }
 

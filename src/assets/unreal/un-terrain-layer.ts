@@ -1,14 +1,4 @@
 import UObject from "./un-object";
-import { PropertyTag } from "./un-property";
-import BufferValue from "../buffer-value";
-import { Plane, Vector3 } from "three";
-import FColor from "./un-color";
-
-type Euler = import("three/src/math/Euler").Euler;
-type Matrix4 = import("three/src/math/Matrix4").Matrix4;
-type UTexture = import("./un-texture").UTexture;
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
 
 class UTerrainLayer extends UObject {
     public map: UTexture = null;
@@ -19,15 +9,15 @@ class UTerrainLayer extends UObject {
     protected panH: number;
     protected mapAxis: number;
     protected mapRotation: number;
-    protected layerRotation: Euler;
-    protected terrainMatrix: Matrix4;
-    protected zPlane: Plane;
-    protected wPlane: Plane;
+    protected layerRotation: FRotator;
+    protected terrainMatrix: UMatrix;
+    protected zPlane: FPlane;
+    protected wPlane: FPlane;
     protected level: number[];
     protected friction: number;
     protected restitution: number;
     protected weightMap: UTexture;
-    protected scale: Vector3;
+    protected scale: FVector;
     protected toWorld = new Set();
     protected toMaskmap = new Set();
     protected useAlpha: boolean;
@@ -67,13 +57,15 @@ class UTerrainLayer extends UObject {
         });
     }
 
-    public async load(pkg: UPackage, exp: UExport) {
+    public preLoad(pkg: UPackage, exp: UExport) { }
+
+    public doLoad(pkg: UPackage, exp: UExport) {
         // debugger;
 
         // const startOffset = pkg.tell();
 
         pkg.seek(this.readHead, "set");
-        await this.readNamedProps(pkg);
+        this.readNamedProps(pkg);
 
         // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
 

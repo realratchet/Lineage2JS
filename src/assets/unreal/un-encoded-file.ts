@@ -165,6 +165,8 @@ class UEncodedFile {
 
         if (this.promiseDecoding) return this.promiseDecoding;
 
+        console.log("Started loading package:", this.path);
+
         return this.handle.promiseDecoding = this.promiseDecoding = new Promise(async resolve => {
             const response = await fetch(this.path);
 

@@ -7,14 +7,10 @@ import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
 import { PropertyTag } from "./un-property";
 import FUnknownStruct from "./un-unknown-struct";
-import { Group } from "three/src/objects/Group";
+// import { Group } from "three/src/objects/Group";
 import UAActor from "./un-aactor";
-import FColor from "./un-color";
+// import FColor from "./un-color";
 import FVector from "./un-vector";
-
-type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
-type UPackage = import("./un-package").UPackage;
-type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -22,7 +18,7 @@ const MAP_SIZE_Y = 128 * 256;
 class UTerrainInfo extends UAActor {
     protected readHeadOffset: number = 17;
 
-    protected terrainMap: UTexture;
+    public terrainMap: UTexture;
     public terrainScale: FVector;
 
     public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
@@ -45,7 +41,7 @@ class UTerrainInfo extends UAActor {
     protected disregardTerrainLighting: boolean;
     protected randomYaw: boolean;
     protected bForceRender: boolean;
-    
+
     protected isSelected: boolean;
 
     constructor(sectors: UExport<UTerrainSector>[]) {
@@ -82,15 +78,15 @@ class UTerrainInfo extends UAActor {
         });
     }
 
-    protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> {
+    protected readStruct(pkg: UPackage, tag: PropertyTag): any {
         switch (tag.structName) {
-            case "TerrainLayer": return await new UTerrainLayer(pkg.tell(), pkg.tell() + tag.dataSize).load(pkg, null);
+            case "TerrainLayer": return new UTerrainLayer(pkg.tell(), pkg.tell() + tag.dataSize).load(pkg, null);
         }
 
         return super.readStruct(pkg, tag);
     }
 
-    public async load(pkg: UPackage, exp: UExport<UTerrainInfo>) {
+    public doLoad(pkg: UPackage, exp: UExport<UTerrainInfo>) {
 
         // likely lightning
         // pkg.seek(exp.offset.value as number, "set");
@@ -98,10 +94,10 @@ class UTerrainInfo extends UAActor {
 
         // debugger;
 
-        await super.load(pkg, exp);
+        super.doLoad(pkg, exp);
 
-        this.location.vector.x = (this.mapX - 20) * MAP_SIZE_X;
-        this.location.vector.z = (this.mapY - 18) * MAP_SIZE_Y;
+        this.location.x = (this.mapX - 20) * MAP_SIZE_X;
+        this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
 
         // debugger;
 
@@ -126,14 +122,27 @@ class UTerrainInfo extends UAActor {
 
         for (let exp of this.sectors) {
             try {
-                await pkg.createObject(pkg, exp, "TerrainSector", this);
+                this.promisesLoading.push(pkg.createObject(pkg, exp, "TerrainSector", this));
             } catch (e) { console.error(e); }
         }
 
         return this;
     }
 
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
+        await Promise.all(this.promisesLoading);
+        await this.terrainMap.getDecodeInfo(library);
+
+        return {
+            type: "TerrainInfo",
+            name: this.objectName,
+            position: [this.location.x, 0, this.location.z],
+            children: await Promise.all(this.sectors.map(sector => (sector.object as UTerrainSector).getDecodeInfo(library)))
+        };
+    }
+
     public async decodeMesh() {
+
         const terrain = new Group();
         const terrainMap = await this.terrainMap.decodeMipmap(0);
 
@@ -147,7 +156,7 @@ class UTerrainInfo extends UAActor {
             terrain.add(segment);
         }
 
-        terrain.position.set(this.location.vector.x, 0, this.location.vector.z);
+        terrain.position.set(this.location.x, 0, this.location.z);
 
         // for (let i = 1, len = this.decoLayers.getElemCount(); i < len; i++) {
         //     const layer = this.decoLayers.getElem(i);

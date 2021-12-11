@@ -54,7 +54,7 @@ class UTexture extends UObject {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-        
+
         super.doLoad(pkg, exp);
 
         this.mipmaps.load(pkg, null);
@@ -131,7 +131,7 @@ class UTexture extends UObject {
                 break;
             case ETexturePixelFormat.TPF_G16:
                 textureType = "g16";
-                decodedBuffer = await decodeG16(width, height, data);
+                decodedBuffer = new Uint16Array(data.buffer);
                 break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
@@ -140,6 +140,8 @@ class UTexture extends UObject {
             materialType: "texture",
             textureType,
             buffer: decodedBuffer,
+            width,
+            height,
             wrapS: this.wrapS,
             wrapT: this.wrapT
         } as ITextureDecodeInfo;
