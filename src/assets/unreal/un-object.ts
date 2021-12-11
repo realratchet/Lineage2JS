@@ -163,14 +163,21 @@ abstract class UObject {
         return true;
     }
 
-    protected setProperty(tag: PropertyTag, value: any) {
+    protected getPropertyVarName(tag: PropertyTag): string {
         const props = this.getPropertyMap();
-        const { name: propName, arrayIndex } = tag;
+        const { name: propName } = tag;
 
         if (!(propName in props))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
         const varName = props[propName];
+
+        return varName;
+    }
+
+    protected setProperty(tag: PropertyTag, value: any) {
+        const varName = this.getPropertyVarName(tag);
+        const { name: propName, arrayIndex } = tag;
 
         if (!this.hasOwnProperty(varName))
             throw new Error(`Cannot map property '${propName}' -> ${varName}`);

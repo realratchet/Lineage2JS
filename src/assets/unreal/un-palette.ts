@@ -3,11 +3,12 @@ import FArray from "./un-array";
 import FColor from "./un-color";
 
 class UPlatte extends UObject {
-    protected colors: FArray<FColor> = new FArray(FColor);
+    public colors: FArray<FColor> = new FArray(FColor);
 
-    public async load(pkg: UPackage, exp: UExport) {
-        await super.load(pkg, exp);
-        await this.colors.load(pkg, null);
+    public doLoad(pkg: UPackage, exp: UExport) {
+        super.doLoad(pkg, exp);
+
+        this.colors.load(pkg, null);
 
         console.assert(this.colors.getElemCount() === 256);
 

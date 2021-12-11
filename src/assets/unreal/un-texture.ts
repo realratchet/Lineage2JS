@@ -1,9 +1,10 @@
-import { FArrayLazy } from "./un-array";
+import FArray, { FArrayLazy } from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
 import UObject from "./un-object";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
+import BufferValue from "../buffer-value";
 
 /*
 
@@ -17,7 +18,7 @@ import FColor from "./un-color";
 class UTexture extends UObject {
     protected palette: UPlatte;
     protected internalTime: number[] = new Array(2);
-    protected format: ETextureFormat;
+    protected format: ETextureFormat = ETextureFormat.TEXF_RGBA8;
 
     public width: number;
     public height: number;
@@ -29,7 +30,7 @@ class UTexture extends UObject {
     protected maxColor: FColor;
     protected mipZero: FColor;
 
-    public readonly mipmaps: FArrayLazy<FMipmap> = new FArrayLazy(FMipmap);
+    public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -57,7 +58,28 @@ class UTexture extends UObject {
 
         super.doLoad(pkg, exp);
 
+        this.readHead = pkg.tell();
+
+        const offStart = pkg.tell();
+
         this.mipmaps.load(pkg, null);
+
+        this.readHead = pkg.tell();
+
+        if (this.readHead !== this.readTail) {
+            pkg.seek(offStart + 4, "set");
+            this.mipmaps.load(pkg, null); // what the fuck is this but it works
+        }
+
+        this.readHead = pkg.tell();
+
+        console.assert(this.readTail === this.readHead);
+
+        // if (this.readHead !== this.readTail)
+        //     debugger;
+        // else console.error(`'${exp.objectName}' ready properly.`)
+
+        // debugger;
 
         return this;
     }
@@ -116,7 +138,7 @@ class UTexture extends UObject {
 
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         const format = this.getTexturePixelFormat();
-        let decodedBuffer: ArrayBuffer;
+        let decodedBuffer: Uint16Array | Uint8Array | ArrayBuffer;
         let textureType: DecodableTexture_T;
 
         switch (format) {
@@ -132,6 +154,41 @@ class UTexture extends UObject {
             case ETexturePixelFormat.TPF_G16:
                 textureType = "g16";
                 decodedBuffer = new Uint16Array(data.buffer);
+                break;
+            case ETexturePixelFormat.TPF_BGRA8:
+            case ETexturePixelFormat.TPF_RGBA8:
+                if (!this.palette) throw new Error("This format should have palette?");
+
+                textureType = "rgba";
+                decodedBuffer = new Uint8Array(imSize * 4);
+
+                for (let i = 0, len = imSize; i < len; i++) {
+                    const c = this.palette.colors.getElem(data[i]);
+                    const ii = i * 4;
+
+                    (decodedBuffer as Uint8Array)[ii + 0] = c.r;
+                    (decodedBuffer as Uint8Array)[ii + 1] = c.g;
+                    (decodedBuffer as Uint8Array)[ii + 2] = c.b;
+                    (decodedBuffer as Uint8Array)[ii + 3] = c.a;
+                }
+
+                // debugger;
+
+                // decodedBuffer = new Uint8Array(this.width * this.height * 4);
+
+                // for (let y = 0; y < this.height; y++) {
+                //     for (let x = 0; x < this.width; x++) {
+                //         const i = y * this.width + x;
+                //         const ii = i * 4;
+                //         const c = this.palette.colors.getElem(i);
+
+                //         (decodedBuffer as Uint8Array)[ii + 0] = c.r;
+                //         (decodedBuffer as Uint8Array)[ii + 1] = c.g;
+                //         (decodedBuffer as Uint8Array)[ii + 2] = c.b;
+                //         (decodedBuffer as Uint8Array)[ii + 3] = c.a;
+                //     }
+                // }
+
                 break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }

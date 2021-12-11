@@ -11,7 +11,7 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
     protected Constructor: { new(...pars: any): T } & ValidConstructables_T<T>;
 
     public getElemCount() { return this.length; }
-    public getElem(idx: number) { return this[idx]; }
+    public getElem(idx: number): T { return this[idx]; }
 
     public constructor(constr: { new(...pars: any): T } & ValidConstructables_T<T>) {
         super();

@@ -120,8 +120,12 @@ function decodeGroup(library: IDecodeLibrary, info: IMaterialGroupDecodeInfo): M
 
 function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo): any {
     return new MeshTerrainMaterial({
-        layers: info.layers.map(map => {
-            return map ? decodeParameter(library, library.materials[map]) : null
+        layers: info.layers.map(({ map, alphaMap }) => {
+            return {
+                map: map ? decodeParameter(library, library.materials[map]) : null,
+                alphaMap: null
+                // alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
+            };
         })
     });
 }

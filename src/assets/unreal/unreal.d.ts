@@ -75,7 +75,7 @@ type FVert = import("./model/un-vert").FVert;
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
-type DecodableTexture_T = "dds" | "g16";
+type DecodableTexture_T = "rgba" | "dds" | "g16";
 type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
@@ -86,7 +86,7 @@ interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
 
 interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "terrain";
-    layers: string[]
+    layers: { map: string, alphaMap: string }[]
 }
 
 
