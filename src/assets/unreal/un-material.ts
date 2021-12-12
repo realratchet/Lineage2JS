@@ -96,7 +96,7 @@ class UShader extends UMaterial {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         const diffuse = await this.diffuse?.getDecodeInfo(library) || null;
         const opacity = await this.opacity?.getDecodeInfo(library) || null;
@@ -148,7 +148,7 @@ class UFadeColor extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
@@ -194,7 +194,7 @@ class UColorModifier extends UBaseMaterial {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         await this.material.getDecodeInfo(library);
 
@@ -247,7 +247,7 @@ class UTexRotator extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         await this.material.getDecodeInfo(library);
 
@@ -281,7 +281,7 @@ class UTexOscillator extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         await this.material.getDecodeInfo(library);
 
@@ -314,7 +314,7 @@ class UTexPanner extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
@@ -368,7 +368,7 @@ class UMaterialContainer extends UBaseMaterial {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         if (this.material)
             await this.material.getDecodeInfo(library);

@@ -67,6 +67,9 @@ class UTerrainLayer extends UObject {
         pkg.seek(this.readHead, "set");
         this.readNamedProps(pkg);
 
+        // if (!this.map || !this.alphaMap)
+        //     debugger;
+
         // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
 
         console.assert((this.readTail - pkg.tell()) === 0);

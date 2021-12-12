@@ -53,7 +53,7 @@ class UStaticMeshActor extends UAActor {
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         const info = {
             type: "StaticMeshActor",

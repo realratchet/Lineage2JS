@@ -44,6 +44,8 @@ class UTerrainInfo extends UAActor {
 
     protected isSelected: boolean;
 
+    public readonly isTerrainInfo = true;
+
     constructor(sectors: UExport<UTerrainSector>[]) {
         super();
 
@@ -130,8 +132,50 @@ class UTerrainInfo extends UAActor {
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
+
+        const itLayer = this.layers.values();
+        const layerCount = this.layers.size;
+        const terrainLayers: UTerrainLayer[] = new Array(this.layers.size);
+
+        for (let i = 0; i < layerCount; i++)
+            terrainLayers[i] = itLayer.next().value as UTerrainLayer;
+
+        await Promise.all(terrainLayers.map(x => x.onLoaded()));
         await this.terrainMap.getDecodeInfo(library);
+
+        const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
+
+        for (let k = 0; k < layerCount; k++) {
+            const layer = terrainLayers[k];
+
+            if (layer.alphaMap === null || layer.map === null)
+                debugger;
+
+            if (!layer.map && !layer.alphaMap) {
+                layers[k] = { map: null, alphaMap: null };
+                continue;
+            }
+
+            if (layer.map?.mipmaps.getElemCount() === 0 && layer.alphaMap?.mipmaps.getElemCount() === 0) {
+                layers[k] = { map: null, alphaMap: null };
+                debugger;
+                continue;
+            }
+
+            layers[k] = {
+                map: await layer.map?.getDecodeInfo(library) || null,
+                alphaMap: await layer.alphaMap?.getDecodeInfo(library) || null
+            };
+
+            if (layers[k].alphaMap && !layers[k].map)
+                debugger;
+        }
+
+        library.materials[this.uuid] = {
+            materialType: "terrain",
+            layers
+        } as IMaterialTerrainDecodeInfo;
 
         return {
             type: "TerrainInfo",

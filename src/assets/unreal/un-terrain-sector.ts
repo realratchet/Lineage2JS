@@ -66,7 +66,7 @@ class UTerrainSector extends UObject {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         const iTerrainMap = library.materials[this.info.terrainMap.uuid] as ITextureDecodeInfo;
         const width = iTerrainMap.width;
@@ -122,40 +122,19 @@ class UTerrainSector extends UObject {
 
         const itLayer = this.info.layers.values();
         const layerCount = this.info.layers.size;
-        const uvs: { uv: Float32Array, map: string, alphaMap: string }[] = new Array(layerCount);
-
-        // debugger;
+        const uvs: Float32Array[] = new Array(layerCount);
 
         for (let k = 0; k < layerCount; k++) {
             const layer = itLayer.next().value as UTerrainLayer;
+            const uv = uvs[k] = new Float32Array(17 * 17 * 2)
 
-            if (!layer.map && !layer.alphaMap) {
-                uvs[k] = { uv: null, map: null, alphaMap: null };
-                continue;
-            }
-
-            if (layer.map?.mipmaps.getElemCount() === 0 && layer.alphaMap?.mipmaps.getElemCount() === 0) {
-                uvs[k] = { uv: null, map: null, alphaMap: null };
+            if (layer.alphaMap && !layer.map)
                 debugger;
-                continue;
-            }
-
-            const { uv } = uvs[k] = {
-                uv: new Float32Array(17 * 17 * 2),
-                map: await layer.map?.getDecodeInfo(library) || null,
-                alphaMap: await layer.alphaMap?.getDecodeInfo(library) || null
-            };
 
             // const usx = layer.scaleW * sx * 2.0;
             // const usy = layer.scaleH * sy * 2.0;
 
-            // if (layer.map && layer.alphaMap) {
-            //     console.assert(layer.map.width === layer.alphaMap.width);
-            //     console.assert(layer.map.height === layer.alphaMap.height);
-            // }
-
-            const layerWidth = layer.map ? layer.map.width : layer.alphaMap.width;
-            const layerHeight = layer.map ? layer.map.height : layer.alphaMap.height;
+            const layerWidth = layer.map.width, layerHeight = layer.map.height;
 
             for (let y = 0; y < 17; y++) {
                 for (let x = 0; x < 17; x++) {
@@ -172,21 +151,16 @@ class UTerrainSector extends UObject {
         library.geometries[this.uuid] = {
             attributes: {
                 positions: vertices,
-                uvs: uvs.map(x => x.uv)
+                uvs
             },
             indices,
             bounds: this.decodeBoundsInfo()
         };
 
-        library.materials[this.uuid] = {
-            materialType: "terrain",
-            layers: uvs.map(x => { return { map: x.map, alphaMap: x.alphaMap } })
-        } as IMaterialTerrainDecodeInfo;
-
         return {
             type: "TerrainSegment",
             geometry: this.uuid,
-            materials: this.uuid
+            materials: this.info.uuid
         };
     }
 

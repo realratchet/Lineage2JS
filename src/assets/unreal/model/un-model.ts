@@ -142,7 +142,7 @@ class UModel extends UPrimitive {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         const globalBSPTexelScale = 128;
         const materials: string[] = [];

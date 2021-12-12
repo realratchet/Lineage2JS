@@ -70,35 +70,89 @@ uniform float opacity;
     uniform Layer3Data layer3;
 #endif
 
-// #ifdef USE_LAYER_4
-//     varying vec2 vUv4;
-//     uniform LayerData layer4;
-// #endif
+#ifdef USE_LAYER_4
+    struct Layer4Data {
+        #ifdef USE_LAYER_4_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_4_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
 
-// #ifdef USE_LAYER_5
-//     varying vec2 vUv5;
-//     uniform LayerData layer5;
-// #endif
+    varying vec2 vUv4;
+    uniform Layer4Data layer4;
+#endif
 
-// #ifdef USE_LAYER_6
-//     varying vec2 vUv6;
-//     uniform LayerData layer6;
-// #endif
+#ifdef USE_LAYER_5
+    struct Layer5Data {
+        #ifdef USE_LAYER_5_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_5_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
 
-// #ifdef USE_LAYER_7
-//     varying vec2 vUv7;
-//     uniform LayerData layer7;
-// #endif
+    varying vec2 vUv5;
+    uniform Layer5Data layer5;
+#endif
 
-// #ifdef USE_LAYER_8
-//     varying vec2 vUv8;
-//     uniform LayerData layer8;
-// #endif
+#ifdef USE_LAYER_6
+    struct Layer6Data {
+        #ifdef USE_LAYER_6_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_6_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
 
-// #ifdef USE_LAYER_9
-//     varying vec2 vUv9;
-//     uniform LayerData layer9;
-// #endif
+    varying vec2 vUv6;
+    uniform Layer6Data layer6;
+#endif
+
+#ifdef USE_LAYER_7
+    struct Layer7Data {
+        #ifdef USE_LAYER_7_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_7_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
+
+    varying vec2 vUv7;
+    uniform Layer7Data layer7;
+#endif
+
+#ifdef USE_LAYER_8
+    struct Layer8Data {
+        #ifdef USE_LAYER_8_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_8_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
+
+    varying vec2 vUv8;
+    uniform Layer8Data layer8;
+#endif
+
+#ifdef USE_LAYER_9
+    struct Layer9Data {
+        #ifdef USE_LAYER_9_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_9_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
+
+    varying vec2 vUv9;
+    uniform Layer9Data layer9;
+#endif
 
 vec4 addLayer(vec4 foreground, vec4 background) {
     return foreground * foreground.a + background * (1.0 - foreground.a);
@@ -110,15 +164,119 @@ void main() {
     #include <logdepthbuf_fragment>
 
     #if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9)
-        vec4 layer;
+        vec4 layer, layerMask;
         vec4 texelDiffuse = vec4(0.0);
     #endif
 
     #ifdef USE_LAYER_1
-        layer = vec4(texture2D(layer1.map.texture, vUv).rgb, 1.0) * texture2D(layer1.alphaMap.texture, vUv).r;
+        #ifdef USE_LAYER_1_OPACITY
+            layerMask = texture2D(layer1.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer1.map.texture, vUv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
+
+    #ifdef USE_LAYER_2
+        #ifdef USE_LAYER_2_OPACITY
+            layerMask = texture2D(layer2.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer2.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_3
+        #ifdef USE_LAYER_3_OPACITY
+            layerMask = texture2D(layer3.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer3.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_4
+        #ifdef USE_LAYER_4_OPACITY
+            layerMask = texture2D(layer4.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer4.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_5
+        #ifdef USE_LAYER_5_OPACITY
+            layerMask = texture2D(layer5.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer5.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_6
+        #ifdef USE_LAYER_6_OPACITY
+            layerMask = texture2D(layer6.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer6.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_7
+        #ifdef USE_LAYER_7_OPACITY
+            layerMask = texture2D(layer7.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer7.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_8
+        #ifdef USE_LAYER_8_OPACITY
+            layerMask = texture2D(layer8.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer8.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_9
+        #ifdef USE_LAYER_9_OPACITY
+            layerMask = texture2D(layer9.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer9.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    diffuseColor.rgb *= texelDiffuse.rgb;
 
     // #ifdef USE_LAYER_1
     //     vec4 layer1 = vec4(texture2D(layer1.map.texture, vUv).rgb, 1.0) * texture2D(layer1.alphaMap.texture, vUv).r;

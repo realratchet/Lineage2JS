@@ -392,7 +392,7 @@ class UStaticMesh extends UPrimitive {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         // debugger;
 

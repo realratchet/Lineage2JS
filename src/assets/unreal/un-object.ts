@@ -3,14 +3,23 @@ import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import FArray from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
+class LoadingWraper {
+    public promisesLoading: Promise<any>[] = [];
+
+    public push(promise: any) {
+        if (!promise)
+            debugger;
+
+        this.promisesLoading.push(promise);
+    }
+}
 
 abstract class UObject {
     public objectName = "Exp_None";
     public readonly uuid = generateUUID();
 
-    protected promisesLoading: Promise<any>[] = [];
+    protected promisesLoading = new LoadingWraper();
+    // protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
@@ -90,7 +99,7 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_FloatProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.float)).value as number);
                 break;
-            case UNP_PropertyTypes.UNP_ObjectProperty:
+            case UNP_PropertyTypes.UNP_ObjectProperty: {
                 // if (tag.name === "StaticMeshLod01" || tag.name === "StaticMeshLod02" || tag.name === "PhysicsVolume") {
                 //     throw new Error("Unsupported yet.");
                 //     //printf("Skipping object property: %s\n", Name);
@@ -98,10 +107,11 @@ abstract class UObject {
                 // } else {
                 const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                 const obj = await pkg.fetchObject(objIndex.value as number);
+
                 this.setProperty(tag, obj);
                 pkg.seek(offEnd, "set");
                 // }
-                break;
+            } break;
             case UNP_PropertyTypes.UNP_NameProperty:
                 this.setProperty(tag, pkg.nameTable[pkg.read(new BufferValue(BufferValue.compat32)).value as number].name.value);
                 break;
@@ -189,6 +199,10 @@ abstract class UObject {
         // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
+    }
+
+    public async onLoaded(): Promise<void> {
+        await Promise.all(this.promisesLoading.promisesLoading);
     }
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }

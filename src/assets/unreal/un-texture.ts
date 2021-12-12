@@ -110,7 +110,7 @@ class UTexture extends UObject {
 
         library.materials[this.uuid] = null;
 
-        await Promise.all(this.promisesLoading);
+        await this.onLoaded();
 
         if (this.mipmaps.length === 0) return null;
 

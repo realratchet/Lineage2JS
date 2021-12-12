@@ -40,6 +40,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
             }
 
             if (layer.alphaMap) {
+                // if(!layer.map) debugger;
+
                 defines[`USE_LAYER_${i + 1}_OPACITY`] = "";
                 Object.assign(u.alphaMap, layer.alphaMap.uniforms.map);
             }
