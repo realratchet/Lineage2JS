@@ -89,7 +89,6 @@ interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
     layers: { map: string, alphaMap: string }[]
 }
 
-
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "texture",
     textureType: DecodableTexture_T,
@@ -144,7 +143,7 @@ interface IDecodedParameter {
 
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model";
+type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light";
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
@@ -185,6 +184,13 @@ interface IGeometryDecodeInfo {
 interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     geometry: string,
     materials: string
+}
+
+interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
+    type: "Light",
+    color: [number, number, number],
+    radius: number,
+    lightType: number
 }
 
 interface IDecodeLibrary {

@@ -91,7 +91,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
     protected Constructor: ValidTypes_T<T>;
 
     public getElemCount() { return this.array.byteLength / this.Constructor.bytes; }
-    public getElem(idx: number) {
+    public getElem(idx: number): number {
         let funName: string = null;
 
         switch (this.Constructor.name) {

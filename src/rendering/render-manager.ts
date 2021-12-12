@@ -92,6 +92,11 @@ class RenderManager {
                 this.controls.target.set(23706.65317650355, -9178.136467533635, 118330.62193563695);
                 this.controls.update();
                 break;
+            case "6":
+                this.camera.position.set(17436.46445202629, -6351.127037466889, 109469.23150265992);
+                this.controls.target.set(18965.828211115713, -6064.126549127763, 106770.89206042158);
+                this.controls.update();
+                break;
         }
     }
 

@@ -1,7 +1,7 @@
 import UObject from "./un-object";
 import UTexture from "./un-texture";
 import UTerrainLayer from "./un-terrain-layer";
-import FArray from "./un-array";
+import FArray, { FPrimitiveArray } from "./un-array";
 import UDecoLayer from "./un-deco-layer";
 import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
@@ -24,12 +24,12 @@ class UTerrainInfo extends UAActor {
     public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
-    public readonly quadVisibilityBitmap: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
-    public readonly edgeTurnBitmap: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
+    public readonly quadVisibilityBitmap: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
+    public readonly edgeTurnBitmap: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected mapX: number;
     protected mapY: number;
-    public readonly quadVisibilityBitmapOrig: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
-    public readonly edgeTurnBitmapOrig: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.int32) as any);
+    public readonly quadVisibilityBitmapOrig: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
+    public readonly edgeTurnBitmapOrig: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected generatedSectorCounter: number;
     protected numIntMap: number;
     protected autoTimeGeneration: boolean;

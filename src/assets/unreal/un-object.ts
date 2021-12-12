@@ -1,25 +1,13 @@
 import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
-import FArray from "./un-array";
+import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
-
-class LoadingWraper {
-    public promisesLoading: Promise<any>[] = [];
-
-    public push(promise: any) {
-        if (!promise)
-            debugger;
-
-        this.promisesLoading.push(promise);
-    }
-}
 
 abstract class UObject {
     public objectName = "Exp_None";
     public readonly uuid = generateUUID();
 
-    protected promisesLoading = new LoadingWraper();
-    // protected promisesLoading: Promise<any>[] = [];
+    protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
@@ -39,6 +27,7 @@ abstract class UObject {
     public get byteOffset() { return this.readHead - this.readStart; }
 
     protected readNamedProps(pkg: UPackage) {
+        pkg.seek(this.readHead, "set");
         do {
             const tag = PropertyTag.from(pkg, this.readHead);
 
@@ -49,7 +38,11 @@ abstract class UObject {
 
         } while (this.readHead < this.readTail);
 
+        // debugger;
+
         this.readHead = pkg.tell();
+
+        // debugger;
     }
 
     protected preLoad(pkg: UPackage, exp: UExport): void {
@@ -151,7 +144,7 @@ abstract class UObject {
             console.warn(`Unread '${tag.name}' ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
     }
 
-    protected async readArray(pkg: UPackage, tag: PropertyTag) {
+    protected readArray(pkg: UPackage, tag: PropertyTag) {
         const props = this.getPropertyMap();
         const { name: propName } = tag;
 
@@ -165,10 +158,10 @@ abstract class UObject {
 
         const _var = (this as any)[varName] as FArray;
 
-        if (!(_var instanceof FArray))
+        if (!(_var instanceof FArray) && !((_var as any) instanceof FPrimitiveArray))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
 
-        await _var.load(pkg, tag);
+        _var.load(pkg, tag);
 
         return true;
     }
@@ -178,7 +171,7 @@ abstract class UObject {
         const { name: propName } = tag;
 
         if (!(propName in props))
-            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
+            return null;
 
         const varName = props[propName];
 
@@ -189,6 +182,9 @@ abstract class UObject {
         const varName = this.getPropertyVarName(tag);
         const { name: propName, arrayIndex } = tag;
 
+        if (!varName)
+            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
+
         if (!this.hasOwnProperty(varName))
             throw new Error(`Cannot map property '${propName}' -> ${varName}`);
 
@@ -196,13 +192,13 @@ abstract class UObject {
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
+        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
     }
 
     public async onLoaded(): Promise<void> {
-        await Promise.all(this.promisesLoading.promisesLoading);
+        await Promise.all(this.promisesLoading);
     }
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }

@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3 } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper } from "three";
 import decodeMaterial from "./material-decoder";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
@@ -74,11 +74,24 @@ function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecode
     return mesh;
 }
 
+function decodeLight(library: IDecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
+    const geo = new SphereBufferGeometry(info.radius, 32, 32);
+    const mat = new MeshBasicMaterial({ color: new Color().fromArray(info.color), wireframe: true });
+    const msh = new Mesh(geo, mat);
+
+    msh.add(new AxesHelper(info.radius));
+
+    applySimpleProperties(library, msh, info);
+
+    return msh;
+}
+
 function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Level":
         case "TerrainInfo":
         case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info);
+        case "Light": return decodeLight(library, info as ILightDecodeInfo);
         case "Model":
         case "TerrainSegment":
         case "StaticMesh": return decodeStaticMesh(library, info as IStaticMeshObjectDecodeInfo);

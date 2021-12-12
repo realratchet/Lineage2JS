@@ -74,6 +74,9 @@ class UTerrainSector extends UObject {
         const vertices = new Float32Array(17 * 17 * 3), indices = new Uint16Array(16 * 16 * 6);
         const { x: sx, y: sy, z: sz } = this.info.terrainScale;
 
+        const sectorX = this.offsetX / 2 / 2048;
+        const sectorY = this.offsetY / 2 / 2048;
+
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
@@ -91,9 +94,9 @@ class UTerrainSector extends UObject {
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
                 // const quadX = sectorX * 16 + x;
-                // const quadZ = sectorY * 16 + y;
-                // const quadIndex = quadZ * 256 + quadX;
-                // const quadValue = this.info.quadVisibilityBitmap.getElem(quadIndex >> 3).value;
+                // const quadY = sectorY * 16 + y;
+                // const quadIndex = quadY * 256 + quadX;
+                // const quadValue = this.info.quadVisibilityBitmap.getElem(quadIndex >> 3);
                 // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
                 const isVisible = true;
                 const idxOffset = (y * 16 + x) * 6;

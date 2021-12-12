@@ -72,7 +72,7 @@ class ULevel extends UObject {
         // debugger;
 
         for (let objectId of objectIds) {
-            const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
+            // const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
 
             // debugger;
 
@@ -89,7 +89,7 @@ class ULevel extends UObject {
 
         // for (let objectId of [1804]) {
         for (let objectId of objectIds2) {
-            const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
+            // const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
 
             // debugger;
 
@@ -126,7 +126,8 @@ class ULevel extends UObject {
             children: (await Promise.all([
                 this.baseModel.getDecodeInfo(library),
                 "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-                "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
+                "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+                "ULight" in groupedObjectList ? Promise.all(groupedObjectList["ULight"].map((exp: ULight) => exp.getDecodeInfo(library))) : Promise.resolve([])
             ])).flat()
         };
     }
