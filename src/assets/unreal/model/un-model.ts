@@ -207,7 +207,7 @@ class UModel extends UPrimitive {
                     // // Use the texture coordinates and normal to create an orthonormal tangent basis.
                     // const tangentX: FVector = textureX;
                     // const tangentY: FVector = textureY;
-                    // const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
+                    const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
                     const fcount = node.numVertices - 2;
                     const findex = vertexOffset + node.iVertexIndex;
 
@@ -239,6 +239,10 @@ class UModel extends UPrimitive {
                         positions[dstVertices * 3 + 1] = position.z;
                         positions[dstVertices * 3 + 2] = position.y;
 
+                        normals[dstVertices * 3 + 0] = tangentZ.x;
+                        normals[dstVertices * 3 + 1] = tangentZ.z;
+                        normals[dstVertices * 3 + 2] = tangentZ.y;
+
                         uvs[dstVertices * 2 + 0] = texU;
                         uvs[dstVertices * 2 + 1] = texV;
 
@@ -258,6 +262,8 @@ class UModel extends UPrimitive {
                 groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
             }
         }
+
+        // debugger;
 
         library.geometries[this.uuid] = {
             groups,
