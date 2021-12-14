@@ -6,6 +6,7 @@ type UExport<T extends UObject = UObject> = import("./un-export").UExport;
 type UName = import("./un-name").UName;
 type UImport = import("./un-import").UImport;
 type UTexture = import("./un-texture").UTexture;
+type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 type UObject = import("./un-object").UObject;
 type UClass = import("./un-class").UClass;
 type UStruct = import("./un-struct").UStruct;
@@ -56,6 +57,7 @@ type UTexOscillator = import("./un-material").UTexOscillator;
 type URangeVector = import("./un-range").URangeVector;
 type URange = import("./un-range").URange;
 type FPlane = import("./un-plane").FPlane;
+type FScale = import("./un-scale").FScale;
 type UPlane = import("./un-plane").UPlane;
 
 type PropertyTag = import("./un-property").PropertyTag;

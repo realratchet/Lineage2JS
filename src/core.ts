@@ -23,57 +23,6 @@ import decodeObject3D from "./assets/decoders/object3d-decoder";
 // import ULevelInfo from "./assets/unreal/un-level-info";
 // import UEncodedFile from "./assets/unreal/un-encoded-file";
 
-async function loadMesh() {
-    const viewport = document.querySelector("viewport") as HTMLViewportElement;
-    const renderManager = new RenderManager(viewport);
-    const assetLoader = new AssetLoader(assetList);
-    const pkg = assetLoader.getPackage("field_deco_S");
-
-    await assetLoader.load(pkg);
-
-    // const exp = pkg.exports.find(exp => exp.objectName === "Skeleton01");
-    // const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02");
-    // const exp = pkg.exports.find(exp => exp.objectName === "talking_island_rock02_LOD");
-    const exp = pkg.exports.find(exp => exp.objectName === "inna_underwater_star");
-    debugger;
-    // for (let exp of pkg.exports) {
-    // if (exp.idClass.value !== -2) continue;
-
-    const umesh = await pkg.createObject(pkg, exp, "StaticMesh") as UStaticMesh;
-    const mesh = await umesh.decodeMesh();
-
-    renderManager.scene.add(mesh);
-    // }
-
-
-    renderManager.startRendering();
-}
-
-// export default loadMesh;
-
-async function loadTexture() {
-    const viewport = document.querySelector("viewport") as HTMLViewportElement;
-    const assetLoader = new AssetLoader(assetList);
-    const pkg = assetLoader.getPackage("T_Dion");
-
-    await assetLoader.load(pkg);
-
-    const texData = pkg.exports.find(exp => exp.objectName === "DI_C5");
-    const utexture = await pkg.createObject(pkg, texData, "Texture") as UTexture;
-    const texture = await utexture.decodeMipmap(0);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = texture.image.width;
-    canvas.height = texture.image.height;
-
-    const ctx2d = canvas.getContext("2d");
-    const imdata = ctx2d.createImageData(texture.image.width, texture.image.height);
-    imdata.data.set(texture.image.data);
-    ctx2d.putImageData(imdata, 0, 0);
-
-    viewport.appendChild(canvas);
-}
-
 async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
     [key: string]: {
         import: UImport;
@@ -213,7 +162,7 @@ async function startCore() {
     // debugger;
 
 
-    await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
+    // await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
 
 
     // debugger;
@@ -297,10 +246,13 @@ async function startCore() {
     // const mLevel = decodeObject3D(decodeLibrary, iLevel);
     // objectGroup.add(mLevel);
 
-    // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
-    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    // const mModel = decodeObject3D(decodeLibrary, iModel);
-    // objectGroup.add(mModel);
+    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    const iModel = await uModel.getDecodeInfo(decodeLibrary);
+
+    debugger;
+
+    const mModel = decodeObject3D(decodeLibrary, iModel);
+    objectGroup.add(mModel);
 
     // debugger;
 

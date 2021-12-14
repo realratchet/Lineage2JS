@@ -1,11 +1,9 @@
-import FScale from "./un-scale";
-import UModel from "./model/un-model";
-import UTextureModifyInfo from "./un-texture-modify-info";
+
 import UAActor from "./un-aactor";
 import FVector from "./un-vector";
 
 class UBrush extends UAActor {
-    protected readHeadOffset = 15;
+    // protected readHeadOffset = 15;
 
     protected csgOper: number;
     protected mainScale: FScale;
@@ -31,23 +29,23 @@ class UBrush extends UAActor {
         });
     }
 
-    public async decodeMesh(): Promise<Object3D> {
+    // public async decodeMesh(): Promise<Object3D> {
 
-        const brush = await this.brush.decodeModel();
+    //     const brush = await this.brush.decodeModel();
 
-        brush.name = this.group || this.objectName;
+    //     brush.name = this.group || this.objectName;
 
-        const position = new Vector3().subVectors(this.location.vector, this.prePivot.vector);
+    //     const position = new Vector3().subVectors(this.location.vector, this.prePivot.vector);
 
-        brush.position.set(position.x, position.z, position.y);
+    //     brush.position.set(position.x, position.z, position.y);
 
-        // brush.scale.set(this.mainScale.x, this.mainScale.y, this.mainScale.z);
+    //     // brush.scale.set(this.mainScale.x, this.mainScale.y, this.mainScale.z);
 
-        // if (brush.children.length > 0)
-        //     debugger;
+    //     // if (brush.children.length > 0)
+    //     //     debugger;
 
-        return brush;
-    }
+    //     return brush;
+    // }
 }
 
 export default UBrush;

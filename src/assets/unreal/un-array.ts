@@ -16,8 +16,8 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
     public constructor(constr: { new(...pars: any): T } & ValidConstructables_T<T>) {
         super();
 
-        if (constr && !isFinite((constr as any).typeSize) && constr !== FUnknownStruct)
-            throw new Error(`Invalid fields for FConstructable: ${constr.name}`);
+        // if (constr && !isFinite((constr as any).typeSize) && constr !== FUnknownStruct)
+        //     throw new Error(`Invalid fields for FConstructable: ${constr.name}`);
 
         this.Constructor = constr;
     }

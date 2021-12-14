@@ -53,7 +53,7 @@ abstract class UObject {
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
-        if (pkg.tell() < this.readTail)
+        if (pkg.tell() < this.readTail && (this.readTail - pkg.tell()) > 15)
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();
@@ -118,7 +118,12 @@ abstract class UObject {
                 break;
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_ArrayProperty: this.readArray(pkg, tag); break;
-            case UNP_PropertyTypes.UNP_ClassProperty:
+            case UNP_PropertyTypes.UNP_ClassProperty: {
+                const start = pkg.tell();
+                const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
+                const offset = pkg.tell() - start;
+                debugger;
+            } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
             case UNP_PropertyTypes.UNP_RotatorProperty:
                 debugger;

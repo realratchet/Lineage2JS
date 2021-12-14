@@ -1,6 +1,6 @@
-import UObject from "./un-object";
+import UPhysicsVolume from "./un-physics-volume";
 
-class UDefaultPhysicsVolume extends UObject {
+class UDefaultPhysicsVolume extends UPhysicsVolume {
 }
 
 export default UDefaultPhysicsVolume;

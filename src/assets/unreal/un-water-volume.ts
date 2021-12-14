@@ -1,6 +1,17 @@
-import UObject from "./un-object";
+import UBrush from "./un-brush";
 
-class UWaterVolume extends UObject {
+class UWaterVolume extends UBrush {
+    protected readHeadOffset = 17;
+
+    protected colLocation: FVector;
+    protected nextPhysicsVolume: UPhysicsVolume;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "ColLocation": "colLocation",
+            "NextPhysicsVolume": "nextPhysicsVolume"
+        });
+    }
 
 }
 
