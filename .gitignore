@@ -4,6 +4,6 @@ bin/
 .vscode/tasks.json
 /build/*
 *cpp/
-# cpp/l2_viewer/
-# cpp/ue_viewer/
+cpp/l2_viewer/
+cpp/ue_viewer/
 *.log

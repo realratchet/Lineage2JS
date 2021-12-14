@@ -30,6 +30,11 @@ class UTexture extends UObject {
     protected maxColor: FColor;
     protected mipZero: FColor;
 
+    protected minFrameRate: number;
+    protected maxFrameRate: number;
+    protected totalFrameNum: number;
+    protected animNext: UTexture;
+
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
@@ -50,7 +55,12 @@ class UTexture extends UObject {
 
             "MaxColor": "maxColor",
 
-            "MipZero": "mipZero"
+            "MipZero": "mipZero",
+
+            "MinFrameRate": "minFrameRate",
+            "MaxFrameRate": "maxFrameRate",
+            "TotalFrameNum": "totalFrameNum",
+            "AnimNext": "animNext"
         });
     }
 

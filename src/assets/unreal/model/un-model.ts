@@ -1,5 +1,5 @@
 import UPrimitive from "../un-primitive";
-import FArray from "../un-array";
+import FArray, { FPrimitiveArray } from "../un-array";
 import FVert from "./un-vert";
 import FVector from "../un-vector";
 import FBSPNode from "../bsp/un-bsp-node";
@@ -12,6 +12,9 @@ import FBox from "../un-box";
 import FNumber from "../un-number";
 import { FLight } from "../un-light";
 import FLeaf from "../un-leaf";
+import FConstructable from "../un-constructable";
+import UPackage from "../un-package";
+import { PropertyTag } from "../un-property";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -19,6 +22,34 @@ type UExport = import("../un-export").UExport;
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
+
+class FLightmap extends FConstructable {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        const int32 = new BufferValue(BufferValue.int32);
+        const uint8 = new BufferValue(BufferValue.uint8);
+        const compat32 = new BufferValue(BufferValue.compat32);
+        const float = new BufferValue(BufferValue.float);
+
+        this.iLightmapTexture = pkg.read(compat32).value as number;
+        this.iSurface = pkg.read(compat32).value as number;
+        this.iUnk1 = pkg.read(compat32).value as number;
+        this.offsetX = pkg.read(compat32).value as number;
+        this.offsetY = pkg.read(compat32).value as number;
+
+
+        // this.dataOffset = pkg.read(int32).value as number;
+        // this.pan = new FVector().load(pkg);
+        // this.clampU = pkg.read(compat32).value as number;
+        // this.clampV = pkg.read(compat32).value as number;
+        // this.scaleU = pkg.read(int32).value as number;
+        // this.scaleV = pkg.read(int32).value as number;
+        // this.clampU = pkg.read(compat32).value as number;
+        // this.iLightIndex = pkg.read(compat32).value as number;
+
+        return this;
+    }
+
+}
 
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
@@ -95,6 +126,50 @@ class UModel extends UPrimitive {
             this.readHead = pkg.tell();
 
             // debugger;
+
+            if (this.objectName === "Exp_Model327") {
+                // pkg.seek(this.readTail - 16, "set");
+
+                // function isPow2(x) {
+                //     return (Math.log(x) / Math.log(2)) % 1 === 0;
+                // }
+
+                // for (let i = this.readHead; i < this.readTail; i++) {
+                //     pkg.seek(i, "set");
+                //     const lmap = new FLightmapIndex().load(pkg);
+
+                //     if (lmap.dataOffset > this.readHead && isFinite(lmap.pan.x) && isFinite(lmap.pan.y) && isFinite(lmap.pan.z) && lmap.clampU === lmap.clampV && lmap.iLightIndex >= 0 && lmap.iLightIndex < 1000 && lmap.dataOffset < this.readTail && isPow2(lmap.clampU)) {
+                //         console.log(i, lmap);
+                //         // debugger;
+                //     }
+                // }
+
+
+                // const startByte = this.readHead + (this.bytesUnread % 32);
+                // const lengthBytes = this.readTail - startByte;
+
+                // // pkg.seek(this.readHead + (this.bytesUnread % 32), "set");
+
+                // const buff = pkg.buffer.slice(this.readTail - (256 * 256 * 4) * 2, this.readTail - (256 * 256 * 2));
+                // const blob = new Blob([buff], { type: "application/octet-stream" });
+                // const url = URL.createObjectURL(blob);
+
+                // console.log(url);
+
+                // window.open(url, "_blank");
+
+                // debugger;
+
+
+                // const lights = new FArray(FNumber.forType(BufferValue.compat32) as any);
+
+                // lights.load(pkg, null);
+
+                // debugger;
+            }
+            // else debugger;
+
+
 
             // this.lights.load(pkg, null);
 

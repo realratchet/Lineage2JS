@@ -192,7 +192,8 @@ interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
     type: "Light",
     color: [number, number, number],
     radius: number,
-    lightType: number
+    lightType: number,
+    cone: number
 }
 
 interface IDecodeLibrary {

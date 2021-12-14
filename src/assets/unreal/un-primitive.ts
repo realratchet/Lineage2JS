@@ -20,7 +20,7 @@ class UPrimitive extends UObject {
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    protected doLoad(pkg: UPackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         this.boundingBox.load(pkg);

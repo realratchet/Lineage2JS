@@ -51,6 +51,8 @@ class ULight extends UAActor {
     public isDynamic: number;
     public skins: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
 
+    protected isIgnoredRange: boolean;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "LightEffect": "effect",
@@ -65,7 +67,8 @@ class ULight extends UAActor {
             "LightPeriod": "period",
             "LightPhase": "phase",
             "LightCone": "cone",
-            "bDynamicLight": "isDynamic"
+            "bDynamicLight": "isDynamic",
+            "bIgnoredRange": "isIgnoredRange"
         });
     }
 

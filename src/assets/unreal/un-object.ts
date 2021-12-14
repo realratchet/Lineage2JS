@@ -33,6 +33,9 @@ abstract class UObject {
 
             if (!tag.isValid()) break;
 
+            // if (tag.name === "USize" || tag.name === "UClamp")
+            //     debugger;
+
             this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
 

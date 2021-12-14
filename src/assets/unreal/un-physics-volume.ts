@@ -11,6 +11,8 @@ class UPhysicsVolume extends UBrush {
     protected isPendingDelete: boolean;
     protected colLocation: FVector;
     protected nextPhysicsVolume: UPhysicsVolume;
+    protected isLightChanged: boolean;
+    protected isSelected: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -20,7 +22,9 @@ class UPhysicsVolume extends UBrush {
             "bDeleteMe": "isDeleteMe",
             "bPendingDelete": "isPendingDelete",
             "ColLocation": "colLocation",
-            "NextPhysicsVolume": "nextPhysicsVolume"
+            "NextPhysicsVolume": "nextPhysicsVolume",
+            "bLightChanged": "isLightChanged",
+            "bSelected": "isSelected"
         });
     }
 }

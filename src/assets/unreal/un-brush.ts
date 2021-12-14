@@ -14,6 +14,11 @@ class UBrush extends UAActor {
     protected texModifyInfo: UTextureModifyInfo;
     protected group: string;
     protected isRangeIgnored: boolean;
+    protected isBlockingActors: boolean;
+    protected isBlockingPlayers: boolean;
+    protected isBlockingKarma: boolean;
+    protected isDynamicLight: boolean;
+    protected isStaticLighting: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -25,7 +30,12 @@ class UBrush extends UAActor {
             "PrePivot": "prePivot",
             "TexModifyInfo": "texModifyInfo",
             "Group": "group",
-            "bIgnoredRange": "isRangeIgnored"
+            "bIgnoredRange": "isRangeIgnored",
+            "bBlockActors": "isBlockingActors",
+            "bBlockPlayers": "isBlockingPlayers",
+            "bBlockKarma": "isBlockingKarma",
+            "bDynamicLight": "isDynamicLight",
+            "bStaticLighting": "isStaticLighting"
         });
     }
 

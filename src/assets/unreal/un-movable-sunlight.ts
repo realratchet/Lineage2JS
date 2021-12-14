@@ -13,19 +13,19 @@ class UNMovableSunLight extends UAActor {
         });
     }
 
-    protected doLoad(pkg: UPackage, exp: UExport): void {
-        pkg.seek(this.readHead, "set");
+    // protected doLoad(pkg: UPackage, exp: UExport): void {
+    //     pkg.seek(this.readHead, "set");
 
-        debugger;
+    //     debugger;
 
-        super.doLoad(pkg, exp);
+    //     super.doLoad(pkg, exp);
 
-        pkg.seek(this.readHead, "set");
+    //     pkg.seek(this.readHead, "set");
 
-        const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
+    //     const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
 
-        debugger;
-    }
+    //     debugger;
+    // }
 }
 
 export default UNMovableSunLight;

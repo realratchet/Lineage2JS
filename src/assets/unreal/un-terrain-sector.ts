@@ -74,8 +74,8 @@ class UTerrainSector extends UObject {
         const vertices = new Float32Array(17 * 17 * 3), indices = new Uint16Array(16 * 16 * 6);
         const { x: sx, y: sy, z: sz } = this.info.terrainScale;
 
-        const sectorX = this.offsetX / 2 / 2048;
-        const sectorY = this.offsetY / 2 / 2048;
+        // const sectorX = this.offsetX / 2 / 2048;
+        // const sectorY = this.offsetY / 2 / 2048;
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {

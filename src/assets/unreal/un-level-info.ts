@@ -19,6 +19,11 @@ class ULevelInfo extends UAActor {
     protected cameraRotationDynamic: FRotator;
 
     protected navigationPointList: UPlayerStart;
+    
+    protected ambientVector: FVector;
+    protected ambientBrightness: number;
+
+    protected distanceFogEnd: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -31,7 +36,11 @@ class ULevelInfo extends UAActor {
             "CameraLocationFront": "cameraLocationFront",
             "CameraLocationSide": "cameraLocationSide",
             "CameraRotationDynamic": "cameraRotationDynamic",
-            "NavigationPointList": "navigationPointList"
+            "NavigationPointList": "navigationPointList",
+            
+            "AmbientVector": "ambientVector",
+            "AmbientBrightness": "ambientBrightness",
+            "DistanceFogEnd": "distanceFogEnd"
         });
     }
 

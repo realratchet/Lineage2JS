@@ -84,7 +84,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_20_21;
+    const pkgLoadPromise = pkg_20_20;
 
 
     // await assetLoader.load(pkg_meffects);
@@ -241,18 +241,18 @@ async function startCore() {
 
     // debugger;
 
-    // const uLevel = await pkgLoad.fetchObject<ULevel>(5);
-    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    // objectGroup.add(mLevel);
+    const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
+    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    objectGroup.add(mLevel);
 
-    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
 
-    debugger;
+    // // debugger;
 
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
     // debugger;
 

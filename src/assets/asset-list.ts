@@ -41,7 +41,10 @@ const assetList = Object.freeze([
     "textures/Oren_tree_T.utx",
     "textures/Oren_HEV_LOD_T.utx",
     "textures/Field_Deco_Artifact_T.utx",
+    "textures/interior_B_elf_t.utx",
+    "textures/Dungeon_Deco_T.utx",
 
+    "staticmeshes/FX_E_S.usx",
     "staticmeshes/Oren_HED_enterance.usx",
     "staticmeshes/Oren_HED_S.usx",
     "staticmeshes/Field_Deco_Artifact_S.usx",
@@ -55,6 +58,8 @@ const assetList = Object.freeze([
     "staticmeshes/dion_curumadungeon_s.usx",
     "staticmeshes/dion_curumadungeon_boss_s.usx",
     "staticmeshes/cruma_s.usx",
+    "staticmeshes/interior_B_elf_s.usx",
+    "staticmeshes/Dungeon_deco_S.usx",
 
     "sounds/AmbSound.uax",
     "sounds/ChrSound.uax",

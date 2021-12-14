@@ -4,7 +4,7 @@ import UAActor from "../un-aactor";
 import UStaticMesh from "./un-static-mesh";
 // import { Vector3, Mesh, Group } from "three";
 import UStaticMeshIsntance from "./un-static-mesh-instance";
-import FArray from "../un-array";
+import FArray, { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
 import FNumber from "../un-number";
 import USound from "../un-sound";
@@ -14,7 +14,7 @@ class UStaticMeshActor extends UAActor {
     protected instance: UStaticMeshIsntance;
     protected isRangeIgnored: boolean;
     protected colLocation: FVector;
-    protected touching: FArray = new FArray(FNumber.forType(BufferValue.int16) as any);
+    protected touching: FPrimitiveArray = new FPrimitiveArray(BufferValue.int16);
     protected isUpdatingShadow: boolean;
     protected stepSound1: USound;
     protected stepSound2: USound;
@@ -28,6 +28,9 @@ class UStaticMeshActor extends UAActor {
     protected forcedRegion: number;
     protected lodViewDuration: number;
     protected currentLod: number;
+    protected isUnlit: boolean;
+    protected isShadowCast: boolean;
+    protected isSelected: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -48,7 +51,10 @@ class UStaticMeshActor extends UAActor {
             "bBlockKarma": "isBlockingKarma",
             "ForcedRegion": "forcedRegion",
             "L2LodViewDuration": "lodViewDuration",
-            "L2CurrentLod": "currentLod"
+            "L2CurrentLod": "currentLod",
+            "bUnlit": "isUnlit",
+            "bShadowCast": "isShadowCast",
+            "bSelected": "isSelected"
         });
     }
 
