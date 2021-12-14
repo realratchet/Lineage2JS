@@ -52,7 +52,12 @@ abstract class UObject {
 
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
-    protected postLoad(pkg: UPackage, exp: UExport): void { this.readHead = pkg.tell(); }
+    protected postLoad(pkg: UPackage, exp: UExport): void {
+        if (pkg.tell() < this.readTail)
+            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes in package '${pkg.path}'`);
+
+        this.readHead = pkg.tell();
+    }
 
     public load(pkg: UPackage, exp: UExport): this {
         this.preLoad(pkg, exp);
@@ -192,7 +197,7 @@ abstract class UObject {
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
         else (this as any)[varName] = value;
 
-        console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
+        // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
 
         return true;
     }

@@ -38,11 +38,23 @@ function decodeRGBA(info: ITextureDecodeInfo): DataTexture {
     const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);
     const texture = new DataTexture(image, info.width, info.height);
 
-    // let width = info.width, height = info.height;
-
     texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
 
-    texture.needsUpdate = true;
+    texture.flipY = false;
+
+    return texture;
+}
+
+function decodeG16(info: ITextureDecodeInfo): DataTexture {
+    const buff = new Uint16Array(info.buffer);
+    const image = new Uint8Array(info.width * info.height * 4);
+    const texture = new DataTexture(image, info.width, info.height);
+
+    for(let i = 0, len = info.width * info.height; i < len; i ++) {
+        image[i * 4 + 0] = image[i * 4 + 1] = image[i * 4 + 2] = buff[i] / 256;
+        image[i * 4 + 3] = 255;
+    }
+
     texture.flipY = false;
 
     return texture;
@@ -54,6 +66,7 @@ function decodeTexture(info: ITextureDecodeInfo): MapData_T {
     switch (info.textureType) {
         case "dds": texture = decodeDDS(info.buffer); break;
         case "rgba": texture = decodeRGBA(info); break;
+        case "g16": texture = decodeG16(info); break;
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
     }
 

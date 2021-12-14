@@ -74,6 +74,44 @@ async function loadTexture() {
     viewport.appendChild(canvas);
 }
 
+async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
+    [key: string]: {
+        import: UImport;
+        index: number;
+    }[];
+}, decodeLibrary: IDecodeLibrary, objectGroup: Object3D) {
+    let index = 0;
+    const geometry = new PlaneBufferGeometry(1000, 1000);
+    const uShaders = await Promise.all(impGroups["Shader"].map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
+    const iShaders = await Promise.all(uShaders.map(obj => obj.getDecodeInfo(decodeLibrary)));
+
+    iShaders.forEach(async (iShader, i) => {
+        const material = decodeMaterial(decodeLibrary, decodeLibrary.materials[iShader]) as MeshStaticMaterial;
+        const mesh = new Mesh(geometry, material);
+
+        mesh.name = uShaders[i].objectName;
+        mesh.position.set(16317.62354947573 + 1000 * index++, -11492.261077168214 - 500, 114151.68197851974 - 500);
+
+        objectGroup.add(new BoxHelper(mesh));
+        objectGroup.add(mesh);
+    });
+
+    const uTextures = await Promise.all(impGroups["Texture"].map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
+    const iTextures = await Promise.all(uTextures.map(obj => obj.getDecodeInfo(decodeLibrary)));
+
+    index = 0;
+    iTextures.forEach(async (iTexture, i) => {
+        const material = decodeMaterial(decodeLibrary, decodeLibrary.materials[iTexture]) as MeshStaticMaterial;
+        const mesh = new Mesh(geometry, material);
+
+        mesh.name = uTextures[i].objectName;
+        mesh.position.set(16317.62354947573 + 1000 * index++, -11492.261077168214 - 500 - 1000, 114151.68197851974 - 500);
+
+        objectGroup.add(new BoxHelper(mesh));
+        objectGroup.add(mesh);
+    });
+}
+
 // export default loadTexture;
 
 async function startCore() {
@@ -175,27 +213,8 @@ async function startCore() {
     // debugger;
 
 
-    // let index = 0;
-    // const shaders = await Promise.all(impGroups["Shader"].slice(0, 1).map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
-    // const geometry = new PlaneBufferGeometry(1000, 1000);
-    // // debugger;
+    await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
 
-    // shaders.forEach(async shader => {
-    //     // debugger;
-    //     const shaderInfo = await shader.getDecodeInfo(decodeLibrary);
-    //     // const texture = decodeTexture(shaderInfo.diffuse);
-    //     // const material = new MeshBasicMaterial({ map: texture });
-    //     const material = decodeMaterial(decodeLibrary, decodeLibrary.materials[shaderInfo]) as MeshStaticMaterial;
-    //     const mesh = new Mesh(geometry, material);
-
-    //     // debugger;
-
-    //     mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
-
-    //     objectGroup.add(mesh);
-    // });
-
-    // const textures = await Promise.all(impGroups["Texture"].slice(0, 1).map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
 
     // debugger;
 
@@ -278,10 +297,10 @@ async function startCore() {
     // const mLevel = decodeObject3D(decodeLibrary, iLevel);
     // objectGroup.add(mLevel);
 
-    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
+    // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
     // debugger;
 

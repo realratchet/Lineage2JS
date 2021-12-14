@@ -173,24 +173,6 @@ class UTexture extends UObject {
                 }
 
                 decodedBuffer = buff.buffer;
-
-                // debugger;
-
-                // decodedBuffer = new Uint8Array(this.width * this.height * 4);
-
-                // for (let y = 0; y < this.height; y++) {
-                //     for (let x = 0; x < this.width; x++) {
-                //         const i = y * this.width + x;
-                //         const ii = i * 4;
-                //         const c = this.palette.colors.getElem(i);
-
-                //         (decodedBuffer as Uint8Array)[ii + 0] = c.r;
-                //         (decodedBuffer as Uint8Array)[ii + 1] = c.g;
-                //         (decodedBuffer as Uint8Array)[ii + 2] = c.b;
-                //         (decodedBuffer as Uint8Array)[ii + 3] = c.a;
-                //     }
-                // }
-
             } break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
