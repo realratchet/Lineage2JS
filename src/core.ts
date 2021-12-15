@@ -77,6 +77,7 @@ async function startCore() {
     const pkg_engine = assetLoader.getPackage("Engine");
     const pkg_core = assetLoader.getPackage("Core");
     const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
+    const pkg_skylevel = assetLoader.getPackage("SkyLevel");
     const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 
     // debugger;
@@ -85,7 +86,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_20_21;
+    const pkgLoadPromise = pkg_skylevel;
 
 
     // await assetLoader.load(pkg_meffects);
@@ -97,7 +98,7 @@ async function startCore() {
     const pkgLoad = await assetLoader.load(pkgLoadPromise);
     // // await assetLoader.load(pkg_engine);
     // // await assetLoader.load(pkg_core);
-    // // await assetLoader.load(pkg_entry);
+    // await assetLoader.load(pkg_entry);
 
     // await pkg_engine.fetchObject(-41)
 
@@ -163,7 +164,7 @@ async function startCore() {
     // debugger;
 
 
-    // await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
+    await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
 
 
     // debugger;
@@ -242,10 +243,10 @@ async function startCore() {
 
     // debugger;
 
-    const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
-    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    objectGroup.add(mLevel);
+    // const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
+    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    // objectGroup.add(mLevel);
 
     // {
     //     const pkgLoad = await assetLoader.load(pkg_20_21);

@@ -75,6 +75,7 @@ class UShader extends UMaterial {
     protected alphaTest: number = 0;
     protected isPerformingLightningOnSpecularPass: boolean = false;
     protected selfIllumination: UMaterial = null;
+    protected selfIlluminationMask: UMaterial = null;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -88,6 +89,7 @@ class UShader extends UMaterial {
             "ZWrite": "depthWrite",
             "AlphaTest": "transparent",
             "SelfIllumination": "selfIllumination",
+            "SelfIlluminationMask": "selfIlluminationMask",
             "AlphaRef": "alphaTest",
             "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
         });
@@ -277,6 +279,12 @@ class UTexOscillator extends UBaseModifier {
     protected amplitudeU: number;
     protected amplitudeV: number;
     protected material: UMaterial;
+    protected typeU: number;
+    protected typeV: number;
+    protected offsetU: number;
+    protected offsetV: number;
+    protected currentUJitter: number;
+    protected currentVJitter: number;
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
@@ -299,7 +307,13 @@ class UTexOscillator extends UBaseModifier {
             "VOscillationPhase": "phaseV",
             "UOscillationAmplitude": "amplitudeU",
             "VOscillationAmplitude": "amplitudeV",
-            "Material": "material"
+            "Material": "material",
+            "UOscillationType": "typeU",
+            "VOscillationType": "typeV",
+            "UOffset": "offsetU",
+            "VOffset": "offsetV",
+            "CurrentUJitter": "currentUJitter",
+            "CurrentVJitter": "currentVJitter"
         });
     }
 }
