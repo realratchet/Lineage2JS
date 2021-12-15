@@ -10,7 +10,7 @@ class AssetLoader {
             if (this.packages.has(pkgName))
                 throw new Error(`Package already registered: ${pkgName}`);
 
-            this.packages.set(pkgName, new Promise(async resolve => {
+            this.packages.set(pkgName.toLowerCase(), new Promise(async resolve => {
                 const { UPackage } = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
                 const pkg = new UPackage(this, `assets/${path}`);
 
@@ -19,8 +19,8 @@ class AssetLoader {
         });
     }
 
-    public getPackage(pkgName: string): Promise<UPackage> { return this.packages.get(pkgName); }
-    public hasPackage(path: string) { return this.packages.has(pathToPkgName(path)); }
+    public getPackage(pkgName: string): Promise<UPackage> { return this.packages.get(pkgName.toLowerCase()); }
+    public hasPackage(path: string) { return this.packages.has(pathToPkgName(path).toLowerCase()); }
     public async load(pkgOrPromise: Promise<UPackage> | UPackage): Promise<UPackage> {
         return await (await pkgOrPromise).decode();
     }

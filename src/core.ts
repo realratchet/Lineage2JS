@@ -68,6 +68,7 @@ async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
+    const pkg_19_21 = assetLoader.getPackage("19_21");
     const pkg_20_19 = assetLoader.getPackage("20_19");
     const pkg_20_20 = assetLoader.getPackage("20_20");
     const pkg_20_21 = assetLoader.getPackage("20_21"); // cruma tower
@@ -84,7 +85,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_20_20;
+    const pkgLoadPromise = pkg_20_21;
 
 
     // await assetLoader.load(pkg_meffects);
@@ -245,6 +246,14 @@ async function startCore() {
     const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
     const mLevel = decodeObject3D(decodeLibrary, iLevel);
     objectGroup.add(mLevel);
+
+    // {
+    //     const pkgLoad = await assetLoader.load(pkg_20_21);
+    //     const uLevel = await pkgLoad.fetchObject<ULevel>(5);
+    //     const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    //     const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    //     objectGroup.add(mLevel);
+    // }
 
     // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
     // const iModel = await uModel.getDecodeInfo(decodeLibrary);

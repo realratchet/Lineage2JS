@@ -49,6 +49,8 @@ class ULight extends UAActor {
     public phase: number;
     public cone: number = 0;
     public isDynamic: number;
+    public lightOnTime: number;
+    public lightOffTime: number;
     public skins: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
 
     protected isIgnoredRange: boolean;
@@ -68,7 +70,9 @@ class ULight extends UAActor {
             "LightPhase": "phase",
             "LightCone": "cone",
             "bDynamicLight": "isDynamic",
-            "bIgnoredRange": "isIgnoredRange"
+            "bIgnoredRange": "isIgnoredRange",
+            "LightOnTime": "lightOnTime",
+            "LightOffTime": "lightOffTime"
         });
     }
 

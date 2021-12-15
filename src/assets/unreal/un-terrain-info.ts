@@ -149,8 +149,8 @@ class UTerrainInfo extends UAActor {
         for (let k = 0; k < layerCount; k++) {
             const layer = terrainLayers[k];
 
-            if (layer.alphaMap === null || layer.map === null)
-                debugger;
+            // if (layer.alphaMap === null || layer.map === null)
+            //     debugger;
 
             if (!layer.map && !layer.alphaMap) {
                 layers[k] = { map: null, alphaMap: null };

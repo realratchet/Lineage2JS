@@ -74,6 +74,7 @@ class UShader extends UMaterial {
     protected transparent: boolean = false;
     protected alphaTest: number = 0;
     protected isPerformingLightningOnSpecularPass: boolean = false;
+    protected selfIllumination: UMaterial = null;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -86,6 +87,7 @@ class UShader extends UMaterial {
             "TreatAsTwoSided": "isTreatingDoubleSided",
             "ZWrite": "depthWrite",
             "AlphaTest": "transparent",
+            "SelfIllumination": "selfIllumination",
             "AlphaRef": "alphaTest",
             "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
         });

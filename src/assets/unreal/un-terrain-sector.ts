@@ -131,8 +131,8 @@ class UTerrainSector extends UObject {
             const layer = itLayer.next().value as UTerrainLayer;
             const uv = uvs[k] = new Float32Array(17 * 17 * 2)
 
-            if (layer.alphaMap && !layer.map)
-                debugger;
+            if (!layer.alphaMap && !layer.map)
+                continue;
 
             // const usx = layer.scaleW * sx * 2.0;
             // const usy = layer.scaleH * sy * 2.0;

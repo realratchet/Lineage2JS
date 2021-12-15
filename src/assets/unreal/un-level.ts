@@ -125,7 +125,7 @@ class ULevel extends UObject {
             name: this.url.map,
             children: (await Promise.all([
                 this.baseModel.getDecodeInfo(library),
-                // "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+                "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
                 "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([]),
                 // "ULight" in groupedObjectList ? Promise.all(groupedObjectList["ULight"].map((exp: ULight) => exp.getDecodeInfo(library))) : Promise.resolve([])
             ])).flat()

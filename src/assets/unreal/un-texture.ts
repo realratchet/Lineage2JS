@@ -167,22 +167,25 @@ class UTexture extends UObject {
                 break;
             case ETexturePixelFormat.TPF_BGRA8:
             case ETexturePixelFormat.TPF_RGBA8: {
-                if (!this.palette) throw new Error("This format should have palette?");
-
                 textureType = "rgba";
-                const buff = new Uint8Array(imSize * 4);
 
-                for (let i = 0, len = imSize; i < len; i++) {
-                    const c = this.palette.colors.getElem(data[i]);
-                    const ii = i * 4;
+                if (!this.palette) {
+                    decodedBuffer = data.buffer;
+                } else {
+                    const buff = new Uint8Array(imSize * 4);
 
-                    buff[ii + 0] = c.r;
-                    buff[ii + 1] = c.g;
-                    buff[ii + 2] = c.b;
-                    buff[ii + 3] = c.a;
+                    for (let i = 0, len = imSize; i < len; i++) {
+                        const c = this.palette.colors.getElem(data[i]);
+                        const ii = i * 4;
+
+                        buff[ii + 0] = c.r;
+                        buff[ii + 1] = c.g;
+                        buff[ii + 2] = c.b;
+                        buff[ii + 3] = c.a;
+                    }
+
+                    decodedBuffer = buff.buffer;
                 }
-
-                decodedBuffer = buff.buffer;
             } break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
