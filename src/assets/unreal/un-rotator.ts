@@ -13,7 +13,6 @@ class FRotator extends FConstructable {
         for (let key of ["pitch", "yaw", "roll"])
             this[key as ("pitch" | "yaw" | "roll")] = pkg.read(int32).value as number;
 
-
         return this;
     }
 
@@ -21,18 +20,9 @@ class FRotator extends FConstructable {
         const _PI = Math.PI;
         const yAxis = (-this.yaw / 32768. * _PI) % (_PI * 2);
         const xAxis = (2 * _PI - this.roll / 32768. * _PI) % (_PI * 2);
-        const zAxis = (2 * _PI - this.pitch / 32768. * _PI) % (_PI * 2);
+        const zAxis = (2 * _PI + this.pitch / 32768. * _PI) % (_PI * 2);
 
         return [xAxis, yAxis, zAxis, "XYZ"];
-    }
-
-    public getEuler(output: THREE.Euler): THREE.Euler {
-        const _PI = Math.PI;
-        const yAxis = (-this.yaw / 32768. * _PI) % (_PI * 2);
-        const xAxis = (2 * _PI - this.roll / 32768. * _PI) % (_PI * 2);
-        const zAxis = (2 * _PI - this.pitch / 32768. * _PI) % (_PI * 2);
-
-        return output.set(xAxis, yAxis, zAxis, "XYZ");
     }
 }
 
