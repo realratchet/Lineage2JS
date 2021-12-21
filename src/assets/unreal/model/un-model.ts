@@ -128,6 +128,8 @@ class UModel extends UPrimitive {
             // debugger;
 
             if (this.objectName === "Exp_Model327") {
+                debugger;
+
                 // pkg.seek(this.readTail - 16, "set");
 
                 // function isPow2(x) {
@@ -151,10 +153,9 @@ class UModel extends UPrimitive {
                 // // pkg.seek(this.readHead + (this.bytesUnread % 32), "set");
 
                 // const buff = pkg.buffer.slice(this.readTail - (256 * 256 * 4) * 2, this.readTail - (256 * 256 * 2));
+                // const buff = pkg.buffer.slice(this.readHead, this.readTail); // (@8306076 128x128)
                 // const blob = new Blob([buff], { type: "application/octet-stream" });
                 // const url = URL.createObjectURL(blob);
-
-                // console.log(url);
 
                 // window.open(url, "_blank");
 

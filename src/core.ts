@@ -5,7 +5,7 @@ import assetList from "./assets/asset-list";
 // import UTerrainSector from "./assets/unreal/un-terrain-sector";
 // import UTexture from "./assets/unreal/un-texture";
 // import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial } from "three";
+import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper } from "three";
 import BufferValue from "./assets/buffer-value";
 // import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 // import UModel from "./assets/unreal/model/un-model";
@@ -86,7 +86,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_skylevel;
+    const pkgLoadPromise = pkg_20_21;
 
 
     // await assetLoader.load(pkg_meffects);
@@ -164,7 +164,7 @@ async function startCore() {
     // debugger;
 
 
-    await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
+    // await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
 
 
     // debugger;
@@ -233,10 +233,10 @@ async function startCore() {
 
     // debugger;
 
-    // const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
-    // const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
-    // const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
-    // objectGroup.add(mTerrain);
+    const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
+    const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
+    const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
+    objectGroup.add(mTerrain);
 
     // const uLevelInfo = await pkgLoad.fetchObject<UNMovableSunLight>(2);
     // await uLevelInfo.onLoaded();
@@ -258,13 +258,11 @@ async function startCore() {
 
     // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
     // const iModel = await uModel.getDecodeInfo(decodeLibrary);
-
-    // // debugger;
-
     // const mModel = decodeObject3D(decodeLibrary, iModel);
     // objectGroup.add(mModel);
 
-    // debugger;
+
+    debugger;
 
 
     // decodeLibrary.objects.forEach(info => {

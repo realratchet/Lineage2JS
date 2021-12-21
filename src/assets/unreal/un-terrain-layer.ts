@@ -52,8 +52,7 @@ class UTerrainLayer extends UObject {
             "Scale": "scale",
             "ToWorld": "toWorld",
             "ToMaskmap": "toMaskmap",
-            "bUseAlpha": "useAlpha",
-            "Z": "z"
+            "bUseAlpha": "useAlpha"
         });
     }
 

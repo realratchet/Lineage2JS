@@ -11,6 +11,7 @@ import FUnknownStruct from "./un-unknown-struct";
 import UAActor from "./un-aactor";
 // import FColor from "./un-color";
 import FVector from "./un-vector";
+import FTIntMap from "./un-tint-map";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -33,7 +34,7 @@ class UTerrainInfo extends UAActor {
     protected generatedSectorCounter: number;
     protected numIntMap: number;
     protected autoTimeGeneration: boolean;
-    protected tIntMap: FArray<FUnknownStruct> = new FArray(FUnknownStruct);
+    protected tIntMap: FArray<FTIntMap> = new FArray(FTIntMap);
     protected tickTime: number;
     protected sectors: UExport<UTerrainSector>[];
     protected showOnInvisibleTerrain: boolean;

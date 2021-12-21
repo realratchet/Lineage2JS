@@ -2,7 +2,7 @@ import UPackage from "./un-package";
 import UObject from "./un-object";
 import FBox from "./un-box";
 import BufferValue from "../buffer-value";
-import FArray from "./un-array";
+import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import FNumber from "./un-number";
 // import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide, Sphere, Box3 } from "three";
@@ -36,16 +36,16 @@ class UTerrainSector extends UObject {
     });
 
     // likely lightning
-    protected unkArr0: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr1: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr2: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr3: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr4: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr5: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr6: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
-    protected unkArr7: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint8) as any);
+    protected unkArr0: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr1: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr2: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr3: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr4: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr5: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr6: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected unkArr7: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
 
-    protected texInfo: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.uint16) as any);
+    protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
 
     public constructor(terrainInfo: UTerrainInfo) {
         super();
@@ -215,6 +215,17 @@ class UTerrainSector extends UObject {
 
         this.cellNum = pkg.read(uint32).value as number;
         this.sectorWidth = pkg.read(uint32).value as number;
+
+        this.readHead = pkg.tell();
+
+        // pkg.seek(1);
+
+        // const buff = pkg.buffer.slice(this.readHead, this.readTail);
+        // const blob = new Blob([buff], { type: "application/octet-stream" });
+        // const url = URL.createObjectURL(blob);
+        // window.open(url, "_blank");
+
+        // debugger;
 
         this.unkArr0.load(pkg);
 

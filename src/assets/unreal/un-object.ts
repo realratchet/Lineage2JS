@@ -56,13 +56,15 @@ abstract class UObject {
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
-        if (pkg.tell() < this.readTail && (this.readTail - pkg.tell()) > 15)
+        if (pkg.tell() < this.readTail && (this.readTail - pkg.tell()) > 17 && this.constructor.name !== "USound" && this.constructor.name !== "UStaticMesh")
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();
     }
 
     public load(pkg: UPackage, exp: UExport): this {
+        // if(exp.objectName.includes("LOD")) debugger;
+
         this.preLoad(pkg, exp);
         this.doLoad(pkg, exp);
         this.postLoad(pkg, exp);

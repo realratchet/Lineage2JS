@@ -58,8 +58,8 @@ class UZoneInfo extends UAActor {
     //     // debugger;
     // }
 
-    // public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
-    //     pkg.seek(this.readHead, "set");
+    public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
+        pkg.seek(this.readHead, "set");
 
     //     // for (let i = 0; i < (exp.size.value as number); i++) {
     //     //     const tag = PropertyTag.from(pkg, this.readHead + i);
@@ -71,12 +71,15 @@ class UZoneInfo extends UAActor {
 
     //     debugger;
 
-    //     super.doLoad(pkg, exp);
+
+        super.doLoad(pkg, exp);
+
+        // debugger;
 
     //     console.log(this.bytesUnread);
 
     //     debugger;
-    // }
+    }
 }
 
 export default UZoneInfo;

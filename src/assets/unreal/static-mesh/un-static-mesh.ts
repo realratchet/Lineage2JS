@@ -65,9 +65,13 @@ class UStaticMesh extends UPrimitive {
 
         // pkg.seek(1);
 
-        const unk = pkg.read(compat32).value as number;
+        // const unk = pkg.read(compat32).value as number;
 
-        if (unk !== 0) debugger;
+        // if (unk !== 0) debugger;
+
+        // const colFaces = pkg.read(compat32).value as number;
+
+        // debugger;
 
         // const unk2 = await pkg.read(compat32).value as number;
 

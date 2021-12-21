@@ -95,36 +95,9 @@ class UEncodedFile {
             if (lineCount <= 256) {
                 if (true || string1.match(/(^0005)|(^0077)|(^0007)/)) {
 
-                    const extraArgs = [];
+                    const extraArgs: any[] = [];
 
                     let finalString = string1;
-
-                    if (finalString.match(/(^0005)|(^0077)|(^0007)/)) {
-                        finalString = finalString
-                            .replace(/^0005/, "%c0005%c")
-                            .replace(/^0077/, "%c0077%c")
-                            .replace(/^0007/, "%c0007%c");
-                        extraArgs.push("color: red; font-weight:bold", "color: black");
-                    }
-
-                    if (finalString.match(/((?<=\ )10)|(10(?=\ ))/)) {
-                        finalString = finalString
-                            .replace(/((?<=\ )10)|(10(?=\ ))/, "%c10%c");
-                        extraArgs.push("color: blue; font-weight:bold", "color: black");
-                    }
-
-                    if (finalString.match(/((?<=\ )0F)|(0F(?=\ ))/)) {
-                        finalString = finalString
-                            .replace(/((?<=\ )0F)|(0F(?=\ ))/, "%c0F%c");
-                        extraArgs.push("color: green; font-weight:bold", "color: black");
-                    }
-
-                    // if (finalString.match(/(00 00)|((?<=\ )0000(?=\ ))/)) {
-                    //     finalString = finalString
-                    //         .replace(/00 00/, "%c00 00%c")
-                    //         .replace(/(?<=\ )0000(?=\ )/, "%c0000%c");
-                    //     extraArgs.push("color: purple; font-weight:bold", "color: black");
-                    // }
 
                     const bits = i.toString(16).toUpperCase();
                     const head = new Array(lineCountHex - bits.length).fill("0").join("");
