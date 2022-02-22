@@ -233,10 +233,10 @@ async function startCore() {
 
     // debugger;
 
-    const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
-    const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
-    const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
-    objectGroup.add(mTerrain);
+    // const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
+    // const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
+    // const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
+    // objectGroup.add(mTerrain);
 
     // const uLevelInfo = await pkgLoad.fetchObject<UNMovableSunLight>(2);
     // await uLevelInfo.onLoaded();
@@ -256,10 +256,10 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
-    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    // const mModel = decodeObject3D(decodeLibrary, iModel);
-    // objectGroup.add(mModel);
+    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    const mModel = decodeObject3D(decodeLibrary, iModel);
+    objectGroup.add(mModel);
 
 
     debugger;

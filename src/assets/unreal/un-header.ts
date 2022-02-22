@@ -20,7 +20,8 @@ class UHeader {
     public generations: UGeneration[] = [];
     public guid = new BufferValue(BufferValue.guid);
 
-    public getVersionLWORD() { return (this.version.value as number) & 0xffff; }
+    public getArchiveFileVersion() { return (this.version.value as number) & 0xffff; }
+    public getLicenseeVersion() { return (this.version.value as number) >> 16; }
 }
 
 export default UHeader;

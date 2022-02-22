@@ -33,9 +33,20 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
         // debugger;
 
+        // if (count.value as number < 0)
+        //     debugger;
+
+
         this.length = count.value as number;
 
         if (count.value as number === 0) return this;
+
+        // if (this.Constructor.name === "FBSPVertex")
+        //     debugger;
+
+        // if (this.Constructor.name === "FBSPVertexStream")
+        //     debugger;
+
 
         const elementSize = hasTag ? dataSize / this.length : null;
 
@@ -123,8 +134,8 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
         const hasTag = tag !== null && tag !== undefined;
         const beginIndex = hasTag ? pkg.tell() : null;
         const count = pkg.read(new BufferValue(BufferValue.compat32));
-        const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
-        const dataSize = hasTag ? tag.dataSize - headerOffset : null;
+        // const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
+        // const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
         const elementCount = count.value as number;
 

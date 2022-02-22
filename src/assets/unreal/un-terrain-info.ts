@@ -99,6 +99,8 @@ class UTerrainInfo extends UAActor {
 
         super.doLoad(pkg, exp);
 
+        // debugger;
+
         this.location.x = (this.mapX - 20) * MAP_SIZE_X;
         this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
 
@@ -123,11 +125,50 @@ class UTerrainInfo extends UAActor {
             debugger;
         }
 
+        this.readHead = pkg.tell();
+
+        try {
+            for (let i = this.readHead; i < this.readTail; i++) {
+                pkg.seek(i, "set");
+
+                const prop = PropertyTag.from(pkg, i);
+
+                if (!prop.isValid()) continue;
+
+                console.log(prop);
+
+                if (
+                    !prop.name.includes("LightMap") &&
+                    prop.name !== "bDynamicActorFilterState" &&
+                    prop.name !== "Level" &&
+                    prop.name !== "Region" &&
+                    prop.name !== "bSunAffect" &&
+                    prop.name !== "Tag" &&
+                    prop.name !== "PhysicsVolume" &&
+                    prop.name !== "Location" &&
+                    prop.name !== "DrawScale" &&
+                    prop.name !== "TexModifyInfo"
+
+                ) continue;
+
+                debugger;
+            }
+        } catch (e) {
+
+        }
+
+        debugger;
+
+        // this.readNamedProps(pkg);
+        // debugger;
+
         for (let exp of this.sectors) {
             try {
                 this.promisesLoading.push(pkg.createObject(pkg, exp, "TerrainSector", this));
             } catch (e) { console.error(e); }
         }
+
+        debugger;
 
         return this;
     }

@@ -90,7 +90,7 @@ class UPackage extends UEncodedFile {
         console.log(`'${readable.path}' => Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
 
         if (readable.path === "assets/maps/20_21.unr") {
-            console.assert(header.getVersionLWORD() === 123);
+            console.assert(header.getArchiveFileVersion() === 123);
             console.assert(header.packageFlags.value === 0x1);
             console.assert(header.nameCount.value === 12165);
             console.assert(header.nameOffset.value === 0x40);
@@ -100,7 +100,7 @@ class UPackage extends UEncodedFile {
             console.assert(header.importOffset.value === 0xFB0712);
         }
 
-        if (header.getVersionLWORD() < 68) {
+        if (header.getArchiveFileVersion() < 68) {
             readable.read(header.heritageCount);
             readable.read(header.heritageOffset);
         } else {

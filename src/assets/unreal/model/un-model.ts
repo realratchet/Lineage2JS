@@ -13,8 +13,10 @@ import FNumber from "../un-number";
 import { FLight } from "../un-light";
 import FLeaf from "../un-leaf";
 import FConstructable from "../un-constructable";
-import UPackage from "../un-package";
-import { PropertyTag } from "../un-property";
+// import UPackage from "../un-package";
+import { PropertyTag, UNP_PropertyTypes } from "../un-property";
+import FBspSection from "../bsp/un-bsp-section";
+import FMultiLightMapTexture from "./un-multi-lightmap-texture";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -51,17 +53,20 @@ class FLightmap extends FConstructable {
 
 }
 
+
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
     protected points = new FArray(FVector);
     protected vertices = new FArray(FVert);
     protected bspNodes = new FArray(FBSPNode);
     protected bspSurfs = new FArray(FBSPSurf);
+    protected bspSection = new FArray(FBspSection);
+    protected lightmaps = new FArray(FMultiLightMapTexture);
     protected numSharedSides: number;
     protected polys: UPolys = null;
     protected zones: FZoneProperties[] = [];
     protected bounds = new FArray(FBox);
-    protected leafHulls = new FArray(FNumber.forType(BufferValue.int32) as any);
+    protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
     protected lights = new FArray(FLight);
     protected rootOutside: boolean;
@@ -69,9 +74,11 @@ class UModel extends UPrimitive {
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
         try {
+            const int8 = new BufferValue(BufferValue.int8);
             const int32 = new BufferValue(BufferValue.int32);
             const uint8 = new BufferValue(BufferValue.uint8);
             const compat32 = new BufferValue(BufferValue.compat32);
+            const float = new BufferValue(BufferValue.float);
 
             pkg.seek(this.readHead, "set");
 
@@ -80,19 +87,23 @@ class UModel extends UPrimitive {
 
             super.doLoad(pkg, exp);
 
-            this.vectors.load(pkg);
-            this.points.load(pkg);
-            this.bspNodes.load(pkg);
-            this.bspSurfs.load(pkg);
-            this.vertices.load(pkg);
+            this.vectors.load(pkg);     // 0x78
+            this.points.load(pkg);      // 0x88
+            this.bspNodes.load(pkg);    // 0x58
+            this.bspSurfs.load(pkg);    // 0x98
+            this.vertices.load(pkg);    // 0x68
 
             // debugger;
 
+            // if (this.objectName === "Exp_Model327") {
+            //     debugger;
+            // }
+
             // console.assert(this.bspNodes.getElemCount() === this.bspSurfs.getElemCount());
 
-            this.numSharedSides = pkg.read(int32).value as number;
+            this.numSharedSides = pkg.read(int32).value as number;  // 0x124
 
-            const numZones = pkg.read(int32).value as number;
+            const numZones = pkg.read(int32).value as number;       // 0x128
 
             console.assert(numZones <= MAX_ZONES);
 
@@ -102,7 +113,7 @@ class UModel extends UPrimitive {
                 this.zones[i] = new FZoneProperties().load(pkg);
 
             this.readHead = pkg.tell();
-            const polysId = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+            const polysId = pkg.read(compat32).value as number;
 
             const polyExp = pkg.exports[polysId - 1];
             const className = pkg.getPackageName(polyExp.idClass.value as number)
@@ -111,23 +122,88 @@ class UModel extends UPrimitive {
 
             this.readHead = pkg.tell();
 
+            // if (this.bytesUnread > 100)
+            //     debugger;
+
+            const version = pkg.header.getArchiveFileVersion();
+            const licenseeVersion = pkg.header.getLicenseeVersion();
+
+            // if (this.objectName === "Exp_Model327") {
+            //     if (version < 0x5c) {
+            //         debugger
+            //     } else {
+            //         if (0x68 < version) {
+            //             debugger;
+            //         }
+
+            //         debugger;
+            //     }
+            // }
+
+            // LAB_10596ff8:
+
             // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-            this.bounds.load(pkg, null);
+            this.bounds.load(pkg, null);            // 0xa8
 
             // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-            this.leafHulls.load(pkg, null);
+            this.leafHulls.load(pkg, null);         // 0xb4
 
             // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
-            this.leaves.load(pkg, null);
+            // if (this.objectName === "Exp_Model327") {
+            //     debugger;
+            // }
+
+            // const unkArr = new FArray(UnknownConstruct).load(pkg);
+            this.leaves.load(pkg, null);            // 0xc0 ???
+
+            // const unk0 = pkg.read(compat32).value as number;
+
+            const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg);
+
+            // if (unkArr0.getElemCount() > 0) debugger;
+
+            // debugger;
 
             this.readHead = pkg.tell();
 
             // debugger;
 
+            const unk1 = pkg.read(int32).value as number;
+            const unk2 = pkg.read(int32).value as number;
+
+            this.readHead = pkg.tell();
+
+            this.bspSection.load(pkg, null);
+
+            this.readHead = pkg.tell();
+
+            if (licenseeVersion < 9) {
+                debugger;
+            }
+
+            debugger;
+
+            this.lightmaps.load(pkg, null);
+
+            this.readHead = pkg.tell();
+
             if (this.objectName === "Exp_Model327") {
+                debugger;
+
+                // for (let i = this.readHead; i < this.readTail; i++) {
+                //     try {
+                //         const prop = PropertyTag.from(pkg, i);
+
+                //         if (!prop.isValid()) continue;
+
+                //         console.log(prop.name, prop.structName, prop.dataSize);
+
+                //     } catch (e) { }
+                // }
+
                 debugger;
 
                 // pkg.seek(this.readTail - 16, "set");
@@ -136,15 +212,39 @@ class UModel extends UPrimitive {
                 //     return (Math.log(x) / Math.log(2)) % 1 === 0;
                 // }
 
-                // for (let i = this.readHead; i < this.readTail; i++) {
+                // // for (let i = this.readHead; i < this.readTail; i++) {
+                // for (let i = this.readTail - 1; this.readHead <= i; i--) {
                 //     pkg.seek(i, "set");
-                //     const lmap = new FLightmapIndex().load(pkg);
+                //     // 66049
 
-                //     if (lmap.dataOffset > this.readHead && isFinite(lmap.pan.x) && isFinite(lmap.pan.y) && isFinite(lmap.pan.z) && lmap.clampU === lmap.clampV && lmap.iLightIndex >= 0 && lmap.iLightIndex < 1000 && lmap.dataOffset < this.readTail && isPow2(lmap.clampU)) {
-                //         console.log(i, lmap);
-                //         // debugger;
+                //     const offset = pkg.tell();
+                //     const count = pkg.read(new BufferValue(BufferValue.compat32)).value;
+
+                //     // // const size = 66049;
+                //     const size = ((64) ** 2);
+
+                //     if (count === size || count === size * 3 || count === size * 4) {
+                //         console.log(count);
+                //         pkg.seek(offset, "set");
+
+                //         debugger;
+
+                //         const tintMap = new FPrimitiveArray(BufferValue.uint8).load(pkg);
+
+                //         const buff = tintMap.array.buffer.slice(tintMap.array.byteOffset, tintMap.array.byteOffset + tintMap.array.byteLength);
+                //         const blob = new Blob([buff], { type: "application/octet-stream" });
+                //         const url = URL.createObjectURL(blob);
+                //         window.open(url, "_blank");
                 //     }
+
+                //     // const lmap = new FLightmapIndex().load(pkg);
+                //     // if (lmap.dataOffset > this.readHead && isFinite(lmap.pan.x) && isFinite(lmap.pan.y) && isFinite(lmap.pan.z) && lmap.clampU === lmap.clampV && lmap.iLightIndex >= 0 && lmap.iLightIndex < 1000 && lmap.dataOffset < this.readTail && isPow2(lmap.clampU)) {
+                //     //     console.log(i, lmap);
+                //     //     // debugger;
+                //     // }
                 // }
+
+                // debugger;
 
 
                 // const startByte = this.readHead + (this.bytesUnread % 32);
@@ -156,7 +256,6 @@ class UModel extends UPrimitive {
                 // const buff = pkg.buffer.slice(this.readHead, this.readTail); // (@8306076 128x128)
                 // const blob = new Blob([buff], { type: "application/octet-stream" });
                 // const url = URL.createObjectURL(blob);
-
                 // window.open(url, "_blank");
 
                 // debugger;
