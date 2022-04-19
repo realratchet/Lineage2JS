@@ -184,9 +184,24 @@ class UModel extends UPrimitive {
                 debugger;
             }
 
-            debugger;
+            // debugger;
 
-            this.lightmaps.load(pkg, null);
+            if (this.objectName === "Exp_Model327") {
+
+               
+
+                // debugger;
+
+
+                try {
+                    this.lightmaps.load(pkg, null);
+                } catch (e) {
+                    debugger;
+                    throw e;
+                }
+
+                debugger;
+            }
 
             this.readHead = pkg.tell();
 

@@ -27,19 +27,18 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
     public load(pkg: UPackage, tag?: PropertyTag): this {
         const hasTag = tag !== null && tag !== undefined;
         const beginIndex = hasTag ? pkg.tell() : null;
-        const count = pkg.read(new BufferValue(BufferValue.compat32));
+        const count = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
         const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
         // debugger;
 
-        // if (count.value as number < 0)
-        //     debugger;
+        if (count < 0)
+            debugger;
 
+        this.length = count;
 
-        this.length = count.value as number;
-
-        if (count.value as number === 0) return this;
+        if (count === 0) return this;
 
         // if (this.Constructor.name === "FBSPVertex")
         //     debugger;
