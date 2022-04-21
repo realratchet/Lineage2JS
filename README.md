@@ -9,7 +9,7 @@ Private servers also a soulless mess that die a week after inception, have insan
 This is an attempt to preserve an old game me and my friends used to love by porting, or at least attempting to, it to TypeScript so that it could even potentially run in the browser. This is not only an attempt to create an open-source interoperable client to preserve the game for the future but is also a way to allow more modding capabilities than were previously even possible by the limited toolsets that came out over more than a decade of the game lifespan.
 
 ## How?
-This is the hard part. Re-creating a game client even if I had the original source code would already be a gradiose task, now imagine all I have is encrypted asset binaries. There exist some open source tools like _UEViewer_ that has greatly helped me to understand the binary layout, some things come directly from _UE4_ source code, although this is not as useful because a lot of older things are not existing in the _UE2_ version Lineage2 uses. And then there's disassembly, it's slow and painful but it does the job.
+This is the hard part. Re-creating a game client even if I had the original source code would already be a gradiose task, now imagine all I have is encrypted asset binaries. There exist some open source tools like _UEViewer_ that has greatly helped me to understand the binary layout, some things come directly from _UE4_ source code, although this is not as useful because a lot of _UE2_ things no longer exist in it. And then there's disassembly, it's slow and painful but it does the job.
 
 I'm not a vanilla purist so if there's some data that's not critical but is hiding there in the binary, I will just skip it if it's possible to do without it.
 
