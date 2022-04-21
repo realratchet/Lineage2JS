@@ -2,13 +2,13 @@
     "name": "lineage-js",
     "version": "1.0.0",
     "description": "",
-    "main": "index.js",
+    "main": "index.ts",
     "scripts": {
         "start": "node_modules/.bin/webpack serve --config configs/development.config.js --port 8080 --host 0.0.0.0",
         "build-dev": "rm -rf bin/ && node_modules/.bin/webpack --config configs/development.config.js"
     },
     "keywords": [],
-    "author": "",
+    "author": "Ratchet",
     "license": "ISC",
     "devDependencies": {
         "@babel/core": "^7.17.9",
