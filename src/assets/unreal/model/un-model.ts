@@ -128,7 +128,7 @@ class UModel extends UPrimitive {
             // debugger;
 
             if (this.objectName === "Exp_Model327") {
-                debugger;
+                // debugger;
 
                 // pkg.seek(this.readTail - 16, "set");
 

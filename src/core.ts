@@ -256,13 +256,13 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    // const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
-    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    // const mModel = decodeObject3D(decodeLibrary, iModel);
-    // objectGroup.add(mModel);
+    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    const mModel = decodeObject3D(decodeLibrary, iModel);
+    objectGroup.add(mModel);
 
 
-    debugger;
+    // debugger;
 
 
     // decodeLibrary.objects.forEach(info => {
@@ -327,14 +327,14 @@ async function startCore() {
     //     loadedObjects.splice(0, 100).forEach(actor => objectGroup.add(actor));
     // }, 1000);
 
-    // const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
-    // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
+    const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
+    const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 
-    // iStaticMeshActors.forEach(info => {
-    //     const mModel = decodeObject3D(decodeLibrary, info);
+    iStaticMeshActors.forEach(info => {
+        const mModel = decodeObject3D(decodeLibrary, info);
 
-    //     objectGroup.add(mModel);
-    // });
+        objectGroup.add(mModel);
+    });
 
     // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 

@@ -35,11 +35,11 @@ class FTIntMap extends UObject {
 
         pkg.seek(this.readTail, "set");
 
-        const buff = this.intensity.array.buffer.slice(this.intensity.array.byteOffset, this.intensity.array.byteOffset + this.intensity.array.byteLength); // (@8306076 128x128)
-        const blob = new Blob([buff], { type: "application/octet-stream" });
-        const url = URL.createObjectURL(blob);
+        // const buff = this.intensity.array.buffer.slice(this.intensity.array.byteOffset, this.intensity.array.byteOffset + this.intensity.array.byteLength); // (@8306076 128x128)
+        // const blob = new Blob([buff], { type: "application/octet-stream" });
+        // const url = URL.createObjectURL(blob);
 
-        window.open(url, "_blank");
+        // window.open(url, "_blank");
 
         return this;
     }
