@@ -2,9 +2,9 @@
 _At least it might be someday, hopefully._
 
 ## Why?
-Modern Lineage II is mostly a _mostly_ dead game full of bots and bad decisions made by NCSOFT. Even their attempts to provide a supposedly classical experience is filled with microtransactions, gameplay elements that prevent any type of punishment or even ban you from using chat until you reach a certain levels, these might have changed since the last time I played but it made me sad enough to just quit.
+Modern Lineage II is a _mostly_ dead game full of bots and bad decisions made by NCSOFT. Even their attempts to provide a supposedly classical experience is filled with microtransactions, gameplay elements that prevent any type of punishment or even ban you from using chat until you reach a certain levels, these might have changed since the last time I played but it made me sad enough to just quit.
 
-Private servers also a soulless mess that die a week after inception, have insane rates, can't decide decide if it's C6 or Interlute and generally outright refuse to run something older than Interlude.
+Private servers are also a soulless mess that die within a week after inception, have insane rates, can't decide decide if it's C6 or Interlude and generally outright refuse to run something older than Interlude.
 
 This is an attempt to preserve an old game me and my friends used to love by porting, or at least attempting to, it to TypeScript so that it could even potentially run in the browser. This is not only an attempt to create an open-source interoperable client to preserve the game for the future but is also a way to allow more modding capabilities than were previously even possible by the limited toolsets that came out over more than a decade of the game lifespan.
 
