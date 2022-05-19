@@ -17,6 +17,7 @@ import FConstructable from "../un-constructable";
 import { PropertyTag, UNP_PropertyTypes } from "../un-property";
 import FBspSection from "../bsp/un-bsp-section";
 import FMultiLightMapTexture from "./un-multi-lightmap-texture";
+import saveFile from "@client/utils/save-file";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -186,26 +187,78 @@ class UModel extends UPrimitive {
 
             // debugger;
 
+            const offset = pkg.tell();
+            const size = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+            this.lightmapCount = size;
+
+            // if (size === 0x60 || size === 0x760 || size > 0)
+            //     debugger;
+
+            pkg.seek(offset, "set");
+
             if (this.objectName === "Exp_Model327") {
 
-               
+                // if (0x73 < pkg.header.getArchiveFileVersion()) {
+                //     // debugger;
+                //     const startOffset = pkg.tell();
+                //     const readSize = this.readTail - startOffset;
+                //     // debugger;
+
+                //     function isPow2(x: number) { return (x & (x - 1)) === 0; }
+
+                //     for (let i = 0; i < readSize; i++) {
+                //         // debugger;
+                //         try {
+                //             pkg.seek(startOffset + i, "set");
+                //             const type = BufferValue.uint16;
+                //             const minSize = 64;
+                //             const data = new FPrimitiveArray(type).load(pkg, null)
+
+                //             const byteCount = data.getByteLength();
+
+                //             if (byteCount <= 0) continue;
+                //             if (byteCount <= (minSize ** 2) * type.bytes) continue;
+                //             if (!isPow2(byteCount)) continue;
+                //             if (((byteCount ** 0.5) % 1) > 0) continue;
+
+                //             console.log(i, byteCount, data.getElemCount() ** 0.5);
+
+                //             const buff = data.array.buffer.slice(data.array.byteOffset, data.array.byteOffset + data.array.byteLength);
+                //             const blob = new Blob([buff], { type: "application/octet-stream" });
+
+                //             saveFile(blob, `dump_${startOffset}_${i}.data`);
+
+                //             debugger;
+
+                //         } catch (e) {
+
+                //         }
+                //     }
+
+                //     debugger;
+                // }
 
                 // debugger;
 
 
                 try {
+                    // if ((new BufferValue(BufferValue.compat32).value as number) === 0x60) debugger;
+
+                    // debugger;
                     this.lightmaps.load(pkg, null);
+                    debugger;
                 } catch (e) {
                     debugger;
                     throw e;
                 }
 
-                debugger;
+                // debugger;
             }
 
             this.readHead = pkg.tell();
 
-            if (this.objectName === "Exp_Model327") {
+            if (false && this.objectName === "Exp_Model327") {
                 debugger;
 
                 // for (let i = this.readHead; i < this.readTail; i++) {

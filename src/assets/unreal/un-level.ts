@@ -11,10 +11,13 @@ import UTerrainInfo from "./un-terrain-info";
 import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
 import UBrush from "./un-brush";
 
+const LOAD_SUB_OBJECTS = false;
+
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
     protected url: FURL = new FURL;
     protected reachSpecs: FPrimitiveArray = new FPrimitiveArray(BufferValue.uint32);
+    public baseModelId: number;
     protected baseModel: UModel;
 
     public doLoad(pkg: UPackage, exp: UExport) {
@@ -59,12 +62,12 @@ class ULevel extends UObject {
 
         this.readHead = pkg.tell();
 
-        const baseModelId = pkg.read(compat32).value as number;
-
+        this.baseModelId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
 
-        this.promisesLoading.push(new Promise(async resolve => {
-            this.baseModel = await pkg.fetchObject<UModel>(baseModelId);
+        this.promisesLoading.push(new Promise<void>(async resolve => {
+            if (!LOAD_SUB_OBJECTS) return;
+            this.baseModel = await pkg.fetchObject<UModel>(this.baseModelId);
             resolve();
         }));
 
@@ -78,7 +81,8 @@ class ULevel extends UObject {
 
             // if (pkgName !== "UStaticMeshActor" && pkgName !== "UTerrainInfo") continue;
 
-            this.promisesLoading.push(new Promise(async resolve => {
+            this.promisesLoading.push(new Promise<void>(async resolve => {
+                if (!LOAD_SUB_OBJECTS) return;
                 const object = await pkg.fetchObject(objectId);
 
                 if (object) this.objectList.push(object);
@@ -95,7 +99,8 @@ class ULevel extends UObject {
 
             // if (pkgName !== "StaticMeshActor" && pkgName !== "TerrainInfo") continue;
 
-            this.promisesLoading.push(new Promise(async resolve => {
+            this.promisesLoading.push(new Promise<void>(async resolve => {
+                if (!LOAD_SUB_OBJECTS) return;
                 const object = await pkg.fetchObject(objectId);
 
                 if (object) this.objectList.push(object);

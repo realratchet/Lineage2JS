@@ -1,6 +1,6 @@
 const path = require("path");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
-const { SourceMapDevToolPlugin } = require("webpack");
+// const { SourceMapDevToolPlugin } = require("webpack");
 
 function createModuleConfig({ name, resolve, entry: _entry, library }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {
@@ -16,17 +16,17 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
-                    { from: "../assets", to: "assets/" }
+                    { from: "../assets-c4", to: "assets/" }
                 ],
             })
         ];
 
         if (devtool) {
-            plugins.unshift(new SourceMapDevToolPlugin({
-                filename: "[name].chunk.js.map",
-                sourceRoot: "/",
-                exclude: ["libs/", /\.(sa|sc|c)ss$/]
-            }));
+            // plugins.unshift(new SourceMapDevToolPlugin({
+            //     filename: "[name].chunk.js.map",
+            //     sourceRoot: "/",
+            //     exclude: ["libs/", /\.(sa|sc|c)ss$/]
+            // }));
         }
 
         if (bundleAnalyzer) plugins.push(new BundleAnalyzerPlugin());
@@ -115,7 +115,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             module: { rules },
             plugins,
             output,
-            devServer: { port: 8080, disableHostCheck: true },
+            devServer: { port: 8080, allowedHosts: "all" },
             devtool,
             context: __dirname
         };

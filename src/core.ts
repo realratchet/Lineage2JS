@@ -12,7 +12,7 @@ import BufferValue from "./assets/buffer-value";
 // import UExport from "./assets/unreal/un-export";
 // import UBrush from "./assets/unreal/un-brush";
 // import ULevel from "./assets/unreal/un-level";
-import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
+// import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
 import decodeTexture from "./assets/decoders/texture-decoder";
 import decodeMaterial from "./assets/decoders/material-decoder";
 import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
@@ -22,6 +22,8 @@ import decodeObject3D from "./assets/decoders/object3d-decoder";
 // import { UShader } from "./assets/unreal/un-material";
 // import ULevelInfo from "./assets/unreal/un-level-info";
 // import UEncodedFile from "./assets/unreal/un-encoded-file";
+
+type ULevel = import("./assets/unreal/un-level").ULevel;
 
 async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
     [key: string]: {
@@ -72,6 +74,7 @@ async function startCore() {
     const pkg_20_19 = assetLoader.getPackage("20_19");
     const pkg_20_20 = assetLoader.getPackage("20_20");
     const pkg_20_21 = assetLoader.getPackage("20_21"); // cruma tower
+    const pkg_21_19 = assetLoader.getPackage("21_19"); // elven village
     const pkg_20_22 = assetLoader.getPackage("20_22");
     const pkg_shader = assetLoader.getPackage("T_SHADER");
     const pkg_engine = assetLoader.getPackage("Engine");
@@ -206,6 +209,7 @@ async function startCore() {
     // debugger;
     // return;
 
+    const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 
     // const expTerrainInfo = expGroups.TerrainInfo[0];
     // const expTerrainSectors = expGroups.TerrainSector
@@ -256,7 +260,12 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    // const uModels = await Promise.all(expGroups.Model.map(model => pkgLoad.fetchObject(model.index + 1)));
+
+    // debugger;
+
+    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    debugger;
     const iModel = await uModel.getDecodeInfo(decodeLibrary);
     const mModel = decodeObject3D(decodeLibrary, iModel);
     objectGroup.add(mModel);
