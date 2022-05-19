@@ -16,7 +16,7 @@ import FConstructable from "../un-constructable";
 // import UPackage from "../un-package";
 import { PropertyTag, UNP_PropertyTypes } from "../un-property";
 import FBspSection from "../bsp/un-bsp-section";
-import FMultiLightMapTexture from "./un-multi-lightmap-texture";
+import FLightmapTexture from "./un-multi-lightmap-texture";
 import saveFile from "@client/utils/save-file";
 
 type UPackage = import("../un-package").UPackage;
@@ -62,7 +62,7 @@ class UModel extends UPrimitive {
     protected bspNodes = new FArray(FBSPNode);
     protected bspSurfs = new FArray(FBSPSurf);
     protected bspSection = new FArray(FBspSection);
-    protected lightmaps = new FArray(FMultiLightMapTexture);
+    protected lightmaps = new FArray(FLightmapTexture);
     protected numSharedSides: number;
     protected polys: UPolys = null;
     protected zones: FZoneProperties[] = [];
