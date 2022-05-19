@@ -3,35 +3,26 @@ import FArray, { FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
 import BufferValue from "@client/assets/buffer-value";
 
 class FSubStructure extends FConstructable {
+    public lightIndex: number;
+    public lightExp: import("../un-export").UExport;
+    public bitmap = new FPrimitiveArray(BufferValue.uint8);
+
+    public unkIntArr0: number[];
+    public unkInt0: number;
+    public unkIntArr1: number[];
+
     public load(pkg: UPackage, tag: PropertyTag): this {
-        const uint8 = new BufferValue(BufferValue.uint8);
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        // debugger;
+        this.lightIndex = pkg.read(compat).value as number;
+        this.lightExp = pkg.exports[this.lightIndex - 1];
 
-        this.unkIndex0 = pkg.read(compat).value as number;
-        const light = pkg.exports[this.unkIndex0 - 1];
+        this.bitmap.load(pkg, tag).getTypedArray();
 
-        // debugger;
-
-        // const offset = pkg.tell();
-        // const size = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // pkg.seek(offset, "set");
-
-        // debugger;
-
-        this.unkArr = new FPrimitiveArray(BufferValue.uint8).load(pkg, tag).getTypedArray();
-
-        // debugger;
-
-        this.unkInts0 = new Array(2).fill(1).map(_ => pkg.read(int32).value as number);
-
-        this.unk0 = pkg.read(int32).value as number;
-
-        this.unkInts1 = new Array(4).fill(1).map(_ => pkg.read(int32).value as number);
-
-        // debugger;
+        this.unkIntArr0 = new Array(2).fill(1).map(_ => pkg.read(int32).value as number);
+        this.unkInt0 = pkg.read(int32).value as number;
+        this.unkIntArr1 = new Array(4).fill(1).map(_ => pkg.read(int32).value as number);
 
         return this;
     }
@@ -58,7 +49,6 @@ class FLightmapTexture extends FConstructable {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        /* some 7 indices */
         ([
             this.lightmapTextureIndex,
             this.surfaceIndex,
@@ -72,27 +62,11 @@ class FLightmapTexture extends FConstructable {
         this.unkFloatGroup1 = new Array(16).fill(1).map(_ => pkg.read(float).value as number);
         this.unkFloatGroup2 = new Array(9).fill(1).map(_ => pkg.read(float).value as number);
 
-        debugger;
-
-        const offset = pkg.tell();
-        const size = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        pkg.seek(offset, "set");
-
-
-        const ver = pkg.header.getArchiveFileVersion();
-
-        // debugger;
-
         this.unkSubstructure.load(pkg);
 
         this.levelId = pkg.read(compat).value as number;
-        this.unk0 = pkg.read(int32).value as number;
 
-        // const ver = pkg.header.getArchiveFileVersion();
-
-        debugger;
-
-
+        this.unkIndex1 = pkg.read(int32).value as number;
 
         return this;
     }
