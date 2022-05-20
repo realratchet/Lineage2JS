@@ -79,6 +79,7 @@ class FLightmapTexture extends FConstructable {
 
 class FMultiLightmapTexture extends FConstructable {
     public textures = new FArray(FLightmapTexture);
+    public unkArray0 = new FPrimitiveArray(BufferValue.int32);
 
     public load(pkg: UPackage, tag: PropertyTag): this {
         const float = new BufferValue(BufferValue.float);
@@ -87,8 +88,9 @@ class FMultiLightmapTexture extends FConstructable {
 
 
         this.textures.load(pkg, tag);
+        this.unkArray0.load(pkg, tag);
 
-        debugger;
+        // debugger;
 
         return this;
     }

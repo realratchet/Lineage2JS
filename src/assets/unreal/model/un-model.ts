@@ -195,6 +195,8 @@ class UModel extends UPrimitive {
                     this.lightmaps.load(pkg, null);
                     this.multiLightmaps.load(pkg, null);
 
+                    this.readHead = pkg.tell();
+
                     debugger;
                 } catch (e) {
                     debugger;
