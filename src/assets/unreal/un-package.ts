@@ -80,6 +80,10 @@ class UPackage extends UEncodedFile {
         readable.read(header.importCount);
         readable.read(header.importOffset);
 
+        // Sanity check
+        console.assert(header.getArchiveFileVersion() === 123);
+        console.assert(header.getLicenseeVersion() === 23);
+
         const dbgNameCount = header.nameCount.value;
         const dbgNameOffset = header.nameOffset.value.toString(16).toUpperCase();
         const dbgExportCount = header.exportCount.value;

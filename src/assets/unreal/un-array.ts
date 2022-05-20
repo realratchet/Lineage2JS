@@ -155,7 +155,16 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
         return this;
     }
 
-    getTypedArray() { return new this.Constructor.dtype(this.array.buffer, this.array.byteOffset, this.getElemCount()); }
+    getTypedArray() {
+        try {
+            return new this.Constructor.dtype(this.array.buffer, this.array.byteOffset, this.getElemCount());
+        } catch (e) {
+            if (e.message.includes("should be a multiple of"))
+                return new this.Constructor.dtype(this.array.buffer.slice(this.array.byteOffset, this.array.byteOffset + this.getByteLength()));
+
+            throw e;
+        }
+    }
     getByteLength() { return this.array.byteLength; }
 }
 
