@@ -265,13 +265,41 @@ async function startCore() {
     // debugger;
 
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    debugger;
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
+
+    const multiLightmaps = uModel.multiLightmaps;
+
+    for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
+        const lightmaps = multiLightmaps[j].textures;
+
+        for (let i = 0, len = lightmaps.length; i < len; i++) {
+            const lightmapUuid = await lightmaps[i].staticLightmap.getDecodeInfo(decodeLibrary);
+            const lightmapInfo = decodeLibrary.materials[lightmapUuid];
+
+            // debugger;
+
+            const { texture } = decodeTexture(lightmapInfo);
+
+            // debugger;
+
+            const geometry = new PlaneBufferGeometry(1000, 1000);
+            const material = new MeshBasicMaterial({ map: texture });
+            const mesh = new Mesh(geometry, material);
+
+            mesh.position.set(16317.62354947573 + 1000 * i, -11492.261077168214 - 500 - 100 + 1000 * j, 114151.68197851974 - 500);
+
+            objectGroup.add(mesh);
+
+        }
+    }
+    //     return;
+
+    // debugger;
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
 
-    debugger;
+    // debugger;
 
 
     // decodeLibrary.objects.forEach(info => {

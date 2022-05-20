@@ -86,7 +86,6 @@ class UModel extends UPrimitive {
             pkg.seek(this.readHead, "set");
 
             const startOffset = pkg.tell();
-            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
 
             super.doLoad(pkg, exp);
 
@@ -95,14 +94,6 @@ class UModel extends UPrimitive {
             this.bspNodes.load(pkg);    // 0x58
             this.bspSurfs.load(pkg);    // 0x98
             this.vertices.load(pkg);    // 0x68
-
-            // debugger;
-
-            // if (this.objectName === "Exp_Model327") {
-            //     debugger;
-            // }
-
-            // console.assert(this.bspNodes.getElemCount() === this.bspSurfs.getElemCount());
 
             this.numSharedSides = pkg.read(int32).value as number;  // 0x124
 
@@ -125,54 +116,13 @@ class UModel extends UPrimitive {
 
             this.readHead = pkg.tell();
 
-            // if (this.bytesUnread > 100)
-            //     debugger;
-
-            const version = pkg.header.getArchiveFileVersion();
-            const licenseeVersion = pkg.header.getLicenseeVersion();
-
-            // if (this.objectName === "Exp_Model327") {
-            //     if (version < 0x5c) {
-            //         debugger
-            //     } else {
-            //         if (0x68 < version) {
-            //             debugger;
-            //         }
-
-            //         debugger;
-            //     }
-            // }
-
-            // LAB_10596ff8:
-
-            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
-
-            this.bounds.load(pkg, null);            // 0xa8
-
-            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
-
-            this.leafHulls.load(pkg, null);         // 0xb4
-
-            // console.log(`offset: ${(this.readTail - pkg.tell())}`);
-
-            // if (this.objectName === "Exp_Model327") {
-            //     debugger;
-            // }
-
-            // const unkArr = new FArray(UnknownConstruct).load(pkg);
-            this.leaves.load(pkg, null);            // 0xc0 ???
-
-            // const unk0 = pkg.read(compat32).value as number;
+            this.bounds.load(pkg, null);
+            this.leafHulls.load(pkg, null);
+            this.leaves.load(pkg, null);
 
             const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg);
 
-            // if (unkArr0.getElemCount() > 0) debugger;
-
-            // debugger;
-
             this.readHead = pkg.tell();
-
-            // debugger;
 
             const unk1 = pkg.read(int32).value as number;
             const unk2 = pkg.read(int32).value as number;
@@ -183,141 +133,12 @@ class UModel extends UPrimitive {
 
             this.readHead = pkg.tell();
 
-            if (licenseeVersion < 9) {
-                debugger;
-            }
+            this.lightmaps.load(pkg, null);
+            this.multiLightmaps.load(pkg, null);
 
             // debugger;
-
-            if (this.objectName === "Exp_Model327") {
-
-                try {
-                    this.lightmaps.load(pkg, null);
-                    this.multiLightmaps.load(pkg, null);
-
-                    this.readHead = pkg.tell();
-
-                    debugger;
-                } catch (e) {
-                    debugger;
-                    throw e;
-                }
-
-                // debugger;
-            }
 
             this.readHead = pkg.tell();
-
-            if (false && this.objectName === "Exp_Model327") {
-                debugger;
-
-                // for (let i = this.readHead; i < this.readTail; i++) {
-                //     try {
-                //         const prop = PropertyTag.from(pkg, i);
-
-                //         if (!prop.isValid()) continue;
-
-                //         console.log(prop.name, prop.structName, prop.dataSize);
-
-                //     } catch (e) { }
-                // }
-
-                debugger;
-
-                // pkg.seek(this.readTail - 16, "set");
-
-                // function isPow2(x) {
-                //     return (Math.log(x) / Math.log(2)) % 1 === 0;
-                // }
-
-                // // for (let i = this.readHead; i < this.readTail; i++) {
-                // for (let i = this.readTail - 1; this.readHead <= i; i--) {
-                //     pkg.seek(i, "set");
-                //     // 66049
-
-                //     const offset = pkg.tell();
-                //     const count = pkg.read(new BufferValue(BufferValue.compat32)).value;
-
-                //     // // const size = 66049;
-                //     const size = ((64) ** 2);
-
-                //     if (count === size || count === size * 3 || count === size * 4) {
-                //         console.log(count);
-                //         pkg.seek(offset, "set");
-
-                //         debugger;
-
-                //         const tintMap = new FPrimitiveArray(BufferValue.uint8).load(pkg);
-
-                //         const buff = tintMap.array.buffer.slice(tintMap.array.byteOffset, tintMap.array.byteOffset + tintMap.array.byteLength);
-                //         const blob = new Blob([buff], { type: "application/octet-stream" });
-                //         const url = URL.createObjectURL(blob);
-                //         window.open(url, "_blank");
-                //     }
-
-                //     // const lmap = new FLightmapIndex().load(pkg);
-                //     // if (lmap.dataOffset > this.readHead && isFinite(lmap.pan.x) && isFinite(lmap.pan.y) && isFinite(lmap.pan.z) && lmap.clampU === lmap.clampV && lmap.iLightIndex >= 0 && lmap.iLightIndex < 1000 && lmap.dataOffset < this.readTail && isPow2(lmap.clampU)) {
-                //     //     console.log(i, lmap);
-                //     //     // debugger;
-                //     // }
-                // }
-
-                // debugger;
-
-
-                // const startByte = this.readHead + (this.bytesUnread % 32);
-                // const lengthBytes = this.readTail - startByte;
-
-                // // pkg.seek(this.readHead + (this.bytesUnread % 32), "set");
-
-                // const buff = pkg.buffer.slice(this.readTail - (256 * 256 * 4) * 2, this.readTail - (256 * 256 * 2));
-                // const buff = pkg.buffer.slice(this.readHead, this.readTail); // (@8306076 128x128)
-                // const blob = new Blob([buff], { type: "application/octet-stream" });
-                // const url = URL.createObjectURL(blob);
-                // window.open(url, "_blank");
-
-                // debugger;
-
-
-                // const lights = new FArray(FNumber.forType(BufferValue.compat32) as any);
-
-                // lights.load(pkg, null);
-
-                // debugger;
-            }
-            // else debugger;
-
-
-
-            // this.lights.load(pkg, null);
-
-            // debugger;
-
-            // const unk = pkg.read(compat32).value as number;
-
-            // this.readHead = pkg.tell();
-
-
-            // if(this.zones.length > 0) {
-            //     console.log(this);
-            //     debugger;
-            // }
-
-            // // debugger;
-
-            // // console.log(exp.objectName, "->", polyExp.objectName);
-            // this.rootOutside = (pkg.read(uint8).value as number) !== 0;
-            // this.linked = (pkg.read(uint8).value as number) !== 0;
-
-            // this.readHead = pkg.tell();
-
-            // // debugger;
-
-            // this.promisesLoading.push(new Promise(async resolve => {
-            //     this.polys = await pkg.fetchObject<UPolys>(polysId);
-            //     resolve();
-            // }));
-
 
             pkg.seek(this.readHead, "set");
         } catch (e) { }
