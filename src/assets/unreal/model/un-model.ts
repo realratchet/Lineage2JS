@@ -27,34 +27,6 @@ const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 
-class FLightmap extends FConstructable {
-    public load(pkg: UPackage, tag?: PropertyTag): this {
-        const int32 = new BufferValue(BufferValue.int32);
-        const uint8 = new BufferValue(BufferValue.uint8);
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const float = new BufferValue(BufferValue.float);
-
-        this.iLightmapTexture = pkg.read(compat32).value as number;
-        this.iSurface = pkg.read(compat32).value as number;
-        this.iUnk1 = pkg.read(compat32).value as number;
-        this.offsetX = pkg.read(compat32).value as number;
-        this.offsetY = pkg.read(compat32).value as number;
-
-
-        // this.dataOffset = pkg.read(int32).value as number;
-        // this.pan = new FVector().load(pkg);
-        // this.clampU = pkg.read(compat32).value as number;
-        // this.clampV = pkg.read(compat32).value as number;
-        // this.scaleU = pkg.read(int32).value as number;
-        // this.scaleV = pkg.read(int32).value as number;
-        // this.clampU = pkg.read(compat32).value as number;
-        // this.iLightIndex = pkg.read(compat32).value as number;
-
-        return this;
-    }
-
-}
-
 
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
@@ -136,7 +108,8 @@ class UModel extends UPrimitive {
             this.lightmaps.load(pkg, null);
             this.multiLightmaps.load(pkg, null);
 
-            // debugger;
+            // if (this.lightmaps.length > 0 || this.multiLightmaps.length > 0)
+            //     debugger;
 
             this.readHead = pkg.tell();
 
@@ -166,15 +139,32 @@ class UModel extends UPrimitive {
         let totalVertices = 0;
         let dstVertices = 0;
 
+        const lightmapsBySurface = this.lightmaps.reduce((acc: FLightmapTexture[][], lm: FLightmapTexture) => {
+
+
+            if (acc[lm.surfaceIndex] === undefined)
+                acc[lm.surfaceIndex] = [];
+
+            acc[lm.surfaceIndex].push(lm);
+
+            return acc;
+        }, new Array(this.bspSurfs.length));
+
+        // debugger;
+
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+            const lmaps: FLightmapTexture[] = lightmapsBySurface[node.iSurf];
 
             await Promise.all(surf.promisesLoading);
 
             const isInvisible = surf.flags & PolyFlags_T.PF_Invisible;
 
             if (isInvisible) continue;
+
+            if (lmaps && lmaps.length > 1)
+                debugger;
 
             if (!objectMap.has(surf.material)) {
                 objectMap.set(surf.material, {
