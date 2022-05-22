@@ -1,5 +1,4 @@
 import BufferValue from "../buffer-value";
-import FUnknownStruct from "./un-unknown-struct";
 
 type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
@@ -16,9 +15,6 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
     public constructor(constr: { new(...pars: any): T } & ValidConstructables_T<T>) {
         super();
 
-        // if (constr && !isFinite((constr as any).typeSize) && constr !== FUnknownStruct)
-        //     throw new Error(`Invalid fields for FConstructable: ${constr.name}`);
-
         this.Constructor = constr;
     }
 
@@ -31,8 +27,6 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
         const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
         const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
-        // debugger;
-
         if (count < 0)
             debugger;
 
@@ -40,42 +34,11 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
         if (count === 0) return this;
 
-        // if (this.Constructor.name === "FBSPVertex")
-        //     debugger;
-
-        // if (this.Constructor.name === "FBSPVertexStream")
-        //     debugger;
-
-
         const elementSize = hasTag ? dataSize / this.length : null;
 
-        // let startOffset = pkg.tell();
-
-        // if (tag?.name === "Materials") {
-        //     const data = await pkg.read(BufferValue.allocBytes(52)).value as DataView;
-
-        //     console.log(data);
-        //     pkg.seek(-52);
-
-        //     debugger;
-        // }
-
         for (let i = 0, len = this.length; i < len; i++) {
-            // if (tag?.name === "Materials") {
-            //     let finalOffset = pkg.tell() - startOffset;
-
-            //     console.log(finalOffset);
-            //     pkg.dump(2);
-            // }
             this[i] = new this.Constructor(elementSize).load(pkg, tag);
         }
-
-        // if (tag?.name === "Materials") {
-        //     let finalOffset = pkg.tell() - startOffset;
-
-        //     console.log(finalOffset);
-        //     debugger;
-        // }
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
 
@@ -85,8 +48,6 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public load(pkg: UPackage, tag: PropertyTag): this {
-        // const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
-
         pkg.seek(4);
 
         super.load(pkg, tag);
@@ -97,7 +58,6 @@ class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
 
 class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements IConstructable {
     public static readonly typeSize: number = 16;
-    // BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T>
     protected Constructor: ValidTypes_T<T>;
 
     public getElemCount() { return this.array.byteLength / this.Constructor.bytes; }
@@ -133,9 +93,6 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
         const hasTag = tag !== null && tag !== undefined;
         const beginIndex = hasTag ? pkg.tell() : null;
         const count = pkg.read(new BufferValue(BufferValue.compat32));
-        // const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
-        // const dataSize = hasTag ? tag.dataSize - headerOffset : null;
-
         const elementCount = count.value as number;
 
         if (elementCount === 0) {
@@ -143,7 +100,6 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
             return this;
         }
 
-        // const elementSize = hasTag ? dataSize / elementCount : null;
         const byteLength = elementCount * this.Constructor.bytes;
 
         this.array = pkg.readPrimitive(pkg.tell(), byteLength);
@@ -170,8 +126,6 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
 
 class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends FPrimitiveArray<T> {
     public load(pkg: UPackage, tag: PropertyTag): this {
-        // const unkData = pkg.read(BufferValue.allocBytes(4)).value as DataView; // skip unknown
-
         pkg.seek(4);
 
         super.load(pkg, tag);

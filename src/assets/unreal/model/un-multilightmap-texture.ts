@@ -23,14 +23,10 @@ class FStaticLightmapTexture extends FConstructable {
         this.data.load(pkg, tag);
         this.dataHalfRes.load(pkg, tag);
 
-        // debugger;
-
         this.format = pkg.read(uint8).value as number;
         this.width = pkg.read(int32).value as number;
         this.height = pkg.read(int32).value as number;
         this.unkInt0 = pkg.read(int32).value as number;
-
-        // debugger;
 
         return this;
     }
@@ -64,8 +60,6 @@ class FStaticLightmapTexture extends FConstructable {
                 break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
-
-        // debugger;
 
         const wrapS = 1024, wrapT = wrapS;
 
@@ -127,8 +121,6 @@ class FMultiLightmapTexture extends FConstructable {
     public load(pkg: UPackage, tag: PropertyTag): this {
         this.textures.load(pkg, tag);
         this.iLightmaps.load(pkg, tag);
-
-        // debugger;
 
         return this;
     }
