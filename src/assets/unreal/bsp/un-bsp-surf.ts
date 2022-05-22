@@ -54,7 +54,7 @@ class FBSPSurf extends FConstructable {
 
         this.lightMapScale = pkg.read(float).value as number;
 
-        const unkInt32 = pkg.read(uint32).value as number;
+        this.unkInt32 = pkg.read(BufferValue.allocBytes(4));
 
         this.panU = this.panV = 0;
 

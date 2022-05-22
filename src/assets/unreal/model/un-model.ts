@@ -92,7 +92,7 @@ class UModel extends UPrimitive {
             this.leafHulls.load(pkg, null);
             this.leaves.load(pkg, null);
 
-            const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x=>x.value);
+            const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x => x.value);
 
             this.readHead = pkg.tell();
 
@@ -135,45 +135,23 @@ class UModel extends UPrimitive {
 
         const globalBSPTexelScale = 128;
         const materials: string[] = [];
-        const objectMap = new Map<UMaterial, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf }[] }>();
+        const objectMap = new Map<UMaterial, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo }[] }>();
 
         // Calculate the size of the vertex buffer and the base vertex index of each node.
         let totalVertices = 0;
         let dstVertices = 0;
 
-        const lightmapsBySurface = this.lightmaps.reduce((acc: FLightmapTexture[][], lm: FLightmapTexture) => {
-
-
-            if (acc[lm.surfaceIndex] === undefined)
-                acc[lm.surfaceIndex] = [];
-
-            acc[lm.surfaceIndex].push(lm);
-
-            return acc;
-        }, new Array(this.bspSurfs.length));
-
-        // debugger;
+        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
-            const lmaps: FLightmapTexture[] = lightmapsBySurface[node.iSurf];
 
             await Promise.all(surf.promisesLoading);
 
             const isInvisible = surf.flags & PolyFlags_T.PF_Invisible;
 
             if (isInvisible) continue;
-
-            if(node.iSurf !== 28) continue;
-
-            if (lmaps && lmaps.length > 1) {
-                // console.log(node.iSurf);
-                // debugger;
-            } else continue;
-
-            console.log(node);
-
             if (!objectMap.has(surf.material)) {
                 objectMap.set(surf.material, {
                     numVertices: 0,
@@ -181,17 +159,25 @@ class UModel extends UPrimitive {
                 });
             }
 
-            // debugger;
-
             const gData = objectMap.get(surf.material);
             const vcount = node.numVertices;
             // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
+
+            const lightmapIndex: FLightmapTexture = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
+            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.lightmapTextureIndex].textures[0].staticLightmap : null;
+            const light: LightmapInfo = !lightmap ? null : {
+                uuid: lightmap.uuid,
+                offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
+                size: { width: lightmapIndex.sizeX, height: lightmapIndex.sizeY }
+            };
+
+            debugger;
 
             node.iVertexIndex = gData.numVertices;
             gData.numVertices += vcount;
             totalVertices += vcount;
 
-            gData.nodes.push({ node, surf, light: this.multiLightmaps[lmaps[0].lightmapTextureIndex] });
+            gData.nodes.push({ node, surf, light });
 
             // if (lmaps && lmaps.length > 1) break;
         }
@@ -433,6 +419,18 @@ class UModel extends UPrimitive {
 
 export default UModel;
 export { UModel };
+
+type LightmapInfo = {
+    uuid: string,
+    offset: {
+        x: number;
+        y: number;
+    },
+    size: {
+        width: number;
+        height: number;
+    }
+};
 
 // function createOrthonormalBasis(inXAxis: FVector, inYAxis: FVector, inZAxis: FVector) {
 //     // Magic numbers for numerical precision.

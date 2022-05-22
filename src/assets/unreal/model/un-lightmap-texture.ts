@@ -1,5 +1,5 @@
 import FConstructable from "../un-constructable";
-import FArray, { FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
+import FArray, { FPrimitiveArray } from "../un-array";
 import BufferValue from "@client/assets/buffer-value";
 
 class FSubStructure extends FConstructable {

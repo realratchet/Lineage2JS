@@ -265,9 +265,9 @@ async function startCore() {
     // debugger;
 
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-
     const multiLightmaps = uModel.multiLightmaps;
 
+    const size = 512, geometry = new PlaneBufferGeometry(size, size);
     for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
         const lightmaps = multiLightmaps[j].textures;
 
@@ -281,13 +281,24 @@ async function startCore() {
 
             // debugger;
 
-            const geometry = new PlaneBufferGeometry(1000, 1000);
             const material = new MeshBasicMaterial({ map: texture });
             const mesh = new Mesh(geometry, material);
 
-            mesh.position.set(16317.62354947573 + 1000 * i, -11492.261077168214 - 500 - 100 + 1000 * j, 114151.68197851974 - 500);
+            mesh.position.set(16317.62354947573 + size * i, -11492.261077168214 - 500 - 100 + size * j, 114151.68197851974 - 500);
 
-            objectGroup.add(mesh);
+            const geo2 = new PlaneBufferGeometry(16, 8);
+            const mat2 = new MeshBasicMaterial({ color: 0xff00ff, wireframe: true, transparent: true, depthTest: false, depthWrite: false });
+            const msh2 = new Mesh(geo2, mat2);
+
+            const ox = 424, oy = 88;
+
+            const rx = 16317.62354947573 + size * i - size * 0.5 + 8 + ox;
+            const ry = -11492.261077168214 - 500 - 100 + size * j - size * 0.5 + 4 + size - oy;
+            const rz = 114151.68197851974 - 500;
+
+            msh2.position.set(rx, ry, rz);
+
+            objectGroup.add(mesh, msh2);
 
             // debugger;
 
@@ -296,9 +307,9 @@ async function startCore() {
     //     return;
 
     // debugger;
-    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    // const mModel = decodeObject3D(decodeLibrary, iModel);
-    // objectGroup.add(mModel);
+    const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    const mModel = decodeObject3D(decodeLibrary, iModel);
+    objectGroup.add(mModel);
 
 
     // debugger;
