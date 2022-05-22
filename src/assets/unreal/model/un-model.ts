@@ -92,7 +92,7 @@ class UModel extends UPrimitive {
             this.leafHulls.load(pkg, null);
             this.leaves.load(pkg, null);
 
-            const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg);
+            const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x=>x.value);
 
             this.readHead = pkg.tell();
 
@@ -107,6 +107,8 @@ class UModel extends UPrimitive {
 
             this.lightmaps.load(pkg, null);
             this.multiLightmaps.load(pkg, null);
+
+            // debugger;
 
             // if (this.lightmaps.length > 0 || this.multiLightmaps.length > 0)
             //     debugger;
@@ -163,8 +165,14 @@ class UModel extends UPrimitive {
 
             if (isInvisible) continue;
 
-            if (lmaps && lmaps.length > 1)
-                debugger;
+            if(node.iSurf !== 28) continue;
+
+            if (lmaps && lmaps.length > 1) {
+                // console.log(node.iSurf);
+                // debugger;
+            } else continue;
+
+            console.log(node);
 
             if (!objectMap.has(surf.material)) {
                 objectMap.set(surf.material, {
@@ -183,7 +191,9 @@ class UModel extends UPrimitive {
             gData.numVertices += vcount;
             totalVertices += vcount;
 
-            gData.nodes.push({ node, surf });
+            gData.nodes.push({ node, surf, light: this.multiLightmaps[lmaps[0].lightmapTextureIndex] });
+
+            // if (lmaps && lmaps.length > 1) break;
         }
 
         // debugger;
@@ -203,7 +213,8 @@ class UModel extends UPrimitive {
                 const startGroupOffset = groupOffset;
                 materials.push(await material.getDecodeInfo(library));
 
-                for (let { node, surf } of nodes) {
+                for (let { node, surf, light } of nodes) {
+                    // debugger;
                     const textureBase: FVector = this.points.getElem(surf.pBase);
                     const textureX: FVector = this.vectors.getElem(surf.vTextureU);
                     const textureY: FVector = this.vectors.getElem(surf.vTextureV);

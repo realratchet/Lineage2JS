@@ -6,8 +6,8 @@ import decompressDDS from "../../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
 
 class FStaticLightmapTexture extends FConstructable {
-    public unkArr0 = new FPrimitiveArrayLazy(BufferValue.uint8);
-    public unkArr1 = new FPrimitiveArrayLazy(BufferValue.uint8);
+    public data = new FPrimitiveArrayLazy(BufferValue.uint8);
+    public dataHalfRes = new FPrimitiveArrayLazy(BufferValue.uint8);
 
     public format: ETextureFormat;
     public width: number;
@@ -20,8 +20,10 @@ class FStaticLightmapTexture extends FConstructable {
         const uint8 = new BufferValue(BufferValue.uint8);
         const int32 = new BufferValue(BufferValue.int32);
 
-        this.unkArr0.load(pkg, tag);
-        this.unkArr1.load(pkg, tag);
+        this.data.load(pkg, tag);
+        this.dataHalfRes.load(pkg, tag);
+
+        // debugger;
 
         this.format = pkg.read(uint8).value as number;
         this.width = pkg.read(int32).value as number;
@@ -38,7 +40,7 @@ class FStaticLightmapTexture extends FConstructable {
 
         library.materials[this.uuid] = null;
 
-        const firstMipmap = this.unkArr0;
+        const firstMipmap = this.data;
         const mipCount = 1;
 
         let imSize = firstMipmap.getByteLength();
@@ -62,6 +64,8 @@ class FStaticLightmapTexture extends FConstructable {
                 break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
+
+        // debugger;
 
         const wrapS = 1024, wrapT = wrapS;
 
@@ -93,22 +97,21 @@ class FLightmapTexture extends FConstructable {
     public levelIndex: number;
     public levelExp: UExport;
 
-    public unkIntArr0 = new FPrimitiveArray(BufferValue.int32);
-    public unkLong0: BigInt;
+    public iLightmaps = new FPrimitiveArray(BufferValue.int32);
+    public internalTime: number[];
     public unkInt0: number;
     public staticLightmap = new FStaticLightmapTexture();
 
     public load(pkg: UPackage, tag: PropertyTag): this {
         const int32 = new BufferValue(BufferValue.int32);
-        const int64 = new BufferValue(BufferValue.int64);
         const compat = new BufferValue(BufferValue.compat32);
 
         this.levelIndex = pkg.read(compat).value as number;
         this.levelExp = pkg.exports[this.levelIndex - 1];
 
-        this.unkIntArr0.load(pkg, tag);
+        this.iLightmaps = this.iLightmaps.load(pkg, tag);
 
-        this.unkLong0 = pkg.read(int64).value as BigInt
+        this.internalTime = new Array(2).fill(1).map(_ => pkg.read(int32).value as number);
         this.unkInt0 = pkg.read(int32).value as number
 
         this.staticLightmap.load(pkg, tag);
@@ -119,11 +122,11 @@ class FLightmapTexture extends FConstructable {
 
 class FMultiLightmapTexture extends FConstructable {
     public textures = new FArray(FLightmapTexture);
-    public unkArray0 = new FPrimitiveArray(BufferValue.int32);
+    public iLightmaps = new FPrimitiveArray(BufferValue.int32);
 
     public load(pkg: UPackage, tag: PropertyTag): this {
         this.textures.load(pkg, tag);
-        this.unkArray0.load(pkg, tag);
+        this.iLightmaps.load(pkg, tag);
 
         // debugger;
 

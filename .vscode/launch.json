@@ -55,7 +55,7 @@
             "url": "http://ratchet-pc:8080",
             "webRoot": "${workspaceFolder}",
             "sourceMapPathOverrides": {
-                "webpack:///./*": "*",
+                "webpack:///../*": "${workspaceFolder}/*",
             }
         }
     ]

@@ -289,14 +289,16 @@ async function startCore() {
 
             objectGroup.add(mesh);
 
+            // debugger;
+
         }
     }
     //     return;
 
     // debugger;
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
 
     // debugger;

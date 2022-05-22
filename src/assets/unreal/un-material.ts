@@ -29,37 +29,37 @@ enum TexRotationType_T {
 };
 
 /**
-	// blending
-	if (OutputBlending == OB_Normal && !Opacity)
-		glDisable(GL_BLEND);
-	else
-		glEnable(GL_BLEND);
-	switch (OutputBlending)
-	{
-	case OB_Normal:
-		if (Opacity) glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		break;
-	case OB_Masked:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glAlphaFunc(GL_GREATER, 0.0f);
-		glEnable(GL_ALPHA_TEST);
-		break;
-	case OB_Modulate:
-		glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);	// src*dst*2
-		break;
-	case OB_Translucent:
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
-		break;
-	case OB_Invisible:
-		glBlendFunc(GL_ZERO, GL_ONE);				// dst
-		break;
-	case OB_Brighten:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE);			// src*srcA + dst
-		break;
-	case OB_Darken:
-		glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR); // dst - src
-		break;
-	}
+    // blending
+    if (OutputBlending == OB_Normal && !Opacity)
+        glDisable(GL_BLEND);
+    else
+        glEnable(GL_BLEND);
+    switch (OutputBlending)
+    {
+    case OB_Normal:
+        if (Opacity) glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        break;
+    case OB_Masked:
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glAlphaFunc(GL_GREATER, 0.0f);
+        glEnable(GL_ALPHA_TEST);
+        break;
+    case OB_Modulate:
+        glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);	// src*dst*2
+        break;
+    case OB_Translucent:
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
+        break;
+    case OB_Invisible:
+        glBlendFunc(GL_ZERO, GL_ONE);				// dst
+        break;
+    case OB_Brighten:
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);			// src*srcA + dst
+        break;
+    case OB_Darken:
+        glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR); // dst - src
+        break;
+    }
  */
 
 class UShader extends UMaterial {
@@ -76,6 +76,20 @@ class UShader extends UMaterial {
     protected isPerformingLightningOnSpecularPass: boolean = false;
     protected selfIllumination: UMaterial = null;
     protected selfIlluminationMask: UMaterial = null;
+    protected unkBytes: BufferValue<"buffer">;
+
+    protected postLoad(pkg: UPackage, exp: UExport): void {
+        // if (pkg.tell() < this.readTail)
+        //     console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes in package '${pkg.path}'`);
+
+        this.readHead = pkg.tell();
+
+        this.unkBytes = pkg.read(BufferValue.allocBytes(this.readTail - this.readHead)) as any;
+
+        this.readHead = pkg.tell();
+
+        // debugger;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -379,7 +393,7 @@ class UMaterialContainer extends UBaseMaterial {
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
-        
+
         if (this.uuid in library.materials) return this.material?.uuid || null;
 
         library.materials[this.uuid] = null;

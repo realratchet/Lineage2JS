@@ -18,7 +18,7 @@ class FSubStructure extends FConstructable {
         this.lightIndex = pkg.read(compat).value as number;
         this.lightExp = pkg.exports[this.lightIndex - 1];
 
-        this.bitmap.load(pkg, tag).getTypedArray();
+        this.bitmap = this.bitmap.load(pkg, tag).getTypedArray();
 
         this.unkIntArr0 = new Array(2).fill(1).map(_ => pkg.read(int32).value as number);
         this.unkInt0 = pkg.read(int32).value as number;
