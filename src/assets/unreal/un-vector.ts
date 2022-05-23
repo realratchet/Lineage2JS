@@ -19,6 +19,10 @@ class FVector extends FConstructable {
     public constructor(x = 0, y = 0, z = 0) {
         super();
 
+        this.set(x, y, z);
+    }
+
+    public set(x: number, y: number, z: number) {
         this.x = x;
         this.y = y;
         this.z = z;
@@ -48,6 +52,26 @@ class FVector extends FConstructable {
         );
     }
 
+    public div(other: FVector) {
+        return new FVector(
+            this.x / other.x,
+            this.y / other.y,
+            this.z / other.z
+        );
+    }
+
+    distanceTo(other: FVector) { return this.distanceToSquared(other) ** 0.5; }
+    distanceToSquared(other: FVector) {
+        const dx = this.x - other.x;
+        const dy = this.y - other.y;
+        const dz = this.z - other.z;
+
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    length() { return this.lengthSq() ** 0.5; }
+    lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
+
     /**
      * operator ^
      * @param other 
@@ -69,15 +93,15 @@ class FVector extends FConstructable {
      */
     public dot(other: FVector) { return this.x * other.x + this.y * other.y + this.z * other.z; }
 
-    toArray( array: number[] | ArrayLike<number> = [], offset = 0 ) {
+    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
-		(array as number[])[ offset ] = this.x;
-		(array as number[])[ offset + 1 ] = this.y;
-		(array as number[])[ offset + 2 ] = this.z;
+        (array as number[])[offset] = this.x;
+        (array as number[])[offset + 1] = this.y;
+        (array as number[])[offset + 2] = this.z;
 
-		return array;
+        return array;
 
-	}
+    }
 }
 
 export default FVector;

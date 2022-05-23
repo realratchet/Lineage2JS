@@ -33,6 +33,25 @@ class UTerrainSector extends UObject {
         constructor() {
             super(40);
         }
+
+        public load(pkg: UPackage, tag: PropertyTag): this {
+
+            const start = pkg.tell();
+
+            // debugger;
+
+            const compat32 = new BufferValue(BufferValue.compat32);
+
+            const d = pkg.read(compat32).value as number;
+
+            // debugger;
+
+            // pkg.read(this.buffer);
+
+            pkg.seek(start + 40, "set");
+
+            return this;
+        }
     });
 
     // likely lightning
@@ -212,6 +231,9 @@ class UTerrainSector extends UObject {
 
         this.boundingBox.load(pkg);
         this.unkArr8.load(pkg);
+
+        // if (this.unkArr8.length > 0)
+        //     debugger;
 
         this.cellNum = pkg.read(uint32).value as number;
         this.sectorWidth = pkg.read(uint32).value as number;

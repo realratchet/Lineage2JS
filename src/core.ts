@@ -12,7 +12,7 @@ import BufferValue from "./assets/buffer-value";
 // import UExport from "./assets/unreal/un-export";
 // import UBrush from "./assets/unreal/un-brush";
 // import ULevel from "./assets/unreal/un-level";
-import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
+// import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
 import decodeTexture from "./assets/decoders/texture-decoder";
 import decodeMaterial from "./assets/decoders/material-decoder";
 import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
@@ -22,6 +22,8 @@ import decodeObject3D from "./assets/decoders/object3d-decoder";
 // import { UShader } from "./assets/unreal/un-material";
 // import ULevelInfo from "./assets/unreal/un-level-info";
 // import UEncodedFile from "./assets/unreal/un-encoded-file";
+
+type ULevel = import("./assets/unreal/un-level").ULevel;
 
 async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
     [key: string]: {
@@ -72,6 +74,7 @@ async function startCore() {
     const pkg_20_19 = assetLoader.getPackage("20_19");
     const pkg_20_20 = assetLoader.getPackage("20_20");
     const pkg_20_21 = assetLoader.getPackage("20_21"); // cruma tower
+    const pkg_21_19 = assetLoader.getPackage("21_19"); // elven village
     const pkg_20_22 = assetLoader.getPackage("20_22");
     const pkg_shader = assetLoader.getPackage("T_SHADER");
     const pkg_engine = assetLoader.getPackage("Engine");
@@ -206,6 +209,7 @@ async function startCore() {
     // debugger;
     // return;
 
+    const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 
     // const expTerrainInfo = expGroups.TerrainInfo[0];
     // const expTerrainSectors = expGroups.TerrainSector
@@ -256,11 +260,68 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    const uModel = await pkgLoad.fetchObject<UModel>(7364); // base model
+    // const uModels = await Promise.all(expGroups.Model.map(model => pkgLoad.fetchObject(model.index + 1)));
+
+    // debugger;
+
+    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+
+    // const multiLightmaps = uModel.multiLightmaps;
+    // const size = 512, geometry = new PlaneBufferGeometry(size, size);
+    // for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
+    //     const lightmaps = multiLightmaps[j].textures;
+
+    //     for (let i = 0, len = lightmaps.length; i < len; i++) {
+    //         const lightmapUuid = await lightmaps[i].staticLightmap.getDecodeInfo(decodeLibrary);
+    //         const lightmapInfo = decodeLibrary.materials[lightmapUuid];
+
+    //         // debugger;
+
+    //         const { texture } = decodeTexture(lightmapInfo);
+
+    //         // debugger;
+
+    //         const material = new MeshBasicMaterial({ map: texture });
+    //         const mesh = new Mesh(geometry, material);
+
+    //         mesh.position.set(16317.62354947573 + size * i, -11492.261077168214 - 500 - 100 + size * j, 114151.68197851974 - 500);
+
+    //         const geo2 = new PlaneBufferGeometry(16, 8);
+    //         const mat2 = new MeshBasicMaterial({ color: 0xff00ff, wireframe: true, transparent: true, depthTest: false, depthWrite: false });
+    //         const msh2 = new Mesh(geo2, mat2);
+
+    //         const ox = 424, oy = 88;
+
+    //         const rx = 16317.62354947573 + size * i - size * 0.5 + 8 + ox;
+    //         const ry = -11492.261077168214 - 500 - 100 + size * j - size * 0.5 + 4 + size - oy;
+    //         const rz = 114151.68197851974 - 500;
+
+    //         msh2.position.set(rx, ry, rz);
+
+    //         objectGroup.add(mesh, msh2);
+
+    //         // debugger;
+
+    //     }
+    // }
+    //     return;
+
+    // debugger;
     const iModel = await uModel.getDecodeInfo(decodeLibrary);
     const mModel = decodeObject3D(decodeLibrary, iModel);
     objectGroup.add(mModel);
 
+
+    // uModel.bspNodes.forEach((node: FBSPNode) => {
+    //     if (node.iSurf !== 1771) return;
+
+    //     const vec = node.surfaceOrigin;
+    //     const helper = new Mesh(new SphereBufferGeometry(100, 100), new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false }))
+
+    //     helper.position.set(vec.x, vec.z, vec.y);
+
+    //     objectGroup.add(helper);
+    // });
 
     // debugger;
 

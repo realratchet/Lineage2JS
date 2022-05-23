@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Intersection, Raycaster } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Intersection, Raycaster, Box3, Vector3 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 class RenderManager {
@@ -35,6 +35,10 @@ class RenderManager {
         this.scene.add(new Mesh(new BoxBufferGeometry()));
 
 
+        // lightmapped water
+        // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
+        // this.controls.target.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
+
         // tower planes
         this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
         this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
@@ -54,6 +58,10 @@ class RenderManager {
         viewport.appendChild(this.renderer.domElement);
 
         addResizeListeners(this);
+
+        global.getSceneSize = () => {
+            return new Box3().setFromObject(this.scene.children[1]).getSize(new Vector3());
+        }
     }
 
     public toScreenSpaceCoords(point: Vector2) {

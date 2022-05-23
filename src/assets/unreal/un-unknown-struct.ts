@@ -13,7 +13,7 @@ class FUnknownStruct extends FConstructable {
         this.buffer = BufferValue.allocBytes(elementSize);
     }
 
-    public async load(pkg: UPackage, tag: PropertyTag): Promise<this> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
         pkg.read(this.buffer);
 
         return this;

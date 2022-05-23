@@ -60,7 +60,11 @@ class MeshStaticMaterial extends ShaderMaterial {
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),
             uvTransform: new Uniform(new Matrix3()),
+            uv2Transform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
+
+            lightMap: new Uniform(null),
+            lightMapIntensity: new Uniform(2.0),
 
             shDiffuse: new Uniform(null),
             shOpacity: new Uniform(null),
@@ -132,7 +136,8 @@ class MeshStaticMaterial extends ShaderMaterial {
             side: info.side,
             transparent: info.transparent,
             depthWrite: info.depthWrite,
-            visible: info.visible
+            visible: info.visible,
+            // wireframe: true
         });
 
         switch (info.blendingMode) {
@@ -145,6 +150,17 @@ class MeshStaticMaterial extends ShaderMaterial {
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
+    }
+
+    setLightmap(lightmap: MapData_T) {
+        this.uniforms.lightMap.value = lightmap.texture;
+
+        if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
+        else delete this.defines.USE_LIGHTMAP;
+
+        this.needsUpdate = true;
+
+        return this;
     }
 }
 

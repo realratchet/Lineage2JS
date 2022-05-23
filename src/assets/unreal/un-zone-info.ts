@@ -7,10 +7,6 @@ class UZoneInfo extends UAActor {
     protected isFogZone: boolean;
     protected hasTerrain: boolean;
     
-    protected hasFog: boolean;
-    protected fogEnd: number;
-    protected fogStart: number;
-    protected fogColor: FColor;
     protected useFogColorClear: boolean;
     
     protected ambientBrightness: number;
@@ -25,10 +21,6 @@ class UZoneInfo extends UAActor {
         return Object.assign({}, super.getPropertyMap(), {
             "bFogZone": "isFogZone",
             "bTerrainZone": "hasTerrain",
-            "bDistanceFog": "hasFog",
-            "DistanceFogStart": "fogStart",
-            "DistanceFogEnd": "fogEnd",
-            "DistanceFogColor": "fogColor",
             "Terrains": "terrains",
             "AmbientBrightness": "ambientBrightness",
             "AmbientVector": "ambientVector",

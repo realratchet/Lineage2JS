@@ -129,6 +129,11 @@ function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo
     });
 }
 
+function decodeLightmapped(library: IDecodeLibrary, info: ILightmappedDecodeInfo) {
+    return (decodeMaterial(library, library.materials[info["material"]]) as MeshStaticMaterial)
+        .setLightmap(fetchTexture(library.materials[info["lightmap"]] as ITextureDecodeInfo));
+}
+
 function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): MeshStaticMaterial | MeshStaticMaterial[] {
     if (!info) return null;
     switch (info.materialType) {
@@ -137,6 +142,7 @@ function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo):
         case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
         case "modifier": return decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
         case "terrain": return decodeTerrain(library, info as IMaterialTerrainDecodeInfo);
+        case "lightmapped": return decodeLightmapped(library, info as ILightmappedDecodeInfo);
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
 }

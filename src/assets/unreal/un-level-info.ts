@@ -23,8 +23,6 @@ class ULevelInfo extends UAActor {
     protected ambientVector: FVector;
     protected ambientBrightness: number;
 
-    protected distanceFogEnd: number;
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TimeSeconds": "time",
@@ -40,7 +38,6 @@ class ULevelInfo extends UAActor {
             
             "AmbientVector": "ambientVector",
             "AmbientBrightness": "ambientBrightness",
-            "DistanceFogEnd": "distanceFogEnd"
         });
     }
 

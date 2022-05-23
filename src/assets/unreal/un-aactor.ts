@@ -42,6 +42,11 @@ class UAActor extends UObject {
     public readonly scale: FVector = new FVector(1, 1, 1);
     protected swayRotationOrig: FRotator = new FRotator();
 
+    protected hasDistanceFog: boolean;
+    protected distanceFogEnd: number;
+    protected distanceFogStart: number;
+    protected distanceFogColor: FColor;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "bDynamicActorFilterState": "isDynamicActorFilterState",
@@ -56,7 +61,12 @@ class UAActor extends UObject {
             "DrawScale": "drawScale",
             "TexModifyInfo": "texModifyInfo",
             "DrawScale3D": "scale",
-            "Group": "group"
+            "Group": "group",
+
+            "bDistanceFog": "hasDistanceFog",
+            "DistanceFogEnd": "distanceFogEnd",
+            "DistanceFogStart": "distanceFogStart",
+            "DistanceFogColor": "distanceFogColor",
         });
     };
 }

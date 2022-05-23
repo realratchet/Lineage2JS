@@ -16,6 +16,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
+                    // { from: "../assets-c4", to: "assets/" }
                     { from: "../assets", to: "assets/" }
                 ],
             })
@@ -23,7 +24,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
 
         if (devtool) {
             // plugins.unshift(new SourceMapDevToolPlugin({
-            //     filename: "[name].chunk.js.map",
+            //     filename: "[name].chunk.js.map[query]",
             //     sourceRoot: "/",
             //     exclude: ["libs/", /\.(sa|sc|c)ss$/]
             // }));
