@@ -247,10 +247,10 @@ async function startCore() {
 
     // debugger;
 
-    // const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
-    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    // objectGroup.add(mLevel);
+    
+    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    objectGroup.add(mLevel);
 
     // {
     //     const pkgLoad = await assetLoader.load(pkg_20_21);
@@ -302,19 +302,19 @@ async function startCore() {
 
     // debugger;
 
-    for (let id of [
-        // 1441,
-        1770,
-        // 1802,
-        // 1804,
-        // 4284
-    ]) {
-        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-        const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
-        const mModel = decodeObject3D(decodeLibrary, iMesh);
+    // for (let id of [
+    //     // 1441,
+    //     1770,
+    //     // 1802,
+    //     // 1804,
+    //     // 4284
+    // ]) {
+    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+    //     const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
+    //     const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-        objectGroup.add(mModel);
-    }
+    //     objectGroup.add(mModel);
+    // }
 
     // for (let exp of expGroups.StaticMeshActor) {
     //     const uMesh = await new UStaticMeshActor().load(pkgLoad, exp);

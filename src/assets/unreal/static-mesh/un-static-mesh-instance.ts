@@ -9,18 +9,18 @@ class UStaticMeshIsntance extends UObject {
     protected readHeadOffset = 12;
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
-        const compat32 = new BufferValue(BufferValue.compat32);
+        // const compat32 = new BufferValue(BufferValue.compat32);
 
-        // pkg.seek(12);
+        // // pkg.seek(12);
 
-        super.doLoad(pkg, exp);
+        // super.doLoad(pkg, exp);
 
-        this.unk = pkg.read(compat32).value as number;
-        this.unkZeroes.load(pkg);
+        // this.unk = pkg.read(compat32).value as number;
+        // this.unkZeroes.load(pkg);
 
-        this.readHead = pkg.tell();
+        // this.readHead = pkg.tell();
 
-        debugger;
+        // // debugger;
 
         return this;
     }
