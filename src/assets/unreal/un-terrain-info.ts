@@ -127,37 +127,37 @@ class UTerrainInfo extends UAActor {
 
         this.readHead = pkg.tell();
 
-        try {
-            for (let i = this.readHead; i < this.readTail; i++) {
-                pkg.seek(i, "set");
+        // try {
+        //     for (let i = this.readHead; i < this.readTail; i++) {
+        //         pkg.seek(i, "set");
 
-                const prop = PropertyTag.from(pkg, i);
+        //         const prop = PropertyTag.from(pkg, i);
 
-                if (!prop.isValid()) continue;
+        //         if (!prop.isValid()) continue;
 
-                console.log(prop);
+        //         console.log(prop);
 
-                if (
-                    !prop.name.includes("LightMap") &&
-                    prop.name !== "bDynamicActorFilterState" &&
-                    prop.name !== "Level" &&
-                    prop.name !== "Region" &&
-                    prop.name !== "bSunAffect" &&
-                    prop.name !== "Tag" &&
-                    prop.name !== "PhysicsVolume" &&
-                    prop.name !== "Location" &&
-                    prop.name !== "DrawScale" &&
-                    prop.name !== "TexModifyInfo"
+        //         if (
+        //             !prop.name.includes("LightMap") &&
+        //             prop.name !== "bDynamicActorFilterState" &&
+        //             prop.name !== "Level" &&
+        //             prop.name !== "Region" &&
+        //             prop.name !== "bSunAffect" &&
+        //             prop.name !== "Tag" &&
+        //             prop.name !== "PhysicsVolume" &&
+        //             prop.name !== "Location" &&
+        //             prop.name !== "DrawScale" &&
+        //             prop.name !== "TexModifyInfo"
 
-                ) continue;
+        //         ) continue;
 
-                debugger;
-            }
-        } catch (e) {
+        //         debugger;
+        //     }
+        // } catch (e) {
 
-        }
+        // }
 
-        debugger;
+        // debugger;
 
         // this.readNamedProps(pkg);
         // debugger;
@@ -168,7 +168,7 @@ class UTerrainInfo extends UAActor {
             } catch (e) { console.error(e); }
         }
 
-        debugger;
+        // debugger;
 
         return this;
     }

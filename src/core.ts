@@ -237,10 +237,10 @@ async function startCore() {
 
     // debugger;
 
-    // const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
-    // const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
-    // const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
-    // objectGroup.add(mTerrain);
+    const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
+    const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
+    const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
+    objectGroup.add(mTerrain);
 
     // const uLevelInfo = await pkgLoad.fetchObject<UNMovableSunLight>(2);
     // await uLevelInfo.onLoaded();
