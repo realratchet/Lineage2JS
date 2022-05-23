@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Intersection, Raycaster } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Intersection, Raycaster, Box3, Vector3 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 class RenderManager {
@@ -58,6 +58,10 @@ class RenderManager {
         viewport.appendChild(this.renderer.domElement);
 
         addResizeListeners(this);
+
+        global.getSceneSize = () => {
+            return new Box3().setFromObject(this.scene.children[1]).getSize(new Vector3());
+        }
     }
 
     public toScreenSpaceCoords(point: Vector2) {

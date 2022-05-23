@@ -28,8 +28,8 @@ class FSubStructure extends FConstructable {
     }
 }
 
-class FLightmapTexture extends FConstructable {
-    public lightmapTextureIndex: number;
+class FLightmapIndex extends FConstructable {
+    public iLightmapTexture: number;
     public surfaceIndex: number;
     public unkIndex0: number;
     public offsetX: number;
@@ -42,7 +42,7 @@ class FLightmapTexture extends FConstructable {
 
     public levelId: number;
     public unkSubstructure = new FArray(FSubStructure);
-    public unkIndex1: number;
+    public unkInt0: number;
 
     public load(pkg: UPackage, tag: PropertyTag): this {
         const float = new BufferValue(BufferValue.float);
@@ -50,7 +50,7 @@ class FLightmapTexture extends FConstructable {
         const compat = new BufferValue(BufferValue.compat32);
 
         ([
-            this.lightmapTextureIndex,
+            this.iLightmapTexture,
             this.surfaceIndex,
             this.unkIndex0,
             this.offsetX,
@@ -69,26 +69,17 @@ class FLightmapTexture extends FConstructable {
         this.unkArrAsInts = new Array(9);
 
         for (let i = 0; i < 9; i++) {
-            try {
-                this.unkArrAsFloats[i] = (unkArray.value as DataView).getFloat32(i * 4, unkArray.endianess === "little");
-                this.unkArrAsInts[i] = (unkArray.value as DataView).getInt32(i * 4, unkArray.endianess === "little")
-
-            } catch (e) {
-                debugger;
-            }
+            this.unkArrAsFloats[i] = (unkArray.value as DataView).getFloat32(i * 4, unkArray.endianess === "little");
+            this.unkArrAsInts[i] = (unkArray.value as DataView).getInt32(i * 4, unkArray.endianess === "little")
         }
 
-        // this.unkFloatGroup2 = new Array(9).fill(1).map(_ => pkg.read(float).value as number);
-
-        this.unkSubstructure.load(pkg);
-
+        this.unkSubstructure.load(pkg); // these might be individual lights?
         this.levelId = pkg.read(compat).value as number;
-
-        this.unkIndex1 = pkg.read(int32).value as number;
+        this.unkInt0 = pkg.read(int32).value as number;
 
         return this;
     }
 }
 
-export default FLightmapTexture;
-export { FLightmapTexture };
+export default FLightmapIndex;
+export { FLightmapIndex };
