@@ -158,6 +158,13 @@ class UModel extends UPrimitive {
 
             if (isInvisible) continue;
 
+            const vert: FVert = this.vertices.getElem(node.iVertPool);
+            const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+
+            if (testY <= -16000 || testY >= 16000) continue;
+            if (testX <= -327680.00 || testX >= 327680.00) continue;
+            if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap : null;
 

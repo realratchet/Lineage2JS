@@ -264,52 +264,10 @@ async function startCore() {
 
     // debugger;
 
-    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-
-    // const multiLightmaps = uModel.multiLightmaps;
-    // const size = 512, geometry = new PlaneBufferGeometry(size, size);
-    // for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
-    //     const lightmaps = multiLightmaps[j].textures;
-
-    //     for (let i = 0, len = lightmaps.length; i < len; i++) {
-    //         const lightmapUuid = await lightmaps[i].staticLightmap.getDecodeInfo(decodeLibrary);
-    //         const lightmapInfo = decodeLibrary.materials[lightmapUuid];
-
-    //         // debugger;
-
-    //         const { texture } = decodeTexture(lightmapInfo);
-
-    //         // debugger;
-
-    //         const material = new MeshBasicMaterial({ map: texture });
-    //         const mesh = new Mesh(geometry, material);
-
-    //         mesh.position.set(16317.62354947573 + size * i, -11492.261077168214 - 500 - 100 + size * j, 114151.68197851974 - 500);
-
-    //         const geo2 = new PlaneBufferGeometry(16, 8);
-    //         const mat2 = new MeshBasicMaterial({ color: 0xff00ff, wireframe: true, transparent: true, depthTest: false, depthWrite: false });
-    //         const msh2 = new Mesh(geo2, mat2);
-
-    //         const ox = 424, oy = 88;
-
-    //         const rx = 16317.62354947573 + size * i - size * 0.5 + 8 + ox;
-    //         const ry = -11492.261077168214 - 500 - 100 + size * j - size * 0.5 + 4 + size - oy;
-    //         const rz = 114151.68197851974 - 500;
-
-    //         msh2.position.set(rx, ry, rz);
-
-    //         objectGroup.add(mesh, msh2);
-
-    //         // debugger;
-
-    //     }
-    // }
-    //     return;
-
-    // debugger;
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
+    // const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
 
     // uModel.bspNodes.forEach((node: FBSPNode) => {
@@ -344,11 +302,19 @@ async function startCore() {
 
     // debugger;
 
-    // for (let id of [/*1441, 1770, 1802, 1804,*/ 4284]) {
-    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-    //     const mesh = await uMesh.decodeMesh();
-    //     objectGroup.add(mesh);
-    // }
+    for (let id of [
+        // 1441,
+        1770,
+        // 1802,
+        // 1804,
+        // 4284
+    ]) {
+        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+        const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
+        const mModel = decodeObject3D(decodeLibrary, iMesh);
+
+        objectGroup.add(mModel);
+    }
 
     // for (let exp of expGroups.StaticMeshActor) {
     //     const uMesh = await new UStaticMeshActor().load(pkgLoad, exp);

@@ -1,5 +1,5 @@
 import UObject from "./un-object"
-import FArray from "./un-array";
+import FArray, { FPrimitiveArray } from "./un-array";
 import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
 import FColor from "./un-color";
@@ -337,7 +337,7 @@ class UTexPanner extends UBaseModifier {
     protected z: number;
     protected matrix: UMatrix;
     protected material: UTexture;
-    protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
+    protected internalTime = new FPrimitiveArray(BufferValue.int32);
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
