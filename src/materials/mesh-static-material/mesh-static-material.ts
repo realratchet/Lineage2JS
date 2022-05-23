@@ -60,6 +60,7 @@ class MeshStaticMaterial extends ShaderMaterial {
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),
             uvTransform: new Uniform(new Matrix3()),
+            uv2Transform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
 
             lightmap: new Uniform(null),

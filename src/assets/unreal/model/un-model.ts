@@ -269,8 +269,11 @@ class UModel extends UPrimitive {
                             normals[dstVertices * 3 + 1] = tangentZ.z;
                             normals[dstVertices * 3 + 2] = tangentZ.y;
 
-                            uvs2[dstVertices * 2 + 0] = uvs[dstVertices * 2 + 0] = texU;
-                            uvs2[dstVertices * 2 + 1] = uvs[dstVertices * 2 + 1] = texV;
+                            uvs[dstVertices * 2 + 0] = texU;
+                            uvs[dstVertices * 2 + 1] = texV;
+
+                            uvs2[dstVertices * 2 + 0] = texU;
+                            uvs2[dstVertices * 2 + 1] = texV;
 
                             // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
                             // tangentX.toArray(tangentsX, dstVertices * 3);
