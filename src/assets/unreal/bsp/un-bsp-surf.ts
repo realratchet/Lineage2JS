@@ -18,10 +18,7 @@ class FBSPSurf extends FConstructable {
     public vNormal: number;          // 4 bytes index to polygon normal.
     public vTextureU: number;        // 4 bytes texture U-vector index.
     public vTextureV: number;        // 4 bytes texture V-vector index.
-    public iLightMap: number;        // 4 bytes light mesh.
     public iBrushPoly: number;       // 4 bytes editor brush polygon index.
-    public panU: number;             // 2 bytes u-panning value.
-    public panV: number;             // 2 bytes v-panning value.
     public lightMapScale: number;
 
     public plane: FPlane = new FPlane();
@@ -45,8 +42,6 @@ class FBSPSurf extends FConstructable {
         this.vTextureU = pkg.read(compat32).value as number;
         this.vTextureV = pkg.read(compat32).value as number;
 
-        this.iLightMap = -1;
-
         this.iBrushPoly = pkg.read(compat32).value as number;
 
         const ownerId = pkg.read(compat32).value as number;
@@ -56,7 +51,6 @@ class FBSPSurf extends FConstructable {
         this.lightMapScale = pkg.read(float).value as number;
 
         this.unkInt32 = pkg.read(int32).value as number;
-        this.panU = this.panV = 0;
 
         const offset = pkg.tell();
 

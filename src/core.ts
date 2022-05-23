@@ -312,16 +312,16 @@ async function startCore() {
     objectGroup.add(mModel);
 
 
-    uModel.bspNodes.forEach((node: FBSPNode) => {
-        if (node.iSurf !== 1771) return;
+    // uModel.bspNodes.forEach((node: FBSPNode) => {
+    //     if (node.iSurf !== 1771) return;
 
-        const vec = node.surfaceOrigin;
-        const helper = new Mesh(new SphereBufferGeometry(100, 100), new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false }))
+    //     const vec = node.surfaceOrigin;
+    //     const helper = new Mesh(new SphereBufferGeometry(100, 100), new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false }))
 
-        helper.position.set(vec.x, vec.z, vec.y);
+    //     helper.position.set(vec.x, vec.z, vec.y);
 
-        objectGroup.add(helper);
-    });
+    //     objectGroup.add(helper);
+    // });
 
     // debugger;
 
@@ -388,14 +388,14 @@ async function startCore() {
     //     loadedObjects.splice(0, 100).forEach(actor => objectGroup.add(actor));
     // }, 1000);
 
-    // const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
-    // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
+    const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
+    const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 
-    // iStaticMeshActors.forEach(info => {
-    //     const mModel = decodeObject3D(decodeLibrary, info);
+    iStaticMeshActors.forEach(info => {
+        const mModel = decodeObject3D(decodeLibrary, info);
 
-    //     objectGroup.add(mModel);
-    // });
+        objectGroup.add(mModel);
+    });
 
     // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 

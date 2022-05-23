@@ -19,6 +19,10 @@ class FVector extends FConstructable {
     public constructor(x = 0, y = 0, z = 0) {
         super();
 
+        this.set(x, y, z);
+    }
+
+    public set(x: number, y: number, z: number) {
         this.x = x;
         this.y = y;
         this.z = z;
@@ -45,6 +49,14 @@ class FVector extends FConstructable {
             this.x - other.x,
             this.y - other.y,
             this.z - other.z
+        );
+    }
+
+    public div(other: FVector) {
+        return new FVector(
+            this.x / other.x,
+            this.y / other.y,
+            this.z / other.z
         );
     }
 
