@@ -144,11 +144,15 @@ class UModel extends UPrimitive {
         let totalVertices = 0;
         let dstVertices = 0;
 
-        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
+        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture, i) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+
+            // if(node.iSurf !== 699) continue;
+            // if(node.iSurf !== 234) continue;
+            if(node.iSurf !== 1771) continue; // offset: [56, 360] | size: [72, 136] | lightmap: 8 | small piece of water
 
             await Promise.all(surf.promisesLoading);
 
@@ -158,6 +162,13 @@ class UModel extends UPrimitive {
 
             const lightmapIndex: FLightmapTexture = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.lightmapTextureIndex].textures[0].staticLightmap : null;
+
+            // if (!lightmapIndex) continue;
+            // if (lightmapIndex.lightmapTextureIndex !== 8) continue;
+            // if (lightmapIndex.offsetX !== 56) continue;
+            // if (lightmapIndex.offsetY !== 360) continue;
+
+            // debugger;
 
             if (!objectMap.has(surf.material)) {
                 objectMap.set(surf.material, new Map());
@@ -176,6 +187,9 @@ class UModel extends UPrimitive {
             const vcount = node.numVertices;
             // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
 
+            // if (vcount == 7)
+            //     debugger;
+
             const light: LightmapInfo = !lightmap ? null : {
                 uuid: lightmap.uuid,
                 offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
@@ -187,6 +201,10 @@ class UModel extends UPrimitive {
             totalVertices += vcount;
 
             gData.nodes.push({ node, surf, light });
+
+            // debugger;
+            console.log(light);
+            break;
         }
 
         // debugger;
@@ -272,8 +290,13 @@ class UModel extends UPrimitive {
                             uvs[dstVertices * 2 + 0] = texU;
                             uvs[dstVertices * 2 + 1] = texV;
 
-                            uvs2[dstVertices * 2 + 0] = texU;
-                            uvs2[dstVertices * 2 + 1] = texV;
+                            const uvNormalizedX = (1 + (texU) % 1) % 1;
+                            const uvNormalizedY = (1 + (texV) % 1) % 1;
+
+                            uvs2[dstVertices * 2 + 0] = uvNormalizedX;
+                            uvs2[dstVertices * 2 + 1] = uvNormalizedY;
+
+                            // debugger;
 
                             // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
                             // tangentX.toArray(tangentsX, dstVertices * 3);
@@ -289,6 +312,8 @@ class UModel extends UPrimitive {
                     vertexOffset = vertexOffset + numVertices;
 
                     groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
+
+                    // debugger;
                 }
             }
         }

@@ -265,45 +265,45 @@ async function startCore() {
     // debugger;
 
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    const multiLightmaps = uModel.multiLightmaps;
+    
+    // const multiLightmaps = uModel.multiLightmaps;
+    // const size = 512, geometry = new PlaneBufferGeometry(size, size);
+    // for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
+    //     const lightmaps = multiLightmaps[j].textures;
 
-    const size = 512, geometry = new PlaneBufferGeometry(size, size);
-    for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
-        const lightmaps = multiLightmaps[j].textures;
+    //     for (let i = 0, len = lightmaps.length; i < len; i++) {
+    //         const lightmapUuid = await lightmaps[i].staticLightmap.getDecodeInfo(decodeLibrary);
+    //         const lightmapInfo = decodeLibrary.materials[lightmapUuid];
 
-        for (let i = 0, len = lightmaps.length; i < len; i++) {
-            const lightmapUuid = await lightmaps[i].staticLightmap.getDecodeInfo(decodeLibrary);
-            const lightmapInfo = decodeLibrary.materials[lightmapUuid];
+    //         // debugger;
 
-            // debugger;
+    //         const { texture } = decodeTexture(lightmapInfo);
 
-            const { texture } = decodeTexture(lightmapInfo);
+    //         // debugger;
 
-            // debugger;
+    //         const material = new MeshBasicMaterial({ map: texture });
+    //         const mesh = new Mesh(geometry, material);
 
-            const material = new MeshBasicMaterial({ map: texture });
-            const mesh = new Mesh(geometry, material);
+    //         mesh.position.set(16317.62354947573 + size * i, -11492.261077168214 - 500 - 100 + size * j, 114151.68197851974 - 500);
 
-            mesh.position.set(16317.62354947573 + size * i, -11492.261077168214 - 500 - 100 + size * j, 114151.68197851974 - 500);
+    //         const geo2 = new PlaneBufferGeometry(16, 8);
+    //         const mat2 = new MeshBasicMaterial({ color: 0xff00ff, wireframe: true, transparent: true, depthTest: false, depthWrite: false });
+    //         const msh2 = new Mesh(geo2, mat2);
 
-            const geo2 = new PlaneBufferGeometry(16, 8);
-            const mat2 = new MeshBasicMaterial({ color: 0xff00ff, wireframe: true, transparent: true, depthTest: false, depthWrite: false });
-            const msh2 = new Mesh(geo2, mat2);
+    //         const ox = 424, oy = 88;
 
-            const ox = 424, oy = 88;
+    //         const rx = 16317.62354947573 + size * i - size * 0.5 + 8 + ox;
+    //         const ry = -11492.261077168214 - 500 - 100 + size * j - size * 0.5 + 4 + size - oy;
+    //         const rz = 114151.68197851974 - 500;
 
-            const rx = 16317.62354947573 + size * i - size * 0.5 + 8 + ox;
-            const ry = -11492.261077168214 - 500 - 100 + size * j - size * 0.5 + 4 + size - oy;
-            const rz = 114151.68197851974 - 500;
+    //         msh2.position.set(rx, ry, rz);
 
-            msh2.position.set(rx, ry, rz);
+    //         objectGroup.add(mesh, msh2);
 
-            objectGroup.add(mesh, msh2);
+    //         // debugger;
 
-            // debugger;
-
-        }
-    }
+    //     }
+    // }
     //     return;
 
     // debugger;
