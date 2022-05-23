@@ -63,6 +63,7 @@ type UPlane = import("./un-plane").UPlane;
 type PropertyTag = import("./un-property").PropertyTag;
 type FColor = import("./un-color").FColor;
 type UMatrix = import("./un-matrix").UMatrix;
+type FMatrix = import("./un-matrix").FMatrix;
 type UPointRegion = import("./un-point-region").UPointRegion;
 type FVector = import("./un-vector").FVector;
 type FRotator = import("./un-rotator").FRotator;

@@ -1,5 +1,25 @@
+import BufferValue from "../buffer-value";
+import FConstructable from "./un-constructable";
 import UObject from "./un-object";
 import { UPlane } from "./un-plane";
+
+class FMatrix extends FConstructable {
+    elements = [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    ];
+
+    public load(pkg: UPackage): this {
+        const float = new BufferValue(BufferValue.float);
+
+        for (let i = 0; i < 16; i++)
+            this.elements[i] = pkg.read(float).value as number;
+
+        return this;
+    }
+}
 
 class UMatrix extends UObject {
     public planeX: UPlane;
@@ -61,4 +81,4 @@ class UMatrix extends UObject {
 }
 
 export default UMatrix;
-export { UMatrix };
+export { UMatrix, FMatrix };
