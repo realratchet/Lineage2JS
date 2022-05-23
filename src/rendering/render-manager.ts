@@ -40,8 +40,8 @@ class RenderManager {
         // this.controls.target.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
 
         // tower planes
-        this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
-        this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
+        // this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
+        // this.controls.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
 
         // blinking roof
         // this.camera.position.set(20532.18926265955, -11863.06999059111, 117553.43156512016);
@@ -51,8 +51,8 @@ class RenderManager {
         // this.camera.position.set(12503.665976183796, -1081.0665384462375, 116917.6052756099);
         // this.controls.target.set(11939.418010659865, -1153.9097602263002, 116384.32683375604);
 
-        // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
-        // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
+        this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
+        this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
         this.controls.update();
 
         viewport.appendChild(this.renderer.domElement);
