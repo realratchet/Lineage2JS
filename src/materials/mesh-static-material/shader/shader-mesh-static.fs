@@ -243,7 +243,7 @@ void main() {
     #ifdef USE_LIGHTMAP
         vec4 lightMapTexel= texture2D( lightMap, vUv2 );
         // reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
-        reflectedLight.indirectDiffuse += lightMapTexel.rgb * 1.0;
+        reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
     #else
         reflectedLight.indirectDiffuse += vec3( 1.0 );
     #endif
