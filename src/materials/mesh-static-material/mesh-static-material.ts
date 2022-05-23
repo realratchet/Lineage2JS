@@ -63,8 +63,8 @@ class MeshStaticMaterial extends ShaderMaterial {
             uv2Transform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
 
-            lightmap: new Uniform(null),
-            lightMapIntensity: new Uniform(10.0),
+            lightMap: new Uniform(null),
+            lightMapIntensity: new Uniform(1.0),
 
             shDiffuse: new Uniform(null),
             shOpacity: new Uniform(null),
@@ -153,7 +153,7 @@ class MeshStaticMaterial extends ShaderMaterial {
     }
 
     setLightmap(lightmap: MapData_T) {
-        this.uniforms.lightmap.value = lightmap.texture;
+        this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
         else delete this.defines.USE_LIGHTMAP;

@@ -266,4 +266,7 @@ void main() {
     // #endif
 
     // gl_FragColor = vec4(texture2D(shDiffuse.map.texture, vUv).rgb, 1.0);
+
+    gl_FragColor = vec4(vUv2, 0.0, 1.0);
+    gl_FragColor = texture2D( lightMap, vUv2 );
 }

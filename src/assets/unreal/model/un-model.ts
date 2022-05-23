@@ -111,8 +111,6 @@ class UModel extends UPrimitive {
             this.lightmaps.load(pkg, null);
             this.multiLightmaps.load(pkg, null);
 
-            // debugger;
-
             // if (this.lightmaps.length > 0 || this.multiLightmaps.length > 0)
             //     debugger;
 
@@ -152,7 +150,7 @@ class UModel extends UPrimitive {
 
             // if(node.iSurf !== 699) continue;
             // if(node.iSurf !== 234) continue;
-            if(node.iSurf !== 1771) continue; // offset: [56, 360] | size: [72, 136] | lightmap: 8 | small piece of water
+            if (node.iSurf !== 1771) continue; // offset: [56, 360] | size: [72, 136] | lightmap: 8 | small piece of water
 
             await Promise.all(surf.promisesLoading);
 
@@ -200,7 +198,7 @@ class UModel extends UPrimitive {
             gData.numVertices += vcount;
             totalVertices += vcount;
 
-            gData.nodes.push({ node, surf, light });
+            gData.nodes.push({ node, surf, light, lightmapIndex, lightmap: this.multiLightmaps[lightmapIndex.lightmapTextureIndex] });
 
             // debugger;
             console.log(light);
@@ -243,7 +241,14 @@ class UModel extends UPrimitive {
                     const { numVertices, nodes } = gSurf.get(staticLightmap);
                     const startGroupOffset = groupOffset;
 
-                    for (let { node, surf, light } of nodes) {
+                    const _uvs = [
+                        [0, 0],
+                        [1, 0],
+                        [1, 1],
+                        [0, 1]
+                    ];
+
+                    for (let { node, surf, light, lightmap, lightmapIndex } of nodes) {
                         const textureBase: FVector = this.points.getElem(surf.pBase);
                         const textureX: FVector = this.vectors.getElem(surf.vTextureU);
                         const textureY: FVector = this.vectors.getElem(surf.vTextureV);
@@ -279,8 +284,21 @@ class UModel extends UPrimitive {
                             const texU = texB.dot(textureX) / globalBSPTexelScale;
                             const texV = texB.dot(textureY) / globalBSPTexelScale;
 
+                            const [lmNormU, lmNormV] = _uvs[vertexIndex];
+
+                            // const lmNormU = 1 + this.vectors.getElem(0 + vertexIndex).dot(textureX);
+                            // const lmNormV = 1 + this.vectors.getElem(0 + vertexIndex).dot(textureY);
+
+                            const lmU = light.offset.x / 512 + lmNormU * (light.size.width / 512);
+                            const lmV = light.offset.y / 512 + lmNormV * (light.size.height / 512);
+
+                            console.log(lmNormU, lmNormV)
+
+                            // [0.109375, 0.703125, 0.140625, 0.265625]
+                            // debugger;
+
                             positions[dstVertices * 3 + 0] = position.x;
-                            positions[dstVertices * 3 + 1] = position.z;
+                            positions[dstVertices * 3 + 1] = position.z + vertexIndex * 400;
                             positions[dstVertices * 3 + 2] = position.y;
 
                             normals[dstVertices * 3 + 0] = tangentZ.x;
@@ -290,11 +308,11 @@ class UModel extends UPrimitive {
                             uvs[dstVertices * 2 + 0] = texU;
                             uvs[dstVertices * 2 + 1] = texV;
 
-                            const uvNormalizedX = (1 + (texU) % 1) % 1;
-                            const uvNormalizedY = (1 + (texV) % 1) % 1;
+                            // const uvNormalizedX = (1 + (texU) % 1) % 1;
+                            // const uvNormalizedY = (1 + (texV) % 1) % 1;
 
-                            uvs2[dstVertices * 2 + 0] = uvNormalizedX;
-                            uvs2[dstVertices * 2 + 1] = uvNormalizedY;
+                            uvs2[dstVertices * 2 + 0] = lmU;
+                            uvs2[dstVertices * 2 + 1] = lmV;
 
                             // debugger;
 
