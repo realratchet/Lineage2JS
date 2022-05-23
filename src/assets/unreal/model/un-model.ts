@@ -19,6 +19,7 @@ import FBspSection from "../bsp/un-bsp-section";
 import FLightmapTexture from "./un-lightmap-texture";
 import saveFile from "@client/utils/save-file";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
+import { generateUUID } from "three/src/math/MathUtils";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -47,6 +48,10 @@ class UModel extends UPrimitive {
     protected rootOutside: boolean;
     protected linked: boolean;
 
+    protected unkArr0: number[];
+    protected unkInt0: number;
+    protected unkInt1: number;
+
     protected doLoad(pkg: UPackage, exp: UExport): this {
         try {
             const int8 = new BufferValue(BufferValue.int8);
@@ -56,8 +61,6 @@ class UModel extends UPrimitive {
             const float = new BufferValue(BufferValue.float);
 
             pkg.seek(this.readHead, "set");
-
-            const startOffset = pkg.tell();
 
             super.doLoad(pkg, exp);
 
@@ -92,12 +95,12 @@ class UModel extends UPrimitive {
             this.leafHulls.load(pkg, null);
             this.leaves.load(pkg, null);
 
-            const unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x => x.value);
+            this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x => x.value);
 
             this.readHead = pkg.tell();
 
-            const unk1 = pkg.read(int32).value as number;
-            const unk2 = pkg.read(int32).value as number;
+            this.unkInt0 = pkg.read(int32).value as number;
+            this.unkInt1 = pkg.read(int32).value as number;
 
             this.readHead = pkg.tell();
 
@@ -135,7 +138,7 @@ class UModel extends UPrimitive {
 
         const globalBSPTexelScale = 128;
         const materials: string[] = [];
-        const objectMap = new Map<UMaterial, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo }[] }>();
+        const objectMap = new Map<UMaterial, Map<any, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo }[] }>>();
 
         // Calculate the size of the vertex buffer and the base vertex index of each node.
         let totalVertices = 0;
@@ -152,34 +155,38 @@ class UModel extends UPrimitive {
             const isInvisible = surf.flags & PolyFlags_T.PF_Invisible;
 
             if (isInvisible) continue;
-            if (!objectMap.has(surf.material)) {
-                objectMap.set(surf.material, {
-                    numVertices: 0,
-                    nodes: []
-                });
-            }
-
-            const gData = objectMap.get(surf.material);
-            const vcount = node.numVertices;
-            // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
 
             const lightmapIndex: FLightmapTexture = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.lightmapTextureIndex].textures[0].staticLightmap : null;
+
+            if (!objectMap.has(surf.material)) {
+                objectMap.set(surf.material, new Map());
+            }
+
+            const gSurf = objectMap.get(surf.material);
+
+            if (!gSurf.has(lightmap)) {
+                gSurf.set(lightmap, {
+                    numVertices: 0,
+                    nodes: []
+                });
+            };
+
+            const gData = gSurf.get(lightmap);
+            const vcount = node.numVertices;
+            // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
+
             const light: LightmapInfo = !lightmap ? null : {
                 uuid: lightmap.uuid,
                 offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
                 size: { width: lightmapIndex.sizeX, height: lightmapIndex.sizeY }
             };
 
-            debugger;
-
             node.iVertexIndex = gData.numVertices;
             gData.numVertices += vcount;
             totalVertices += vcount;
 
             gData.nodes.push({ node, surf, light });
-
-            // if (lmaps && lmaps.length > 1) break;
         }
 
         // debugger;
@@ -187,6 +194,7 @@ class UModel extends UPrimitive {
         const positions = new Float32Array(totalVertices * 3);
         const normals = new Float32Array(totalVertices * 3);
         const uvs = new Float32Array(totalVertices * 2);
+        const uvs2 = new Float32Array(totalVertices * 2);
         // const tangentsX = new Float32Array(totalVertices * 3);
         // const tangentsZ = new Float32Array(totalVertices * 4);
         const indices: number[] = [], groups: ArrGeometryGroup[] = [];
@@ -195,72 +203,90 @@ class UModel extends UPrimitive {
 
         if (totalVertices > 0) {
             for (let material of [...objectMap.keys()]) {
-                const { numVertices, nodes } = objectMap.get(material);
-                const startGroupOffset = groupOffset;
-                materials.push(await material.getDecodeInfo(library));
+                const gSurf = objectMap.get(material);
 
-                for (let { node, surf, light } of nodes) {
-                    // debugger;
-                    const textureBase: FVector = this.points.getElem(surf.pBase);
-                    const textureX: FVector = this.vectors.getElem(surf.vTextureU);
-                    const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+                for (let staticLightmap of [...gSurf.keys()]) {
+                    const materialUuid = await material.getDecodeInfo(library);
 
-                    // // Use the texture coordinates and normal to create an orthonormal tangent basis.
-                    // const tangentX: FVector = textureX;
-                    // const tangentY: FVector = textureY;
-                    const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
-                    const fcount = node.numVertices - 2;
-                    const findex = vertexOffset + node.iVertexIndex;
+                    if (staticLightmap) {
+                        const lightmappedMaterialUuid = generateUUID();
 
-                    // createOrthonormalBasis(tangentX, tangentY, tangentZ);
+                        library.materials[lightmappedMaterialUuid] = {
+                            materialType: "lightmapped",
+                            material: materialUuid,
+                            lightmap: staticLightmap?.uuid || null,
+                        } as IBaseMaterialDecodeInfo;
 
-                    for (let i = 0; i < fcount; i++) {
-                        indices.push(findex, findex + i + 2, findex + i + 1)
+                        materials.push(lightmappedMaterialUuid);
+                    } else {
+                        materials.push(materialUuid);
                     }
 
-                    groupOffset = groupOffset + fcount;
+                    const { numVertices, nodes } = gSurf.get(staticLightmap);
+                    const startGroupOffset = groupOffset;
 
-                    if (surf.flags & PolyFlags_T.PF_TwoSided) {
+                    for (let { node, surf, light } of nodes) {
+                        const textureBase: FVector = this.points.getElem(surf.pBase);
+                        const textureX: FVector = this.vectors.getElem(surf.vTextureU);
+                        const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+
+                        // // Use the texture coordinates and normal to create an orthonormal tangent basis.
+                        // const tangentX: FVector = textureX;
+                        // const tangentY: FVector = textureY;
+                        const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
+                        const fcount = node.numVertices - 2;
+                        const findex = vertexOffset + node.iVertexIndex;
+
+                        // createOrthonormalBasis(tangentX, tangentY, tangentZ);
+
                         for (let i = 0; i < fcount; i++) {
-                            indices.push(findex, findex + i + 1, findex + i + 2)
+                            indices.push(findex, findex + i + 2, findex + i + 1)
                         }
 
                         groupOffset = groupOffset + fcount;
+
+                        if (surf.flags & PolyFlags_T.PF_TwoSided) {
+                            for (let i = 0; i < fcount; i++) {
+                                indices.push(findex, findex + i + 1, findex + i + 2)
+                            }
+
+                            groupOffset = groupOffset + fcount;
+                        }
+
+                        for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
+                            const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
+                            const position: FVector = this.points.getElem(vert.pVertex);//.sub(new FVector(17728, 114176, -2852));
+
+                            const texB = position.sub(textureBase);
+                            const texU = texB.dot(textureX) / globalBSPTexelScale;
+                            const texV = texB.dot(textureY) / globalBSPTexelScale;
+
+                            positions[dstVertices * 3 + 0] = position.x;
+                            positions[dstVertices * 3 + 1] = position.z;
+                            positions[dstVertices * 3 + 2] = position.y;
+
+                            normals[dstVertices * 3 + 0] = tangentZ.x;
+                            normals[dstVertices * 3 + 1] = tangentZ.z;
+                            normals[dstVertices * 3 + 2] = tangentZ.y;
+
+                            uvs2[dstVertices * 2 + 0] = uvs[dstVertices * 2 + 0] = texU;
+                            uvs2[dstVertices * 2 + 1] = uvs[dstVertices * 2 + 1] = texV;
+
+                            // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
+                            // tangentX.toArray(tangentsX, dstVertices * 3);
+                            // tangentZ.toArray(tangentsZ, dstVertices * 4);
+
+                            // // store the sign of the determinant in TangentZ.W
+                            // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
+
+                            dstVertices++;
+                        }
                     }
 
-                    for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
-                        const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-                        const position: FVector = this.points.getElem(vert.pVertex);//.sub(new FVector(17728, 114176, -2852));
+                    vertexOffset = vertexOffset + numVertices;
 
-                        const texB = position.sub(textureBase);
-                        const texU = texB.dot(textureX) / globalBSPTexelScale;
-                        const texV = texB.dot(textureY) / globalBSPTexelScale;
-
-                        positions[dstVertices * 3 + 0] = position.x;
-                        positions[dstVertices * 3 + 1] = position.z;
-                        positions[dstVertices * 3 + 2] = position.y;
-
-                        normals[dstVertices * 3 + 0] = tangentZ.x;
-                        normals[dstVertices * 3 + 1] = tangentZ.z;
-                        normals[dstVertices * 3 + 2] = tangentZ.y;
-
-                        uvs[dstVertices * 2 + 0] = texU;
-                        uvs[dstVertices * 2 + 1] = texV;
-
-                        // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
-                        // tangentX.toArray(tangentsX, dstVertices * 3);
-                        // tangentZ.toArray(tangentsZ, dstVertices * 4);
-
-                        // // store the sign of the determinant in TangentZ.W
-                        // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
-
-                        dstVertices++;
-                    }
+                    groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
                 }
-
-                vertexOffset = vertexOffset + numVertices;
-
-                groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
             }
         }
 
@@ -273,7 +299,7 @@ class UModel extends UPrimitive {
             attributes: {
                 normals,
                 positions,
-                uvs
+                uvs: [uvs, uvs2]
             },
         };
 

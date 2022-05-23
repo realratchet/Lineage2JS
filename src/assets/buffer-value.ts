@@ -29,7 +29,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     public bytes: DataView;
 
     private type: ValidTypes_T<T>;
-    private endianess: "big" | "little" = "little";
+    public readonly endianess: "big" | "little" = "little";
 
     static allocBytes(bytes: number): BufferValue<"buffer"> {
         return new BufferValue<"buffer">(Object.freeze({ bytes: bytes, signed: true, name: "buffer" }));

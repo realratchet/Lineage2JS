@@ -62,6 +62,9 @@ class MeshStaticMaterial extends ShaderMaterial {
             uvTransform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
 
+            lightmap: new Uniform(null),
+            lightMapIntensity: new Uniform(1.0),
+
             shDiffuse: new Uniform(null),
             shOpacity: new Uniform(null),
             shSpecular: new Uniform(null),
@@ -146,6 +149,17 @@ class MeshStaticMaterial extends ShaderMaterial {
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
+    }
+
+    setLightmap(lightmap: MapData_T) {
+        this.uniforms.lightmap.value = lightmap.texture;
+
+        if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
+        else delete this.defines.USE_LIGHTMAP;
+
+        this.needsUpdate = true;
+
+        return this;
     }
 }
 

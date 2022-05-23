@@ -29,12 +29,13 @@ class FBSPSurf extends FConstructable {
     protected actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
+    protected unkInt32: number;
+
     public load(pkg: UPackage, tag?: PropertyTag): this {
-        const uint64 = new BufferValue(BufferValue.uint64);
         const float = new BufferValue(BufferValue.float);
         const uint32 = new BufferValue(BufferValue.uint32);
+        const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);
-        const uint8 = new BufferValue(BufferValue.uint8);
 
         const materialId = pkg.read(compat32).value as number;
 
@@ -54,8 +55,7 @@ class FBSPSurf extends FConstructable {
 
         this.lightMapScale = pkg.read(float).value as number;
 
-        this.unkInt32 = pkg.read(BufferValue.allocBytes(4));
-
+        this.unkInt32 = pkg.read(int32).value as number;
         this.panU = this.panV = 0;
 
         const offset = pkg.tell();
@@ -69,6 +69,7 @@ class FBSPSurf extends FConstructable {
             this.actor = await pkg.fetchObject<UBrush>(ownerId);
             resolve();
         }));
+
         pkg.seek(offset, "set");
 
         return this;

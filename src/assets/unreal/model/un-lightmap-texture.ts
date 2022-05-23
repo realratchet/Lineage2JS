@@ -37,8 +37,8 @@ class FLightmapTexture extends FConstructable {
     public sizeX: number;
     public sizeY: number;
 
-    public unkFloatGroup1: number[];
-    public unkFloatGroup2: number[];
+    public unkMatrix4: number[];
+    public unkFloatGroup0: number[];
 
     public levelId: number;
     public unkSubstructure = new FArray(FSubStructure);
@@ -59,8 +59,26 @@ class FLightmapTexture extends FConstructable {
             this.sizeY
         ] = new Array(7).fill(1).map(_ => pkg.read(compat).value as number));
 
-        this.unkFloatGroup1 = new Array(16).fill(1).map(_ => pkg.read(float).value as number);
-        this.unkFloatGroup2 = new Array(9).fill(1).map(_ => pkg.read(float).value as number);
+        // 18430.568359375 110065 -9380 27.42898941040039 0 0 0 64 0
+
+        this.unkMatrix4 = new Array(16).fill(1).map(_ => pkg.read(float).value as number);
+
+        const unkArray = pkg.read(BufferValue.allocBytes(9 * 4)) as BufferValue;
+
+        this.unkArrAsFloats = new Array(9);
+        this.unkArrAsInts = new Array(9);
+
+        for (let i = 0; i < 9; i++) {
+            try {
+                this.unkArrAsFloats[i] = (unkArray.value as DataView).getFloat32(i * 4, unkArray.endianess === "little");
+                this.unkArrAsInts[i] = (unkArray.value as DataView).getInt32(i * 4, unkArray.endianess === "little")
+
+            } catch (e) {
+                debugger;
+            }
+        }
+
+        // this.unkFloatGroup2 = new Array(9).fill(1).map(_ => pkg.read(float).value as number);
 
         this.unkSubstructure.load(pkg);
 

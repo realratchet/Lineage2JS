@@ -78,7 +78,7 @@ type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "rgba" | "dds" | "g16";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -102,6 +102,12 @@ interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
 interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "group",
     materials: string[]
+}
+
+interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "lightmapped",
+    material: string,
+    lightmap: string
 }
 
 interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -177,6 +183,7 @@ interface IGeometryDecodeInfo {
         positions?: Float32Array;
         normals?: Float32Array;
         uvs?: Float32Array | Float32Array[];
+        uvs2?: Float32Array | Float32Array[];
     };
     indices: number[] | Uint8Array | Uint16Array | Uint32Array;
     groups?: ArrGeometryGroup[],
