@@ -38,13 +38,13 @@ class UTerrainSector extends UObject {
 
             const start = pkg.tell();
 
-            debugger;
+            // debugger;
 
             const compat32 = new BufferValue(BufferValue.compat32);
 
             const d = pkg.read(compat32).value as number;
 
-            debugger;
+            // debugger;
 
             // pkg.read(this.buffer);
 
@@ -232,8 +232,8 @@ class UTerrainSector extends UObject {
         this.boundingBox.load(pkg);
         this.unkArr8.load(pkg);
 
-        if (this.unkArr8.length > 0)
-            debugger;
+        // if (this.unkArr8.length > 0)
+        //     debugger;
 
         this.cellNum = pkg.read(uint32).value as number;
         this.sectorWidth = pkg.read(uint32).value as number;
