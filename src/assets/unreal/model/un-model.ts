@@ -256,7 +256,7 @@ class UModel extends UPrimitive {
                         const fcount = node.numVertices - 2;
                         const findex = vertexOffset + node.iVertexIndex;
 
-                        debugger;
+                        // debugger;
 
                         // createOrthonormalBasis(tangentX, tangentY, tangentZ);
 
@@ -286,8 +286,8 @@ class UModel extends UPrimitive {
 
                             // const [lmNormU, lmNormV] = _uvs[vertexIndex];
 
-                            const a = position.sub(node.unkVec).dot(textureX);
-                            const b = position.sub(node.unkVec).dot(textureY);
+                            // const a = position.sub(node.unkVec).dot(textureX);
+                            // const b = position.sub(node.unkVec).dot(textureY);
 
                             debugger;
 

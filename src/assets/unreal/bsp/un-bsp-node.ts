@@ -42,7 +42,7 @@ class FBSPNode extends FConstructable {
     public unkInt0: number;                  // 4 bytes, static between same surface nodes
     public unkInt1: number;                  // 4 bytes, change between same surface nodes
 
-    public unkVec = new FVector();           // 12 bytes, some floating vector
+    public surfaceOrigin = new FVector();                 // 12 bytes, origin of the bsp surface node
     public unkValues = BufferValue.allocBytes(4 + 8 + 8); // 20 bytes, only first 4 change others usually 0?
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
@@ -66,7 +66,7 @@ class FBSPNode extends FConstructable {
         this.iCollisionBound = pkg.read(compat32).value as number;
         this.iRenderBound = pkg.read(compat32).value as number;
 
-        this.unkVec.load(pkg);
+        this.surfaceOrigin.load(pkg);
         pkg.read(this.unkValues);
 
         // const unkId = pkg.read(uint32).value as number;

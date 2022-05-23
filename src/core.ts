@@ -265,7 +265,7 @@ async function startCore() {
     // debugger;
 
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    
+
     // const multiLightmaps = uModel.multiLightmaps;
     // const size = 512, geometry = new PlaneBufferGeometry(size, size);
     // for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
@@ -311,6 +311,17 @@ async function startCore() {
     const mModel = decodeObject3D(decodeLibrary, iModel);
     objectGroup.add(mModel);
 
+
+    uModel.bspNodes.forEach((node: FBSPNode) => {
+        if (node.iSurf !== 1771) return;
+
+        const vec = node.surfaceOrigin;
+        const helper = new Mesh(new SphereBufferGeometry(100, 100), new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false }))
+
+        helper.position.set(vec.x, vec.z, vec.y);
+
+        objectGroup.add(helper);
+    });
 
     // debugger;
 
