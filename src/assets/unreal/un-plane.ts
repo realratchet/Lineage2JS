@@ -12,6 +12,16 @@ class FPlane extends FConstructable {
     public z: number;
     public w: number;
 
+    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
+
+        (array as number[])[offset] = this.x;
+        (array as number[])[offset + 1] = this.y;
+        (array as number[])[offset + 2] = this.z;
+        (array as number[])[offset + 3] = this.w;
+
+        return array;
+    }
+
     public load(pkg: UPackage): this {
         const f = new BufferValue(BufferValue.float);
 

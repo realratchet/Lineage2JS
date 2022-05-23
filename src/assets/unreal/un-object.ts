@@ -57,7 +57,7 @@ abstract class UObject {
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
         if (pkg.tell() < this.readTail && (this.readTail - pkg.tell()) > 17 && this.constructor.name !== "USound" && this.constructor.name !== "UStaticMesh")
-            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes in package '${pkg.path}'`);
+            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes (${((this.readTail - pkg.tell()) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();
     }
@@ -156,7 +156,7 @@ abstract class UObject {
         pkg.seek(offEnd, "set");
 
         if (pkg.tell() < offEnd)
-            console.warn(`Unread '${tag.name}' ${offEnd - pkg.tell()} bytes for package '${pkg.path}'`);
+            console.warn(`Unread '${tag.name}' ${offEnd - pkg.tell()} bytes (${((offEnd - pkg.tell()) / 1024).toFixed(2)} kB) for package '${pkg.path}'`);
     }
 
     protected readArray(pkg: UPackage, tag: PropertyTag) {
@@ -213,7 +213,12 @@ abstract class UObject {
     }
 
     public async onLoaded(): Promise<void> {
-        await Promise.all(this.promisesLoading);
+        try {
+            await Promise.all(this.promisesLoading);
+        } catch (e) {
+            debugger;
+            throw e;
+        }
     }
 
     protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }

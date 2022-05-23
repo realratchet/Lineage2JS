@@ -100,7 +100,30 @@ class FVector extends FConstructable {
         (array as number[])[offset + 2] = this.z;
 
         return array;
+    }
 
+    normalized() {
+        const len = this.length();
+
+        return new FVector(
+            this.x / len,
+            this.y / len,
+            this.z / len
+        );
+    }
+
+    applyMatrix4(m: FMatrix) {
+
+        const x = this.x, y = this.y, z = this.z;
+        const e = m.elements;
+
+        const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+
+        const nx = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w;
+        const ny = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
+        const nz = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
+
+        return new FVector(nx, ny, nz);
     }
 }
 

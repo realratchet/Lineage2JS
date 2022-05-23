@@ -3,13 +3,8 @@ import UPackage from "./un-package";
 import UExport from "./un-export";
 import BufferValue from "../buffer-value";
 import FURL from "./un-url";
-import FArray, { FPrimitiveArray } from "./un-array";
-import FNumber from "./un-number";
-// import { Group } from "three";
+import { FPrimitiveArray } from "./un-array";
 import UModel from "./model/un-model";
-import UTerrainInfo from "./un-terrain-info";
-import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
-import UBrush from "./un-brush";
 
 const LOAD_SUB_OBJECTS = false;
 
@@ -66,7 +61,10 @@ class ULevel extends UObject {
         this.readHead = pkg.tell();
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (!LOAD_SUB_OBJECTS) return;
+            if (!LOAD_SUB_OBJECTS) {
+                resolve();
+                return;
+            }
             this.baseModel = await pkg.fetchObject<UModel>(this.baseModelId);
             resolve();
         }));
@@ -82,7 +80,10 @@ class ULevel extends UObject {
             // if (pkgName !== "UStaticMeshActor" && pkgName !== "UTerrainInfo") continue;
 
             this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) return;
+                if (!LOAD_SUB_OBJECTS) {
+                    resolve();
+                    return;
+                }
                 const object = await pkg.fetchObject(objectId);
 
                 if (object) this.objectList.push(object);
@@ -100,7 +101,10 @@ class ULevel extends UObject {
             // if (pkgName !== "StaticMeshActor" && pkgName !== "TerrainInfo") continue;
 
             this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) return;
+                if (!LOAD_SUB_OBJECTS) {
+                    resolve();
+                    return;
+                }
                 const object = await pkg.fetchObject(objectId);
 
                 if (object) this.objectList.push(object);
@@ -125,14 +129,15 @@ class ULevel extends UObject {
             return accum;
         }, {} as { [key: string]: UObject[] });
 
+        debugger;
+
         return {
             type: "Level",
             name: this.url.map,
             children: (await Promise.all([
                 this.baseModel.getDecodeInfo(library),
-                "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-                "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-                // "ULight" in groupedObjectList ? Promise.all(groupedObjectList["ULight"].map((exp: ULight) => exp.getDecodeInfo(library))) : Promise.resolve([])
+                // "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+                // "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
             ])).flat()
         };
     }

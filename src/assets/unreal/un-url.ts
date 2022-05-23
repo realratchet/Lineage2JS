@@ -2,7 +2,7 @@ import FConstructable from "./un-constructable";
 import UPackage from "./un-package";
 import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
-import FArray from "./un-array";
+import FArray, { FPrimitiveArray } from "./un-array";
 import FNumber from "./un-number";
 
 class FURL extends FConstructable {
@@ -11,7 +11,7 @@ class FURL extends FConstructable {
     public port: number = 0;
     public map: string;
     public portal: string;
-    public op: FArray = new FArray(FNumber.forType(BufferValue.uint32) as any);
+    public op = new FPrimitiveArray(BufferValue.uint32);
     public isValid: boolean = false;
 
     public load(pkg: UPackage, tag?: PropertyTag): this {

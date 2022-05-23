@@ -2,11 +2,9 @@ import UExport from "../un-export";
 import UPackage from "../un-package";
 import UAActor from "../un-aactor";
 import UStaticMesh from "./un-static-mesh";
-// import { Vector3, Mesh, Group } from "three";
 import UStaticMeshIsntance from "./un-static-mesh-instance";
-import FArray, { FPrimitiveArray } from "../un-array";
+import { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
-import FNumber from "../un-number";
 import USound from "../un-sound";
 
 class UStaticMeshActor extends UAActor {
