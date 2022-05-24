@@ -45,6 +45,9 @@ class UStaticMesh extends UPrimitive {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
+
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
         const int8 = new BufferValue(BufferValue.int8);
@@ -63,7 +66,7 @@ class UStaticMesh extends UPrimitive {
         this.indexStream.load(pkg, null);     // 4606 E500 E400 E000 DE00 DF00 E000 E100
         this.edgesStream.load(pkg, null);     // 7409 E500 E400 E400 E000 E000 E500 DE00
 
-        debugger;
+        // debugger;
 
         // pkg.seek(1);
 
@@ -380,6 +383,8 @@ class UStaticMesh extends UPrimitive {
         /*                                          // 1F1A BFAC AB81 C300 0000 0000 0080 3F00 */
         /*                                          // 0000 0000 000C 426F 1F1A BF00 0000 0029 */
         this.readHead = pkg.tell();
+
+        // debugger;
 
         // debugger;
 

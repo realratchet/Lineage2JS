@@ -19,20 +19,20 @@ class UStaticMeshIsntance extends UObject {
 
         this.colorStream.load(pkg, null);
 
-        debugger;
-        // this.colorStream.load(pkg, null);
+        // debugger;
+        // // this.colorStream.load(pkg, null);
+
+        // // debugger;
+
+        // const unkArr0 = new FPrimitiveArray(BufferValue.int32).load(pkg, null).getTypedArray();
+        // const unkArr1 = new FPrimitiveArray(BufferValue.int32).load(pkg, null).getTypedArray();
+
+        // const unkIndex0 = pkg.read(compat32).value as number;
+        // const unkIndex1 = pkg.read(compat32).value as number;
+
+        // this.readHead = pkg.tell();
 
         // debugger;
-
-        const unkArr0 = new FPrimitiveArray(BufferValue.int32).load(pkg, null).getTypedArray();
-        const unkArr1 = new FPrimitiveArray(BufferValue.int32).load(pkg, null).getTypedArray();
-
-        const unkIndex0 = pkg.read(compat32).value as number;
-        const unkIndex1 = pkg.read(compat32).value as number;
-
-        this.readHead = pkg.tell();
-
-        debugger;
 
         // this.unk = pkg.read(compat32).value as number;
         // this.unkZeroes.load(pkg);

@@ -49,68 +49,74 @@ class UModel extends UPrimitive {
     protected unkInt1: number;
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
-        try {
-            const int8 = new BufferValue(BufferValue.int8);
-            const int32 = new BufferValue(BufferValue.int32);
-            const uint8 = new BufferValue(BufferValue.uint8);
-            const compat32 = new BufferValue(BufferValue.compat32);
-            const float = new BufferValue(BufferValue.float);
 
-            pkg.seek(this.readHead, "set");
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-            super.doLoad(pkg, exp);
+        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-            this.vectors.load(pkg);     // 0x78
-            this.points.load(pkg);      // 0x88
-            this.bspNodes.load(pkg);    // 0x58
-            this.bspSurfs.load(pkg);    // 0x98
-            this.vertices.load(pkg);    // 0x68
+        const int8 = new BufferValue(BufferValue.int8);
+        const int32 = new BufferValue(BufferValue.int32);
+        const uint8 = new BufferValue(BufferValue.uint8);
+        const compat32 = new BufferValue(BufferValue.compat32);
+        const float = new BufferValue(BufferValue.float);
 
-            this.numSharedSides = pkg.read(int32).value as number;  // 0x124
+        pkg.seek(this.readHead, "set");
 
-            const numZones = pkg.read(int32).value as number;       // 0x128
+        super.doLoad(pkg, exp);
 
-            console.assert(numZones <= MAX_ZONES);
+        this.vectors.load(pkg);     // 0x78
+        this.points.load(pkg);      // 0x88
+        this.bspNodes.load(pkg);    // 0x58
+        this.bspSurfs.load(pkg);    // 0x98
+        this.vertices.load(pkg);    // 0x68
 
-            this.zones = new Array(numZones);
+        this.numSharedSides = pkg.read(int32).value as number;  // 0x124
 
-            for (let i = 0; i < numZones; i++)
-                this.zones[i] = new FZoneProperties().load(pkg);
+        const numZones = pkg.read(int32).value as number;       // 0x128
 
-            this.readHead = pkg.tell();
-            const polysId = pkg.read(compat32).value as number;
+        console.assert(numZones <= MAX_ZONES);
 
-            const polyExp = pkg.exports[polysId - 1];
-            const className = pkg.getPackageName(polyExp.idClass.value as number)
+        this.zones = new Array(numZones);
 
-            console.assert(className === "Polys");
+        for (let i = 0; i < numZones; i++)
+            this.zones[i] = new FZoneProperties().load(pkg);
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
+        const polysId = pkg.read(compat32).value as number;
 
-            this.bounds.load(pkg, null);
-            this.leafHulls.load(pkg, null);
-            this.leaves.load(pkg, null);
+        const polyExp = pkg.exports[polysId - 1];
+        const className = pkg.getPackageName(polyExp.idClass.value as number)
 
-            this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
+        console.assert(className === "Polys");
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-            this.unkInt0 = pkg.read(int32).value as number;
-            this.unkInt1 = pkg.read(int32).value as number;
+        this.bounds.load(pkg, null);
+        this.leafHulls.load(pkg, null);
+        this.leaves.load(pkg, null);
 
-            this.readHead = pkg.tell();
+        this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
 
-            this.bspSection.load(pkg, null);
+        this.readHead = pkg.tell();
 
-            this.readHead = pkg.tell();
+        this.unkInt0 = pkg.read(int32).value as number;
+        this.unkInt1 = pkg.read(int32).value as number;
 
-            this.lightmaps.load(pkg, null);
-            this.multiLightmaps.load(pkg, null);
+        this.readHead = pkg.tell();
 
-            this.readHead = pkg.tell();
+        this.bspSection.load(pkg, null);
 
-            pkg.seek(this.readHead, "set");
-        } catch (e) { }
+        this.readHead = pkg.tell();
+
+        this.lightmaps.load(pkg, null);
+        this.multiLightmaps.load(pkg, null);
+
+        this.readHead = pkg.tell();
+
+        pkg.seek(this.readHead, "set");
+
         return this;
     }
 
