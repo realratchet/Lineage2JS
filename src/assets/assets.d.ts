@@ -63,5 +63,6 @@ type ValidConstructables_T<T> = typeof import("./unreal/un-color").FColor
     | typeof import("./unreal/un-unknown-struct").FUnknownStruct
     | typeof import("./unreal/bsp/un-bsp-node").FBSPNode
     | typeof import("./unreal/bsp/un-bsp-surf").FBSPSurf
+    | typeof import("./unreal/bsp/un-bsp-section").FBSPSection
     | typeof import("./unreal/model/un-vert").FVert
     | FNumberExt<T>;

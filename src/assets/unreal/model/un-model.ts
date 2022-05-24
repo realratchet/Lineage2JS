@@ -12,7 +12,7 @@ import FBox from "../un-box";
 import FNumber from "../un-number";
 import { FLight } from "../un-light";
 import FLeaf from "../un-leaf";
-import FBspSection from "../bsp/un-bsp-section";
+import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
@@ -31,7 +31,7 @@ class UModel extends UPrimitive {
     protected vertices = new FArray(FVert);
     protected bspNodes = new FArray(FBSPNode);
     protected bspSurfs = new FArray(FBSPSurf);
-    protected bspSection = new FArray(FBspSection);
+    protected bspSection = new FArray(FBSPSection);
     protected lightmaps = new FArray(FLightmapIndex);
     protected multiLightmaps = new FArray(FMultiLightmapTexture);
     protected numSharedSides: number;
@@ -40,7 +40,7 @@ class UModel extends UPrimitive {
     protected bounds = new FArray(FBox);
     protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
-    protected lights = new FArray(FLight);
+    // protected lights = new FArray(FLight);
     protected rootOutside: boolean;
     protected linked: boolean;
 
@@ -91,7 +91,7 @@ class UModel extends UPrimitive {
             this.leafHulls.load(pkg, null);
             this.leaves.load(pkg, null);
 
-            this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x => x.value);
+            this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
 
             this.readHead = pkg.tell();
 

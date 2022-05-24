@@ -63,6 +63,8 @@ class UStaticMesh extends UPrimitive {
         this.indexStream.load(pkg, null);     // 4606 E500 E400 E000 DE00 DF00 E000 E100
         this.edgesStream.load(pkg, null);     // 7409 E500 E400 E400 E000 E000 E500 DE00
 
+        debugger;
+
         // pkg.seek(1);
 
         // const unk = pkg.read(compat32).value as number;

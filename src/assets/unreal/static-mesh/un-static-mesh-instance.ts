@@ -2,25 +2,44 @@ import UObject from "../un-object";
 import BufferValue from "../../buffer-value";
 import FArray, { FPrimitiveArray } from "../un-array";
 import FNumber from "../un-number";
+import FRawColorStream from "../un-raw-color-stream";
 
 class UStaticMeshIsntance extends UObject {
     protected unk: number; // unk compat
     protected unkZeroes = new FPrimitiveArray(BufferValue.uint32);
-    protected readHeadOffset = 12;
+    protected readHeadOffset = 0;
+    protected colorStream = new FRawColorStream();
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
         const compat32 = new BufferValue(BufferValue.compat32);
 
-        // pkg.seek(12);
+        // // pkg.seek(12);
 
         super.doLoad(pkg, exp);
 
-        this.unk = pkg.read(compat32).value as number;
-        this.unkZeroes.load(pkg);
+        this.colorStream.load(pkg, null);
+
+        debugger;
+        // this.colorStream.load(pkg, null);
+
+        // debugger;
+
+        const unkArr0 = new FPrimitiveArray(BufferValue.int32).load(pkg, null).getTypedArray();
+        const unkArr1 = new FPrimitiveArray(BufferValue.int32).load(pkg, null).getTypedArray();
+
+        const unkIndex0 = pkg.read(compat32).value as number;
+        const unkIndex1 = pkg.read(compat32).value as number;
 
         this.readHead = pkg.tell();
 
         debugger;
+
+        // this.unk = pkg.read(compat32).value as number;
+        // this.unkZeroes.load(pkg);
+
+        // this.readHead = pkg.tell();
+
+        // debugger;
 
         return this;
     }

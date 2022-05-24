@@ -2,7 +2,7 @@ import FConstructable from "../un-constructable";
 import FArray from "../un-array";
 import BufferValue from "@client/assets/buffer-value";
 
-class FBspSection extends FConstructable {
+class FBSPSection extends FConstructable {
     public load(pkg: UPackage, tag: PropertyTag): this {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
@@ -47,5 +47,5 @@ class FBSPVertex extends FConstructable {
     }
 }
 
-export default FBspSection;
-export { FBspSection };
+export default FBSPSection;
+export { FBSPSection };
