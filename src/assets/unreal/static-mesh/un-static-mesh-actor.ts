@@ -2,14 +2,14 @@ import UExport from "../un-export";
 import UPackage from "../un-package";
 import UAActor from "../un-aactor";
 import UStaticMesh from "./un-static-mesh";
-import UStaticMeshIsntance from "./un-static-mesh-instance";
+import UStaticMeshInstance from "./un-static-mesh-instance";
 import { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
 import USound from "../un-sound";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
-    protected instance: UStaticMeshIsntance;
+    protected instance: UStaticMeshInstance;
     protected isRangeIgnored: boolean;
     protected colLocation: FVector;
     protected touching: FPrimitiveArray = new FPrimitiveArray(BufferValue.int16);

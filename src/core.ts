@@ -7,7 +7,7 @@ import assetList from "./assets/asset-list";
 // import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper } from "three";
 import BufferValue from "./assets/buffer-value";
-// import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
+// import UStaticMeshInstance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 // import UModel from "./assets/unreal/model/un-model";
 // import UExport from "./assets/unreal/un-export";
 // import UBrush from "./assets/unreal/un-brush";
@@ -248,9 +248,9 @@ async function startCore() {
     // debugger;
 
 
-    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    objectGroup.add(mLevel);
+    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    // objectGroup.add(mLevel);
 
     // {
     //     const pkgLoad = await assetLoader.load(pkg_20_21);
@@ -302,19 +302,19 @@ async function startCore() {
 
     // debugger;
 
-    // for (let id of [
-    //     // 1441,
-    //     1770,
-    //     // 1802,
-    //     // 1804,
-    //     // 4284
-    // ]) {
-    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-    //     const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
-    //     const mModel = decodeObject3D(decodeLibrary, iMesh);
+    for (let id of [
+        // 1441,
+        1770,
+        // 1802,
+        // 1804,
+        // 4284
+    ]) {
+        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+        const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
+        const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-    //     objectGroup.add(mModel);
-    // }
+        objectGroup.add(mModel);
+    }
 
     // for (let exp of expGroups.StaticMeshActor) {
     //     const uMesh = await new UStaticMeshActor().load(pkgLoad, exp);
