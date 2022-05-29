@@ -68,6 +68,8 @@ class UStaticMeshActor extends UAActor {
             children: [await this.mesh.getDecodeInfo(library)]
         } as IBaseObjectDecodeInfo;
 
+        debugger;
+
         return info;
     }
 

@@ -50,6 +50,8 @@ class UStaticMeshInstance extends UObject {
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
+        // debugger;
+
         return this;
     }
 }

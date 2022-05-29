@@ -8,10 +8,10 @@ class FStaticMeshUVStream extends FConstructable {
     public f10: number;
     public f1C: number;
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage): this {
         const i = new BufferValue(BufferValue.int32);
 
-        this.data.load(pkg, tag);
+        this.data.load(pkg);
         
         this.f10 = pkg.read(i).value as number;
         this.f1C = pkg.read(i).value as number;
@@ -26,7 +26,7 @@ class FMeshUVFloat extends FConstructable {
     public u: number;
     public v: number;
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage): this {
         const f = new BufferValue(BufferValue.float);
 
         this.u = pkg.read(f).value as number;

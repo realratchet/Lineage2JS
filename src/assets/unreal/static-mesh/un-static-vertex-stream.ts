@@ -9,7 +9,7 @@ class FStaticMeshVertexStream extends FConstructable {
     public readonly vert: FArray<FStaticMeshVertex> = new FArray(FStaticMeshVertex);
     public revision: number;
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage): this {
         this.vert.load(pkg, null);
 
         this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
@@ -24,7 +24,7 @@ class FStaticMeshVertex extends FConstructable {
     public readonly position = new FVector();
     public readonly normal = new FVector();
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage): this {
         const f = new BufferValue(BufferValue.float);
 
         [this.position, this.normal].forEach(vec => {

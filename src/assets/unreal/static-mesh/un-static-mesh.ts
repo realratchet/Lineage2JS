@@ -11,6 +11,8 @@ import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-sta
 import FVector from "../un-vector";
 import FConstructable from "../un-constructable";
 
+const triggerDebuggerOnUnsupported = false;
+
 class FStaticMeshTriangleSub extends FConstructable {
     public f0: number[];
     public f1: number[];
@@ -150,11 +152,13 @@ class UStaticMesh extends UPrimitive {
 
         if (verLicense < 0x11) {
             console.warn("Not supported yet");
-            debugger;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
         } else {
             if (verArchive < 0x3E) {
                 console.warn("Not supported yet");
-                debugger;
+                if (triggerDebuggerOnUnsupported) debugger;
+                return;
             } else {
                 this.collisionFaces.load(pkg);
                 this.collisionNodes.load(pkg);
@@ -165,7 +169,8 @@ class UStaticMesh extends UPrimitive {
 
         if (verArchive < 0x72) {
             console.warn("Not supported yet");
-            debugger;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
         }
 
         if (0x5 < verLicense) {
@@ -192,25 +197,30 @@ class UStaticMesh extends UPrimitive {
 
         if (verArchive < 0X5C) {
             console.warn("Not supported yet");
-            debugger;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
         }
 
         if (0x4E < verArchive) {
             if (verArchive < 0x61) {
                 console.warn("Not supported yet");
-                debugger;
+                if (triggerDebuggerOnUnsupported) debugger;
+                return;
             } else this.staticMeshTris.load(pkg);
         }
 
         if (verArchive < 0x51) {
             console.warn("Not supported yet");
-            debugger;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
         } else this.unkInt0 = pkg.read(int32).value as number;
 
         if (99 < verArchive) this.unkIndex1 = pkg.read(compat32).value as number;
         if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value as number;
 
         this.readHead = pkg.tell();
+
+        console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
@@ -226,6 +236,10 @@ class UStaticMesh extends UPrimitive {
         library.materials[this.uuid] = null;
 
         await this.onLoaded();
+
+        // 43 arrays of 30 uint8 values that are likely colors
+        // 43x30 -> 1290
+        // 43x10 -> 430
 
         const countVerts = this.vertexStream.vert.getElemCount();
         const countFaces = this.indexStream.indices.getElemCount();
@@ -271,6 +285,8 @@ class UStaticMesh extends UPrimitive {
         };
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        debugger;
 
         return {
             type: "StaticMesh",

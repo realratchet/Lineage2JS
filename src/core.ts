@@ -252,6 +252,8 @@ async function startCore() {
     // const mLevel = decodeObject3D(decodeLibrary, iLevel);
     // objectGroup.add(mLevel);
 
+    // debugger;
+
     // {
     //     const pkgLoad = await assetLoader.load(pkg_20_21);
     //     const uLevel = await pkgLoad.fetchObject<ULevel>(5);
@@ -304,8 +306,8 @@ async function startCore() {
 
     for (let id of [
         // 1441,
-        1770,
-        // 1802,
+        // 1770,
+        1802,
         // 1804,
         // 4284
     ]) {
