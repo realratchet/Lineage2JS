@@ -1,4 +1,4 @@
-import FArray, { FArrayLazy, FPrimitiveArray } from "../un-array";
+import FArray, { FArrayLazy } from "../un-array";
 import UPrimitive from "../un-primitive";
 import FStaticMeshSection from "./un-static-mesh-section";
 import FStaticMeshVertexStream from "./un-static-vertex-stream";
@@ -9,6 +9,67 @@ import FRawIndexBuffer from "../un-raw-index-buffer";
 import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
 import FVector from "../un-vector";
+import FConstructable from "../un-constructable";
+
+class FStaticMeshTriangleSub extends FConstructable {
+    public f0: number[];
+    public f1: number[];
+    public f2: number[];
+
+    public load(pkg: UPackage): this {
+
+        const float = new BufferValue(BufferValue.float);
+
+        this.f0 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
+        this.f1 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
+        this.f2 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
+
+        return this;
+    }
+}
+
+class FStaticMeshTriangle extends FConstructable {
+    public v0 = new FVector();
+    public v1 = new FVector();
+    public v2 = new FVector();
+
+    public unkSubs: FStaticMeshTriangleSub[];
+    public unkBytes = BufferValue.allocBytes(12);
+
+    public unkInt0: number;
+    public unkInt1: number;
+
+    public load(pkg: UPackage): this {
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const uint32 = new BufferValue(BufferValue.uint32);
+
+        if (verArchive < 0x6f) {
+            console.warn("Not supported yet");
+            debugger;
+        } else {
+
+            this.v0.load(pkg);
+            this.v1.load(pkg);
+            this.v2.load(pkg);
+
+            const count = pkg.read(uint32).value as number;
+
+            this.unkSubs = new Array(count).fill(1).map(_ => new FStaticMeshTriangleSub().load(pkg));
+
+            pkg.read(this.unkBytes);
+
+            if (verArchive < 0x70) {
+                console.warn("Not supported yet");
+                debugger;
+            }
+
+            this.unkInt0 = pkg.read(uint32).value as number;
+            this.unkInt1 = pkg.read(uint32).value as number;
+        }
+
+        return this;
+    }
+}
 
 class UStaticMesh extends UPrimitive {
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
@@ -30,6 +91,28 @@ class UStaticMesh extends UPrimitive {
 
     protected collisionFaces: FArrayLazy<FStaticMeshCollisionTriangle> = new FArrayLazy(FStaticMeshCollisionTriangle);
     protected collisionNodes: FArrayLazy<FStaticMeshCollisionNode> = new FArrayLazy(FStaticMeshCollisionNode);
+    protected staticMeshTris: FArrayLazy<FStaticMeshTriangle> = new FArrayLazy(FStaticMeshTriangle);
+
+    protected unkIndex0: number;
+
+    protected unkInt_5x0: number;
+    protected unkInd_5x0: number;
+    protected unkInd_5x1: number;
+    protected unkInt_5x1: number;
+    protected unkInt_5x2: number;
+
+    protected unkInt_6x0: number;
+    protected unkInt_6x1: number;
+    protected unkInt_Ax0: number;
+    protected unkInt_Cx0: number;
+    protected unkInt_Dx0: number;
+    protected unkInt_Dx1: number;
+    protected unkInt_Ex0: number;
+
+    protected unkInt0: number;
+    protected unkIndex1: number;
+    protected unkInt1: number;
+
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -50,103 +133,84 @@ class UStaticMesh extends UPrimitive {
         const verLicense = pkg.header.getLicenseeVersion();
 
         const compat32 = new BufferValue(BufferValue.compat32);
-        const uint32 = new BufferValue(BufferValue.uint32);
         const int32 = new BufferValue(BufferValue.int32);
-        const float = new BufferValue(BufferValue.float);
-        const int8 = new BufferValue(BufferValue.int8);
-
-        // if (exp.objectName === "oren_curumadungeon17") debugger;
-        // if (exp.objectName === "oren_curumadungeon33") debugger;
 
         super.doLoad(pkg, exp);
 
-        this.sections.load(pkg, null);        // 0400 0000 0000 00BE 00ED 0022 0022 0000
-        this.boundingBox.load(pkg);           // 6666 A2C3 FAED EBC0 889D 06C4 6666 A243
-        this.vertexStream.load(pkg, null);    // 6E03 6666 A243 0000 0C42 8A2E F343 0000
-        this.colorStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        this.alphaStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        this.uvStream.load(pkg, null);        // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        this.indexStream.load(pkg, null);     // 4606 E500 E400 E000 DE00 DF00 E000 E100
-        this.edgesStream.load(pkg, null);     // 7409 E500 E400 E400 E000 E000 E500 DE00
+        this.sections.load(pkg, null);
+        this.boundingBox.load(pkg);
+        this.vertexStream.load(pkg, null);
+        this.colorStream.load(pkg, null);
+        this.alphaStream.load(pkg, null);
+        this.uvStream.load(pkg, null);
+        this.indexStream.load(pkg, null);
+        this.edgesStream.load(pkg, null);
 
-        const unkIndex0 = pkg.read(compat32).value as number;
+        this.unkIndex0 = pkg.read(compat32).value as number;
 
         if (verLicense < 0x11) {
-            debugger;
             console.warn("Not supported yet");
+            debugger;
         } else {
             if (verArchive < 0x3E) {
-                debugger;
                 console.warn("Not supported yet");
+                debugger;
             } else {
-                // lazy loader for something
-                this.collisionFaces.load(pkg, null);
-                this.readHead = pkg.tell();
-
-                this.collisionNodes.load(pkg, null);
-                this.readHead = pkg.tell();
+                this.collisionFaces.load(pkg);
+                this.collisionNodes.load(pkg);
             }
-
-            debugger;
-
-            // // lazy loader for something
-            // {
-            //     const unkInt1 = pkg.read(uint32).value as number;
-
-            //     this.collisionNodes.load(pkg);
-            //     this.readHead = pkg.tell();
-
-            //     debugger;
-            // }
-
-            // // const unkIndex3 = pkg.read(compat32).value as number;
-            // // const unkIndex4 = pkg.read(compat32).value as number;
-
-            // debugger;
         }
 
-
-        debugger;
-
-        const unkInt2 = pkg.read(uint32).value as number;
-        const unkIndex5 = pkg.read(compat32).value as number;
-        const unkIndex6 = pkg.read(compat32).value as number;
-
-        // const a = new FVector().load()
-
-        const v = new FVector().load(pkg);
-
         this.readHead = pkg.tell();
 
-        debugger;
+        if (verArchive < 0x72) {
+            console.warn("Not supported yet");
+            debugger;
+        }
 
-        // const unkInt3 = pkg.read(uint32).value as number;
-        // const unkInt4 = pkg.read(uint32).value as number;
+        if (0x5 < verLicense) {
+            this.unkInt_5x0 = pkg.read(int32).value as number;
+            this.unkInd_5x0 = pkg.read(compat32).value as number;
+            this.unkInd_5x1 = pkg.read(compat32).value as number;
+            this.unkInt_5x1 = pkg.read(int32).value as number;
+            this.unkInt_5x2 = pkg.read(int32).value as number;
+        }
 
-        // const unkInt5 = pkg.read(uint32).value as number;
-        // const unkInt6 = pkg.read(uint32).value as number;
+        if (0x6 < verLicense) {
+            this.unkInt_6x0 = pkg.read(int32).value as number;
+            this.unkInt_6x1 = pkg.read(int32).value as number;
+        }
 
-        // const unkInt7 = pkg.read(uint32).value as number;
-        // const unkInt8 = pkg.read(uint32).value as number;
+        if (0xA < verLicense) this.unkInt_Ax0 = pkg.read(int32).value as number;
+        if (0xC < verLicense) this.unkInt_Cx0 = pkg.read(int32).value as number;
+        if (0xD < verLicense) {
+            this.unkInt_Dx0 = pkg.read(int32).value as number;
+            this.unkInt_Dx1 = pkg.read(int32).value as number;
+        }
 
-        // const unkInt9 = pkg.read(uint32).value as number;
-        // const unkInt10 = pkg.read(uint32).value as number;
+        if (0xE < verLicense) this.unkInt_Ex0 = pkg.read(int32).value as number;
 
-        // const unkInt11 = pkg.read(uint32).value as number;
+        if (verArchive < 0X5C) {
+            console.warn("Not supported yet");
+            debugger;
+        }
 
-        // // lazy loader for something
-        // const unkInt12 = pkg.read(uint32).value as number;
-        // const unkIndex7 = pkg.read(compat32).value as number;
-        // const unkIndex8 = pkg.read(compat32).value as number;
+        if (0x4E < verArchive) {
+            if (verArchive < 0x61) {
+                console.warn("Not supported yet");
+                debugger;
+            } else this.staticMeshTris.load(pkg);
+        }
 
-        // const unkInt13 = pkg.read(uint32).value as number;
+        if (verArchive < 0x51) {
+            console.warn("Not supported yet");
+            debugger;
+        } else this.unkInt0 = pkg.read(int32).value as number;
 
-        // const unkIndex9 = pkg.read(compat32).value as number;
-
-        // const unkInt14 = pkg.read(uint32).value as number;
+        if (99 < verArchive) this.unkIndex1 = pkg.read(compat32).value as number;
+        if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value as number;
 
         this.readHead = pkg.tell();
-
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
@@ -163,14 +227,6 @@ class UStaticMesh extends UPrimitive {
 
         await this.onLoaded();
 
-        // debugger;
-
-        // const section = this.sections.getElem(0);
-        // const materials = this.materials.getElem(0);
-
-        // if (this.sections.getElemCount() > 1)
-        //     debugger;
-
         const countVerts = this.vertexStream.vert.getElemCount();
         const countFaces = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
@@ -185,10 +241,6 @@ class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countVerts; i++) {
             const { position, normal } = this.vertexStream.vert.getElem(i);
             const { u, v } = this.uvStream.getElem(0).data.getElem(i);
-
-
-            // position.toArray(positions, i * 3);
-            // normal.toArray(normals, i * 3);
 
             positions[i * 3 + 0] = position.x;
             positions[i * 3 + 1] = position.z;
@@ -219,8 +271,6 @@ class UStaticMesh extends UPrimitive {
         };
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
-        // debugger;
 
         return {
             type: "StaticMesh",

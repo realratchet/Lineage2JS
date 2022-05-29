@@ -50,7 +50,7 @@ class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public unkLazyInt: number;
 
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         this.unkLazyInt = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
         super.load(pkg, tag);
@@ -90,7 +90,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
     protected array: DataView;
     public constructor(constr: ValidTypes_T<T>) { this.Constructor = constr; }
 
-    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...this].map(fnMap); }
+    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...(this as any as Array<T>)].map(fnMap); }
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         const hasTag = tag !== null && tag !== undefined;
@@ -130,7 +130,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
 class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends FPrimitiveArray<T> {
     public unkLazyInt: number;
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage, tag?: PropertyTag): this {
         this.unkLazyInt = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
 
         super.load(pkg, tag);

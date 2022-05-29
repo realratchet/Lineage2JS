@@ -1,8 +1,5 @@
 import FConstructable from "../un-constructable";
-import UPackage from "../un-package";
-import { PropertyTag } from "../un-property";
 import BufferValue from "../../buffer-value";
-import FVector from "../un-vector";
 
 class FStaticMeshCollisionNode extends FConstructable {
     public static readonly typeSize: number = 4 * 4 + 4 * 6 + 1;
@@ -11,7 +8,7 @@ class FStaticMeshCollisionNode extends FConstructable {
     public f2: number[];
     public f3: number;
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
+    public load(pkg: UPackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
         const int8 = new BufferValue(BufferValue.int8);
@@ -30,18 +27,15 @@ class FStaticMeshCollisionTriangle extends FConstructable {
     public f1: number[];
     public f2: number[];
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
+    public load(pkg: UPackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
 
         this.f1 = new Array(16).fill(1).map(_ => pkg.read(float).value as number);
         this.f2 = new Array(4).fill(1).map(_ => pkg.read(compat32).value as number);
 
-        // debugger;
-
         return this;
     }
-
 }
 
 export { FStaticMeshCollisionNode, FStaticMeshCollisionTriangle };
