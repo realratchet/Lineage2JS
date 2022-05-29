@@ -47,8 +47,11 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 }
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
+    public unkLazyInt: number;
+
+
     public load(pkg: UPackage, tag: PropertyTag): this {
-        pkg.seek(4);
+        this.unkLazyInt = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
         super.load(pkg, tag);
 
@@ -125,8 +128,10 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
 }
 
 class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends FPrimitiveArray<T> {
+    public unkLazyInt: number;
+
     public load(pkg: UPackage, tag: PropertyTag): this {
-        pkg.seek(4);
+        this.unkLazyInt = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
 
         super.load(pkg, tag);
 

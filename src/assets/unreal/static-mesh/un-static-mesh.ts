@@ -8,6 +8,7 @@ import FRawIndexBuffer from "../un-raw-index-buffer";
 
 import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
+import FVector from "../un-vector";
 
 class UStaticMesh extends UPrimitive {
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
@@ -82,13 +83,11 @@ class UStaticMesh extends UPrimitive {
                 this.collisionFaces.load(pkg, null);
                 this.readHead = pkg.tell();
 
-                debugger;
-
-
-                // const unkIndex2 = pkg.read(compat32).value as number;
-
-                // debugger;
+                this.collisionNodes.load(pkg, null);
+                this.readHead = pkg.tell();
             }
+
+            debugger;
 
             // // lazy loader for something
             // {
@@ -106,9 +105,20 @@ class UStaticMesh extends UPrimitive {
             // debugger;
         }
 
-        // const unkInt2 = pkg.read(uint32).value as number;
-        // const unkIndex5 = pkg.read(compat32).value as number;
-        // const unkIndex6 = pkg.read(compat32).value as number;
+
+        debugger;
+
+        const unkInt2 = pkg.read(uint32).value as number;
+        const unkIndex5 = pkg.read(compat32).value as number;
+        const unkIndex6 = pkg.read(compat32).value as number;
+
+        // const a = new FVector().load()
+
+        const v = new FVector().load(pkg);
+
+        this.readHead = pkg.tell();
+
+        debugger;
 
         // const unkInt3 = pkg.read(uint32).value as number;
         // const unkInt4 = pkg.read(uint32).value as number;

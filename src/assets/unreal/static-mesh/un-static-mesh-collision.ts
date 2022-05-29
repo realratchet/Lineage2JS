@@ -7,8 +7,8 @@ import FVector from "../un-vector";
 class FStaticMeshCollisionNode extends FConstructable {
     public static readonly typeSize: number = 4 * 4 + 4 * 6 + 1;
 
-    public f1: number[] = new Array(4);
-    public f2: number[] = new Array(6);
+    public f1: number[];
+    public f2: number[];
     public f3: number;
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
@@ -16,12 +16,8 @@ class FStaticMeshCollisionNode extends FConstructable {
         const float = new BufferValue(BufferValue.float);
         const int8 = new BufferValue(BufferValue.int8);
 
-        for (let i = 0; i < 4; i++)
-            this.f1[i] = pkg.read(compat32).value as number;
-
-        for (let i = 0; i < 4; i++)
-            this.f2[i] = pkg.read(float).value as number;
-
+        this.f1 = new Array(4).fill(1).map(_ => pkg.read(compat32).value as number);
+        this.f2 = new Array(6).fill(1).map(_ => pkg.read(float).value as number);
         this.f3 = pkg.read(int8).value as number;
 
         return this;
@@ -40,6 +36,8 @@ class FStaticMeshCollisionTriangle extends FConstructable {
 
         this.f1 = new Array(16).fill(1).map(_ => pkg.read(float).value as number);
         this.f2 = new Array(4).fill(1).map(_ => pkg.read(compat32).value as number);
+
+        // debugger;
 
         return this;
     }
