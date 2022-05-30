@@ -5,8 +5,6 @@ import { PropertyTag } from "./un-property";
 type UPackage = import("./un-package").UPackage;
 
 class FLeaf extends FConstructable {
-    public static readonly typeSize: number = -1;
-
     public iZone: number;
     public iPermeating: number;
     public iVolumetric: number;

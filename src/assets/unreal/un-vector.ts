@@ -2,7 +2,6 @@ import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
 
 class FVector extends FConstructable {
-    public static readonly typeSize = 12;
     public x: number = 0;
     public y: number = 0;
     public z: number = 0;

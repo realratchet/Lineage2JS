@@ -2,8 +2,6 @@ import FConstructable from "../un-constructable";
 import BufferValue from "../../buffer-value";
 
 class FStaticMeshCollisionNode extends FConstructable {
-    public static readonly typeSize: number = 4 * 4 + 4 * 6 + 1;
-
     public f1: number[];
     public f2: number[];
     public f3: number;
@@ -22,8 +20,6 @@ class FStaticMeshCollisionNode extends FConstructable {
 }
 
 class FStaticMeshCollisionTriangle extends FConstructable {
-    public static readonly typeSize: number = 4 * 16 + 2 * 4;
-
     public f1: number[];
     public f2: number[];
 

@@ -1,19 +1,12 @@
 import FConstructable from "../un-constructable";
-import UPackage from "../un-package";
-import { PropertyTag } from "../un-property";
-import UMaterial, { UMaterialContainer, UShader } from "../un-material";
+
 import { FPlane } from "../un-plane";
 import BufferValue from "../../buffer-value";
-import UBrush from "../un-brush";
-import FArray from "../un-array";
-import { PolyFlags_T } from "../un-polys";
 
 class FBSPSurf extends FConstructable {
-    public static readonly typeSize = 1;
-
     public material: UShader;
 
-    public flags: PolyFlags_T;            // 4 bytes polygon flags.
+    public flags: PolyFlags_T;       // 4 bytes polygon flags.
     public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
     public vNormal: number;          // 4 bytes index to polygon normal.
     public vTextureU: number;        // 4 bytes texture U-vector index.

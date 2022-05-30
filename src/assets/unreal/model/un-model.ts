@@ -117,6 +117,9 @@ class UModel extends UPrimitive {
 
         pkg.seek(this.readHead, "set");
 
+        if (this.lightmaps.length > 0)
+            debugger;
+
         return this;
     }
 
@@ -146,17 +149,6 @@ class UModel extends UPrimitive {
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
-
-            // if (![
-            //     // 699,
-            //     // 234,
-            //     1771, // offset: [56, 360] | size: [72, 136] | lightmap: 8 | small piece of water
-            //     1772, // grass opposite side of water
-            //     1773, // small grass in-between
-            //     1774, // grass near water
-            //     1775, // small grass in-between
-            //     // 1776, 1777, 1778, 1779, 1780, 1781,
-            // ].includes(node.iSurf)) continue
 
             await Promise.all(surf.promisesLoading);
 

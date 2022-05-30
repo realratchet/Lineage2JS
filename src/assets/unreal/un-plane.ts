@@ -5,8 +5,6 @@ import UObject from "./un-object";
 import { PropertyTag } from "./un-property";
 
 class FPlane extends FConstructable {
-    public static readonly typeSize: number = 16;
-
     public x: number;
     public y: number;
     public z: number;

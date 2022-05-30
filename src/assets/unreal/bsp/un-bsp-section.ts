@@ -14,7 +14,7 @@ class FBSPSection extends FConstructable {
         this.unk3 = pkg.read(int32).value as number;
         this.unk4 = pkg.read(int32).value as number;
 
-        this.promisesLoading.push(new Promise(async resolve => {
+        this.promisesLoading.push(new Promise<void>(async resolve => {
             this.texture = await pkg.fetchObject<UObject>(textureId);
             resolve();
         }));
@@ -24,8 +24,6 @@ class FBSPSection extends FConstructable {
 }
 
 class FBSPVertex extends FConstructable {
-    public static readonly typeSize = 24;
-
     public load(pkg: UPackage, tag: PropertyTag): this {
 
         const ver = pkg.header.getArchiveFileVersion();

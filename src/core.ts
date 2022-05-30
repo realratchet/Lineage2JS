@@ -271,7 +271,6 @@ async function startCore() {
     // const mModel = decodeObject3D(decodeLibrary, iModel);
     // objectGroup.add(mModel);
 
-
     // uModel.bspNodes.forEach((node: FBSPNode) => {
     //     if (node.iSurf !== 1771) return;
 
@@ -307,8 +306,8 @@ async function startCore() {
     for (let id of [
         // 1441,
         // 1770,
-        1802,
-        // 1804,
+        // 1802,
+        1804,
         // 4284
     ]) {
         const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;

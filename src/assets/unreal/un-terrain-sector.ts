@@ -28,11 +28,7 @@ class UTerrainSector extends UObject {
     protected unkBuf0: any;
 
     protected unkArr8: FArray<FNumber> = new FArray(class FUnknownStructExt extends FUnknownStruct {
-        public static readonly typeSize = 40;
-
-        constructor() {
-            super(40);
-        }
+        constructor() { super(40); }
 
         public load(pkg: UPackage, tag: PropertyTag): this {
 

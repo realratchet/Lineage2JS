@@ -1,7 +1,6 @@
 import UObject from "./un-object";
 
 class UDecoLayer extends UObject {
-    public static readonly typeSize: number = 128;
     protected showOnTerrain: number;
     protected scaleMap: UTexture;
     protected densityMap: UTexture;

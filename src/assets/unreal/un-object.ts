@@ -33,19 +33,12 @@ abstract class UObject {
 
             if (!tag.isValid()) break;
 
-            // if (tag.name === "USize" || tag.name === "UClamp")
-            //     debugger;
-
             this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
 
-        // debugger;
-
         this.readHead = pkg.tell();
-
-        // debugger;
     }
 
     protected preLoad(pkg: UPackage, exp: UExport): void {
@@ -63,8 +56,6 @@ abstract class UObject {
     }
 
     public load(pkg: UPackage, exp: UExport): this {
-        // if(exp.objectName.includes("LOD")) debugger;
-
         this.preLoad(pkg, exp);
         this.doLoad(pkg, exp);
         this.postLoad(pkg, exp);
@@ -124,9 +115,9 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_ArrayProperty: this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty: {
-                const start = pkg.tell();
-                const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-                const offset = pkg.tell() - start;
+                // const start = pkg.tell();
+                // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
+                // const offset = pkg.tell() - start;
                 debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:

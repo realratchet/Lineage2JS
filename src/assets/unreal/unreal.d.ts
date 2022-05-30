@@ -20,6 +20,7 @@ type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
 type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
 type UModel = import("./model/un-model").UModel;
 type UPolys = import("./un-polys").UPolys;
+type PolyFlags_T = import("./un-polys").PolyFlags_T;
 type UBrush = import("./un-brush").UBrush;
 type ULevel = import("./un-level").ULevel;
 type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
@@ -45,7 +46,7 @@ type UEncodedFile = import("./un-encoded-file").UEncodedFile;
 type UTextBuffer = import("./un-text-buffer").UTextBuffer;
 
 type UMaterial = import("./un-material").UMaterial;
-type UMaterialContainer = import("./un-material").UMaterialContainer;
+type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
 type OutputBlending_T = import("./un-material").OutputBlending_T;
 
 type UShader = import("./un-material").UShader;

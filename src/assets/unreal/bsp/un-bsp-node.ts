@@ -17,8 +17,6 @@ enum BspNodeFlags_T {
 };
 
 class FBSPNode extends FConstructable {
-    public static readonly typeSize = 1;
-
     public readonly plane = new FPlane();    // 16 byte plane the node falls into (X, Y, Z, W).
     public zoneMask: number;                 // 8  byte mask for all zones at or below this node (up to 64).
     public iVertPool: number;                // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.

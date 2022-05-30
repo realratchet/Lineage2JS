@@ -1,11 +1,9 @@
-import FConstructable from "../un-constructable";
 import FArray from "../un-array";
-import BufferValue from "../../buffer-value";
 import FVector from "../un-vector";
+import BufferValue from "../../buffer-value";
+import FConstructable from "../un-constructable";
 
 class FStaticMeshVertexStream extends FConstructable {
-    public static readonly typeSize = 24;
-
     public readonly vert: FArray<FStaticMeshVertex> = new FArray(FStaticMeshVertex);
     public revision: number;
 
@@ -19,19 +17,12 @@ class FStaticMeshVertexStream extends FConstructable {
 }
 
 class FStaticMeshVertex extends FConstructable {
-    public static readonly typeSize = 24;
-
     public readonly position = new FVector();
     public readonly normal = new FVector();
 
     public load(pkg: UPackage): this {
-        const f = new BufferValue(BufferValue.float);
-
-        [this.position, this.normal].forEach(vec => {
-            ["x", "y", "z"].forEach((ax: "x" | "y" | "z") => {
-                vec[ax] = pkg.read(f).value as number;
-            });
-        });
+        this.position.load(pkg);
+        this.normal.load(pkg);
 
         return this;
     }

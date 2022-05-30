@@ -196,7 +196,6 @@ void main() {
             vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
             diffuseColor.rgb *= texelDiffuse.rgb;
-            // dicks;
         #endif
     #endif
 
@@ -267,8 +266,8 @@ void main() {
 
     // gl_FragColor = vec4(texture2D(shDiffuse.map.texture, vUv).rgb, 1.0);
 
-    #ifdef USE_LIGHTMAP
-        // gl_FragColor = vec4(vUv2, 0.0, 1.0);
-        // gl_FragColor = texture2D( lightMap, vUv2 );
-    #endif
+    // #ifdef USE_LIGHTMAP
+    //     // gl_FragColor = vec4(vUv2, 0.0, 1.0);
+    //     // gl_FragColor = texture2D( lightMap, vUv2 );
+    // #endif
 }

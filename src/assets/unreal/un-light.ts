@@ -35,8 +35,6 @@ enum LightEffect_T {
 };
 
 class ULight extends UAActor {
-    public static readonly typeSize: number = 1;
-
     public effect: number;
     public lightness: number = 255;
     public radius: number;

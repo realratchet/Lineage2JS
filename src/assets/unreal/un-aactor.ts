@@ -1,7 +1,5 @@
 import UObject from "./un-object";
-import { Euler, Vector3 } from "three";
 import UTextureModifyInfo from "./un-texture-modify-info";
-import ULevelInfo from "./un-level-info";
 import UPointRegion from "./un-point-region";
 import UPhysicsVolume from "./un-physics-volume";
 import FVector from "./un-vector";

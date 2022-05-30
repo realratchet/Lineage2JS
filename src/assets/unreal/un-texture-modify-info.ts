@@ -40,13 +40,9 @@ class UTextureModifyInfo extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    protected preLoad(pkg: UPackage, tag: any) {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
-
-        this.readNamedProps(pkg);
-
-        return this;
     }
 }
 

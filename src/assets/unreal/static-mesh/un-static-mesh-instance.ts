@@ -15,7 +15,7 @@ class FUnkStruct extends FConstructable {
         const int32 = new BufferValue(BufferValue.int32);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
-        this.unkArray0.load(pkg, null);
+        this.unkArray0 = this.unkArray0.load(pkg, null).getTypedArray();
         this.unkInt0 = pkg.read(int32).value as number;
 
         return this;
@@ -31,6 +31,14 @@ class UStaticMeshInstance extends UObject {
     protected unkArrIndex: number[];
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
+        // basemodel id 7364 -> export 7363
+        // level id 5 -> export 4
+        // umodel has 1888 lightmap sufraces with 9 textures
+        // 1888 x 9
+        // vertices 238
+        // faces 390
+        // material 18
+
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
         const compat32 = new BufferValue(BufferValue.compat32);

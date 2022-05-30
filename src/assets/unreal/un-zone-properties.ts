@@ -2,9 +2,6 @@ import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
 
 class FZoneProperties extends FConstructable {
-
-    public static readonly typeSize = 16;
-
     public connectivity: BigInt;
     public visibility: BigInt;
     public lastRenderTime: number;

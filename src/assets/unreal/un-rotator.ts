@@ -2,7 +2,6 @@ import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
 
 class FRotator extends FConstructable {
-    public static readonly typeSize = 12;
     public pitch = 0;
     public yaw = 0;
     public roll = 0;

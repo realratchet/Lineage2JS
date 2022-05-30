@@ -21,7 +21,6 @@ class FNumber<T extends ValueTypeNames_T = ValueTypeNames_T> extends FConstructa
 
     public static forType<T extends ValueTypeNames_T = ValueTypeNames_T>(dtype: ValidTypes_T<T>): new (...params: any) => FNumber<T> {
         class FNumberExt extends FNumber<T> {
-            public static readonly typeSize: number = dtype.bytes;
             constructor() { super(dtype); }
         }
 

@@ -65,4 +65,5 @@ type ValidConstructables_T<T> = typeof import("./unreal/un-color").FColor
     | typeof import("./unreal/bsp/un-bsp-surf").FBSPSurf
     | typeof import("./unreal/bsp/un-bsp-section").FBSPSection
     | typeof import("./unreal/model/un-vert").FVert
+    | typeof import("./unreal/un-material").FStaticMeshMaterial
     | FNumberExt<T>;

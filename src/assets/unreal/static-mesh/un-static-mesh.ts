@@ -139,14 +139,14 @@ class UStaticMesh extends UPrimitive {
 
         super.doLoad(pkg, exp);
 
-        this.sections.load(pkg, null);
+        this.sections.load(pkg);
         this.boundingBox.load(pkg);
-        this.vertexStream.load(pkg, null);
-        this.colorStream.load(pkg, null);
-        this.alphaStream.load(pkg, null);
-        this.uvStream.load(pkg, null);
-        this.indexStream.load(pkg, null);
-        this.edgesStream.load(pkg, null);
+        this.vertexStream.load(pkg);
+        this.colorStream.load(pkg);
+        this.alphaStream.load(pkg);
+        this.uvStream.load(pkg);
+        this.indexStream.load(pkg);
+        this.edgesStream.load(pkg);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
 
@@ -220,6 +220,8 @@ class UStaticMesh extends UPrimitive {
 
         this.readHead = pkg.tell();
 
+        // debugger;
+
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
@@ -247,6 +249,8 @@ class UStaticMesh extends UPrimitive {
 
         if (countUvs > 1) debugger;
 
+        // debugger;
+
         const positions = new Float32Array(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
@@ -271,7 +275,7 @@ class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countFaces; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
-        const materials = await Promise.all(this.materials.map((mat: UMaterialContainer) => mat.getDecodeInfo(library)));
+        const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
 
         library.geometries[this.uuid] = {
             attributes: {
@@ -286,7 +290,7 @@ class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
-        debugger;
+        // debugger;
 
         return {
             type: "StaticMesh",
