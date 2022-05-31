@@ -68,6 +68,8 @@ class UZoneInfo extends UAActor {
 
         // debugger;
 
+        // debugger;
+
     //     console.log(this.bytesUnread);
 
     //     debugger;

@@ -98,15 +98,17 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        // const unk2 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const unk3 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         // // const unk4 = await pkg.read(new BufferValue(BufferValue.uint8)).value as number;
 
         // pkg.seek(8);
 
-        // const unk4 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk4 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk5 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const unk6 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
 
-        this.readHead = pkg.tell();
+        // this.readHead = pkg.tell();
 
         // debugger;
 
@@ -123,6 +125,7 @@ class UStaticMeshActor extends UAActor {
         // // const prop2 = await pkg.read(BufferValue.allocBytes(5)).value as DataView;
 
         // debugger;
+
 
         return this;
     }

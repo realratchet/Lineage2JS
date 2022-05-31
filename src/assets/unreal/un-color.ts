@@ -15,6 +15,16 @@ class FColor extends FConstructable {
 
         return this;
     }
+
+    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
+
+        (array as number[])[offset] = this.r;
+        (array as number[])[offset + 1] = this.g;
+        (array as number[])[offset + 2] = this.b;
+        (array as number[])[offset + 3] = this.a;
+
+        return array;
+    }
 }
 
 export default FColor;

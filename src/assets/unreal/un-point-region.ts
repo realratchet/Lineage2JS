@@ -13,14 +13,9 @@ class UPointRegion extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-
-        this.readHead = pkg.tell();
+    public preLoad(pkg: UPackage, tag: any) {
+        this.readHead = this.readStart = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
-
-        this.readNamedProps(pkg);
-
-        return this;
     }
 }
 

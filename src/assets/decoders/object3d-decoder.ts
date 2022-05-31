@@ -8,7 +8,7 @@ function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): Inde
         case Uint8Array: return Uint8BufferAttribute;
         case Uint16Array: return Uint16BufferAttribute;
         case Uint32Array: return Uint32BufferAttribute;
-        default: throw new Error(`$Unsupported index array constructor ${IndexArrayConstructor.name}`);
+        default: throw new Error(`Unsupported index array constructor ${IndexArrayConstructor.name}`);
     }
 }
 

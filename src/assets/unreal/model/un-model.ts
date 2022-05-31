@@ -14,6 +14,7 @@ import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -111,8 +112,8 @@ class UModel extends UPrimitive {
 
         pkg.seek(this.readHead, "set");
 
-        if (this.lightmaps.length > 0)
-            debugger;
+        // if (this.lightmaps.length > 0)
+        //     debugger;
 
         // debugger;
 
@@ -132,7 +133,7 @@ class UModel extends UPrimitive {
 
         await this.onLoaded();
 
-        debugger;
+        // debugger;
 
         const globalBSPTexelScale = 128;
         const materials: string[] = [];
@@ -201,6 +202,7 @@ class UModel extends UPrimitive {
         const normals = new Float32Array(totalVertices * 3);
         const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
 
+        const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
         const indices: number[] = [], groups: ArrGeometryGroup[] = [];
 
         let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
@@ -309,7 +311,7 @@ class UModel extends UPrimitive {
 
         library.geometries[this.uuid] = {
             groups,
-            indices,
+            indices: new TypedIndicesArray(indices),
             attributes: {
                 normals,
                 positions,

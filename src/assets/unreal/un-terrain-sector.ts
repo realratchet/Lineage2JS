@@ -24,7 +24,7 @@ class UTerrainSector extends UObject {
     protected unkArr8: FArray<FUnknownStruct> = new FArray(class FUnknownStructExt extends FUnknownStruct {
         constructor() { super(40); }
 
-        public load(pkg: UPackage, tag: PropertyTag): this {
+        public load(pkg: UPackage): this {
 
             const start = pkg.tell();
 

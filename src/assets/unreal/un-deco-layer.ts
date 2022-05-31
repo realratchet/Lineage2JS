@@ -50,12 +50,12 @@ class UDecoLayer extends UObject {
         });
     }
 
-    public preLoad(pkg: UPackage, exp: UExport) { 
-        this.readHead = pkg.tell();
+    public preLoad(pkg: UPackage) {
+        this.readStart = this.readHead = pkg.tell();
         this.readTail = this.readHead + this.size;
     }
 
-    public doLoad(pkg: UPackage, exp: UExport): this {
+    public doLoad(pkg: UPackage): this {
 
         this.readNamedProps(pkg);
 

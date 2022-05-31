@@ -4,7 +4,6 @@ import FConstructable from "../un-constructable";
 import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
 
-
 class FUnkStruct extends FConstructable {
     public unkIndex0: number;
     public unkArray0 = new FPrimitiveArray(BufferValue.uint8);
@@ -58,7 +57,11 @@ class UStaticMeshInstance extends UObject {
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
-        debugger;
+        // const mappedNames = this.unkArray0.map(a => pkg.exports[a.unkIndex0 - 1].objectName.includes("Light");
+
+        // console.assert(this.unkArray0.map(a => pkg.exports[a.unkIndex0 - 1].objectName.includes("Light")).filter(x => !x).length === 0)
+
+        // debugger;
 
         return this;
     }

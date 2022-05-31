@@ -183,7 +183,7 @@ class UStaticMesh extends UPrimitive {
         // 43x30 -> 1290
         // 43x10 -> 430
 
-        // 24 x 117
+        // 24 x 117 = 2808 | (24 x 39 = 936)
 
         const countVerts = this.vertexStream.vert.getElemCount();
         const countFaces = this.indexStream.indices.getElemCount();
@@ -193,7 +193,7 @@ class UStaticMesh extends UPrimitive {
 
         // debugger;
 
-        const TypedIndicesArray = getTypedArrayConstructor(countFaces);
+        const TypedIndicesArray = getTypedArrayConstructor(countVerts);
         const positions = new Float32Array(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
@@ -233,7 +233,7 @@ class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
-        debugger;
+        // debugger;
 
         return {
             type: "StaticMesh",
@@ -241,7 +241,7 @@ class UStaticMesh extends UPrimitive {
             geometry: this.uuid,
             materials: this.uuid,
             children: [
-                this.getDecodeTrisInfo(library),
+                // this.getDecodeTrisInfo(library),
             ]
         };
     }
@@ -272,6 +272,7 @@ class UStaticMesh extends UPrimitive {
             trisIndices[indOffset + 2] = vIndOffset + 2;
             trisIndices[indOffset + 3] = vIndOffset + 0;
         }
+
 
         library.geometries[trisGeometryUuid] = {
             indices: trisIndices,
