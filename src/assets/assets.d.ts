@@ -67,4 +67,9 @@ type ValidConstructables_T<T> = typeof import("./unreal/un-color").FColor
     | typeof import("./unreal/model/un-vert").FVert
     | typeof import("./unreal/un-material").FStaticMeshMaterial
     | typeof import("./unreal/un-tint-map").FTIntMap
+    | typeof import("./unreal/bsp/un-bsp-section").FBSPVertex
+    | typeof import("./unreal/model/un-lightmap-index").FLightmapIndex
+    | typeof import("./unreal/model/un-multilightmap-texture").FMultiLightmapTexture
+    | typeof import("./unreal/un-box").FBox
+    | typeof import("./unreal/un-leaf").FLeaf
     | FNumberExt<T>;

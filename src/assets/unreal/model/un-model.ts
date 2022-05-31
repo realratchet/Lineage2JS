@@ -24,7 +24,6 @@ const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 
-
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
     protected points = new FArray(FVector);
@@ -56,11 +55,8 @@ class UModel extends UPrimitive {
         console.assert(verArchive === 123, "Archive version differs, will likely not work.");
         console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-        const int8 = new BufferValue(BufferValue.int8);
         const int32 = new BufferValue(BufferValue.int32);
-        const uint8 = new BufferValue(BufferValue.uint8);
         const compat32 = new BufferValue(BufferValue.compat32);
-        const float = new BufferValue(BufferValue.float);
 
         pkg.seek(this.readHead, "set");
 
@@ -93,9 +89,9 @@ class UModel extends UPrimitive {
 
         this.readHead = pkg.tell();
 
-        this.bounds.load(pkg, null);
-        this.leafHulls.load(pkg, null);
-        this.leaves.load(pkg, null);
+        this.bounds.load(pkg);
+        this.leafHulls.load(pkg);
+        this.leaves.load(pkg);
 
         this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
 
@@ -106,12 +102,12 @@ class UModel extends UPrimitive {
 
         this.readHead = pkg.tell();
 
-        this.bspSection.load(pkg, null);
+        this.bspSection.load(pkg);
 
         this.readHead = pkg.tell();
 
-        this.lightmaps.load(pkg, null);
-        this.multiLightmaps.load(pkg, null);
+        this.lightmaps.load(pkg);
+        this.multiLightmaps.load(pkg);
 
         this.readHead = pkg.tell();
 

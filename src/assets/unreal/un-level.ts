@@ -47,8 +47,7 @@ class ULevel extends UObject {
             objectIds2 = [];
         }
 
-        this.url.load(pkg, null);
-
+        this.url.load(pkg);
 
         pkg.seek(7);
         this.readHead = pkg.tell();
@@ -114,6 +113,8 @@ class ULevel extends UObject {
         }
 
         this.readHead = this.readTail;
+
+        debugger;
 
         return this;
     }

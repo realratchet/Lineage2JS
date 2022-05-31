@@ -1,21 +1,32 @@
-import FConstructable from "../un-constructable";
 import FArray from "../un-array";
+import FConstructable from "../un-constructable";
 import BufferValue from "@client/assets/buffer-value";
 
 class FBSPSection extends FConstructable {
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public bspVertices = new FArray(FBSPVertex);
+    public textureId: number;
+    public texture: UTexture;
+
+    public unkInt0: number;
+    public unkInt1: number;
+    public unkInt2: number;
+    public unkInt3: number;
+
+    public load(pkg: UPackage): this {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.bspVertices = new FArray(FBSPVertex).load(pkg, null);
-        this.unk1 = pkg.read(int32).value as number;
-        const textureId = pkg.read(compat).value as number;
-        this.unk2 = pkg.read(int32).value as number;
-        this.unk3 = pkg.read(int32).value as number;
-        this.unk4 = pkg.read(int32).value as number;
+        this.bspVertices.load(pkg);
+        this.unkInt0 = pkg.read(int32).value as number;
+
+        this.textureId = pkg.read(compat).value as number;
+
+        this.unkInt1 = pkg.read(int32).value as number;
+        this.unkInt2 = pkg.read(int32).value as number;
+        this.unkInt3 = pkg.read(int32).value as number;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.texture = await pkg.fetchObject<UObject>(textureId);
+            this.texture = await pkg.fetchObject<UObject>(this.textureId) as UTexture;
             resolve();
         }));
 
@@ -24,26 +35,22 @@ class FBSPSection extends FConstructable {
 }
 
 class FBSPVertex extends FConstructable {
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public unkArr0: number[];
+    public unkArr1: number[];
+
+    public load(pkg: UPackage): this {
 
         const ver = pkg.header.getArchiveFileVersion();
+        const f = new BufferValue(BufferValue.float);
 
-        const arr1 = pkg.read(BufferValue.allocBytes(4 * 7));
-        const farr1 = new Float32Array(arr1.bytes.buffer);
+        this.unkArr0 = new Array(7).fill(1).map(_ => pkg.read(f).value as number);
 
-        this.unk1 = farr1;
-
-        if (0x6c < ver) {
-            const arr2 = pkg.read(BufferValue.allocBytes(4 * 3));
-            const farr2 = new Float32Array(arr2.bytes.buffer);
-
-            this.unk2 = farr2;
-        }
-
+        if (0x6c < ver)
+            this.unkArr1 = new Array(3).fill(1).map(_ => pkg.read(f).value as number);
 
         return this;
     }
 }
 
 export default FBSPSection;
-export { FBSPSection };
+export { FBSPSection, FBSPVertex };

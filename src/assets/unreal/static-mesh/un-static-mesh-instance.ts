@@ -48,17 +48,17 @@ class UStaticMeshInstance extends UObject {
         if (verArchive < 0x70) {
             console.warn("Unsupported yet");
             debugger;
-        } else this.colorStream.load(pkg, null);
+        } else this.colorStream.load(pkg);
 
-        if (0x6D < verArchive) this.unkArray0.load(pkg, null);
-        if (0x03 < verLicense) this.unkArray1.load(pkg, null);
+        if (0x6D < verArchive) this.unkArray0.load(pkg);
+        if (0x03 < verLicense) this.unkArray1.load(pkg);
         if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read(compat32).value as number);
 
         this.readHead = pkg.tell();
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
-        // debugger;
+        debugger;
 
         return this;
     }
