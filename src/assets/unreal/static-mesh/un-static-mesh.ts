@@ -9,6 +9,7 @@ import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 
 const triggerDebuggerOnUnsupported = false;
 
@@ -192,10 +193,11 @@ class UStaticMesh extends UPrimitive {
 
         // debugger;
 
+        const TypedIndicesArray = getTypedArrayConstructor(countFaces);
         const positions = new Float32Array(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
-        const indices = new Uint16Array(countFaces);
+        const indices = new TypedIndicesArray(countFaces);
 
         for (let i = 0; i < countVerts; i++) {
             const { position, normal } = this.vertexStream.vert.getElem(i);
@@ -247,8 +249,9 @@ class UStaticMesh extends UPrimitive {
     protected getDecodeTrisInfo(library: IDecodeLibrary): IBaseObjectDecodeInfo {
         const trisCount = this.staticMeshTris.length;
         const trisGeometryUuid = generateUUID();
+        const TypedIndicesArray = getTypedArrayConstructor(trisCount);
         const trisPositions = new Float32Array(trisCount * 3 * 3);
-        const trisIndices = new Uint16Array(trisCount * 4);
+        const trisIndices = new TypedIndicesArray(trisCount * 4);
 
         for (let i = 0, len = trisCount; i < len; i++) {
             const indOffset = i * 4;

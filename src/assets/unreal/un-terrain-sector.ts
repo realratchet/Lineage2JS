@@ -1,15 +1,9 @@
-import UPackage from "./un-package";
 import UObject from "./un-object";
 import FBox from "./un-box";
 import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
-import FNumber from "./un-number";
-// import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide, Sphere, Box3 } from "three";
-
-// type UExport = import("./un-export").UExport;
-// type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
-// type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer;
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
@@ -27,7 +21,7 @@ class UTerrainSector extends UObject {
 
     protected unkBuf0: any;
 
-    protected unkArr8: FArray<FNumber> = new FArray(class FUnknownStructExt extends FUnknownStruct {
+    protected unkArr8: FArray<FUnknownStruct> = new FArray(class FUnknownStructExt extends FUnknownStruct {
         constructor() { super(40); }
 
         public load(pkg: UPackage, tag: PropertyTag): this {
@@ -86,7 +80,9 @@ class UTerrainSector extends UObject {
         const iTerrainMap = library.materials[this.info.terrainMap.uuid] as ITextureDecodeInfo;
         const width = iTerrainMap.width;
         const data = new Uint16Array(iTerrainMap.buffer);
-        const vertices = new Float32Array(17 * 17 * 3), indices = new Uint16Array(16 * 16 * 6);
+        const TypedIndicesArray = getTypedArrayConstructor(17 * 17);
+
+        const vertices = new Float32Array(17 * 17 * 3), indices = new TypedIndicesArray(16 * 16 * 6);
         const { x: sx, y: sy, z: sz } = this.info.terrainScale;
 
         // const sectorX = this.offsetX / 2 / 2048;

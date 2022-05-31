@@ -1,7 +1,16 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute } from "three";
 import decodeMaterial from "./material-decoder";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
+
+function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): IndexTypedArrayAttribute {
+    switch (IndexArrayConstructor) {
+        case Uint8Array: return Uint8BufferAttribute;
+        case Uint16Array: return Uint16BufferAttribute;
+        case Uint32Array: return Uint32BufferAttribute;
+        default: throw new Error(`$Unsupported index array constructor ${IndexArrayConstructor.name}`);
+    }
+}
 
 function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
     if (cacheGeometries.has(info)) return cacheGeometries.get(info);
@@ -21,7 +30,11 @@ function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
     if (info.attributes.positions)
         geometry.setAttribute("position", new Float32BufferAttribute(info.attributes.positions, 3));
 
-    if (info.indices) geometry.setIndex(new Uint16BufferAttribute(info.indices, 1));
+    if (info.indices) {
+        const AttributeConstructor = getAttributeForTypedArray(info.indices.constructor as IndexTypedArray);
+
+        geometry.setIndex(new AttributeConstructor(info.indices, 1));
+    }
 
     if (info.groups) info.groups.forEach(group => geometry.addGroup(...group));
 
