@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments } from "three";
 import decodeMaterial from "./material-decoder";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
@@ -7,10 +7,6 @@ function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
     if (cacheGeometries.has(info)) return cacheGeometries.get(info);
 
     const arrUvs = info.attributes.uvs instanceof Array ? info.attributes.uvs : [info.attributes.uvs];
-
-    const attrPosition = new Float32BufferAttribute(info.attributes.positions, 3);
-    const attrIndices = new Uint16BufferAttribute(info.indices, 1);
-
     const geometry = new BufferGeometry();
 
     arrUvs.forEach((arrUv, i) => {
@@ -22,8 +18,10 @@ function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
     if (info.attributes.normals)
         geometry.setAttribute("normal", new Float32BufferAttribute(info.attributes.normals, 3));
 
-    geometry.setAttribute("position", attrPosition);
-    geometry.setIndex(attrIndices);
+    if (info.attributes.positions)
+        geometry.setAttribute("position", new Float32BufferAttribute(info.attributes.positions, 3));
+
+    if (info.indices) geometry.setIndex(new Uint16BufferAttribute(info.indices, 1));
 
     if (info.groups) info.groups.forEach(group => geometry.addGroup(...group));
 
@@ -65,6 +63,17 @@ function decodeSimpleObject(library: IDecodeLibrary, Constructor: (typeof Object
     return object;
 }
 
+function decodeEdges(library: IDecodeLibrary, info: IEdgesObjectDecodeInfo): THREE.Line {
+    const material = new LineBasicMaterial({
+        color: info.color ? new Color().fromArray(info.color) : 0xffff00
+    });
+    const mesh = new LineSegments(fetchGeometry(library.geometries[info.geometry] as IGeometryDecodeInfo), material);
+
+    applySimpleProperties(library, mesh, info);
+
+    return mesh;
+}
+
 function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
     const materials = decodeMaterial(library, library.materials[info.materials]);
     const mesh = new Mesh(fetchGeometry(library.geometries[info.geometry] as IGeometryDecodeInfo), materials);
@@ -95,6 +104,7 @@ function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectDecodeInfo): T
         case "Model":
         case "TerrainSegment":
         case "StaticMesh": return decodeStaticMesh(library, info as IStaticMeshObjectDecodeInfo);
+        case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

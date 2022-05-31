@@ -10,6 +10,7 @@ import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
 import FVector from "../un-vector";
 import FConstructable from "../un-constructable";
+import { generateUUID } from "three/src/math/MathUtils";
 
 const triggerDebuggerOnUnsupported = false;
 
@@ -290,14 +291,57 @@ class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
-        // debugger;
+        const children: IBaseObjectDecodeInfo[] = [];
+
+        // children.push(this.getDecodeTrisInfo(library));
 
         return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: this.uuid
+            materials: this.uuid,
+            children
         };
+    }
+
+    protected getDecodeTrisInfo(library: IDecodeLibrary): IBaseObjectDecodeInfo {
+        const trisCount = this.staticMeshTris.length;
+        const trisGeometryUuid = generateUUID();
+        const trisPositions = new Float32Array(trisCount * 3 * 3);
+        const trisIndices = new Uint16Array(trisCount * 4);
+
+        for (let i = 0, len = trisCount; i < len; i++) {
+            const indOffset = i * 4;
+            const vIndOffset = i * 3, vertOffset = vIndOffset * 3;
+            const { v0, v1, v2 } = this.staticMeshTris.getElem(i);
+
+            [v0, v1, v2].forEach((v, j) => {
+                const { x, y, z } = v;
+                const offset = vertOffset + j * 3;
+
+                trisPositions[offset + 0] = x;
+                trisPositions[offset + 1] = z;
+                trisPositions[offset + 2] = y;
+            });
+
+            trisIndices[indOffset + 0] = vIndOffset + 0;
+            trisIndices[indOffset + 1] = vIndOffset + 1;
+            trisIndices[indOffset + 2] = vIndOffset + 2;
+            trisIndices[indOffset + 3] = vIndOffset + 0;
+        }
+
+        library.geometries[trisGeometryUuid] = {
+            indices: trisIndices,
+            attributes: {
+                positions: trisPositions
+            }
+        };
+
+        return {
+            type: "Edges",
+            geometry: trisGeometryUuid,
+            color: [1, 0, 1]
+        } as IEdgesObjectDecodeInfo;
     }
 }
 

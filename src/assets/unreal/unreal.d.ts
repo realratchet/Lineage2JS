@@ -153,7 +153,7 @@ interface IDecodedParameter {
 
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light";
+type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
@@ -187,7 +187,7 @@ interface IGeometryDecodeInfo {
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
     };
-    indices: number[] | Uint8Array | Uint16Array | Uint32Array;
+    indices?: number[] | Uint8Array | Uint16Array | Uint32Array;
     groups?: ArrGeometryGroup[],
     bounds?: IBoundsDecodeInfo
 }
@@ -195,6 +195,12 @@ interface IGeometryDecodeInfo {
 interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     geometry: string,
     materials: string
+}
+
+interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
+    type: "Edges",
+    geometry: string,
+    color?: [number, number, number]
 }
 
 interface ILightDecodeInfo extends IBaseObjectDecodeInfo {

@@ -15,7 +15,7 @@ class FUnkStruct extends FConstructable {
         const int32 = new BufferValue(BufferValue.int32);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
-        this.unkArray0 = this.unkArray0.load(pkg, null).getTypedArray();
+        this.unkArray0 = this.unkArray0.load(pkg).getTypedArray();
         this.unkInt0 = pkg.read(int32).value as number;
 
         return this;
@@ -58,7 +58,7 @@ class UStaticMeshInstance extends UObject {
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
-        debugger;
+        // debugger;
 
         return this;
     }

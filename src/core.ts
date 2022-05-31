@@ -132,7 +132,7 @@ async function startCore() {
 
     const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {} };
 
-    debugger;
+    // debugger;
 
     // return;
 
