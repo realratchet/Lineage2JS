@@ -57,11 +57,13 @@ class UStaticMeshInstance extends UObject {
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
-        const mappedNames = this.unkLights0.map(a => pkg.exports[a.lightIndex - 1].objectName);
-        const notLights = mappedNames.filter(x => !x.toLocaleLowerCase().startsWith("light"));
+        debugger;
 
-        if (notLights.length > 0)
-            debugger;
+        // const mappedNames = this.unkLights0.map(a => pkg.exports[a.lightIndex - 1].objectName);
+        // const notLights = mappedNames.filter(x => !x.toLocaleLowerCase().startsWith("light"));
+
+        // if (notLights.length > 0)
+        //     debugger;
 
         return this;
     }

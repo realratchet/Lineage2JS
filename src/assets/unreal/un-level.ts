@@ -6,7 +6,7 @@ import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 import UModel from "./model/un-model";
 
-const LOAD_SUB_OBJECTS = true;
+const LOAD_SUB_OBJECTS = false;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
