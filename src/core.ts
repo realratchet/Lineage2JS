@@ -304,10 +304,10 @@ async function startCore() {
     // debugger;
 
     for (let id of [
-        // 1441,
+        1441,
         // 1770,
         // 1802,
-        1804,
+        // 1804,
         // 4284
     ]) {
         const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;

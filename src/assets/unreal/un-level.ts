@@ -114,8 +114,6 @@ class ULevel extends UObject {
 
         this.readHead = this.readTail;
 
-        debugger;
-
         return this;
     }
 

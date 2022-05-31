@@ -7,10 +7,8 @@ import FBSPSurf from "../bsp/un-bsp-surf";
 import UPolys, { PolyFlags_T } from "../un-polys";
 import BufferValue from "../../buffer-value";
 import FZoneProperties from "../un-zone-properties";
-import UMaterial from "../un-material";
 import FBox from "../un-box";
 import FNumber from "../un-number";
-import { FLight } from "../un-light";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
@@ -116,6 +114,8 @@ class UModel extends UPrimitive {
         if (this.lightmaps.length > 0)
             debugger;
 
+        // debugger;
+
         return this;
     }
 
@@ -131,6 +131,8 @@ class UModel extends UPrimitive {
         library.materials[this.uuid] = null;
 
         await this.onLoaded();
+
+        debugger;
 
         const globalBSPTexelScale = 128;
         const materials: string[] = [];

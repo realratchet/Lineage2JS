@@ -5,74 +5,12 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-
 import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
-import FVector from "../un-vector";
-import FConstructable from "../un-constructable";
 import { generateUUID } from "three/src/math/MathUtils";
+import FStaticMeshTriangle from "./un-static-mesh-triangle";
 
 const triggerDebuggerOnUnsupported = false;
-
-class FStaticMeshTriangleSub extends FConstructable {
-    public f0: number[];
-    public f1: number[];
-    public f2: number[];
-
-    public load(pkg: UPackage): this {
-
-        const float = new BufferValue(BufferValue.float);
-
-        this.f0 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
-        this.f1 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
-        this.f2 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
-
-        return this;
-    }
-}
-
-class FStaticMeshTriangle extends FConstructable {
-    public v0 = new FVector();
-    public v1 = new FVector();
-    public v2 = new FVector();
-
-    public unkSubs: FStaticMeshTriangleSub[];
-    public unkBytes = BufferValue.allocBytes(12);
-
-    public unkInt0: number;
-    public unkInt1: number;
-
-    public load(pkg: UPackage): this {
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        if (verArchive < 0x6f) {
-            console.warn("Not supported yet");
-            debugger;
-        } else {
-
-            this.v0.load(pkg);
-            this.v1.load(pkg);
-            this.v2.load(pkg);
-
-            const count = pkg.read(uint32).value as number;
-
-            this.unkSubs = new Array(count).fill(1).map(_ => new FStaticMeshTriangleSub().load(pkg));
-
-            pkg.read(this.unkBytes);
-
-            if (verArchive < 0x70) {
-                console.warn("Not supported yet");
-                debugger;
-            }
-
-            this.unkInt0 = pkg.read(uint32).value as number;
-            this.unkInt1 = pkg.read(uint32).value as number;
-        }
-
-        return this;
-    }
-}
 
 class UStaticMesh extends UPrimitive {
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
@@ -244,6 +182,8 @@ class UStaticMesh extends UPrimitive {
         // 43x30 -> 1290
         // 43x10 -> 430
 
+        // 24 x 117
+
         const countVerts = this.vertexStream.vert.getElemCount();
         const countFaces = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
@@ -291,13 +231,15 @@ class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
+        debugger;
+
         return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
             materials: this.uuid,
             children: [
-                // this.getDecodeTrisInfo(library),
+                this.getDecodeTrisInfo(library),
             ]
         };
     }
@@ -344,4 +286,4 @@ class UStaticMesh extends UPrimitive {
 }
 
 export default UStaticMesh;
-export { UStaticMesh };
+export { UStaticMesh, FStaticMeshTriangle };

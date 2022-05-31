@@ -1,8 +1,8 @@
 import UObject from "../un-object";
 import BufferValue from "../../buffer-value";
-import FArray, { FPrimitiveArray } from "../un-array";
-import FRawColorStream from "../un-raw-color-stream";
 import FConstructable from "../un-constructable";
+import FRawColorStream from "../un-raw-color-stream";
+import FArray, { FPrimitiveArray } from "../un-array";
 
 
 class FUnkStruct extends FConstructable {
@@ -15,7 +15,7 @@ class FUnkStruct extends FConstructable {
         const int32 = new BufferValue(BufferValue.int32);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
-        this.unkArray0 = this.unkArray0.load(pkg).getTypedArray();
+        this.unkArray0 = this.unkArray0.load(pkg).getTypedArray() as any;
         this.unkInt0 = pkg.read(int32).value as number;
 
         return this;
@@ -25,8 +25,8 @@ class FUnkStruct extends FConstructable {
 class UStaticMeshInstance extends UObject {
     protected colorStream = new FRawColorStream();
 
-    protected unkArray0 = new FArray(FUnkStruct);
-    protected unkArray1 = new FArray(FUnkStruct);
+    protected unkArray0: FArray<FUnkStruct> = new FArray(FUnkStruct as any);
+    protected unkArray1: FArray<FUnkStruct> = new FArray(FUnkStruct as any);
 
     protected unkArrIndex: number[];
 
