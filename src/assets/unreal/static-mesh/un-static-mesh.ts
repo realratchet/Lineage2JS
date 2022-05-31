@@ -291,16 +291,14 @@ class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
-        const children: IBaseObjectDecodeInfo[] = [];
-
-        // children.push(this.getDecodeTrisInfo(library));
-
         return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
             materials: this.uuid,
-            children
+            children: [
+                // this.getDecodeTrisInfo(library),
+            ]
         };
     }
 
