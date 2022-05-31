@@ -4,8 +4,8 @@ import FConstructable from "../un-constructable";
 import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
 
-class FUnkStruct extends FConstructable {
-    public unkIndex0: number;
+class FUnkLightStruct extends FConstructable {
+    public lightIndex: number; // seems to be light index
     public unkArray0 = new FPrimitiveArray(BufferValue.uint8);
     public unkInt0: number;
 
@@ -13,7 +13,7 @@ class FUnkStruct extends FConstructable {
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
 
-        this.unkIndex0 = pkg.read(compat32).value as number;
+        this.lightIndex = pkg.read(compat32).value as number;
         this.unkArray0 = this.unkArray0.load(pkg).getTypedArray() as any;
         this.unkInt0 = pkg.read(int32).value as number;
 
@@ -24,8 +24,8 @@ class FUnkStruct extends FConstructable {
 class UStaticMeshInstance extends UObject {
     protected colorStream = new FRawColorStream();
 
-    protected unkArray0: FArray<FUnkStruct> = new FArray(FUnkStruct as any);
-    protected unkArray1: FArray<FUnkStruct> = new FArray(FUnkStruct as any);
+    protected unkLights0: FArray<FUnkLightStruct> = new FArray(FUnkLightStruct as any);
+    protected unkLights1: FArray<FUnkLightStruct> = new FArray(FUnkLightStruct as any);
 
     protected unkArrIndex: number[];
 
@@ -49,19 +49,19 @@ class UStaticMeshInstance extends UObject {
             debugger;
         } else this.colorStream.load(pkg);
 
-        if (0x6D < verArchive) this.unkArray0.load(pkg);
-        if (0x03 < verLicense) this.unkArray1.load(pkg);
+        if (0x6D < verArchive) this.unkLights0.load(pkg);
+        if (0x03 < verLicense) this.unkLights1.load(pkg);
         if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read(compat32).value as number);
 
         this.readHead = pkg.tell();
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
-        // const mappedNames = this.unkArray0.map(a => pkg.exports[a.unkIndex0 - 1].objectName.includes("Light");
+        const mappedNames = this.unkLights0.map(a => pkg.exports[a.lightIndex - 1].objectName);
+        const notLights = mappedNames.filter(x => !x.toLocaleLowerCase().startsWith("light"));
 
-        // console.assert(this.unkArray0.map(a => pkg.exports[a.unkIndex0 - 1].objectName.includes("Light")).filter(x => !x).length === 0)
-
-        // debugger;
+        if (notLights.length > 0)
+            debugger;
 
         return this;
     }
