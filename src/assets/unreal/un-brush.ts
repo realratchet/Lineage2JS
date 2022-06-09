@@ -15,6 +15,7 @@ class UBrush extends UAActor {
     protected isBlockingKarma: boolean;
     protected isDynamicLight: boolean;
     protected isStaticLighting: boolean;
+    protected isLightChanged: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -29,7 +30,8 @@ class UBrush extends UAActor {
             "bBlockPlayers": "isBlockingPlayers",
             "bBlockKarma": "isBlockingKarma",
             "bDynamicLight": "isDynamicLight",
-            "bStaticLighting": "isStaticLighting"
+            "bStaticLighting": "isStaticLighting",
+            'bLightChanged': "isLightChanged"
         });
     }
 }

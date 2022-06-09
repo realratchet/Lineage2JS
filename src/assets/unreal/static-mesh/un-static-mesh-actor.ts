@@ -1,11 +1,6 @@
-import UExport from "../un-export";
-import UPackage from "../un-package";
 import UAActor from "../un-aactor";
-import UStaticMesh from "./un-static-mesh";
-import UStaticMeshInstance from "./un-static-mesh-instance";
 import { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
-import USound from "../un-sound";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -59,14 +54,29 @@ class UStaticMeshActor extends UAActor {
     public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
         await this.onLoaded();
 
+        if (this.instance) this.instance.setActor(this);
+
+        // if (this.colLocation.sub(this.location).length() > 1e-3)
+        //     debugger;
+
+        const lights: any[] = [];
+        // const lights: ILightDecodeInfo[] = (await this.instance.getDecodeInfo(library)).filter(l => l.directional);
+
+        const siblings = [...lights];
+
+        // debugger;
+
         const info = {
             type: "StaticMeshActor",
             name: this.objectName,
-            position: [this.location.x, this.location.z, this.location.y],
-            scale: [this.scale.x, this.scale.z, this.scale.y],
+            position: this.colLocation.getVectorElements(),
+            scale: this.scale.getVectorElements(),
             rotation: this.rotation.getEulerElements(),
-            children: [await this.mesh.getDecodeInfo(library)]
+            children: [await this.mesh.getDecodeInfo(library)/*, this.getRegionLineHelper(library)*/],
+            siblings,
         } as IBaseObjectDecodeInfo;
+
+        // debugger;
 
         return info;
     }
@@ -89,6 +99,7 @@ class UStaticMeshActor extends UAActor {
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
+
 
         // if (this.scale.vector.x !== 1 || this.scale.vector.y !== 1 || this.scale.vector.z !== 1) debugger;
 
@@ -125,7 +136,6 @@ class UStaticMeshActor extends UAActor {
         // // const prop2 = await pkg.read(BufferValue.allocBytes(5)).value as DataView;
 
         // debugger;
-
 
         return this;
     }

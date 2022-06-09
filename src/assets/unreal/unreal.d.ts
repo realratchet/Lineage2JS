@@ -75,6 +75,7 @@ type FUnknownStruct = import("./un-unknown-struct").FUnknownStruct;
 type FBSPNode = import("./bsp/un-bsp-node").FBSPNode;
 type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
 type FVert = import("./model/un-vert").FVert;
+type FBox = import("./un-box").FBox;
 
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
@@ -82,7 +83,7 @@ type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 type DecodableTexture_T = "rgba" | "dds" | "g16";
 type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
-interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
+interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T, color?: boolean }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "modifier",
     modifierType: DecodableMaterialModifier_T
@@ -166,6 +167,7 @@ interface IBaseObjectDecodeInfo {
     position?: Vector3Arr,
     rotation?: EulerArr,
     scale?: Vector3Arr,
+    siblings?: IBaseObjectDecodeInfo[],
     children?: IBaseObjectDecodeInfo[]
 }
 
@@ -184,6 +186,7 @@ interface IGeometryDecodeInfo {
     attributes: {
         positions?: Float32Array;
         normals?: Float32Array;
+        colors?: Float32Array,
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
     };
@@ -200,14 +203,17 @@ interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
 interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
     type: "Edges",
     geometry: string,
-    color?: [number, number, number]
+    color?: [number, number, number],
+    ignoreDepth?: boolean
 }
 
 interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
     type: "Light",
     color: [number, number, number],
     radius: number,
-    lightType: number,
+    directional: boolean,
+    lightType: LightType_T,
+    lightEffect: LightEffect_T,
     cone: number
 }
 
@@ -218,3 +224,34 @@ interface IDecodeLibrary {
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
+
+type LightType_T = number | {
+    None: 0,
+    Steady: 1,
+    Pulse: 2,
+    Blink: 3,
+    Flicker: 4,
+    Strobe: 5,
+    SubtlePulse: 6,
+    TexturePaletteOnce: 7,
+    TexturePaletteLoop: 8
+};
+
+type LightEffect_T = number | {
+    TorchWaver: 0x0,
+    FireWaver: 0x1,
+    WateryShimmer: 0x2,
+    SearchLight: 0x3,
+    SlowWave: 0x4,
+    FastWave: 0x5,
+    Shock: 0x6,
+    Disco: 0x7,
+    Spotlight: 0x8,
+    NonIncidence: 0x9,
+    ShellOnly: 0xA,
+    OmniBumpMap: 0xB,
+    Interference: 0xC,
+    Cylinder: 0xD,
+    Rotor: 0xE,
+    Unused: 0xF
+};

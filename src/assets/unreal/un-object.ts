@@ -6,6 +6,9 @@ import { generateUUID } from "three/src/math/MathUtils";
 abstract class UObject {
     public objectName = "Exp_None";
     public readonly uuid = generateUUID();
+    public readonly careUnread: boolean = true;
+
+    public skipRemaining: boolean = false;
 
     protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
@@ -15,6 +18,7 @@ abstract class UObject {
 
     public constructor(...params: any[]) { }
 
+    protected getSignedMap(): { [key: string]: boolean } { return {}; }
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
     protected setReadPointers(exp: UExport) {
@@ -28,6 +32,7 @@ abstract class UObject {
 
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
+
         do {
             const tag = PropertyTag.from(pkg, this.readHead);
 
@@ -49,8 +54,9 @@ abstract class UObject {
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
-        if (pkg.tell() < this.readTail && (this.readTail - pkg.tell()) > 17 && this.constructor.name !== "USound" && this.constructor.name !== "UStaticMesh")
-            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes (${((this.readTail - pkg.tell()) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
+        if (this.skipRemaining) this.readHead = this.readTail;
+        if (this.bytesUnread > this.readHeadOffset && this.careUnread)
+            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();
     }
@@ -82,12 +88,14 @@ abstract class UObject {
         if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
             throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
+        const isSigned = this.getPropertyIsSigned(tag);
+
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int8)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int8 : BufferValue.uint8)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_IntProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int32)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int32 : BufferValue.uint32)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_BoolProperty: this.setProperty(tag, tag.boolValue); break;
             case UNP_PropertyTypes.UNP_FloatProperty:
@@ -172,6 +180,16 @@ abstract class UObject {
         return true;
     }
 
+    protected getPropertyIsSigned(tag: PropertyTag): boolean {
+        const props = this.getSignedMap();
+        const { name: propName } = tag;
+
+        if (!(propName in props))
+            return true;
+
+        return props[propName];
+    }
+
     protected getPropertyVarName(tag: PropertyTag): string {
         const props = this.getPropertyMap();
         const { name: propName } = tag;
@@ -179,9 +197,7 @@ abstract class UObject {
         if (!(propName in props))
             return null;
 
-        const varName = props[propName];
-
-        return varName;
+        return props[propName];
     }
 
     protected setProperty(tag: PropertyTag, value: any) {

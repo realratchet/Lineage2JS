@@ -20,6 +20,7 @@ class AssetLoader {
     }
 
     public getPackage(pkgName: string): Promise<UPackage> { return this.packages.get(pkgName.toLowerCase()); }
+    public getPackageByPath(path: string): Promise<UPackage> { return this.packages.get(pathToPkgName(path).toLowerCase()); }
     public hasPackage(path: string) { return this.packages.has(pathToPkgName(path).toLowerCase()); }
     public async load(pkgOrPromise: Promise<UPackage> | UPackage): Promise<UPackage> {
         return await (await pkgOrPromise).decode();

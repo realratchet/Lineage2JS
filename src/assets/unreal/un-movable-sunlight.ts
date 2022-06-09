@@ -1,6 +1,4 @@
-import UObject from "./un-object";
 import UAActor from "./un-aactor";
-import BufferValue from "../buffer-value";
 
 class UNMovableSunLight extends UAActor {
     protected readHeadOffset: number = 17;
@@ -11,6 +9,12 @@ class UNMovableSunLight extends UAActor {
         return Object.assign({}, super.getPropertyMap(), {
             "LightBrightness": "brightness"
         });
+    }
+
+    protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
+        super.doLoad(pkg, exp);
+
+        this.readHead = pkg.tell();
     }
 
     // protected doLoad(pkg: UPackage, exp: UExport): void {

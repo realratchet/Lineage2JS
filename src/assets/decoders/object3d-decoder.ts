@@ -24,11 +24,9 @@ function fetchGeometry(info: IGeometryDecodeInfo): THREE.BufferGeometry {
         geometry.setAttribute(`uv${i === 0 ? "" : i + 1}`, new Float32BufferAttribute(arrUv, 2));
     });
 
-    if (info.attributes.normals)
-        geometry.setAttribute("normal", new Float32BufferAttribute(info.attributes.normals, 3));
-
-    if (info.attributes.positions)
-        geometry.setAttribute("position", new Float32BufferAttribute(info.attributes.positions, 3));
+    if (info.attributes.normals) geometry.setAttribute("normal", new Float32BufferAttribute(info.attributes.normals, 3));
+    if (info.attributes.positions) geometry.setAttribute("position", new Float32BufferAttribute(info.attributes.positions, 3));
+    if (info.attributes.colors) geometry.setAttribute("color", new Float32BufferAttribute(info.attributes.colors, 3));
 
     if (info.indices) {
         const AttributeConstructor = getAttributeForTypedArray(info.indices.constructor as IndexTypedArray);
@@ -77,9 +75,14 @@ function decodeSimpleObject(library: IDecodeLibrary, Constructor: (typeof Object
 }
 
 function decodeEdges(library: IDecodeLibrary, info: IEdgesObjectDecodeInfo): THREE.Line {
+    const ignoreDepth = "ignoreDepth" in info ? info.ignoreDepth : false;
     const material = new LineBasicMaterial({
-        color: info.color ? new Color().fromArray(info.color) : 0xffff00
+        color: info.color ? new Color().fromArray(info.color) : 0xffff00,
+        depthTest: !ignoreDepth,
+        depthWrite: !ignoreDepth,
+        transparent: ignoreDepth
     });
+
     const mesh = new LineSegments(fetchGeometry(library.geometries[info.geometry] as IGeometryDecodeInfo), material);
 
     applySimpleProperties(library, mesh, info);
@@ -88,8 +91,19 @@ function decodeEdges(library: IDecodeLibrary, info: IEdgesObjectDecodeInfo): THR
 }
 
 function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
-    const materials = decodeMaterial(library, library.materials[info.materials]);
-    const mesh = new Mesh(fetchGeometry(library.geometries[info.geometry] as IGeometryDecodeInfo), materials);
+    const infoGeo = library.geometries[info.geometry];
+    const infoMats = library.materials[info.materials];
+
+    const materials = decodeMaterial(library, infoMats);
+    const mesh = new Mesh(fetchGeometry(infoGeo as IGeometryDecodeInfo), materials);
+
+    if (infoGeo.attributes.colors) {
+        (materials instanceof Array ? materials : [materials]).forEach(mat => {
+            if (!mat) return;
+
+            mat.vertexColors = true;
+        });
+    }
 
     applySimpleProperties(library, mesh, info);
 

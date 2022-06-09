@@ -5,6 +5,8 @@ class UPointRegion extends UObject {
     protected indexLeaf: number;
     protected zoneNumber: number;
 
+    public getZone() { return this.zone; }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Zone": "zone",
@@ -17,6 +19,16 @@ class UPointRegion extends UObject {
         this.readHead = this.readStart = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
     }
+
+    // protected postLoad(pkg: UPackage, exp: UExport<UObject>): void {
+    //     super.postLoad(pkg, exp);
+
+    //     Promise.all(this.promisesLoading).then(z => {
+    //         const self = this;
+
+    //         debugger;
+    //     });
+    // }
 }
 
 export default UPointRegion;

@@ -3,7 +3,7 @@ import BufferValue from "../../buffer-value";
 import FConstructable from "../un-constructable";
 
 class FStaticMeshUVStream extends FConstructable {
-    public readonly data: FArray<FMeshUVFloat> = new FArray(FMeshUVFloat);
+    public readonly data: FArray<FMeshUVFloat> = new FArray(FMeshUVFloat as any);
 
     public f10: number;
     public f1C: number;

@@ -37,6 +37,15 @@ class ULevelInfo extends UAActor {
             "AmbientBrightness": "ambientBrightness",
         });
     }
+
+    // public doLoad(pkg: UPackage, exp: UExport) {
+    //     super.doLoad(pkg, exp);
+
+    //     this.readHead = pkg.tell();
+
+    //     debugger;
+        
+    // }
 }
 
 export default ULevelInfo;

@@ -1,8 +1,6 @@
 import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
 import UObject from "./un-object";
-import { PropertyTag } from "./un-property";
 
 class FPlane extends FConstructable {
     public x: number;
@@ -46,11 +44,12 @@ class UPlane extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-
+    protected preLoad(pkg: UPackage, tag: any): void {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
+    }
 
+    public doLoad(pkg: UPackage, tag: any): this {
 
         this.readNamedProps(pkg);
 

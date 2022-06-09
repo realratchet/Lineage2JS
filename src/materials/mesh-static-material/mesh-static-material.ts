@@ -53,11 +53,14 @@ class MeshStaticMaterial extends ShaderMaterial {
         // const hasVisible = "visible" in parameters && parameters.visible !== null && parameters.visible !== undefined;
         // const hasTransformedTexture = "transformedTexture" in parameters && parameters.transformedTexture !== null && parameters.transformedTexture !== undefined;
 
+        // debugger;
+
         const defines: { [key: string]: any } = {};
         const uniforms: { [key: string]: Uniform } = {
             alphaTest: new Uniform(1e-3),
             globalTime: new Uniform(0),
-            diffuse: new Uniform(new Color(1, 1, 1)),
+            diffuse: new Uniform(new Color(0xffffff)),
+            // diffuse: new Uniform(new Color(0x787878)),
             opacity: new Uniform(1),
             uvTransform: new Uniform(new Matrix3()),
             uv2Transform: new Uniform(new Matrix3()),

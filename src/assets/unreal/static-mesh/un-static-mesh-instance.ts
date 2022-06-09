@@ -9,6 +9,8 @@ class FUnkLightStruct extends FConstructable {
     public unkArray0 = new FPrimitiveArray(BufferValue.uint8);
     public unkInt0: number;
 
+    public light: ULight;
+
     public load(pkg: UPackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
@@ -16,6 +18,13 @@ class FUnkLightStruct extends FConstructable {
         this.lightIndex = pkg.read(compat32).value as number;
         this.unkArray0 = this.unkArray0.load(pkg).getTypedArray() as any;
         this.unkInt0 = pkg.read(int32).value as number;
+
+        this.promisesLoading.push(new Promise<void>(async resolve => {
+
+            this.light = await pkg.fetchObject<ULight>(this.lightIndex);
+
+            resolve();
+        }));
 
         return this;
     }
@@ -29,6 +38,20 @@ class UStaticMeshInstance extends UObject {
 
     protected unkArrIndex: number[];
 
+    protected actor: UStaticMeshActor;
+
+    public setActor(actor: UStaticMeshActor) { this.actor = actor; }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+        await this.onLoaded();
+
+        const allLights = [...this.unkLights0/*, ...this.unkLights1*/];
+        const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
+        const filteredMaps = (Object.values(filteredMapsDict) as ULight[]).filter(l => l.getZone() === this.actor.getZone());
+
+        return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
+    }
+
     protected doLoad(pkg: UPackage, exp: UExport): this {
         // basemodel id 7364 -> export 7363
         // level id 5 -> export 4
@@ -37,6 +60,7 @@ class UStaticMeshInstance extends UObject {
         // vertices 238
         // faces 390
         // material 18
+
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
@@ -47,7 +71,9 @@ class UStaticMeshInstance extends UObject {
         if (verArchive < 0x70) {
             console.warn("Unsupported yet");
             debugger;
-        } else this.colorStream.load(pkg);
+        } else this.colorStream.load(pkg);  // this is not always 0! need to add this
+
+        this.readHead = pkg.tell();
 
         if (0x6D < verArchive) this.unkLights0.load(pkg);
         if (0x03 < verLicense) this.unkLights1.load(pkg);
@@ -57,13 +83,7 @@ class UStaticMeshInstance extends UObject {
 
         console.assert(this.readHead === this.readTail, "Should be zero");
 
-        debugger;
-
-        // const mappedNames = this.unkLights0.map(a => pkg.exports[a.lightIndex - 1].objectName);
-        // const notLights = mappedNames.filter(x => !x.toLocaleLowerCase().startsWith("light"));
-
-        // if (notLights.length > 0)
-        //     debugger;
+        // debugger;
 
         return this;
     }

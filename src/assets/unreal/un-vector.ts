@@ -111,6 +111,96 @@ class FVector extends FConstructable {
         );
     }
 
+    getVectorElements(): [number, number, number] { return [this.x, this.z, this.y]; }
+
+    applyRotator(rotator: FRotator, negate: boolean): FVector {
+
+        let [x, y, z, order] = rotator.getEulerElements();
+
+        if (negate) x = -x, y = -y, z = -z;
+
+        // http://www.mathworks.com/matlabcentral/fileexchange/
+        // 	20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/
+        //	content/SpinCalc.m
+
+        const cos = Math.cos;
+        const sin = Math.sin;
+
+        const c1 = cos(x / 2);
+        const c2 = cos(y / 2);
+        const c3 = cos(z / 2);
+
+        const s1 = sin(x / 2);
+        const s2 = sin(y / 2);
+        const s3 = sin(z / 2);
+
+        let qx: number, qy: number, qz: number, qw: number;
+
+        switch (order) {
+            case "XYZ":
+                qx = s1 * c2 * c3 + c1 * s2 * s3;
+                qy = c1 * s2 * c3 - s1 * c2 * s3;
+                qz = c1 * c2 * s3 + s1 * s2 * c3;
+                qw = c1 * c2 * c3 - s1 * s2 * s3;
+                break;
+            case "YXZ":
+                qx = s1 * c2 * c3 + c1 * s2 * s3;
+                qy = c1 * s2 * c3 - s1 * c2 * s3;
+                qz = c1 * c2 * s3 - s1 * s2 * c3;
+                qw = c1 * c2 * c3 + s1 * s2 * s3;
+                break;
+            case "ZXY":
+                qx = s1 * c2 * c3 - c1 * s2 * s3;
+                qy = c1 * s2 * c3 + s1 * c2 * s3;
+                qz = c1 * c2 * s3 + s1 * s2 * c3;
+                qw = c1 * c2 * c3 - s1 * s2 * s3;
+                break;
+
+            case "ZYX":
+                qx = s1 * c2 * c3 - c1 * s2 * s3;
+                qy = c1 * s2 * c3 + s1 * c2 * s3;
+                qz = c1 * c2 * s3 - s1 * s2 * c3;
+                qw = c1 * c2 * c3 + s1 * s2 * s3;
+                break;
+            case "YZX":
+                qx = s1 * c2 * c3 + c1 * s2 * s3;
+                qy = c1 * s2 * c3 + s1 * c2 * s3;
+                qz = c1 * c2 * s3 - s1 * s2 * c3;
+                qw = c1 * c2 * c3 - s1 * s2 * s3;
+                break;
+            case "XZY":
+                qx = s1 * c2 * c3 - c1 * s2 * s3;
+                qy = c1 * s2 * c3 - s1 * c2 * s3;
+                qz = c1 * c2 * s3 + s1 * s2 * c3;
+                qw = c1 * c2 * c3 + s1 * s2 * s3;
+                break;
+            default: throw new Error(`Unsupported order: ${order}`)
+        }
+
+        return this.applyQuaternion(qx, qy, qz, qw);
+    }
+
+    applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
+
+        const x = this.x, y = this.y, z = this.z;
+
+        // calculate quat * vector
+
+        const ix = qw * x + qy * z - qz * y;
+        const iy = qw * y + qz * x - qx * z;
+        const iz = qw * z + qx * y - qy * x;
+        const iw = - qx * x - qy * y - qz * z;
+
+        // calculate result * inverse quat
+
+        const nx = ix * qw + iw * - qx + iy * - qz - iz * - qy;
+        const ny = iy * qw + iw * - qy + iz * - qx - ix * - qz;
+        const nz = iz * qw + iw * - qz + ix * - qy - iy * - qx;
+
+        return new FVector(nx, ny, nz);
+    }
+
+
     applyMatrix4(m: FMatrix) {
 
         const x = this.x, y = this.y, z = this.z;

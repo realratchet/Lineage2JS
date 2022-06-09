@@ -1,7 +1,7 @@
 
 import UBrush from "./un-brush";
 
-class UPhysicsVolume extends UBrush { 
+class UPhysicsVolume extends UBrush {
     protected readHeadOffset = 17;
 
     protected priority: number;
@@ -11,7 +11,6 @@ class UPhysicsVolume extends UBrush {
     protected isPendingDelete: boolean;
     protected colLocation: FVector;
     protected nextPhysicsVolume: UPhysicsVolume;
-    protected isLightChanged: boolean;
     protected isSelected: boolean;
 
     protected getPropertyMap() {
@@ -23,7 +22,6 @@ class UPhysicsVolume extends UBrush {
             "bPendingDelete": "isPendingDelete",
             "ColLocation": "colLocation",
             "NextPhysicsVolume": "nextPhysicsVolume",
-            "bLightChanged": "isLightChanged",
             "bSelected": "isSelected"
         });
     }

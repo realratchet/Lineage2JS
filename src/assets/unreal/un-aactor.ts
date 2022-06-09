@@ -1,10 +1,7 @@
 import UObject from "./un-object";
-import UTextureModifyInfo from "./un-texture-modify-info";
-import UPointRegion from "./un-point-region";
-import UPhysicsVolume from "./un-physics-volume";
 import FVector from "./un-vector";
 import FRotator from "./un-rotator";
-import ULevel from "./un-level";
+import { generateUUID } from "three/src/math/MathUtils";
 
 // 15 byte header
 // byte  1: compat importing same class
@@ -44,6 +41,38 @@ class UAActor extends UObject {
     protected distanceFogEnd: number;
     protected distanceFogStart: number;
     protected distanceFogColor: FColor;
+
+    public getRegion() { return this.region; }
+    public getZone() { return this.region.getZone(); }
+
+    protected getRegionLineHelper(library: IDecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+        const lineGeometryUuid = generateUUID();
+        const _a = this.region.getZone().location;
+        const _b = this.location;
+
+        const a = new FVector(_a.x, _a.z, _a.y);
+        const b = new FVector(_b.x, _b.z, _b.y);
+
+        const geoPosition = a.sub(b)//.applyRotator(this.rotation, true);
+        const regionHelper = {
+            type: "Edges",
+            geometry: lineGeometryUuid,
+            color,
+            ignoreDepth
+        } as IEdgesObjectDecodeInfo;
+
+        library.geometries[lineGeometryUuid] = {
+            indices: new Uint8Array([0, 1]),
+            attributes: {
+                positions: new Float32Array([
+                    0, 0, 0,
+                    geoPosition.x, geoPosition.y, geoPosition.z
+                ])
+            }
+        };
+
+        return regionHelper;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

@@ -1,11 +1,10 @@
-import UObject from "./un-object"
-import { FPrimitiveArray } from "./un-array";
-import BufferValue from "../buffer-value";
 import FColor from "./un-color";
-import UExport from "./un-export";
-import UPackage from "./un-package";
+import UObject from "./un-object"
+import BufferValue from "../buffer-value";
+import { FPrimitiveArray } from "./un-array";
 
 abstract class UBaseMaterial extends UObject {
+    public readonly skipRemaining = true;
     public abstract getDecodeInfo(library: IDecodeLibrary): Promise<string>;
 }
 
@@ -61,6 +60,30 @@ enum TexRotationType_T {
         break;
     }
  */
+
+class UFinalBlend extends UBaseModifier {
+    protected material: UMaterial;
+    protected frameBufferBlending: number;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Material": "material",
+            "FrameBufferBlending": "frameBufferBlending"
+        });
+    }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
+        await this.onLoaded();
+
+        await this.material.getDecodeInfo(library);
+
+        return this.material.uuid;
+    }
+}
 
 class UShader extends UMaterial {
     protected diffuse: UMaterial = null;
@@ -408,4 +431,4 @@ class FStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, OutputBlending_T };
+export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T };

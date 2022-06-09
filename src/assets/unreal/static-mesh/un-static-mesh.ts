@@ -92,11 +92,13 @@ class UStaticMesh extends UPrimitive {
 
         if (verLicense < 0x11) {
             console.warn("Not supported yet");
+            this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
         } else {
             if (verArchive < 0x3E) {
                 console.warn("Not supported yet");
+                this.skipRemaining = true;
                 if (triggerDebuggerOnUnsupported) debugger;
                 return;
             } else {
@@ -109,6 +111,7 @@ class UStaticMesh extends UPrimitive {
 
         if (verArchive < 0x72) {
             console.warn("Not supported yet");
+            this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
         }
@@ -137,6 +140,7 @@ class UStaticMesh extends UPrimitive {
 
         if (verArchive < 0X5C) {
             console.warn("Not supported yet");
+            this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
         }
@@ -144,6 +148,7 @@ class UStaticMesh extends UPrimitive {
         if (0x4E < verArchive) {
             if (verArchive < 0x61) {
                 console.warn("Not supported yet");
+                this.skipRemaining = true;
                 if (triggerDebuggerOnUnsupported) debugger;
                 return;
             } else this.staticMeshTris.load(pkg);
@@ -151,6 +156,7 @@ class UStaticMesh extends UPrimitive {
 
         if (verArchive < 0x51) {
             console.warn("Not supported yet");
+            this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
         } else this.unkInt0 = pkg.read(int32).value as number;
@@ -159,8 +165,6 @@ class UStaticMesh extends UPrimitive {
         if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value as number;
 
         this.readHead = pkg.tell();
-
-        // debugger;
 
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
@@ -186,7 +190,7 @@ class UStaticMesh extends UPrimitive {
         // 24 x 117 = 2808 | (24 x 39 = 936)
 
         const countVerts = this.vertexStream.vert.getElemCount();
-        const countFaces = this.indexStream.indices.getElemCount();
+        const countIndices = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
 
         if (countUvs > 1) debugger;
@@ -195,13 +199,50 @@ class UStaticMesh extends UPrimitive {
 
         const TypedIndicesArray = getTypedArrayConstructor(countVerts);
         const positions = new Float32Array(countVerts * 3);
+        const colors = new Float32Array(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
-        const indices = new TypedIndicesArray(countFaces);
+        const indices = new TypedIndicesArray(countIndices);
+
+        const _colors = [
+            /*0000000*/ 0x3c, 0x59, 0xff, 0x31, 0x4a, 0x6f, 0xff, 0x3d, 0x4e, 0x6f, 0xff, 0x3e, 0x36, 0x51, 0xff, 0x2c,
+            /*0000010*/ 0x00, 0x00, 0xff, 0x00, 0x45, 0x67, 0xff, 0x39, 0x4e, 0x72, 0xff, 0x3e, 0x00, 0x00, 0xff, 0x00,
+            /*0000020*/ 0x0c, 0x12, 0xff, 0x0a, 0x0a, 0x10, 0xff, 0x08, 0x0c, 0x12, 0xff, 0x0a, 0x0f, 0x16, 0xff, 0x0c,
+            /*0000030*/ 0x00, 0x00, 0xff, 0x00, 0x08, 0x0c, 0xff, 0x06, 0x0a, 0x10, 0xff, 0x08, 0x00, 0x00, 0xff, 0x00,
+            /*0000040*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x00, 0x00, 0xff, 0x00,
+            /*0000050*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x42, 0xff, 0x23, 0x27, 0x3a, 0xff, 0x20, 0x2c, 0x43, 0xff, 0x24,
+            /*0000060*/ 0x12, 0x1b, 0xff, 0x0f, 0x1e, 0x2b, 0xff, 0x18, 0x3a, 0x47, 0xff, 0x29, 0x08, 0x0c, 0xff, 0x06,
+            /*0000070*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+            /*0000080*/ 0x44, 0x64, 0xff, 0x37, 0x41, 0x5c, 0xff, 0x33, 0x52, 0x71, 0xff, 0x40, 0x48, 0x6b, 0xff, 0x3b,
+            /*0000090*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x0e, 0x15, 0xff, 0x0b, 0x09, 0x0e, 0xff, 0x08,
+            /*00000a0*/ 0x00, 0x00, 0xff, 0x00, 0x2b, 0x40, 0xff, 0x23, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+            /*00000b0*/ 0x00, 0x00, 0xff, 0x00, 0x4e, 0x6f, 0xff, 0x3e, 0x4a, 0x6f, 0xff, 0x3d, 0x00, 0x00, 0xff, 0x00,
+            /*00000c0*/ 0x00, 0x00, 0xff, 0x00, 0x0f, 0x16, 0xff, 0x0c, 0x0c, 0x12, 0xff, 0x0a, 0x00, 0x00, 0xff, 0x00,
+            /*00000d0*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x2c, 0x43, 0xff, 0x24
+        ];
+
+        const _colors2 = [
+            89, 60, 49, 255, 111, 74, 61, 255, 111, 78, 62, 255, 81, 54, 44, 255,
+            0, 0, 0, 255, 103, 69, 57, 255, 114, 78, 62, 255, 0, 0, 0, 255,
+            18, 12, 10, 255, 16, 10, 8, 255, 18, 12, 10, 255, 22, 15, 12, 255,
+            0, 0, 0, 255, 12, 8, 6, 255, 16, 10, 8, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 0, 0, 0, 255, 67, 44, 36, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 66, 44, 35, 255, 58, 39, 32, 255, 67, 44, 36, 255,
+            27, 18, 15, 255, 43, 30, 24, 255, 71, 58, 41, 255, 12, 8, 6, 255,
+            0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+            100, 68, 55, 255, 92, 65, 51, 255, 113, 82, 64, 255, 107, 72, 59, 255,
+            0, 0, 0, 255, 0, 0, 0, 255, 21, 14, 11, 255, 14, 9, 8, 255,
+            0, 0, 0, 255, 64, 43, 35, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 111, 78, 62, 255, 111, 74, 61, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 22, 15, 12, 255, 18, 12, 10, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 67, 44, 36, 255, 67, 44, 36, 255
+        ];
+
 
         for (let i = 0; i < countVerts; i++) {
             const { position, normal } = this.vertexStream.vert.getElem(i);
             const { u, v } = this.uvStream.getElem(0).data.getElem(i);
+            const color = this.colorStream.color.getElem(i);
 
             positions[i * 3 + 0] = position.x;
             positions[i * 3 + 1] = position.z;
@@ -211,20 +252,35 @@ class UStaticMesh extends UPrimitive {
             normals[i * 3 + 1] = normal.z;
             normals[i * 3 + 2] = normal.y;
 
+            // colors[i * 3 + 0] = _colors[i * 4 + 1] / 255;
+            // colors[i * 3 + 1] = _colors[i * 4 + 0] / 255;
+            // colors[i * 3 + 2] = _colors[i * 4 + 3] / 255;
+
+            colors[i * 3 + 0] = color.r / 255;
+            colors[i * 3 + 1] = color.g / 255;
+            colors[i * 3 + 2] = color.b / 255;
+
             uvs[i * 2 + 0] = u;
             uvs[i * 2 + 1] = v;
         }
 
-        for (let i = 0; i < countFaces; i++)
+        for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
         const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
 
+        materials.forEach(uuid => {
+            if (!library.materials[uuid]) return;
+
+            library.materials[uuid].color = true;
+        });
+
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
+                colors,
                 normals,
-                uvs,
+                uvs
             },
             indices,
             groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
@@ -232,8 +288,6 @@ class UStaticMesh extends UPrimitive {
         };
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
-        // debugger;
 
         return {
             type: "StaticMesh",

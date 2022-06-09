@@ -41,10 +41,12 @@ class FBSPNode extends FConstructable {
     public unkInt1: number;                  // 4 bytes, change between same surface nodes
 
     public surfaceOrigin = new FVector();                 // 12 bytes, origin of the bsp surface node
-    public unkValues = BufferValue.allocBytes(4 + 8 + 8); // 20 bytes, only first 4 change others usually 0?
+    public unkFloat: number;
+    public unkBytes = BufferValue.allocBytes(16) // 16 bytes, usually 0?
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         const uint64 = new BufferValue(BufferValue.uint64);
+        const float = new BufferValue(BufferValue.float);
         const int32 = new BufferValue(BufferValue.int32);
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat32 = new BufferValue(BufferValue.compat32);
@@ -65,7 +67,9 @@ class FBSPNode extends FConstructable {
         this.iRenderBound = pkg.read(compat32).value as number;
 
         this.surfaceOrigin.load(pkg);
-        pkg.read(this.unkValues);
+        this.unkFloat = pkg.read(float).value as number;
+
+        pkg.read(this.unkBytes);
 
         // const unkId = pkg.read(uint32).value as number;
         // const unkConnZones = pkg.read(uint64).value as number;
@@ -76,14 +80,13 @@ class FBSPNode extends FConstructable {
 
         this.numVertices = pkg.read(uint8).value as number;
 
-        this.iLeaf[0] = pkg.read(uint32).value as number;
-        this.iLeaf[1] = pkg.read(uint32).value as number;
-
+        this.iLeaf[0] = pkg.read(int32).value as number;
+        this.iLeaf[1] = pkg.read(int32).value as number;
 
         this.unkInt0 = pkg.read(uint32).value as number;
         this.unkInt1 = pkg.read(uint32).value as number;
 
-        this.iLightmapIndex = pkg.read(uint32).value as number;
+        this.iLightmapIndex = pkg.read(int32).value as number;
 
         return this;
     }

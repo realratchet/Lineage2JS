@@ -86,6 +86,11 @@ class UModel extends UPrimitive {
 
         console.assert(className === "Polys");
 
+        // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     this.polys = await pkg.fetchObject<UPolys>(polysId);
+        //     resolve();
+        // }));
+
         this.readHead = pkg.tell();
 
         this.bounds.load(pkg);

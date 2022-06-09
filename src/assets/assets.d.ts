@@ -10,6 +10,7 @@ type ValidTypes_T<T extends ValueTypeNames_T> = {
 };
 
 type UObjectTypes_T = "Texture" |
+    "FinalBlend" |
     "Palette" |
     "StaticMesh" |
     "Shader" |
@@ -79,4 +80,5 @@ type ValidConstructables_T<T> = typeof import("./unreal/un-color").FColor
     | typeof import("./unreal/static-mesh/un-static-mesh-collision").FStaticMeshCollisionNode
     | typeof import("./unreal/static-mesh/un-static-mesh-collision").FStaticMeshCollisionTriangle
     | typeof import("./unreal/static-mesh/un-static-mesh-triangle").FStaticMeshTriangle
+
     | FNumberExt<T>;

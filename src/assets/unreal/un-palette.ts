@@ -4,6 +4,7 @@ import FColor from "./un-color";
 
 class UPlatte extends UObject {
     public colors: FArray<FColor> = new FArray(FColor);
+    public readonly skipRemaining = true;
 
     public doLoad(pkg: UPackage, exp: UExport) {
         super.doLoad(pkg, exp);

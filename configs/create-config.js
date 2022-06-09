@@ -116,7 +116,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             module: { rules },
             plugins,
             output,
-            devServer: { port: 8080, allowedHosts: "all" },
+            devServer: { port: 8080, allowedHosts: "all", hot: false },
             devtool,
             context: __dirname
         };

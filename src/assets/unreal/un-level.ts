@@ -6,14 +6,17 @@ import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 import UModel from "./model/un-model";
 
-const LOAD_SUB_OBJECTS = false;
+const LOAD_SUB_OBJECTS = true;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
-    protected url: FURL = new FURL;
+    protected url: FURL = new FURL();
     protected reachSpecs: FPrimitiveArray = new FPrimitiveArray(BufferValue.uint32);
     public baseModelId: number;
     protected baseModel: UModel;
+
+    protected unkBytes = BufferValue.allocBytes(3);
+    protected unkInt0: number;
 
     public doLoad(pkg: UPackage, exp: UExport) {
         const int32 = new BufferValue(BufferValue.int32);
@@ -30,26 +33,28 @@ class ULevel extends UObject {
         let dbNum = pkg.read(int32).value as number;
         let dbMax = pkg.read(int32).value as number;
 
-        const objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
+        const ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
 
         this.readHead = pkg.tell();
 
         // debugger;
 
-        let objectIds2: number[];
-        if (objectIds.length === dbMax) {
+        let objectIds: number[];
+        if (ambientSoundIds.length === dbMax) {
             dbNum = pkg.read(int32).value as number;
             dbMax = pkg.read(int32).value as number;
 
-            objectIds2 = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
+            objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
         } else {
             debugger;
-            objectIds2 = [];
+            objectIds = [];
         }
 
         this.url.load(pkg);
 
-        pkg.seek(7);
+        this.unkInt0 = pkg.read(int32).value as number;
+        pkg.read(this.unkBytes);
+
         this.readHead = pkg.tell();
 
         this.reachSpecs.load(pkg);
@@ -68,16 +73,21 @@ class ULevel extends UObject {
             resolve();
         }));
 
+        for (let objectId of ambientSoundIds) {
+            this.promisesLoading.push(new Promise<void>(async resolve => {
+                if (!LOAD_SUB_OBJECTS) {
+                    resolve();
+                    return;
+                }
+                const object = await pkg.fetchObject(objectId);
 
-        // debugger;
+                if (object) this.objectList.push(object);
+
+                resolve();
+            }));
+        }
 
         for (let objectId of objectIds) {
-            // const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
-
-            // debugger;
-
-            // if (pkgName !== "UStaticMeshActor" && pkgName !== "UTerrainInfo") continue;
-
             this.promisesLoading.push(new Promise<void>(async resolve => {
                 if (!LOAD_SUB_OBJECTS) {
                     resolve();
@@ -91,26 +101,18 @@ class ULevel extends UObject {
             }));
         }
 
-        // for (let objectId of [1804]) {
-        for (let objectId of objectIds2) {
-            // const pkgName = pkg.getPackageName(pkg.exports[objectId - 1].idClass.value as number);
+        pkg.seek(this.readHead, "set");
 
-            // debugger;
+        // const startBytes = pkg.tell();
+        // const unk1 = pkg.read(new BufferValue(BufferValue.float)).value;
+        // // console.log(pkg.tell() - startBytes);
+        // // const unk2 = pkg.read(compat32).value;
+        // // console.log(pkg.tell() - startBytes);
 
-            // if (pkgName !== "StaticMeshActor" && pkgName !== "TerrainInfo") continue;
 
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) {
-                    resolve();
-                    return;
-                }
-                const object = await pkg.fetchObject(objectId);
+        // // pkg.dump(2);
 
-                if (object) this.objectList.push(object);
-
-                resolve();
-            }));
-        }
+        // debugger;
 
         this.readHead = this.readTail;
 
