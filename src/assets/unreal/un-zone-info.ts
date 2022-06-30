@@ -9,8 +9,8 @@ class UZoneInfo extends UAActor {
     
     protected useFogColorClear: boolean;
     
-    protected ambientBrightness: number;
-    protected ambientVector: FVector;
+    public ambientBrightness: number;
+    public ambientVector: FVector;
 
     protected killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
 

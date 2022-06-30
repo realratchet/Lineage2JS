@@ -1,12 +1,9 @@
 import UObject from "./un-object";
-import UPackage from "./un-package";
-import UExport from "./un-export";
 import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
-import UModel from "./model/un-model";
 
-const LOAD_SUB_OBJECTS = true;
+const LOAD_SUB_OBJECTS = false;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
@@ -101,6 +98,8 @@ class ULevel extends UObject {
             }));
         }
 
+        // debugger;
+
         pkg.seek(this.readHead, "set");
 
         // const startBytes = pkg.tell();
@@ -136,8 +135,8 @@ class ULevel extends UObject {
             type: "Level",
             name: this.url.map,
             children: (await Promise.all([
-                this.baseModel.getDecodeInfo(library),
-                "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+                // this.baseModel.getDecodeInfo(library),
+                // "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
                 "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
             ])).flat()
         };

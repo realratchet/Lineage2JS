@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Intersection, Raycaster, Box3, Vector3 } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
@@ -58,6 +58,13 @@ class RenderManager {
 
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
+        
+        
+        // elven ruins colon
+        this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
+        this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
+        this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
+        
         this.controls.orbit.update();
         // this.controls.fps.update(0);
 
@@ -161,7 +168,7 @@ class RenderManager {
         try {
             const position = new Vector2(event.pageX, event.pageY);
             const ssPosition = this.toScreenSpaceCoords(position);
-            const intersections: Intersection[] = [];
+            const intersections: THREE.Intersection[] = [];
 
             this.raycaster.setFromCamera(ssPosition, this.camera);
             this.raycaster.intersectObject(this.scene, true, intersections);

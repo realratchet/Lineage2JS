@@ -5,7 +5,7 @@ import assetList from "./assets/asset-list";
 // import UTerrainSector from "./assets/unreal/un-terrain-sector";
 // import UTexture from "./assets/unreal/un-texture";
 // import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper } from "three";
+import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight } from "three";
 import BufferValue from "./assets/buffer-value";
 // import UStaticMeshInstance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 // import UModel from "./assets/unreal/model/un-model";
@@ -63,25 +63,31 @@ async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
 // export default loadTexture;
 
 async function startCore() {
+    const geoHelperDirecional = new BoxBufferGeometry();
+    const geoHelperPoint = new SphereBufferGeometry();
+
     const objectGroup = new Object3D();
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    const pkg_17_22 = assetLoader.getPackage("17_22"); // gludio /crashes
-    const pkg_19_21 = assetLoader.getPackage("19_21"); // crashes
-    const pkg_20_19 = assetLoader.getPackage("20_19"); // <-- works
-    const pkg_20_20 = assetLoader.getPackage("20_20"); // <-- elven fortress/ works
-    const pkg_20_21 = assetLoader.getPackage("20_21"); // cruma tower
-    const pkg_21_19 = assetLoader.getPackage("21_19"); // elven village /crashes
-    const pkg_20_22 = assetLoader.getPackage("20_22");
-    const pkg_21_22 = assetLoader.getPackage("22_22"); // execution grounds
-    const pkg_22_22 = assetLoader.getPackage("22_22"); // giran /crashes
-    const pkg_shader = assetLoader.getPackage("T_SHADER");
-    const pkg_engine = assetLoader.getPackage("Engine");
-    const pkg_core = assetLoader.getPackage("Core");
-    const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
-    const pkg_skylevel = assetLoader.getPackage("SkyLevel");
-    const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
+    const pkg_16_24 = assetLoader.getPackage("16_24", "Level"); // talking island top, no lights / works
+    const pkg_16_25 = assetLoader.getPackage("16_25", "Level");
+    const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // crashes on terrain
+    const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
+    const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
+    const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
+    const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
+    const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
+    const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
+    const pkg_20_22 = assetLoader.getPackage("20_22", "Level");
+    const pkg_21_22 = assetLoader.getPackage("22_22", "Level"); // execution grounds
+    const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes
+    // const pkg_shader = assetLoader.getPackage("T_SHADER");
+    // const pkg_engine = assetLoader.getPackage("Engine");
+    // const pkg_core = assetLoader.getPackage("Core");
+    // const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
+    // const pkg_skylevel = assetLoader.getPackage("SkyLevel");
+    // const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 
     // debugger;
 
@@ -89,7 +95,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_20_21;
+    const pkgLoadPromise = pkg_16_25;
 
     // for (let ass of assetList) {
     //     const pkgPromise = assetLoader.getPackageByPath(ass);
@@ -179,95 +185,36 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { index: number, export: UExport }[] });
 
-    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {} };
+    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, materialModifiers: {} };
 
     // debugger;
 
     // return;
 
 
-    // const geoHelperDirecional = new BoxBufferGeometry();
-    // const geoHelperPoint = new SphereBufferGeometry();
+    for (let { index } of expGroups["Light"]) {
+        const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
+        const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
 
-    // for (let { index } of expGroups["Light"]) {
-    //     const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
-    //     const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
+        const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
 
-    //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
+        const matHelper = new MeshBasicMaterial({ transparent: true, depthTest: false, wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+        const helper = new Mesh(geo, matHelper);
 
-    //     const matHelper = new MeshBasicMaterial({ wireframe: true, color: new Color().fromArray(decodeInfo.color) });
-    //     const helper = new Mesh(geo, matHelper);
+        helper.position.fromArray(decodeInfo.position);
 
-    //     helper.position.fromArray(decodeInfo.position);
+        if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
+        else matHelper.color.setHex(0xff00ff);
 
-    //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
-    //     else matHelper.color.setHex(0xff00ff);
-
-    //     objectGroup.add(helper);
-    // }
+        objectGroup.add(helper);
+    }
 
     // debugger;
 
     // const nonDirectional = lights.filter(x => !x.isDirectional);
 
-    // debugger;
-
-
-    // await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
-
-
-    // debugger;
-
-    // const textureInfo = await textures[0].getDecodeInfo(true);
-    // const texture = decodeTexture(textureInfo);
-
-    // const material = new MeshBasicMaterial({ map: texture });
-    // const mesh = new Mesh(geometry, material);
-
-    // mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
-
-    // objectGroup.add(mesh);
-
-    // return;
-
-    // debugger;
-
-    // debugger;
-
-    // for (let impShader of impGroups["Texture"]) {
-    //     try {
-    //         const uMaterial = await pkgLoad.fetchObject<UTexture>(impShader.index);
-
-    //         debugger;
-
-    //         const material = await uMaterial.decodeMaterial();
-
-    //         const mesh = new Mesh(geometry, material);
-
-    //         mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
-
-    //         objectGroup.add(mesh);
-
-    //         break;
-    //     } catch (e) { }
-    // }
-
-    // debugger;
-    // return;
 
     const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
-
-    // const expTerrainInfo = expGroups.TerrainInfo[0];
-    // const expTerrainSectors = expGroups.TerrainSector
-    //     .sort(({ objectName: na }, { objectName: nb }) => {
-    //         const a = parseInt(na.replace("TerrainSector", ""));
-    //         const b = parseInt(nb.replace("TerrainSector", ""));
-    //         return a - b;
-    //     });
-
-    // const filteredSectors = expTerrainSectors
-
-    // debugger;
 
     expGroups.Model
         .sort(({ export: { objectName: na } }, { export: { objectName: nb } }) => {
@@ -275,18 +222,6 @@ async function startCore() {
             const b = parseInt(nb.replace("Model", ""));
             return a - b;
         });
-    // .slice(0, 10).forEach(exp => {
-    //     console.log(exp.objectName);
-    //     pkgLoad.seek(exp.offset.value as number + 0, "set");
-    //     pkgLoad.dump(5, true, false)
-    // });
-
-    // debugger;
-
-    // const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
-    // const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
-    // const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
-    // objectGroup.add(mTerrain);
 
     // const uLevelInfo = await pkgLoad.fetchObject<UNMovableSunLight>(2);
     // await uLevelInfo.onLoaded();
@@ -295,12 +230,11 @@ async function startCore() {
 
     // debugger;
 
+    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    // objectGroup.add(mLevel);
+
     // debugger;
-
-
-    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    objectGroup.add(mLevel);
 
     // {
     //     const pkgLoad = await assetLoader.load(pkg_20_21);
@@ -310,12 +244,10 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    // const uModels = await Promise.all(expGroups.Model.map(model => pkgLoad.fetchObject(model.index + 1)));
-
-    // const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    // const mModel = decodeObject3D(decodeLibrary, iModel);
-    // objectGroup.add(mModel);
+    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    const mModel = decodeObject3D(decodeLibrary, iModel);
+    objectGroup.add(mModel);
 
     // const zones = await Promise.all(uModel.zones.slice(1).map(x => pkgLoad.fetchObject<UZoneInfo>(x.index)));
 
@@ -326,51 +258,7 @@ async function startCore() {
     //     objectGroup.add(mesh);
     // });
 
-    // (uModel.bounds as FBox[]).forEach((bb: FBox) => {
-    //     const box = new Box3();
-
-    //     box.min.set(bb.min.x, bb.min.z, bb.min.y);
-    //     box.max.set(bb.max.x, bb.max.z, bb.max.y);
-
-    //     const b = new Box3Helper(box, new Color(Math.floor(Math.random() * 0xffffff)));
-
-    //     objectGroup.add(b);
-    // });
-
-    // uModel.bspNodes.forEach((node: FBSPNode) => {
-    //     if (node.iSurf !== 1771) return;
-
-    //     const vec = node.surfaceOrigin;
-    //     const helper = new Mesh(new SphereBufferGeometry(100, 100), new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false }))
-
-    //     helper.position.set(vec.x, vec.z, vec.y);
-
-    //     objectGroup.add(helper);
-    // });
-
     // debugger;
-
-
-    // decodeLibrary.objects.forEach(info => {
-    //     const mModel = decodeObject3D(decodeLibrary, info);
-    //     objectGroup.add(mModel);
-
-    // });
-
-    // debugger;
-
-
-    // debugger;
-
-    // debugger;
-
-    // Exp_oren_curumadungeon17
-    // Exp_oren_curumadungeon20
-
-    // debugger;
-
-    const geoHelperDirecional = new BoxBufferGeometry();
-    const geoHelperPoint = new SphereBufferGeometry();
 
     for (let id of [
         // 1441,
@@ -382,25 +270,20 @@ async function startCore() {
         // 10254, // scluptures
         // 8028,
         // 1370 // wall object
+        // 5680, // floor near wall objectrs
         // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+        // 555,// elven ruins colon
+        1781 // elven ruins light fixture
     ]) {
         const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
         const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
         const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-        // const zoneLocation = new Vector3().fromArray([uMesh.getZone().location.x, uMesh.getZone().location.z, uMesh.getZone().location.y]);
-
-        // const meshLocation = mModel.position.clone();
-
-        // const offset = new Vector3().fromArray(mModel.children[1].geometry.attributes.position.array.slice(3));
-
-        // const _Vector3 = Vector3;
-
         objectGroup.add(mModel);
 
         await uLevel.onLoaded();
 
-        // debugger;
+        // debugger;c
 
         {
             for (let decodeInfo of (iMesh.siblings.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
@@ -409,7 +292,7 @@ async function startCore() {
                 const helper = decodeInfo.directional ? new DirectionalLightHelper(light as DirectionalLight, 100) : new PointLightHelper(light as PointLight, decodeInfo.radius);
 
                 light.position.fromArray(decodeInfo.position);
-                light.rotation.fromArray(decodeInfo.rotation);
+                // if (decodeInfo.rotation) light.rotation.fromArray(decodeInfo.rotation);
 
                 objectGroup.add(light, helper);
 

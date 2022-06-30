@@ -22,6 +22,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layer7: new Uniform(null),
             layer8: new Uniform(null),
             layer9: new Uniform(null),
+            layer10: new Uniform(null),
+            layer11: new Uniform(null),
         };
 
         info.layers.forEach((layer, i) => {

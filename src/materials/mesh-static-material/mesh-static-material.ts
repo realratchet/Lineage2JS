@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
@@ -55,25 +55,35 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         // debugger;
 
+
         const defines: { [key: string]: any } = {};
-        const uniforms: { [key: string]: Uniform } = {
-            alphaTest: new Uniform(1e-3),
-            globalTime: new Uniform(0),
-            diffuse: new Uniform(new Color(0xffffff)),
-            // diffuse: new Uniform(new Color(0x787878)),
-            opacity: new Uniform(1),
-            uvTransform: new Uniform(new Matrix3()),
-            uv2Transform: new Uniform(new Matrix3()),
-            transformSpecular: new Uniform(null),
+        const uniforms: { [key: string]: Uniform } = UniformsUtils.merge([
+            UniformsLib.lights,
+            {
+                alphaTest: new Uniform(1e-3),
+                globalTime: new Uniform(0),
+                diffuse: new Uniform(new Color(0xffffff)),
+                // diffuse: new Uniform(new Color(0x787878)),
+                opacity: new Uniform(1),
+                uvTransform: new Uniform(new Matrix3()),
+                uv2Transform: new Uniform(new Matrix3()),
+                transformSpecular: new Uniform(null),
 
-            lightMap: new Uniform(null),
-            lightMapIntensity: new Uniform(2.0),
+                lightMap: new Uniform(null),
+                lightMapIntensity: new Uniform(2.0),
 
-            shDiffuse: new Uniform(null),
-            shOpacity: new Uniform(null),
-            shSpecular: new Uniform(null),
-            shSpecularMask: new Uniform(null)
-        };
+                shDiffuse: new Uniform(null),
+                shOpacity: new Uniform(null),
+                shSpecular: new Uniform(null),
+                shSpecularMask: new Uniform(null),
+
+                directionalAmbient: new Uniform({
+                    direction: new Vector3(),
+                    color: new Color(1, 1, 1),
+                    brightness: 1
+                })
+            }
+        ]);
 
         function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
             if (!parameters) return;
@@ -94,6 +104,8 @@ class MeshStaticMaterial extends ShaderMaterial {
         if (info.opacity) {
             defines["USE_ALPHATEST"] = "";
         }
+
+        // defines["USE_DIRECTIONAL_AMBIENT"] = "";
 
         // debugger;
 
@@ -140,6 +152,7 @@ class MeshStaticMaterial extends ShaderMaterial {
             transparent: info.transparent,
             depthWrite: info.depthWrite,
             visible: info.visible,
+            lights: true
             // wireframe: true
         });
 
@@ -165,10 +178,38 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         return this;
     }
+
+    disableDirectionalAmbient() {
+        delete this.defines.USE_DIRECTIONAL_AMBIENT;
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbient) {
+        const u = this.uniforms.directionalAmbient.value;
+
+        u.color.copy(color);
+        u.direction.copy(direction);
+        u.brightness = brightness / 5;
+
+        this.defines["USE_DIRECTIONAL_AMBIENT"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
 }
 
 export default MeshStaticMaterial;
 export { MeshStaticMaterial };
+
+type IDirectionalAmbient = {
+    color: THREE.Color,
+    direction: THREE.Vector3,
+    brightness: number
+};
 
 type MeshStaticMaterialParameters = {
     diffuse: IDecodedParameter,

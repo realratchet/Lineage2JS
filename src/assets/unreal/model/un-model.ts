@@ -38,7 +38,6 @@ class UModel extends UPrimitive {
     protected bounds = new FArray(FBox);
     protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
-    // protected lights = new FArray(FLight);
     protected rootOutside: boolean;
     protected linked: boolean;
 

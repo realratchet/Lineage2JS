@@ -81,7 +81,7 @@ type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "rgba" | "dds" | "g16";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T, color?: boolean }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -92,6 +92,12 @@ interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
 interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "terrain";
     layers: { map: string, alphaMap: string }[]
+}
+
+interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "instance",
+    baseMaterial: string,
+    modifiers: string[]
 }
 
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -152,6 +158,7 @@ interface IDecodedParameter {
     transformType: "none" | "pan" | "rotate",
 }
 
+type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
 type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
@@ -217,8 +224,20 @@ interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
     cone: number
 }
 
+interface IMaterialModifier {
+    type: "Ambient"
+}
+
+interface IAmbientMaterialModifier extends IMaterialModifier {
+    type: "Ambient",
+    color: [number, number, number],
+    direction: [number, number, number],
+    brightness: number
+}
+
 interface IDecodeLibrary {
     loadMipmaps: boolean,
+    materialModifiers: { [key: string]: IMaterialModifier },
     materials: { [key: string]: IBaseMaterialDecodeInfo },
     geometries: { [key: string]: IGeometryDecodeInfo }
 }

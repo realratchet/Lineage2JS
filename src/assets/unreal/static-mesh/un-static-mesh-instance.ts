@@ -47,7 +47,7 @@ class UStaticMeshInstance extends UObject {
 
         const allLights = [...this.unkLights0/*, ...this.unkLights1*/];
         const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
-        const filteredMaps = (Object.values(filteredMapsDict) as ULight[]).filter(l => l.getZone() === this.actor.getZone());
+        const filteredMaps = (Object.values(filteredMapsDict) as ULight[]);//.filter(l => l.getZone() === this.actor.getZone());
 
         return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }

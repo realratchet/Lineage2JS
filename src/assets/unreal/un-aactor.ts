@@ -3,23 +3,6 @@ import FVector from "./un-vector";
 import FRotator from "./un-rotator";
 import { generateUUID } from "three/src/math/MathUtils";
 
-// 15 byte header
-// byte  1: compat importing same class
-// byte  2: compat importing same class
-// byte  3: ?
-// byte  4: ?
-// byte  5: ?
-// byte  6: ?
-// byte  7: ?
-// byte  8: ?
-// byte  9: ?
-// byte 10: ?
-// byte 11: compat for some export? light? (2 bytes)
-// byte 12
-// byte 13: compat for some export? light? (2 bytes)
-// byte 14
-// byte 15: compat pointing to engine package?
-
 class UAActor extends UObject {
     protected readHeadOffset: number = 15;
 
@@ -29,7 +12,7 @@ class UAActor extends UObject {
     protected region: UPointRegion;
     protected drawScale: number;
     protected tag: string;
-    protected group: string;
+    protected group: string = "None";
     protected isSunAffected: boolean;
     protected physicsVolume: UPhysicsVolume;
     public readonly location: FVector = new FVector();
@@ -42,6 +25,12 @@ class UAActor extends UObject {
     protected distanceFogStart: number;
     protected distanceFogColor: FColor;
 
+    protected isHiddenInEditor: boolean;
+    protected isLightChanged: boolean;
+    protected isDeleteMe: boolean;
+    protected isPendingDelete: boolean;
+    protected isSelected: boolean;
+
     public getRegion() { return this.region; }
     public getZone() { return this.region.getZone(); }
 
@@ -53,7 +42,7 @@ class UAActor extends UObject {
         const a = new FVector(_a.x, _a.z, _a.y);
         const b = new FVector(_b.x, _b.z, _b.y);
 
-        const geoPosition = a.sub(b)//.applyRotator(this.rotation, true);
+        const geoPosition = a.sub(b).applyRotator(this.rotation, true);
         const regionHelper = {
             type: "Edges",
             geometry: lineGeometryUuid,
@@ -94,6 +83,13 @@ class UAActor extends UObject {
             "DistanceFogEnd": "distanceFogEnd",
             "DistanceFogStart": "distanceFogStart",
             "DistanceFogColor": "distanceFogColor",
+
+            "bHiddenEd": "isHiddenInEditor",
+            "bLightChanged": "isLightChanged",
+            "bSelected": "isSelected",
+
+            "bDeleteMe": "isDeleteMe",
+            "bPendingDelete": "isPendingDelete",
         });
     };
 }

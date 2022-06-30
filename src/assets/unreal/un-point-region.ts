@@ -20,6 +20,8 @@ class UPointRegion extends UObject {
         this.readTail = this.readHead + tag.dataSize;
     }
 
+
+
     // protected postLoad(pkg: UPackage, exp: UExport<UObject>): void {
     //     super.postLoad(pkg, exp);
 

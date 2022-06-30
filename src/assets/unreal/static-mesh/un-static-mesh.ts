@@ -1,3 +1,4 @@
+import { v5 as seededUuid } from "uuid";
 import FArray, { FArrayLazy } from "../un-array";
 import UPrimitive from "../un-primitive";
 import FStaticMeshSection from "./un-static-mesh-section";
@@ -10,6 +11,7 @@ import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-sta
 import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import StringSet from "@client/utils/string-set";
 
 const triggerDebuggerOnUnsupported = false;
 
@@ -169,19 +171,55 @@ class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
+        await this.onLoaded();
+
+        let materialUuid = this.uuid;
+
+        if (matModifiers?.length > 0) {
+            const hash = new StringSet(matModifiers).hash();
+            const hashArr = new Uint8Array(new BigUint64Array([hash]).buffer);
+
+            materialUuid = seededUuid(hashArr, materialUuid);
+
+            if (!(materialUuid in library.materials)) {
+                library.materials[materialUuid] = {
+                    materialType: "instance",
+                    baseMaterial: this.uuid,
+                    modifiers: matModifiers
+                } as IMaterialInstancedDecodeInfo;
+
+                // debugger;
+            }
+        }
+
+        // debugger;
+
+
+        // if (!(materialUuid in library.materials)) {
+        //     debugger;
+        //     const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+
+        //     materials.forEach(uuid => {
+        //         if (!library.materials[uuid]) return;
+
+        //         library.materials[uuid].color = true;
+        //     });
+
+        //     library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        //     debugger;
+        // }
 
         if (this.uuid in library.geometries) return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: this.uuid,
+            materials: materialUuid,
         } as IStaticMeshObjectDecodeInfo;
 
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
-
-        await this.onLoaded();
 
         // 43 arrays of 30 uint8 values that are likely colors
         // 43x30 -> 1290
@@ -203,6 +241,9 @@ class UStaticMesh extends UPrimitive {
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
         const indices = new TypedIndicesArray(countIndices);
+
+        // if (countVerts === 0xB3)
+        //     debugger;
 
         const _colors = [
             /*0000000*/ 0x3c, 0x59, 0xff, 0x31, 0x4a, 0x6f, 0xff, 0x3d, 0x4e, 0x6f, 0xff, 0x3e, 0x36, 0x51, 0xff, 0x2c,
@@ -267,14 +308,6 @@ class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
-        const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
-
-        materials.forEach(uuid => {
-            if (!library.materials[uuid]) return;
-
-            library.materials[uuid].color = true;
-        });
-
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
@@ -287,15 +320,25 @@ class UStaticMesh extends UPrimitive {
             bounds: this.decodeBoundsInfo()
         };
 
+        const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+
+        materials.forEach(uuid => {
+            if (!library.materials[uuid]) return;
+
+            library.materials[uuid].color = true;
+        });
+
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        // debugger;
 
         return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: this.uuid,
+            materials: materialUuid,
             children: [
-                // this.getDecodeTrisInfo(library),
+                this.getDecodeTrisInfo(library),
             ]
         };
     }

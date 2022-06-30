@@ -145,10 +145,9 @@ class UPackage extends UEncodedFile {
         while (imp.idPackage.value as number !== 0)
             imp = this.imports[-imp.idPackage.value as number - 1];
 
-        if (!this.loader.hasPackage(imp.objectName))
+        if (!this.loader.hasPackage(imp.objectName, mainImp.className as SupportedImports_T))
             throw new Error(`Unable to locate package: ${imp.objectName}`);
-
-        const pkg = await this.loader.getPackage(imp.objectName);
+        const pkg = await this.loader.getPackage(imp.objectName, mainImp.className as SupportedImports_T);
 
         if (!pkg.buffer) await this.loader.load(pkg);
 

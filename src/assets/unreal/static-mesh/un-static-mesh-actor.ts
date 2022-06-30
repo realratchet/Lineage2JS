@@ -1,6 +1,7 @@
 import UAActor from "../un-aactor";
 import { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
+import FVector from "../un-vector";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -23,7 +24,6 @@ class UStaticMeshActor extends UAActor {
     protected currentLod: number;
     protected isUnlit: boolean;
     protected isShadowCast: boolean;
-    protected isSelected: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -47,7 +47,6 @@ class UStaticMeshActor extends UAActor {
             "L2CurrentLod": "currentLod",
             "bUnlit": "isUnlit",
             "bShadowCast": "isShadowCast",
-            "bSelected": "isSelected"
         });
     }
 
@@ -59,10 +58,33 @@ class UStaticMeshActor extends UAActor {
         // if (this.colLocation.sub(this.location).length() > 1e-3)
         //     debugger;
 
-        const lights: any[] = [];
-        // const lights: ILightDecodeInfo[] = (await this.instance.getDecodeInfo(library)).filter(l => l.directional);
+        const lights: ILightDecodeInfo[] = []
+            // const lights: ILightDecodeInfo[] = (await this.instance.getDecodeInfo(library))
+            //.filter((l: ILightDecodeInfo) => l.directional)
+            // .filter((l: ILightDecodeInfo) => l.isDynamic)
+
+            // debugger;
 
         const siblings = [...lights];
+        const zone = this.getZone();
+
+        let hasModifier = false;
+
+        if (zone?.ambientVector) {
+            hasModifier = true;
+
+            if (!(zone.uuid in library.materialModifiers)) {
+                library.materialModifiers[zone.uuid] = {
+                    type: "Ambient",
+                    brightness: zone.ambientBrightness,
+                    direction: zone.ambientVector.getVectorElements()
+                } as IAmbientMaterialModifier;
+            }
+
+            // debugger;
+        }
+
+        console.log("Leaf | Mesh:", this.region.uuid);
 
         // debugger;
 
@@ -72,70 +94,23 @@ class UStaticMeshActor extends UAActor {
             position: this.colLocation.getVectorElements(),
             scale: this.scale.getVectorElements(),
             rotation: this.rotation.getEulerElements(),
-            children: [await this.mesh.getDecodeInfo(library)/*, this.getRegionLineHelper(library)*/],
+            children: [await this.mesh.getDecodeInfo(library, hasModifier ? [zone.uuid] : null), this.getRegionLineHelper(library)],
             siblings,
         } as IBaseObjectDecodeInfo;
 
-        // debugger;
+        debugger;
 
         return info;
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-        // debugger;
-        // this.readHeadOffset = 15;
-        // pkg.seek(exp.offset.value as number, "set");
-
-        // pkg.dump(1);
-
-        // const unk02 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // pkg.seek(5);
-        // const unk03 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // // const unk03 = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // debugger;
-
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
 
 
-        // if (this.scale.vector.x !== 1 || this.scale.vector.y !== 1 || this.scale.vector.z !== 1) debugger;
-
-        // const unk1 = await pkg.read(BufferValue.allocBytes(10)).value as DataView;
-
-        // pkg.dump(1);
-
-        // debugger;
-
-        // const unk2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const unk3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // // const unk4 = await pkg.read(new BufferValue(BufferValue.uint8)).value as number;
-
-        // pkg.seek(8);
-
-        // const unk4 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const unk5 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const unk6 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // this.readHead = pkg.tell();
-
-        // debugger;
-
-        // // const obj2 = await pkg.fetchObject(unk2);
-        // // debugger;
-        // // const obj3 = await pkg.fetchObject(unk3);
-        // // debugger;
-        // // const obj4 = await pkg.fetchObject(unk4);
-
-        // debugger;
-
-        // // await this.readNamedProps(pkg);
-
-        // // const prop2 = await pkg.read(BufferValue.allocBytes(5)).value as DataView;
-
-        // debugger;
+        // if (this.objectName === 'Exp_StaticMeshActor449')
+        //     debugger;
 
         return this;
     }

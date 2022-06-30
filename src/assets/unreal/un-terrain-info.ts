@@ -37,8 +37,6 @@ class UTerrainInfo extends UAActor {
     protected randomYaw: boolean;
     protected bForceRender: boolean;
 
-    protected isSelected: boolean;
-
     public readonly isTerrainInfo = true;
 
     protected sectorsX: number;
@@ -70,8 +68,7 @@ class UTerrainInfo extends UAActor {
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
-            "bForceRender": "bForceRender",
-            "bSelected": "isSelected"
+            "bForceRender": "bForceRender"
         });
     }
 

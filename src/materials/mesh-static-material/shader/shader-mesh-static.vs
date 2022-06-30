@@ -126,6 +126,35 @@
     #endif
 #endif
 
+#ifdef USE_DIRECTIONAL_AMBIENT
+    // varying vec3 vViewPosition;
+    // varying vec3 vNormal;
+    #include <lights_pars_begin>
+
+    varying vec3 vLightFront;
+    varying vec3 vIndirectFront;
+
+    #ifdef DOUBLE_SIDED
+        varying vec3 vLightBack;
+        varying vec3 vIndirectBack;
+    #endif
+
+     struct DirectionalAmbientLight {
+        vec3 direction;
+        vec3 color;
+        float brightness;
+    };
+
+    void getDirectionalAmbientLightInfo( const in DirectionalAmbientLight directionalLight, const in GeometricContext geometry, out IncidentLight light ) {
+        light.color = directionalLight.color;
+        light.direction = directionalLight.direction;
+        light.visible = true;
+    }
+
+    IncidentLight directLight;
+    uniform DirectionalAmbientLight directionalAmbient;
+#endif
+
 void main() {
     #include <uv_vertex>
     #include <uv2_vertex>
@@ -208,7 +237,7 @@ void main() {
     // #endif
 
     #include <color_vertex>
-    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING )
+    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( USE_DIRECTIONAL_AMBIENT )
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
@@ -223,5 +252,22 @@ void main() {
     #include <clipping_planes_vertex>
     #include <worldpos_vertex>
     #include <envmap_vertex>
+
+    #ifdef USE_DIRECTIONAL_AMBIENT
+        // vViewPosition = -mvPosition.xyz;
+        #include <lights_lambert_vertex>
+
+        getDirectionalAmbientLightInfo( directionalAmbient, geometry, directLight );
+        
+        vec3 lightDir = -normalize(mat3(viewMatrix) * directLight.direction);
+
+        dotNL = dot( geometry.normal, lightDir );
+        directLightColor_Diffuse = directLight.color * directionalAmbient.brightness;
+        vLightFront += saturate( dotNL ) * directLightColor_Diffuse;
+        #ifdef DOUBLE_SIDED
+            vLightBack += saturate( - dotNL ) * directLightColor_Diffuse;
+        #endif
+    #endif
+
     #include <fog_vertex>
 }
