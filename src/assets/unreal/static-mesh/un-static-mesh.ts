@@ -338,7 +338,7 @@ class UStaticMesh extends UPrimitive {
             geometry: this.uuid,
             materials: materialUuid,
             children: [
-                this.getDecodeTrisInfo(library),
+                // this.getDecodeTrisInfo(library),
             ]
         };
     }

@@ -16,7 +16,7 @@ class UDecoLayer extends UObject {
     protected alignToTerrain: number;
     protected drawOrder: number;
     protected isShowOnInvisibleTerrain: number;
-    protected dirLightning: number;
+    protected dirLighting: number;
     protected disregardTerrainLighting: number;
     protected randomYaw: number;
     protected isForcingRender: number;
@@ -43,7 +43,7 @@ class UDecoLayer extends UObject {
             "MaxPerQuad": "maxPerQuad",
             "DrawOrder": "drawOrder",
             "ShowOnInvisibleTerrain": "isShowOnInvisibleTerrain",
-            "LitDirectional": "dirLightning",
+            "LitDirectional": "dirLighting",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
             "bForceRender": "isForcingRender"

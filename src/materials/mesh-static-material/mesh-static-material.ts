@@ -77,6 +77,11 @@ class MeshStaticMaterial extends ShaderMaterial {
                 shSpecular: new Uniform(null),
                 shSpecularMask: new Uniform(null),
 
+                ambient: new Uniform({
+                    color: new Color(1, 1, 1),
+                    brightness: 1
+                }),
+
                 directionalAmbient: new Uniform({
                     direction: new Vector3(),
                     color: new Color(1, 1, 1),
@@ -164,6 +169,7 @@ class MeshStaticMaterial extends ShaderMaterial {
                 this.blendDst = OneMinusSrcAlphaFactor;
                 this.alphaTest = 0;
                 break;
+            case "translucent": this.transparent = true; break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
     }
@@ -187,7 +193,20 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbient) {
+    enableAmbient({ color, brightness }: IAmbientLighting) {
+        const u = this.uniforms.ambient.value;
+
+        u.color.copy(color);
+        u.brightness = brightness / 5;
+
+        this.defines["USE_AMBIENT"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbientLighting) {
         const u = this.uniforms.directionalAmbient.value;
 
         u.color.copy(color);
@@ -205,11 +224,13 @@ class MeshStaticMaterial extends ShaderMaterial {
 export default MeshStaticMaterial;
 export { MeshStaticMaterial };
 
-type IDirectionalAmbient = {
+type IBaseLighting = {
     color: THREE.Color,
-    direction: THREE.Vector3,
     brightness: number
 };
+
+type IAmbientLighting = IBaseLighting;
+type IDirectionalAmbientLighting = IBaseLighting & { direction: THREE.Vector3 };
 
 type MeshStaticMaterialParameters = {
     diffuse: IDecodedParameter,

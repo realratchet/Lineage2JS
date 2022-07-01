@@ -4,7 +4,7 @@ import FVector from "./un-vector";
 
 class UBrush extends UAActor {
     protected csgOper: number;
-    protected mainScale: FScale;
+
     protected postScale: FScale;
     protected polyFlags: number;
     protected brush: UModel;
@@ -19,7 +19,6 @@ class UBrush extends UAActor {
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "CsgOper": "csgOper",
-            "MainScale": "mainScale",
             "PostScale": "postScale",
             "PolyFlags": "polyFlags",
             "Brush": "brush",

@@ -31,6 +31,9 @@ class UAActor extends UObject {
     protected isPendingDelete: boolean;
     protected isSelected: boolean;
 
+    protected mainScale: FScale;
+    protected dummy: boolean;
+
     public getRegion() { return this.region; }
     public getZone() { return this.region.getZone(); }
 
@@ -65,6 +68,10 @@ class UAActor extends UObject {
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
+            "MainScale": "mainScale",
+
+            "bDummy": "dummy",
+
             "bDynamicActorFilterState": "isDynamicActorFilterState",
             "Level": "level",
             "Region": "region",

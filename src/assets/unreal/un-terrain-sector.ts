@@ -44,7 +44,7 @@ class UTerrainSector extends UObject {
         }
     });
 
-    // likely lightning
+    // likely lighting
     protected unkArr0: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
     protected unkArr1: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
     protected unkArr2: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);

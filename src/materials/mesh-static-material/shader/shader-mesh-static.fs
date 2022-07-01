@@ -184,24 +184,17 @@ uniform float opacity;
     uniform float globalTime;
 #endif
 
+#ifdef USE_AMBIENT
+    struct AmbientLighting {
+        vec3 color;
+        float brightness;
+    };
+
+    uniform AmbientLighting ambient;
+#endif
+
 #ifdef USE_DIRECTIONAL_AMBIENT
     #include <bsdfs>
-    // #include <lights_physical_pars_fragment>
-
-    // struct DirectionalAmbientLight {
-    //     vec3 direction;
-    //     vec3 color;
-    //     float brightness;
-    // };
-
-    // void getDirectionalAmbientLightInfo( const in DirectionalAmbientLight directionalLight, const in GeometricContext geometry, out IncidentLight light ) {
-    //     light.color = directionalLight.color;
-    //     light.direction = directionalLight.direction;
-    //     light.visible = true;
-    // }
-
-    // IncidentLight directLight;
-    // uniform DirectionalAmbientLight directionalAmbient;
 
     varying vec3 vLightFront;
     varying vec3 vIndirectFront;
@@ -209,8 +202,6 @@ uniform float opacity;
         varying vec3 vLightBack;
         varying vec3 vIndirectBack;
     #endif
-
-    // varying vec3 vViewPosition;
 
 #endif
 
@@ -255,8 +246,12 @@ void main() {
     #else
         #ifdef USE_DIRECTIONAL_AMBIENT
             reflectedLight.indirectDiffuse += vec3( 0.0 );
-        #else
+        #elif !defined(USE_AMBIENT)
             reflectedLight.indirectDiffuse += vec3( 1.0 );
+        #endif
+
+        #ifdef USE_AMBIENT
+            reflectedLight.indirectDiffuse += ambient.brightness * ambient.color;
         #endif
     #endif
 

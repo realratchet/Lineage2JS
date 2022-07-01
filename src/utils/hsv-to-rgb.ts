@@ -1,4 +1,4 @@
-function hsvToColorPlane(h: number, s: number, v: number): [number, number, number] {
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
     let r: number, g: number, b: number;
     let lightness = (v & 0xff) * 0.005490196;
 
@@ -38,5 +38,5 @@ function hsvToColorPlane(h: number, s: number, v: number): [number, number, numb
     return [x, y, z];
 }
 
-export default hsvToColorPlane;
-export { hsvToColorPlane as hsvToRgba };
+export default hsvToRgb;
+export { hsvToRgb as hsvToRgba };

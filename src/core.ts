@@ -71,21 +71,21 @@ async function startCore() {
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
     const pkg_16_24 = assetLoader.getPackage("16_24", "Level"); // talking island top, no lights / works
-    const pkg_16_25 = assetLoader.getPackage("16_25", "Level");
-    const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // crashes on terrain
-    const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
-    const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
+    const pkg_16_25 = assetLoader.getPackage("16_25", "Level"); // elven ruins entrance /works
+    // const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // crashes on terrain
+    // const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
+    // const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
     const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
     const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
     const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
-    const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
-    const pkg_20_22 = assetLoader.getPackage("20_22", "Level");
-    const pkg_21_22 = assetLoader.getPackage("22_22", "Level"); // execution grounds
-    const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes
+    // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
+    // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // /crashes
+    // const pkg_21_22 = assetLoader.getPackage("22_22", "Level"); // execution grounds /crashes
+    // const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
     // const pkg_engine = assetLoader.getPackage("Engine");
     // const pkg_core = assetLoader.getPackage("Core");
-    // const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
+    // const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
     // const pkg_skylevel = assetLoader.getPackage("SkyLevel");
     // const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 
@@ -192,22 +192,24 @@ async function startCore() {
     // return;
 
 
-    for (let { index } of expGroups["Light"]) {
-        const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
-        const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
+    // for (let { index } of expGroups["Light"]) {
+    //     const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
+    //     const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
 
-        const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
+    //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
 
-        const matHelper = new MeshBasicMaterial({ transparent: true, depthTest: false, wireframe: true, color: new Color().fromArray(decodeInfo.color) });
-        const helper = new Mesh(geo, matHelper);
+    //     const matHelper = new MeshBasicMaterial({ transparent: true, depthTest: false, wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+    //     const helper = new Mesh(geo, matHelper);
 
-        helper.position.fromArray(decodeInfo.position);
+    //     helper.position.fromArray(decodeInfo.position);
 
-        if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
-        else matHelper.color.setHex(0xff00ff);
+    //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
+    //     else matHelper.color.setHex(0xff00ff);
 
-        objectGroup.add(helper);
-    }
+    //     objectGroup.add(helper);
+    // }
+
+    // const sunlight = await pkgLoad.fetchObject<UNMovableSunLight>(expGroups.NMovableSunLight[0].index + 1);
 
     // debugger;
 
@@ -244,10 +246,10 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
+    // const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
     // const zones = await Promise.all(uModel.zones.slice(1).map(x => pkgLoad.fetchObject<UZoneInfo>(x.index)));
 
@@ -265,14 +267,14 @@ async function startCore() {
         // 1770,
         // 1802,
         // 1804,
-        // 4284
+        // 4284,
         // 10253, // scluptures
         // 10254, // scluptures
         // 8028,
-        // 1370 // wall object
+        // 1370, // wall object
         // 5680, // floor near wall objectrs
         // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
-        // 555,// elven ruins colon
+        555,// elven ruins colon
         1781 // elven ruins light fixture
     ]) {
         const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
@@ -283,7 +285,7 @@ async function startCore() {
 
         await uLevel.onLoaded();
 
-        // debugger;c
+        // debugger;
 
         {
             for (let decodeInfo of (iMesh.siblings.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
@@ -337,7 +339,7 @@ async function startCore() {
     }
 
 
-    // const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
+    // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"]||[]).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)))).filter(x => x.isSunAffected);
     // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
 
     // iStaticMeshActors.forEach(info => {

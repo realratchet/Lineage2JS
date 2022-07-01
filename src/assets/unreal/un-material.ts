@@ -96,7 +96,7 @@ class UShader extends UMaterial {
     protected depthWrite: boolean = true;
     protected transparent: boolean = false;
     protected alphaTest: number = 0;
-    protected isPerformingLightningOnSpecularPass: boolean = false;
+    protected isPerformingLightingOnSpecularPass: boolean = false;
     protected selfIllumination: UMaterial = null;
     protected selfIlluminationMask: UMaterial = null;
     protected unkBytes: BufferValue<"buffer">;
@@ -123,7 +123,7 @@ class UShader extends UMaterial {
             "SelfIllumination": "selfIllumination",
             "SelfIlluminationMask": "selfIlluminationMask",
             "AlphaRef": "alphaTest",
-            "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
+            "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass"
         });
     }
 

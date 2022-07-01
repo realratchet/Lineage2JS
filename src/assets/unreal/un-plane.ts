@@ -8,6 +8,22 @@ class FPlane extends FConstructable {
     public z: number;
     public w: number;
 
+    constructor(x = 0, y = 0, z = 0, w = 0) {
+        super();
+
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+
+    public getElements(): [number, number, number, number] { return [this.x, this.y, this.z, this.w]; }
+
+    public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
+    public multiplyScalar(scalar: number) {
+        return new FPlane(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
+    }
+
     toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.x;

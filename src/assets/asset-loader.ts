@@ -17,9 +17,12 @@ const extToType = Object.freeze(
 const impToType = Object.freeze(
     new Map([
         ["Level", extToType.get("UNR")],
-        ["Texture", extToType.get("UTX")],
-        ["Shader", extToType.get("UTX")],
-        ["ColorModifier", extToType.get("UTX")],
+        ...[ // textures
+            "Texture",
+            "TexOscillator",
+            "Shader",
+            "ColorModifier"
+        ].map(v => ([v, extToType.get("UTX")] as [SupportedImports_T, SupportedPackages_T])),
         ["Sound", extToType.get("UAX")],
         ["StaticMesh", extToType.get("USX")],
     ]) as Map<SupportedImports_T, SupportedPackages_T>

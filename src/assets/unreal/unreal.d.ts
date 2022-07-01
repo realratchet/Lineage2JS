@@ -68,6 +68,7 @@ type FMatrix = import("./un-matrix").FMatrix;
 type UPointRegion = import("./un-point-region").UPointRegion;
 type FVector = import("./un-vector").FVector;
 type FRotator = import("./un-rotator").FRotator;
+type FCoords = import("./un-coords").FCoords;
 
 type FMipmap = import("./un-mipmap").FMipmap;
 type UDecoLayer = import("./un-deco-layer").UDecoLayer;
@@ -225,14 +226,23 @@ interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
 }
 
 interface IMaterialModifier {
-    type: "Ambient"
+    type: "Lighting"
 }
 
-interface IAmbientMaterialModifier extends IMaterialModifier {
-    type: "Ambient",
+interface IBaseLightingMaterialModifier extends IMaterialModifier {
+    type: "Lighting",
+    lightType: "Directional" | "Ambient",
     color: [number, number, number],
-    direction: [number, number, number],
     brightness: number
+}
+
+interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
+    lightType: "Directional",
+    direction: [number, number, number],
+}
+
+interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
+    lightType: "Ambient"
 }
 
 interface IDecodeLibrary {

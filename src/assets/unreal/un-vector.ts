@@ -27,13 +27,12 @@ class FVector extends FConstructable {
         this.z = z;
     }
 
-    public getElements(): number[] { return [this.x, this.y, this.z]; }
-
-    public multiplyScalar(scalar: number): FVector {
-        return new FVector(this.x * scalar, this.y * scalar, this.z * scalar);
-    }
+    public getElements(): [number, number, number] { return [this.x, this.y, this.z]; }
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
+    public multiplyScalar(scalar: number) {
+        return new FVector(this.x * scalar, this.y * scalar, this.z * scalar);
+    }
 
     public add(other: FVector) {
         return new FVector(

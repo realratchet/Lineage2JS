@@ -3,6 +3,8 @@ import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 
+const CLEANUP_NAMESPACE = true;
+
 abstract class UObject {
     public objectName = "Exp_None";
     public readonly uuid = generateUUID();
@@ -222,6 +224,13 @@ abstract class UObject {
     public async onLoaded(): Promise<void> {
         try {
             await Promise.all(this.promisesLoading);
+
+            if (CLEANUP_NAMESPACE) {
+                Object.values(this.getPropertyMap()).forEach(propName => {
+                    if ((this as any)[propName] === undefined)
+                        delete (this as any)[propName];
+                });
+            }
         } catch (e) {
             debugger;
             throw e;

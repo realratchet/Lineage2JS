@@ -26,6 +26,8 @@ class FUnkLightStruct extends FConstructable {
             resolve();
         }));
 
+        // debugger;
+
         return this;
     }
 }

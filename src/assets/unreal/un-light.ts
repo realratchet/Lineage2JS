@@ -1,4 +1,4 @@
-import hsvToColorPlane from "@client/utils/hsv-to-color-plane";
+import hsvToRgb from "@client/utils/hsv-to-rgb";
 import { generateUUID } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
@@ -86,7 +86,7 @@ class ULight extends UAActor {
 
         return {
             type: "Light",
-            color: hsvToColorPlane(this.hue, this.saturation, this.lightness),
+            color: hsvToRgb(this.hue, this.saturation, this.lightness),
             cone: this.cone,
             lightType: this.type,
             lightEffect: this.effect,

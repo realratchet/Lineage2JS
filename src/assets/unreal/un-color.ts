@@ -16,6 +16,8 @@ class FColor extends FConstructable {
         return this;
     }
 
+    getBrightness() { return (this.g * 3.0 + this.b + this.b + this.r) * 0.0006510417; }
+
     toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.r;

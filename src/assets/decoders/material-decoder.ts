@@ -134,7 +134,14 @@ function decodeLightmapped(library: IDecodeLibrary, info: ILightmappedDecodeInfo
         .setLightmap(fetchTexture(library.materials[info["lightmap"]] as ITextureDecodeInfo));
 }
 
-function applyModAmbient(library: IDecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], direction, brightness }: IAmbientMaterialModifier) {
+function applyModAmbient(library: IDecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: ILightAmbientMaterialModifier) {
+    material.enableAmbient({
+        color: new Color().fromArray(color),
+        brightness
+    });
+}
+
+function applyModDirectional(library: IDecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], direction, brightness }: ILightDirectionalMaterialModifier) {
     material.enableDirectionalAmbient({
         color: new Color().fromArray(color),
         direction: new Vector3().fromArray(direction),
@@ -142,10 +149,18 @@ function applyModAmbient(library: IDecodeLibrary, material: MeshStaticMaterial, 
     });
 }
 
+function applyModLighting(library: IDecodeLibrary, material: MeshStaticMaterial, modifier: IBaseLightingMaterialModifier) {
+    switch (modifier.lightType) {
+        case "Ambient": applyModAmbient(library, material, modifier as ILightAmbientMaterialModifier); break;
+        case "Directional": applyModDirectional(library, material, modifier as ILightDirectionalMaterialModifier); break;
+        default: throw new Error(`Unknown modifier type: ${modifier.type}`);
+    }
+}
+
 function applyModifiers(library: IDecodeLibrary, material: MeshStaticMaterial, modifiers: IMaterialModifier[]) {
     modifiers.forEach(mod => {
         switch (mod.type) {
-            case "Ambient": applyModAmbient(library, material, mod as IAmbientMaterialModifier); break;
+            case "Lighting": applyModLighting(library, material, mod as IBaseLightingMaterialModifier); break;
             default: throw new Error(`Unknown modifier type: ${mod.type}`);
         }
     });

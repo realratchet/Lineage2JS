@@ -20,6 +20,8 @@ class ULevelInfo extends UAActor {
     protected ambientVector: FVector;
     protected ambientBrightness: number;
 
+    protected hasPathNodes: boolean;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TimeSeconds": "time",
@@ -35,6 +37,8 @@ class ULevelInfo extends UAActor {
 
             "AmbientVector": "ambientVector",
             "AmbientBrightness": "ambientBrightness",
+
+            "bHasPathNodes": "hasPathNodes"
         });
     }
 
