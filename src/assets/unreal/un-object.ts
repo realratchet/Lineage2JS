@@ -7,6 +7,8 @@ const CLEANUP_NAMESPACE = true;
 
 abstract class UObject {
     public objectName = "Exp_None";
+    public exportIndex = null;
+
     public readonly uuid = generateUUID();
     public readonly careUnread: boolean = true;
 
@@ -50,6 +52,8 @@ abstract class UObject {
 
     protected preLoad(pkg: UPackage, exp: UExport): void {
         this.objectName = `Exp_${exp.objectName}`;
+        this.exportIndex = exp.index;
+
         this.setReadPointers(exp);
     }
 

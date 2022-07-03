@@ -1,5 +1,7 @@
+import hsvToRgb from "@client/utils/hsv-to-rgb";
 import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
+import { FPlane } from "./un-plane";
 
 class FNTimeColor extends FConstructable {
     public time: number;
@@ -49,6 +51,8 @@ class FNTimeHSV extends FConstructable {
 
         return this;
     }
+
+    public toColorPlane() { return new FPlane(...hsvToRgb(this.hue, this.saturation, this.lightness), 1); }
 };
 
 class FNTimeScale extends FConstructable {
