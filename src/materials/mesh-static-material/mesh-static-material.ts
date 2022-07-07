@@ -157,7 +157,7 @@ class MeshStaticMaterial extends ShaderMaterial {
             transparent: info.transparent,
             depthWrite: info.depthWrite,
             visible: info.visible,
-            lights: true
+            // lights: true
             // wireframe: true
         });
 

@@ -193,8 +193,10 @@ uniform float opacity;
     uniform AmbientLighting ambient;
 #endif
 
-#ifdef USE_DIRECTIONAL_AMBIENT
-    #include <bsdfs>
+#include <bsdfs>
+
+#if NUM_SPOT_LIGHTS > 0 || NUM_DIR_LIGHTS > 0 || NUM_HEMI_LIGHTS > 0
+    #define HAS_LIGHTS
 
     varying vec3 vLightFront;
     varying vec3 vIndirectFront;
@@ -204,6 +206,19 @@ uniform float opacity;
     #endif
 
 #endif
+
+// #ifdef USE_DIRECTIONAL_AMBIENT
+
+//     varying vec3 vLightFront;
+//     varying vec3 vIndirectFront;
+//     #ifdef DOUBLE_SIDED
+//         varying vec3 vLightBack;
+//         varying vec3 vIndirectBack;
+//     #endif
+
+// #endif
+
+varying vec3 vColorInstance;
 
 void main() {
     #include <clipping_planes_fragment>
@@ -244,18 +259,20 @@ void main() {
         // reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
         reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
     #else
-        #ifdef USE_DIRECTIONAL_AMBIENT
+        #ifdef HAS_LIGHTS
             reflectedLight.indirectDiffuse += vec3( 0.0 );
         #elif !defined(USE_AMBIENT)
-            reflectedLight.indirectDiffuse += vec3( 1.0 );
+            // reflectedLight.indirectDiffuse += vec3( 1.0 );
         #endif
+
+        reflectedLight.indirectDiffuse += vColorInstance;
 
         #ifdef USE_AMBIENT
             reflectedLight.indirectDiffuse += ambient.brightness * ambient.color;
         #endif
     #endif
 
-    #ifdef USE_DIRECTIONAL_AMBIENT
+    #ifdef HAS_LIGHTS
         #ifdef DOUBLE_SIDED
             reflectedLight.indirectDiffuse += ( gl_FrontFacing ) ? vIndirectFront : vIndirectBack;
         #else

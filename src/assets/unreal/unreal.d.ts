@@ -169,14 +169,26 @@ type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
 type EulerArr = [number, number, number, EulerOrder];
 type ArrGeometryGroup = [number, number, number];
 
-interface IBaseObjectDecodeInfo {
+interface IBaseObjectOrInstanceDecodeInfo {
+    type: DecodableObject_T | "StaticMeshInstance"
+}
+
+interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
+    type: "StaticMeshInstance",
+    mesh: IStaticMeshObjectDecodeInfo,
+    attributes?: {
+        colors?: Float32Array
+    }
+}
+
+interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: DecodableObject_T,
     name?: string,
     position?: Vector3Arr,
     rotation?: EulerArr,
     scale?: Vector3Arr,
-    siblings?: IBaseObjectDecodeInfo[],
-    children?: IBaseObjectDecodeInfo[]
+    siblings?: IBaseObjectOrInstanceDecodeInfo[],
+    children?: IBaseObjectOrInstanceDecodeInfo[]
 }
 
 type IBoundsDecodeInfo = {
@@ -249,7 +261,8 @@ interface IDecodeLibrary {
     loadMipmaps: boolean,
     materialModifiers: { [key: string]: IMaterialModifier },
     materials: { [key: string]: IBaseMaterialDecodeInfo },
-    geometries: { [key: string]: IGeometryDecodeInfo }
+    geometries: { [key: string]: IGeometryDecodeInfo },
+    geometryInstances: { [key: string]: number }
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };

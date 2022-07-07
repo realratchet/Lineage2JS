@@ -81,17 +81,19 @@ class ULight extends UAActor {
         return regionHelper;
     }
 
+    public getColor() { return hsvToRgb(this.hue, this.saturation, this.lightness); }
+
     public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
 
         return {
             type: "Light",
-            color: hsvToRgb(this.hue, this.saturation, this.lightness),
+            color: this.getColor(),
             cone: this.cone,
             lightType: this.type,
             lightEffect: this.effect,
             directional: this.isDirectional,
-            radius: this.radius,
+            radius: (this.radius + 1) * 25,
             name: this.objectName,
             position: this.location.getVectorElements(),
             scale: this.scale.getVectorElements(),

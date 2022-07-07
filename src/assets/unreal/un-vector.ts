@@ -91,6 +91,16 @@ class FVector extends FConstructable {
      */
     public dot(other: FVector) { return this.x * other.x + this.y * other.y + this.z * other.z; }
 
+    fromArray(array: number[] | ArrayLike<number> = [], offset = 0, restoreOrder = false) {
+        const [a, b, c] = restoreOrder ? [0, 2, 1] : [0, 1, 2];
+
+        this.x = array[offset + a];
+        this.y = array[offset + b];
+        this.z = array[offset + c];
+
+        return this;
+    }
+
     toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.x;

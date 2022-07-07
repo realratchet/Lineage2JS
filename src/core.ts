@@ -185,29 +185,29 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { index: number, export: UExport }[] });
 
-    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, materialModifiers: {} };
+    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, materialModifiers: {}, geometryInstances: {} };
 
     // debugger;
 
     // return;
 
 
-    for (let { index } of expGroups["Light"]) {
-        const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
-        const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
+    // for (let { index } of expGroups["Light"]) {
+    //     const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
+    //     const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
 
-        const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
+    //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
 
-        const matHelper = new MeshBasicMaterial({ transparent: true, depthTest: false, wireframe: true, color: new Color().fromArray(decodeInfo.color) });
-        const helper = new Mesh(geo, matHelper);
+    //     const matHelper = new MeshBasicMaterial({ transparent: true, depthTest: false, wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+    //     const helper = new Mesh(geo, matHelper);
 
-        helper.position.fromArray(decodeInfo.position);
+    //     helper.position.fromArray(decodeInfo.position);
 
-        if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
-        else matHelper.color.setHex(0xff00ff);
+    //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
+    //     else matHelper.color.setHex(0xff00ff);
 
-        objectGroup.add(helper);
-    }
+    //     objectGroup.add(helper);
+    // }
 
     // const sunlight = await pkgLoad.fetchObject<UNMovableSunLight>(expGroups.NMovableSunLight[0].index + 1);
 
@@ -262,7 +262,8 @@ async function startCore() {
 
     // debugger;
 
-    for (let id of [
+
+    (await Promise.all([
         // 1441,
         // 1770,
         // 1802,
@@ -275,13 +276,17 @@ async function startCore() {
         // 5680, // floor near wall objectrs
         // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
         // 555,// elven ruins colon
-        ...[608, 610, 1755, 1781] // elven ruins light fixtures
-    ]) {
+        610, // light fixture with 2 lights near elven ruins
+        // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+    ].map(async id => {
         const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
         const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
+
+        return iMesh;
+    }))).forEach(async iMesh => {
         const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-        debugger;
+        // debugger;
 
         objectGroup.add(mModel);
 
@@ -338,7 +343,7 @@ async function startCore() {
                 // }
             }
         }
-    }
+    });
 
 
     // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);

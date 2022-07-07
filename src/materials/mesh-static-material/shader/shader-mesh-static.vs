@@ -126,36 +126,46 @@
     #endif
 #endif
 
-#ifdef USE_DIRECTIONAL_AMBIENT
-    // varying vec3 vViewPosition;
-    // varying vec3 vNormal;
+
+#if NUM_SPOT_LIGHTS > 0 || NUM_DIR_LIGHTS > 0 || NUM_HEMI_LIGHTS > 0
+    #define HAS_LIGHTS
     #include <lights_pars_begin>
-
-    varying vec3 vLightFront;
-    varying vec3 vIndirectFront;
-
-    #ifdef DOUBLE_SIDED
-        varying vec3 vLightBack;
-        varying vec3 vIndirectBack;
-    #endif
-
-     struct DirectionalAmbientLight {
-        vec3 direction;
-        vec3 color;
-        float brightness;
-    };
-
-    void getDirectionalAmbientLightInfo( const in DirectionalAmbientLight directionalLight, const in GeometricContext geometry, out IncidentLight light ) {
-        light.color = directionalLight.color;
-        light.direction = directionalLight.direction;
-        light.visible = true;
-    }
-
-    IncidentLight directLight;
-    uniform DirectionalAmbientLight directionalAmbient;
 #endif
 
+attribute vec3 colorInstance;
+varying vec3 vColorInstance;
+
+// #ifdef USE_DIRECTIONAL_AMBIENT
+//     // varying vec3 vViewPosition;
+//     // varying vec3 vNormal;
+
+//     varying vec3 vLightFront;
+//     varying vec3 vIndirectFront;
+
+//     #ifdef DOUBLE_SIDED
+//         varying vec3 vLightBack;
+//         varying vec3 vIndirectBack;
+//     #endif
+
+//      struct DirectionalAmbientLight {
+//         vec3 direction;
+//         vec3 color;
+//         float brightness;
+//     };
+
+//     void getDirectionalAmbientLightInfo( const in DirectionalAmbientLight directionalLight, const in GeometricContext geometry, out IncidentLight light ) {
+//         light.color = directionalLight.color;
+//         light.direction = directionalLight.direction;
+//         light.visible = true;
+//     }
+
+//     IncidentLight directLight;
+//     uniform DirectionalAmbientLight directionalAmbient;
+// #endif
+
 void main() {
+    vColorInstance = colorInstance;
+
     #include <uv_vertex>
     #include <uv2_vertex>
 
@@ -237,7 +247,7 @@ void main() {
     // #endif
 
     #include <color_vertex>
-    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( USE_DIRECTIONAL_AMBIENT )
+    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS )
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
@@ -253,21 +263,24 @@ void main() {
     #include <worldpos_vertex>
     #include <envmap_vertex>
 
-    #ifdef USE_DIRECTIONAL_AMBIENT
-        // vViewPosition = -mvPosition.xyz;
+    #ifdef HAS_LIGHTS
         #include <lights_lambert_vertex>
-
-        getDirectionalAmbientLightInfo( directionalAmbient, geometry, directLight );
-        
-        vec3 lightDir = -normalize(mat3(viewMatrix) * directLight.direction);
-
-        dotNL = dot( geometry.normal, lightDir );
-        directLightColor_Diffuse = directLight.color * directionalAmbient.brightness;
-        vLightFront += saturate( dotNL ) * directLightColor_Diffuse;
-        #ifdef DOUBLE_SIDED
-            vLightBack += saturate( - dotNL ) * directLightColor_Diffuse;
-        #endif
     #endif
+    // #ifdef USE_DIRECTIONAL_AMBIENT
+    ///     #include <lights_lambert_vertex>
+    //     // vViewPosition = -mvPosition.xyz;
+
+    //     getDirectionalAmbientLightInfo( directionalAmbient, geometry, directLight );
+        
+    //     vec3 lightDir = -normalize(mat3(viewMatrix) * directLight.direction);
+
+    //     dotNL = dot( geometry.normal, lightDir );
+    //     directLightColor_Diffuse = directLight.color * directionalAmbient.brightness;
+    //     vLightFront += saturate( dotNL ) * directLightColor_Diffuse;
+    //     #ifdef DOUBLE_SIDED
+    //         vLightBack += saturate( - dotNL ) * directLightColor_Diffuse;
+    //     #endif
+    // #endif
 
     #include <fog_vertex>
 }

@@ -4,9 +4,6 @@ import { FStaticMeshMaterial } from "./un-material";
 import FBox from "./un-box";
 import USphere from "./un-sphere";
 
-type UPackage = import("./un-package").UPackage;
-type UExport = import("./un-export").UExport;
-
 class UPrimitive extends UObject {
     protected materials: FArray<FStaticMeshMaterial> = new FArray(FStaticMeshMaterial);
     protected swayObject: boolean;

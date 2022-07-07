@@ -41,6 +41,8 @@ class FPlane extends FConstructable {
             this[ax] = pkg.read(f).value as number;
         });
 
+        debugger;
+
         return this;
     }
 }
@@ -66,8 +68,9 @@ class UPlane extends UObject {
     }
 
     public doLoad(pkg: UPackage, tag: any): this {
-
         this.readNamedProps(pkg);
+
+        debugger;
 
         return this;
     }

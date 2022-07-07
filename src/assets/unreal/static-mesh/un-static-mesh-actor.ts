@@ -8,6 +8,8 @@ import { FPlane } from "../un-plane";
 import { FNTimeHSV } from "../un-time-light";
 import FCoords from "../un-coords";
 import FRotator from "../un-rotator";
+import { sampleLightIntensity } from "../un-sample-light";
+import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -187,7 +189,8 @@ class UStaticMeshActor extends UAActor {
         //     debugger;
 
         const lights: ILightDecodeInfo[] = []
-        // const lights: ILightDecodeInfo[] = (await this.instance.getDecodeInfo(library))
+            // const lights: ILightDecodeInfo[] = (await this.instance.getDecodeInfo(library))
+            .filter((l: ILightDecodeInfo) => l.lightType === 7)
         //.filter((l: ILightDecodeInfo) => l.directional)
         // .filter((l: ILightDecodeInfo) => l.isDynamic)
 
@@ -203,7 +206,7 @@ class UStaticMeshActor extends UAActor {
         //     hasModifier = true;
         //     modifierUuid = zone.uuid;
 
-        //     if (!(modifierUuid in library.materialModifiers)) {
+        //     if (!(modifierUuid in library.materialModifiers))    {
         //         library.materialModifiers[modifierUuid] = {
         //             type: "Lighting",
         //             lightType: "Directional",
@@ -226,15 +229,94 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;
 
+        const mesh = await this.mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
+
+        const attributes = library.geometries[mesh.geometry].attributes;
+
+        const vertexArrayLen = attributes.positions.length;
+        const instanceColors = new Float32Array(vertexArrayLen).fill(0);
+        // const position = new FVector(), normal = new FVector(), color = new FPlane();
+        const position = new Vector3(), normal = new Vector3(), color = new FPlane();
+
+        const lightInfo = this.instance.sceneLights[0];
+        const lightArray = lightInfo.unkArray0;
+
+        const lightPosition = new Vector3().fromArray(lightInfo.light.location.getVectorElements());
+        const currentPosition = new Vector3().fromArray(this.location.getVectorElements());
+
+        const scale = new Vector3().fromArray(this.scale.getVectorElements());
+        const euler = new Euler().fromArray(this.rotation.getEulerElements());
+        const quaternion = new Quaternion().setFromEuler(euler);
+
+        const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
+
+        // debugger;
+
+        // const invLightPosition = currentPosition.sub(lightPosition);
+
+        let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
+        let someFlag = 1;
+
+
+        const [r, g, b] = lightInfo.light.getColor();
+
+        for (let i = 0; i < vertexArrayLen; i += 3) {
+            // const vertexIndex = i / 3;
+            if ((objectFlag & someFlag) !== 0) {
+                position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                normal.fromArray(attributes.normals, i).applyMatrix4(matrix).normalize();
+
+                // debugger;
+
+                const intensity = sampleLightIntensity({
+                    type: 0, //lightInfo.light.type,
+                    position: lightPosition,
+                    radius: (lightInfo.light.radius + 1) * 25
+                }, position, normal);
+
+                instanceColors[i + 0] = r * intensity;
+                instanceColors[i + 1] = g * intensity;
+                instanceColors[i + 2] = b * intensity;
+
+                // debugger;
+            }
+
+            someFlag = someFlag << 0x1;
+
+            if ((someFlag & 0x7f) === 0x0) {
+                lightArrIterator = lightArray[++lightArrIterator];
+                someFlag = 0x1;
+            }
+        }
+
+        // debugger;
+
+        // const attributes = library.geometries[mesh.geometry].attributes;
+        // const colors = new Float32Array(attributes.positions.length);
+        // const color = Math.floor(Math.random() * 0x1000000);
+        // const r = (color & 0xff0000) >> 16, g = (color & 0x00ff00) >> 8, b = color & 0x0000ff;
+
+        // for (let i = 0; i < attributes.positions.length; i += 3) {
+        //     colors[i + 0] = r / 255;
+        //     colors[i + 1] = g / 255;
+        //     colors[i + 2] = b / 255;
+        // }
+
         const info = {
             type: "StaticMeshActor",
             name: this.objectName,
             position: this.colLocation.getVectorElements(),
             scale: this.scale.getVectorElements(),
             rotation: this.rotation.getEulerElements(),
-            children: [await this.mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null)/*, this.getRegionLineHelper(library)*/],
+            children: [
+                { mesh, type: "StaticMeshInstance", attributes: { colors: instanceColors } } as IStaticMeshInstanceDecodeInfo
+                // mesh,
+                /*, this.getRegionLineHelper(library)*/
+            ],
             siblings,
         } as IBaseObjectDecodeInfo;
+
+        library.geometryInstances[mesh.geometry]++;
 
         // debugger;
 

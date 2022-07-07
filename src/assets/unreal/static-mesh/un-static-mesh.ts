@@ -218,6 +218,7 @@ class UStaticMesh extends UPrimitive {
             materials: materialUuid,
         } as IStaticMeshObjectDecodeInfo;
 
+        library.geometryInstances[this.uuid] = 0;
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
