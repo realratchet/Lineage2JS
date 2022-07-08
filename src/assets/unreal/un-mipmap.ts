@@ -7,7 +7,6 @@ type UPackage = import("./un-package").UPackage;
 type PropertyTag = import("./un-property").PropertyTag;
 
 class FMipmap extends FConstructable {
-    public static readonly typeSize: number = FPrimitiveArrayLazy.typeSize + 16;
     protected dataArray: FPrimitiveArrayLazy<"uint8"> = new FPrimitiveArrayLazy(BufferValue.uint8);
 
     public sizeW: number;

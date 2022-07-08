@@ -7,19 +7,14 @@ import FBSPSurf from "../bsp/un-bsp-surf";
 import UPolys, { PolyFlags_T } from "../un-polys";
 import BufferValue from "../../buffer-value";
 import FZoneProperties from "../un-zone-properties";
-import UMaterial from "../un-material";
 import FBox from "../un-box";
 import FNumber from "../un-number";
-import { FLight } from "../un-light";
 import FLeaf from "../un-leaf";
-import FConstructable from "../un-constructable";
-// import UPackage from "../un-package";
-import { PropertyTag, UNP_PropertyTypes } from "../un-property";
-import FBspSection from "../bsp/un-bsp-section";
+import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
-import saveFile from "@client/utils/save-file";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -28,14 +23,13 @@ const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 
-
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
     protected points = new FArray(FVector);
     protected vertices = new FArray(FVert);
     protected bspNodes = new FArray(FBSPNode);
     protected bspSurfs = new FArray(FBSPSurf);
-    protected bspSection = new FArray(FBspSection);
+    protected bspSection = new FArray(FBSPSection);
     protected lightmaps = new FArray(FLightmapIndex);
     protected multiLightmaps = new FArray(FMultiLightmapTexture);
     protected numSharedSides: number;
@@ -44,7 +38,6 @@ class UModel extends UPrimitive {
     protected bounds = new FArray(FBox);
     protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
-    protected lights = new FArray(FLight);
     protected rootOutside: boolean;
     protected linked: boolean;
 
@@ -53,71 +46,81 @@ class UModel extends UPrimitive {
     protected unkInt1: number;
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
-        try {
-            const int8 = new BufferValue(BufferValue.int8);
-            const int32 = new BufferValue(BufferValue.int32);
-            const uint8 = new BufferValue(BufferValue.uint8);
-            const compat32 = new BufferValue(BufferValue.compat32);
-            const float = new BufferValue(BufferValue.float);
 
-            pkg.seek(this.readHead, "set");
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-            super.doLoad(pkg, exp);
+        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-            this.vectors.load(pkg);     // 0x78
-            this.points.load(pkg);      // 0x88
-            this.bspNodes.load(pkg);    // 0x58
-            this.bspSurfs.load(pkg);    // 0x98
-            this.vertices.load(pkg);    // 0x68
+        const int32 = new BufferValue(BufferValue.int32);
+        const compat32 = new BufferValue(BufferValue.compat32);
 
-            this.numSharedSides = pkg.read(int32).value as number;  // 0x124
+        pkg.seek(this.readHead, "set");
 
-            const numZones = pkg.read(int32).value as number;       // 0x128
+        super.doLoad(pkg, exp);
 
-            console.assert(numZones <= MAX_ZONES);
+        this.vectors.load(pkg);     // 0x78
+        this.points.load(pkg);      // 0x88
+        this.bspNodes.load(pkg);    // 0x58
+        this.bspSurfs.load(pkg);    // 0x98
+        this.vertices.load(pkg);    // 0x68
 
-            this.zones = new Array(numZones);
+        this.numSharedSides = pkg.read(int32).value as number;  // 0x124
 
-            for (let i = 0; i < numZones; i++)
-                this.zones[i] = new FZoneProperties().load(pkg);
+        const numZones = pkg.read(int32).value as number;       // 0x128
 
-            this.readHead = pkg.tell();
-            const polysId = pkg.read(compat32).value as number;
+        console.assert(numZones <= MAX_ZONES);
 
-            const polyExp = pkg.exports[polysId - 1];
-            const className = pkg.getPackageName(polyExp.idClass.value as number)
+        this.zones = new Array(numZones);
 
-            console.assert(className === "Polys");
+        for (let i = 0; i < numZones; i++)
+            this.zones[i] = new FZoneProperties().load(pkg);
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
+        const polysId = pkg.read(compat32).value as number;
 
-            this.bounds.load(pkg, null);
-            this.leafHulls.load(pkg, null);
-            this.leaves.load(pkg, null);
+        const polyExp = pkg.exports[polysId - 1];
+        const className = pkg.getPackageName(polyExp.idClass.value as number)
 
-            this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x => x.value);
+        console.assert(className === "Polys");
 
-            this.readHead = pkg.tell();
+        // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     this.polys = await pkg.fetchObject<UPolys>(polysId);
+        //     resolve();
+        // }));
 
-            this.unkInt0 = pkg.read(int32).value as number;
-            this.unkInt1 = pkg.read(int32).value as number;
+        this.readHead = pkg.tell();
 
-            this.readHead = pkg.tell();
+        this.bounds.load(pkg);
+        this.leafHulls.load(pkg);
+        this.leaves.load(pkg);
 
-            this.bspSection.load(pkg, null);
+        this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-            this.lightmaps.load(pkg, null);
-            this.multiLightmaps.load(pkg, null);
+        this.unkInt0 = pkg.read(int32).value as number;
+        this.unkInt1 = pkg.read(int32).value as number;
 
-            // if (this.lightmaps.length > 0 || this.multiLightmaps.length > 0)
-            //     debugger;
+        this.readHead = pkg.tell();
 
-            this.readHead = pkg.tell();
+        this.bspSection.load(pkg);
 
-            pkg.seek(this.readHead, "set");
-        } catch (e) { }
+        this.readHead = pkg.tell();
+
+        this.lightmaps.load(pkg);
+        this.multiLightmaps.load(pkg);
+
+        this.readHead = pkg.tell();
+
+        pkg.seek(this.readHead, "set");
+
+        // if (this.lightmaps.length > 0)
+        //     debugger;
+
+        // debugger;
+
         return this;
     }
 
@@ -134,13 +137,15 @@ class UModel extends UPrimitive {
 
         await this.onLoaded();
 
+        // debugger;
+
         const globalBSPTexelScale = 128;
         const materials: string[] = [];
         const objectMap = new Map<UMaterial, Map<any, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo }[] }>>();
 
         // Calculate the size of the vertex buffer and the base vertex index of each node.
         let totalVertices = 0;
-        let dstVertices = 0, dstLightmapUvs = 0;
+        let dstVertices = 0;
 
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture, i) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
@@ -148,28 +153,21 @@ class UModel extends UPrimitive {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
 
-            // if(node.iSurf !== 699) continue;
-            // if(node.iSurf !== 234) continue;
-            // if (node.iSurf !== 1771) continue; // offset: [56, 360] | size: [72, 136] | lightmap: 8 | small piece of water
-            // if (node.iSurf !== 1774) continue; // grass near water
-
             await Promise.all(surf.promisesLoading);
 
             const isInvisible = surf.flags & PolyFlags_T.PF_Invisible;
 
             if (isInvisible) continue;
 
+            const vert: FVert = this.vertices.getElem(node.iVertPool);
+            const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+
+            if (testY <= -16000 || testY >= 16000) continue;
+            if (testX <= -327680.00 || testX >= 327680.00) continue;
+            if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap : null;
-
-            // if (!lightmapIndex) continue;
-            // if (lightmapIndex.iLightmapTexture !== 8) continue;
-            // if (lightmapIndex.offsetX !== 56 && lightmapIndex.offsetX !== 128) continue;
-            // if (lightmapIndex.offsetY !== 360) continue;
-
-            // console.log(lightmapIndex.offsetX, node.iSurf);
-
-            // debugger;
 
             if (!objectMap.has(surf.material)) {
                 objectMap.set(surf.material, new Map());
@@ -188,34 +186,27 @@ class UModel extends UPrimitive {
             const vcount = node.numVertices;
             // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
 
-            // if (vcount == 7)
-            //     debugger;
-
             const light: LightmapInfo = !lightmap ? null : {
                 uuid: lightmap.uuid,
+                resolution: { width: lightmap.width, height: lightmap.height },
                 offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
-                size: { width: lightmapIndex.sizeX, height: lightmapIndex.sizeY }
+                size: { width: lightmapIndex.sizeX, height: lightmapIndex.sizeY },
+                matrix: lightmapIndex.uvMatrix
             };
 
             node.iVertexIndex = gData.numVertices;
             gData.numVertices += vcount;
             totalVertices += vcount;
 
-            gData.nodes.push({ node, surf, light, lightmapIndex, lightmap: this.multiLightmaps?.[lightmapIndex?.iLightmapTexture] });
+            gData.nodes.push({ node, surf, light });
 
-            // debugger;
-            // console.log(light);
-            // break;
         }
-
-        // debugger;
 
         const positions = new Float32Array(totalVertices * 3);
         const normals = new Float32Array(totalVertices * 3);
-        const uvs = new Float32Array(totalVertices * 2);
-        const uvs2 = new Float32Array(totalVertices * 2);
-        // const tangentsX = new Float32Array(totalVertices * 3);
-        // const tangentsZ = new Float32Array(totalVertices * 4);
+        const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
+
+        const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
         const indices: number[] = [], groups: ArrGeometryGroup[] = [];
 
         let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
@@ -243,9 +234,8 @@ class UModel extends UPrimitive {
 
                     const { numVertices, nodes } = gSurf.get(staticLightmap);
                     const startGroupOffset = groupOffset;
-                    const bounds = new FBox();
 
-                    for (let { node, surf, light, lightmap, lightmapIndex } of nodes) {
+                    for (let { node, surf, light } of nodes) {
                         const textureBase: FVector = this.points.getElem(surf.pBase);
                         const textureX: FVector = this.vectors.getElem(surf.vTextureU);
                         const textureY: FVector = this.vectors.getElem(surf.vTextureV);
@@ -292,7 +282,18 @@ class UModel extends UPrimitive {
                             uvs[dstVertices * 2 + 0] = texU;
                             uvs[dstVertices * 2 + 1] = texV;
 
-                            bounds.expandByPoint(position);
+                            if (light) {
+                                const posLightmapped = position.applyMatrix4(light.matrix);
+                                const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
+
+                                const { width, height } = light.resolution;
+
+                                const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
+                                const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
+
+                                uvs2[dstVertices * 2 + 0] = lmU;
+                                uvs2[dstVertices * 2 + 1] = lmV;
+                            }
 
                             // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
                             // tangentX.toArray(tangentsX, dstVertices * 3);
@@ -305,29 +306,6 @@ class UModel extends UPrimitive {
                         }
                     }
 
-                    // debugger;
-
-                    const boundSize = bounds.getSize();
-
-                    for (let { node, surf, light, lightmap, lightmapIndex } of nodes) {
-                        for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
-                            const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-                            const position: FVector = this.points.getElem(vert.pVertex);
-
-                            const { x: u, y: v } = position.sub(bounds.min).div(boundSize);
-
-                            const lmU = light ? light.offset.x / 512 + u * (light.size.width / 512) : 0;
-                            const lmV = light ? light.offset.y / 512 + v * (light.size.height / 512) : 0;
-
-                            uvs2[dstLightmapUvs * 2 + 0] = lmU;
-                            uvs2[dstLightmapUvs * 2 + 1] = lmV;
-
-                            dstLightmapUvs++;
-                        }
-                    }
-
-                    // debugger;
-
                     vertexOffset = vertexOffset + numVertices;
 
                     groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
@@ -335,12 +313,9 @@ class UModel extends UPrimitive {
             }
         }
 
-        // debugger;
-
         library.geometries[this.uuid] = {
             groups,
-            indices,
-            // bounds: this.decodeBoundsInfo(),
+            indices: new TypedIndicesArray(indices),
             attributes: {
                 normals,
                 positions,
@@ -357,135 +332,6 @@ class UModel extends UPrimitive {
             materials: this.uuid,
         } as IStaticMeshObjectDecodeInfo;
     }
-
-    // public async decodeModel(): Promise<Object3D> {
-    //     const groups = new Group();
-    //     const globalBSPTexelScale = 128;
-    //     const objectMap = new Map<UMaterial, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf }[] }>();
-    //     const geometry = new BufferGeometry();
-    //     const materials: Material[] = [];
-
-    //     // Calculate the size of the vertex buffer and the base vertex index of each node.
-    //     let totalVertices = 0;
-    //     let dstVertices = 0;
-
-    //     for (let nodeIndex = 0, ncount = this.bspNodes.getElemCount(); nodeIndex < ncount; nodeIndex++) {
-    //         const node: FBSPNode = this.bspNodes.getElem(nodeIndex);
-    //         const surf: FBSPSurf = this.bspSurfs.getElem(node.iSurf);
-
-    //         const isInvisible = surf.flags & PolyFlags_T.PF_Invisible;
-
-    //         if (isInvisible) continue;
-
-    //         if (!objectMap.has(surf.material)) {
-    //             objectMap.set(surf.material, {
-    //                 numVertices: 0,
-    //                 nodes: []
-    //             });
-    //         }
-
-    //         const gData = objectMap.get(surf.material);
-    //         const vcount = node.numVertices;
-    //         // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
-
-    //         node.iVertexIndex = gData.numVertices;
-    //         gData.numVertices += vcount;
-    //         totalVertices += vcount;
-
-    //         gData.nodes.push({ node, surf });
-    //         // break;
-    //     }
-
-    //     // debugger;
-
-    //     const arrPositions = new Float32Array(totalVertices * 3);
-    //     const arrNormals = new Float32Array(totalVertices * 3);
-    //     const arrUvs = new Float32Array(totalVertices * 2);
-    //     const arrTangentX = new Float32Array(totalVertices * 3);
-    //     const arrTangentZ = new Float32Array(totalVertices * 4);
-    //     const indices = [];
-
-    //     let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
-
-    //     if (totalVertices > 0) {
-    //         for (let material of [...objectMap.keys()]) {
-    //             const { numVertices, nodes } = objectMap.get(material);
-    //             const startGroupOffset = groupOffset;
-    //             materials.push(await material.decodeMaterial());
-
-    //             for (let { node, surf } of nodes) {
-    //                 const textureBase: FVector = this.points.getElem(surf.pBase);
-    //                 const textureX: FVector = this.vectors.getElem(surf.vTextureU);
-    //                 const textureY: FVector = this.vectors.getElem(surf.vTextureV);
-
-    //                 // Use the texture coordinates and normal to create an orthonormal tangent basis.
-    //                 const tangentX: FVector = textureX;
-    //                 const tangentY: FVector = textureY;
-    //                 const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
-    //                 const fcount = node.numVertices - 2;
-    //                 const findex = vertexOffset + node.iVertexIndex;
-
-    //                 createOrthonormalBasis(tangentX, tangentY, tangentZ);
-
-    //                 for (let i = 0; i < fcount; i++) {
-    //                     indices.push(findex, findex + i + 2, findex + i + 1)
-    //                 }
-
-    //                 groupOffset = groupOffset + fcount;
-
-    //                 if (surf.flags & PolyFlags_T.PF_TwoSided) {
-    //                     for (let i = 0; i < fcount; i++) {
-    //                         indices.push(findex, findex + i + 1, findex + i + 2)
-    //                     }
-
-    //                     groupOffset = groupOffset + fcount;
-    //                 }
-
-    //                 for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
-    //                     const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-    //                     const position: FVector = this.points.getElem(vert.pVertex);//.sub(new FVector(17728, 114176, -2852));
-
-    //                     const texB = position.sub(textureBase);
-    //                     const texU = texB.dot(textureX) / globalBSPTexelScale;
-    //                     const texV = texB.dot(textureY) / globalBSPTexelScale;
-
-    //                     arrPositions[dstVertices * 3 + 0] = position.x;
-    //                     arrPositions[dstVertices * 3 + 1] = position.z;
-    //                     arrPositions[dstVertices * 3 + 2] = position.y;
-
-    //                     arrUvs[dstVertices * 2 + 0] = texU;
-    //                     arrUvs[dstVertices * 2 + 1] = texV;
-
-    //                     // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
-    //                     tangentX.toArray(arrTangentX, dstVertices * 3);
-    //                     tangentZ.toArray(arrTangentZ, dstVertices * 4);
-
-    //                     // store the sign of the determinant in TangentZ.W
-    //                     arrTangentZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
-
-    //                     dstVertices++;
-    //                 }
-    //             }
-
-    //             vertexOffset = vertexOffset + numVertices;
-
-    //             geometry.addGroup(startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++);
-    //         }
-    //     }
-
-    //     const attrPositions = new Float32BufferAttribute(arrPositions, 3);
-    //     const attrUvs = new Float32BufferAttribute(arrUvs, 2);
-
-    //     geometry.setAttribute("position", attrPositions);
-    //     geometry.setAttribute("uv", attrUvs);
-    //     geometry.setIndex(new Uint16BufferAttribute(indices, 1));
-
-    //     const mesh = new Mesh(geometry, materials);
-
-    //     groups.add(mesh);
-
-    //     return groups;
-    // }
 }
 
 export default UModel;
@@ -497,10 +343,15 @@ type LightmapInfo = {
         x: number;
         y: number;
     },
+    resolution: {
+        width: number;
+        height: number;
+    },
     size: {
         width: number;
         height: number;
-    }
+    },
+    matrix: FMatrix
 };
 
 // function createOrthonormalBasis(inXAxis: FVector, inYAxis: FVector, inZAxis: FVector) {

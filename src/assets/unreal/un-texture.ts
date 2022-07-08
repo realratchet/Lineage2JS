@@ -156,7 +156,7 @@ class UTexture extends UObject {
             case ETexturePixelFormat.TPF_DXT5:
             case ETexturePixelFormat.TPF_DXT5N:
                 textureType = "dds";
-                decodedBuffer = await decompressDDS(format, mipCount, width, height, data);
+                decodedBuffer = decompressDDS(format, mipCount, width, height, data);
                 // texture.wrapS = RepeatWrapping;
                 // texture.wrapT = RepeatWrapping;
                 break;

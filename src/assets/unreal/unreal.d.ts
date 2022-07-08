@@ -20,6 +20,7 @@ type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
 type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
 type UModel = import("./model/un-model").UModel;
 type UPolys = import("./un-polys").UPolys;
+type PolyFlags_T = import("./un-polys").PolyFlags_T;
 type UBrush = import("./un-brush").UBrush;
 type ULevel = import("./un-level").ULevel;
 type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
@@ -38,14 +39,14 @@ type UMusicVolume = import("./un-music-volume").UMusicVolume;
 type UMover = import("./un-mover").UMover;
 type UBlockingVolume = import("./un-blocking-volume").UBlockingVolume;
 type UCamera = import("./un-camera").UCamera;
-type UStaticMeshIsntance = import("./static-mesh/un-static-mesh-instance").UStaticMeshIsntance;
+type UStaticMeshInstance = import("./static-mesh/un-static-mesh-instance").UStaticMeshInstance;
 type ULevelSummary = import("./un-level-summary").ULevelSummary;
 type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
 type UEncodedFile = import("./un-encoded-file").UEncodedFile;
 type UTextBuffer = import("./un-text-buffer").UTextBuffer;
 
 type UMaterial = import("./un-material").UMaterial;
-type UMaterialContainer = import("./un-material").UMaterialContainer;
+type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
 type OutputBlending_T = import("./un-material").OutputBlending_T;
 
 type UShader = import("./un-material").UShader;
@@ -63,9 +64,11 @@ type UPlane = import("./un-plane").UPlane;
 type PropertyTag = import("./un-property").PropertyTag;
 type FColor = import("./un-color").FColor;
 type UMatrix = import("./un-matrix").UMatrix;
+type FMatrix = import("./un-matrix").FMatrix;
 type UPointRegion = import("./un-point-region").UPointRegion;
 type FVector = import("./un-vector").FVector;
 type FRotator = import("./un-rotator").FRotator;
+type FCoords = import("./un-coords").FCoords;
 
 type FMipmap = import("./un-mipmap").FMipmap;
 type UDecoLayer = import("./un-deco-layer").UDecoLayer;
@@ -73,14 +76,15 @@ type FUnknownStruct = import("./un-unknown-struct").FUnknownStruct;
 type FBSPNode = import("./bsp/un-bsp-node").FBSPNode;
 type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
 type FVert = import("./model/un-vert").FVert;
+type FBox = import("./un-box").FBox;
 
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "rgba" | "dds" | "g16";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
-interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T }
+interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T, color?: boolean }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "modifier",
     modifierType: DecodableMaterialModifier_T
@@ -89,6 +93,12 @@ interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
 interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "terrain";
     layers: { map: string, alphaMap: string }[]
+}
+
+interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "instance",
+    baseMaterial: string,
+    modifiers: string[]
 }
 
 interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -142,6 +152,10 @@ interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
     }
 }
 
+interface IBaseTimedConstructable {
+    time: number;
+}
+
 interface IDecodedParameter {
     uniforms: { [key: string]: any },
     defines: { [key: string]: any },
@@ -149,22 +163,36 @@ interface IDecodedParameter {
     transformType: "none" | "pan" | "rotate",
 }
 
+type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light";
+type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
 type EulerArr = [number, number, number, EulerOrder];
 type ArrGeometryGroup = [number, number, number];
 
-interface IBaseObjectDecodeInfo {
+interface IBaseObjectOrInstanceDecodeInfo {
+    type: DecodableObject_T | "StaticMeshInstance"
+}
+
+interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
+    type: "StaticMeshInstance",
+    mesh: IStaticMeshObjectDecodeInfo,
+    attributes?: {
+        colors?: Float32Array
+    }
+}
+
+interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: DecodableObject_T,
     name?: string,
     position?: Vector3Arr,
     rotation?: EulerArr,
     scale?: Vector3Arr,
-    children?: IBaseObjectDecodeInfo[]
+    siblings?: IBaseObjectOrInstanceDecodeInfo[],
+    children?: IBaseObjectOrInstanceDecodeInfo[]
 }
 
 type IBoundsDecodeInfo = {
@@ -182,10 +210,11 @@ interface IGeometryDecodeInfo {
     attributes: {
         positions?: Float32Array;
         normals?: Float32Array;
+        colors?: Float32Array,
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
     };
-    indices: number[] | Uint8Array | Uint16Array | Uint32Array;
+    indices?: number[] | Uint8Array | Uint16Array | Uint32Array;
     groups?: ArrGeometryGroup[],
     bounds?: IBoundsDecodeInfo
 }
@@ -195,18 +224,80 @@ interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     materials: string
 }
 
+interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
+    type: "Edges",
+    geometry: string,
+    color?: [number, number, number],
+    ignoreDepth?: boolean
+}
+
 interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
     type: "Light",
     color: [number, number, number],
     radius: number,
-    lightType: number,
+    directional: boolean,
+    lightType: LightType_T,
+    lightEffect: LightEffect_T,
     cone: number
+}
+
+interface IMaterialModifier {
+    type: "Lighting"
+}
+
+interface IBaseLightingMaterialModifier extends IMaterialModifier {
+    type: "Lighting",
+    lightType: "Directional" | "Ambient",
+    color: [number, number, number],
+    brightness: number
+}
+
+interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
+    lightType: "Directional",
+    direction: [number, number, number],
+}
+
+interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
+    lightType: "Ambient"
 }
 
 interface IDecodeLibrary {
     loadMipmaps: boolean,
+    materialModifiers: { [key: string]: IMaterialModifier },
     materials: { [key: string]: IBaseMaterialDecodeInfo },
-    geometries: { [key: string]: IGeometryDecodeInfo }
+    geometries: { [key: string]: IGeometryDecodeInfo },
+    geometryInstances: { [key: string]: number }
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
+
+type LightType_T = number | {
+    None: 0,
+    Steady: 1,
+    Pulse: 2,
+    Blink: 3,
+    Flicker: 4,
+    Strobe: 5,
+    SubtlePulse: 6,
+    TexturePaletteOnce: 7,
+    TexturePaletteLoop: 8
+};
+
+type LightEffect_T = number | {
+    TorchWaver: 0x0,
+    FireWaver: 0x1,
+    WateryShimmer: 0x2,
+    SearchLight: 0x3,
+    SlowWave: 0x4,
+    FastWave: 0x5,
+    Shock: 0x6,
+    Disco: 0x7,
+    Spotlight: 0x8,
+    NonIncidence: 0x9,
+    ShellOnly: 0xA,
+    OmniBumpMap: 0xB,
+    Interference: 0xC,
+    Cylinder: 0xD,
+    Rotor: 0xE,
+    Unused: 0xF
+};

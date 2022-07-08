@@ -1,12 +1,8 @@
 import BufferValue from "../buffer-value";
 
-type UPackage = import("./un-package").UPackage;
-type PropertyTag = import("./un-property").PropertyTag;
-type FConstructable = import("./un-constructable").FConstructable;
+type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
 
 class FArray<T extends FConstructable = FConstructable> extends Array implements IConstructable {
-    public static readonly typeSize: number = 16;
-
     protected Constructor: { new(...pars: any): T } & ValidConstructables_T<T>;
 
     public getElemCount() { return this.length; }
@@ -27,18 +23,14 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
         const headerOffset = hasTag ? pkg.tell() - beginIndex : null;
         const dataSize = hasTag ? tag.dataSize - headerOffset : null;
 
-        if (count < 0)
-            debugger;
-
         this.length = count;
 
         if (count === 0) return this;
 
         const elementSize = hasTag ? dataSize / this.length : null;
 
-        for (let i = 0, len = this.length; i < len; i++) {
-            this[i] = new this.Constructor(elementSize).load(pkg, tag);
-        }
+        for (let i = 0, len = this.length; i < len; i++)
+            this[i] = new (this.Constructor as any)(elementSize).load(pkg, tag);
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
 
@@ -47,8 +39,11 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 }
 
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
-    public load(pkg: UPackage, tag: PropertyTag): this {
-        pkg.seek(4);
+    public unkLazyInt: number;
+
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        this.unkLazyInt = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
         super.load(pkg, tag);
 
@@ -57,7 +52,6 @@ class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
 }
 
 class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements IConstructable {
-    public static readonly typeSize: number = 16;
     protected Constructor: ValidTypes_T<T>;
 
     public getElemCount() { return this.array.byteLength / this.Constructor.bytes; }
@@ -87,7 +81,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
     protected array: DataView;
     public constructor(constr: ValidTypes_T<T>) { this.Constructor = constr; }
 
-    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...this].map(fnMap); }
+    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...(this as any as Array<T>)].map(fnMap); }
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         const hasTag = tag !== null && tag !== undefined;
@@ -125,8 +119,10 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
 }
 
 class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends FPrimitiveArray<T> {
-    public load(pkg: UPackage, tag: PropertyTag): this {
-        pkg.seek(4);
+    public unkLazyInt: number;
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        this.unkLazyInt = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
 
         super.load(pkg, tag);
 

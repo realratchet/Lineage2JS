@@ -1,24 +1,26 @@
 import UObject from "./un-object";
-import BufferValue from "../buffer-value";
 import FString from "./un-string";
+import BufferValue from "../buffer-value";
 
 class UTextBuffer extends UObject {
     public pos: number;
     public top: number;
-    public text: string;
+    public string = new FString();
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+    public doLooad(pkg: UPackage, exp: UExport): this {
         const uint32 = new BufferValue(BufferValue.uint32);
 
-        super.load(pkg, exp);
+        super.doLoad(pkg, exp);
 
-        this.pos = await pkg.read(uint32).value as number;
-        this.top = await pkg.read(uint32).value as number;
+        this.pos = pkg.read(uint32).value as number;
+        this.top = pkg.read(uint32).value as number;
 
-        this.text = (await new FString().load(pkg)).value;
+        this.string.load(pkg);
 
         return this;
     }
+
+    public get text() { return this.string.value; }
 }
 
 export default UTextBuffer;

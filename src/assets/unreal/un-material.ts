@@ -1,15 +1,14 @@
-import UObject from "./un-object"
-import FArray from "./un-array";
-import BufferValue from "../buffer-value";
-import FNumber from "./un-number";
 import FColor from "./un-color";
+import UObject from "./un-object"
+import BufferValue from "../buffer-value";
+import { FPrimitiveArray } from "./un-array";
 
 abstract class UBaseMaterial extends UObject {
-    public abstract async getDecodeInfo(library: IDecodeLibrary): Promise<string>;
-}
-abstract class UBaseModifier extends UBaseMaterial {
+    public readonly skipRemaining = true;
+    public abstract getDecodeInfo(library: IDecodeLibrary): Promise<string>;
 }
 
+abstract class UBaseModifier extends UBaseMaterial { }
 abstract class UMaterial extends UBaseMaterial { }
 
 enum OutputBlending_T {
@@ -62,6 +61,30 @@ enum TexRotationType_T {
     }
  */
 
+class UFinalBlend extends UBaseModifier {
+    protected material: UMaterial;
+    protected frameBufferBlending: number;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Material": "material",
+            "FrameBufferBlending": "frameBufferBlending"
+        });
+    }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
+        await this.onLoaded();
+
+        await this.material.getDecodeInfo(library);
+
+        return this.material.uuid;
+    }
+}
+
 class UShader extends UMaterial {
     protected diffuse: UMaterial = null;
     protected opacity: UMaterial = null;
@@ -73,22 +96,17 @@ class UShader extends UMaterial {
     protected depthWrite: boolean = true;
     protected transparent: boolean = false;
     protected alphaTest: number = 0;
-    protected isPerformingLightningOnSpecularPass: boolean = false;
+    protected isPerformingLightingOnSpecularPass: boolean = false;
     protected selfIllumination: UMaterial = null;
     protected selfIlluminationMask: UMaterial = null;
     protected unkBytes: BufferValue<"buffer">;
 
-    protected postLoad(pkg: UPackage, exp: UExport): void {
-        // if (pkg.tell() < this.readTail)
-        //     console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes in package '${pkg.path}'`);
-
+    protected postLoad(pkg: UPackage): void {
         this.readHead = pkg.tell();
 
         this.unkBytes = pkg.read(BufferValue.allocBytes(this.readTail - this.readHead)) as any;
 
         this.readHead = pkg.tell();
-
-        // debugger;
     }
 
     protected getPropertyMap() {
@@ -105,7 +123,7 @@ class UShader extends UMaterial {
             "SelfIllumination": "selfIllumination",
             "SelfIlluminationMask": "selfIlluminationMask",
             "AlphaRef": "alphaTest",
-            "PerformLightingOnSpecularPass": "isPerformingLightningOnSpecularPass"
+            "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass"
         });
     }
 
@@ -196,21 +214,23 @@ class UColorModifier extends UBaseMaterial {
     protected material: UShader;
     protected alphaBlend: boolean;
 
-    public async decodeMaterial(): Promise<THREE.Material> {
-        const material = await this.material?.decodeMaterial() as THREE.MeshBasicMaterial;
+    // public async decodeMaterial(): Promise<THREE.Material> {
+    //     const material = await this.material?.decodeMaterial() as THREE.ShaderMaterial;
 
-        material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
-        material.uniforms.opacity.value = this.color.a / 255;
+    //     material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
+    //     material.uniforms.opacity.value = this.color.a / 255;
 
-        if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
+    //     if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
 
-        return material;
-    }
+    //     return material;
+    // }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
+
+        debugger;
 
         await this.onLoaded();
 
@@ -237,28 +257,28 @@ class UTexRotator extends UBaseModifier {
     protected offsetV: number;
     protected material: UMaterial;
 
-    public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
+    // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
-    public async getParameters() {
-        // const matrix = this.matrix.getMatrix3(new Matrix3());
-        const matrix = new Matrix3();
-        this.matrix.getMatrix3(matrix);
-        const texture = await (this.material as UTexture).decodeMipmap(0);
+    // public async getParameters() {
+    //     // const matrix = this.matrix.getMatrix3(new Matrix3());
+    //     const matrix = new Matrix3();
+    //     this.matrix.getMatrix3(matrix);
+    //     const texture = await (this.material as UTexture).decodeMipmap(0);
 
-        // console.log(matrix.elements.slice(0, 3));
-        // console.log(matrix.elements.slice(3, 6));
-        // console.log(matrix.elements.slice(6, 9));
+    //     // console.log(matrix.elements.slice(0, 3));
+    //     // console.log(matrix.elements.slice(3, 6));
+    //     // console.log(matrix.elements.slice(6, 9));
 
-        // debugger;
+    //     // debugger;
 
-        return {
-            transformedTexture: {
-                transformRotate: true,
-                texture,
-                matrix
-            }
-        };
-    }
+    //     return {
+    //         transformedTexture: {
+    //             transformRotate: true,
+    //             texture,
+    //             matrix
+    //         }
+    //     };
+    // }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
@@ -337,7 +357,7 @@ class UTexPanner extends UBaseModifier {
     protected z: number;
     protected matrix: UMatrix;
     protected material: UTexture;
-    protected internalTime: number[] = new FArray(FNumber.forType(BufferValue.int32) as any) as any;
+    protected internalTime = new FPrimitiveArray(BufferValue.int32);
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
@@ -370,9 +390,7 @@ class UTexPanner extends UBaseModifier {
     }
 }
 
-class UMaterialContainer extends UBaseMaterial {
-    public static readonly typeSize: number = 14;
-
+class FStaticMeshMaterial extends UBaseMaterial {
     protected noDynamicShadowCast: boolean;
     protected collisionForShadow: boolean;
     protected enableCollision: boolean;
@@ -387,9 +405,14 @@ class UMaterialContainer extends UBaseMaterial {
         });
     }
 
-    protected preLoad(pkg: UPackage, exp: UExport) {
+    protected preLoad(pkg: UPackage) {
         this.readHead = pkg.tell();
-        this.readTail = this.readHead + UMaterialContainer.typeSize;
+        this.readTail = this.readHead + Infinity;
+    }
+
+    protected doLoad(pkg: UPackage): void {
+        super.doLoad(pkg, null);
+        this.readTail = pkg.tell();
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
@@ -408,4 +431,4 @@ class UMaterialContainer extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, UMaterialContainer, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, OutputBlending_T };
+export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T };

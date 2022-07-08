@@ -1,11 +1,24 @@
 import FConstructable from "./un-constructable";
 import BufferValue from "../buffer-value";
 
+const _PI = Math.PI;
+const _TWO_PI = 2 * _PI;
+const _TWO_TO_FIFTEEN = 2 ** 15;
+const _INV_TWO_TO_FIFTEEN = 1 / _TWO_TO_FIFTEEN;
+const _INV_TWO_TO_FIFTEEN_TIMES_PI = _INV_TWO_TO_FIFTEEN * _PI;
+
 class FRotator extends FConstructable {
-    public static readonly typeSize = 12;
-    public pitch = 0;
-    public yaw = 0;
-    public roll = 0;
+    public pitch: number;
+    public yaw: number;
+    public roll: number;
+
+    public constructor(pitch = 0, yaw = 0, roll = 0) {
+        super();
+
+        this.pitch = pitch;
+        this.yaw = yaw;
+        this.roll = roll;
+    }
 
     public load(pkg: UPackage): this {
         const int32 = new BufferValue(BufferValue.int32);
@@ -17,10 +30,9 @@ class FRotator extends FConstructable {
     }
 
     public getEulerElements(): EulerArr {
-        const _PI = Math.PI;
-        const yAxis = (-this.yaw / 32768. * _PI) % (_PI * 2);
-        const xAxis = (2 * _PI - this.roll / 32768. * _PI) % (_PI * 2);
-        const zAxis = (2 * _PI + this.pitch / 32768. * _PI) % (_PI * 2);
+        const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+        const xAxis = (_TWO_PI - this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+        const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
 
         return [xAxis, yAxis, zAxis, "XYZ"];
     }

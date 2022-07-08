@@ -5,9 +5,9 @@ import assetList from "./assets/asset-list";
 // import UTerrainSector from "./assets/unreal/un-terrain-sector";
 // import UTexture from "./assets/unreal/un-texture";
 // import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper } from "three";
+import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight } from "three";
 import BufferValue from "./assets/buffer-value";
-// import UStaticMeshIsntance from "./assets/unreal/static-mesh/un-static-mesh-instance";
+// import UStaticMeshInstance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 // import UModel from "./assets/unreal/model/un-model";
 // import UExport from "./assets/unreal/un-export";
 // import UBrush from "./assets/unreal/un-brush";
@@ -17,13 +17,8 @@ import decodeTexture from "./assets/decoders/texture-decoder";
 import decodeMaterial from "./assets/decoders/material-decoder";
 import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
 import decodeObject3D from "./assets/decoders/object3d-decoder";
-// import ULight from "./assets/unreal/un-light";
-// import UImport from "./assets/unreal/un-import";
-// import { UShader } from "./assets/unreal/un-material";
-// import ULevelInfo from "./assets/unreal/un-level-info";
-// import UEncodedFile from "./assets/unreal/un-encoded-file";
-
-type ULevel = import("./assets/unreal/un-level").ULevel;
+import ULight from "./assets/unreal/un-light";
+import findPattern from "./utils/pattern-finder";
 
 async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
     [key: string]: {
@@ -66,22 +61,31 @@ async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
 // export default loadTexture;
 
 async function startCore() {
+    const geoHelperDirecional = new BoxBufferGeometry();
+    const geoHelperPoint = new SphereBufferGeometry();
+
     const objectGroup = new Object3D();
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    const pkg_19_21 = assetLoader.getPackage("19_21");
-    const pkg_20_19 = assetLoader.getPackage("20_19");
-    const pkg_20_20 = assetLoader.getPackage("20_20");
-    const pkg_20_21 = assetLoader.getPackage("20_21"); // cruma tower
-    const pkg_21_19 = assetLoader.getPackage("21_19"); // elven village
-    const pkg_20_22 = assetLoader.getPackage("20_22");
-    const pkg_shader = assetLoader.getPackage("T_SHADER");
-    const pkg_engine = assetLoader.getPackage("Engine");
-    const pkg_core = assetLoader.getPackage("Core");
-    const pkg_entry = assetLoader.getPackage("Entry"); // login screen?
-    const pkg_skylevel = assetLoader.getPackage("SkyLevel");
-    const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
+    const pkg_16_24 = assetLoader.getPackage("16_24", "Level"); // talking island top, no lights / works
+    const pkg_16_25 = assetLoader.getPackage("16_25", "Level"); // elven ruins entrance /works
+    // const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // crashes on terrain
+    // const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
+    // const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
+    const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
+    const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
+    const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
+    // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
+    // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // /crashes
+    // const pkg_21_22 = assetLoader.getPackage("22_22", "Level"); // execution grounds /crashes
+    // const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes
+    // const pkg_shader = assetLoader.getPackage("T_SHADER");
+    // const pkg_engine = assetLoader.getPackage("Engine");
+    // const pkg_core = assetLoader.getPackage("Core");
+    // const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
+    // const pkg_skylevel = assetLoader.getPackage("SkyLevel");
+    // const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 
     // debugger;
 
@@ -91,6 +95,55 @@ async function startCore() {
 
     const pkgLoadPromise = pkg_20_21;
 
+    // for (let ass of assetList) {
+    //     const pkgPromise = assetLoader.getPackageByPath(ass);
+    //     const pkg = (await assetLoader.load(pkgPromise)).asReadable();
+
+    //     const _pattern0 = [
+    //         /*0000000*/ 0x59, 0x3c, 0x31, 0xff, 0x6f, 0x4a, 0x3d, 0xff, 0x6f, 0x4e, 0x3e, 0xff, 0x51, 0x36, 0x2c, 0xff,
+    //         /*0000010*/ 0x00, 0x00, 0x00, 0xff, 0x67, 0x45, 0x39, 0xff, 0x72, 0x4e, 0x3e, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*0000020*/ 0x12, 0x0c, 0x0a, 0xff, 0x10, 0x0a, 0x08, 0xff, 0x12, 0x0c, 0x0a, 0xff, 0x16, 0x0f, 0x0c, 0xff,
+    //         /*0000030*/ 0x00, 0x00, 0x00, 0xff, 0x0c, 0x08, 0x06, 0xff, 0x10, 0x0a, 0x08, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*0000040*/ 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x43, 0x2c, 0x24, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*0000050*/ 0x00, 0x00, 0x00, 0xff, 0x42, 0x2c, 0x23, 0xff, 0x3a, 0x27, 0x20, 0xff, 0x43, 0x2c, 0x24, 0xff,
+    //         /*0000060*/ 0x1b, 0x12, 0x0f, 0xff, 0x2b, 0x1e, 0x18, 0xff, 0x47, 0x3a, 0x29, 0xff, 0x0c, 0x08, 0x06, 0xff,
+    //         /*0000070*/ 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*0000080*/ 0x64, 0x44, 0x37, 0xff, 0x5c, 0x41, 0x33, 0xff, 0x71, 0x52, 0x40, 0xff, 0x6b, 0x48, 0x3b, 0xff,
+    //         /*0000090*/ 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x15, 0x0e, 0x0b, 0xff, 0x0e, 0x09, 0x08, 0xff,
+    //         /*00000a0*/ 0x00, 0x00, 0x00, 0xff, 0x40, 0x2b, 0x23, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*00000b0*/ 0x00, 0x00, 0x00, 0xff, 0x6f, 0x4e, 0x3e, 0xff, 0x6f, 0x4a, 0x3d, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*00000c0*/ 0x00, 0x00, 0x00, 0xff, 0x16, 0x0f, 0x0c, 0xff, 0x12, 0x0c, 0x0a, 0xff, 0x00, 0x00, 0x00, 0xff,
+    //         /*00000d0*/ 0x00, 0x00, 0x00, 0xff, 0x43, 0x2c, 0x24, 0xff, 0x43, 0x2c, 0x24, 0xff
+    //     ];
+
+    //     const _pattern1 = [
+    //         /*0000000*/ 0x3c, 0x59, 0xff, 0x31, 0x4a, 0x6f, 0xff, 0x3d, 0x4e, 0x6f, 0xff, 0x3e, 0x36, 0x51, 0xff, 0x2c,
+    //         /*0000010*/ 0x00, 0x00, 0xff, 0x00, 0x45, 0x67, 0xff, 0x39, 0x4e, 0x72, 0xff, 0x3e, 0x00, 0x00, 0xff, 0x00,
+    //         /*0000020*/ 0x0c, 0x12, 0xff, 0x0a, 0x0a, 0x10, 0xff, 0x08, 0x0c, 0x12, 0xff, 0x0a, 0x0f, 0x16, 0xff, 0x0c,
+    //         /*0000030*/ 0x00, 0x00, 0xff, 0x00, 0x08, 0x0c, 0xff, 0x06, 0x0a, 0x10, 0xff, 0x08, 0x00, 0x00, 0xff, 0x00,
+    //         /*0000040*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x00, 0x00, 0xff, 0x00,
+    //         /*0000050*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x42, 0xff, 0x23, 0x27, 0x3a, 0xff, 0x20, 0x2c, 0x43, 0xff, 0x24,
+    //         /*0000060*/ 0x12, 0x1b, 0xff, 0x0f, 0x1e, 0x2b, 0xff, 0x18, 0x3a, 0x47, 0xff, 0x29, 0x08, 0x0c, 0xff, 0x06,
+    //         /*0000070*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+    //         /*0000080*/ 0x44, 0x64, 0xff, 0x37, 0x41, 0x5c, 0xff, 0x33, 0x52, 0x71, 0xff, 0x40, 0x48, 0x6b, 0xff, 0x3b,
+    //         /*0000090*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x0e, 0x15, 0xff, 0x0b, 0x09, 0x0e, 0xff, 0x08,
+    //         /*00000a0*/ 0x00, 0x00, 0xff, 0x00, 0x2b, 0x40, 0xff, 0x23, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+    //         /*00000b0*/ 0x00, 0x00, 0xff, 0x00, 0x4e, 0x6f, 0xff, 0x3e, 0x4a, 0x6f, 0xff, 0x3d, 0x00, 0x00, 0xff, 0x00,
+    //         /*00000c0*/ 0x00, 0x00, 0xff, 0x00, 0x0f, 0x16, 0xff, 0x0c, 0x0c, 0x12, 0xff, 0x0a, 0x00, 0x00, 0xff, 0x00,
+    //         /*00000d0*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x2c, 0x43, 0xff, 0x24
+    //     ];
+
+    //     const pattern0 = findPattern(pkg, _pattern0);
+    //     const pattern1 = findPattern(pkg, _pattern1);
+
+    //     console.info(`Searching for pattern not in '${ass}'`);
+
+    //     if (pattern0.index >= 0 || pattern1.index >= 0) debugger;
+    //     else console.warn(`Pattern not in '${ass} (max: ${pattern0.maxPattern}/${pattern1.maxPattern})'`);
+
+    // }
+
+    // debugger;
 
     // await assetLoader.load(pkg_meffects);
 
@@ -130,98 +183,38 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { index: number, export: UExport }[] });
 
-    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {} };
+    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, materialModifiers: {}, geometryInstances: {} };
 
     // debugger;
 
     // return;
 
 
-    // const lights = [];
-    // const geoHelper = new SphereBufferGeometry();
+    // for (let { index } of expGroups["Light"]) {
+    //     const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
+    //     const decodeInfo = await uLight.getDecodeInfo(decodeLibrary);
 
-    // for (let expLight of expGroups["Light"]) {
-    //     const uLight = await new ULight().load(pkgLoad, expLight);
+    //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
 
-    //     lights.push(uLight);
+    //     const matHelper = new MeshBasicMaterial({ transparent: true, depthTest: false, wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+    //     const helper = new Mesh(geo, matHelper);
 
-    //     const color = uLight.getColor();
-    //     const matHelper = new MeshBasicMaterial({ wireframe: true, color });
-    //     const helper = new Mesh(geoHelper, matHelper);
+    //     helper.position.fromArray(decodeInfo.position);
 
-    //     helper.position.set(uLight.location.vector.x, uLight.location.vector.z, uLight.location.vector.y);
-    //     // debugger;
-
-
-
-    //     if (uLight.radius !== undefined) helper.scale.set(uLight.radius, uLight.radius, uLight.radius);
+    //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
     //     else matHelper.color.setHex(0xff00ff);
 
     //     objectGroup.add(helper);
     // }
 
+    // const sunlight = await pkgLoad.fetchObject<UNMovableSunLight>(expGroups.NMovableSunLight[0].index + 1);
+
     // debugger;
 
     // const nonDirectional = lights.filter(x => !x.isDirectional);
 
-    // debugger;
-
-
-    // await addMaterialPreviews(pkgLoad, impGroups, decodeLibrary, objectGroup);
-
-
-    // debugger;
-
-    // const textureInfo = await textures[0].getDecodeInfo(true);
-    // const texture = decodeTexture(textureInfo);
-
-    // const material = new MeshBasicMaterial({ map: texture });
-    // const mesh = new Mesh(geometry, material);
-
-    // mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
-
-    // objectGroup.add(mesh);
-
-    // return;
-
-    // debugger;
-
-    // debugger;
-
-    // for (let impShader of impGroups["Texture"]) {
-    //     try {
-    //         const uMaterial = await pkgLoad.fetchObject<UTexture>(impShader.index);
-
-    //         debugger;
-
-    //         const material = await uMaterial.decodeMaterial();
-
-    //         const mesh = new Mesh(geometry, material);
-
-    //         mesh.position.set(16317.62354947573 + 100 * index++, -11492.261077168214 - 500 - 100, 114151.68197851974 - 500);
-
-    //         objectGroup.add(mesh);
-
-    //         break;
-    //     } catch (e) { }
-    // }
-
-    // debugger;
-    // return;
 
     const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
-
-    // const expTerrainInfo = expGroups.TerrainInfo[0];
-    // const expTerrainSectors = expGroups.TerrainSector
-    //     .sort(({ objectName: na }, { objectName: nb }) => {
-    //         const a = parseInt(na.replace("TerrainSector", ""));
-    //         const b = parseInt(nb.replace("TerrainSector", ""));
-    //         return a - b;
-    //     });
-
-    // const filteredSectors = expTerrainSectors
-
-    // debugger;
 
     expGroups.Model
         .sort(({ export: { objectName: na } }, { export: { objectName: nb } }) => {
@@ -229,28 +222,19 @@ async function startCore() {
             const b = parseInt(nb.replace("Model", ""));
             return a - b;
         });
-    // .slice(0, 10).forEach(exp => {
-    //     console.log(exp.objectName);
-    //     pkgLoad.seek(exp.offset.value as number + 0, "set");
-    //     pkgLoad.dump(5, true, false)
-    // });
-
-    // debugger;
-
-    const uTerrain = await pkgLoad.fetchObject<UTerrainInfo>(119);
-    const iTerrain = await uTerrain.getDecodeInfo(decodeLibrary);
-    const mTerrain = decodeObject3D(decodeLibrary, iTerrain);
-    objectGroup.add(mTerrain);
 
     // const uLevelInfo = await pkgLoad.fetchObject<UNMovableSunLight>(2);
     // await uLevelInfo.onLoaded();
 
+    // const uLevelInfo = await pkgLoad.fetchObject<ULevelInfo>(1);
+
     // debugger;
 
-    // const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
-    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    // objectGroup.add(mLevel);
+    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    objectGroup.add(mLevel);
+
+    // debugger;
 
     // {
     //     const pkgLoad = await assetLoader.load(pkg_20_21);
@@ -260,238 +244,127 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
-    // const uModels = await Promise.all(expGroups.Model.map(model => pkgLoad.fetchObject(model.index + 1)));
+    // const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    // const iModel = await uModel.getDecodeInfo(decodeLibrary);
+    // const mModel = decodeObject3D(decodeLibrary, iModel);
+    // objectGroup.add(mModel);
 
-    // debugger;
+    // const zones = await Promise.all(uModel.zones.slice(1).map(x => pkgLoad.fetchObject<UZoneInfo>(x.index)));
 
-    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    // zones.forEach(zoneInfo => {
+    //     const mesh = new Mesh(new SphereBufferGeometry(100), new MeshBasicMaterial({ color: 0xff00ff, depthTest: false, depthWrite: true }));
+    //     mesh.position.set(zoneInfo.location.x, zoneInfo.location.z, zoneInfo.location.y);
 
-    // const multiLightmaps = uModel.multiLightmaps;
-    // const size = 512, geometry = new PlaneBufferGeometry(size, size);
-    // for (let j = 0, len2 = multiLightmaps.length; j < len2; j++) {
-    //     const lightmaps = multiLightmaps[j].textures;
-
-    //     for (let i = 0, len = lightmaps.length; i < len; i++) {
-    //         const lightmapUuid = await lightmaps[i].staticLightmap.getDecodeInfo(decodeLibrary);
-    //         const lightmapInfo = decodeLibrary.materials[lightmapUuid];
-
-    //         // debugger;
-
-    //         const { texture } = decodeTexture(lightmapInfo);
-
-    //         // debugger;
-
-    //         const material = new MeshBasicMaterial({ map: texture });
-    //         const mesh = new Mesh(geometry, material);
-
-    //         mesh.position.set(16317.62354947573 + size * i, -11492.261077168214 - 500 - 100 + size * j, 114151.68197851974 - 500);
-
-    //         const geo2 = new PlaneBufferGeometry(16, 8);
-    //         const mat2 = new MeshBasicMaterial({ color: 0xff00ff, wireframe: true, transparent: true, depthTest: false, depthWrite: false });
-    //         const msh2 = new Mesh(geo2, mat2);
-
-    //         const ox = 424, oy = 88;
-
-    //         const rx = 16317.62354947573 + size * i - size * 0.5 + 8 + ox;
-    //         const ry = -11492.261077168214 - 500 - 100 + size * j - size * 0.5 + 4 + size - oy;
-    //         const rz = 114151.68197851974 - 500;
-
-    //         msh2.position.set(rx, ry, rz);
-
-    //         objectGroup.add(mesh, msh2);
-
-    //         // debugger;
-
-    //     }
-    // }
-    //     return;
-
-    // debugger;
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
-
-
-    // uModel.bspNodes.forEach((node: FBSPNode) => {
-    //     if (node.iSurf !== 1771) return;
-
-    //     const vec = node.surfaceOrigin;
-    //     const helper = new Mesh(new SphereBufferGeometry(100, 100), new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthTest: false, depthWrite: false }))
-
-    //     helper.position.set(vec.x, vec.z, vec.y);
-
-    //     objectGroup.add(helper);
+    //     objectGroup.add(mesh);
     // });
 
     // debugger;
 
 
-    // decodeLibrary.objects.forEach(info => {
-    //     const mModel = decodeObject3D(decodeLibrary, info);
-    //     objectGroup.add(mModel);
-
-    // });
-
-    // debugger;
-
-
-    // debugger;
-
-    // debugger;
-
-    // Exp_oren_curumadungeon17
-    // Exp_oren_curumadungeon20
-
-    // debugger;
-
-    // for (let id of [/*1441, 1770, 1802, 1804,*/ 4284]) {
+    // (await Promise.all([
+    //     // 1441,
+    //     // 1770,
+    //     // 1802,
+    //     // 1804,
+    //     // 4284,
+    //     // 10253, // scluptures
+    //     // 10254, // scluptures
+    //     // 8028,
+    //     // 1370, // wall object
+    //     // 5680, // floor near wall objectrs
+    //     // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+    //     // 555,// elven ruins colon
+    //     // 47, // rock with ambient light
+    //     2369,
+    //     // 610, // light fixture with 2 lights near elven ruins
+    //     // 1755, // light fixture with 3 lights near elven ruins
+    //     // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+    // ].map(async id => {
     //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-    //     const mesh = await uMesh.decodeMesh();
-    //     objectGroup.add(mesh);
-    // }
+    //     const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
 
-    // for (let exp of expGroups.StaticMeshActor) {
-    //     const uMesh = await new UStaticMeshActor().load(pkgLoad, exp);
-    //     const mesh = await uMesh.decodeMesh();
-    //     objectGroup.add(mesh);
-    // }
+    //     return iMesh;
+    // }))).forEach(async iMesh => {
+    //     // debugger;
+    //     const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-    // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1804); // tower plane
-    // // // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(4284); // rotating crystal
-    // // // const uMesh = await pkgLoad.fetchObject<UStaticMeshActor>(1441); // blinkig roof
+    //     // debugger;
 
-    // (await Promise.all([await uMesh.getDecodeInfo(decodeLibrary)])).forEach(info => {
+    //     objectGroup.add(mModel);
+
+    //     await uLevel.onLoaded();
+
+    //     // debugger;
+
+    //     {
+    //         for (let decodeInfo of (iMesh.siblings.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
+    //             const color = new Color().fromArray(decodeInfo.color);
+    //             const light = decodeInfo.directional ? new DirectionalLight(color) : new PointLight(color, undefined, decodeInfo.radius);
+    //             const helper = decodeInfo.directional ? new DirectionalLightHelper(light as DirectionalLight, 100) : new PointLightHelper(light as PointLight, decodeInfo.radius);
+
+    //             light.position.fromArray(decodeInfo.position);
+    //             // if (decodeInfo.rotation) light.rotation.fromArray(decodeInfo.rotation);
+
+    //             objectGroup.add(light, helper);
+
+
+    //             // debugger;
+
+    //             if (decodeInfo.directional) {
+    //                 const target = (light as DirectionalLight).target;
+
+    //                 light.updateMatrixWorld();
+    //                 target.position
+    //                     .set(0, 0, 1)
+    //                     .applyEuler(new Euler().fromArray(decodeInfo.rotation || [0, 0, 0, "XYZ"]))
+    //                     .normalize()
+    //                     .multiplyScalar(200)
+    //                     .add(light.position);
+
+    //                 target.updateMatrixWorld();
+
+    //                 (helper as DirectionalLightHelper).update();
+    //             }
+
+    //             light.add(...decodeInfo.children.map(nfo => decodeObject3D(decodeLibrary, nfo)));
+
+    //             // {
+    //             //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
+
+    //             //     const matHelper = new MeshBasicMaterial({ wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+    //             //     const helper = new Mesh(geo, matHelper);
+
+    //             //     helper.add(new AxesHelper(2));
+    //             //     helper.position.fromArray(decodeInfo.position);
+    //             //     helper.rotation.fromArray(decodeInfo.rotation);
+
+    //             //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
+    //             //     else matHelper.color.setHex(0xff00ff);
+
+    //             //     objectGroup.add(helper);
+    //             // }
+    //         }
+    //     }
+    // });
+
+
+    // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
+    // const iStaticMeshActors = await (await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary))))//.filter(x => x.children[0]?.name === "Exp_obj49");
+    //     // debugger
+
+    // iStaticMeshActors.forEach(info => {
     //     const mModel = decodeObject3D(decodeLibrary, info);
+
     //     objectGroup.add(mModel);
     // });
-
-    // debugger;
-
-    // const group = decodeObject3D(mesh);
-
-    // // debugger;
-
-    // objectGroup.add(group);
-
-    // const loadedObjects: THREE.Object3D[] = [];
-
-    // expGroups["StaticMeshActor"].forEach(async exp => {
-    //     const uStaticMeshActor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);;
-    //     const iStaticMeshActor = await uStaticMeshActor.getDecodeInfo(decodeLibrary);
-    //     const oStaticMeshActor = decodeObject3D(decodeLibrary, iStaticMeshActor);
-
-    //     // objectGroup.add(oStaticMeshActor);
-    //     loadedObjects.push(oStaticMeshActor);
-    // });
-
-    // setInterval(function () {
-    //     loadedObjects.splice(0, 100).forEach(actor => objectGroup.add(actor));
-    // }, 1000);
-
-    const uStaticMeshActors = await Promise.all(expGroups["StaticMeshActor"].map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)));
-    const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
-
-    iStaticMeshActors.forEach(info => {
-        const mModel = decodeObject3D(decodeLibrary, info);
-
-        objectGroup.add(mModel);
-    });
-
-    // const iStaticMeshActors = await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
-
-    // iStaticMeshActors.forEach(info => objectGroup.add(decodeObject3D(info)));
-
-    // const towerIndex = 2301;
-
-    // for (let exp of expGroups.StaticMeshActor/*.slice(towerIndex, towerIndex + 1)*/) {
-    //     const uActor = await new UStaticMeshActor().load(pkgLoad, exp);
-    //     const actor = await uActor.decodeMesh();
-
-    //     objectGroup.add(actor);
-    // }
-
-    // debugger;
-
-    // for (let exp of expGroups.Brush/*.filter(exp=>exp.size.value > 73)*/) {
-    //     // console.assert(exp.offset.value as number !== 72);
-
-    //     // pkgLoad.seek(exp.offset.value as number, "set");
-
-    //     // pkgLoad.dump()
-
-    //     const uBrush = await new UBrush().load(pkgLoad, exp);
-
-    //     // debugger;
-
-    //     const mesh = await uBrush.decodeMesh();
-
-    //     objectGroup.add(mesh);
-
-    //     // debugger;
-    // }
-
-    // for (let exp of expGroups.Model/*.filter(exp=>exp.size.value > 73)*/) {
-    //     // console.assert(exp.offset.value as number !== 72);
-
-    //     // pkgLoad.seek(exp.offset.value as number, "set");
-
-    //     // pkgLoad.dump()
-
-    //     const uBrush = await new UModel().load(pkgLoad, exp);
-
-    //     const mesh = await uBrush.decodeMesh();
-
-    //     objectGroup.add(mesh);
-
-    //     // debugger;
-    // }
-
-    // debugger;
-
-    // for (let exp of expMeshes) {
-    //     const uMesh = await new UStaticMesh().load(pkgLoad, exp);
-    //     const mesh = await uMesh.decodeMesh();
-
-    //     objectGroup.add(mesh);
-
-    //     debugger;
-    // }
-
-    // const uTerrain = await new UTerrainInfo(filteredSectors).load(pkgLoad, expTerrainInfo);
-    // const terrain = await uTerrain.decodeMesh();
-    // objectGroup.add(terrain);
-
-
-    // objectGroup.scale.set(0.001, 0.001, 0.001);
-
-    // const boundingBox = new Box3().setFromObject(objectGroup);
-    // const boxSize = boundingBox.getSize(new Vector3());
 
     console.info("System has loaded!");
-
-
-
-    // terrain.scale.set(0.001, 0.001, 0.001);
-    // terrain.position.y = -boundingBox.min.y;
-
-    // console.log(boxSize.toArray().join(", "));
 
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
     renderManager.startRendering();
 
     (global as any).renderManager = renderManager;
-
-    // for (let exp of expTerrainSector.slice(0, 2)) {
-    //     const t = await new UTerrainSector().load(pkg, exp);
-    //     debugger;
-    // }
-
-    // // const sectors = await Promise.all(expTerrainSector.map(async exp => await new UTerrainSector().load(pkg, exp)));
-
-    // console.log("terrain loading done");
-
-    // const renderManager = new RenderManager(viewport);
 }
 
 export default startCore;

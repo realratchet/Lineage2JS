@@ -1,9 +1,6 @@
-import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-import { PropertyTag } from "./un-property";
-import { FPrimitiveArray } from "./un-array";
-import BufferValue from "../buffer-value";
 import UObject from "./un-object";
+import BufferValue from "../buffer-value";
+import { FPrimitiveArray } from "./un-array";
 
 class FTIntMap extends UObject {
     public time: number;
@@ -24,21 +21,16 @@ class FTIntMap extends UObject {
         });
     }
 
-    public preLoad(pkg: UPackage, exp: UExport) {
+    public preLoad(pkg: UPackage) {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + this.size;
     }
 
-    public doLoad(pkg: UPackage, exp: UExport): this {
+    public doLoad(pkg: UPackage): this {
 
         this.readNamedProps(pkg);
 
         pkg.seek(this.readTail, "set");
-
-        // const buff = this.intensity.array.buffer.slice(this.intensity.array.byteOffset, this.intensity.array.byteOffset + this.intensity.array.byteLength); // (@8306076 128x128)
-        // const blob = new Blob([buff], { type: "application/octet-stream" });
-        // const url = URL.createObjectURL(blob);
-        // window.open(url, "_blank");
 
         return this;
     }

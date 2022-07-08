@@ -1,5 +1,33 @@
 import * as _path from "path";
 
+type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX";
+type SupportedPackages_T = "LEVEL" | "TEXTURE" | "STATIC_MESHES" | "SOUNDS" | "SCRIPTS" | "EFFECTS";
+
+const extToType = Object.freeze(
+    new Map([
+        ["UNR", "LEVEL"],
+        ["UTX", "TEXTURE"],
+        ["USX", "STATIC_MESHES"],
+        ["UAX", "SOUNDS"],
+        ["U", "SCRIPTS"],
+        ["UKX", "EFFECTS"]
+    ]) as Map<SupportedExtensions_T, SupportedPackages_T>
+);
+
+const impToType = Object.freeze(
+    new Map([
+        ["Level", extToType.get("UNR")],
+        ...[ // textures
+            "Texture",
+            "TexOscillator",
+            "Shader",
+            "ColorModifier"
+        ].map(v => ([v, extToType.get("UTX")] as [SupportedImports_T, SupportedPackages_T])),
+        ["Sound", extToType.get("UAX")],
+        ["StaticMesh", extToType.get("USX")],
+    ]) as Map<SupportedImports_T, SupportedPackages_T>
+);
+
 class AssetLoader {
     private packages = new Map<string, Promise<UPackage>>();
 
@@ -19,8 +47,12 @@ class AssetLoader {
         });
     }
 
-    public getPackage(pkgName: string): Promise<UPackage> { return this.packages.get(pkgName.toLowerCase()); }
-    public hasPackage(path: string) { return this.packages.has(pathToPkgName(path).toLowerCase()); }
+    public getPackage(pkgName: string, impType: SupportedImports_T): Promise<UPackage> { return this.packages.get(importToPkgName(pkgName, impType)); }
+    public hasPackage(pkgName: string, impType: SupportedImports_T) { return this.packages.has(importToPkgName(pkgName, impType)); }
+
+    public getPackageByPath(path: string): Promise<UPackage> { return this.packages.get(pathToPkgName(path).toLowerCase()); }
+    public hasPackageByPath(path: string) { return this.packages.has(pathToPkgName(path).toLowerCase()); }
+
     public async load(pkgOrPromise: Promise<UPackage> | UPackage): Promise<UPackage> {
         return await (await pkgOrPromise).decode();
     }
@@ -29,4 +61,22 @@ class AssetLoader {
 export default AssetLoader;
 export { AssetLoader };
 
-function pathToPkgName(path: string) { return _path.basename(path, _path.extname(path)) };
+function importToPkgName(pkgName: string, impType: SupportedImports_T) {
+    if (!impToType.has(impType))
+        throw new Error(`Unsupported package type '${impType}' for package '${pkgName}'`);
+
+    const type = impToType.get(impType);
+    const fullName = `${pkgName}/${type}`.toLowerCase();
+
+    return fullName;
+}
+
+function pathToPkgName(path: string) {
+    const ext = _path.extname(path);
+    const extUpper = ext.slice(1).toUpperCase() as SupportedExtensions_T;
+
+    if (!extToType.has(extUpper))
+        throw new Error(`Unsupported package type '${ext}' for package '${_path.basename(path)}'`);
+
+    return `${_path.basename(path, ext)}/${extToType.get(extUpper)}`;
+};

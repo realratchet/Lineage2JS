@@ -1,15 +1,9 @@
-import UPackage from "./un-package";
 import UObject from "./un-object";
 import FBox from "./un-box";
 import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
-import FNumber from "./un-number";
-// import { Object3D, Texture, DataTexture, BufferGeometry, Float32Attribute, Uint16BufferAttribute, MeshBasicMaterial, Mesh, Float32BufferAttribute, DoubleSide, Sphere, Box3 } from "three";
-
-// type UExport = import("./un-export").UExport;
-// type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
-// type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer;
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
@@ -27,14 +21,10 @@ class UTerrainSector extends UObject {
 
     protected unkBuf0: any;
 
-    protected unkArr8: FArray<FNumber> = new FArray(class FUnknownStructExt extends FUnknownStruct {
-        public static readonly typeSize = 40;
+    protected unkArr8: FArray<FUnknownStruct> = new FArray(class FUnknownStructExt extends FUnknownStruct {
+        constructor() { super(40); }
 
-        constructor() {
-            super(40);
-        }
-
-        public load(pkg: UPackage, tag: PropertyTag): this {
+        public load(pkg: UPackage): this {
 
             const start = pkg.tell();
 
@@ -54,7 +44,7 @@ class UTerrainSector extends UObject {
         }
     });
 
-    // likely lightning
+    // likely lighting
     protected unkArr0: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
     protected unkArr1: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
     protected unkArr2: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
@@ -66,15 +56,7 @@ class UTerrainSector extends UObject {
 
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
 
-    public constructor(terrainInfo: UTerrainInfo) {
-        super();
-
-        // debugger;
-
-        this.info = terrainInfo;
-    }
-
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary, info: UTerrainInfo): Promise<IStaticMeshObjectDecodeInfo> {
         if (this.uuid in library.geometries) return {
             type: "TerrainSegment",
             name: this.objectName,
@@ -87,11 +69,13 @@ class UTerrainSector extends UObject {
 
         await this.onLoaded();
 
-        const iTerrainMap = library.materials[this.info.terrainMap.uuid] as ITextureDecodeInfo;
+        const iTerrainMap = library.materials[info.terrainMap.uuid] as ITextureDecodeInfo;
         const width = iTerrainMap.width;
         const data = new Uint16Array(iTerrainMap.buffer);
-        const vertices = new Float32Array(17 * 17 * 3), indices = new Uint16Array(16 * 16 * 6);
-        const { x: sx, y: sy, z: sz } = this.info.terrainScale;
+        const TypedIndicesArray = getTypedArrayConstructor(17 * 17);
+
+        const vertices = new Float32Array(17 * 17 * 3), indices = new TypedIndicesArray(16 * 16 * 6);
+        const { x: sx, y: sy, z: sz } = info.terrainScale;
 
         // const sectorX = this.offsetX / 2 / 2048;
         // const sectorY = this.offsetY / 2 / 2048;
@@ -115,7 +99,7 @@ class UTerrainSector extends UObject {
                 // const quadX = sectorX * 16 + x;
                 // const quadY = sectorY * 16 + y;
                 // const quadIndex = quadY * 256 + quadX;
-                // const quadValue = this.info.quadVisibilityBitmap.getElem(quadIndex >> 3);
+                // const quadValue = info.quadVisibilityBitmap.getElem(quadIndex >> 3);
                 // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
                 const isVisible = true;
                 const idxOffset = (y * 16 + x) * 6;
@@ -142,8 +126,8 @@ class UTerrainSector extends UObject {
             }
         }
 
-        const itLayer = this.info.layers.values();
-        const layerCount = this.info.layers.size;
+        const itLayer = info.layers.values();
+        const layerCount = info.layers.size;
         const uvs: Float32Array[] = new Array(layerCount);
 
         for (let k = 0; k < layerCount; k++) {
@@ -182,7 +166,7 @@ class UTerrainSector extends UObject {
         return {
             type: "TerrainSegment",
             geometry: this.uuid,
-            materials: this.info.uuid
+            materials: info.uuid
         };
     }
 
@@ -262,6 +246,8 @@ class UTerrainSector extends UObject {
         pkg.seek(64); // unknown 
 
         this.texInfo.load(pkg);
+
+        this.readHead = pkg.tell();
 
         return this;
     }

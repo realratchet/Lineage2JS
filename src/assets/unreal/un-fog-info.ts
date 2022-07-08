@@ -1,5 +1,4 @@
 import UObject from "./un-object";
-import UAActor from "./un-aactor";
 import FArray from "./un-array";
 import FColor from "./un-color";
 
@@ -11,6 +10,8 @@ class UFogInfo extends UObject {
     protected fogRange4: URange;
     protected fogRange5: URange;
     protected colors: FArray<FColor> = new FArray(FColor);
+
+    public readonly careUnread = false;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

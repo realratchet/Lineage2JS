@@ -1,14 +1,6 @@
 import UObject from "./un-object";
 
-class UStruct extends UObject {
-    // public async load(pkg: UPackage, exp: UExport): Promise<this> {
-    //     super.load(pkg, exp);
-
-    //     debugger;
-
-    //     return this;
-    // }
-}
+class UStruct extends UObject { }
 
 export default UStruct;
 export { UStruct };

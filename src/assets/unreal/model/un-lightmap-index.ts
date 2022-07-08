@@ -1,6 +1,7 @@
 import FConstructable from "../un-constructable";
 import FArray, { FPrimitiveArray } from "../un-array";
 import BufferValue from "@client/assets/buffer-value";
+import { FMatrix } from "../un-matrix";
 
 class FSubStructure extends FConstructable {
     public lightIndex: number;
@@ -37,7 +38,7 @@ class FLightmapIndex extends FConstructable {
     public sizeX: number;
     public sizeY: number;
 
-    public unkMatrix4: number[];
+    public uvMatrix = new FMatrix();
     public unkFloatGroup0: number[];
 
     public levelId: number;
@@ -61,7 +62,7 @@ class FLightmapIndex extends FConstructable {
 
         // 18430.568359375 110065 -9380 27.42898941040039 0 0 0 64 0
 
-        this.unkMatrix4 = new Array(16).fill(1).map(_ => pkg.read(float).value as number);
+        this.uvMatrix.load(pkg);
 
         const unkArray = pkg.read(BufferValue.allocBytes(9 * 4)) as BufferValue;
 

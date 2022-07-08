@@ -3,6 +3,7 @@ import BufferValue from "../buffer-value";
 type UObject = import("./un-object").UObject;
 
 class UExport<T extends UObject = UObject> {
+    public index: number;
     public idClass = new BufferValue(BufferValue.compat32);
     public idSuper = new BufferValue(BufferValue.compat32);
     public idPackage = new BufferValue(BufferValue.uint32);

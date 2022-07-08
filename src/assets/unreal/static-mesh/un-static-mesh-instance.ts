@@ -1,101 +1,155 @@
 import UObject from "../un-object";
 import BufferValue from "../../buffer-value";
-import FArray from "../un-array";
-import FNumber from "../un-number";
+import FConstructable from "../un-constructable";
+import FRawColorStream from "../un-raw-color-stream";
+import FArray, { FPrimitiveArray } from "../un-array";
+import { selectByTime, staticMeshLight } from "../un-time-list";
 
-class UStaticMeshIsntance extends UObject {
-    protected unk: number; // unk compat
-    protected unkZeroes = new FArray(FNumber.forType(BufferValue.uint32) as any);
+class FAssignedLight extends FConstructable {
+    public lightIndex: number; // seems to be light index
+    public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
+    public unkInt0: number;
 
-    public async load(pkg: UPackage, exp: UExport): Promise<this> {
+    public light: ULight;
+
+    public load(pkg: UPackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const float = new BufferValue(BufferValue.float);
+        const int32 = new BufferValue(BufferValue.int32);
 
-        this.objectName = `Exp_${exp.objectName}`;
+        this.lightIndex = pkg.read(compat32).value as number;
+        this.vertexFlags.load(pkg);
+        this.unkInt0 = pkg.read(int32).value as number;
 
-        this.setReadPointers(exp);
-        pkg.seek(this.readHead, "set");
+        this.promisesLoading.push(new Promise<void>(async resolve => {
 
-        // console.log(this.readTail - this.readHead);
+            this.light = await pkg.fetchObject<ULight>(this.lightIndex);
 
-        this.unk = await pkg.read(compat32).value as number;
-        await this.unkZeroes.load(pkg);
-
-        this.readHead = pkg.tell();
-
-        // console.log(this.readTail - this.readHead);
-
-        // const arr = new Int32Array((await pkg.read(BufferValue.allocBytes(this.readTail - this.readHead)).value as DataView).buffer);
-
-        // // const unk2 = await pkg.read(compat32).value as number;
-        // // const unkInt = await pkg.read(float).value as number;
-
-        // debugger;
-
-        // // const unk2 = await pkg.read(compat32).value as number;
-
-        let offset = pkg.tell();
-        let bytesLeft = this.readTail - pkg.tell();
-
-        // debugger;
-
-        for (let i = 0; i < bytesLeft; i++) {
-
-            const objectId = await pkg.read(compat32).value as number;
-
-            if (objectId !== 0) {
-                try {
-                    const pkgName = pkg.getPackageName(objectId);
-                    // console.log(`${objectId} -> ${pkgName}`);
-                } catch (e) { }
-            }
-
-            // const tag = await PropertyTag.from(pkg, offset + i);
-
-            // if (!tag.isValid()) continue;
-
-            // if (
-            //     true
-            //     && tag.name !== "None"
-            //     && tag.dataSize > 0
-            //     && tag.type >= 0x1 && tag.type <= 0xf
-            //     && tag.arrayIndex >= 0
-            //     && !tag.name.startsWith("None,")
-            //     // && tag.structName !== "EnableCollision" && tag.structName !== "EnableCollisionforShadow" && tag.structName !== "Material" && tag.structName !== "Cm_dg_inner_deco5" && tag.structName !== "Cm_dg_statue3"
-            //     && (tag.type !== UNP_PropertyTypes.UNP_StructProperty || tag.type === UNP_PropertyTypes.UNP_StructProperty && tag.structName)
-            //     // && (tag.type !== UNP_PropertyTypes.UNP_ArrayProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty && tag.arrayIndex === 0 && tag.dataSize > 1)
-            //     // && (tag.type === UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty /*|| tag.type === UNP_PropertyTypes.UNP_ClassProperty*/)
-            //     && !tag.name.startsWith("Cm_") && !tag.name.startsWith("oren_") && !tag.name.startsWith("cm_") && !tag.name.startsWith("dion_")
-            //     && (tag.dataSize < bytesLeft)
-            //     // && (tag.type !== UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ObjectProperty && tag.dataSize <= 4)
-            //     // && tag.name !== "EnableCollisionforShadow" && tag.name !== "EnableCollision" && tag.name !== "bNoDynamicShadowCast"
-            // ) {
-            //     console.log(i, tag);
-            // }
-
-        }
-
-        // debugger;
-
-        // // pkg.seek(20);
-
-
-        // // pkg.dump(1);
-        // // debugger;
-
-        // this.readHead = pkg.tell();
-
-        // await this.readNamedProps(pkg);
-
-        // const bytesOffset = this.readTail - pkg.tell();
+            resolve();
+        }));
 
         // debugger;
 
         return this;
     }
 
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+
+        await Promise.all(this.promisesLoading);
+
+        return {
+            vertexFlags: this.vertexFlags.getTypedArray(),
+            ...(await this.light.getDecodeInfo(library))
+        };
+    }
 }
 
-export default UStaticMeshIsntance;
-export { UStaticMeshIsntance };
+class UStaticMeshInstance extends UObject {
+    protected colorStream = new FRawColorStream();
+
+    protected sceneLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
+    protected environmentLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
+
+    protected unkArrIndex: number[];
+
+    protected actor: UStaticMeshActor;
+
+    public setActor(actor: UStaticMeshActor) { this.actor = actor; }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+        await this.onLoaded();
+
+        const color = new Float32Array(this.colorStream.color.length * 3);
+
+        for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
+            const { r, g, b } = this.colorStream.color[i] as FColor;
+            const offset = i * 3;
+
+            color[offset + 0] = r / 255;
+            color[offset + 1] = g / 255;
+            color[offset + 2] = b / 255;
+        }
+
+        const timeOfDay = 12;
+
+        let validEnvironment: FAssignedLight = null;
+        let startIndex: number, finishIndex: number;
+        let startTime: number, finishTime: number;
+
+        let lightingColor: [number, number, number];
+
+        for (let i = 0, len = this.environmentLights.length; i < len; i++) {
+            const timeForIndex = indexToTime(i, len);
+
+            if ((Number(timeForIndex < timeOfDay) << 0x8 | Number(timeForIndex === timeOfDay) << 0xe) === 0x0) {
+                validEnvironment = this.environmentLights[i];
+                startIndex = i;
+                finishIndex = i + 1;
+                startTime = timeForIndex;
+                finishTime = indexToTime(finishIndex, len);
+                lightingColor = selectByTime(timeOfDay, staticMeshLight).getColor();
+
+                break;
+            }
+        }
+
+        return {
+            color,
+            lights: {
+                scene: await Promise.all(this.sceneLights.map(l => l.getDecodeInfo(library))),
+                environment: validEnvironment ? {
+                    color: lightingColor,
+                    ...await validEnvironment.getDecodeInfo(library)
+                } : null
+            }
+        };
+
+        // const allLights = [...this.sceneLights/*, ...this.unkLights1*/];
+        // const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
+        // const filteredMaps = (Object.values(filteredMapsDict) as ULight[]);//.filter(l => l.getZone() === this.actor.getZone());
+
+        // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
+    }
+
+    protected doLoad(pkg: UPackage, exp: UExport): this {
+        // basemodel id 7364 -> export 7363
+        // level id 5 -> export 4
+        // umodel has 1888 lightmap sufraces with 9 textures
+        // 1888 x 9
+        // vertices 238
+        // faces 390
+        // material 18
+
+
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
+        const compat32 = new BufferValue(BufferValue.compat32);
+
+        super.doLoad(pkg, exp);
+
+        if (verArchive < 0x70) {
+            console.warn("Unsupported yet");
+            debugger;
+        } else this.colorStream.load(pkg);  // this is not always 0! need to add this
+
+        this.readHead = pkg.tell();
+
+        if (0x6D < verArchive) this.sceneLights.load(pkg);
+        if (0x03 < verLicense) this.environmentLights.load(pkg);
+        if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read(compat32).value as number);
+
+        this.readHead = pkg.tell();
+
+        console.assert(this.readHead === this.readTail, "Should be zero");
+
+        return this;
+    }
+}
+
+export default UStaticMeshInstance;
+export { UStaticMeshInstance };
+
+
+function indexToTime(index: number, totalElements: number) {
+    return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements;
+}
+

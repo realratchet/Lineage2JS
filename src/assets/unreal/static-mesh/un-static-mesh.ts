@@ -1,13 +1,19 @@
-import FArray from "../un-array";
+import { v5 as seededUuid } from "uuid";
+import FArray, { FArrayLazy } from "../un-array";
 import UPrimitive from "../un-primitive";
 import FStaticMeshSection from "./un-static-mesh-section";
 import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-
 import BufferValue from "../../buffer-value";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
+import { generateUUID } from "three/src/math/MathUtils";
+import FStaticMeshTriangle from "./un-static-mesh-triangle";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import StringSet from "@client/utils/string-set";
+
+const triggerDebuggerOnUnsupported = false;
 
 class UStaticMesh extends UPrimitive {
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
@@ -27,8 +33,30 @@ class UStaticMesh extends UPrimitive {
     protected isUsingBillboard: boolean;
     protected frequency: number;
 
-    protected collisionFaces: FArray<FStaticMeshCollisionTriangle> = new FArray(FStaticMeshCollisionTriangle);
-    protected collisionNodes: FArray<FStaticMeshCollisionNode> = new FArray(FStaticMeshCollisionNode);
+    protected collisionFaces: FArrayLazy<FStaticMeshCollisionTriangle> = new FArrayLazy(FStaticMeshCollisionTriangle);
+    protected collisionNodes: FArrayLazy<FStaticMeshCollisionNode> = new FArrayLazy(FStaticMeshCollisionNode);
+    protected staticMeshTris: FArrayLazy<FStaticMeshTriangle> = new FArrayLazy(FStaticMeshTriangle);
+
+    protected unkIndex0: number;
+
+    protected unkInt_5x0: number;
+    protected unkInd_5x0: number;
+    protected unkInd_5x1: number;
+    protected unkInt_5x1: number;
+    protected unkInt_5x2: number;
+
+    protected unkInt_6x0: number;
+    protected unkInt_6x1: number;
+    protected unkInt_Ax0: number;
+    protected unkInt_Cx0: number;
+    protected unkInt_Dx0: number;
+    protected unkInt_Dx1: number;
+    protected unkInt_Ex0: number;
+
+    protected unkInt0: number;
+    protected unkIndex1: number;
+    protected unkInt1: number;
+
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -45,385 +73,218 @@ class UStaticMesh extends UPrimitive {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const float = new BufferValue(BufferValue.float);
-        const int8 = new BufferValue(BufferValue.int8);
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-        // if (exp.objectName === "oren_curumadungeon17") debugger;
-        // if (exp.objectName === "oren_curumadungeon33") debugger;
+        const compat32 = new BufferValue(BufferValue.compat32);
+        const int32 = new BufferValue(BufferValue.int32);
 
         super.doLoad(pkg, exp);
 
-        this.sections.load(pkg, null);        // 0400 0000 0000 00BE 00ED 0022 0022 0000
-        this.boundingBox.load(pkg);           // 6666 A2C3 FAED EBC0 889D 06C4 6666 A243
-        this.vertexStream.load(pkg, null);    // 6E03 6666 A243 0000 0C42 8A2E F343 0000
-        this.colorStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        this.alphaStream.load(pkg, null);     // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        this.uvStream.load(pkg, null);        // 6E03 FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-        this.indexStream.load(pkg, null);     // 4606 E500 E400 E000 DE00 DF00 E000 E100
-        this.edgesStream.load(pkg, null);     // 7409 E500 E400 E400 E000 E000 E500 DE00
+        this.sections.load(pkg);
+        this.boundingBox.load(pkg);
+        this.vertexStream.load(pkg);
+        this.colorStream.load(pkg);
+        this.alphaStream.load(pkg);
+        this.uvStream.load(pkg);
+        this.indexStream.load(pkg);
+        this.edgesStream.load(pkg);
+
+        this.unkIndex0 = pkg.read(compat32).value as number;
+
+        if (verLicense < 0x11) {
+            console.warn("Not supported yet");
+            this.skipRemaining = true;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
+        } else {
+            if (verArchive < 0x3E) {
+                console.warn("Not supported yet");
+                this.skipRemaining = true;
+                if (triggerDebuggerOnUnsupported) debugger;
+                return;
+            } else {
+                this.collisionFaces.load(pkg);
+                this.collisionNodes.load(pkg);
+            }
+        }
 
-        // pkg.seek(1);
-
-        // const unk = pkg.read(compat32).value as number;
-
-        // if (unk !== 0) debugger;
-
-        // const colFaces = pkg.read(compat32).value as number;
-
-        // debugger;
-
-        // const unk2 = await pkg.read(compat32).value as number;
-
-        // const lodsMaybe = await new FArray(FStaticMeshSection).load(pkg);
-
-
-        // debugger;
-
-
-
-
-        // debugger;
-
-        // // const arr = await new FArray(UModel).load(pkg);
-
-        // debugger;
-
-        // // 15 4 60 0
-
-        // // const unk = [
-        // //     await pkg.read(new BufferValue(BufferValue.uint8)).value as number,
-        // //     await pkg.read(new BufferValue(BufferValue.uint8)).value as number,
-        // //     await pkg.read(new BufferValue(BufferValue.uint8)).value as number,
-        // //     await pkg.read(new BufferValue(BufferValue.uint8)).value as number,
-        // //     // await pkg.read(new BufferValue(BufferValue.compat32)).value as number,
-        // //     // await pkg.read(new BufferValue(BufferValue.compat32)).value as number,
-        // //     // await pkg.read(new BufferValue(BufferValue.compat32)).value as number,
-        // //     // await pkg.read(new BufferValue(BufferValue.compat32)).value as number
-        // // ];
-
-        // // debugger;
-
-        // // const startOffset = pkg.tell();
-
-        // // const unk = pkg.read(new BufferValue(BufferValue.int32)); // skip unknown;
-        // // const unkVal = unk.value;
-
-        // // const compatVal = await pkg.read(compat32).value as number;
-
-        // // const steps = pkg.tell() - startOffset;
-
-        // // debugger;
-
-        // // console.log(this.vertexStream.vert[this.indexStream1.indices[0].value].position);
-        // // console.log(this.vertexStream.vert[this.indexStream1.indices[1].value].position);
-        // // console.log(this.vertexStream.vert[this.indexStream1.indices[2].value].position);
-
-        // const count = await pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // // debugger;
-
-        // const dview = await pkg.read(BufferValue.allocBytes(this.readTail - pkg.tell() - 3)).value as DataView;
-        // const fview = new Float32Array(dview.buffer);
-
-        // // debugger;
-
-        // await this.collisionFaces.load(pkg);
-
-        // // debugger;
-
-        // this.readHead = pkg.tell();
-
-        // const bytesLeft = this.readTail - this.readHead;
-        // const nextItems = [];
-        // const byteOffset = 1 + 1, byteCount = 5000;
-        // const byteEnd = Math.min(bytesLeft, byteOffset + byteCount);
-
-        // const sphere = new Sphere(this.boundingSphere.center, this.boundingSphere.radius);
-
-        // console.log(this.boundingBox.min, this.boundingBox.max);
-
-        // this.vtest = [];
-        // this.ptest = [];
-
-        // for (let i = 0, len = this.collisionFaces.length; i < len; i++) {
-        //     const tri = this.collisionFaces[i] as FStaticMeshCollisionTriangle;
-
-        //     for (let j = 0; j < 4; j++) {
-        //         const plane = new Plane(new Vector3(tri.f1[j * 4 + 0], tri.f1[j * 4 + 2], tri.f1[j * 4 + 1]), tri.f1[j * 4 + 3]);
-
-        //         this.ptest.push(plane);
-        //     }
-
-        //     // debugger;
-
-        //     // const x = tri.f1[3 + 4 * 0], y = tri.f1[3 + 4 * 1], z = tri.f1[3 + 4 * 2], w = tri.f1[3 + 4 * 3];
-
-        //     // this.vtest.push(new Vector3(x, y, z));
-
-        //     // console.log(tri.f1, tri.f2);
-        //     // console.log(x, y, z, w, tri.f2);
-        // }
-
-
-        // // debugger;
-
-        // // pkg.seek(3924065, "set");
-        // pkg.seek(6);
-
-        // pkg.dump(1);
-
-        // debugger;
-
-        // for (let steps = 0; pkg.tell() < this.readTail; steps++) {
-        //     // pkg.seek(this.readHead + i, "set");
-
-        //     const nx = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //     const fx = new Float32Array(nx.buffer);
-        //     const px = await pkg.read(float).value as number;
-        //     const ny = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //     const fy = new Float32Array(ny.buffer);
-        //     const py = await pkg.read(float).value as number;
-        //     const nz = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //     const fz = new Float32Array(nz.buffer);
-        //     const pz = await pkg.read(float).value as number;
-
-        //     // debugger;
-
-        //     // const a = await pkg.read(float).value;
-        //     // const b = await pkg.read(compat32).value;
-        //     // const c = await pkg.read(compat32).value;
-        //     // const d = await pkg.read(compat32).value;
-        //     // const e = await pkg.read(compat32).value;
-
-        //     const unk = await pkg.read(BufferValue.allocBytes(5 * 4)).value as DataView;
-
-        //     this.vtest.push(new Vector3(px, py, pz));
-
-        //     // debugger;
-
-        //     if (steps === 10)
-        //         break;
-        // }
-
-        // for (let i = byteOffset; i < byteEnd - FVector.typeSize * 4; i += 1) {
-        //     try {
-        //         pkg.seek(this.readHead + i, "set");
-
-        //         if (await pkg.read(float).value as number === 35) {
-        //             pkg.seek(3924065, "set");
-
-        //             debugger;
-
-        //             const nx = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //             const fx = new Float32Array(nx.buffer);
-        //             const px = await pkg.read(float).value as number;
-        //             const ny = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //             const fy = new Float32Array(ny.buffer);
-        //             const py = await pkg.read(float).value as number;
-        //             const nz = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //             const fz = new Float32Array(nz.buffer);
-        //             const pz = await pkg.read(float).value as number;
-
-        //             const t = pkg.tell();
-
-        //             const a = await pkg.read(compat32).value;
-        //             const b = await pkg.read(compat32).value;
-        //             const c = await pkg.read(compat32).value;
-        //             const d = await pkg.read(compat32).value;
-        //             const e = await pkg.read(compat32).value;
-
-        //             console.log(pkg.tell() - t);
-
-        //             debugger;
-
-        //             // const unk = await pkg.read(BufferValue.allocBytes(5 * 4)).value as DataView;
-
-        //             const nx1 = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //             const px1 = await pkg.read(float).value as number;
-        //             const ny1 = await pkg.read(BufferValue.allocBytes(3 * 4)).value as DataView;
-        //             const py1 = await pkg.read(float).value as number;
-        //             const nz1 = await pkg.read(BufferValue.allocBytes(3 * 4)).value as numbeDataViewr;
-        //             const pz1 = await pkg.read(float).value as number;
-
-        //             // const px1 = await pkg.read(float).value as number, nx1 = await pkg.read(BufferValue.allocBytes(3 * 4)).value as number;
-        //             // const py1 = await pkg.read(float).value as number, ny1 = await pkg.read(BufferValue.allocBytes(3 * 4)).value as number;
-        //             // const pz1 = await pkg.read(float).value as number, nz1 = await pkg.read(BufferValue.allocBytes(3 * 4)).value as number;
-
-        //             const buff = new Float32Array(await pkg.read(BufferValue.allocBytes(4 * 64 * 2 - 4)).value.buffer);
-
-        //             debugger;
-        //         }
-
-        //         // pkg.seek(3928502, "set");
-
-        //         // // const v = await new FVector().load(pkg);
-        //         // // const n = await new FVector().load(pkg);
-
-        //         // pkg.seek(-4 * 12 - 3);
-        //         // const buff = new Float32Array(await pkg.read(BufferValue.allocBytes(4 * 64 * 2 - 4)).value.buffer)
-
-        //         // debugger;
-
-        //         // const px = await pkg.read(float).value as number, nx = await pkg.read(BufferValue.allocBytes(3 * 4)).value as number;
-        //         // const py = await pkg.read(float).value as number, ny = await pkg.read(BufferValue.allocBytes(3 * 4)).value as number;
-        //         // const pz = await pkg.read(float).value as number, nz = await pkg.read(BufferValue.allocBytes(3 * 4)).value as number;
-
-        //         // debugger;
-
-        //         // 
-        //         // const py = await pkg.read(float).value as number, ny = await pkg.read(int8).value as number;
-        //         // const pz = await pkg.read(float).value as number, nz = await pkg.read(int8).value as number;
-
-        //         const p = new Vector3(px, py, pz);
-        //         const n = new Vector3(nx, ny, nz);
-
-        //         if (sphere.containsPoint(p) /*&& v.vector.z > 500*/) {
-        //             nextItems.push([pkg.tell(), ...p.toArray()]);
-
-        //             this.vtest.push(p);
-        //         }
-
-        //         debugger;
-
-        //         // const tag = await PropertyTag.from(pkg, pkg.tell());
-
-        //         // if (
-        //         //     true
-        //         //     && tag.name !== "None"
-        //         //     && tag.dataSize > 0
-        //         //     && tag.type >= 0x1 && tag.type < 0xf
-        //         //     && tag.arrayIndex >= 0
-        //         //     && tag.structName !== "EnableCollision" && tag.structName !== "EnableCollisionforShadow" && tag.structName !== "Material" && tag.structName !== "Cm_dg_inner_deco5" && tag.structName !== "Cm_dg_statue3"
-        //         //     && (tag.type !== UNP_PropertyTypes.UNP_StructProperty || tag.type === UNP_PropertyTypes.UNP_StructProperty && tag.structName)
-        //         //     && (tag.type !== UNP_PropertyTypes.UNP_ArrayProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty && tag.arrayIndex === 0 && tag.dataSize > 1)
-        //         //     && (tag.type === UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ArrayProperty /*|| tag.type === UNP_PropertyTypes.UNP_ClassProperty*/)
-        //         //     && !tag.name.startsWith("Cm_") && !tag.name.startsWith("oren_") && !tag.name.startsWith("cm_") && !tag.name.startsWith("dion_")
-        //         //     && (tag.dataSize < bytesLeft)
-        //         //     && (tag.type !== UNP_PropertyTypes.UNP_ObjectProperty || tag.type === UNP_PropertyTypes.UNP_ObjectProperty && tag.dataSize <= 4)
-        //         //     && tag.name !== "EnableCollisionforShadow" && tag.name !== "EnableCollision" && tag.name !== "bNoDynamicShadowCast"
-        //         // ) {
-        //         //     console.log(i, tag);
-
-        //         //     nextItems.push(tag);
-        //         // }
-
-        //         // const index = await pkg.read(compat32).value as number;
-
-        //         // const data = index < 0
-        //         //     ? (pkg.imports[-index - 1] ? pkg.getPackageName(index) : "Bad Import")
-        //         //     : index > 0
-        //         //         ? (pkg.exports[index] ? pkg.getPackageName(pkg.exports[index].idClass.value as number) : "Bad Export")
-        //         //         : null;
-
-        //         // if (data !== null && index < 0 && !data.startsWith("Bad "))
-        //         //     nextItems.push([data, index]);
-        //     } catch (e) { }
-        // }
-
-        // pkg.seek(3928703 - 4 * 64, "set");
-
-        // const buffer = new Float32Array(await pkg.read(BufferValue.allocBytes(4 * 64 * 2)).value.buffer);
-
-        // console.log(buffer);
-
-        // debugger;
-
-        // console.log(nextItems);
-
-        // debugger;
-
-        // const bytesLeft = this.readTail - this.readHead;
-        // const lines = Math.max(Math.ceil(bytesLeft / 16), 255);
-
-        // // debugger;
-
-        // pkg.dump(100);
-
-        // const buffer = await pkg.read(BufferValue.allocBytes(bytesLeft));
-
-        // debugger;
-
-        // const unk = await pkg.read(compat32).value as number;
-
-        // if (unk !== 0) debugger;
-
-        // debugger;
-
-        // await this.collisionFaces.load(pkg);
-        // await this.collisionNodes.load(pkg);
-
-        // debugger;
-
-        // await this.readNamedProps(pkg);
-
-        /*                                          // 000F 043C 0042 0200 0080 3F00 0000 0000 */
-        /*                                          // 0000 0066 66A2 4300 0000 8000 0080 3F00 */
-        /*                                          // 0000 0000 000C 4200 0000 0000 0000 0000 */
-        /*                                          // 0080 BF75 6257 C300 0000 002E ED7C BF23 */
-        /*                                          // 331E 3EE5 3C22 4200 0102 0300 0080 3F00 */
-        /*                                          // 0000 8000 0000 0066 66A2 4300 0000 002E */
-        /*                                          // ED7C 3F23 331E BEE4 3C22 C200 0000 8000 */
-        /*                                          // 0080 BF00 0000 00FA EDEB 4000 0000 8000 */
-        /*                                          // 0000 0000 0080 3F8A 2EF3 4300 0203 0300 */
-        /*                                          // 0000 0000 0000 0000 0080 BF75 6257 C300 */
-        /*                                          // 0000 0000 0080 3F00 0000 0000 000C 4200 */
-        /*                                          // 0080 BF00 0000 8000 0000 8066 6622 C3FD */
-        /*                                          // 4281 3E0B B577 BF00 0000 005F 8940 4204 */
-        /*                                          // 0506 0200 0000 0000 0000 0000 0080 BF75 */
-        /*                                          // 6257 C3FD 4281 BE0B B577 3F00 0000 005F */
-        /*                                          // 8940 C200 0000 0000 0080 BF00 0000 00FA */
-        /*                                          // EDEB 4000 0080 3F00 0000 8000 0000 0066 */
-        /*                                          // 66A2 4304 0607 0229 684C BF00 0000 006E */
-        /*                                          // 1F1A BFAC AB81 C300 0000 0000 0080 3F00 */
-        /*                                          // 0000 0000 000C 426F 1F1A BF00 0000 0029 */
         this.readHead = pkg.tell();
 
-        // debugger;
+        if (verArchive < 0x72) {
+            console.warn("Not supported yet");
+            this.skipRemaining = true;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
+        }
 
-        // console.assert((this.readTail - pkg.tell()) === 0);
+        if (0x5 < verLicense) {
+            this.unkInt_5x0 = pkg.read(int32).value as number;
+            this.unkInd_5x0 = pkg.read(compat32).value as number;
+            this.unkInd_5x1 = pkg.read(compat32).value as number;
+            this.unkInt_5x1 = pkg.read(int32).value as number;
+            this.unkInt_5x2 = pkg.read(int32).value as number;
+        }
+
+        if (0x6 < verLicense) {
+            this.unkInt_6x0 = pkg.read(int32).value as number;
+            this.unkInt_6x1 = pkg.read(int32).value as number;
+        }
+
+        if (0xA < verLicense) this.unkInt_Ax0 = pkg.read(int32).value as number;
+        if (0xC < verLicense) this.unkInt_Cx0 = pkg.read(int32).value as number;
+        if (0xD < verLicense) {
+            this.unkInt_Dx0 = pkg.read(int32).value as number;
+            this.unkInt_Dx1 = pkg.read(int32).value as number;
+        }
+
+        if (0xE < verLicense) this.unkInt_Ex0 = pkg.read(int32).value as number;
+
+        if (verArchive < 0X5C) {
+            console.warn("Not supported yet");
+            this.skipRemaining = true;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
+        }
+
+        if (0x4E < verArchive) {
+            if (verArchive < 0x61) {
+                console.warn("Not supported yet");
+                this.skipRemaining = true;
+                if (triggerDebuggerOnUnsupported) debugger;
+                return;
+            } else this.staticMeshTris.load(pkg);
+        }
+
+        if (verArchive < 0x51) {
+            console.warn("Not supported yet");
+            this.skipRemaining = true;
+            if (triggerDebuggerOnUnsupported) debugger;
+            return;
+        } else this.unkInt0 = pkg.read(int32).value as number;
+
+        if (99 < verArchive) this.unkIndex1 = pkg.read(compat32).value as number;
+        if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value as number;
+
+        this.readHead = pkg.tell();
+
+        console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
+        await this.onLoaded();
+
+        let materialUuid = this.uuid;
+
+        if (matModifiers?.length > 0) {
+            const hash = new StringSet(matModifiers).hash();
+            const hashArr = new Uint8Array(new BigUint64Array([hash]).buffer);
+
+            materialUuid = seededUuid(hashArr, materialUuid);
+
+            if (!(materialUuid in library.materials)) {
+                library.materials[materialUuid] = {
+                    materialType: "instance",
+                    baseMaterial: this.uuid,
+                    modifiers: matModifiers
+                } as IMaterialInstancedDecodeInfo;
+
+                // debugger;
+            }
+        }
+
+        // debugger;
+
+
+        // if (!(materialUuid in library.materials)) {
+        //     debugger;
+        //     const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+
+        //     materials.forEach(uuid => {
+        //         if (!library.materials[uuid]) return;
+
+        //         library.materials[uuid].color = true;
+        //     });
+
+        //     library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        //     debugger;
+        // }
 
         if (this.uuid in library.geometries) return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: this.uuid,
+            materials: materialUuid,
         } as IStaticMeshObjectDecodeInfo;
 
+        library.geometryInstances[this.uuid] = 0;
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        // 43 arrays of 30 uint8 values that are likely colors
+        // 43x30 -> 1290
+        // 43x10 -> 430
 
-        // debugger;
-
-        // const section = this.sections.getElem(0);
-        // const materials = this.materials.getElem(0);
-
-        // if (this.sections.getElemCount() > 1)
-        //     debugger;
+        // 24 x 117 = 2808 | (24 x 39 = 936)
 
         const countVerts = this.vertexStream.vert.getElemCount();
-        const countFaces = this.indexStream.indices.getElemCount();
+        const countIndices = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
 
         if (countUvs > 1) debugger;
 
+        // debugger;
+
+        const TypedIndicesArray = getTypedArrayConstructor(countVerts);
         const positions = new Float32Array(countVerts * 3);
+        const colors = new Float32Array(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
-        const indices = new Uint16Array(countFaces);
+        const indices = new TypedIndicesArray(countIndices);
+
+        // if (countVerts === 0x42)
+        //     debugger;
+
+        const _colors = [
+            /*0000000*/ 0x3c, 0x59, 0xff, 0x31, 0x4a, 0x6f, 0xff, 0x3d, 0x4e, 0x6f, 0xff, 0x3e, 0x36, 0x51, 0xff, 0x2c,
+            /*0000010*/ 0x00, 0x00, 0xff, 0x00, 0x45, 0x67, 0xff, 0x39, 0x4e, 0x72, 0xff, 0x3e, 0x00, 0x00, 0xff, 0x00,
+            /*0000020*/ 0x0c, 0x12, 0xff, 0x0a, 0x0a, 0x10, 0xff, 0x08, 0x0c, 0x12, 0xff, 0x0a, 0x0f, 0x16, 0xff, 0x0c,
+            /*0000030*/ 0x00, 0x00, 0xff, 0x00, 0x08, 0x0c, 0xff, 0x06, 0x0a, 0x10, 0xff, 0x08, 0x00, 0x00, 0xff, 0x00,
+            /*0000040*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x00, 0x00, 0xff, 0x00,
+            /*0000050*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x42, 0xff, 0x23, 0x27, 0x3a, 0xff, 0x20, 0x2c, 0x43, 0xff, 0x24,
+            /*0000060*/ 0x12, 0x1b, 0xff, 0x0f, 0x1e, 0x2b, 0xff, 0x18, 0x3a, 0x47, 0xff, 0x29, 0x08, 0x0c, 0xff, 0x06,
+            /*0000070*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+            /*0000080*/ 0x44, 0x64, 0xff, 0x37, 0x41, 0x5c, 0xff, 0x33, 0x52, 0x71, 0xff, 0x40, 0x48, 0x6b, 0xff, 0x3b,
+            /*0000090*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x0e, 0x15, 0xff, 0x0b, 0x09, 0x0e, 0xff, 0x08,
+            /*00000a0*/ 0x00, 0x00, 0xff, 0x00, 0x2b, 0x40, 0xff, 0x23, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+            /*00000b0*/ 0x00, 0x00, 0xff, 0x00, 0x4e, 0x6f, 0xff, 0x3e, 0x4a, 0x6f, 0xff, 0x3d, 0x00, 0x00, 0xff, 0x00,
+            /*00000c0*/ 0x00, 0x00, 0xff, 0x00, 0x0f, 0x16, 0xff, 0x0c, 0x0c, 0x12, 0xff, 0x0a, 0x00, 0x00, 0xff, 0x00,
+            /*00000d0*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x2c, 0x43, 0xff, 0x24
+        ];
+
+        const _colors2 = [
+            89, 60, 49, 255, 111, 74, 61, 255, 111, 78, 62, 255, 81, 54, 44, 255,
+            0, 0, 0, 255, 103, 69, 57, 255, 114, 78, 62, 255, 0, 0, 0, 255,
+            18, 12, 10, 255, 16, 10, 8, 255, 18, 12, 10, 255, 22, 15, 12, 255,
+            0, 0, 0, 255, 12, 8, 6, 255, 16, 10, 8, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 0, 0, 0, 255, 67, 44, 36, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 66, 44, 35, 255, 58, 39, 32, 255, 67, 44, 36, 255,
+            27, 18, 15, 255, 43, 30, 24, 255, 71, 58, 41, 255, 12, 8, 6, 255,
+            0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+            100, 68, 55, 255, 92, 65, 51, 255, 113, 82, 64, 255, 107, 72, 59, 255,
+            0, 0, 0, 255, 0, 0, 0, 255, 21, 14, 11, 255, 14, 9, 8, 255,
+            0, 0, 0, 255, 64, 43, 35, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 111, 78, 62, 255, 111, 74, 61, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 22, 15, 12, 255, 18, 12, 10, 255, 0, 0, 0, 255,
+            0, 0, 0, 255, 67, 44, 36, 255, 67, 44, 36, 255
+        ];
+
 
         for (let i = 0; i < countVerts; i++) {
             const { position, normal } = this.vertexStream.vert.getElem(i);
             const { u, v } = this.uvStream.getElem(0).data.getElem(i);
-
-
-            // position.toArray(positions, i * 3);
-            // normal.toArray(normals, i * 3);
+            const color = this.colorStream.color.getElem(i);
 
             positions[i * 3 + 0] = position.x;
             positions[i * 3 + 1] = position.z;
@@ -433,36 +294,98 @@ class UStaticMesh extends UPrimitive {
             normals[i * 3 + 1] = normal.z;
             normals[i * 3 + 2] = normal.y;
 
+            // colors[i * 3 + 0] = _colors[i * 4 + 1] / 255;
+            // colors[i * 3 + 1] = _colors[i * 4 + 0] / 255;
+            // colors[i * 3 + 2] = _colors[i * 4 + 3] / 255;
+
+            colors[i * 3 + 0] = color.r / 255;
+            colors[i * 3 + 1] = color.g / 255;
+            colors[i * 3 + 2] = color.b / 255;
+
             uvs[i * 2 + 0] = u;
             uvs[i * 2 + 1] = v;
         }
 
-        for (let i = 0; i < countFaces; i++)
+        for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
-
-        const materials = await Promise.all(this.materials.map((mat: UMaterialContainer) => mat.getDecodeInfo(library)));
 
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
+                colors,
                 normals,
-                uvs,
+                uvs
             },
             indices,
             groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
             bounds: this.decodeBoundsInfo()
         };
 
+        const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+
+        materials.forEach(uuid => {
+            if (!library.materials[uuid]) return;
+
+            library.materials[uuid].color = true;
+        });
+
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        // debugger;
 
         return {
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: this.uuid
+            materials: materialUuid,
+            children: [
+                // this.getDecodeTrisInfo(library),
+            ]
         };
+    }
+
+    protected getDecodeTrisInfo(library: IDecodeLibrary): IBaseObjectDecodeInfo {
+        const trisCount = this.staticMeshTris.length;
+        const trisGeometryUuid = generateUUID();
+        const TypedIndicesArray = getTypedArrayConstructor(trisCount);
+        const trisPositions = new Float32Array(trisCount * 3 * 3);
+        const trisIndices = new TypedIndicesArray(trisCount * 4);
+
+        for (let i = 0, len = trisCount; i < len; i++) {
+            const indOffset = i * 4;
+            const vIndOffset = i * 3, vertOffset = vIndOffset * 3;
+            const { v0, v1, v2 } = this.staticMeshTris.getElem(i);
+
+            [v0, v1, v2].forEach((v, j) => {
+                const { x, y, z } = v;
+                const offset = vertOffset + j * 3;
+
+                trisPositions[offset + 0] = x;
+                trisPositions[offset + 1] = z;
+                trisPositions[offset + 2] = y;
+            });
+
+            trisIndices[indOffset + 0] = vIndOffset + 0;
+            trisIndices[indOffset + 1] = vIndOffset + 1;
+            trisIndices[indOffset + 2] = vIndOffset + 2;
+            trisIndices[indOffset + 3] = vIndOffset + 0;
+        }
+
+
+        library.geometries[trisGeometryUuid] = {
+            indices: trisIndices,
+            attributes: {
+                positions: trisPositions
+            }
+        };
+
+        return {
+            type: "Edges",
+            geometry: trisGeometryUuid,
+            color: [1, 0, 1]
+        } as IEdgesObjectDecodeInfo;
     }
 }
 
 export default UStaticMesh;
-export { UStaticMesh };
+export { UStaticMesh, FStaticMeshTriangle };

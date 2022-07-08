@@ -1,65 +1,41 @@
+import hsvToRgb from "@client/utils/hsv-to-rgb";
+import { generateUUID } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
-import FArray, { FPrimitiveArray } from "./un-array";
-import FNumber from "./un-number";
-
-enum LightType_T {
-    None,
-    Steady,
-    Pulse,
-    Blink,
-    Flicker,
-    Strobe,
-    SubtlePulse,
-    TexturePaletteOnce,
-    TexturePaletteLoop
-};
-
-enum LightEffect_T {
-    TorchWaver,
-    FireWaver,
-    WateryShimmer,
-    SearchLight,
-    SlowWave,
-    FastWave,
-    Shock,
-    Disco,
-    Spotlight,
-    NonIncidence,
-    ShellOnly,
-    OmniBumpMap,
-    Interference,
-    Cylinder,
-    Rotor,
-    Unused
-};
+import { FPrimitiveArray } from "./un-array";
+import FVector from "./un-vector";
 
 class ULight extends UAActor {
-    public static readonly typeSize: number = 1;
-
-    public effect: number;
+    public effect: LightEffect_T;
     public lightness: number = 255;
     public radius: number;
     public hue: number = 0;
     public saturation: number = 127;
     public isDirectional: boolean = false;
-    public type: number = 1;
-    public hasCorona: boolean;
-    public period: number;
-    public phase: number;
+    public type: LightType_T = 1;
+    public hasCorona: boolean = false;
+    public period: number = 0;
+    public phase: number = 0;
     public cone: number = 0;
-    public isDynamic: number;
+    public isDynamic: boolean = false;
     public lightOnTime: number;
     public lightOffTime: number;
     public skins: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
 
     protected isIgnoredRange: boolean;
 
+    protected getSignedMap() {
+        return Object.assign({}, super.getSignedMap(), {
+            "LightHue": false,
+            "LightSaturation": false
+        });
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "LightEffect": "effect",
-            "LightBrightness": "lightness",
             "LightRadius": "radius",
+            "LightBrightness": "lightness",
             "LightHue": "hue",
             "LightSaturation": "saturation",
             "bDirectional": "isDirectional",
@@ -72,9 +48,40 @@ class ULight extends UAActor {
             "bDynamicLight": "isDynamic",
             "bIgnoredRange": "isIgnoredRange",
             "LightOnTime": "lightOnTime",
-            "LightOffTime": "lightOffTime"
+            "LightOffTime": "lightOffTime",
         });
     }
+
+    protected getRegionLineHelper(library: IDecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+        const lineGeometryUuid = generateUUID();
+        const _a = this.region.getZone().location;
+        const _b = this.location;
+
+        const a = new FVector(_a.x, _a.z, _a.y);
+        const b = new FVector(_b.x, _b.z, _b.y);
+
+        const geoPosition = a.sub(b);
+        const regionHelper = {
+            type: "Edges",
+            geometry: lineGeometryUuid,
+            color,
+            ignoreDepth
+        } as IEdgesObjectDecodeInfo;
+
+        library.geometries[lineGeometryUuid] = {
+            indices: new Uint8Array([0, 1]),
+            attributes: {
+                positions: new Float32Array([
+                    0, 0, 0,
+                    geoPosition.x, geoPosition.y, geoPosition.z
+                ])
+            }
+        };
+
+        return regionHelper;
+    }
+
+    public getColor() { return hsvToRgb(this.hue, this.saturation, this.lightness); }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
@@ -82,87 +89,19 @@ class ULight extends UAActor {
         return {
             type: "Light",
             color: this.getColor(),
-            lightType: this.type,
             cone: this.cone,
-            radius: this.radius,
+            lightType: this.type,
+            lightEffect: this.effect,
+            directional: this.isDirectional,
+            radius: (this.radius + 1) * 25,
             name: this.objectName,
-            position: [this.location.x, this.location.z, this.location.y],
-            scale: [this.scale.x, this.scale.z, this.scale.y],
+            position: this.location.getVectorElements(),
+            scale: this.scale.getVectorElements(),
             rotation: this.rotation.getEulerElements(),
+            children: [this.getRegionLineHelper(library, [1, 0, 0])]
         };
-    }
-
-    public getColor(): [number, number, number] {
-        let h = this.hue, s = this.saturation, l = this.lightness;
-        let r: number, g: number, b: number;
-        let offsetLightness: number, offsetSaturation: number;
-
-        if (h === undefined || s === undefined || l === undefined)
-            debugger;
-
-        if (h < 0) h = (240 - h) % 240;
-        else h = h % 240;
-
-        if (h < 80) r = Math.min(255, 255 * (80 - h) / 40);
-        else if (h > 160) r = Math.min(255, 255 * (h - 160) / 40);
-
-        if (h < 160) g = Math.min(255, 255 * (80 - Math.abs(h - 80)) / 40);
-        if (h > 80) b = Math.min(255, 255 * (80 - Math.abs(h - 160)) / 40);
-
-        if (s < 240) {
-            const r0 = s / 240;
-
-            r = r * r0;
-            g = g * r0;
-            b = b * r0;
-
-            offsetSaturation = 128 * (240 - s) / 240;
-            r += offsetSaturation;
-            g += offsetSaturation;
-            b += offsetSaturation;
-        }
-
-        l = Math.min(240, l);
-
-        const r1 = (120 - Math.abs(l - 120)) / 120;
-
-        r = r * r1;
-        g = g * r1;
-        b = b * r1;
-
-        if (l > 120) {
-            offsetLightness = 256 * (l - 120) / 120;
-            r += offsetLightness;
-            g += offsetLightness;
-            b += offsetLightness;
-        }
-
-        const r2 = 1 / 255;
-
-        r = r * r2;
-        g = g * r2;
-        b = b * r2;
-
-        return [r, g, b];
-    }
-}
-
-class FLight extends ULight {
-
-    public load(pkg: UPackage, exp: UExport): this {
-        debugger;
-        this.readStart = this.readHead = pkg.tell() + this.readHeadOffset;
-        this.readTail = this.readHead + Infinity;
-
-        debugger;
-
-        this.readNamedProps(pkg);
-
-        // debugger;
-
-        return this;
     }
 }
 
 export default ULight;
-export { ULight, FLight };
+export { ULight };

@@ -1,17 +1,11 @@
-import UObject from "./un-object";
-import UTexture from "./un-texture";
 import UTerrainLayer from "./un-terrain-layer";
 import FArray, { FPrimitiveArray } from "./un-array";
 import UDecoLayer from "./un-deco-layer";
-import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
-import { PropertyTag } from "./un-property";
-import FUnknownStruct from "./un-unknown-struct";
-// import { Group } from "three/src/objects/Group";
 import UAActor from "./un-aactor";
-// import FColor from "./un-color";
-import FVector from "./un-vector";
 import FTIntMap from "./un-tint-map";
+import FNumber from "./un-number";
+import FColor from "./un-color";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -36,24 +30,22 @@ class UTerrainInfo extends UAActor {
     protected autoTimeGeneration: boolean;
     protected tIntMap: FArray<FTIntMap> = new FArray(FTIntMap);
     protected tickTime: number;
-    protected sectors: UExport<UTerrainSector>[];
+    protected sectors: UTerrainSector[] = [];
     protected showOnInvisibleTerrain: boolean;
     protected litDirectional: boolean;
     protected disregardTerrainLighting: boolean;
     protected randomYaw: boolean;
     protected bForceRender: boolean;
 
-    protected isSelected: boolean;
-
     public readonly isTerrainInfo = true;
 
-    constructor(sectors: UExport<UTerrainSector>[]) {
-        super();
-
-        // debugger;
-
-        this.sectors = sectors;
-    }
+    protected sectorsX: number;
+    protected sectorsY: number;
+    protected unkIntArr0: number[];
+    protected unkIntArr1: number[];
+    protected unkInt2: number;
+    protected unkInt3: number;
+    protected unkColorArr = new FArray(FColor);
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -76,8 +68,7 @@ class UTerrainInfo extends UAActor {
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
-            "bForceRender": "bForceRender",
-            "bSelected": "isSelected"
+            "bForceRender": "bForceRender"
         });
     }
 
@@ -91,84 +82,97 @@ class UTerrainInfo extends UAActor {
 
     public doLoad(pkg: UPackage, exp: UExport<UTerrainInfo>) {
 
-        // likely lightning
-        // pkg.seek(exp.offset.value as number, "set");
-        // const header = pkg.read(BufferValue.allocBytes(17));
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-        // debugger;
+        const int32 = new BufferValue(BufferValue.int32);
+        const float = new BufferValue(BufferValue.float);
+
+        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
         super.doLoad(pkg, exp);
-
-        // debugger;
 
         this.location.x = (this.mapX - 20) * MAP_SIZE_X;
         this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
 
-        // debugger;
+        this.readHead = pkg.tell();
 
-        if (!this.sectors) {
-            const expTerrainSectors = pkg.exports
-                .filter(exp => {
-                    const expType = pkg.getPackageName(exp.idClass.value as number);
+        if (verLicense >= 0x11) {
+            const sectorIds = new FArray(FNumber.forType(BufferValue.compat32) as any)
+                .load(pkg, null)
+                .map(id => id.value) as number[];
 
-                    return expType === "TerrainSector";
-                })
-                .sort(({ objectName: na }, { objectName: nb }) => {
-                    const a = parseInt(na.replace("TerrainSector", ""));
-                    const b = parseInt(nb.replace("TerrainSector", ""));
-                    return a - b;
-                });
+            this.readHead = pkg.tell();
 
-            this.sectors = expTerrainSectors as UExport<UTerrainSector>[];
+            this.promisesLoading.push(Promise.all(sectorIds.map(async id => {
+                const object = await pkg.fetchObject<UTerrainSector>(id);
+
+                this.sectors.push(object);
+            })));
+
+            pkg.seek(this.readHead, "set");
+
+            this.sectorsX = pkg.read(int32).value as number;
+            this.sectorsY = pkg.read(int32).value as number;
         } else {
-            console.warn("Terrain already has sectors?");
+            console.warn("Unsupported yet");
             debugger;
         }
 
-        this.readHead = pkg.tell();
-
-        // try {
-        //     for (let i = this.readHead; i < this.readTail; i++) {
-        //         pkg.seek(i, "set");
-
-        //         const prop = PropertyTag.from(pkg, i);
-
-        //         if (!prop.isValid()) continue;
-
-        //         console.log(prop);
-
-        //         if (
-        //             !prop.name.includes("LightMap") &&
-        //             prop.name !== "bDynamicActorFilterState" &&
-        //             prop.name !== "Level" &&
-        //             prop.name !== "Region" &&
-        //             prop.name !== "bSunAffect" &&
-        //             prop.name !== "Tag" &&
-        //             prop.name !== "PhysicsVolume" &&
-        //             prop.name !== "Location" &&
-        //             prop.name !== "DrawScale" &&
-        //             prop.name !== "TexModifyInfo"
-
-        //         ) continue;
-
-        //         debugger;
-        //     }
-        // } catch (e) {
-
-        // }
-
-        // debugger;
-
-        // this.readNamedProps(pkg);
-        // debugger;
-
-        for (let exp of this.sectors) {
-            try {
-                this.promisesLoading.push(pkg.createObject(pkg, exp, "TerrainSector", this));
-            } catch (e) { console.error(e); }
+        if (verArchive >= 0x53) {
+            this.unkIntArr0 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
+            this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
+        } else {
+            console.warn("Unsupported yet");
+            debugger;
         }
 
-        // debugger;
+        if (verArchive >= 0x4C) {
+            this.unkInt2 = pkg.read(int32).value as number;
+            this.unkInt3 = pkg.read(int32).value as number;
+        } else {
+            console.warn("Unsupported yet");
+            debugger;
+        }
+
+        if (verArchive <= 0x4A) {
+            console.warn("Unsupported yet");
+            debugger;
+        } else {
+            if (verArchive >= 0x52) {
+                if (verArchive >= 0x56) {
+                    if (verArchive <= 0x57) {
+                        console.warn("Unsupported yet");
+                        debugger;
+                    } else {
+                        if (verArchive >= 0x73) {
+                            if (verArchive >= 0x77) {
+                                if (verArchive >= 0x75) this.unkColorArr.load(pkg, null);
+                                else {
+                                    console.warn("Unsupported yet");
+                                    debugger;
+                                }
+                            } else {
+                                console.warn("Unsupported yet");
+                                debugger;
+                            }
+                        } else {
+                            console.warn("Unsupported yet");
+                            debugger;
+                        }
+                    }
+                } else {
+                    console.warn("Unsupported yet");
+                    debugger;
+                }
+            } else {
+                console.warn("Unsupported yet");
+                debugger;
+            }
+        }
+
+        this.readHead = pkg.tell();
 
         return this;
     }
@@ -223,7 +227,7 @@ class UTerrainInfo extends UAActor {
             type: "TerrainInfo",
             name: this.objectName,
             position: [this.location.x, 0, this.location.z],
-            children: await Promise.all(this.sectors.map(sector => (sector.object as UTerrainSector).getDecodeInfo(library)))
+            children: await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this)))
         };
     }
 }

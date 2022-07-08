@@ -11,7 +11,7 @@ import UClass from "./un-class";
 import UStruct from "./un-struct";
 import UPlatte from "./un-palette";
 import UStaticMesh from "./static-mesh/un-static-mesh";
-import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator } from "./un-material";
+import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend } from "./un-material";
 import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
 import UZoneInfo from "./un-zone-info";
@@ -145,10 +145,9 @@ class UPackage extends UEncodedFile {
         while (imp.idPackage.value as number !== 0)
             imp = this.imports[-imp.idPackage.value as number - 1];
 
-        if (!this.loader.hasPackage(imp.objectName))
+        if (!this.loader.hasPackage(imp.objectName, mainImp.className as SupportedImports_T))
             throw new Error(`Unable to locate package: ${imp.objectName}`);
-
-        const pkg = await this.loader.getPackage(imp.objectName);
+        const pkg = await this.loader.getPackage(imp.objectName, mainImp.className as SupportedImports_T);
 
         if (!pkg.buffer) await this.loader.load(pkg);
 
@@ -238,6 +237,7 @@ class UPackage extends UEncodedFile {
             case "LevelSummary": Constructor = ULevelSummary; break;
             case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
             case "TextBuffer": Constructor = UTextBuffer; break;
+            case "FinalBlend": Constructor = UFinalBlend; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
@@ -317,6 +317,7 @@ class UPackage extends UEncodedFile {
             this.read(uexport.idPackage);
             this.read(index);
 
+            uexport.index = i;
             uexport.objectName = nameTable[index.value as number].name.string;
 
             this.read(uexport.flags);

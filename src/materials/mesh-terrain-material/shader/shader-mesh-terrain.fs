@@ -21,7 +21,7 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
-#if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9)
+#if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9) || defined(USE_LAYER_10)  || defined(USE_LAYER_11)
     struct TextureData {
         sampler2D texture;
         vec2 size;
@@ -154,6 +154,34 @@ uniform float opacity;
     uniform Layer9Data layer9;
 #endif
 
+#ifdef USE_LAYER_10
+    struct Layer10Data {
+        #ifdef USE_LAYER_10_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_10_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
+
+    varying vec2 vUv10;
+    uniform Layer10Data layer10;
+#endif
+
+#ifdef USE_LAYER_11
+    struct Layer11Data {
+        #ifdef USE_LAYER_11_DIFFUSE
+            TextureData map;
+        #endif
+        #ifdef USE_LAYER_11_OPACITY
+            TextureData alphaMap;
+        #endif
+    };
+
+    varying vec2 vUv11;
+    uniform Layer11Data layer11;
+#endif
+
 vec4 addLayer(vec4 foreground, vec4 background) {
     return foreground * foreground.a + background * (1.0 - foreground.a);
 }
@@ -163,7 +191,7 @@ void main() {
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
 
-    #if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9)
+    #if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9)  || defined(USE_LAYER_10)  || defined(USE_LAYER_11)
         vec4 layer, layerMask;
         vec4 texelDiffuse = vec4(0.0);
     #endif
@@ -276,6 +304,30 @@ void main() {
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
+    #ifdef USE_LAYER_10
+        #ifdef USE_LAYER_10_OPACITY
+            layerMask = texture2D(layer10.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer10.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
+    #ifdef USE_LAYER_11
+        #ifdef USE_LAYER_11_OPACITY
+            layerMask = texture2D(layer11.alphaMap.texture, vUv);
+        #else
+            layerMask = vec4(1.0);
+        #endif
+
+        layer = vec4(texture2D(layer11.map.texture, vUv).rgb, 1.0) * layerMask.r;
+
+        texelDiffuse = addLayer(layer, texelDiffuse);
+    #endif
+
     diffuseColor.rgb *= texelDiffuse.rgb;
 
     // #ifdef USE_LAYER_1
@@ -292,7 +344,7 @@ void main() {
     //     // dicks;
     // #endif
 
-    #if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9)
+    #if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9) || defined(USE_LAYER_10) || defined(USE_LAYER_11)
     #endif
 
 
