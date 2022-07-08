@@ -44,7 +44,7 @@ class UEncodedFile {
         }
     }
 
-    public readPrimitive<DataView>(byteOffset: number, byteLength: number) {
+    public readPrimitive(byteOffset: number, byteLength: number) {
         return new DataView(this.buffer, byteOffset + this.contentOffset, byteLength)
     }
 

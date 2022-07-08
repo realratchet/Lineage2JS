@@ -4,8 +4,6 @@ import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
 
 class FScale extends FConstructable {
-    public static readonly typeSize = 25;
-
     public x: number;
     public y: number;
     public z: number;

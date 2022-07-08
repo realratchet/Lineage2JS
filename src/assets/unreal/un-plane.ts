@@ -1,16 +1,28 @@
 import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
 import UObject from "./un-object";
-import { PropertyTag } from "./un-property";
 
 class FPlane extends FConstructable {
-    public static readonly typeSize: number = 16;
-
     public x: number;
     public y: number;
     public z: number;
     public w: number;
+
+    constructor(x = 0, y = 0, z = 0, w = 0) {
+        super();
+
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+
+    public getElements(): [number, number, number, number] { return [this.x, this.y, this.z, this.w]; }
+
+    public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
+    public multiplyScalar(scalar: number) {
+        return new FPlane(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
+    }
 
     toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
@@ -48,12 +60,12 @@ class UPlane extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-
+    protected preLoad(pkg: UPackage, tag: any): void {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
+    }
 
-
+    public doLoad(pkg: UPackage, tag: any): this {
         this.readNamedProps(pkg);
 
         return this;

@@ -3,9 +3,16 @@ import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 
+const CLEANUP_NAMESPACE = true;
+
 abstract class UObject {
     public objectName = "Exp_None";
+    public exportIndex?: number = null;
+
     public readonly uuid = generateUUID();
+    public readonly careUnread: boolean = true;
+
+    public skipRemaining: boolean = false;
 
     protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
@@ -15,6 +22,7 @@ abstract class UObject {
 
     public constructor(...params: any[]) { }
 
+    protected getSignedMap(): { [key: string]: boolean } { return {}; }
     protected getPropertyMap(): { [key: string]: string } { return {}; }
 
     protected setReadPointers(exp: UExport) {
@@ -28,43 +36,38 @@ abstract class UObject {
 
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
+
         do {
             const tag = PropertyTag.from(pkg, this.readHead);
 
             if (!tag.isValid()) break;
-
-            // if (tag.name === "USize" || tag.name === "UClamp")
-            //     debugger;
 
             this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
 
-        // debugger;
-
         this.readHead = pkg.tell();
-
-        // debugger;
     }
 
     protected preLoad(pkg: UPackage, exp: UExport): void {
         this.objectName = `Exp_${exp.objectName}`;
+        this.exportIndex = exp.index;
+
         this.setReadPointers(exp);
     }
 
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
-        if (pkg.tell() < this.readTail && (this.readTail - pkg.tell()) > 17 && this.constructor.name !== "USound" && this.constructor.name !== "UStaticMesh")
-            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.readTail - pkg.tell()} bytes (${((this.readTail - pkg.tell()) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
+        if (this.skipRemaining) this.readHead = this.readTail;
+        if (this.bytesUnread > this.readHeadOffset && this.careUnread)
+            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();
     }
 
     public load(pkg: UPackage, exp: UExport): this {
-        // if(exp.objectName.includes("LOD")) debugger;
-
         this.preLoad(pkg, exp);
         this.doLoad(pkg, exp);
         this.postLoad(pkg, exp);
@@ -91,12 +94,14 @@ abstract class UObject {
         if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
             throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
+        const isSigned = this.getPropertyIsSigned(tag);
+
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int8)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int8 : BufferValue.uint8)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_IntProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int32)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int32 : BufferValue.uint32)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_BoolProperty: this.setProperty(tag, tag.boolValue); break;
             case UNP_PropertyTypes.UNP_FloatProperty:
@@ -124,9 +129,9 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_StringProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_ArrayProperty: this.readArray(pkg, tag); break;
             case UNP_PropertyTypes.UNP_ClassProperty: {
-                const start = pkg.tell();
-                const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-                const offset = pkg.tell() - start;
+                // const start = pkg.tell();
+                // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
+                // const offset = pkg.tell() - start;
                 debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
@@ -181,6 +186,16 @@ abstract class UObject {
         return true;
     }
 
+    protected getPropertyIsSigned(tag: PropertyTag): boolean {
+        const props = this.getSignedMap();
+        const { name: propName } = tag;
+
+        if (!(propName in props))
+            return true;
+
+        return props[propName];
+    }
+
     protected getPropertyVarName(tag: PropertyTag): string {
         const props = this.getPropertyMap();
         const { name: propName } = tag;
@@ -188,9 +203,7 @@ abstract class UObject {
         if (!(propName in props))
             return null;
 
-        const varName = props[propName];
-
-        return varName;
+        return props[propName];
     }
 
     protected setProperty(tag: PropertyTag, value: any) {
@@ -201,7 +214,7 @@ abstract class UObject {
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
         if (!this.hasOwnProperty(varName))
-            throw new Error(`Cannot map property '${propName}' -> ${varName}`);
+            throw new Error(`Cannot map property '${propName}' -> ${varName}`);;
 
         if ((this as any)[varName] instanceof Array) ((this as any)[varName] as Array<any>)[arrayIndex] = value;
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
@@ -215,6 +228,13 @@ abstract class UObject {
     public async onLoaded(): Promise<void> {
         try {
             await Promise.all(this.promisesLoading);
+
+            if (CLEANUP_NAMESPACE) {
+                Object.values(this.getPropertyMap()).forEach(propName => {
+                    if ((this as any)[propName] === undefined)
+                        delete (this as any)[propName];
+                });
+            }
         } catch (e) {
             debugger;
             throw e;

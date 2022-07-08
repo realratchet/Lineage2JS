@@ -36,10 +36,12 @@ class UMatrix extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    protected preLoad(pkg: UPackage, tag: any): void {
         this.readHead = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
+    }
 
+    public doLoad(pkg: UPackage, tag: any): this {
         this.readNamedProps(pkg);
 
         return this;

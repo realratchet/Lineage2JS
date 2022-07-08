@@ -36,7 +36,6 @@ enum PolyFlags_T {
 
 
 class FPoly extends FConstructable {
-    public static readonly typeSize = 1;
     public base: FVector = new FVector();
     public normal: FVector = new FVector();
     public textureU: FVector = new FVector();
@@ -92,11 +91,11 @@ class FPoly extends FConstructable {
         if (actorId !== 0) debugger;
 
         const offset = pkg.tell();
-        if (actorId !== 0) this.promisesLoading.push(new Promise(async resolve => {
+        if (actorId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
             this.actor = await pkg.fetchObject<UObject>(actorId);
             resolve();
         }));
-        if (textureId !== 0) this.promisesLoading.push(new Promise(async resolve => {
+        if (textureId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
             this.texture = await pkg.fetchObject<UTexture>(textureId);
             resolve();
         }));
@@ -107,49 +106,48 @@ class FPoly extends FConstructable {
         return this;
     }
 
-    public async decodeMesh(): Promise<Mesh> {
+    // public async decodeMesh(): Promise<Mesh> {
 
-        const flags = this.flags;
+    //     const flags = this.flags;
 
-        const isInvisible = flags & PolyFlags_T.PF_Invisible;
-        const isNotSolid = flags & PolyFlags_T.PF_NotSolid;
-        const isUnk0 = flags & 0x00000080;
-        const isUnk1 = flags & PolyFlags_T.PF_Unk1;
-        const isUnk2 = flags & PolyFlags_T.PF_Unk2;
-        const isSheet = this.name === "Sheet";
-        const vcount = this.vertices.length;
+    //     const isInvisible = flags & PolyFlags_T.PF_Invisible;
+    //     const isNotSolid = flags & PolyFlags_T.PF_NotSolid;
+    //     const isUnk0 = flags & 0x00000080;
+    //     const isUnk1 = flags & PolyFlags_T.PF_Unk1;
+    //     const isUnk2 = flags & PolyFlags_T.PF_Unk2;
+    //     const isSheet = this.name === "Sheet";
+    //     const vcount = this.vertices.length;
 
-        if (isInvisible || isNotSolid || isUnk0 || isUnk1 || isUnk2 || isSheet || vcount === 0) return null;
+    //     if (isInvisible || isNotSolid || isUnk0 || isUnk1 || isUnk2 || isSheet || vcount === 0) return null;
 
-        const uvs = [], normals = [], positions = [];
+    //     const uvs = [], normals = [], positions = [];
 
-        for (let vertex of this.vertices) {
-            const [tu, tv] = [this.textureU, this.textureV].map(vtex => vertex.sub(this.base).dot(vtex) / 128);
+    //     for (let vertex of this.vertices) {
+    //         const [tu, tv] = [this.textureU, this.textureV].map(vtex => vertex.sub(this.base).dot(vtex) / 128);
 
-            uvs.push(tu, tv);
-            normals.push(this.normal.vector.x, this.normal.vector.z, this.normal.vector.y);
-            positions.push(vertex.vector.x, vertex.vector.z, vertex.vector.y);
-        }
+    //         uvs.push(tu, tv);
+    //         normals.push(this.normal.vector.x, this.normal.vector.z, this.normal.vector.y);
+    //         positions.push(vertex.vector.x, vertex.vector.z, vertex.vector.y);
+    //     }
 
-        const attrUvs = new Float32BufferAttribute(uvs, 2);
-        const attrNormals = new Float32BufferAttribute(normals, 3);
-        const attrPositions = new Float32BufferAttribute(positions, 3);
-        const geometry = new BufferGeometry();
+    //     const attrUvs = new Float32BufferAttribute(uvs, 2);
+    //     const attrNormals = new Float32BufferAttribute(normals, 3);
+    //     const attrPositions = new Float32BufferAttribute(positions, 3);
+    //     const geometry = new BufferGeometry();
 
-        geometry.setAttribute("uv", attrUvs);
-        geometry.setAttribute("normal", attrNormals);
-        geometry.setAttribute("position", attrPositions);
+    //     geometry.setAttribute("uv", attrUvs);
+    //     geometry.setAttribute("normal", attrNormals);
+    //     geometry.setAttribute("position", attrPositions);
 
-        const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
-        const materials = await this.texture?.decodeMaterial();
+    //     const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
+    //     const materials = await this.texture?.decodeMaterial();
 
-        const mesh = new Mesh(fanGeo, materials);
+    //     const mesh = new Mesh(fanGeo, materials);
 
-        mesh.name = this.name || "";
+    //     mesh.name = this.name || "";
 
-        return mesh;
-    }
-
+    //     return mesh;
+    // }
 }
 
 class UPolys extends UObject {
@@ -191,20 +189,20 @@ class UPolys extends UObject {
         return this;
     }
 
-    public async decodePolys(): Promise<Group> {
-        const group = new Group();
+    // public async decodePolys(): Promise<Group> {
+    //     const group = new Group();
 
-        for (let poly of this.polyList) {
-            const mesh = await poly.decodeMesh();
+    //     for (let poly of this.polyList) {
+    //         const mesh = await poly.decodeMesh();
 
-            if (mesh) group.add(mesh);
+    //         if (mesh) group.add(mesh);
 
-            if (poly.actor)
-                debugger;
-        }
+    //         if (poly.actor)
+    //             debugger;
+    //     }
 
-        return group;
-    }
+    //     return group;
+    // }
 }
 
 export default UPolys;

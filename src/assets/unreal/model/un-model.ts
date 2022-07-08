@@ -7,15 +7,14 @@ import FBSPSurf from "../bsp/un-bsp-surf";
 import UPolys, { PolyFlags_T } from "../un-polys";
 import BufferValue from "../../buffer-value";
 import FZoneProperties from "../un-zone-properties";
-import UMaterial from "../un-material";
 import FBox from "../un-box";
 import FNumber from "../un-number";
-import { FLight } from "../un-light";
 import FLeaf from "../un-leaf";
-import FBspSection from "../bsp/un-bsp-section";
+import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -24,14 +23,13 @@ const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 
-
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
     protected points = new FArray(FVector);
     protected vertices = new FArray(FVert);
     protected bspNodes = new FArray(FBSPNode);
     protected bspSurfs = new FArray(FBSPSurf);
-    protected bspSection = new FArray(FBspSection);
+    protected bspSection = new FArray(FBSPSection);
     protected lightmaps = new FArray(FLightmapIndex);
     protected multiLightmaps = new FArray(FMultiLightmapTexture);
     protected numSharedSides: number;
@@ -40,7 +38,6 @@ class UModel extends UPrimitive {
     protected bounds = new FArray(FBox);
     protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
-    protected lights = new FArray(FLight);
     protected rootOutside: boolean;
     protected linked: boolean;
 
@@ -49,68 +46,81 @@ class UModel extends UPrimitive {
     protected unkInt1: number;
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
-        try {
-            const int8 = new BufferValue(BufferValue.int8);
-            const int32 = new BufferValue(BufferValue.int32);
-            const uint8 = new BufferValue(BufferValue.uint8);
-            const compat32 = new BufferValue(BufferValue.compat32);
-            const float = new BufferValue(BufferValue.float);
 
-            pkg.seek(this.readHead, "set");
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-            super.doLoad(pkg, exp);
+        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-            this.vectors.load(pkg);     // 0x78
-            this.points.load(pkg);      // 0x88
-            this.bspNodes.load(pkg);    // 0x58
-            this.bspSurfs.load(pkg);    // 0x98
-            this.vertices.load(pkg);    // 0x68
+        const int32 = new BufferValue(BufferValue.int32);
+        const compat32 = new BufferValue(BufferValue.compat32);
 
-            this.numSharedSides = pkg.read(int32).value as number;  // 0x124
+        pkg.seek(this.readHead, "set");
 
-            const numZones = pkg.read(int32).value as number;       // 0x128
+        super.doLoad(pkg, exp);
 
-            console.assert(numZones <= MAX_ZONES);
+        this.vectors.load(pkg);     // 0x78
+        this.points.load(pkg);      // 0x88
+        this.bspNodes.load(pkg);    // 0x58
+        this.bspSurfs.load(pkg);    // 0x98
+        this.vertices.load(pkg);    // 0x68
 
-            this.zones = new Array(numZones);
+        this.numSharedSides = pkg.read(int32).value as number;  // 0x124
 
-            for (let i = 0; i < numZones; i++)
-                this.zones[i] = new FZoneProperties().load(pkg);
+        const numZones = pkg.read(int32).value as number;       // 0x128
 
-            this.readHead = pkg.tell();
-            const polysId = pkg.read(compat32).value as number;
+        console.assert(numZones <= MAX_ZONES);
 
-            const polyExp = pkg.exports[polysId - 1];
-            const className = pkg.getPackageName(polyExp.idClass.value as number)
+        this.zones = new Array(numZones);
 
-            console.assert(className === "Polys");
+        for (let i = 0; i < numZones; i++)
+            this.zones[i] = new FZoneProperties().load(pkg);
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
+        const polysId = pkg.read(compat32).value as number;
 
-            this.bounds.load(pkg, null);
-            this.leafHulls.load(pkg, null);
-            this.leaves.load(pkg, null);
+        const polyExp = pkg.exports[polysId - 1];
+        const className = pkg.getPackageName(polyExp.idClass.value as number)
 
-            this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32)).load(pkg).map(x => x.value);
+        console.assert(className === "Polys");
 
-            this.readHead = pkg.tell();
+        // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     this.polys = await pkg.fetchObject<UPolys>(polysId);
+        //     resolve();
+        // }));
 
-            this.unkInt0 = pkg.read(int32).value as number;
-            this.unkInt1 = pkg.read(int32).value as number;
+        this.readHead = pkg.tell();
 
-            this.readHead = pkg.tell();
+        this.bounds.load(pkg);
+        this.leafHulls.load(pkg);
+        this.leaves.load(pkg);
 
-            this.bspSection.load(pkg, null);
+        this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-            this.lightmaps.load(pkg, null);
-            this.multiLightmaps.load(pkg, null);
+        this.unkInt0 = pkg.read(int32).value as number;
+        this.unkInt1 = pkg.read(int32).value as number;
 
-            this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-            pkg.seek(this.readHead, "set");
-        } catch (e) { }
+        this.bspSection.load(pkg);
+
+        this.readHead = pkg.tell();
+
+        this.lightmaps.load(pkg);
+        this.multiLightmaps.load(pkg);
+
+        this.readHead = pkg.tell();
+
+        pkg.seek(this.readHead, "set");
+
+        // if (this.lightmaps.length > 0)
+        //     debugger;
+
+        // debugger;
+
         return this;
     }
 
@@ -127,6 +137,8 @@ class UModel extends UPrimitive {
 
         await this.onLoaded();
 
+        // debugger;
+
         const globalBSPTexelScale = 128;
         const materials: string[] = [];
         const objectMap = new Map<UMaterial, Map<any, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo }[] }>>();
@@ -140,17 +152,6 @@ class UModel extends UPrimitive {
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
-
-            // if (![
-            //     // 699,
-            //     // 234,
-            //     1771, // offset: [56, 360] | size: [72, 136] | lightmap: 8 | small piece of water
-            //     1772, // grass opposite side of water
-            //     1773, // small grass in-between
-            //     1774, // grass near water
-            //     1775, // small grass in-between
-            //     // 1776, 1777, 1778, 1779, 1780, 1781,
-            // ].includes(node.iSurf)) continue
 
             await Promise.all(surf.promisesLoading);
 
@@ -205,6 +206,7 @@ class UModel extends UPrimitive {
         const normals = new Float32Array(totalVertices * 3);
         const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
 
+        const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
         const indices: number[] = [], groups: ArrGeometryGroup[] = [];
 
         let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
@@ -313,7 +315,7 @@ class UModel extends UPrimitive {
 
         library.geometries[this.uuid] = {
             groups,
-            indices,
+            indices: new TypedIndicesArray(indices),
             attributes: {
                 normals,
                 positions,

@@ -184,10 +184,50 @@ uniform float opacity;
     uniform float globalTime;
 #endif
 
+#ifdef USE_AMBIENT
+    struct AmbientLighting {
+        vec3 color;
+        float brightness;
+    };
+
+    uniform AmbientLighting ambient;
+#endif
+
+#include <bsdfs>
+
+#if NUM_SPOT_LIGHTS > 0 || NUM_DIR_LIGHTS > 0 || NUM_HEMI_LIGHTS > 0
+    #define HAS_LIGHTS
+
+    varying vec3 vLightFront;
+    varying vec3 vIndirectFront;
+    #ifdef DOUBLE_SIDED
+        varying vec3 vLightBack;
+        varying vec3 vIndirectBack;
+    #endif
+
+#endif
+
+// #ifdef USE_DIRECTIONAL_AMBIENT
+
+//     varying vec3 vLightFront;
+//     varying vec3 vIndirectFront;
+//     #ifdef DOUBLE_SIDED
+//         varying vec3 vLightBack;
+//         varying vec3 vIndirectBack;
+//     #endif
+
+// #endif
+
+#ifdef USE_INSTANCED_ATTRIBUTES
+    varying vec3 vColorInstance;
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
+
+    ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     
     // #include <map_fragment>
     // boomer tech
@@ -196,30 +236,6 @@ void main() {
             vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
             diffuseColor.rgb *= texelDiffuse.rgb;
-            // dicks;
-        #endif
-    #endif
-
-
-    #ifdef USE_SPECULAR
-        vec3 specularColor = vec3(1.0);
-
-        #ifdef USE_FADE
-            float mixValue = (sin(globalTime) + 1.0) / 2.0;
-            specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
-        #else
-            #ifdef USE_MAP_SPECULAR
-                vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
-                specularColor = texelSpecular.rgb;
-            #endif
-        #endif
-
-        
-        #ifdef USE_MAP_SPECULAR_MASK
-            vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
-            diffuseColor.rgb += texelSpecularMask.a * specularColor;
-        #else
-            diffuseColor.rgb *= specularColor;
         #endif
     #endif
 
@@ -238,19 +254,73 @@ void main() {
 
     #include <alphatest_fragment>
     // #include <specularmap_fragment>
-    ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
+    
     // accumulation (baked indirect lighting only)
     #ifdef USE_LIGHTMAP
-        vec4 lightMapTexel= texture2D( lightMap, vUv2 );
+        vec4 lightMapTexel = texture2D( lightMap, vUv2 );
         // reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
         reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
     #else
-        reflectedLight.indirectDiffuse += vec3( 1.0 );
+        #ifdef HAS_LIGHTS
+            reflectedLight.indirectDiffuse += vec3( 0.0 );
+        #elif !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES)
+            reflectedLight.indirectDiffuse += vec3( 1.0 );
+        #endif
+
+        #ifdef USE_INSTANCED_ATTRIBUTES
+            reflectedLight.indirectDiffuse += vColorInstance;
+        #endif
+
+        #ifdef USE_AMBIENT
+            reflectedLight.indirectDiffuse += ambient.brightness * ambient.color;
+        #endif
     #endif
+
+    #ifdef HAS_LIGHTS
+        #ifdef DOUBLE_SIDED
+            reflectedLight.indirectDiffuse += ( gl_FrontFacing ) ? vIndirectFront : vIndirectBack;
+        #else
+            reflectedLight.indirectDiffuse += vIndirectFront;
+        #endif
+        #include <lightmap_fragment>
+        reflectedLight.indirectDiffuse *= BRDF_Lambert( diffuseColor.rgb );
+        #ifdef DOUBLE_SIDED
+            reflectedLight.directDiffuse = ( gl_FrontFacing ) ? vLightFront : vLightBack;
+        #else
+            reflectedLight.directDiffuse = vLightFront;
+        #endif
+        reflectedLight.directDiffuse *= BRDF_Lambert( diffuseColor.rgb ) ;//c6c* getShadowMask();
+    #endif
+    
     // modulation
     #include <aomap_fragment>
+    
     reflectedLight.indirectDiffuse *= diffuseColor.rgb;
-    vec3 outgoingLight = reflectedLight.indirectDiffuse;
+    
+    #ifdef USE_SPECULAR
+        vec3 specularColor = vec3(1.0);
+
+        #ifdef USE_FADE
+            float mixValue = (sin(globalTime) + 1.0) / 2.0;
+            specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
+        #else
+            #ifdef USE_MAP_SPECULAR
+                vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
+                specularColor = texelSpecular.rgb;
+            #endif
+        #endif
+
+        
+        #ifdef USE_MAP_SPECULAR_MASK
+            vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
+            reflectedLight.directDiffuse += texelSpecularMask.a * specularColor;
+        #else
+            reflectedLight.directDiffuse *= specularColor;
+        #endif
+    #endif
+
+    vec3 outgoingLight = reflectedLight.indirectDiffuse + reflectedLight.directDiffuse;
+    
     #include <envmap_fragment>
     #include <output_fragment>
     #include <tonemapping_fragment>
@@ -267,8 +337,10 @@ void main() {
 
     // gl_FragColor = vec4(texture2D(shDiffuse.map.texture, vUv).rgb, 1.0);
 
-    #ifdef USE_LIGHTMAP
-        // gl_FragColor = vec4(vUv2, 0.0, 1.0);
-        // gl_FragColor = texture2D( lightMap, vUv2 );
-    #endif
+    // #ifdef USE_LIGHTMAP
+    //     // gl_FragColor = vec4(vUv2, 0.0, 1.0);
+    //     // gl_FragColor = texture2D( lightMap, vUv2 );
+    // #endif
+
+    // gl_FragColor = vec4((directLight.color * (saturate( dot( geometry.normal, directLight.direction ) ))) * BRDF_Lambert( material.diffuseColor ) * 10.0, 1.0);
 }

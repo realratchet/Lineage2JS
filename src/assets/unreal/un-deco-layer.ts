@@ -1,7 +1,6 @@
 import UObject from "./un-object";
 
 class UDecoLayer extends UObject {
-    public static readonly typeSize: number = 128;
     protected showOnTerrain: number;
     protected scaleMap: UTexture;
     protected densityMap: UTexture;
@@ -17,7 +16,7 @@ class UDecoLayer extends UObject {
     protected alignToTerrain: number;
     protected drawOrder: number;
     protected isShowOnInvisibleTerrain: number;
-    protected dirLightning: number;
+    protected dirLighting: number;
     protected disregardTerrainLighting: number;
     protected randomYaw: number;
     protected isForcingRender: number;
@@ -44,19 +43,19 @@ class UDecoLayer extends UObject {
             "MaxPerQuad": "maxPerQuad",
             "DrawOrder": "drawOrder",
             "ShowOnInvisibleTerrain": "isShowOnInvisibleTerrain",
-            "LitDirectional": "dirLightning",
+            "LitDirectional": "dirLighting",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
             "bForceRender": "isForcingRender"
         });
     }
 
-    public preLoad(pkg: UPackage, exp: UExport) { 
-        this.readHead = pkg.tell();
+    public preLoad(pkg: UPackage) {
+        this.readStart = this.readHead = pkg.tell();
         this.readTail = this.readHead + this.size;
     }
 
-    public doLoad(pkg: UPackage, exp: UExport): this {
+    public doLoad(pkg: UPackage): this {
 
         this.readNamedProps(pkg);
 
