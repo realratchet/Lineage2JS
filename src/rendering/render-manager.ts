@@ -60,10 +60,10 @@ class RenderManager {
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
         
         
-        // elven ruins colon
-        this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
-        this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
-        this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
+        // // elven ruins colon
+        // this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
+        // this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
+        // this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
         
         this.controls.orbit.update();
         // this.controls.fps.update(0);
