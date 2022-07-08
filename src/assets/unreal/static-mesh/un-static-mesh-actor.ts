@@ -230,18 +230,18 @@ class UStaticMeshActor extends UAActor {
         // debugger;
 
         const mesh = await this.mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
-
         const attributes = library.geometries[mesh.geometry].attributes;
+        const instance = (this.instance ? await this.instance.getDecodeInfo(library) : {
+            color: new Float32Array(attributes.positions.length).fill(0),
+            lights: { scene: [], ambient: [] }
+        });
+
 
         const vertexArrayLen = attributes.positions.length;
-        const instanceColors = new Float32Array(vertexArrayLen).fill(0);
+        const instanceColors = instance.color;
         // const position = new FVector(), normal = new FVector(), color = new FPlane();
         const position = new Vector3(), normal = new Vector3(), color = new FPlane();
 
-        const lightInfo = this.instance.sceneLights[0];
-        const lightArray = lightInfo.unkArray0;
-
-        const lightPosition = new Vector3().fromArray(lightInfo.light.location.getVectorElements());
         const currentPosition = new Vector3().fromArray(this.location.getVectorElements());
 
         const scale = new Vector3().fromArray(this.scale.getVectorElements());
@@ -254,42 +254,46 @@ class UStaticMeshActor extends UAActor {
 
         // const invLightPosition = currentPosition.sub(lightPosition);
 
-        let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
         let someFlag = 1;
 
+        const lightPosition = new Vector3();
 
-        const [r, g, b] = lightInfo.light.getColor();
+        instance.lights.scene.forEach(lightInfo => {
+            const lightArray = lightInfo.vertexFlags;
+            let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
-        for (let i = 0; i < vertexArrayLen; i += 3) {
-            // const vertexIndex = i / 3;
-            if ((objectFlag & someFlag) !== 0) {
-                position.fromArray(attributes.positions, i).applyMatrix4(matrix);
-                normal.fromArray(attributes.normals, i).applyMatrix4(matrix).normalize();
+            const [r, g, b] = lightInfo.color;
 
-                // debugger;
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                // const vertexIndex = i / 3;
+                if ((objectFlag & someFlag) !== 0) {
+                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                    normal.fromArray(attributes.normals, i).applyMatrix4(matrix).normalize();
 
-                const intensity = sampleLightIntensity({
-                    type: 0, //lightInfo.light.type,
-                    position: lightPosition,
-                    radius: (lightInfo.light.radius + 1) * 25
-                }, position, normal);
+                    // debugger;
 
-                instanceColors[i + 0] = r * intensity;
-                instanceColors[i + 1] = g * intensity;
-                instanceColors[i + 2] = b * intensity;
+                    const intensity = sampleLightIntensity({
+                        type: lightInfo.lightType,
+                        position: lightPosition.fromArray(lightInfo.position),
+                        radius: (lightInfo.radius + 1) * 25
+                    }, position, normal);
 
-                // debugger;
+
+                    instanceColors[i + 0] = r * intensity;
+                    instanceColors[i + 1] = g * intensity;
+                    instanceColors[i + 2] = b * intensity;
+
+                    // debugger;
+                }
+
+                someFlag = someFlag << 0x1;
+
+                if ((someFlag & 0x7f) === 0x0) {
+                    lightArrIterator = lightArray[++lightArrIterator];
+                    someFlag = 0x1;
+                }
             }
-
-            someFlag = someFlag << 0x1;
-
-            if ((someFlag & 0x7f) === 0x0) {
-                lightArrIterator = lightArray[++lightArrIterator];
-                someFlag = 0x1;
-            }
-        }
-
-        // debugger;
+        });
 
         // const attributes = library.geometries[mesh.geometry].attributes;
         // const colors = new Float32Array(attributes.positions.length);

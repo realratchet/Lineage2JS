@@ -218,7 +218,9 @@ uniform float opacity;
 
 // #endif
 
-varying vec3 vColorInstance;
+#ifdef USE_INSTANCED_ATTRIBUTES
+    varying vec3 vColorInstance;
+#endif
 
 void main() {
     #include <clipping_planes_fragment>
@@ -261,11 +263,13 @@ void main() {
     #else
         #ifdef HAS_LIGHTS
             reflectedLight.indirectDiffuse += vec3( 0.0 );
-        #elif !defined(USE_AMBIENT)
-            // reflectedLight.indirectDiffuse += vec3( 1.0 );
+        #elif !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES)
+            reflectedLight.indirectDiffuse += vec3( 1.0 );
         #endif
 
-        reflectedLight.indirectDiffuse += vColorInstance;
+        #ifdef USE_INSTANCED_ATTRIBUTES
+            reflectedLight.indirectDiffuse += vColorInstance;
+        #endif
 
         #ifdef USE_AMBIENT
             reflectedLight.indirectDiffuse += ambient.brightness * ambient.color;

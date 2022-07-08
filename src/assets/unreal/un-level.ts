@@ -3,7 +3,7 @@ import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 
-const LOAD_SUB_OBJECTS = false;
+const LOAD_SUB_OBJECTS = true;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
@@ -135,8 +135,8 @@ class ULevel extends UObject {
             type: "Level",
             name: this.url.map,
             children: (await Promise.all([
-                // this.baseModel.getDecodeInfo(library),
-                // "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+                this.baseModel.getDecodeInfo(library),
+                "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
                 "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
             ])).flat()
         };

@@ -14,8 +14,6 @@ class FMatrix extends FConstructable {
     public load(pkg: UPackage): this {
         const float = new BufferValue(BufferValue.float);
 
-        debugger;
-
         for (let i = 0; i < 16; i++)
             this.elements[i] = pkg.read(float).value as number;
 
@@ -45,8 +43,6 @@ class UMatrix extends UObject {
 
     public doLoad(pkg: UPackage, tag: any): this {
         this.readNamedProps(pkg);
-
-        debugger;
 
         return this;
     }

@@ -219,6 +219,14 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         return this;
     }
+
+    setInstanced() {
+        this.defines["USE_INSTANCED_ATTRIBUTES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
 }
 
 export default MeshStaticMaterial;

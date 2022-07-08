@@ -126,7 +126,7 @@ function decodeLight(library: IDecodeLibrary, info: ILightDecodeInfo): THREE.Mes
 function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInstanceDecodeInfo) {
 
     const geometryUuid = info.mesh.geometry;
-    const geometryInfo = {
+    const infoGeo = {
         ...library.geometries[geometryUuid],
         attributes: {
             ...library.geometries[geometryUuid].attributes,
@@ -134,7 +134,7 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
         }
     };
 
-    const geometry = fetchGeometry(geometryInfo);
+    const geometry = fetchGeometry(infoGeo);
     const meshInfo = info.mesh;
 
     const infoMats = library.materials[meshInfo.materials];
@@ -143,6 +143,16 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
     const mesh = new Mesh(geometry, materials);
 
     applySimpleProperties(library, mesh, meshInfo);
+
+    (materials instanceof Array ? materials : [materials]).forEach(mat => mat?.setInstanced());
+
+    if (infoGeo.attributes.colors) {
+        (materials instanceof Array ? materials : [materials]).forEach(mat => {
+            if (!mat) return;
+
+            mat.vertexColors = true;
+        });
+    }
 
     return mesh;
 }

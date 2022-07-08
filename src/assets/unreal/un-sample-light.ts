@@ -31,6 +31,8 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //     return (normal.x * (this->someVector).x +
         //            normal.z * (this->someVector).z + normal.y * (this->someVector).y) * -2.0;
         //   }
+
+        debugger;
     } else if (lightType === 0x11) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
@@ -45,6 +47,8 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //     }
         //     return fVar1 + fVar1;
         //   }
+
+        debugger;
     } else if (lightType === 0xd) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
@@ -57,6 +61,8 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //     dVar5 = appSqrt((double)(1.02 - (float)dVar5 / this->field4_0x20));
         //     return (float)dVar5 + (float)dVar5;
         //   }
+
+        debugger;
     } else if (lightType === 0x14) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
@@ -69,13 +75,13 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //     fVar1 = 1.02 - fVar2 / fVar1;
         //     return fVar1 + fVar1;
         //   }
+
+        debugger;
     } else if ((lightType !== 0xc) && (lightType !== 0x8)) {
         const dt = new Vector3().copy(light.position).sub(sampPosition);
         const radius = light.radius;
         const len = dt.length();
         const intensity = calculateIntensity(len, radius, dt.x, dt.y, dt.z, sampNormal.x, sampNormal.y, sampNormal.z);
-
-        // debugger;
 
         return intensity;
     } else {
@@ -97,6 +103,8 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //       return fVar1 * fVar1 * fVar4;
         //     }
         //   }
+
+        debugger;
     }
     return 0.0;
 }

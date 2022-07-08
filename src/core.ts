@@ -20,8 +20,6 @@ import decodeObject3D from "./assets/decoders/object3d-decoder";
 import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 
-type ULevel = import("./assets/unreal/un-level").ULevel;
-
 async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
     [key: string]: {
         import: UImport;
@@ -95,7 +93,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_16_25;
+    const pkgLoadPromise = pkg_20_21;
 
     // for (let ass of assetList) {
     //     const pkgPromise = assetLoader.getPackageByPath(ass);
@@ -232,9 +230,9 @@ async function startCore() {
 
     // debugger;
 
-    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    // objectGroup.add(mLevel);
+    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    objectGroup.add(mLevel);
 
     // debugger;
 
@@ -263,87 +261,88 @@ async function startCore() {
     // debugger;
 
 
-    (await Promise.all([
-        // 1441,
-        // 1770,
-        // 1802,
-        // 1804,
-        // 4284,
-        // 10253, // scluptures
-        // 10254, // scluptures
-        // 8028,
-        // 1370, // wall object
-        // 5680, // floor near wall objectrs
-        // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
-        // 555,// elven ruins colon
-        610, // light fixture with 2 lights near elven ruins
-        // ...[608, 610, 1755, 1781] // elven ruins light fixtures
-    ].map(async id => {
-        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-        const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
+    // (await Promise.all([
+    //     // 1441,
+    //     // 1770,
+    //     // 1802,
+    //     // 1804,
+    //     // 4284,
+    //     // 10253, // scluptures
+    //     // 10254, // scluptures
+    //     // 8028,
+    //     // 1370, // wall object
+    //     // 5680, // floor near wall objectrs
+    //     // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+    //     // 555,// elven ruins colon
+    //     // 610, // light fixture with 2 lights near elven ruins
+    //     // 1755, // light fixture with 3 lights near elven ruins
+    //     ...[608, 610, 1755, 1781] // elven ruins light fixtures
+    // ].map(async id => {
+    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+    //     const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
 
-        return iMesh;
-    }))).forEach(async iMesh => {
-        const mModel = decodeObject3D(decodeLibrary, iMesh);
+    //     return iMesh;
+    // }))).forEach(async iMesh => {
+    //     const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-        // debugger;
+    //     // debugger;
 
-        objectGroup.add(mModel);
+    //     objectGroup.add(mModel);
 
-        await uLevel.onLoaded();
+    //     await uLevel.onLoaded();
 
-        // debugger;
+    //     // debugger;
 
-        {
-            for (let decodeInfo of (iMesh.siblings.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
-                const color = new Color().fromArray(decodeInfo.color);
-                const light = decodeInfo.directional ? new DirectionalLight(color) : new PointLight(color, undefined, decodeInfo.radius);
-                const helper = decodeInfo.directional ? new DirectionalLightHelper(light as DirectionalLight, 100) : new PointLightHelper(light as PointLight, decodeInfo.radius);
+    //     {
+    //         for (let decodeInfo of (iMesh.siblings.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
+    //             const color = new Color().fromArray(decodeInfo.color);
+    //             const light = decodeInfo.directional ? new DirectionalLight(color) : new PointLight(color, undefined, decodeInfo.radius);
+    //             const helper = decodeInfo.directional ? new DirectionalLightHelper(light as DirectionalLight, 100) : new PointLightHelper(light as PointLight, decodeInfo.radius);
 
-                light.position.fromArray(decodeInfo.position);
-                // if (decodeInfo.rotation) light.rotation.fromArray(decodeInfo.rotation);
+    //             light.position.fromArray(decodeInfo.position);
+    //             // if (decodeInfo.rotation) light.rotation.fromArray(decodeInfo.rotation);
 
-                objectGroup.add(light, helper);
+    //             objectGroup.add(light, helper);
 
 
-                // debugger;
+    //             // debugger;
 
-                if (decodeInfo.directional) {
-                    const target = (light as DirectionalLight).target;
+    //             if (decodeInfo.directional) {
+    //                 const target = (light as DirectionalLight).target;
 
-                    light.updateMatrixWorld();
-                    target.position
-                        .set(0, 0, 1)
-                        .applyEuler(new Euler().fromArray(decodeInfo.rotation || [0, 0, 0, "XYZ"]))
-                        .normalize()
-                        .multiplyScalar(200)
-                        .add(light.position);
+    //                 light.updateMatrixWorld();
+    //                 target.position
+    //                     .set(0, 0, 1)
+    //                     .applyEuler(new Euler().fromArray(decodeInfo.rotation || [0, 0, 0, "XYZ"]))
+    //                     .normalize()
+    //                     .multiplyScalar(200)
+    //                     .add(light.position);
 
-                    target.updateMatrixWorld();
+    //                 target.updateMatrixWorld();
 
-                    (helper as DirectionalLightHelper).update();
-                }
+    //                 (helper as DirectionalLightHelper).update();
+    //             }
 
-                light.add(...decodeInfo.children.map(nfo => decodeObject3D(decodeLibrary, nfo)));
+    //             light.add(...decodeInfo.children.map(nfo => decodeObject3D(decodeLibrary, nfo)));
 
-                // {
-                //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
+    //             // {
+    //             //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
 
-                //     const matHelper = new MeshBasicMaterial({ wireframe: true, color: new Color().fromArray(decodeInfo.color) });
-                //     const helper = new Mesh(geo, matHelper);
+    //             //     const matHelper = new MeshBasicMaterial({ wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+    //             //     const helper = new Mesh(geo, matHelper);
 
-                //     helper.add(new AxesHelper(2));
-                //     helper.position.fromArray(decodeInfo.position);
-                //     helper.rotation.fromArray(decodeInfo.rotation);
+    //             //     helper.add(new AxesHelper(2));
+    //             //     helper.position.fromArray(decodeInfo.position);
+    //             //     helper.rotation.fromArray(decodeInfo.rotation);
 
-                //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
-                //     else matHelper.color.setHex(0xff00ff);
+    //             //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
+    //             //     else matHelper.color.setHex(0xff00ff);
 
-                //     objectGroup.add(helper);
-                // }
-            }
-        }
-    });
+    //             //     objectGroup.add(helper);
+    //             // }
+    //         }
+    //     }
+    // });
 
 
     // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);

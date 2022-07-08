@@ -132,8 +132,10 @@
     #include <lights_pars_begin>
 #endif
 
-attribute vec3 colorInstance;
-varying vec3 vColorInstance;
+#ifdef USE_INSTANCED_ATTRIBUTES
+    attribute vec3 colorInstance;
+    varying vec3 vColorInstance;
+#endif
 
 // #ifdef USE_DIRECTIONAL_AMBIENT
 //     // varying vec3 vViewPosition;
@@ -164,7 +166,9 @@ varying vec3 vColorInstance;
 // #endif
 
 void main() {
-    vColorInstance = colorInstance;
+    #ifdef USE_INSTANCED_ATTRIBUTES
+        vColorInstance = colorInstance;
+    #endif
 
     #include <uv_vertex>
     #include <uv2_vertex>

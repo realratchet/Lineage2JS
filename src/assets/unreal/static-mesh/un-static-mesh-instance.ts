@@ -6,7 +6,7 @@ import FArray, { FPrimitiveArray } from "../un-array";
 
 class FAssignedLight extends FConstructable {
     public lightIndex: number; // seems to be light index
-    public unkArray0 = new FPrimitiveArray(BufferValue.uint8);
+    public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public unkInt0: number;
 
     public light: ULight;
@@ -16,7 +16,7 @@ class FAssignedLight extends FConstructable {
         const int32 = new BufferValue(BufferValue.int32);
 
         this.lightIndex = pkg.read(compat32).value as number;
-        this.unkArray0 = this.unkArray0.load(pkg).getTypedArray() as any;
+        this.vertexFlags.load(pkg);
         this.unkInt0 = pkg.read(int32).value as number;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
@@ -29,6 +29,16 @@ class FAssignedLight extends FConstructable {
         // debugger;
 
         return this;
+    }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+
+        await Promise.all(this.promisesLoading);
+
+        return {
+            vertexFlags: this.vertexFlags.getTypedArray(),
+            ...(await this.light.getDecodeInfo(library))
+        };
     }
 }
 
@@ -47,11 +57,29 @@ class UStaticMeshInstance extends UObject {
     public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
         await this.onLoaded();
 
-        const allLights = [...this.sceneLights/*, ...this.unkLights1*/];
-        const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
-        const filteredMaps = (Object.values(filteredMapsDict) as ULight[]);//.filter(l => l.getZone() === this.actor.getZone());
+        const color = new Float32Array(this.colorStream.color.length * 3);
 
-        return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
+        for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
+            const { r, g, b } = this.colorStream.color[i] as FColor;
+            const offset = i * 3;
+
+            color[offset + 0] = r / 255;
+            color[offset + 1] = g / 255;
+            color[offset + 2] = b / 255;
+        }
+
+        return {
+            color,
+            lights: {
+                scene: await Promise.all(this.sceneLights.map(l => l.getDecodeInfo(library)))
+            }
+        };
+
+        // const allLights = [...this.sceneLights/*, ...this.unkLights1*/];
+        // const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
+        // const filteredMaps = (Object.values(filteredMapsDict) as ULight[]);//.filter(l => l.getZone() === this.actor.getZone());
+
+        // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
