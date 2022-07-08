@@ -3,11 +3,23 @@ import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
 import { FPlane } from "./un-plane";
 
-class FNTimeColor extends FConstructable {
+abstract class FNBaseTimedConstructable extends FConstructable implements IBaseTimedConstructable {
     public time: number;
+}
+
+class FNTimeColor extends FNBaseTimedConstructable {
     public r: number;
     public g: number;
     public b: number;
+
+    constructor(t = 0, r = 0, g = 0, b = 0) {
+        super();
+
+        this.time = t;
+        this.r = r;
+        this.g = g;
+        this.b = b;
+    }
 
     public load(pkg: UPackage): this {
         const int8 = new BufferValue(BufferValue.int8);
@@ -23,8 +35,7 @@ class FNTimeColor extends FConstructable {
     }
 };
 
-class FNTimeHSV extends FConstructable {
-    public time: number;
+class FNTimeHSV extends FNBaseTimedConstructable {
     public hue: number;
     public saturation: number;
     public lightness: number;
@@ -52,11 +63,11 @@ class FNTimeHSV extends FConstructable {
         return this;
     }
 
-    public toColorPlane() { return new FPlane(...hsvToRgb(this.hue, this.saturation, this.lightness), 1); }
+    public getColor(): [number, number, number] { return hsvToRgb(this.hue, this.saturation, this.lightness); }
+    public toColorPlane() { return new FPlane(...this.getColor(), 1); }
 };
 
-class FNTimeScale extends FConstructable {
-    public time: number;
+class FNTimeScale extends FNBaseTimedConstructable {
     public scale: number;
 
     public load(pkg: UPackage): this {

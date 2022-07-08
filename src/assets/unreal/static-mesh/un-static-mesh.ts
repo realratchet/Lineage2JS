@@ -243,7 +243,7 @@ class UStaticMesh extends UPrimitive {
         const uvs = new Float32Array(countVerts * 2);
         const indices = new TypedIndicesArray(countIndices);
 
-        // if (countVerts === 0xB3)
+        // if (countVerts === 0x42)
         //     debugger;
 
         const _colors = [

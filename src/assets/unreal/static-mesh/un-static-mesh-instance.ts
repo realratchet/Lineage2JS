@@ -3,6 +3,7 @@ import BufferValue from "../../buffer-value";
 import FConstructable from "../un-constructable";
 import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
+import { selectByTime, staticMeshLight } from "../un-time-list";
 
 class FAssignedLight extends FConstructable {
     public lightIndex: number; // seems to be light index
@@ -46,7 +47,7 @@ class UStaticMeshInstance extends UObject {
     protected colorStream = new FRawColorStream();
 
     protected sceneLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
-    protected unkLights1: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
+    protected environmentLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
 
     protected unkArrIndex: number[];
 
@@ -68,10 +69,37 @@ class UStaticMeshInstance extends UObject {
             color[offset + 2] = b / 255;
         }
 
+        const timeOfDay = 12;
+
+        let validEnvironment: FAssignedLight = null;
+        let startIndex: number, finishIndex: number;
+        let startTime: number, finishTime: number;
+
+        let lightingColor: [number, number, number];
+
+        for (let i = 0, len = this.environmentLights.length; i < len; i++) {
+            const timeForIndex = indexToTime(i, len);
+
+            if ((Number(timeForIndex < timeOfDay) << 0x8 | Number(timeForIndex === timeOfDay) << 0xe) === 0x0) {
+                validEnvironment = this.environmentLights[i];
+                startIndex = i;
+                finishIndex = i + 1;
+                startTime = timeForIndex;
+                finishTime = indexToTime(finishIndex, len);
+                lightingColor = selectByTime(timeOfDay, staticMeshLight).getColor();
+
+                break;
+            }
+        }
+
         return {
             color,
             lights: {
-                scene: await Promise.all(this.sceneLights.map(l => l.getDecodeInfo(library)))
+                scene: await Promise.all(this.sceneLights.map(l => l.getDecodeInfo(library))),
+                environment: validEnvironment ? {
+                    color: lightingColor,
+                    ...await validEnvironment.getDecodeInfo(library)
+                } : null
             }
         };
 
@@ -106,14 +134,12 @@ class UStaticMeshInstance extends UObject {
         this.readHead = pkg.tell();
 
         if (0x6D < verArchive) this.sceneLights.load(pkg);
-        if (0x03 < verLicense) this.unkLights1.load(pkg);
+        if (0x03 < verLicense) this.environmentLights.load(pkg);
         if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read(compat32).value as number);
 
         this.readHead = pkg.tell();
 
         console.assert(this.readHead === this.readTail, "Should be zero");
-
-        // debugger;
 
         return this;
     }
@@ -121,3 +147,9 @@ class UStaticMeshInstance extends UObject {
 
 export default UStaticMeshInstance;
 export { UStaticMeshInstance };
+
+
+function indexToTime(index: number, totalElements: number) {
+    return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements;
+}
+

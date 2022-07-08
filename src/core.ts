@@ -274,15 +274,18 @@ async function startCore() {
     //     // 5680, // floor near wall objectrs
     //     // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
     //     // 555,// elven ruins colon
+    //     // 47, // rock with ambient light
+    //     2369,
     //     // 610, // light fixture with 2 lights near elven ruins
     //     // 1755, // light fixture with 3 lights near elven ruins
-    //     ...[608, 610, 1755, 1781] // elven ruins light fixtures
+    //     // ...[608, 610, 1755, 1781] // elven ruins light fixtures
     // ].map(async id => {
     //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
     //     const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
 
     //     return iMesh;
     // }))).forEach(async iMesh => {
+    //     // debugger;
     //     const mModel = decodeObject3D(decodeLibrary, iMesh);
 
     //     // debugger;

@@ -3,11 +3,12 @@ import UAActor from "./un-aactor";
 class UNMovableSunLight extends UAActor {
     protected readHeadOffset: number = 17;
 
-    protected brightness: number;
+    protected lightness: number = 128;
+    protected type = 0x13;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "LightBrightness": "brightness"
+            "LightBrightness": "lightness"
         });
     }
 
@@ -15,6 +16,20 @@ class UNMovableSunLight extends UAActor {
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
+    }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+        await this.onLoaded();
+
+        return {
+            type: "Sunlight",
+            name: this.objectName,
+            position: this.location.getVectorElements(),
+            rotation: this.rotation.getEulerElements(),
+            scale: this.scale.getVectorElements(),
+            lightness: this.lightness / 255,
+            lightType: this.type
+        };
     }
 
     // protected doLoad(pkg: UPackage, exp: UExport): void {

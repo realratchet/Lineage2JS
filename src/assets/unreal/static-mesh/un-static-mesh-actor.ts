@@ -10,6 +10,7 @@ import FCoords from "../un-coords";
 import FRotator from "../un-rotator";
 import { sampleLightIntensity } from "../un-sample-light";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+import { selectByTime, staticMeshAmbient, staticMeshLight } from "../un-time-list";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -257,6 +258,59 @@ class UStaticMeshActor extends UAActor {
         let someFlag = 1;
 
         const lightPosition = new Vector3();
+        const timeOfDay = 0;
+
+
+        if (this.isSunAffected) {
+            const ambient = selectByTime(timeOfDay, staticMeshAmbient);
+
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                instanceColors[i + 0] += ambient.r / 255;
+                instanceColors[i + 1] += ambient.g / 255;
+                instanceColors[i + 2] += ambient.b / 255;
+            }
+        }
+
+        const trackingLight = new Array(vertexArrayLen / 3).fill(0);
+
+        if (instance.lights.environment) {
+            const lightInfo = instance.lights.environment
+            const lightArray = lightInfo.vertexFlags;
+            let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
+
+            const [r, g, b] = lightInfo.color;
+
+            const euler = new Euler().fromArray(lightInfo.rotation);
+            const direction = new Vector3(0, -1, -1).normalize().applyEuler(euler);
+
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                if ((objectFlag & someFlag) !== 0) {
+
+                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                    normal.fromArray(attributes.normals, i).applyMatrix4(matrix).normalize();
+
+                    const intensity = sampleLightIntensity({
+                        type: lightInfo.lightType,
+                        direction,
+                        position: lightPosition.fromArray(lightInfo.position),
+                        radius: (lightInfo.radius + 1) * 25
+                    }, position, normal);
+
+                    instanceColors[i + 0] += r * intensity * lightInfo.lightness;
+                    instanceColors[i + 1] += g * intensity * lightInfo.lightness;
+                    instanceColors[i + 2] += b * intensity * lightInfo.lightness;
+                    trackingLight[i / 3]++;
+                }
+
+                someFlag = someFlag << 0x1;
+
+                if ((someFlag & 0x7f) === 0x0) {
+                    lightArrIterator = lightArray[++lightArrIterator];
+                    someFlag = 0x1;
+                }
+            }
+        }
+
 
         instance.lights.scene.forEach(lightInfo => {
             const lightArray = lightInfo.vertexFlags;
@@ -265,7 +319,6 @@ class UStaticMeshActor extends UAActor {
             const [r, g, b] = lightInfo.color;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
-                // const vertexIndex = i / 3;
                 if ((objectFlag & someFlag) !== 0) {
                     position.fromArray(attributes.positions, i).applyMatrix4(matrix);
                     normal.fromArray(attributes.normals, i).applyMatrix4(matrix).normalize();
@@ -279,9 +332,10 @@ class UStaticMeshActor extends UAActor {
                     }, position, normal);
 
 
-                    instanceColors[i + 0] = r * intensity;
-                    instanceColors[i + 1] = g * intensity;
-                    instanceColors[i + 2] = b * intensity;
+                    instanceColors[i + 0] += r * intensity;
+                    instanceColors[i + 1] += g * intensity;
+                    instanceColors[i + 2] += b * intensity;
+                    trackingLight[i / 3]++;
 
                     // debugger;
                 }
@@ -294,6 +348,16 @@ class UStaticMeshActor extends UAActor {
                 }
             }
         });
+
+        for (let i = 0; i < vertexArrayLen; i += 3) {
+            const d = trackingLight[i / 3];
+
+            if (d > 0) {
+                instanceColors[i + 0] /= d;
+                instanceColors[i + 1] /= d;
+                instanceColors[i + 2] /= d;
+            }
+        }
 
         // const attributes = library.geometries[mesh.geometry].attributes;
         // const colors = new Float32Array(attributes.positions.length);
@@ -321,6 +385,10 @@ class UStaticMeshActor extends UAActor {
         } as IBaseObjectDecodeInfo;
 
         library.geometryInstances[mesh.geometry]++;
+
+        // if(this.mesh.objectName === "Exp_StoneH_06") {
+        //     debugger;
+        // }
 
         // debugger;
 

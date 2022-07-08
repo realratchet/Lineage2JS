@@ -152,6 +152,10 @@ interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
     }
 }
 
+interface IBaseTimedConstructable {
+    time: number;
+}
+
 interface IDecodedParameter {
     uniforms: { [key: string]: any },
     defines: { [key: string]: any },
