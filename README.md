@@ -28,4 +28,4 @@ I don't know of the legality of providing assets, technically it wouldn't be pir
 ![](docs/tower_outside.jpg)
 ![](docs/tower_inside.jpg)
 ![](docs/tower_statues.jpg)
-[![Cruma Tower Test](https://img.youtube.com/vi/mbgX-iopjiU/0.jpg)](https://www.youtube.com/watch?v=mbgX-iopjiU)
+[![Cruma Tower Test](https://img.youtube.com/vi/9x22oLpw6QY/0.jpg)](https://www.youtube.com/watch?v=9x22oLpw6QY)
