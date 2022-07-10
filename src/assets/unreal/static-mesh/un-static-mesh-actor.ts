@@ -312,11 +312,16 @@ class UStaticMeshActor extends UAActor {
         }
 
 
+        // debugger;
         instance.lights.scene.forEach(lightInfo => {
             const lightArray = lightInfo.vertexFlags;
             let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
             const [r, g, b] = lightInfo.color;
+
+            console.log(lightInfo.color);
+
+            // debugger;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 if ((objectFlag & someFlag) !== 0) {
@@ -410,3 +415,35 @@ class UStaticMeshActor extends UAActor {
 
 export default UStaticMeshActor;
 export { UStaticMeshActor };
+
+function fromColorPlane([r, g, b]: [number, number, number]) {
+    let iVar1: number;
+
+    /* 0x1000f  302  ??0FColor@@QAE@ABVFPlane@@@Z */
+    iVar1 = Math.floor(r * 255.0);
+    if (iVar1 < 0x0) {
+        iVar1 = 0x0;
+    }
+    else if (0xfe < iVar1) {
+        iVar1 = 0xff;
+    }
+    let _r = iVar1;
+    iVar1 = Math.floor(g * 255.0);
+    if (iVar1 < 0x0) {
+        iVar1 = 0x0;
+    }
+    else if (0xfe < iVar1) {
+        iVar1 = 0xff;
+    }
+    let _g = iVar1;
+    iVar1 = Math.floor(b * 255.0);
+    if (iVar1 < 0x0) {
+        iVar1 = 0x0;
+    }
+    else if (0xfe < iVar1) {
+        iVar1 = 0xff;
+    }
+    let _b = iVar1;
+
+    return [_r, _g, _b];
+}

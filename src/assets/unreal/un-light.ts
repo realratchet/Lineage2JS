@@ -1,4 +1,4 @@
-import hsvToRgb from "@client/utils/hsv-to-rgb";
+import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { generateUUID } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
@@ -81,7 +81,40 @@ class ULight extends UAActor {
         return regionHelper;
     }
 
-    public getColor() { return hsvToRgb(this.hue, this.saturation, this.lightness); }
+    public getColor() {
+        const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
+        const w = 1;
+        const brightness = saturationToBrightness(this.lightness);
+
+        // const lightType = this.type;
+
+        // console.log(`x: ${x}, y: ${y}, z: ${z}, w: ${w}`);
+
+        // let someColor_88 = 0;
+        // let actor1: any;
+        // let GMath_exref: any;
+
+        // debugger;
+
+        // switch (lightType) {
+        //     case 0x7:
+        //         someColor_88 = actor1[0x2].field_0xe;
+        //         if (someColor_88 === 0x0) {
+        //             someColor_88 = 1.401298e-45;
+        //         }
+        //         let someFloat = actor1[0x2].field_0xf << 0x8;
+        //         let uVar4 = FUN_10740ab4();
+        //         let tmp_double = (GMath_exref + (uVar4 >> 0x2 & 0x3fff) * 0x4 + 0x8c) * 0.09 + 0.9;
+
+        //         debugger;
+        //         break;
+        //     default:
+        //         debugger;
+        //         break;
+        // }
+
+        return [x * brightness, y * brightness, z * brightness];
+    }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
@@ -93,15 +126,46 @@ class ULight extends UAActor {
             lightType: this.type,
             lightEffect: this.effect,
             directional: this.isDirectional,
-            radius: (this.radius + 1) * 25,
+            radius: /*(this.radius + 1) * 25*/this.radius,
             name: this.objectName,
             position: this.location.getVectorElements(),
             scale: this.scale.getVectorElements(),
             rotation: this.rotation.getEulerElements(),
-            children: [this.getRegionLineHelper(library, [1, 0, 0])]
+            children: [/*this.getRegionLineHelper(library, [1, 0, 0])*/]
         };
     }
 }
 
 export default ULight;
 export { ULight };
+
+function FUN_10740ab4(): any {
+    debugger;
+    //     ulonglong uVar1;
+    //     uint uVar2;
+    //     bool bVar3;
+    //     float fVar4;
+    //     float10 in_ST0;
+    //     uint local_20;
+    //     float fStack28;
+
+    //     uVar1 = (ulonglong)ROUND(in_ST0);
+    //     local_20 = (uint)uVar1;
+    //     fStack28 = (float)(uVar1 >> 0x20);
+    //     fVar4 = (float)in_ST0;
+    //     if ((local_20 != 0x0) || (fVar4 = fStack28, (uVar1 & 0x7fffffff00000000) != 0x0)) {
+    //       if ((int)fVar4 < 0x0) {
+    //         uVar2 = (uint)(0x80000000 < ((uint)(float)(in_ST0 - (float10)uVar1) ^ 0x80000000));
+    //         bVar3 = CARRY4(local_20,uVar2);
+    //         local_20 = local_20 + uVar2;
+    //         fStack28 = (float)((int)fStack28 + (uint)bVar3);
+    //       }
+    //       else {
+    //         uVar2 = (uint)(0x80000000 < (uint)(float)(in_ST0 - (float10)uVar1));
+    //         bVar3 = local_20 < uVar2;
+    //         local_20 = local_20 - uVar2;
+    //         fStack28 = (float)((int)fStack28 - (uint)bVar3);
+    //       }
+    //     }
+    //     return CONCAT44(fStack28,local_20);
+}

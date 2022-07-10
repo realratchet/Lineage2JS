@@ -93,57 +93,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_20_21;
-
-    // for (let ass of assetList) {
-    //     const pkgPromise = assetLoader.getPackageByPath(ass);
-    //     const pkg = (await assetLoader.load(pkgPromise)).asReadable();
-
-    //     const _pattern0 = [
-    //         /*0000000*/ 0x59, 0x3c, 0x31, 0xff, 0x6f, 0x4a, 0x3d, 0xff, 0x6f, 0x4e, 0x3e, 0xff, 0x51, 0x36, 0x2c, 0xff,
-    //         /*0000010*/ 0x00, 0x00, 0x00, 0xff, 0x67, 0x45, 0x39, 0xff, 0x72, 0x4e, 0x3e, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*0000020*/ 0x12, 0x0c, 0x0a, 0xff, 0x10, 0x0a, 0x08, 0xff, 0x12, 0x0c, 0x0a, 0xff, 0x16, 0x0f, 0x0c, 0xff,
-    //         /*0000030*/ 0x00, 0x00, 0x00, 0xff, 0x0c, 0x08, 0x06, 0xff, 0x10, 0x0a, 0x08, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*0000040*/ 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x43, 0x2c, 0x24, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*0000050*/ 0x00, 0x00, 0x00, 0xff, 0x42, 0x2c, 0x23, 0xff, 0x3a, 0x27, 0x20, 0xff, 0x43, 0x2c, 0x24, 0xff,
-    //         /*0000060*/ 0x1b, 0x12, 0x0f, 0xff, 0x2b, 0x1e, 0x18, 0xff, 0x47, 0x3a, 0x29, 0xff, 0x0c, 0x08, 0x06, 0xff,
-    //         /*0000070*/ 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*0000080*/ 0x64, 0x44, 0x37, 0xff, 0x5c, 0x41, 0x33, 0xff, 0x71, 0x52, 0x40, 0xff, 0x6b, 0x48, 0x3b, 0xff,
-    //         /*0000090*/ 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x15, 0x0e, 0x0b, 0xff, 0x0e, 0x09, 0x08, 0xff,
-    //         /*00000a0*/ 0x00, 0x00, 0x00, 0xff, 0x40, 0x2b, 0x23, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*00000b0*/ 0x00, 0x00, 0x00, 0xff, 0x6f, 0x4e, 0x3e, 0xff, 0x6f, 0x4a, 0x3d, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*00000c0*/ 0x00, 0x00, 0x00, 0xff, 0x16, 0x0f, 0x0c, 0xff, 0x12, 0x0c, 0x0a, 0xff, 0x00, 0x00, 0x00, 0xff,
-    //         /*00000d0*/ 0x00, 0x00, 0x00, 0xff, 0x43, 0x2c, 0x24, 0xff, 0x43, 0x2c, 0x24, 0xff
-    //     ];
-
-    //     const _pattern1 = [
-    //         /*0000000*/ 0x3c, 0x59, 0xff, 0x31, 0x4a, 0x6f, 0xff, 0x3d, 0x4e, 0x6f, 0xff, 0x3e, 0x36, 0x51, 0xff, 0x2c,
-    //         /*0000010*/ 0x00, 0x00, 0xff, 0x00, 0x45, 0x67, 0xff, 0x39, 0x4e, 0x72, 0xff, 0x3e, 0x00, 0x00, 0xff, 0x00,
-    //         /*0000020*/ 0x0c, 0x12, 0xff, 0x0a, 0x0a, 0x10, 0xff, 0x08, 0x0c, 0x12, 0xff, 0x0a, 0x0f, 0x16, 0xff, 0x0c,
-    //         /*0000030*/ 0x00, 0x00, 0xff, 0x00, 0x08, 0x0c, 0xff, 0x06, 0x0a, 0x10, 0xff, 0x08, 0x00, 0x00, 0xff, 0x00,
-    //         /*0000040*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x00, 0x00, 0xff, 0x00,
-    //         /*0000050*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x42, 0xff, 0x23, 0x27, 0x3a, 0xff, 0x20, 0x2c, 0x43, 0xff, 0x24,
-    //         /*0000060*/ 0x12, 0x1b, 0xff, 0x0f, 0x1e, 0x2b, 0xff, 0x18, 0x3a, 0x47, 0xff, 0x29, 0x08, 0x0c, 0xff, 0x06,
-    //         /*0000070*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
-    //         /*0000080*/ 0x44, 0x64, 0xff, 0x37, 0x41, 0x5c, 0xff, 0x33, 0x52, 0x71, 0xff, 0x40, 0x48, 0x6b, 0xff, 0x3b,
-    //         /*0000090*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x0e, 0x15, 0xff, 0x0b, 0x09, 0x0e, 0xff, 0x08,
-    //         /*00000a0*/ 0x00, 0x00, 0xff, 0x00, 0x2b, 0x40, 0xff, 0x23, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
-    //         /*00000b0*/ 0x00, 0x00, 0xff, 0x00, 0x4e, 0x6f, 0xff, 0x3e, 0x4a, 0x6f, 0xff, 0x3d, 0x00, 0x00, 0xff, 0x00,
-    //         /*00000c0*/ 0x00, 0x00, 0xff, 0x00, 0x0f, 0x16, 0xff, 0x0c, 0x0c, 0x12, 0xff, 0x0a, 0x00, 0x00, 0xff, 0x00,
-    //         /*00000d0*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x2c, 0x43, 0xff, 0x24
-    //     ];
-
-    //     const pattern0 = findPattern(pkg, _pattern0);
-    //     const pattern1 = findPattern(pkg, _pattern1);
-
-    //     console.info(`Searching for pattern not in '${ass}'`);
-
-    //     if (pattern0.index >= 0 || pattern1.index >= 0) debugger;
-    //     else console.warn(`Pattern not in '${ass} (max: ${pattern0.maxPattern}/${pattern1.maxPattern})'`);
-
-    // }
-
-    // debugger;
+    const pkgLoadPromise = pkg_16_25;
 
     // await assetLoader.load(pkg_meffects);
 
@@ -230,9 +180,9 @@ async function startCore() {
 
     // debugger;
 
-    const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
-    const mLevel = decodeObject3D(decodeLibrary, iLevel);
-    objectGroup.add(mLevel);
+    // const iLevel = await uLevel.getDecodeInfo(decodeLibrary);
+    // const mLevel = decodeObject3D(decodeLibrary, iLevel);
+    // objectGroup.add(mLevel);
 
     // debugger;
 
@@ -261,91 +211,91 @@ async function startCore() {
     // debugger;
 
 
-    // (await Promise.all([
-    //     // 1441,
-    //     // 1770,
-    //     // 1802,
-    //     // 1804,
-    //     // 4284,
-    //     // 10253, // scluptures
-    //     // 10254, // scluptures
-    //     // 8028,
-    //     // 1370, // wall object
-    //     // 5680, // floor near wall objectrs
-    //     // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
-    //     // 555,// elven ruins colon
-    //     // 47, // rock with ambient light
-    //     2369,
-    //     // 610, // light fixture with 2 lights near elven ruins
-    //     // 1755, // light fixture with 3 lights near elven ruins
-    //     // ...[608, 610, 1755, 1781] // elven ruins light fixtures
-    // ].map(async id => {
-    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-    //     const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
+    (await Promise.all([
+        // 1441,
+        // 1770,
+        // 1802,
+        // 1804,
+        // 4284,
+        // 10253, // scluptures
+        // 10254, // scluptures
+        // 8028,
+        // 1370, // wall object
+        // 5680, // floor near wall objectrs
+        // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+        // 555,// elven ruins colon
+        // 47, // rock with ambient light
+        // 2369,
+        610, // light fixture with 2 lights near elven ruins
+        // 1755, // light fixture with 3 lights near elven ruins
+        // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+    ].map(async id => {
+        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+        const iMesh = await uMesh.getDecodeInfo(decodeLibrary);
 
-    //     return iMesh;
-    // }))).forEach(async iMesh => {
-    //     // debugger;
-    //     const mModel = decodeObject3D(decodeLibrary, iMesh);
+        return iMesh;
+    }))).forEach(async iMesh => {
+        // debugger;
+        const mModel = decodeObject3D(decodeLibrary, iMesh);
 
-    //     // debugger;
+        // debugger;
 
-    //     objectGroup.add(mModel);
+        objectGroup.add(mModel);
 
-    //     await uLevel.onLoaded();
+        await uLevel.onLoaded();
 
-    //     // debugger;
+        // debugger;
 
-    //     {
-    //         for (let decodeInfo of (iMesh.siblings.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
-    //             const color = new Color().fromArray(decodeInfo.color);
-    //             const light = decodeInfo.directional ? new DirectionalLight(color) : new PointLight(color, undefined, decodeInfo.radius);
-    //             const helper = decodeInfo.directional ? new DirectionalLightHelper(light as DirectionalLight, 100) : new PointLightHelper(light as PointLight, decodeInfo.radius);
+        {
+            for (let decodeInfo of (iMesh.siblings?.filter(x => x.type === "Light") as ILightDecodeInfo[])) {
+                const color = new Color().fromArray(decodeInfo.color);
+                const light = decodeInfo.directional ? new DirectionalLight(color) : new PointLight(color, undefined, decodeInfo.radius);
+                const helper = decodeInfo.directional ? new DirectionalLightHelper(light as DirectionalLight, 100) : new PointLightHelper(light as PointLight, decodeInfo.radius);
 
-    //             light.position.fromArray(decodeInfo.position);
-    //             // if (decodeInfo.rotation) light.rotation.fromArray(decodeInfo.rotation);
+                light.position.fromArray(decodeInfo.position);
+                // if (decodeInfo.rotation) light.rotation.fromArray(decodeInfo.rotation);
 
-    //             objectGroup.add(light, helper);
+                objectGroup.add(light, helper);
 
 
-    //             // debugger;
+                // debugger;
 
-    //             if (decodeInfo.directional) {
-    //                 const target = (light as DirectionalLight).target;
+                if (decodeInfo.directional) {
+                    const target = (light as DirectionalLight).target;
 
-    //                 light.updateMatrixWorld();
-    //                 target.position
-    //                     .set(0, 0, 1)
-    //                     .applyEuler(new Euler().fromArray(decodeInfo.rotation || [0, 0, 0, "XYZ"]))
-    //                     .normalize()
-    //                     .multiplyScalar(200)
-    //                     .add(light.position);
+                    light.updateMatrixWorld();
+                    target.position
+                        .set(0, 0, 1)
+                        .applyEuler(new Euler().fromArray(decodeInfo.rotation || [0, 0, 0, "XYZ"]))
+                        .normalize()
+                        .multiplyScalar(200)
+                        .add(light.position);
 
-    //                 target.updateMatrixWorld();
+                    target.updateMatrixWorld();
 
-    //                 (helper as DirectionalLightHelper).update();
-    //             }
+                    (helper as DirectionalLightHelper).update();
+                }
 
-    //             light.add(...decodeInfo.children.map(nfo => decodeObject3D(decodeLibrary, nfo)));
+                light.add(...decodeInfo.children.map(nfo => decodeObject3D(decodeLibrary, nfo)));
 
-    //             // {
-    //             //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
+                // {
+                //     const geo = decodeInfo.directional ? geoHelperDirecional : geoHelperPoint;
 
-    //             //     const matHelper = new MeshBasicMaterial({ wireframe: true, color: new Color().fromArray(decodeInfo.color) });
-    //             //     const helper = new Mesh(geo, matHelper);
+                //     const matHelper = new MeshBasicMaterial({ wireframe: true, color: new Color().fromArray(decodeInfo.color) });
+                //     const helper = new Mesh(geo, matHelper);
 
-    //             //     helper.add(new AxesHelper(2));
-    //             //     helper.position.fromArray(decodeInfo.position);
-    //             //     helper.rotation.fromArray(decodeInfo.rotation);
+                //     helper.add(new AxesHelper(2));
+                //     helper.position.fromArray(decodeInfo.position);
+                //     helper.rotation.fromArray(decodeInfo.rotation);
 
-    //             //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
-    //             //     else matHelper.color.setHex(0xff00ff);
+                //     if (decodeInfo.radius !== undefined) helper.scale.set(decodeInfo.radius, decodeInfo.radius, decodeInfo.radius);
+                //     else matHelper.color.setHex(0xff00ff);
 
-    //             //     objectGroup.add(helper);
-    //             // }
-    //         }
-    //     }
-    // });
+                //     objectGroup.add(helper);
+                // }
+            }
+        }
+    });
 
 
     // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
