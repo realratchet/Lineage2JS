@@ -1,7 +1,5 @@
-import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
+import FConstructable from "./un-constructable";
 
 class FScale extends FConstructable {
     public x: number;
@@ -13,17 +11,16 @@ class FScale extends FConstructable {
 
     public unk0: BufferValue;
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
+    public load(pkg: UPackage): this {
 
         const float = new BufferValue(BufferValue.float);
-        const int32 = new BufferValue(BufferValue.int32);
         const int8 = new BufferValue(BufferValue.int8);
 
         this.x = pkg.read(float).value as number;
         this.y = pkg.read(float).value as number;
         this.z = pkg.read(float).value as number;
 
-        this.sheerRate = pkg.read(int32).value as number;
+        this.sheerRate = pkg.read(float).value as number;
         this.sheerAxis = pkg.read(int8).value as number;
 
         this.unk0 = pkg.read(BufferValue.allocBytes(8));

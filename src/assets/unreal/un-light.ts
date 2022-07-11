@@ -81,9 +81,8 @@ class ULight extends UAActor {
         return regionHelper;
     }
 
-    public getColor() {
+    public getColor(): [number, number, number] {
         const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
-        const w = 1;
         const brightness = saturationToBrightness(this.lightness);
 
         // const lightType = this.type;

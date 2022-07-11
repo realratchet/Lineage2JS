@@ -14,7 +14,7 @@ Object.assign(UObject.prototype, {
         switch (tag.structName) {
             case "Color": return new FColor().load(pkg);
             case "Plane": return new UPlane().load(pkg, tag);
-            case "Scale": return new FScale().load(pkg, tag);
+            case "Scale": return new FScale().load(pkg);
             case "Vector": return new FVector().load(pkg);
             case "Rotator": return new FRotator().load(pkg);
             case "Matrix": return new UMatrix().load(pkg, tag);
