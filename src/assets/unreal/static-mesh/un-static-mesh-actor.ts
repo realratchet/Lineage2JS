@@ -237,6 +237,9 @@ class UStaticMeshActor extends UAActor {
             lights: { scene: [], ambient: [] }
         });
 
+        // if (mesh.name === "Exp_oren_curumadungeon77" && instance.lights.scene.length === 10) {
+        //     console.log("probably object:", this.exportIndex + 1);
+        // }
 
         const vertexArrayLen = attributes.positions.length;
         const instanceColors = instance.color;
@@ -251,7 +254,7 @@ class UStaticMeshActor extends UAActor {
 
         const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
 
-        const _Vector3 = Vector3;
+        // const _Vector3 = Vector3;
 
         // debugger;
 
@@ -261,7 +264,6 @@ class UStaticMeshActor extends UAActor {
 
         const lightPosition = new Vector3();
         const timeOfDay = 0;
-
 
         if (this.isSunAffected) {
             const ambient = selectByTime(timeOfDay, staticMeshAmbient);
@@ -274,6 +276,8 @@ class UStaticMeshActor extends UAActor {
         }
 
         const trackingLight = new Array(vertexArrayLen / 3).fill(0);
+
+        // debugger;
 
         if (instance.lights.environment) {
             const lightInfo = instance.lights.environment
@@ -309,6 +313,8 @@ class UStaticMeshActor extends UAActor {
                     trackingLight[i / 3]++;
                 }
 
+                // debugger;
+
                 someFlag = someFlag << 0x1;
 
                 if ((someFlag & 0x7f) === 0x0) {
@@ -318,12 +324,14 @@ class UStaticMeshActor extends UAActor {
             }
         }
 
-        const { x: px, y: pz, z: py } = this.location;
-        const pw = 1;
+        // const { x: px, y: pz, z: py } = this.location;
+        // const pw = 1;
 
         // debugger;
-        instance.lights.scene.forEach(lightInfo => {
+        instance.lights.scene.forEach((lightInfo, index) => {
             const lightArray = lightInfo.vertexFlags;
+            const euler = new Euler().fromArray(lightInfo.rotation);
+            const direction = new Vector3(1, 0, 0).applyEuler(euler);
             let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
             const [r, g, b] = lightInfo.color;
@@ -332,8 +340,22 @@ class UStaticMeshActor extends UAActor {
 
             // debugger;
 
+            someFlag = 0x1;
+
             for (let i = 0; i < vertexArrayLen; i += 3) {
+
+                const vertexIndex = i / 3;
+
+                // if (i / 3 === 0x1e) {
+                //     debugger;
+                // }
+
                 if ((objectFlag & someFlag) !== 0) {
+                    position.fromArray(attributes.positions, i);
+                    normal.fromArray(attributes.normals, i);
+
+                    // debugger;
+
                     // const { x: vx, y: vz, z: vy } = position.fromArray(attributes.positions, i);
                     // const { x: nx, y: nz, z: ny } = normal.fromArray(attributes.normals, i);
 
@@ -463,17 +485,51 @@ class UStaticMeshActor extends UAActor {
 
                     // const calculated = new Vector3(stored1, stored3, stored2);
 
-                    position.applyMatrix4(matrix);
-                    normal.applyMatrix4(matrix).normalize();
+                    // if (i / 3 === 0xA) {
+                    //     const likelyDirection = new Vector3().fromArray([-4.65637147426605224609375e-1, 8.84819507598876953125e-1, 1.66288353502750396728516e-2]);
+
+                    //     direction;
+
+                    //     // const euler = new Euler().fromArray(lightInfo.rotation);
+
+                    //     // console.log(likelyDirection.toArray());
+                    //     // console.log("-----------------------");
+
+                    //     // [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach(vec => {
+                    //     //     const dir0 = new Vector3().fromArray(vec).applyEuler(euler);
+                    //     //     const dir1 = new Vector3().fromArray(vec).negate().applyEuler(euler);
+
+                    //     //     console.log(dir0.toArray());
+                    //     //     console.log(dir1.toArray());
+                    //     // });
+
+
+                    //     // console.log(dir.clone().sub(likelyDirection));
+
+                    //     debugger;
+                    // }
 
                     // debugger;
 
+                    position.applyMatrix4(matrix);
+                    normal.applyMatrix4(matrix).normalize();
+
+                    if (i / 3 === 0x1e) {
+                        // debugger;
+                    }
+
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
+                        effect: lightInfo.lightEffect,
                         position: lightPosition.fromArray(lightInfo.position),
+                        direction,
                         radius: (lightInfo.radius + 1) * 25
                     }, position, normal);
 
+                    // if (i / 3 === 0x1e) {
+                    //     console.log(`light ${index}:`, intensity);
+                    //     // debugger;
+                    // }
 
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity);
@@ -484,23 +540,27 @@ class UStaticMeshActor extends UAActor {
                     // debugger;
                 }
 
-                someFlag = someFlag << 0x1;
 
                 if ((someFlag & 0x7f) === 0x0) {
-                    lightArrIterator = lightArray[++lightArrIterator];
+                    objectFlag = lightArray[++lightArrIterator];
                     someFlag = 0x1;
-                }
+                } else someFlag = someFlag << 0x1;
+
             }
         });
 
         for (let i = 0; i < vertexArrayLen; i += 3) {
             const d = trackingLight[i / 3];
 
-            if (d > 0) {
-                instanceColors[i + 0] /= d;
-                instanceColors[i + 1] /= d;
-                instanceColors[i + 2] /= d;
-            }
+            // if (d > 0) {
+            //     instanceColors[i + 0] /= d;
+            //     instanceColors[i + 1] /= d;
+            //     instanceColors[i + 2] /= d;
+            // }
+
+            // instanceColors[i + 0] = 1;
+            // instanceColors[i + 1] = 1;
+            // instanceColors[i + 2] = 1;
         }
 
         // const attributes = library.geometries[mesh.geometry].attributes;

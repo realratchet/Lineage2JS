@@ -242,7 +242,11 @@ void main() {
     #ifdef USE_OPACITY
         #ifdef USE_MAP_OPACITY
             vec4 texelOpacity = texture2D(shOpacity.map.texture, UV_OPACITY);
+            
             diffuseColor.rgba *= texelOpacity.a;
+            
+            // if (texelOpacity.a < 0.5)
+            //     discard;
         #endif
     #endif
 

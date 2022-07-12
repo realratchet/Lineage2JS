@@ -6,7 +6,7 @@ import { FPrimitiveArray } from "./un-array";
 import FVector from "./un-vector";
 
 class ULight extends UAActor {
-    public effect: LightEffect_T;
+    public effect: LightEffect_T = 0;
     public lightness: number = 255;
     public radius: number;
     public hue: number = 0;
@@ -117,7 +117,7 @@ class ULight extends UAActor {
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
-
+        
         return {
             type: "Light",
             color: this.getColor(),
@@ -125,7 +125,7 @@ class ULight extends UAActor {
             lightType: this.type,
             lightEffect: this.effect,
             directional: this.isDirectional,
-            radius: /*(this.radius + 1) * 25*/this.radius,
+            radius: this.radius,
             name: this.objectName,
             position: this.location.getVectorElements(),
             scale: this.scale.getVectorElements(),
@@ -137,34 +137,3 @@ class ULight extends UAActor {
 
 export default ULight;
 export { ULight };
-
-function FUN_10740ab4(): any {
-    debugger;
-    //     ulonglong uVar1;
-    //     uint uVar2;
-    //     bool bVar3;
-    //     float fVar4;
-    //     float10 in_ST0;
-    //     uint local_20;
-    //     float fStack28;
-
-    //     uVar1 = (ulonglong)ROUND(in_ST0);
-    //     local_20 = (uint)uVar1;
-    //     fStack28 = (float)(uVar1 >> 0x20);
-    //     fVar4 = (float)in_ST0;
-    //     if ((local_20 != 0x0) || (fVar4 = fStack28, (uVar1 & 0x7fffffff00000000) != 0x0)) {
-    //       if ((int)fVar4 < 0x0) {
-    //         uVar2 = (uint)(0x80000000 < ((uint)(float)(in_ST0 - (float10)uVar1) ^ 0x80000000));
-    //         bVar3 = CARRY4(local_20,uVar2);
-    //         local_20 = local_20 + uVar2;
-    //         fStack28 = (float)((int)fStack28 + (uint)bVar3);
-    //       }
-    //       else {
-    //         uVar2 = (uint)(0x80000000 < (uint)(float)(in_ST0 - (float10)uVar1));
-    //         bVar3 = local_20 < uVar2;
-    //         local_20 = local_20 - uVar2;
-    //         fStack28 = (float)((int)fStack28 - (uint)bVar3);
-    //       }
-    //     }
-    //     return CONCAT44(fStack28,local_20);
-}
