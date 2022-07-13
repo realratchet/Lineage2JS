@@ -24,8 +24,9 @@ const decodeDDS = (function () {
         const { mipmaps, width, height, format: _format, mipmapCount } = dds;
         const texture = new CompressedTexture(mipmaps as ImageData[], width, height, _format as THREE.CompressedPixelFormat);
 
-        // if (mipmapCount === 1) texture.minFilter = LinearFilter;
-        texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+        if (mipmapCount === 1) texture.minFilter = LinearFilter;
+        // texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+        texture.anisotropy = 16;
 
         texture.needsUpdate = true;
         texture.flipY = false;
@@ -39,6 +40,7 @@ function decodeRGBA(info: ITextureDecodeInfo): DataTexture {
     const texture = new DataTexture(image, info.width, info.height);
 
     texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+    texture.anisotropy = 16;
 
     texture.flipY = false;
 
