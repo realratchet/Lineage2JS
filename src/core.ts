@@ -133,7 +133,14 @@ async function startCore() {
         return accum;
     }, {} as { [key: string]: { index: number, export: UExport }[] });
 
-    const decodeLibrary: IDecodeLibrary = { loadMipmaps: true, geometries: {}, materials: {}, materialModifiers: {}, geometryInstances: {} };
+    const decodeLibrary: IDecodeLibrary = {
+        loadMipmaps: true,
+        anisotropy: renderManager.renderer.capabilities.getMaxAnisotropy(),
+        geometries: {},
+        materials: {},
+        materialModifiers: {},
+        geometryInstances: {}
+    };
 
     // debugger;
 

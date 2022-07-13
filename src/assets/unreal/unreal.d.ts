@@ -263,6 +263,7 @@ interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
 
 interface IDecodeLibrary {
     loadMipmaps: boolean,
+    anisotropy: number,
     materialModifiers: { [key: string]: IMaterialModifier },
     materials: { [key: string]: IBaseMaterialDecodeInfo },
     geometries: { [key: string]: IGeometryDecodeInfo },

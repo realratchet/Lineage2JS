@@ -26,7 +26,6 @@ const decodeDDS = (function () {
 
         if (mipmapCount === 1) texture.minFilter = LinearFilter;
         // texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
-        texture.anisotropy = 16;
 
         texture.needsUpdate = true;
         texture.flipY = false;
@@ -40,7 +39,6 @@ function decodeRGBA(info: ITextureDecodeInfo): DataTexture {
     const texture = new DataTexture(image, info.width, info.height);
 
     texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
-    texture.anisotropy = 16;
 
     texture.flipY = false;
 
@@ -52,7 +50,7 @@ function decodeG16(info: ITextureDecodeInfo): DataTexture {
     const image = new Uint8Array(info.width * info.height * 4);
     const texture = new DataTexture(image, info.width, info.height);
 
-    for(let i = 0, len = info.width * info.height; i < len; i ++) {
+    for (let i = 0, len = info.width * info.height; i < len; i++) {
         image[i * 4 + 0] = image[i * 4 + 1] = image[i * 4 + 2] = buff[i] / 256;
         image[i * 4 + 3] = 255;
     }
@@ -62,7 +60,7 @@ function decodeG16(info: ITextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeTexture(info: ITextureDecodeInfo): MapData_T {
+function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
@@ -74,6 +72,8 @@ function decodeTexture(info: ITextureDecodeInfo): MapData_T {
 
     texture.wrapS = getClamping(info.wrapS);
     texture.wrapT = getClamping(info.wrapT);
+
+    texture.anisotropy = library.anisotropy;
 
     return { texture, size: new Vector2(texture.image.width, texture.image.height) };
 }

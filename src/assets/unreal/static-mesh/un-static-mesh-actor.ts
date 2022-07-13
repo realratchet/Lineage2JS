@@ -512,7 +512,8 @@ class UStaticMeshActor extends UAActor {
                     // debugger;
 
                     position.applyMatrix4(matrix);
-                    normal.applyMatrix4(matrix).normalize();
+                    normal.multiply(scale).applyQuaternion(quaternion).normalize();
+                
 
                     if (i / 3 === 0x1e) {
                         // debugger;
