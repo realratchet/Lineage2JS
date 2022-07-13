@@ -3,7 +3,7 @@ import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 
-const LOAD_SUB_OBJECTS = true;
+const LOAD_SUB_OBJECTS = false;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
