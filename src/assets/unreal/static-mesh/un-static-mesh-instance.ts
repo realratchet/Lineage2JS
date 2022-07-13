@@ -86,7 +86,7 @@ class UStaticMeshInstance extends UObject {
                 finishIndex = i + 1;
                 startTime = timeForIndex;
                 finishTime = indexToTime(finishIndex, len);
-                lightingColor = selectByTime(timeOfDay, staticMeshLight).getColor();
+                lightingColor = [0, 0, 0];//selectByTime(timeOfDay, staticMeshLight).getColor();
 
                 break;
             }

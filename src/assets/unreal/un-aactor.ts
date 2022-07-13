@@ -10,7 +10,7 @@ class UAActor extends UObject {
     protected isDynamicActorFilterState: boolean;
     protected level: ULevel;
     protected region: UPointRegion;
-    protected drawScale: number;
+    protected drawScale: number = 1;
     protected tag: string;
     protected group: string = "None";
     protected isSunAffected: boolean;
