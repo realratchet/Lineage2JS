@@ -43,8 +43,8 @@ class RenderManager {
         // this.controls.target.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
 
         // tower planes
-        this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-                this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+        // this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
+        // this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
         // this.controls.fps.lookAt(17908.226612501945, -11639.21923814191, 114223.45684942426);
 
         // blinking roof
@@ -57,13 +57,15 @@ class RenderManager {
 
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
-        
-        
+
+        this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
+        this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+
         // // elven ruins colon
         // this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
         // this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
         // this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
-        
+
         this.controls.orbit.update();
         // this.controls.fps.update(0);
 
