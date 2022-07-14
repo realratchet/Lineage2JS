@@ -83,7 +83,7 @@ async function startCore() {
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
     // const pkg_engine = assetLoader.getPackage("Engine");
     // const pkg_core = assetLoader.getPackage("Core");
-    // const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
+    const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
     // const pkg_skylevel = assetLoader.getPackage("SkyLevel");
     // const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 

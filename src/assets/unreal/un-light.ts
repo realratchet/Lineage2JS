@@ -85,6 +85,8 @@ class ULight extends UAActor {
         const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
         const brightness = saturationToBrightness(this.lightness);
 
+        // debugger;
+
         // const lightType = this.type;
 
         // console.log(`x: ${x}, y: ${y}, z: ${z}, w: ${w}`);

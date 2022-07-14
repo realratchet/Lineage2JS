@@ -4,6 +4,7 @@ import FConstructable from "../un-constructable";
 import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
 import { selectByTime, staticMeshLight } from "../un-time-list";
+import ULight from "../un-light";
 
 class FAssignedLight extends FConstructable {
     public lightIndex: number; // seems to be light index
@@ -23,6 +24,9 @@ class FAssignedLight extends FConstructable {
         this.promisesLoading.push(new Promise<void>(async resolve => {
 
             this.light = await pkg.fetchObject<ULight>(this.lightIndex);
+
+            // if (this.light instanceof ULight)
+            //     debugger;
 
             resolve();
         }));
@@ -111,15 +115,6 @@ class UStaticMeshInstance extends UObject {
     }
 
     protected doLoad(pkg: UPackage, exp: UExport): this {
-        // basemodel id 7364 -> export 7363
-        // level id 5 -> export 4
-        // umodel has 1888 lightmap sufraces with 9 textures
-        // 1888 x 9
-        // vertices 238
-        // faces 390
-        // material 18
-
-
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
         const compat32 = new BufferValue(BufferValue.compat32);
@@ -129,7 +124,7 @@ class UStaticMeshInstance extends UObject {
         if (verArchive < 0x70) {
             console.warn("Unsupported yet");
             debugger;
-        } else this.colorStream.load(pkg);  // this is not always 0! need to add this
+        } else this.colorStream.load(pkg);
 
         this.readHead = pkg.tell();
 

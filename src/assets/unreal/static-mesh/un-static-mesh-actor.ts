@@ -312,6 +312,9 @@ class UStaticMeshActor extends UAActor {
 
             const [r, g, b] = lightInfo.color;
 
+            // debugger;
+
+
             someFlag = 0x1;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {

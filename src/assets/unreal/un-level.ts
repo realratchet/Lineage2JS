@@ -25,27 +25,30 @@ class ULevel extends UObject {
 
         this.readNamedProps(pkg);
 
-        // debugger;
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-        let dbNum = pkg.read(int32).value as number;
-        let dbMax = pkg.read(int32).value as number;
+        debugger;
 
-        const ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
-
-        this.readHead = pkg.tell();
-
-        // debugger;
-
+        let dbNum: number;
+        let dbMax: number;
+        let ambientSoundIds: number[] = [];
         let objectIds: number[];
-        if (ambientSoundIds.length === dbMax) {
+
+        if (0x16 < verLicense) {
             dbNum = pkg.read(int32).value as number;
             dbMax = pkg.read(int32).value as number;
 
-            objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
-        } else {
-            debugger;
-            objectIds = [];
+            ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
         }
+
+        this.readHead = pkg.tell();
+
+        dbNum = pkg.read(int32).value as number;
+        dbMax = pkg.read(int32).value as number;
+
+        objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
+
 
         this.url.load(pkg);
 
