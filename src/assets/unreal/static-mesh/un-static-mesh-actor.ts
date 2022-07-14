@@ -254,13 +254,7 @@ class UStaticMeshActor extends UAActor {
 
         const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
 
-        // const _Vector3 = Vector3;
-
-        // debugger;
-
-        // const invLightPosition = currentPosition.sub(lightPosition);
-
-        let someFlag = 1;
+        let someFlag = 0x1;
 
         const lightPosition = new Vector3();
         const timeOfDay = 0;
@@ -275,10 +269,6 @@ class UStaticMeshActor extends UAActor {
             }
         }
 
-        const trackingLight = new Array(vertexArrayLen / 3).fill(0);
-
-        // debugger;
-
         if (instance.lights.environment) {
             const lightInfo = instance.lights.environment
             const lightArray = lightInfo.vertexFlags;
@@ -292,11 +282,8 @@ class UStaticMeshActor extends UAActor {
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 if ((objectFlag & someFlag) !== 0) {
 
-                    position.fromArray(attributes.positions, i);
-                    normal.fromArray(attributes.normals, i);
-
-                    position.applyMatrix4(matrix);
-                    normal.applyMatrix4(matrix).normalize();
+                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                    normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
@@ -305,29 +292,18 @@ class UStaticMeshActor extends UAActor {
                         radius: (lightInfo.radius + 1) * 25
                     }, position, normal);
 
-
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity * lightInfo.lightness);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity * lightInfo.lightness);
                     instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity * lightInfo.lightness);
-
-                    trackingLight[i / 3]++;
                 }
-
-                // debugger;
-
-                someFlag = someFlag << 0x1;
 
                 if ((someFlag & 0x7f) === 0x0) {
-                    lightArrIterator = lightArray[++lightArrIterator];
+                    objectFlag = lightArray[++lightArrIterator];
                     someFlag = 0x1;
-                }
+                } else someFlag = someFlag << 0x1;
             }
         }
 
-        // const { x: px, y: pz, z: py } = this.location;
-        // const pw = 1;
-
-        // debugger;
         instance.lights.scene.forEach((lightInfo, index) => {
             const lightArray = lightInfo.vertexFlags;
             const euler = new Euler().fromArray(lightInfo.rotation);
@@ -336,188 +312,13 @@ class UStaticMeshActor extends UAActor {
 
             const [r, g, b] = lightInfo.color;
 
-            // console.log(lightInfo.color);
-
-            // debugger;
-
             someFlag = 0x1;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
 
-                const vertexIndex = i / 3;
-
-                // if (i / 3 === 0x1e) {
-                //     debugger;
-                // }
-
                 if ((objectFlag & someFlag) !== 0) {
-                    position.fromArray(attributes.positions, i);
-                    normal.fromArray(attributes.normals, i);
-
-                    // debugger;
-
-                    // const { x: vx, y: vz, z: vy } = position.fromArray(attributes.positions, i);
-                    // const { x: nx, y: nz, z: ny } = normal.fromArray(attributes.normals, i);
-
-                    // // const _matrix = [
-                    // //     -0.5, 6.12303176911188629105709e-17,  0, 0,
-                    // //     -6.12303176911188629105709e-17, -0.5, 0, 0,
-                    // //     0, 0, 0.5, 0,
-                    // //     px, py, pz, pw
-                    // // ];
-
-                    // const _matrix = [
-                    //     -0.5, +0.0, +0.0, +0.0,
-                    //     +0.0, -0.5, +0.0, +0.0,
-                    //     +0.0, +0.0, +0.5, +0.0,
-                    //     + px, + py, + pz, + pw
-                    // ];
-
-                    // matrix;
-                    // scale;
-                    // euler;
-                    // this;
-
-                    // const vector = new Vector3().setFromMatrixScale(matrix);
-
-                    // debugger;
-
-                    // const x0 = vx * -0.5;
-                    // const y0 = vx * 6.12303176911188629105709e-17;
-                    // const z0 = vx * 0;
-                    // const w0 = vx * 0;
-
-                    // const x1 = vy * -6.12303176911188629105709e-17;
-                    // const y1 = vy * -0.5;
-                    // const z1 = vy * 0;
-                    // const w1 = vy * 0;
-
-                    // function swap(stack: number[], i: number) {
-                    //     const a = stack[0], b = stack[i];
-
-                    //     stack[i] = a;
-                    //     stack[0] = b;
-
-                    //     return stack;
-                    // }
-
-                    // function add(stack: number[], destination: number, source: number) {
-                    //     const sum = stack[source] + stack[destination];
-
-
-                    //     // stack.splice(destination, 0, sum);
-                    //     stack[destination] = sum;
-                    //     stack.push(stack.shift());
-                    //     // stack.push(sum);
-
-                    //     return stack;
-                    // }
-
-                    // function rollingPopAndStore(stack: number[]) {
-                    //     const value = stack.shift();
-
-                    //     stack.push(value);
-
-                    //     return value;
-                    // }
-
-                    // const stack1 = [x0, y0, z0, w0, x1, y1, z1, w1].reverse();
-
-                    // /*
-                    //     ST0 5.006925732572676e-16
-                    //     ST1 0
-                    //     ST2 4.088600158691406
-                    //     ST3 0
-                    //     ST4 0
-                    //     ST5 0
-                    //     ST6 5.181921822403534e-17
-                    //     ST7 -0.4231500029563904
-                    // */
-                    // swap(stack1, 3);
-
-                    // /*
-                    //     ST0 0
-                    //     ST1 4.088600158691406
-                    //     ST2 0
-                    //     ST3 0
-                    //     ST4 0
-                    //     ST5 5.181921822403534e-17
-                    //     ST6 -0.4231500029563904
-                    //     ST7 5.525117914813029e-16
-                    // */
-                    // add(stack1, 7, 0);
-                    // add(stack1, 4, 0);
-                    // add(stack1, 4, 0);
-                    // add(stack1, 1, 0);
-
-                    // const x2 = vz * 0;
-                    // const y2 = vz * 0;
-                    // const z2 = vz * 0.5;
-                    // const w2 = vz * 0;
-
-                    // const stack2 = [w2, z2, y2, x2, ...stack1.slice(0, 4)];
-
-                    // swap(stack2, 3);
-                    // add(stack2, 7, 0);
-                    // add(stack2, 4, 0);
-                    // add(stack2, 4, 0);
-                    // add(stack2, 1, 0);
-
-
-
-                    // const stack3 = [pw, py, pz, px, ...stack2.slice(0, 4)];
-
-                    // swap(stack3, 3);
-                    // add(stack3, 7, 0);
-                    // add(stack3, 4, 0);
-                    // add(stack3, 4, 0);
-                    // add(stack3, 1, 0);
-
-                    // swap(stack3, 3);
-
-                    // const stored1 = rollingPopAndStore(stack3);
-                    // swap(stack3, 1);
-                    // const stored2 = rollingPopAndStore(stack3);
-                    // const stored3 = rollingPopAndStore(stack3);
-                    // const stored4 = rollingPopAndStore(stack3);
-
-                    // debugger;
-
-                    // const calculated = new Vector3(stored1, stored3, stored2);
-
-                    // if (i / 3 === 0xA) {
-                    //     const likelyDirection = new Vector3().fromArray([-4.65637147426605224609375e-1, 8.84819507598876953125e-1, 1.66288353502750396728516e-2]);
-
-                    //     direction;
-
-                    //     // const euler = new Euler().fromArray(lightInfo.rotation);
-
-                    //     // console.log(likelyDirection.toArray());
-                    //     // console.log("-----------------------");
-
-                    //     // [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach(vec => {
-                    //     //     const dir0 = new Vector3().fromArray(vec).applyEuler(euler);
-                    //     //     const dir1 = new Vector3().fromArray(vec).negate().applyEuler(euler);
-
-                    //     //     console.log(dir0.toArray());
-                    //     //     console.log(dir1.toArray());
-                    //     // });
-
-
-                    //     // console.log(dir.clone().sub(likelyDirection));
-
-                    //     debugger;
-                    // }
-
-                    // debugger;
-
-                    position.applyMatrix4(matrix);
-                    normal.multiply(scale).applyQuaternion(quaternion).normalize();
-                
-
-                    if (i / 3 === 0x1e) {
-                        // debugger;
-                    }
+                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                    normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
@@ -527,42 +328,17 @@ class UStaticMeshActor extends UAActor {
                         radius: (lightInfo.radius + 1) * 25
                     }, position, normal);
 
-                    // if (i / 3 === 0x1e) {
-                    //     console.log(`light ${index}:`, intensity);
-                    //     // debugger;
-                    // }
-
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity);
                     instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity);
-
-                    trackingLight[i / 3]++;
-
-                    // debugger;
                 }
-
 
                 if ((someFlag & 0x7f) === 0x0) {
                     objectFlag = lightArray[++lightArrIterator];
                     someFlag = 0x1;
                 } else someFlag = someFlag << 0x1;
-
             }
         });
-
-        for (let i = 0; i < vertexArrayLen; i += 3) {
-            const d = trackingLight[i / 3];
-
-            // if (d > 0) {
-            //     instanceColors[i + 0] /= d;
-            //     instanceColors[i + 1] /= d;
-            //     instanceColors[i + 2] /= d;
-            // }
-
-            // instanceColors[i + 0] = 1;
-            // instanceColors[i + 1] = 1;
-            // instanceColors[i + 2] = 1;
-        }
 
         // const attributes = library.geometries[mesh.geometry].attributes;
         // const colors = new Float32Array(attributes.positions.length);

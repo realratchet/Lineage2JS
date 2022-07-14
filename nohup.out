@@ -1,0 +1,990 @@
+kf.plasma.quick: Applet preload policy set to 1
+qml: PlasmaExtras.ScrollArea is deprecated. Use PlasmaComponents3.ScrollView instead.
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+qml: PlasmaExtras.ScrollArea is deprecated. Use PlasmaComponents3.ScrollView instead.
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+qml: PlasmaExtras.ScrollArea is deprecated. Use PlasmaComponents3.ScrollView instead.
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 628, resource id: 155189255, major code: 3 (GetWindowAttributes), minor code: 0
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 629, resource id: 155189255, major code: 2 (ChangeWindowAttributes), minor code: 0
+Plasma Shell startup completed
+Plasma Shell startup completed
+Plasma Shell startup completed
+Trying to use rootObject before initialization is completed, whilst using setInitializationDelayed. Forcing completion
+Entry is not valid "kontact.desktop" QSharedPointer(0x556744f49430)
+Entry is not valid "ktp-contactlist.desktop" QSharedPointer(0x556745122d40)
+Entry is not valid "kontact.desktop" QSharedPointer(0x556744f49480)
+Entry is not valid "ktp-contactlist.desktop" QSharedPointer(0x556744983570)
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/DigitalClock.qml:531:9: QML Label: Binding loop detected for property "height"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/DigitalClock.qml:486:13: QML Label: Binding loop detected for property "height"
+trying to show an empty dialog
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/DigitalClock.qml:486:13: QML Label: Binding loop detected for property "height"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/DigitalClock.qml:531:9: QML Label: Binding loop detected for property "height"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/DigitalClock.qml:553:5: QML Label: Binding loop detected for property "height"
+trying to show an empty dialog
+file:///usr/share/plasma/plasmoids/org.kde.panel/contents/ui/main.qml:18:1: QML DropArea (parent or ancestor of QQuickLayoutAttached): Binding loop detected for property "minimumWidth"
+Cyclic dependency detected between "file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/global/Globals.qml" and "file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationHeader.qml"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.private.systemtray/contents/ui/ExpandedRepresentation.qml:165:9: QML HiddenItemsView: Binding loop detected for property "implicitHeight"
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/CompactRepresentation.qml:71:17: Unable to assign [undefined] to int
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: known incorrect sRGB profile
+libpng warning: profile matches sRGB but writing iCCP instead
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+trying to show an empty dialog
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+org.kde.dolphin: Unknown class  ""  in session saved data!
+Qt: Session management error: networkIdsList argument is NULL
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Hspell: can't open /usr/share/hspell/hebrew.wgz.sizes.
+kf.sonnet.clients.hspell: HSpellDict::HSpellDict: Init failed
+Connecting to deprecated signal QDBusConnectionInterface::serviceOwnerChanged(QString,QString,QString)
+Warning: Schema “org.gnome.system.locale” has path “/system/locale/”.  Paths starting with “/apps/”, “/desktop/” or “/system/” are deprecated.
+Warning: Schema “org.gnome.system.proxy” has path “/system/proxy/”.  Paths starting with “/apps/”, “/desktop/” or “/system/” are deprecated.
+Warning: Schema “org.gnome.system.proxy.http” has path “/system/proxy/http/”.  Paths starting with “/apps/”, “/desktop/” or “/system/” are deprecated.
+Warning: Schema “org.gnome.system.proxy.https” has path “/system/proxy/https/”.  Paths starting with “/apps/”, “/desktop/” or “/system/” are deprecated.
+Warning: Schema “org.gnome.system.proxy.ftp” has path “/system/proxy/ftp/”.  Paths starting with “/apps/”, “/desktop/” or “/system/” are deprecated.
+Warning: Schema “org.gnome.system.proxy.socks” has path “/system/proxy/socks/”.  Paths starting with “/apps/”, “/desktop/” or “/system/” are deprecated.
+16:23:15:0575 Gtk Failed to load module "window-decorations-gtk-module"
+16:23:15:0576 Gtk Failed to load module "colorreload-gtk-module"
+16:23:15:0594 Gs  Failed to setup plugins: Unable to find default local file monitor type
+kf.service.services: The desktop entry file "/usr/share/applications/gnome-UPSmart.desktop" has Type= "Application" but no Exec line
+kf.service.sycoca: Invalid Service :  "/usr/share/applications/gnome-UPSmart.desktop"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Qt: Session management error: networkIdsList argument is NULL
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+Qt: Session management error: networkIdsList argument is NULL
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Seeking in video failed
+Seeking in video failed
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+[000055750868a640] main libvlc: Running vlc with the default interface. Use 'cvlc' to use vlc without interface.
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+[00007f222c0048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007f222c0048f0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f222c0048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f222c0048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007f222c0048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+QObject::connect: No such signal Phonon::VLC::MediaObject::angleChanged(int)
+QObject::connect: No such signal Phonon::VLC::MediaObject::availableAnglesChanged(int)
+QObject::connect: No such signal Phonon::VLC::MediaObject::angleChanged(int)
+QObject::connect: No such signal Phonon::VLC::MediaObject::availableAnglesChanged(int)
+WARNING: Phonon::createPath: Cannot connect  Phonon::MediaObject ( no objectName ) to  Phonon::AudioDataOutput ( no objectName ).
+Opening QUrl("file:///home/ratchet/Videos/recording-2022-07-13_14.19.57.mp4")
+Stopped state
+updated actions
+updated menus
+set titles 
+seekable changed to  false
+detected mimetype:  "video/mp4"
+Initial offset is  0
+Updating channels, subtitle count: 0
+Updating channels, subtitle count: 0
+Updating channels, subtitle count: 0
+Updating channels, subtitle count: 0
+chapters:  0  titles:  0
+going from  "Stopped"  to  "Loading"
+Loading state
+updated actions
+updated menus
+set titles 
+chapters:  0  titles:  0
+going from  "Loading"  to  "Stopped"
+Stopped state
+updated actions
+updated menus
+set titles 
+()
+()
+()
+ update recent files list 
+("")
+("")
+("recording-2022-07-13_14.19.57.mp4")
+metaDataChanged
+Disc ID: ""
+set titles 
+("")
+("")
+("recording-2022-07-13_14.19.57.mp4")
+chapters:  0  titles:  0
+going from  "Stopped"  to  "Loading"
+Loading state
+updated actions
+updated menus
+set titles 
+chapters:  0  titles:  0
+going from  "Loading"  to  "Buffering"
+Buffering state
+updated actions
+updated menus
+set titles 
+seekable changed to  true
+chapters:  0  titles:  0
+going from  "Buffering"  to  "Playing"
+Playing state
+QPainter::begin: Paint device returned engine == 0, type: 2
+updated actions
+updated menus
+set titles 
+chapters:  0  titles:  0
+going from  "Playing"  to  "Buffering"
+Buffering state
+updated actions
+updated menus
+set titles 
+[00007fb380010f50] main filter error: Failed to create video converter
+[00007fb37c187260] vdpau_avcodec generic error: Xlib is required for VDPAU
+chapters:  0  titles:  0
+going from  "Buffering"  to  "Playing"
+Updating channels, subtitle count: 0
+adjusting size to video resolution
+Playing state
+updated actions
+updated menus
+set titles 
+chapters:  0  titles:  0
+going from  "Playing"  to  "Buffering"
+Buffering state
+updated actions
+updated menus
+set titles 
+chapters:  0  titles:  0
+going from  "Buffering"  to  "Playing"
+Updating channels, subtitle count: 0
+Playing state
+updated actions
+updated menus
+set titles 
+Updating channels, subtitle count: 0
+Updating channels, subtitle count: 0
+hasVideo changed true
+Playing state
+updated actions
+updated menus
+set titles 
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Seeking in video failed
+Seeking in video failed
+stop cursorTimer
+stop cursorTimer
+stop cursorTimer
+stop cursorTimer
+chapters:  0  titles:  0
+going from  "Playing"  to  "Stopped"
+Stopped state
+updated actions
+updated menus
+set titles 
+hasVideo changed false
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Qt: Session management error: networkIdsList argument is NULL
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+Qt: Session management error: networkIdsList argument is NULL
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Seeking in video failed
+kde.dataengine.mpris: "org.mpris.MediaPlayer2.vlc.instance16392" does not implement org.freedesktop.DBus.Properties correctly Error message was "org.freedesktop.DBus.Error.NoReply" "Message recipient disconnected from message bus without replying"
+kde.dataengine.mpris: Failed to find working MPRIS2 interface for "org.mpris.MediaPlayer2.vlc.instance16392"
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[00007f2264000ff0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007f2264000ff0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f2264000ff0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f2264000ff0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007f2264000ff0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+[vp8 @ 0x7f224cc7cdc0] get_buffer() failed
+[vp8 @ 0x7f224cc7cdc0] thread_get_buffer() failed
+[vp8 @ 0x7f224cc72300] get_buffer() failed
+[vp8 @ 0x7f224cc72300] thread_get_buffer() failed
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[00007f2264000ff0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007f2264000ff0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f2264000ff0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f2264000ff0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007f2264000ff0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+Seeking in video failed
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+[vp8 @ 0x7f224cc5bc40] get_buffer() failed
+[vp8 @ 0x7f224cc5bc40] thread_get_buffer() failed
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+QObject::~QObject: Timers cannot be stopped from another thread
+Seeking in video failed
+Cannot initialize model with data QJsonObject(). missing: QJsonValue(string, "urls")
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Qt: Session management error: networkIdsList argument is NULL
+[0000564b0bf44640] main libvlc: Running vlc with the default interface. Use 'cvlc' to use vlc without interface.
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+[00007fcc240048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007fcc240048f0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007fcc240048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007fcc240048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007fcc240048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+file:///usr/share/plasma/plasmoids/org.kde.plasma.battery/contents/ui/InhibitionHint.qml:26:5: QML Label: Binding loop detected for property "verticalAlignment"
+Qt: Session management error: networkIdsList argument is NULL
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 29435, resource id: 190840833, major code: 3 (GetWindowAttributes), minor code: 0
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 29436, resource id: 190840833, major code: 2 (ChangeWindowAttributes), minor code: 0
+Seeking in video failed
+QObject::~QObject: Timers cannot be stopped from another thread
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+[000055bd43765640] main libvlc: Running vlc with the default interface. Use 'cvlc' to use vlc without interface.
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+[00007fa1540048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007fa1540048f0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007fa1540048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007fa1540048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007fa1540048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+[vp8 @ 0x7fa168c351c0] get_buffer() failed
+[vp8 @ 0x7fa168c351c0] thread_get_buffer() failed
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+QObject::~QObject: Timers cannot be stopped from another thread
+Qt: Session management error: networkIdsList argument is NULL
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+Could not open input file:  "/home/ratchet/Videos/output.webm"
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Seeking in video failed
+Qt: Session management error: networkIdsList argument is NULL
+Qt: Session management error: networkIdsList argument is NULL
+Qt: Session management error: networkIdsList argument is NULL
+[00005604f7879640] main libvlc: Running vlc with the default interface. Use 'cvlc' to use vlc without interface.
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+[00007f237c0048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007f237c0048f0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f237c0048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007f237c0048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007f237c0048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+[00007f2390000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[vp8 @ 0x7f2394c42340] get_buffer() failed
+[vp8 @ 0x7f2394c42340] thread_get_buffer() failed
+[00007f2394c0a390] main decoder error: buffer deadlock prevented
+[00007f2390000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007f2394c0a390] main decoder error: buffer deadlock prevented
+[00007f2390000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007f2394c0a390] main decoder error: buffer deadlock prevented
+[00007f2390000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[vp8 @ 0x7f2394c42340] get_buffer() failed
+[vp8 @ 0x7f2394c42340] thread_get_buffer() failed
+[00007f2394c0a390] main decoder error: buffer deadlock prevented
+QObject::~QObject: Timers cannot be stopped from another thread
+Qt: Session management error: networkIdsList argument is NULL
+Qt: Session management error: networkIdsList argument is NULL
+[00005580e133f640] main libvlc: Running vlc with the default interface. Use 'cvlc' to use vlc without interface.
+QFont::setPointSizeF: Point size <= 0 (0.000000), must be greater than 0
+[00007fabdc0048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+libva info: VA-API version 1.14.0
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: va_openDriver() returns -1
+[00007fabdc0048f0] glconv_vaapi_x11 gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007fabdc0048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+libva info: VA-API version 1.14.0
+libva error: vaGetDriverNameByIndex() failed with unknown libva error, driver_name = (null)
+[00007fabdc0048f0] glconv_vaapi_drm gl error: vaInitialize: unknown libva error
+[00007fabdc0048f0] gl gl: Initialized libplacebo v4.192.1 (API v192)
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[vp8 @ 0x7fabecc37e80] get_buffer() failed
+[vp8 @ 0x7fabecc37e80] thread_get_buffer() failed
+[00007fabecc18770] main decoder error: buffer deadlock prevented
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[vp8 @ 0x7fabecc3b140] get_buffer() failed
+[vp8 @ 0x7fabecc3b140] thread_get_buffer() failed
+[00007fabecc18770] main decoder error: buffer deadlock prevented
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007fabecc18770] main decoder error: buffer deadlock prevented
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[vp8 @ 0x7fabecc37e80] get_buffer() failed
+[vp8 @ 0x7fabecc37e80] thread_get_buffer() failed
+[00007fabecc18770] main decoder error: buffer deadlock prevented
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[vp8 @ 0x7fabecc3b140] get_buffer() failed
+[vp8 @ 0x7fabecc3b140] thread_get_buffer() failed
+[00007fabecc18770] main decoder error: buffer deadlock prevented
+[00007fabf8000c90] main input error: INPUT_CONTROL_SET_POSITION 100,0% failed
+[00007fabecc18770] main decoder error: buffer deadlock prevented
+[vp8 @ 0x7fabecc37e80] get_buffer() failed
+[vp8 @ 0x7fabecc37e80] thread_get_buffer() failed
+[31muint DBusMenuExporterDBus::GetLayout(int, int, const QStringList&, DBusMenuLayoutItem&)[0m: Condition failed: menu
+QObject::~QObject: Timers cannot be stopped from another thread
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitHeight"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitHeight"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/SelectableLabel.qml:38:5: QML TextArea: Binding loop detected for property "implicitHeight"
+kf.coreaddons: "Could not find plugin kcms/kcm_trash"
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+kf.itemviews: User of KWidgetItemDelegate should not delete widgets created by createItemWidgets!
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitHeight"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/look-and-feel/org.kde.breeze.desktop/contents/osd/Osd.qml:24:15: QML OsdItem (parent or ancestor of QQuickLayoutAttached): Binding loop detected for property "minimumWidth"
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+org.kde.plasma.pulseaudio: No object for name "auto_null"
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 62922, resource id: 188743968, major code: 3 (GetWindowAttributes), minor code: 0
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 62923, resource id: 188743968, major code: 2 (ChangeWindowAttributes), minor code: 0
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/look-and-feel/org.kde.breeze.desktop/contents/osd/Osd.qml:24:15: QML OsdItem (parent or ancestor of QQuickLayoutAttached): Binding loop detected for property "minimumWidth"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitWidth"
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/NotificationItem.qml:219:21: QML SelectableLabel: Binding loop detected for property "implicitHeight"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+trying to show an empty dialog
+trying to show an empty dialog
+requesting unexisting screen 1
+requesting unexisting screen 1
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 914, resource id: 188744010, major code: 3 (GetWindowAttributes), minor code: 0
+qt.qpa.xcb: QXcbConnection: XCB error: 3 (BadWindow), sequence: 915, resource id: 188744010, major code: 2 (ChangeWindowAttributes), minor code: 0
+requesting unexisting screen 1
+requesting unexisting screen 1
+trying to show an empty dialog
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Desktop.qml:118:19: QML Loader: Binding loop detected for property "height"
+trying to show an empty dialog
+trying to show an empty dialog
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:198: TypeError: Cannot read property 'action' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:192: TypeError: Cannot read property 'action' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:20: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:33: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:34: TypeError: Cannot read property 'editMode' of null
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:198: TypeError: Cannot read property 'action' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:192: TypeError: Cannot read property 'action' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:20: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:33: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:34: TypeError: Cannot read property 'editMode' of null
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+QObject::disconnect: Unexpected nullptr parameter
+QObject::disconnect: Unexpected nullptr parameter
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:198: TypeError: Cannot read property 'action' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:192: TypeError: Cannot read property 'action' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:20: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:33: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.desktoptoolbox/contents/ui/ToolBoxContent.qml:34: TypeError: Cannot read property 'editMode' of null
+trying to show an empty dialog
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:63: TypeError: Cannot read property 'pluginName' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:66: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:67: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:68: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:69: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:20: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:22: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml:23: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/packages/org.kde.paneltoolbox/contents/ui/main.qml:18: TypeError: Cannot read property 'formFactor' of null
+file:///usr/share/plasma/packages/org.kde.paneltoolbox/contents/ui/main.qml:90: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.paneltoolbox/contents/ui/main.qml:35: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/packages/org.kde.paneltoolbox/contents/ui/main.qml:24: TypeError: Cannot read property 'editMode' of null
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/applet/CompactApplet.qml:52: TypeError: Cannot read property 'implicitWidth' of null
+file:///usr/share/plasma/shells/org.kde.plasma.desktop/contents/applet/CompactApplet.qml:70: TypeError: Cannot read property 'implicitHeight' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/ui/Kickoff.qml:26: TypeError: Cannot read property 'location' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/ui/Kickoff.qml:30: TypeError: Cannot read property 'formFactor' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/ui/Kickoff.qml:33: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/ui/Kickoff.qml:43: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/ui/Kickoff.qml:79: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.kickoff/contents/ui/Kickoff.qml:119: TypeError: Cannot read property 'formFactor' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/main.qml:141: TypeError: Cannot read property 'nativeInterface' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/global/Globals.qml:65:5: Unable to assign [undefined] to QObject*
+file:///usr/share/plasma/plasmoids/org.kde.plasma.notifications/contents/ui/global/Globals.qml:162: TypeError: Cannot read property 'nativeInterface' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.keyboardindicator/contents/ui/main.qml:21: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.kdeconnect/contents/ui/main.qml:38: TypeError: Cannot read property 'formFactor' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.volume/contents/ui/main.qml:25: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.devicenotifier/contents/ui/devicenotifier.qml:24: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.devicenotifier/contents/ui/devicenotifier.qml:244: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.devicenotifier/contents/ui/devicenotifier.qml:250: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.devicenotifier/contents/ui/devicenotifier.qml:256: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.devicenotifier/contents/ui/devicenotifier.qml:264: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.networkmanagement/contents/ui/main.qml:69: TypeError: Cannot read property 'expanded' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/main.qml:98: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/main.qml:99: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/main.qml:90: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/main.qml:26: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/Tooltip.qml:71: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/Tooltip.qml:60: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/Tooltip.qml:86: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/main.qml:65: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/Tooltip.qml:86: TypeError: Cannot read property 'configuration' of null
+file:///usr/share/plasma/plasmoids/org.kde.plasma.digitalclock/contents/ui/main.qml:42: TypeError: Cannot read property 'compactRepresentationItem' of null
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_output.pci-0000_26_00.1.hdmi-stereo-extra1"
+org.kde.plasma.pulseaudio: No object for name "alsa_input.pci-0000_28_00.4.analog-stereo"
