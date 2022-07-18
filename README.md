@@ -17,7 +17,7 @@ I'm not a vanilla purist so if there's some data that's not critical but is hidi
 Hopefully someday it's actually complete, obviously this is a passion project and it's not sustainable to invest any reasonable amount of time to it, so there can be months before even a small amount of progress is made, depending on my schedule. However, any help is always welcome, I will not however take bug reports or requests because obviously it's not something that's even remotely ready to be used.
 
 ## What's on the timeline?
-Currently I am working on locating the lightmaps for static meshes, I've seen them in raw dumps using GIMP so I know they are there, just need to find the appropriate datastructures that store them and their offsets, terrain lightmaps have been located. Next up would likely be collision.
+Static mesh lighting has been decoded, however some objects lighting is over-exposed, there seems to be a chain intensity multiplication but two of the intensity multipliers come from unknown location, so need to find out what it is and where it comes from. Also need to apply environment light to valid brushes and terrain. Next up would likely be collision.
 
 ## The code is messy!
 I know, originally I thought I wanted to make it clean, hence why it's using TypeScript in the first place. But I quickly realized that it needs *WAY* too many changes when trying to find memory layouts, etc. If I ever reach the stage where I can actually start working on the gameplay emulation and it won't be just a glorious asset viewer, I will clean it up beforehand.
