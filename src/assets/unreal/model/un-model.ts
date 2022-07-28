@@ -22,6 +22,7 @@ type UExport = import("../un-export").UExport;
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
+const TEXEL_SCALE = 128;
 
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
@@ -128,8 +129,7 @@ class UModel extends UPrimitive {
         await this.onLoaded();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
-        const globalBSPTexelScale = 128;
-        const objectMap = new Map<UZoneInfo, ObjectsForZone_T>();
+        const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
@@ -149,25 +149,24 @@ class UModel extends UPrimitive {
             const zone = surf.actor.getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
+            const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
-            if (!objectMap.has(zone)) objectMap.set(zone, { totalVertices: 0, objects: new Map() });
+            if (!objectMap.has(priority)) objectMap.set(priority, new Map());
 
-            const gZone = objectMap.get(zone);
+            const gPriority = objectMap.get(priority);
+
+            if (!gPriority.has(zone)) gPriority.set(zone, { totalVertices: 0, objects: new Map() });
+
+            const gZone = gPriority.get(zone);
 
             if (!gZone.objects.has(surf.material)) gZone.objects.set(surf.material, new Map());
 
             const gSurf = gZone.objects.get(surf.material);
 
-            if (!gSurf.has(lightmap)) {
-                gSurf.set(lightmap, {
-                    numVertices: 0,
-                    nodes: []
-                });
-            };
+            if (!gSurf.has(lightmap)) gSurf.set(lightmap, { numVertices: 0, nodes: [] });
 
             const gData = gSurf.get(lightmap);
             const vcount = node.numVertices;
-            // const vcount = (surf.flags & PolyFlags_T.PF_TwoSided) ? (node.numVertices * 2) : node.numVertices;
 
             const light: LightmapInfo = !lightmap ? null : {
                 uuid: lightmap.uuid,
@@ -184,7 +183,7 @@ class UModel extends UPrimitive {
             gData.nodes.push({ node, surf, light });
         }
 
-        const createZoneInfo = async ([zone, { totalVertices, objects: objectMap }]: [UZoneInfo, ObjectsForZone_T]): Promise<IStaticMeshObjectDecodeInfo> => {
+        const createZoneInfo = async (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): Promise<IStaticMeshObjectDecodeInfo> => {
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
@@ -253,8 +252,8 @@ class UModel extends UPrimitive {
                                 const position: FVector = this.points.getElem(vert.pVertex);
 
                                 const texB = position.sub(textureBase);
-                                const texU = texB.dot(textureX) / globalBSPTexelScale;
-                                const texV = texB.dot(textureY) / globalBSPTexelScale;
+                                const texU = texB.dot(textureX) / TEXEL_SCALE;
+                                const texV = texB.dot(textureY) / TEXEL_SCALE;
 
                                 positions[dstVertices * 3 + 0] = position.x;
                                 positions[dstVertices * 3 + 1] = position.z;
@@ -298,8 +297,8 @@ class UModel extends UPrimitive {
                 }
             }
 
-            const materialUuid = `${zone.uuid}/${this.uuid}`;
-            const geometryUuid = `${zone.uuid}/${this.uuid}`;
+            const materialUuid = `${priority}/${zone.uuid}/${this.uuid}`;
+            const geometryUuid = `${priority}/${zone.uuid}/${this.uuid}`;
 
             library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
             library.geometries[geometryUuid] = {
@@ -318,12 +317,20 @@ class UModel extends UPrimitive {
                 geometry: geometryUuid,
                 materials: materialUuid,
             }
-        }
+        };
+
+        const createPriorityGroup = async ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): Promise<IBaseObjectDecodeInfo> => {
+            return {
+                name: `${priority}_${this.objectName}`,
+                type: "Group",
+                children: await Promise.all([...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects))),
+            } as IBaseObjectDecodeInfo;
+        };
 
         return {
             name: `Root_${this.objectName}`,
             type: "Group",
-            children: await Promise.all([...objectMap.entries()].map(createZoneInfo)),
+            children: await Promise.all([...objectMap.entries()].map(createPriorityGroup)),
         } as IBaseObjectDecodeInfo;
     }
 }
@@ -331,6 +338,8 @@ class UModel extends UPrimitive {
 export default UModel;
 export { UModel };
 
+type PriorityGroups_T = "opaque" | "transparent";
+type ObjectsForPriority_T = Map<UZoneInfo, ObjectsForZone_T>;
 type ObjectsForZone_T = { totalVertices: number, objects: Map<UMaterial, ObjectsForMaterial_T> };
 type ObjectsForMaterial_T = Map<FStaticLightmapTexture, ObjectsForLightmap_T>;
 type ObjectsForLightmap_T = { numVertices: number, nodes: NodeInfo_T[] };

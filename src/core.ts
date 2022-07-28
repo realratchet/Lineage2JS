@@ -70,20 +70,20 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList);
     const pkg_16_24 = assetLoader.getPackage("16_24", "Level"); // talking island top, no lights / works
     const pkg_16_25 = assetLoader.getPackage("16_25", "Level"); // elven ruins entrance /works
-    // const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // crashes on terrain
+    // const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // /crashes on terrain
     // const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
     // const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
     const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
     const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
     const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
     // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
-    // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // /crashes
-    // const pkg_21_22 = assetLoader.getPackage("22_22", "Level"); // execution grounds /crashes
-    // const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes
+    // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // /crashes always
+    // const pkg_21_22 = assetLoader.getPackage("21_22", "Level"); // execution grounds /crashes on static meshes
+    // const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes on static meshes
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
     // const pkg_engine = assetLoader.getPackage("Engine");
     // const pkg_core = assetLoader.getPackage("Core");
-    const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
+    // const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
     // const pkg_skylevel = assetLoader.getPackage("SkyLevel");
     // const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
 
@@ -198,6 +198,8 @@ async function startCore() {
     const iModel = await uModel.getDecodeInfo(decodeLibrary);
     const mModel = decodeObject3D(decodeLibrary, iModel);
     objectGroup.add(mModel);
+
+    mModel.children.forEach(c => objectGroup.add(new BoxHelper(c, Math.floor(Math.random() * 0xffffff))));
 
     const zones = {};
 
@@ -321,15 +323,13 @@ async function startCore() {
     // });
 
 
-    // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
-    // const iStaticMeshActors = await (await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary))))//.filter(x => x.children[0]?.name === "Exp_obj49");
-    //     // debugger
+    const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
+    const iStaticMeshActors = await (await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary))))//.filter(x => x.children[0]?.name === "Exp_obj49");
+    iStaticMeshActors.forEach(info => {
+        const mModel = decodeObject3D(decodeLibrary, info);
 
-    // iStaticMeshActors.forEach(info => {
-    //     const mModel = decodeObject3D(decodeLibrary, info);
-
-    //     objectGroup.add(mModel);
-    // });
+        objectGroup.add(mModel);
+    });
 
     console.info("System has loaded!");
 

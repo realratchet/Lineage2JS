@@ -127,7 +127,7 @@ abstract class UObject {
                 const obj = await pkg.fetchObject(objIndex.value as number);
 
                 this.setProperty(tag, obj);
-                pkg.seek(offEnd, "set");
+                // pkg.seek(offEnd, "set");
                 // }
             } break;
             case UNP_PropertyTypes.UNP_NameProperty:
@@ -142,6 +142,7 @@ abstract class UObject {
                 // const start = pkg.tell();
                 // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                 // const offset = pkg.tell() - start;
+                // pkg.seek(4 * 3);
                 debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
@@ -246,7 +247,7 @@ abstract class UObject {
                 });
             }
         } catch (e) {
-            debugger;
+            // debugger;
             throw e;
         }
     }

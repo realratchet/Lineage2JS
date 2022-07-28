@@ -172,6 +172,8 @@ class MeshStaticMaterial extends ShaderMaterial {
             case "translucent": this.transparent = true; break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
+
+        if (info.opacity) this.transparent = true;
     }
 
     setLightmap(lightmap: MapData_T) {
