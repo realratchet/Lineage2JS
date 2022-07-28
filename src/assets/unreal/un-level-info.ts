@@ -42,14 +42,14 @@ class ULevelInfo extends UAActor {
         });
     }
 
-    // public doLoad(pkg: UPackage, exp: UExport) {
-    //     super.doLoad(pkg, exp);
+    public doLoad(pkg: UPackage, exp: UExport) {
+        super.doLoad(pkg, exp);
 
-    //     this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-    //     debugger;
+        // debugger;
         
-    // }
+    }
 }
 
 export default ULevelInfo;

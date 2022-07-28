@@ -78,6 +78,9 @@ type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
 type FVert = import("./model/un-vert").FVert;
 type FBox = import("./un-box").FBox;
 
+type FMultiLightmapTexture = import("./model/un-multilightmap-texture").FMultiLightmapTexture;
+type FStaticLightmapTexture = import("./model/un-multilightmap-texture").FStaticLightmapTexture;
+
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
@@ -166,7 +169,7 @@ interface IDecodedParameter {
 type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
+type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";

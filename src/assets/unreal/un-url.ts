@@ -1,9 +1,6 @@
-import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-import { PropertyTag } from "./un-property";
 import BufferValue from "../buffer-value";
-import FArray, { FPrimitiveArray } from "./un-array";
-import FNumber from "./un-number";
+import { FPrimitiveArray } from "./un-array";
+import FConstructable from "./un-constructable";
 
 class FURL extends FConstructable {
     public protocol: string;
@@ -14,12 +11,13 @@ class FURL extends FConstructable {
     public op = new FPrimitiveArray(BufferValue.uint32);
     public isValid: boolean = false;
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
+    public load(pkg: UPackage): this {
         this.isValid = true;
 
         const uint32 = new BufferValue(BufferValue.uint32);
 
         this.protocol = pkg.read(new BufferValue(BufferValue.char)).value as string;
+
         this.host = pkg.read(new BufferValue(BufferValue.char)).value as string;
 
         if (this.host.length > 0)
@@ -27,9 +25,11 @@ class FURL extends FConstructable {
 
         this.map = pkg.read(new BufferValue(BufferValue.char)).value as string;
 
-        this.op.load(pkg, tag);
+        this.op.load(pkg);
+
 
         this.portal = pkg.read(new BufferValue(BufferValue.char)).value as string;
+        // debugger;
 
         return this;
     }

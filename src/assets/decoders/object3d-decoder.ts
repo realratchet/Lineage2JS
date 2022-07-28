@@ -159,6 +159,7 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
 
 function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
+        case "Group":
         case "Level":
         case "TerrainInfo":
         case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);

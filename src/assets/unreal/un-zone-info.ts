@@ -6,9 +6,9 @@ import BufferValue from "../buffer-value";
 class UZoneInfo extends UAActor {
     protected isFogZone: boolean;
     protected hasTerrain: boolean;
-    
+
     protected useFogColorClear: boolean;
-    
+
     public ambientBrightness: number;
     public ambientVector: FVector;
 
@@ -53,20 +53,26 @@ class UZoneInfo extends UAActor {
     public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
         pkg.seek(this.readHead, "set");
 
-    //     // for (let i = 0; i < (exp.size.value as number); i++) {
-    //     //     const tag = PropertyTag.from(pkg, this.readHead + i);
+        //     // for (let i = 0; i < (exp.size.value as number); i++) {
+        //     //     const tag = PropertyTag.from(pkg, this.readHead + i);
 
-    //     //     if (tag.name === "None") continue;
+        //     //     if (tag.name === "None") continue;
 
-    //     //     console.log(`${this.readHeadOffset + i} => ${tag.index} '${tag.name}' (${tag.structName}) of size ${tag.dataSize}`);
-    //     // }
+        //     //     console.log(`${this.readHeadOffset + i} => ${tag.index} '${tag.name}' (${tag.structName}) of size ${tag.dataSize}`);
+        //     // }
 
-    //     debugger;
+        //     debugger;
 
 
         super.doLoad(pkg, exp);
 
-        // debugger;
+        this.readHead = pkg.tell();
+
+        const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const value3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        this.readHead = pkg.tell();
 
         // debugger;
 

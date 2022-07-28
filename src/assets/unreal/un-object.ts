@@ -37,15 +37,25 @@ abstract class UObject {
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
 
+        const tags = [];
+
         do {
             const tag = PropertyTag.from(pkg, this.readHead);
 
             if (!tag.isValid()) break;
 
+            tags.push(tag.name + "/" + tag.type);
+
             this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
+
+        // if (this.objectName === "Exp_TerrainInfo0") {
+        //     console.log(this.objectName, "\n\t->" + tags.join("\n\t->"));
+
+        //     debugger;
+        // }
 
         this.readHead = pkg.tell();
     }

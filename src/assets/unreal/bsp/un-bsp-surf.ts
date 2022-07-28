@@ -16,10 +16,10 @@ class FBSPSurf extends FConstructable {
 
     public plane: FPlane = new FPlane();
 
-    protected actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
+    public actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
-    protected unkInt32: number;
+    public unkInt32: number;
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         const float = new BufferValue(BufferValue.float);

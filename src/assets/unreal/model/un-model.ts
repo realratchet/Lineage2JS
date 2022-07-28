@@ -124,30 +124,12 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IStaticMeshObjectDecodeInfo> {
-        if (this.uuid in library.geometries) return {
-            name: this.objectName,
-            type: "Model",
-            geometry: this.uuid,
-            materials: this.uuid,
-        } as IStaticMeshObjectDecodeInfo
-
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
-
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
         await this.onLoaded();
-
-        // debugger;
+        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
         const globalBSPTexelScale = 128;
-        const materials: string[] = [];
-        const objectMap = new Map<UMaterial, Map<any, { numVertices: number, nodes: { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo }[] }>>();
-
-        // Calculate the size of the vertex buffer and the base vertex index of each node.
-        let totalVertices = 0;
-        let dstVertices = 0;
-
-        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture, i) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
+        const objectMap = new Map<UZoneInfo, ObjectsForZone_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
@@ -155,9 +137,7 @@ class UModel extends UPrimitive {
 
             await Promise.all(surf.promisesLoading);
 
-            const isInvisible = surf.flags & PolyFlags_T.PF_Invisible;
-
-            if (isInvisible) continue;
+            if (surf.flags & PolyFlags_T.PF_Invisible) continue;
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
             const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
@@ -166,14 +146,17 @@ class UModel extends UPrimitive {
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
+            const zone = surf.actor.getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
-            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap : null;
+            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
 
-            if (!objectMap.has(surf.material)) {
-                objectMap.set(surf.material, new Map());
-            }
+            if (!objectMap.has(zone)) objectMap.set(zone, { totalVertices: 0, objects: new Map() });
 
-            const gSurf = objectMap.get(surf.material);
+            const gZone = objectMap.get(zone);
+
+            if (!gZone.objects.has(surf.material)) gZone.objects.set(surf.material, new Map());
+
+            const gSurf = gZone.objects.get(surf.material);
 
             if (!gSurf.has(lightmap)) {
                 gSurf.set(lightmap, {
@@ -196,161 +179,168 @@ class UModel extends UPrimitive {
 
             node.iVertexIndex = gData.numVertices;
             gData.numVertices += vcount;
-            totalVertices += vcount;
+            gZone.totalVertices += vcount;
 
             gData.nodes.push({ node, surf, light });
-
         }
 
-        const positions = new Float32Array(totalVertices * 3);
-        const normals = new Float32Array(totalVertices * 3);
-        const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
+        const createZoneInfo = async ([zone, { totalVertices, objects: objectMap }]: [UZoneInfo, ObjectsForZone_T]): Promise<IStaticMeshObjectDecodeInfo> => {
+            const positions = new Float32Array(totalVertices * 3);
+            const normals = new Float32Array(totalVertices * 3);
+            const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
 
-        const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
-        const indices: number[] = [], groups: ArrGeometryGroup[] = [];
+            const materials: string[] = [];
+            const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
+            const indices: number[] = [], groups: ArrGeometryGroup[] = [];
 
-        let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
+            let dstVertices = 0;
+            let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
 
-        if (totalVertices > 0) {
-            for (let material of [...objectMap.keys()]) {
-                const gSurf = objectMap.get(material);
+            if (totalVertices > 0) {
+                for (let material of objectMap.keys()) {
+                    const gSurf = objectMap.get(material);
 
-                for (let staticLightmap of [...gSurf.keys()]) {
-                    const materialUuid = await material.getDecodeInfo(library);
+                    for (let staticLightmap of gSurf.keys()) {
+                        const materialUuid = await material.getDecodeInfo(library);
 
-                    if (staticLightmap) {
-                        const lightmappedMaterialUuid = generateUUID();
+                        if (staticLightmap) {
+                            const lightmappedMaterialUuid = generateUUID();
 
-                        library.materials[lightmappedMaterialUuid] = {
-                            materialType: "lightmapped",
-                            material: materialUuid,
-                            lightmap: staticLightmap?.uuid || null,
-                        } as IBaseMaterialDecodeInfo;
+                            library.materials[lightmappedMaterialUuid] = {
+                                materialType: "lightmapped",
+                                material: materialUuid,
+                                lightmap: staticLightmap?.uuid || null,
+                            } as IBaseMaterialDecodeInfo;
 
-                        materials.push(lightmappedMaterialUuid);
-                    } else {
-                        materials.push(materialUuid);
-                    }
-
-                    const { numVertices, nodes } = gSurf.get(staticLightmap);
-                    const startGroupOffset = groupOffset;
-
-                    for (let { node, surf, light } of nodes) {
-                        const textureBase: FVector = this.points.getElem(surf.pBase);
-                        const textureX: FVector = this.vectors.getElem(surf.vTextureU);
-                        const textureY: FVector = this.vectors.getElem(surf.vTextureV);
-
-                        // // Use the texture coordinates and normal to create an orthonormal tangent basis.
-                        // const tangentX: FVector = textureX;
-                        // const tangentY: FVector = textureY;
-                        const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
-                        const fcount = node.numVertices - 2;
-                        const findex = vertexOffset + node.iVertexIndex;
-
-                        // createOrthonormalBasis(tangentX, tangentY, tangentZ);
-
-                        for (let i = 0; i < fcount; i++) {
-                            indices.push(findex, findex + i + 2, findex + i + 1)
+                            materials.push(lightmappedMaterialUuid);
+                        } else {
+                            materials.push(materialUuid);
                         }
 
-                        groupOffset = groupOffset + fcount;
+                        const { numVertices, nodes } = gSurf.get(staticLightmap);
+                        const startGroupOffset = groupOffset;
 
-                        if (surf.flags & PolyFlags_T.PF_TwoSided) {
+                        for (let { node, surf, light } of nodes) {
+                            const textureBase: FVector = this.points.getElem(surf.pBase);
+                            const textureX: FVector = this.vectors.getElem(surf.vTextureU);
+                            const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+
+                            // // Use the texture coordinates and normal to create an orthonormal tangent basis.
+                            // const tangentX: FVector = textureX;
+                            // const tangentY: FVector = textureY;
+                            const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
+                            const fcount = node.numVertices - 2;
+                            const findex = vertexOffset + node.iVertexIndex;
+
+                            // createOrthonormalBasis(tangentX, tangentY, tangentZ);
+
                             for (let i = 0; i < fcount; i++) {
-                                indices.push(findex, findex + i + 1, findex + i + 2)
+                                indices.push(findex, findex + i + 2, findex + i + 1)
                             }
 
                             groupOffset = groupOffset + fcount;
-                        }
 
-                        for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
-                            const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-                            const position: FVector = this.points.getElem(vert.pVertex);
+                            if (surf.flags & PolyFlags_T.PF_TwoSided) {
+                                for (let i = 0; i < fcount; i++) {
+                                    indices.push(findex, findex + i + 1, findex + i + 2)
+                                }
 
-                            const texB = position.sub(textureBase);
-                            const texU = texB.dot(textureX) / globalBSPTexelScale;
-                            const texV = texB.dot(textureY) / globalBSPTexelScale;
-
-                            positions[dstVertices * 3 + 0] = position.x;
-                            positions[dstVertices * 3 + 1] = position.z;
-                            positions[dstVertices * 3 + 2] = position.y;
-
-                            normals[dstVertices * 3 + 0] = tangentZ.x;
-                            normals[dstVertices * 3 + 1] = tangentZ.z;
-                            normals[dstVertices * 3 + 2] = tangentZ.y;
-
-                            uvs[dstVertices * 2 + 0] = texU;
-                            uvs[dstVertices * 2 + 1] = texV;
-
-                            if (light) {
-                                const posLightmapped = position.applyMatrix4(light.matrix);
-                                const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
-
-                                const { width, height } = light.resolution;
-
-                                const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
-                                const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
-
-                                uvs2[dstVertices * 2 + 0] = lmU;
-                                uvs2[dstVertices * 2 + 1] = lmV;
+                                groupOffset = groupOffset + fcount;
                             }
 
-                            // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
-                            // tangentX.toArray(tangentsX, dstVertices * 3);
-                            // tangentZ.toArray(tangentsZ, dstVertices * 4);
+                            for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
+                                const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
+                                const position: FVector = this.points.getElem(vert.pVertex);
 
-                            // // store the sign of the determinant in TangentZ.W
-                            // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
+                                const texB = position.sub(textureBase);
+                                const texU = texB.dot(textureX) / globalBSPTexelScale;
+                                const texV = texB.dot(textureY) / globalBSPTexelScale;
 
-                            dstVertices++;
+                                positions[dstVertices * 3 + 0] = position.x;
+                                positions[dstVertices * 3 + 1] = position.z;
+                                positions[dstVertices * 3 + 2] = position.y;
+
+                                normals[dstVertices * 3 + 0] = tangentZ.x;
+                                normals[dstVertices * 3 + 1] = tangentZ.z;
+                                normals[dstVertices * 3 + 2] = tangentZ.y;
+
+                                uvs[dstVertices * 2 + 0] = texU;
+                                uvs[dstVertices * 2 + 1] = texV;
+
+                                if (light) {
+                                    const posLightmapped = position.applyMatrix4(light.matrix);
+                                    const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
+
+                                    const { width, height } = light.resolution;
+
+                                    const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
+                                    const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
+
+                                    uvs2[dstVertices * 2 + 0] = lmU;
+                                    uvs2[dstVertices * 2 + 1] = lmV;
+                                }
+
+                                // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
+                                // tangentX.toArray(tangentsX, dstVertices * 3);
+                                // tangentZ.toArray(tangentsZ, dstVertices * 4);
+
+                                // // store the sign of the determinant in TangentZ.W
+                                // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
+
+                                dstVertices++;
+                            }
                         }
+
+                        vertexOffset = vertexOffset + numVertices;
+
+                        groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
                     }
-
-                    vertexOffset = vertexOffset + numVertices;
-
-                    groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
                 }
+            }
+
+            const materialUuid = `${zone.uuid}/${this.uuid}`;
+            const geometryUuid = `${zone.uuid}/${this.uuid}`;
+
+            library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+            library.geometries[geometryUuid] = {
+                groups,
+                indices: new TypedIndicesArray(indices),
+                attributes: {
+                    normals,
+                    positions,
+                    uvs: [uvs, uvs2]
+                }
+            };
+
+            return {
+                type: "Model",
+                name: `Sub_${this.objectName}_${zone.objectName}`,
+                geometry: geometryUuid,
+                materials: materialUuid,
             }
         }
 
-        library.geometries[this.uuid] = {
-            groups,
-            indices: new TypedIndicesArray(indices),
-            attributes: {
-                normals,
-                positions,
-                uvs: [uvs, uvs2]
-            },
-        };
-
-        library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
         return {
-            name: this.objectName,
-            type: "Model",
-            geometry: this.uuid,
-            materials: this.uuid,
-        } as IStaticMeshObjectDecodeInfo;
+            name: `Root_${this.objectName}`,
+            type: "Group",
+            children: await Promise.all([...objectMap.entries()].map(createZoneInfo)),
+        } as IBaseObjectDecodeInfo;
     }
 }
 
 export default UModel;
 export { UModel };
 
+type ObjectsForZone_T = { totalVertices: number, objects: Map<UMaterial, ObjectsForMaterial_T> };
+type ObjectsForMaterial_T = Map<FStaticLightmapTexture, ObjectsForLightmap_T>;
+type ObjectsForLightmap_T = { numVertices: number, nodes: NodeInfo_T[] };
+type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo };
+
 type LightmapInfo = {
     uuid: string,
-    offset: {
-        x: number;
-        y: number;
-    },
-    resolution: {
-        width: number;
-        height: number;
-    },
-    size: {
-        width: number;
-        height: number;
-    },
+    offset: { x: number; y: number; },
+    resolution: { width: number; height: number; },
+    size: { width: number; height: number; },
     matrix: FMatrix
 };
 

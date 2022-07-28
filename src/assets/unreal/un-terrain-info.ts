@@ -82,6 +82,8 @@ class UTerrainInfo extends UAActor {
 
     public doLoad(pkg: UPackage, exp: UExport<UTerrainInfo>) {
 
+
+
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -173,6 +175,8 @@ class UTerrainInfo extends UAActor {
         }
 
         this.readHead = pkg.tell();
+
+        // debugger;
 
         return this;
     }

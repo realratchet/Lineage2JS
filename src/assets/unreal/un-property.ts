@@ -1,29 +1,27 @@
 import BufferValue from "../buffer-value";
 
-type UPackage = import("./un-package").UPackage;
-
 enum UNP_PropertyTypes {
-    UNP_ByteProperty = 0x1,
-    UNP_IntProperty = 0x2,
-    UNP_BoolProperty = 0x3,
-    UNP_FloatProperty = 0x4,
-    UNP_ObjectProperty = 0x5,
-    UNP_NameProperty = 0x6,
-    UNP_StringProperty = 0x7,
-    UNP_ClassProperty = 0x8,
-    UNP_ArrayProperty = 0x9,
-    UNP_StructProperty = 0xa,
-    UNP_VectorProperty = 0xb,
-    UNP_RotatorProperty = 0xc,
-    UNP_StrProperty = 0xd,
-    UNP_MapProperty = 0xe,
-    UNP_FixedArrayProperty = 0xf
+    UNP_ByteProperty /*      */ = 0x1,
+    UNP_IntProperty /*       */ = 0x2,
+    UNP_BoolProperty /*      */ = 0x3,
+    UNP_FloatProperty /*     */ = 0x4,
+    UNP_ObjectProperty /*    */ = 0x5,
+    UNP_NameProperty /*      */ = 0x6,
+    UNP_StringProperty /*    */ = 0x7,
+    UNP_ClassProperty /*     */ = 0x8,
+    UNP_ArrayProperty /*     */ = 0x9,
+    UNP_StructProperty /*    */ = 0xA,
+    UNP_VectorProperty /*    */ = 0xB,
+    UNP_RotatorProperty /*   */ = 0xC,
+    UNP_StrProperty /*       */ = 0xD,
+    UNP_MapProperty /*       */ = 0xE,
+    UNP_FixedArrayProperty /**/ = 0xF
 };
 
 enum UNP_PropertyMasks {
-    PROPERTY_TYPE_MASK = 0x0f,
-    PROPERTY_SIZE_MASK = 0x70,
-    PROPERTY_ARRAY_MASK = 0x80
+    PROPERTY_TYPE_MASK /* */ = 0x0F,
+    PROPERTY_SIZE_MASK /* */ = 0x70,
+    PROPERTY_ARRAY_MASK /**/ = 0x80
 };
 
 class PropertyTag {
