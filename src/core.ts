@@ -135,6 +135,7 @@ async function startCore() {
 
     const decodeLibrary: IDecodeLibrary = {
         loadMipmaps: true,
+        zones: {},
         anisotropy: renderManager.renderer.capabilities.getMaxAnisotropy(),
         geometries: {},
         materials: {},
@@ -194,31 +195,57 @@ async function startCore() {
     //     objectGroup.add(mLevel);
     // }
 
+    const uLevelInfo = await pkgLoad.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1);
+    const uZonesInfo = await Promise.all((expGroups["ZoneInfo"] || []).map(exp => pkgLoad.fetchObject<UZoneInfo>(exp.index + 1)));
+
+    await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
+
+    // debugger;
+
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
     const iModel = await uModel.getDecodeInfo(decodeLibrary);
+
+    debugger;
+
     const mModel = decodeObject3D(decodeLibrary, iModel);
     objectGroup.add(mModel);
 
-    mModel.children.forEach(c => objectGroup.add(new BoxHelper(c, Math.floor(Math.random() * 0xffffff))));
+    debugger;
 
-    const zones = {};
+    Object.values(decodeLibrary.zones).forEach(zone => {
+        const { min, max } = zone.bounds;
+        const box = new Box3();
+        const color = new Color(Math.floor(Math.random() * 0xffffff));
 
-    for (let nodeIndex = 0, ncount = uModel.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
-        const node: FBSPNode = uModel.bspNodes[nodeIndex];
-        const surf: FBSPSurf = uModel.bspSurfs[node.iSurf];
+        box.min.fromArray(min);
+        box.max.fromArray(max);
 
-        const zone = surf.actor.getZone();
+        const helper = new Box3Helper(box, color);
+        if ("name" in zone) helper.name = zone.name;
 
-        zones[zone.uuid] = zones[zone.uuid] || zone.location.getVectorElements();
-    }
-
-    Object.values(zones).forEach(l => {
-        const mesh = new Mesh(new SphereBufferGeometry(10), new MeshBasicMaterial({ color: 0xff00ff, depthTest: false, transparent: true }));
-
-        mesh.position.fromArray(l);
-
-        objectGroup.add(mesh);
+        objectGroup.add(helper);
     });
+
+    // mModel.children.forEach(c => objectGroup.add(new BoxHelper(c, Math.floor(Math.random() * 0xffffff))));
+
+    // const zones = {};
+
+    // for (let nodeIndex = 0, ncount = uModel.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
+    //     const node: FBSPNode = uModel.bspNodes[nodeIndex];
+    //     const surf: FBSPSurf = uModel.bspSurfs[node.iSurf];
+
+    //     const zone = surf.actor.getZone();
+
+    //     zones[zone.uuid] = zones[zone.uuid] || zone.location.getVectorElements();
+    // }
+
+    // Object.values(zones).forEach(l => {
+    //     const mesh = new Mesh(new SphereBufferGeometry(10), new MeshBasicMaterial({ color: 0xff00ff, depthTest: false, transparent: true }));
+
+    //     mesh.position.fromArray(l);
+
+    //     objectGroup.add(mesh);
+    // });
 
 
 
@@ -323,13 +350,13 @@ async function startCore() {
     // });
 
 
-    const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
-    const iStaticMeshActors = await (await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary))))//.filter(x => x.children[0]?.name === "Exp_obj49");
-    iStaticMeshActors.forEach(info => {
-        const mModel = decodeObject3D(decodeLibrary, info);
+    // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
+    // const iStaticMeshActors = await (await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary))))//.filter(x => x.children[0]?.name === "Exp_obj49");
+    // iStaticMeshActors.forEach(info => {
+    //     const mModel = decodeObject3D(decodeLibrary, info);
 
-        objectGroup.add(mModel);
-    });
+    //     objectGroup.add(mModel);
+    // });
 
     console.info("System has loaded!");
 

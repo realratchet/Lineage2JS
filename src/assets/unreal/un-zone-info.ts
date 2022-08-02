@@ -2,8 +2,9 @@ import UAActor from "./un-aactor";
 import FArray from "./un-array";
 import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
+import FBox from "./un-box";
 
-class UZoneInfo extends UAActor {
+class UZoneInfo extends UAActor implements IInfo {
     protected isFogZone: boolean;
     protected hasTerrain: boolean;
 
@@ -79,6 +80,20 @@ class UZoneInfo extends UAActor {
         // console.log(this.bytesUnread);
 
         // debugger;
+    }
+
+    async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        await this.onLoaded();
+
+        library.zones[this.uuid] = {
+            uuid: this.uuid,
+            type: "Zone",
+            name: this.objectName,
+            bounds: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            children: []
+        };
+
+        return this.uuid;
     }
 }
 

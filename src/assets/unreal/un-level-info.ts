@@ -1,7 +1,8 @@
 import ULevelSummary from "./un-level-summary";
 import UAActor from "./un-aactor";
+import FBox from "./un-box";
 
-class ULevelInfo extends UAActor {
+class ULevelInfo extends UAActor implements IInfo {
     protected readHeadOffset: number = 17;
 
     protected time: number;
@@ -48,7 +49,22 @@ class ULevelInfo extends UAActor {
         this.readHead = pkg.tell();
 
         // debugger;
-        
+
+    }
+
+    async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        await this.onLoaded();
+
+        library.sector = {
+            uuid: this.uuid,
+            type: "Sector",
+            bounds: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            name: this.objectName,
+            children: [],
+            zones: {}
+        } as ISectorDecodeInfo;
+
+        return this.uuid;
     }
 }
 

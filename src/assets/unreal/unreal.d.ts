@@ -173,12 +173,24 @@ type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | 
 
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
-type EulerArr = [number, number, number, EulerOrder];
+type EulerArr = [...Vector3Arr, EulerOrder];
 type ArrGeometryGroup = [number, number, number];
 
 interface IBaseObjectOrInstanceDecodeInfo {
+    uuid: string,
     type: DecodableObject_T | "StaticMeshInstance"
 }
+
+interface IBaseZoneDecodeInfo {
+    type: "Sector" | "Zone",
+    uuid: string,
+    name?: string,
+    bounds: { min: Vector3Arr, max: Vector3Arr },
+    children: IBaseObjectOrInstanceDecodeInfo[]
+}
+
+interface IZoneDecodeInfo { type: "Zone" }
+interface ISectorDecodeInfo { type: "Sector", zones: { [key: string]: IZoneDecodeInfo } }
 
 interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: "StaticMeshInstance",
@@ -257,7 +269,7 @@ interface IBaseLightingMaterialModifier extends IMaterialModifier {
 
 interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
     lightType: "Directional",
-    direction: [number, number, number],
+    direction: Vector3Arr,
 }
 
 interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
@@ -270,7 +282,8 @@ interface IDecodeLibrary {
     materialModifiers: { [key: string]: IMaterialModifier },
     materials: { [key: string]: IBaseMaterialDecodeInfo },
     geometries: { [key: string]: IGeometryDecodeInfo },
-    geometryInstances: { [key: string]: number }
+    geometryInstances: { [key: string]: number },
+    sector: ISectorDecodeInfo
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
@@ -305,3 +318,5 @@ type LightEffect_T = number | {
     Rotor: 0xE,
     Unused: 0xF
 };
+
+interface IInfo { getDecodeInfo(library: IDecodeLibrary): Promise<string>; }

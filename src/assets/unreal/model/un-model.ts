@@ -125,7 +125,7 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string[][]> {
         await this.onLoaded();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
@@ -183,7 +183,8 @@ class UModel extends UPrimitive {
             gData.nodes.push({ node, surf, light });
         }
 
-        const createZoneInfo = async (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): Promise<IStaticMeshObjectDecodeInfo> => {
+        const createZoneInfo = async (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): Promise<string> => {
+            const zoneInfo = library.zones[zone.uuid];
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
@@ -255,16 +256,27 @@ class UModel extends UPrimitive {
                                 const texU = texB.dot(textureX) / TEXEL_SCALE;
                                 const texV = texB.dot(textureY) / TEXEL_SCALE;
 
-                                positions[dstVertices * 3 + 0] = position.x;
-                                positions[dstVertices * 3 + 1] = position.z;
-                                positions[dstVertices * 3 + 2] = position.y;
+                                const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
 
-                                normals[dstVertices * 3 + 0] = tangentZ.x;
-                                normals[dstVertices * 3 + 1] = tangentZ.z;
-                                normals[dstVertices * 3 + 2] = tangentZ.y;
+                                positions[vOffset + 0] = position.x;
+                                positions[vOffset + 1] = position.z;
+                                positions[vOffset + 2] = position.y;
 
-                                uvs[dstVertices * 2 + 0] = texU;
-                                uvs[dstVertices * 2 + 1] = texV;
+                                [
+                                    [Math.min, zoneInfo.bounds.min],
+                                    [Math.max, zoneInfo.bounds.max]
+                                ].forEach(([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                                    for (let i = 0; i < 3; i++) {
+                                        arr[i] = fn(arr[i], positions[vOffset + i]);
+                                    }
+                                });
+
+                                normals[vOffset + 0] = tangentZ.x;
+                                normals[vOffset + 1] = tangentZ.z;
+                                normals[vOffset + 2] = tangentZ.y;
+
+                                uvs[uOffset + 0] = texU;
+                                uvs[uOffset + 1] = texV;
 
                                 if (light) {
                                     const posLightmapped = position.applyMatrix4(light.matrix);
@@ -275,8 +287,8 @@ class UModel extends UPrimitive {
                                     const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
                                     const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
 
-                                    uvs2[dstVertices * 2 + 0] = lmU;
-                                    uvs2[dstVertices * 2 + 1] = lmV;
+                                    uvs2[uOffset + 0] = lmU;
+                                    uvs2[uOffset + 1] = lmV;
                                 }
 
                                 // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
@@ -297,6 +309,7 @@ class UModel extends UPrimitive {
                 }
             }
 
+            const uuid = generateUUID();
             const materialUuid = `${priority}/${zone.uuid}/${this.uuid}`;
             const geometryUuid = `${priority}/${zone.uuid}/${this.uuid}`;
 
@@ -311,27 +324,22 @@ class UModel extends UPrimitive {
                 }
             };
 
-            return {
+            zoneInfo.children.push({
+                uuid,
                 type: "Model",
                 name: `Sub_${this.objectName}_${zone.objectName}`,
                 geometry: geometryUuid,
                 materials: materialUuid,
-            }
+            } as IStaticMeshObjectDecodeInfo);
+
+            return uuid;
         };
 
-        const createPriorityGroup = async ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): Promise<IBaseObjectDecodeInfo> => {
-            return {
-                name: `${priority}_${this.objectName}`,
-                type: "Group",
-                children: await Promise.all([...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects))),
-            } as IBaseObjectDecodeInfo;
+        const createPriorityGroup = async ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): Promise<string[]> => {
+            return await Promise.all([...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects)));
         };
 
-        return {
-            name: `Root_${this.objectName}`,
-            type: "Group",
-            children: await Promise.all([...objectMap.entries()].map(createPriorityGroup)),
-        } as IBaseObjectDecodeInfo;
+        return await Promise.all([...objectMap.entries()].map(createPriorityGroup));
     }
 }
 

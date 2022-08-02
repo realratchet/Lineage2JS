@@ -1,5 +1,5 @@
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
-import { generateUUID } from "three/src/math/MathUtils";
+import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
 import { FPrimitiveArray } from "./un-array";
@@ -85,7 +85,7 @@ class ULight extends UAActor {
         const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
         const brightness = saturationToBrightness(this.lightness);
 
-        // debugger;
+        debugger;
 
         // const lightType = this.type;
 
@@ -119,7 +119,9 @@ class ULight extends UAActor {
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
-        
+
+        debugger;
+
         return {
             type: "Light",
             color: this.getColor(),
@@ -139,3 +141,111 @@ class ULight extends UAActor {
 
 export default ULight;
 export { ULight };
+
+function LODWORD(x: number) { return x & 0xFFFFFFFF };
+
+function __CFADD__(x: number, y: number) {
+    return Number(x > (x + y));
+}
+
+function f2i(v: number) { return new Uint32Array(new Float32Array([v]).buffer)[0]; }
+function i2f(v: number) { return new Float32Array(new Uint32Array([v]).buffer)[0]; }
+
+function ftol2(a1: number) {
+    // let b = Math.ceil(a);
+
+    // if (isFinite(b) && b !== 0) {
+    //     let c = a - b;
+
+    //     if (c >= 0) {
+    //         debugger;
+    //     } else {
+    //         let d = f2i(c);
+    //         let e = (d + 0x7FFFFFFF)/* - 1*/;
+    //         let carry = Number(new Uint32Array([e])[0] < e);
+
+    //         if (!carry)
+    //             debugger;
+
+    //         return b - carry;
+    //     }
+    // } else {
+    //     debugger;
+    // }
+
+
+    let a = Math.trunc(a1);
+    let v1 = a;
+    let result = Math.trunc(a1);
+    if (result || (v1 = Math.trunc(a1) >> 32, (v1 & 0x7FFFFFFF) != 0)) {
+        if (v1 >= 0) {
+            // debugger;
+            let c = a1 - Math.trunc(a1);
+            let dwc = f2i(c);
+            let carry = __CFADD__(LODWORD(dwc), 0x7FFFFFFF);
+
+            if (carry > 0)
+                debugger;
+
+            result = result - carry;
+        } else {
+            debugger;
+            // return (__PAIR64__(result, -(float)(a1 - (double)(__int64)a1)) + 0x7FFFFFFF) >> 32;
+        }
+    }
+    return result;
+}
+
+function toSin(v: number) { return Math.sin((v + v) * 0.0001917475984857051); }
+function toSqrt(v: number) { return Math.sqrt(v * 6.103516e-05); }
+
+const LUT_SIN = new Array(0x4000).fill(1).map((_, i) => toSin(i));
+const LUT_SQRT = new Array(0x4000).fill(1).map((_, i) => toSqrt(i));
+
+const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
+
+// debugger;
+
+// (function unkFunc() {
+//     let a = 0x20;
+
+//     if (a < 1) a = 1;
+
+//     let x = 6.49065196514129638671875e-1;//5.4150390625e-1;
+//     let y = 0;
+
+//     // first branch without carry -> 1.28317940235137939453125
+//     // with carry -> 6.49065196514129638671875e-1
+
+//     // 5.8258211612701416015625e-1  -> 0.5825821161270142
+//     // 5.4150390625e-1              -> 0.54150390625
+//     // 6.4640057086944580078125e-1  -> 0.6464005708694458
+//     let z = x * 2293760.0; // = 1192957.7734375
+//     y = y << 8; // = 0
+
+//     z = z / 32; // = 37279.930419921875
+
+//     z = z + y; // = 37279.930419921875
+
+//     // let [eax, edx] = ftol2_ghidra(z);
+
+//     // let w = eax;
+
+//     // let b = (Math.floor(w) >> 2) & 0x3FFF;
+//     let c = (Math.floor(ftol2(z)) >> 2) & 0x3FFF;
+
+//     let sin = LUT_SIN[c];
+//     let out = sin * 0.090000004 + 0.89999998;
+
+//     // debugger;
+
+//     // const aa = i2f(-1099808769);
+//     // let z = ftol2(x);
+
+//     // 
+
+//     debugger;
+
+//     return out;
+// })();
+
