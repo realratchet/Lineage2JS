@@ -262,14 +262,14 @@ class UModel extends UPrimitive {
                                 positions[vOffset + 1] = position.z;
                                 positions[vOffset + 2] = position.y;
 
-                                [
-                                    [Math.min, zoneInfo.bounds.min],
-                                    [Math.max, zoneInfo.bounds.max]
-                                ].forEach(([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
-                                    for (let i = 0; i < 3; i++) {
-                                        arr[i] = fn(arr[i], positions[vOffset + i]);
+                                zoneInfo.bounds.isValid = true;
+
+                                [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+                                    ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                                        for (let i = 0; i < 3; i++)
+                                            arr[i] = fn(arr[i], positions[vOffset + i]);
                                     }
-                                });
+                                );
 
                                 normals[vOffset + 0] = tangentZ.x;
                                 normals[vOffset + 1] = tangentZ.z;
@@ -327,7 +327,7 @@ class UModel extends UPrimitive {
             zoneInfo.children.push({
                 uuid,
                 type: "Model",
-                name: `Sub_${this.objectName}_${zone.objectName}`,
+                name: `Sub_${priority}_${this.objectName}_${zone.objectName}`,
                 geometry: geometryUuid,
                 materials: materialUuid,
             } as IStaticMeshObjectDecodeInfo);

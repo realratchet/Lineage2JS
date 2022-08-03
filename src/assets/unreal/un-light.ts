@@ -85,7 +85,7 @@ class ULight extends UAActor {
         const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
         const brightness = saturationToBrightness(this.lightness);
 
-        debugger;
+        // debugger;
 
         // const lightType = this.type;
 
@@ -120,9 +120,10 @@ class ULight extends UAActor {
     public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
 
-        debugger;
+        // debugger;
 
         return {
+            uuid: this.uuid,
             type: "Light",
             color: this.getColor(),
             cone: this.cone,

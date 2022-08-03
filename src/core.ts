@@ -16,7 +16,7 @@ import BufferValue from "./assets/buffer-value";
 import decodeTexture from "./assets/decoders/texture-decoder";
 import decodeMaterial from "./assets/decoders/material-decoder";
 import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
-import decodeObject3D from "./assets/decoders/object3d-decoder";
+import decodeObject3D, { decodeSector } from "./assets/decoders/object3d-decoder";
 import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 
@@ -135,6 +135,7 @@ async function startCore() {
 
     const decodeLibrary: IDecodeLibrary = {
         loadMipmaps: true,
+        sector: null,
         zones: {},
         anisotropy: renderManager.renderer.capabilities.getMaxAnisotropy(),
         geometries: {},
@@ -200,17 +201,8 @@ async function startCore() {
 
     await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
 
-    // debugger;
-
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    const iModel = await uModel.getDecodeInfo(decodeLibrary);
-
-    debugger;
-
-    const mModel = decodeObject3D(decodeLibrary, iModel);
-    objectGroup.add(mModel);
-
-    debugger;
+    await uModel.getDecodeInfo(decodeLibrary);
 
     Object.values(decodeLibrary.zones).forEach(zone => {
         const { min, max } = zone.bounds;
@@ -350,13 +342,10 @@ async function startCore() {
     // });
 
 
-    // const uStaticMeshActors = await (await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))))//.filter(x => x.isSunAffected);
-    // const iStaticMeshActors = await (await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary))))//.filter(x => x.children[0]?.name === "Exp_obj49");
-    // iStaticMeshActors.forEach(info => {
-    //     const mModel = decodeObject3D(decodeLibrary, info);
+    const uStaticMeshActors = await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)))//.filter(x => x.isSunAffected);
+    await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)))//.filter(x => x.children[0]?.name === "Exp_obj49");
 
-    //     objectGroup.add(mModel);
-    // });
+    objectGroup.add(decodeSector(decodeLibrary));
 
     console.info("System has loaded!");
 

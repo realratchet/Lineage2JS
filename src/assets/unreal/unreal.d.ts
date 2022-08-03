@@ -185,12 +185,12 @@ interface IBaseZoneDecodeInfo {
     type: "Sector" | "Zone",
     uuid: string,
     name?: string,
-    bounds: { min: Vector3Arr, max: Vector3Arr },
+    bounds: { isValid: boolean, min: Vector3Arr, max: Vector3Arr },
     children: IBaseObjectOrInstanceDecodeInfo[]
 }
 
-interface IZoneDecodeInfo { type: "Zone" }
-interface ISectorDecodeInfo { type: "Sector", zones: { [key: string]: IZoneDecodeInfo } }
+interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
+interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector", zones: { [key: string]: IZoneDecodeInfo } }
 
 interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: "StaticMeshInstance",
@@ -226,6 +226,7 @@ interface IGeometryDecodeInfo {
         positions?: Float32Array;
         normals?: Float32Array;
         colors?: Float32Array,
+        colorsInstance?: Float32Array,
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
     };
@@ -283,7 +284,8 @@ interface IDecodeLibrary {
     materials: { [key: string]: IBaseMaterialDecodeInfo },
     geometries: { [key: string]: IGeometryDecodeInfo },
     geometryInstances: { [key: string]: number },
-    sector: ISectorDecodeInfo
+    sector: string,
+    zones: { [key: string]: IBaseZoneDecodeInfo }
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };

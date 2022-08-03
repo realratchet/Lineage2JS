@@ -181,7 +181,7 @@ class UStaticMeshActor extends UAActor {
         }
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         if (this.instance) this.instance.setActor(this);
@@ -354,7 +354,10 @@ class UStaticMeshActor extends UAActor {
         //     colors[i + 2] = b / 255;
         // }
 
-        const info = {
+        const zoneInfo = library.zones[this.getZone().uuid];
+
+        zoneInfo.children.push({
+            uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
             position: this.colLocation.getVectorElements(),
@@ -366,9 +369,11 @@ class UStaticMeshActor extends UAActor {
                 /*, this.getRegionLineHelper(library)*/
             ],
             siblings,
-        } as IBaseObjectDecodeInfo;
+        } as IBaseObjectDecodeInfo);
 
         library.geometryInstances[mesh.geometry]++;
+
+        // debugger;
 
         // if(this.mesh.objectName === "Exp_StoneH_06") {
         //     debugger;
@@ -376,7 +381,7 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        return info;
+        return this.uuid;
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {

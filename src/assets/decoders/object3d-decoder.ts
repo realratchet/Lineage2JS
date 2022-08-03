@@ -157,6 +157,25 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
     return mesh;
 }
 
+function decodeZoneObject(library: IDecodeLibrary, info: IBaseZoneDecodeInfo) {
+    const object = new Object3D();
+
+    if (info.name) object.name = info.name;
+    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+
+    return object;
+}
+
+function decodeSector(library: IDecodeLibrary) {
+    const sectorUuid = library.sector;
+    const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
+    const sector = decodeZoneObject(library, library.zones[sectorUuid]);
+
+    zonesUuids.forEach(uuid => sector.add(decodeZoneObject(library, library.zones[uuid])));
+
+    return sector;
+}
+
 function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
@@ -174,4 +193,4 @@ function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDeco
 }
 
 export default decodeObject3D;
-export { decodeObject3D };
+export { decodeObject3D, decodeSector };

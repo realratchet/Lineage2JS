@@ -89,7 +89,7 @@ class UZoneInfo extends UAActor implements IInfo {
             uuid: this.uuid,
             type: "Zone",
             name: this.objectName,
-            bounds: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
             children: []
         };
 
