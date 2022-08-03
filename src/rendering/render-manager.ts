@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3 } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
@@ -21,6 +21,8 @@ class RenderManager {
     protected isOrbitControls = true;
     protected lastRender: number = 0;
     protected pixelRatio: number = global.devicePixelRatio;
+    protected readonly frustum = new Frustum();
+    protected readonly lastProjectionScreenMatrix = new Matrix4();
 
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
@@ -58,13 +60,13 @@ class RenderManager {
 
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
-        
-        
+
+
         // elven ruins colon
         this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
         this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
         this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
-        
+
         this.controls.orbit.update();
         // this.controls.fps.update(0);
 
@@ -218,7 +220,27 @@ class RenderManager {
         requestAnimationFrame(this.onHandleRender.bind(this));
     }
 
+    protected _updateObjects(currentTime: number, deltaTime: number) {
+        this.scene.traverse((object: any) => {
+
+            if (object.isZoneObject && !object.update(this.frustum, this.camera.position)) return;
+
+            if (object.material) {
+                const materials = object.material instanceof Array ? object.material : [object.material];
+
+                materials.forEach((material: any) => {
+                    if (material?.uniforms?.globalTime) {
+                        material.uniforms.globalTime.value = currentTime / 600;
+                    }
+                });
+            }
+        });
+    }
+
     protected _preRender(currentTime: number, deltaTime: number) {
+        this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
+
         if (!this.isOrbitControls) {
             let forwardVelocity = 0, sidewaysVelocity = 0;
             const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? 2 : 1);
@@ -238,27 +260,14 @@ class RenderManager {
         }
 
         this.renderer.clear();
-        this.scene.traverse((object: any) => {
-
-            if (object.material) {
-                const materials = object.material instanceof Array ? object.material : [object.material];
-
-                materials.forEach((material: any) => {
-                    if (material?.uniforms?.globalTime) {
-                        material.uniforms.globalTime.value = currentTime / 600;
-                    }
-                });
-            }
-        });
+        this._updateObjects(currentTime, deltaTime);
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
         this.renderer.render(this.scene, this.camera);
     }
 
-    protected _postRender(currentTime: number, deltaTime: number) {
-
-    }
+    protected _postRender(currentTime: number, deltaTime: number) { }
 
     public startRendering() { this.onHandleRender(0); }
 }
