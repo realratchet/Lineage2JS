@@ -29,14 +29,14 @@ class ZoneObject extends Object3D {
         return this;
     }
 
-    public update(frustum: THREE.Frustum, cameraPosition: THREE.Vector3) {
-        if (!frustum.intersectsSphere(this.boundsRenderSphere) && !this.boundsRender.containsPoint(cameraPosition)) {
+    public update(enableZoneCulling: boolean, frustum: THREE.Frustum, cameraPosition: THREE.Vector3) {
+        if (enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere) && !this.boundsRender.containsPoint(cameraPosition)) {
             this.children = [];
             return false;
         }
 
         this.children = this.childObjects;
-        this.childZones.forEach(z => z.update(frustum, cameraPosition));
+        this.childZones.forEach(z => z.update(enableZoneCulling, frustum, cameraPosition));
 
         return true;
     }

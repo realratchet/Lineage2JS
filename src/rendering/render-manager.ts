@@ -67,6 +67,12 @@ class RenderManager {
         this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
         this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
 
+        // tower ceiling fixture
+        this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
+        this.camera.lookAt(17611.91280729978, -5819.704399240179, 116526.32678153258);
+        this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
+
+
         this.controls.orbit.update();
         // this.controls.fps.update(0);
 
@@ -220,10 +226,12 @@ class RenderManager {
         requestAnimationFrame(this.onHandleRender.bind(this));
     }
 
+    public enableZoneCulling = true;
+
     protected _updateObjects(currentTime: number, deltaTime: number) {
         this.scene.traverse((object: any) => {
 
-            if (object.isZoneObject && !object.update(this.frustum, this.camera.position)) return;
+            if (object.isZoneObject && !object.update(this.enableZoneCulling, this.frustum, this.camera.position)) return;
 
             if (object.material) {
                 const materials = object.material instanceof Array ? object.material : [object.material];

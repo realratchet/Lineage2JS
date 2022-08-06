@@ -96,6 +96,8 @@ class UStaticMeshInstance extends UObject {
             }
         }
 
+        debugger;
+
         return {
             color,
             lights: {
