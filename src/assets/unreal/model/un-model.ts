@@ -22,7 +22,7 @@ type UExport = import("../un-export").UExport;
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
-const TEXEL_SCALE = 128;
+const TEXEL_SCALE = 512;
 
 class UModel extends UPrimitive {
     protected vectors = new FArray(FVector);
