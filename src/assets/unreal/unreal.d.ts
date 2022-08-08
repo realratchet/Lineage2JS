@@ -171,6 +171,8 @@ type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent"
 
 type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
 
+type Vector4Arr = [number, number, number, number];
+type ColorArr = Vector4Arr;
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
 type EulerArr = [...Vector3Arr, EulerOrder];
@@ -186,7 +188,8 @@ interface IBaseZoneDecodeInfo {
     uuid: string,
     name?: string,
     bounds: { isValid: boolean, min: Vector3Arr, max: Vector3Arr },
-    children: IBaseObjectOrInstanceDecodeInfo[]
+    children: IBaseObjectOrInstanceDecodeInfo[],
+    fog?: IZoneFogInfo
 }
 
 interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
@@ -322,3 +325,9 @@ type LightEffect_T = number | {
 };
 
 interface IInfo { getDecodeInfo(library: IDecodeLibrary): Promise<string>; }
+
+interface IZoneFogInfo {
+    start: number,
+    end: number,
+    color: ColorArr
+}

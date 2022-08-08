@@ -201,24 +201,16 @@ async function startCore() {
 
     await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
 
-    // const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    // await uModel.getDecodeInfo(decodeLibrary);
+    // const uLights = await Promise.all((expGroups["Light"] || []).map(exp => pkgLoad.fetchObject<ULight>(exp.index + 1)))//.filter(x => x.isSunAffected);
 
-    // Object.values(decodeLibrary.zones).forEach(zone => {
-    //     const { min, max } = zone.bounds;
-    //     const box = new Box3();
-    //     const color = new Color(Math.floor(Math.random() * 0xffffff));
+    // const data = uLights.map(l => [`objectName: ${l.objectName}`, `hue: ${l.hue}`, `saturation: ${l.saturation}`, `lightness: ${l.lightness}`]);
 
-    //     box.min.fromArray(min);
-    //     box.max.fromArray(max);
+    // data.forEach(d=>console.log(d.join(", ")))
 
-    //     const helper = new Box3Helper(box, color);
-    //     if ("name" in zone) helper.name = zone.name;
+    // debugger;
 
-    //     objectGroup.add(helper);
-    // });
-
-    // mModel.children.forEach(c => objectGroup.add(new BoxHelper(c, Math.floor(Math.random() * 0xffffff))));
+    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    await uModel.getDecodeInfo(decodeLibrary);
 
     // const zones = {};
 
@@ -253,41 +245,59 @@ async function startCore() {
     // debugger;
 
 
-    
-    (await Promise.all([
-        // 1441,
-        // 1770,
-        // 1802,
-        // 1804,
-        // 4284,
-        // 10253, // scluptures
-        // 10254, // scluptures
-        // 8028,
-        // 1370, // wall object
-        // 9742, // some ground from cruma loaded first, fails lighting
-        // ...[9742, 9646, 10157, 9675], // some ground from cruma loaded first, fails lighting
-        // 5680, // floor near wall objects
-        // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
-        // 555,// elven ruins colon
-        // 47, // rock with ambient light
-        // 2369,
-        2011, // ceiling fixture that's too red
-        // 610, // light fixture with 2 lights near elven ruins
-        // 1755, // light fixture with 3 lights near elven ruins
-        // ...[608, 610, 1755, 1781] // elven ruins light fixtures
-    ].map(async id => {
-        const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-        await uMesh.getDecodeInfo(decodeLibrary);
 
-    })));
+    // (await Promise.all([
+    //     // 1441,
+    //     // 1770,
+    //     // 1802,
+    //     // 1804,
+    //     // 4284,
+    //     // 10253, // scluptures
+    //     // 10254, // scluptures
+    //     // 8028,
+    //     // 1370, // wall object
+    //     // 9742, // some ground from cruma loaded first, fails lighting
+    //     // ...[9742, 9646, 10157, 9675], // some ground from cruma loaded first, fails lighting
+    //     // 5680, // floor near wall objects
+    //     // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+    //     // 555,// elven ruins colon
+    //     // 47, // rock with ambient light
+    //     // 2369,
+    //     // 2011, // ceiling fixture that's too red
+    //     4609, // transparency issue
+    //     // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
+    //     // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
+    //     // 610, // light fixture with 2 lights near elven ruins
+    //     // 1755, // light fixture with 3 lights near elven ruins
+    //     // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+    // ].map(async id => {
+    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
+    //     await uMesh.getDecodeInfo(decodeLibrary);
+
+    // })));
 
 
-    // const uStaticMeshActors = await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)))//.filter(x => x.isSunAffected);
-    // await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)))//.filter(x => x.children[0]?.name === "Exp_obj49");
+    const uStaticMeshActors = await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)))//.filter(x => x.isSunAffected);
+    await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)))//.filter(x => x.children[0]?.name === "Exp_obj49");
 
     objectGroup.add(decodeSector(decodeLibrary));
 
+    Object.values(decodeLibrary.zones).forEach(zone => {
+        const { min, max } = zone.bounds;
+        const box = new Box3();
+        const color = new Color(Math.floor(Math.random() * 0xffffff));
+
+        box.min.fromArray(min);
+        box.max.fromArray(max);
+
+        const helper = new Box3Helper(box, color);
+        if ("name" in zone) helper.name = zone.name;
+
+        objectGroup.add(helper);
+    });
+
     console.info("System has loaded!");
+    
 
     renderManager.enableZoneCulling = false;
     renderManager.scene.add(objectGroup);

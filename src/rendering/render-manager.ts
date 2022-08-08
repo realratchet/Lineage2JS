@@ -1,4 +1,5 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4 } from "three";
+import ZoneObject from "../zone-object";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 
@@ -229,9 +230,16 @@ class RenderManager {
     public enableZoneCulling = true;
 
     protected _updateObjects(currentTime: number, deltaTime: number) {
+        let fog: THREE.Fog;
+
         this.scene.traverse((object: any) => {
 
-            if (object.isZoneObject && !object.update(this.enableZoneCulling, this.frustum, this.camera.position)) return;
+            if ((object as ZoneObject).isZoneObject) {
+
+                if (!object.update(this.enableZoneCulling, this.frustum, this.camera.position)) return;
+
+                fog = object.fog;
+            }
 
             if (object.material) {
                 const materials = object.material instanceof Array ? object.material : [object.material];
@@ -240,9 +248,17 @@ class RenderManager {
                     if (material?.uniforms?.globalTime) {
                         material.uniforms.globalTime.value = currentTime / 600;
                     }
+
+                    if (fog) {
+                        material?.uniforms?.fogColor?.value.copy(fog.color);
+                        if (material?.uniforms?.fogNear?.value) material.uniforms.fogNear.value = fog.near;
+                        if (material?.uniforms?.fogFar?.value) material.uniforms.fogFar.value = fog.far;
+                    }
                 });
             }
         });
+
+        // this.scene.fog = new FogExp2(0xff00ff, 0.1);
     }
 
     protected _preRender(currentTime: number, deltaTime: number) {

@@ -2,7 +2,6 @@ import UAActor from "./un-aactor";
 import FArray from "./un-array";
 import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
-import FBox from "./un-box";
 
 class UZoneInfo extends UAActor implements IInfo {
     protected isFogZone: boolean;
@@ -90,7 +89,12 @@ class UZoneInfo extends UAActor implements IInfo {
             type: "Zone",
             name: this.objectName,
             bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
-            children: []
+            children: [],
+            fog: !this.hasDistanceFog ? null : {
+                start: this.distanceFogStart,
+                end: this.distanceFogEnd,
+                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
+            }
         };
 
         return this.uuid;

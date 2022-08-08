@@ -63,6 +63,7 @@ abstract class UObject {
     protected preLoad(pkg: UPackage, exp: UExport): void {
         this.objectName = `Exp_${exp.objectName}`;
         this.exportIndex = exp.index;
+        this.exp = exp;
 
         this.setReadPointers(exp);
     }

@@ -123,6 +123,7 @@ class ULight extends UAActor {
         // debugger;
 
         return {
+            this: this,
             uuid: this.uuid,
             type: "Light",
             color: this.getColor(),

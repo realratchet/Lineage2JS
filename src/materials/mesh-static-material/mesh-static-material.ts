@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
@@ -56,9 +56,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         // debugger;
 
 
-        const defines: { [key: string]: any } = {};
+        const defines: { [key: string]: any } = { USE_FOG: "", FOG_EXP2: "" };
         const uniforms: { [key: string]: Uniform } = UniformsUtils.merge([
             UniformsLib.lights,
+            UniformsLib.fog,
             {
                 alphaTest: new Uniform(1e-3),
                 globalTime: new Uniform(0),
@@ -161,9 +162,10 @@ class MeshStaticMaterial extends ShaderMaterial {
             // wireframe: true
         });
 
+        if (info.opacity) this.transparent = true;
+
         switch (info.blendingMode) {
-            case "normal":
-            case "masked":
+            case "normal": this.blending = NormalBlending; break; case "masked":
                 this.blending = CustomBlending;
                 this.blendSrc = SrcAlphaFactor;
                 this.blendDst = OneMinusSrcAlphaFactor;
@@ -173,7 +175,6 @@ class MeshStaticMaterial extends ShaderMaterial {
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
 
-        if (info.opacity) this.transparent = true;
     }
 
     setLightmap(lightmap: MapData_T) {

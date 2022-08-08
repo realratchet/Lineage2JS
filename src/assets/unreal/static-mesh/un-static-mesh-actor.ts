@@ -2,7 +2,7 @@ import UAActor from "../un-aactor";
 import { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
 import FVector from "../un-vector";
-import { generateUUID } from "three/src/math/MathUtils";
+import { clamp, generateUUID } from "three/src/math/MathUtils";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import { FPlane } from "../un-plane";
 import { FNTimeHSV } from "../un-time-light";
@@ -198,7 +198,7 @@ class UStaticMeshActor extends UAActor {
         // debugger;
 
         const siblings = [...lights];
-        const zone = this.getZone();
+        // const zone = this.getZone();
 
         let hasModifier = false;
         let modifierUuid: string;
@@ -269,6 +269,13 @@ class UStaticMeshActor extends UAActor {
             }
         }
 
+        // if ((vertexArrayLen / 3) === 0x84 && this.instance.sceneLights.length === 0xE) {
+        //     console.log("correct:", this.objectName, "exp:", this.exportIndex + 1);
+        //     // debugger;
+        // }
+
+        // debugger;
+
         if (instance.lights.environment) {
             const lightInfo = instance.lights.environment
             const lightArray = lightInfo.vertexFlags;
@@ -304,6 +311,8 @@ class UStaticMeshActor extends UAActor {
             }
         }
 
+        // debugger;    
+
         instance.lights.scene.forEach((lightInfo, index) => {
             const lightArray = lightInfo.vertexFlags;
             const euler = new Euler().fromArray(lightInfo.rotation);
@@ -312,7 +321,7 @@ class UStaticMeshActor extends UAActor {
 
             const [r, g, b] = lightInfo.color;
 
-            // debugger;
+            //  debugger;
 
 
             someFlag = 0x1;
@@ -323,6 +332,8 @@ class UStaticMeshActor extends UAActor {
                     position.fromArray(attributes.positions, i).applyMatrix4(matrix);
                     normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
+                    // debugger;
+
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
                         effect: lightInfo.lightEffect,
@@ -331,9 +342,11 @@ class UStaticMeshActor extends UAActor {
                         radius: (lightInfo.radius + 1) * 25
                     }, position, normal);
 
-                    instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity);
-                    instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity);
-                    instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity);
+                    instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + clamp(r * intensity * 255, 0, 255) / 255);
+                    instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
+                    instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + clamp(b * intensity * 255, 0, 255) / 255);
+
+
                 }
 
                 if ((someFlag & 0x7f) === 0x0) {
@@ -355,12 +368,13 @@ class UStaticMeshActor extends UAActor {
         // }
 
         const zoneInfo = library.zones[this.getZone().uuid];
+        const _position = this.colLocation.getVectorElements();
 
         zoneInfo.children.push({
             uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
-            position: this.colLocation.getVectorElements(),
+            position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
             children: [
@@ -373,9 +387,21 @@ class UStaticMeshActor extends UAActor {
 
         library.geometryInstances[mesh.geometry]++;
 
-        // debugger;
+        zoneInfo.bounds.isValid = true;
 
-        // if(this.mesh.objectName === "Exp_StoneH_06") {
+        const { min, max } = library.geometries[mesh.geometry].bounds.box;
+
+        const _min = min.map((v, i) => v + _position[i]);
+        const _max = max.map((v, i) => v + _position[i]);
+
+        [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+            ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                for (let i = 0; i < 3; i++)
+                    arr[i] = fn(arr[i], _min[i], _max[i]);
+            }
+        );
+
+        // if(this.objectName === "Exp_StaticMeshActor1893") {
         //     debugger;
         // }
 
@@ -391,6 +417,10 @@ class UStaticMeshActor extends UAActor {
 
         // if (this.objectName === "Exp_StaticMeshActor1109")
         //     debugger;
+
+        // if(this.objectName === "Exp_StaticMeshActor1893") {
+        //     debugger;
+        // }
 
         return this;
     }

@@ -164,6 +164,7 @@ function decodeZoneObject(library: IDecodeLibrary, info: IBaseZoneDecodeInfo) {
     if (info.name) object.name = info.name;
     if (info.bounds && info.bounds.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
 
     return object;
 }
