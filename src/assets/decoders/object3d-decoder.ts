@@ -1,5 +1,6 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute } from "three";
 import decodeMaterial from "./material-decoder";
+import ZoneObject from "../../zone-object";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -157,8 +158,30 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
     return mesh;
 }
 
+function decodeZoneObject(library: IDecodeLibrary, info: IBaseZoneDecodeInfo) {
+    const object = new ZoneObject();
+
+    if (info.name) object.name = info.name;
+    if (info.bounds && info.bounds.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
+    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
+
+    return object;
+}
+
+function decodeSector(library: IDecodeLibrary) {
+    const sectorUuid = library.sector;
+    const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
+    const sector = decodeZoneObject(library, library.zones[sectorUuid]);
+
+    zonesUuids.forEach(uuid => sector.add(decodeZoneObject(library, library.zones[uuid])));
+
+    return sector;
+}
+
 function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
+        case "Group":
         case "Level":
         case "TerrainInfo":
         case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
@@ -173,4 +196,4 @@ function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDeco
 }
 
 export default decodeObject3D;
-export { decodeObject3D };
+export { decodeObject3D, decodeSector };

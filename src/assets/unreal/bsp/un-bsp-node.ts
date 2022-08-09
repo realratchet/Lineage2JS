@@ -28,12 +28,11 @@ class FBSPNode extends FConstructable {
 
     public iCollisionBound: number;          // 4  byte collision bound.
     public iRenderBound: number;             // 4  byte rendering bound.
-    public iZone: number[] = new Array(2);   // 2  byte visibility zone in 1=front, 0=back.
+    public readonly iZone: number[] = new Array(2);   // 2  byte visibility zone in 1=front, 0=back.
     public numVertices: number;              // 1  byte number of vertices in node.
     public flags: BspNodeFlags_T;            // 1  byte node flags.
-    public iLeaf: number[] = new Array(2);   // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
+    public readonly iLeaf: number[] = new Array(2);   // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
-    public baseIndex: number;
     public iVertexIndex: number;
     public iLightmapIndex: number;
 

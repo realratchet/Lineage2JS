@@ -91,6 +91,8 @@ class UStaticMesh extends UPrimitive {
         this.edgesStream.load(pkg);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
+        
+        // debugger;
 
         if (verLicense < 0x11) {
             console.warn("Not supported yet");
@@ -334,6 +336,7 @@ class UStaticMesh extends UPrimitive {
         // debugger;
 
         return {
+            uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,

@@ -5,11 +5,11 @@ import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-te
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
 
-function fetchTexture(info: ITextureDecodeInfo): MapData_T {
+function fetchTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
-    const data = _decodeTexture(info);
+    const data = _decodeTexture(library, info);
 
     cacheTextures.set(info, data);
 
@@ -49,7 +49,7 @@ function decodeTexPannerModifer(library: IDecodeLibrary, info: ITexPannerDecodeI
             USE_GLOBAL_TIME: ""
         },
         uniforms: Object.assign({
-            map: isUsingMap ? fetchTexture(library.materials[info.transform.map] as ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchTexture(library, library.materials[info.transform.map] as ITextureDecodeInfo) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: info.transform.rate,
@@ -72,7 +72,7 @@ function decodeParameter(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo)
     switch (info.materialType) {
         case "modifier": return _decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
         case "texture": return {
-            uniforms: { map: fetchTexture(info as ITextureDecodeInfo) },
+            uniforms: { map: fetchTexture(library, info as ITextureDecodeInfo) },
             defines: {},
             isUsingMap: true,
             transformType: "none"
@@ -131,7 +131,7 @@ function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo
 
 function decodeLightmapped(library: IDecodeLibrary, info: ILightmappedDecodeInfo) {
     return (decodeMaterial(library, library.materials[info["material"]]) as MeshStaticMaterial)
-        .setLightmap(fetchTexture(library.materials[info["lightmap"]] as ITextureDecodeInfo));
+        .setLightmap(fetchTexture(library, library.materials[info["lightmap"]] as ITextureDecodeInfo));
 }
 
 function applyModAmbient(library: IDecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: ILightAmbientMaterialModifier) {

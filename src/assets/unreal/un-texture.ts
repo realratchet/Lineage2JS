@@ -121,32 +121,81 @@ class UTexture extends UObject {
 
         await this.onLoaded();
 
-        if (this.mipmaps.length === 0) return null;
+        const totalMipCount = this.mipmaps.length;
+
+        if (totalMipCount === 0) return null;
+
+        const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
 
         const firstMipmap = this.mipmaps[0] as FMipmap;
-        const mipCount = library.loadMipmaps ? this.mipmaps.length : 1;
+        const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] as FMipmap : firstMipmap;
+        const insertMipmap = loadMipmaps ? lastMipmap.sizeW !== 1 || lastMipmap.sizeH !== 1 : false;
+
+        const embededMipCount = loadMipmaps ? totalMipCount : 1;
+        const mipCount = loadMipmaps ? totalMipCount + (insertMipmap ? 1 : 0) : 1;
+
+        const format = this.getTexturePixelFormat();
+
+        let blockSize;
+
+        switch (format) {
+            case ETexturePixelFormat.TPF_DXT1: blockSize = 8; break;
+            case ETexturePixelFormat.TPF_DXT3: blockSize = 16; break;
+            case ETexturePixelFormat.TPF_DXT5: blockSize = 16; break;
+            case ETexturePixelFormat.TPF_DXT5N: blockSize = 16; break;
+            default: blockSize = 4; break;
+        }
 
         let byteOffset = 0;
         let imSize = firstMipmap.getByteLength();
 
-        for (let i = 1; i < mipCount; i++) {
+        for (let i = 1; i < embededMipCount; i++) {
             imSize += (this.mipmaps[i] as FMipmap).getByteLength();
         }
+
+        if (insertMipmap) imSize += blockSize;
 
         const data = new Uint8Array(imSize);
 
         firstMipmap.getImageBuffer(data, 0);
         byteOffset += firstMipmap.getByteLength();
 
-        for (let i = 1, len = mipCount; i < len; i++) {
+        // debugger;
+
+        for (let i = 1, len = embededMipCount; i < len; i++) {
             const mipmap = this.mipmaps[i] as FMipmap;
 
             mipmap.getImageBuffer(data, byteOffset);
             byteOffset += mipmap.getByteLength();
         }
 
+        if (insertMipmap) {
+            const lastSliceSize = lastMipmap.getByteLength();
+            const pixelCount = lastSliceSize / 4;
+
+            const color = new Uint8Array(4);
+
+            for (let i = byteOffset - lastSliceSize; i < byteOffset; i += 4) {
+                color[0] += data[i + 0];
+                color[1] += data[i + 1];
+                color[2] += data[i + 2];
+                color[3] += data[i + 3];
+            }
+
+            color[0] = Math.round(color[0] / pixelCount);
+            color[1] = Math.round(color[1] / pixelCount);
+            color[2] = Math.round(color[2] / pixelCount);
+            color[3] = Math.round(color[3] / pixelCount);
+
+            for (let i = 0; i < blockSize; i += 4) {
+                data[byteOffset + i + 0] = color[0];
+                data[byteOffset + i + 1] = color[1];
+                data[byteOffset + i + 2] = color[2];
+                data[byteOffset + i + 3] = color[3];
+            }
+        }
+
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
-        const format = this.getTexturePixelFormat();
         let decodedBuffer: ArrayBuffer;
         let textureType: DecodableTexture_T;
 

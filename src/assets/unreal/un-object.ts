@@ -22,8 +22,8 @@ abstract class UObject {
 
     public constructor(...params: any[]) { }
 
-    protected getSignedMap(): { [key: string]: boolean } { return {}; }
-    protected getPropertyMap(): { [key: string]: string } { return {}; }
+    protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
+    protected getPropertyMap(): GenericObjectContainer_T<string> { return {}; }
 
     protected setReadPointers(exp: UExport) {
         this.readStart = this.readHead = exp.offset.value as number + this.readHeadOffset;
@@ -37,15 +37,25 @@ abstract class UObject {
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
 
+        const tags = [];
+
         do {
             const tag = PropertyTag.from(pkg, this.readHead);
 
             if (!tag.isValid()) break;
 
+            tags.push(tag.name + "/" + tag.type);
+
             this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
 
         } while (this.readHead < this.readTail);
+
+        // if (this.objectName === "Exp_TerrainInfo0") {
+        //     console.log(this.objectName, "\n\t->" + tags.join("\n\t->"));
+
+        //     debugger;
+        // }
 
         this.readHead = pkg.tell();
     }
@@ -53,6 +63,7 @@ abstract class UObject {
     protected preLoad(pkg: UPackage, exp: UExport): void {
         this.objectName = `Exp_${exp.objectName}`;
         this.exportIndex = exp.index;
+        this.exp = exp;
 
         this.setReadPointers(exp);
     }
@@ -117,7 +128,7 @@ abstract class UObject {
                 const obj = await pkg.fetchObject(objIndex.value as number);
 
                 this.setProperty(tag, obj);
-                pkg.seek(offEnd, "set");
+                // pkg.seek(offEnd, "set");
                 // }
             } break;
             case UNP_PropertyTypes.UNP_NameProperty:
@@ -132,6 +143,7 @@ abstract class UObject {
                 // const start = pkg.tell();
                 // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                 // const offset = pkg.tell() - start;
+                // pkg.seek(4 * 3);
                 debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
@@ -236,7 +248,7 @@ abstract class UObject {
                 });
             }
         } catch (e) {
-            debugger;
+            // debugger;
             throw e;
         }
     }

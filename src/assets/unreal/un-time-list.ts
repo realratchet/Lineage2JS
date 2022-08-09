@@ -1,5 +1,7 @@
 import { FNTimeColor, FNTimeHSV } from "./un-time-light";
 
+// 8.157360553741455078125e-1
+
 const staticMeshLight = [
     [0, 138, 182, 0],
     [1, 138, 182, 120],

@@ -1,3 +1,4 @@
+type GenericObjectContainer_T<T> = { [key: string]: T };
 type UPackage = import("./un-package").UPackage;
 type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
 type UHeader = import("./un-header").UHeader;
@@ -78,6 +79,9 @@ type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
 type FVert = import("./model/un-vert").FVert;
 type FBox = import("./un-box").FBox;
 
+type FMultiLightmapTexture = import("./model/un-multilightmap-texture").FMultiLightmapTexture;
+type FStaticLightmapTexture = import("./model/un-multilightmap-texture").FStaticLightmapTexture;
+
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
@@ -157,8 +161,8 @@ interface IBaseTimedConstructable {
 }
 
 interface IDecodedParameter {
-    uniforms: { [key: string]: any },
-    defines: { [key: string]: any },
+    uniforms: GenericObjectContainer_T<any>,
+    defines: GenericObjectContainer_T<any>,
     isUsingMap: boolean,
     transformType: "none" | "pan" | "rotate",
 }
@@ -166,16 +170,31 @@ interface IDecodedParameter {
 type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
+type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
 
+type Vector4Arr = [number, number, number, number];
+type ColorArr = Vector4Arr;
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
-type EulerArr = [number, number, number, EulerOrder];
+type EulerArr = [...Vector3Arr, EulerOrder];
 type ArrGeometryGroup = [number, number, number];
 
 interface IBaseObjectOrInstanceDecodeInfo {
+    uuid: string,
     type: DecodableObject_T | "StaticMeshInstance"
 }
+
+interface IBaseZoneDecodeInfo {
+    type: "Sector" | "Zone",
+    uuid: string,
+    name?: string,
+    bounds: { isValid: boolean, min: Vector3Arr, max: Vector3Arr },
+    children: IBaseObjectOrInstanceDecodeInfo[],
+    fog?: IZoneFogInfo
+}
+
+interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
+interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector", zones: GenericObjectContainer_T<IZoneDecodeInfo> }
 
 interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: "StaticMeshInstance",
@@ -211,6 +230,7 @@ interface IGeometryDecodeInfo {
         positions?: Float32Array;
         normals?: Float32Array;
         colors?: Float32Array,
+        colorsInstance?: Float32Array,
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
     };
@@ -254,7 +274,7 @@ interface IBaseLightingMaterialModifier extends IMaterialModifier {
 
 interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
     lightType: "Directional",
-    direction: [number, number, number],
+    direction: Vector3Arr,
 }
 
 interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
@@ -263,10 +283,13 @@ interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
 
 interface IDecodeLibrary {
     loadMipmaps: boolean,
-    materialModifiers: { [key: string]: IMaterialModifier },
-    materials: { [key: string]: IBaseMaterialDecodeInfo },
-    geometries: { [key: string]: IGeometryDecodeInfo },
-    geometryInstances: { [key: string]: number }
+    anisotropy: number,
+    materialModifiers: GenericObjectContainer_T<IMaterialModifier>,
+    materials: GenericObjectContainer_T<IBaseMaterialDecodeInfo>,
+    geometries: GenericObjectContainer_T<IGeometryDecodeInfo>,
+    geometryInstances: GenericObjectContainer_T<number>,
+    sector: string,
+    zones: GenericObjectContainer_T<IBaseZoneDecodeInfo>
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
@@ -301,3 +324,11 @@ type LightEffect_T = number | {
     Rotor: 0xE,
     Unused: 0xF
 };
+
+interface IInfo { getDecodeInfo(library: IDecodeLibrary): Promise<string>; }
+
+interface IZoneFogInfo {
+    start: number,
+    end: number,
+    color: ColorArr
+}

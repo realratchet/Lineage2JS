@@ -6,7 +6,7 @@ function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampN
 
 function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
 
-    let lightType: LightType_T; // char
+    let lightEffect: LightEffect_T; // char
     let fVar2: number; // float
     let fVar3: number; // float10
     let fVar4: number; // float
@@ -23,15 +23,15 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
     let fStack16: number; // float
     let fStack12: number; // float
 
-    lightType = light.type;
+    lightEffect = light.effect;
 
-    if (lightType === 0x13) {
+    if (lightEffect === 0x13) {
         const dotProduct = sampNormal.x * light.direction.x + sampNormal.z * light.direction.z + sampNormal.y * light.direction.y;
-        
+
         if (dotProduct < 0.0) {
             return dotProduct * -2.0;
         }
-    } else if (lightType === 0x11) {
+    } else if (lightEffect === 0x11) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
         //   dt_pos.z = (this->likelyPosition).z - position.z;
@@ -47,7 +47,7 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //   }
 
         debugger;
-    } else if (lightType === 0xd) {
+    } else if (lightEffect === 0xd) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
         //   dt_pos.z = (this->likelyPosition).z - position.z;
@@ -61,7 +61,7 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //   }
 
         debugger;
-    } else if (lightType === 0x14) {
+    } else if (lightEffect === 0x14) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
         //   dt_pos.z = (this->likelyPosition).z - position.z;
@@ -75,34 +75,39 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //   }
 
         debugger;
-    } else if ((lightType !== 0xc) && (lightType !== 0x8)) {
+    } else if ((lightEffect !== 0xc) && (lightEffect !== 0x8)) {
         const dt = new Vector3().copy(light.position).sub(sampPosition);
         const radius = light.radius;
         const len = dt.length();
         const intensity = calculateIntensity(len, radius, dt.x, dt.y, dt.z, sampNormal.x, sampNormal.y, sampNormal.z);
 
+        // debugger;
+
         return intensity;
     } else {
-        //   dt_pos.x = (this->likelyPosition).x - position.x;
-        //   dt_pos.y = (this->likelyPosition).y - position.y;
-        //   dt_pos.z = (this->likelyPosition).z - position.z;
-        //   fVar1 = FVector::SizeSquared(&dt_pos);
-        //   dVar5 = appSqrt((double)fVar1);
-        //   fVar4 = calculateIntensity((float)dVar5,this->field4_0x20,dt_pos.x,dt_pos.y,dt_pos.z,normal.x,
-        //                              normal.y,normal.z);
-        //   if ((ushort)((ushort)(fVar4 < 0.0) << 0x8 | (ushort)(fVar4 == 0.0) << 0xe) == 0x0) {
-        //     fVar2 = 1.0 - (float)(uint)*(byte *)&this->light[0xb].field72_0x48 * 0.00390625;
-        //     fVar6 = 1.0 / (1.0 - fVar2);
-        //     fVar3 = -dt_pos.x * (this->likelyDirection).x +
-        //             -dt_pos.y * (this->likelyDirection).y + -dt_pos.z * (this->likelyDirection).z;
-        //     if (((ushort)((ushort)(fVar3 < 0.0) << 0x8 | (ushort)(fVar3 == 0.0) << 0xe) == 0x0) &&
-        //        (fVar2 * fVar2 * fVar1 < fVar3 * fVar3)) {
-        //       fVar1 = (fVar3 / (float)dVar5) * fVar6 - fVar6 * fVar2;
-        //       return fVar1 * fVar1 * fVar4;
-        //     }
-        //   }
+        const dt = new Vector3().copy(light.position).sub(sampPosition);
+        const radius = light.radius;
+        const lightSize = dt.lengthSq();
+        const dVar1 = Math.sqrt(lightSize);
+        const dx = calculateIntensity(dVar1, radius, dt.x, dt.y, dt.z, sampNormal.x, sampNormal.y, sampNormal.z);
 
-        debugger;
+        if ((Number(dx < 0.0) << 0x8 | Number(dx === 0.0) << 0xe) === 0x0) {
+            const magicVariable = 128; // might be saturation
+            const dy = 1.0 - magicVariable * 0.00390625;
+            const dz = 1.0 / (1.0 - dy);
+            const direction = light.direction;
+            const fVar2 = -dt.x * direction.x + -dt.y * direction.y + -dt.z * direction.z;
+
+            if (((Number(fVar2 < 0.0) << 0x8 | Number(fVar2 == 0.0) << 0xe) === 0x0) &&
+                (dy * dy * lightSize < fVar2 * fVar2)) {
+                const finalLightSize = (fVar2 / dVar1) * dz - dz * dy;
+                const value = finalLightSize * finalLightSize * dx;
+
+                return value;
+            }
+        }
+
+        // debugger;
     }
     return 0.0;
 }
@@ -137,7 +142,7 @@ function calculateIntensity(
 
         planeOffset = (planeOffset / fVar1) * (((fVar2 + fVar2) - fVar1 * fVar1 * 3.0) + 1.0);
 
-        return planeOffset + planeOffset;
+        return 2 * planeOffset;
     }
     return 0.0;
 }
