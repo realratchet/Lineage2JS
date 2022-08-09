@@ -1,14 +1,14 @@
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending } from "three";
-
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
+import { appendGlobalUniforms } from "../global-uniforms";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending } from "three";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     parameters: IDecodedParameter,
-    uniforms: { [key: string]: Uniform },
-    defines: { [key: string]: any }
+    uniforms: GenericObjectContainer_T<Uniform>,
+    defines: GenericObjectContainer_T<any>
 }
 
 function applyParameters({ name, parameters, uniforms, defines }: ApplyParams_T): void {
@@ -56,13 +56,12 @@ class MeshStaticMaterial extends ShaderMaterial {
         // debugger;
 
 
-        const defines: { [key: string]: any } = { USE_FOG: "", FOG_EXP2: "" };
-        const uniforms: { [key: string]: Uniform } = UniformsUtils.merge([
+
+        const defines: GenericObjectContainer_T<any> = { USE_FOG: "", FOG_EXP2: "" };
+        const uniforms: GenericObjectContainer_T<Uniform> = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.lights,
-            UniformsLib.fog,
             {
                 alphaTest: new Uniform(1e-3),
-                globalTime: new Uniform(0),
                 diffuse: new Uniform(new Color(0xffffff)),
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
@@ -89,7 +88,7 @@ class MeshStaticMaterial extends ShaderMaterial {
                     brightness: 1
                 })
             }
-        ]);
+        ]));
 
         function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
             if (!parameters) return;
@@ -165,12 +164,16 @@ class MeshStaticMaterial extends ShaderMaterial {
         if (info.opacity) this.transparent = true;
 
         switch (info.blendingMode) {
-            case "normal": this.blending = NormalBlending; break; case "masked":
-                this.blending = CustomBlending;
-                this.blendSrc = SrcAlphaFactor;
-                this.blendDst = OneMinusSrcAlphaFactor;
-                this.alphaTest = 0;
+            case "normal":
+            case "masked":
+                this.blending = NormalBlending;
                 break;
+            // case "masked":
+            //     this.blending = CustomBlending;
+            //     this.blendSrc = SrcAlphaFactor;
+            //     this.blendDst = OneMinusSrcAlphaFactor;
+            //     this.alphaTest = 0;
+            //     break;
             case "translucent": this.transparent = true; break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }

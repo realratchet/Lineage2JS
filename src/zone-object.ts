@@ -3,15 +3,16 @@ import { Box3, Color, Fog, Object3D, Sphere } from "three";
 const tmpColor = new Color();
 
 class ZoneObject extends Object3D {
-    protected boundsRender = new Box3();
-    protected boundsRenderSphere = new Sphere();
-    protected childZones: ZoneObject[] = [];
-    protected childObjects: Object3D[] = [];
+    protected readonly childZones: ZoneObject[] = [];
+    protected readonly childObjects: Object3D[] = [];
+
+    public fog: Fog = null;
+
+    public readonly boundsRender = new Box3();
+    public readonly boundsRenderSphere = new Sphere();
 
     public readonly isZoneObject = true;
     public readonly type = "Zone";
-
-    public fog: Fog = null;
 
     public setRenderBounds(min: Vector3Arr, max: Vector3Arr): this {
 
@@ -39,14 +40,14 @@ class ZoneObject extends Object3D {
         return this;
     }
 
-    public update(enableZoneCulling: boolean, frustum: THREE.Frustum, cameraPosition: THREE.Vector3) {
-        if (enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere) && !this.boundsRender.containsPoint(cameraPosition)) {
+    public update(enableZoneCulling: boolean, frustum: THREE.Frustum) {
+        if (enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere)) {
             this.children = [];
             return false;
         }
 
         this.children = this.childObjects;
-        this.childZones.forEach(z => z.update(enableZoneCulling, frustum, cameraPosition));
+        this.childZones.forEach(z => z.update(enableZoneCulling, frustum));
 
         return true;
     }

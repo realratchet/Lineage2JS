@@ -22,8 +22,8 @@ abstract class UObject {
 
     public constructor(...params: any[]) { }
 
-    protected getSignedMap(): { [key: string]: boolean } { return {}; }
-    protected getPropertyMap(): { [key: string]: string } { return {}; }
+    protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
+    protected getPropertyMap(): GenericObjectContainer_T<string> { return {}; }
 
     protected setReadPointers(exp: UExport) {
         this.readStart = this.readHead = exp.offset.value as number + this.readHeadOffset;

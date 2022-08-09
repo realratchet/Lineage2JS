@@ -133,7 +133,7 @@ class ULevel extends UObject {
             accum[obj.constructor.name].push(obj);
 
             return accum;
-        }, {} as { [key: string]: UObject[] });
+        }, {} as GenericObjectContainer_T<UObject[]>);
 
         // debugger;
 

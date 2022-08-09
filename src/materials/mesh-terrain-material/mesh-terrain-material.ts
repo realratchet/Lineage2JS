@@ -6,8 +6,8 @@ import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
 class MeshTerrainMaterial extends ShaderMaterial {
     // @ts-ignore
     constructor(info: MeshTerrainMaterialParameters) {
-        const defines: { [key: string]: any } = {};
-        const uniforms: { [key: string]: Uniform } = {
+        const defines: GenericObjectContainer_T<any> = {};
+        const uniforms: GenericObjectContainer_T<Uniform> = {
             alphaTest: new Uniform(1e-3),
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),

@@ -20,12 +20,10 @@ import decodeObject3D, { decodeSector } from "./assets/decoders/object3d-decoder
 import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 
-async function addMaterialPreviews(pkgLoad: UPackage, impGroups: {
-    [key: string]: {
-        import: UImport;
-        index: number;
-    }[];
-}, decodeLibrary: IDecodeLibrary, objectGroup: Object3D) {
+async function addMaterialPreviews(pkgLoad: UPackage, impGroups: GenericObjectContainer_T<{
+    import: UImport;
+    index: number;
+}[]>, decodeLibrary: IDecodeLibrary, objectGroup: Object3D) {
     let index = 0;
     const geometry = new PlaneBufferGeometry(1000, 1000);
     const uShaders = await Promise.all(impGroups["Shader"].map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
@@ -121,7 +119,7 @@ async function startCore() {
         list.push({ import: imp, index: -index - 1 });
 
         return accum;
-    }, {} as { [key: string]: { import: UImport, index: number }[] });
+    }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
 
     const expGroups = pkgLoad.exports.reduce((accum, exp, index) => {
 
@@ -131,7 +129,7 @@ async function startCore() {
         list.push({ index, export: exp });
 
         return accum;
-    }, {} as { [key: string]: { index: number, export: UExport }[] });
+    }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>);
 
     const decodeLibrary: IDecodeLibrary = {
         loadMipmaps: true,
@@ -282,24 +280,24 @@ async function startCore() {
 
     objectGroup.add(decodeSector(decodeLibrary));
 
-    Object.values(decodeLibrary.zones).forEach(zone => {
-        const { min, max } = zone.bounds;
-        const box = new Box3();
-        const color = new Color(Math.floor(Math.random() * 0xffffff));
+    // Object.values(decodeLibrary.zones).forEach(zone => {
+    //     const { min, max } = zone.bounds;
+    //     const box = new Box3();
+    //     const color = new Color(Math.floor(Math.random() * 0xffffff));
 
-        box.min.fromArray(min);
-        box.max.fromArray(max);
+    //     box.min.fromArray(min);
+    //     box.max.fromArray(max);
 
-        const helper = new Box3Helper(box, color);
-        if ("name" in zone) helper.name = zone.name;
+    //     const helper = new Box3Helper(box, color);
+    //     if ("name" in zone) helper.name = zone.name;
 
-        objectGroup.add(helper);
-    });
+    //     objectGroup.add(helper);
+    // });
 
     console.info("System has loaded!");
-    
 
-    renderManager.enableZoneCulling = false;
+
+    // renderManager.enableZoneCulling = false;
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
     renderManager.startRendering();

@@ -1,3 +1,4 @@
+type GenericObjectContainer_T<T> = { [key: string]: T };
 type UPackage = import("./un-package").UPackage;
 type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
 type UHeader = import("./un-header").UHeader;
@@ -160,8 +161,8 @@ interface IBaseTimedConstructable {
 }
 
 interface IDecodedParameter {
-    uniforms: { [key: string]: any },
-    defines: { [key: string]: any },
+    uniforms: GenericObjectContainer_T<any>,
+    defines: GenericObjectContainer_T<any>,
     isUsingMap: boolean,
     transformType: "none" | "pan" | "rotate",
 }
@@ -193,7 +194,7 @@ interface IBaseZoneDecodeInfo {
 }
 
 interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
-interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector", zones: { [key: string]: IZoneDecodeInfo } }
+interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector", zones: GenericObjectContainer_T<IZoneDecodeInfo> }
 
 interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: "StaticMeshInstance",
@@ -283,12 +284,12 @@ interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
 interface IDecodeLibrary {
     loadMipmaps: boolean,
     anisotropy: number,
-    materialModifiers: { [key: string]: IMaterialModifier },
-    materials: { [key: string]: IBaseMaterialDecodeInfo },
-    geometries: { [key: string]: IGeometryDecodeInfo },
-    geometryInstances: { [key: string]: number },
+    materialModifiers: GenericObjectContainer_T<IMaterialModifier>,
+    materials: GenericObjectContainer_T<IBaseMaterialDecodeInfo>,
+    geometries: GenericObjectContainer_T<IGeometryDecodeInfo>,
+    geometryInstances: GenericObjectContainer_T<number>,
     sector: string,
-    zones: { [key: string]: IBaseZoneDecodeInfo }
+    zones: GenericObjectContainer_T<IBaseZoneDecodeInfo>
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };

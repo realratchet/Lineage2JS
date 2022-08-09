@@ -2,14 +2,16 @@ import ZoneObject from "../zone-object";
 import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
+const DEFAULT_FAR = 100_000;
 
 class RenderManager {
     public readonly renderer: WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
-    public readonly camera = new PerspectiveCamera(75, 1, 0.1, 100000);
+    public readonly camera = new PerspectiveCamera(75, 1, 0.1, DEFAULT_FAR);
     public readonly scene = new Scene();
     public readonly lastSize: Vector2 = new Vector2();
     public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = {} as any;
@@ -236,27 +238,35 @@ class RenderManager {
 
             if ((object as ZoneObject).isZoneObject) {
 
-                if (!object.update(this.enableZoneCulling, this.frustum, this.camera.position)) return;
+                const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
 
-                fog = object.fog;
-            }
+                if (inBounds) fog = (object as ZoneObject).fog;
 
-            if (object.material) {
-                const materials = object.material instanceof Array ? object.material : [object.material];
-
-                materials.forEach((material: any) => {
-                    if (material?.uniforms?.globalTime) {
-                        material.uniforms.globalTime.value = currentTime / 600;
-                    }
-
-                    if (fog) {
-                        material?.uniforms?.fogColor?.value.copy(fog.color);
-                        if (material?.uniforms?.fogNear?.value) material.uniforms.fogNear.value = fog.near;
-                        if (material?.uniforms?.fogFar?.value) material.uniforms.fogFar.value = fog.far;
-                    }
-                });
+                (object as ZoneObject).update(this.enableZoneCulling, this.frustum);
             }
         });
+
+        GLOBAL_UNIFORMS.globalTime.value = currentTime / 600;
+
+        const oldFar = this.camera.far;
+
+        if (fog) {
+            GLOBAL_UNIFORMS.fogColor.value.copy(fog.color);
+            GLOBAL_UNIFORMS.fogNear.value = fog.near;
+            GLOBAL_UNIFORMS.fogFar.value = fog.far;
+
+            this.renderer.setClearColor(fog.color);
+            this.camera.far = fog.far * 1.2;
+        } else {
+            GLOBAL_UNIFORMS.fogColor.value.setHex(0x000000);
+            GLOBAL_UNIFORMS.fogNear.value = DEFAULT_FAR * 10;
+            GLOBAL_UNIFORMS.fogFar.value = DEFAULT_FAR * 10 + 1;
+            
+            this.renderer.setClearColor(0x000000);
+            this.camera.far = DEFAULT_FAR;
+        }
+
+        if (this.camera.far !== oldFar) this.camera.updateProjectionMatrix();
 
         // this.scene.fog = new FogExp2(0xff00ff, 0.1);
     }
