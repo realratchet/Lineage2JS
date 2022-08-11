@@ -199,50 +199,12 @@ async function startCore() {
 
     await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
 
-    // const uLights = await Promise.all((expGroups["Light"] || []).map(exp => pkgLoad.fetchObject<ULight>(exp.index + 1)))//.filter(x => x.isSunAffected);
 
-    // const data = uLights.map(l => [`objectName: ${l.objectName}`, `hue: ${l.hue}`, `saturation: ${l.saturation}`, `lightness: ${l.lightness}`]);
-
-    // data.forEach(d=>console.log(d.join(", ")))
-
-    // debugger;
+    const uTerrainInfo = await pkgLoad.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1);
+    await uTerrainInfo.getDecodeInfo(decodeLibrary);
 
     const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
     await uModel.getDecodeInfo(decodeLibrary);
-
-    // const zones = {};
-
-    // for (let nodeIndex = 0, ncount = uModel.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
-    //     const node: FBSPNode = uModel.bspNodes[nodeIndex];
-    //     const surf: FBSPSurf = uModel.bspSurfs[node.iSurf];
-
-    //     const zone = surf.actor.getZone();
-
-    //     zones[zone.uuid] = zones[zone.uuid] || zone.location.getVectorElements();
-    // }
-
-    // Object.values(zones).forEach(l => {
-    //     const mesh = new Mesh(new SphereBufferGeometry(10), new MeshBasicMaterial({ color: 0xff00ff, depthTest: false, transparent: true }));
-
-    //     mesh.position.fromArray(l);
-
-    //     objectGroup.add(mesh);
-    // });
-
-
-
-    // const zones = await Promise.all(uModel.zones.slice(1).map(x => pkgLoad.fetchObject<UZoneInfo>(x.index)));
-
-    // zones.forEach(zoneInfo => {
-    //     const mesh = new Mesh(new SphereBufferGeometry(100), new MeshBasicMaterial({ color: 0xff00ff, depthTest: false, depthWrite: true }));
-    //     mesh.position.set(zoneInfo.location.x, zoneInfo.location.z, zoneInfo.location.y);
-
-    //     objectGroup.add(mesh);
-    // });
-
-    // debugger;
-
-
 
     // (await Promise.all([
     //     // 1441,
@@ -280,22 +242,9 @@ async function startCore() {
 
     objectGroup.add(decodeSector(decodeLibrary));
 
-    // Object.values(decodeLibrary.zones).forEach(zone => {
-    //     const { min, max } = zone.bounds;
-    //     const box = new Box3();
-    //     const color = new Color(Math.floor(Math.random() * 0xffffff));
-
-    //     box.min.fromArray(min);
-    //     box.max.fromArray(max);
-
-    //     const helper = new Box3Helper(box, color);
-    //     if ("name" in zone) helper.name = zone.name;
-
-    //     objectGroup.add(helper);
-    // });
-
     console.info("System has loaded!");
 
+    // debugger;
 
     // renderManager.enableZoneCulling = false;
     renderManager.scene.add(objectGroup);

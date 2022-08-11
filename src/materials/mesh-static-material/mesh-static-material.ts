@@ -57,7 +57,7 @@ class MeshStaticMaterial extends ShaderMaterial {
 
 
 
-        const defines: GenericObjectContainer_T<any> = { USE_FOG: "", FOG_EXP2: "" };
+        const defines: GenericObjectContainer_T<any> = { USE_FOG: "" };
         const uniforms: GenericObjectContainer_T<Uniform> = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.lights,
             {

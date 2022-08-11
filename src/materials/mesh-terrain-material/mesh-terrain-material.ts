@@ -1,13 +1,14 @@
-import { ShaderMaterial, Uniform, Color, Matrix3 } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
+import { appendGlobalUniforms } from "../global-uniforms";
 
 class MeshTerrainMaterial extends ShaderMaterial {
     // @ts-ignore
     constructor(info: MeshTerrainMaterialParameters) {
-        const defines: GenericObjectContainer_T<any> = {};
-        const uniforms: GenericObjectContainer_T<Uniform> = {
+        const defines: GenericObjectContainer_T<any> = { USE_FOG: "" };
+        const uniforms: GenericObjectContainer_T<Uniform> = appendGlobalUniforms({
             alphaTest: new Uniform(1e-3),
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),
@@ -24,12 +25,12 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layer9: new Uniform(null),
             layer10: new Uniform(null),
             layer11: new Uniform(null),
-        };
+        });
 
         info.layers.forEach((layer, i) => {
             if (!layer.map && !layer.alphaMap) return;
 
-            defines[`USE_UV${i === 0 ? "" : i + 1}`] = "";
+            defines[`USE_UV${i === 0 ? "" : `_${i + 1}`}`] = "";
             defines[`USE_LAYER_${i + 1}`] = "";
 
             const u = uniforms[`layer${i + 1}`].value = { map: {}, alphaMap: {} };
@@ -61,8 +62,10 @@ class MeshTerrainMaterial extends ShaderMaterial {
         super({
             defines,
             uniforms,
+            transparent:true,  
             vertexShader: VERTEX_SHADER,
-            fragmentShader: FRAGMENT_SHADER
+            fragmentShader: FRAGMENT_SHADER,
+            side: DoubleSide
         });
     }
 }

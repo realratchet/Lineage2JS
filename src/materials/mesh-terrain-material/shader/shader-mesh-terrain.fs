@@ -192,138 +192,150 @@ void main() {
     #include <logdepthbuf_fragment>
 
     #if defined(USE_LAYER_1) || defined(USE_LAYER_2) || defined(USE_LAYER_3) || defined(USE_LAYER_4) || defined(USE_LAYER_5) || defined(USE_LAYER_6) || defined(USE_LAYER_7) || defined(USE_LAYER_8) || defined(USE_LAYER_9)  || defined(USE_LAYER_10)  || defined(USE_LAYER_11)
+        vec2 uv;
         vec4 layer, layerMask;
         vec4 texelDiffuse = vec4(0.0);
     #endif
 
     #ifdef USE_LAYER_1
+        uv = vUv;
         #ifdef USE_LAYER_1_OPACITY
-            layerMask = texture2D(layer1.alphaMap.texture, vUv);
+            layerMask = texture2D(layer1.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer1.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer1.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_2
+        uv = vUv2;
         #ifdef USE_LAYER_2_OPACITY
-            layerMask = texture2D(layer2.alphaMap.texture, vUv);
+            layerMask = texture2D(layer2.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer2.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer2.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_3
+        uv = vUv3;
         #ifdef USE_LAYER_3_OPACITY
-            layerMask = texture2D(layer3.alphaMap.texture, vUv);
+            layerMask = texture2D(layer3.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer3.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer3.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_4
+        uv = vUv4;
         #ifdef USE_LAYER_4_OPACITY
-            layerMask = texture2D(layer4.alphaMap.texture, vUv);
+            layerMask = texture2D(layer4.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer4.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer4.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_5
+        uv = vUv5;
         #ifdef USE_LAYER_5_OPACITY
-            layerMask = texture2D(layer5.alphaMap.texture, vUv);
+            layerMask = texture2D(layer5.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer5.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer5.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_6
+        uv = vUv6;
         #ifdef USE_LAYER_6_OPACITY
-            layerMask = texture2D(layer6.alphaMap.texture, vUv);
+            layerMask = texture2D(layer6.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer6.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer6.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_7
+        uv = vUv7;
         #ifdef USE_LAYER_7_OPACITY
-            layerMask = texture2D(layer7.alphaMap.texture, vUv);
+            layerMask = texture2D(layer7.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer7.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer7.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_8
+        uv = vUv8;
         #ifdef USE_LAYER_8_OPACITY
-            layerMask = texture2D(layer8.alphaMap.texture, vUv);
+            layerMask = texture2D(layer8.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer8.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer8.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_9
+        uv = vUv9;
         #ifdef USE_LAYER_9_OPACITY
-            layerMask = texture2D(layer9.alphaMap.texture, vUv);
+            layerMask = texture2D(layer9.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer9.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer9.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_10
+        uv = vUv10;
         #ifdef USE_LAYER_10_OPACITY
-            layerMask = texture2D(layer10.alphaMap.texture, vUv);
+            layerMask = texture2D(layer10.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer10.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer10.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif
 
     #ifdef USE_LAYER_11
+        uv = vUv11;
         #ifdef USE_LAYER_11_OPACITY
-            layerMask = texture2D(layer11.alphaMap.texture, vUv);
+            layerMask = texture2D(layer11.alphaMap.texture, uv);
         #else
             layerMask = vec4(1.0);
         #endif
 
-        layer = vec4(texture2D(layer11.map.texture, vUv).rgb, 1.0) * layerMask.r;
+        layer = vec4(texture2D(layer11.map.texture, uv).rgb, 1.0) * layerMask.r;
 
         texelDiffuse = addLayer(layer, texelDiffuse);
     #endif

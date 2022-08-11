@@ -2,15 +2,11 @@ import UAActor from "../un-aactor";
 import { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
 import FVector from "../un-vector";
-import { clamp, generateUUID } from "three/src/math/MathUtils";
-import hsvToRgb from "@client/utils/hsv-to-rgb";
+import { clamp } from "three/src/math/MathUtils";
 import { FPlane } from "../un-plane";
-import { FNTimeHSV } from "../un-time-light";
-import FCoords from "../un-coords";
-import FRotator from "../un-rotator";
 import { sampleLightIntensity } from "../un-sample-light";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
-import { selectByTime, staticMeshAmbient, staticMeshLight } from "../un-time-list";
+import { selectByTime, staticMeshAmbient } from "../un-time-list";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -260,12 +256,12 @@ class UStaticMeshActor extends UAActor {
         const timeOfDay = 0;
 
         if (this.isSunAffected) {
-            const ambient = selectByTime(timeOfDay, staticMeshAmbient);
+            const ambient = selectByTime(timeOfDay, staticMeshAmbient).getColor();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += ambient.r / 255;
-                instanceColors[i + 1] += ambient.g / 255;
-                instanceColors[i + 2] += ambient.b / 255;
+                instanceColors[i + 0] += ambient[0];
+                instanceColors[i + 1] += ambient[1];
+                instanceColors[i + 2] += ambient[2];
             }
         }
 
@@ -390,10 +386,10 @@ class UStaticMeshActor extends UAActor {
         zoneInfo.bounds.isValid = true;
 
         const { min, max } = library.geometries[mesh.geometry].bounds.box;
-
         const _min = min.map((v, i) => v + _position[i]);
         const _max = max.map((v, i) => v + _position[i]);
 
+        zoneInfo.bounds.isValid = true;
         [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
             ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                 for (let i = 0; i < 3; i++)

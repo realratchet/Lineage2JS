@@ -25,6 +25,8 @@ class FVector extends FConstructable {
         this.x = x;
         this.y = y;
         this.z = z;
+
+        return this;
     }
 
     public getElements(): [number, number, number] { return [this.x, this.y, this.z]; }

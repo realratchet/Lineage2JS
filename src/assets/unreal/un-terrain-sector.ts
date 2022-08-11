@@ -4,17 +4,20 @@ import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import { selectByTime, terrainAmbient, terrainLight } from "./un-time-list";
+import { mapLinear } from "three/src/math/MathUtils";
+import FVector from "./un-vector";
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
-    protected boundingBox: FBox = new FBox();
+    public readonly boundingBox: FBox = new FBox();
     protected offsetX: number;
     protected offsetY: number;
-    protected info: UTerrainInfo;
+    public info: UTerrainInfo;
     protected cellNum: number;
     protected sectorWidth: number;
 
-    protected unkId0: number;
+    protected infoId: number;
     protected unkNum0: number;
     protected unkNum1: number;
     protected unkNum2: number;
@@ -56,7 +59,7 @@ class UTerrainSector extends UObject {
 
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
 
-    public async getDecodeInfo(library: IDecodeLibrary, info: UTerrainInfo): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary, info: UTerrainInfo, { min, max, data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
         if (this.uuid in library.geometries) return {
             type: "TerrainSegment",
             name: this.objectName,
@@ -69,30 +72,46 @@ class UTerrainSector extends UObject {
 
         await this.onLoaded();
 
-        const iTerrainMap = library.materials[info.terrainMap.uuid] as ITextureDecodeInfo;
+
         const width = iTerrainMap.width;
-        const data = new Uint16Array(iTerrainMap.buffer);
         const TypedIndicesArray = getTypedArrayConstructor(17 * 17);
 
-        const vertices = new Float32Array(17 * 17 * 3), indices = new TypedIndicesArray(16 * 16 * 6);
-        const { x: sx, y: sy, z: sz } = info.terrainScale;
+        const positions = new Float32Array(17 * 17 * 3), colors = new Float32Array(17 * 17 * 3);
+        const indices = new TypedIndicesArray(16 * 16 * 6);
+        const [sx, , sz] = info.terrainScale.getVectorElements();
 
         // const sectorX = this.offsetX / 2 / 2048;
         // const sectorY = this.offsetY / 2 / 2048;
+
+        const timeOfDay = 0;
+        const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
+
+        const trueBoundingBox = new FBox();
+        const tmpVector = new FVector();
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
                 const hmy = y + this.offsetY;
                 const offset = Math.min(hmy, 255) * width + Math.min(hmx, 255);
-                const height = (data[offset] - 32768) / 128;
                 const idxOffset = (y * 17 + x) * 3;
+                const px = hmx * sx;
+                const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
+                const pz = hmy * sz;
 
-                vertices[idxOffset + 0] = hmx * sx;
-                vertices[idxOffset + 1] = height * sz / 2;
-                vertices[idxOffset + 2] = hmy * sy;
+                positions[idxOffset + 0] = px;
+                positions[idxOffset + 1] = py;
+                positions[idxOffset + 2] = pz;
+
+                trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
+
+                colors[idxOffset + 0] = ambient[0];
+                colors[idxOffset + 1] = ambient[1];
+                colors[idxOffset + 2] = ambient[2];
             }
         }
+
+        // debugger;
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -150,32 +169,38 @@ class UTerrainSector extends UObject {
 
                     uv[idxOffset + 0] = hmx / layerWidth;
                     uv[idxOffset + 1] = hmy / layerHeight;
+
+                    // uv[idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
+                    // uv[idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
+
                 }
             }
         }
 
+        // -3793.68212890625
+
+        // debugger;
+
         library.geometries[this.uuid] = {
             attributes: {
-                positions: vertices,
+                positions,
+                colors,
                 uvs
             },
             indices,
-            bounds: this.decodeBoundsInfo()
+            bounds: {
+                box: trueBoundingBox.isValid ? {
+                    min: [trueBoundingBox.min.x, trueBoundingBox.min.y, trueBoundingBox.min.z],
+                    max: [trueBoundingBox.max.x, trueBoundingBox.max.y, trueBoundingBox.max.z]
+                } : null
+            }
         };
 
         return {
+            uuid: this.uuid,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: info.uuid
-        };
-    }
-
-    public decodeBoundsInfo(): IBoundsDecodeInfo {
-        return {
-            box: this.boundingBox.isValid ? {
-                min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
-                max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
-            } : null
         };
     }
 
@@ -189,7 +214,7 @@ class UTerrainSector extends UObject {
         // pkg.dump(1, true, false);
         pkg.seek(1);
 
-        this.unkId0 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
 
         // const uint16 = new BufferValue(BufferValue.uint16);
         // const int32 = new BufferValue(BufferValue.int32);
@@ -233,17 +258,17 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.unkArr0.load(pkg);
+        this.unkArr0 = this.unkArr0.load(pkg).getTypedArray();
+        this.unkArr1 = this.unkArr1.load(pkg).getTypedArray();
+        this.unkArr2 = this.unkArr2.load(pkg).getTypedArray();
+        this.unkArr3 = this.unkArr3.load(pkg).getTypedArray();
+        this.unkArr4 = this.unkArr4.load(pkg).getTypedArray();
+        this.unkArr5 = this.unkArr5.load(pkg).getTypedArray();
+        this.unkArr6 = this.unkArr6.load(pkg).getTypedArray();
+        this.unkArr7 = this.unkArr7.load(pkg).getTypedArray();
 
-        this.unkArr1.load(pkg);
-        this.unkArr2.load(pkg);
-        this.unkArr3.load(pkg);
-        this.unkArr4.load(pkg);
-        this.unkArr5.load(pkg);
-        this.unkArr6.load(pkg);
-        this.unkArr7.load(pkg);
+        this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
 
-        pkg.seek(64); // unknown 
 
         this.texInfo.load(pkg);
 
@@ -255,3 +280,5 @@ class UTerrainSector extends UObject {
 
 export default UTerrainSector;
 export { UTerrainSector };
+
+type HeightMapInfo_T = { min: number, max: number, data: Uint16Array, info: ITextureDecodeInfo };

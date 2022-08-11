@@ -11,8 +11,9 @@ class ZoneObject extends Object3D {
     public readonly boundsRender = new Box3();
     public readonly boundsRenderSphere = new Sphere();
 
+    public readonly isCullable: boolean = true;
     public readonly isZoneObject = true;
-    public readonly type = "Zone";
+    public readonly type: "Zone" | "Sector" = "Zone";
 
     public setRenderBounds(min: Vector3Arr, max: Vector3Arr): this {
 
@@ -41,7 +42,7 @@ class ZoneObject extends Object3D {
     }
 
     public update(enableZoneCulling: boolean, frustum: THREE.Frustum) {
-        if (enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere)) {
+        if (this.isCullable && enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere)) {
             this.children = [];
             return false;
         }
@@ -53,5 +54,10 @@ class ZoneObject extends Object3D {
     }
 }
 
+class SectorObject extends ZoneObject {
+    public readonly isSectorObject = true;
+    public readonly type = "Sector";
+}
+
 export default ZoneObject;
-export { ZoneObject };
+export { ZoneObject, SectorObject };

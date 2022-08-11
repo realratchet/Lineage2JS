@@ -109,6 +109,8 @@ class UTerrainLayer extends UObject {
 
         // debugger;
 
+        // this.bytesUnread
+
         return this;
     }
 }

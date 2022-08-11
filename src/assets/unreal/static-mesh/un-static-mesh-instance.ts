@@ -73,7 +73,7 @@ class UStaticMeshInstance extends UObject {
             color[offset + 2] = b / 255;
         }
 
-        const timeOfDay = 12;
+        const timeOfDay = 0;
 
         let validEnvironment: FAssignedLight = null;
         let startIndex: number, finishIndex: number;
@@ -90,7 +90,7 @@ class UStaticMeshInstance extends UObject {
                 finishIndex = i + 1;
                 startTime = timeForIndex;
                 finishTime = indexToTime(finishIndex, len);
-                lightingColor = [0, 0, 0];//selectByTime(timeOfDay, staticMeshLight).getColor();
+                lightingColor = selectByTime(timeOfDay, staticMeshLight).getColor();
 
                 break;
             }

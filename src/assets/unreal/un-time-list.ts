@@ -1,6 +1,63 @@
 import { FNTimeColor, FNTimeHSV } from "./un-time-light";
 
-// 8.157360553741455078125e-1
+const toHSV = ([t, h, s, v]: number[]) => new FNTimeHSV(t, h, s, v);
+const toColor = ([t, r, g, b]: number[]) => new FNTimeColor(t, r, g, b);
+
+const terrainLight = [
+    [0, 138, 182, 0],
+    [1, 138, 182, 200],
+    [2, 138, 182, 200],
+    [3, 138, 182, 200],
+    [4, 138, 182, 200],
+    [5, 138, 182, 200],
+    [6, 29, 153, 100],
+    [7, 29, 153, 450],
+    [8, 29, 153, 450],
+    [9, 29, 153, 450],
+    [10, 1, 255, 160],
+    [11, 1, 255, 160],
+    [12, 1, 255, 200],
+    [13, 1, 255, 200],
+    [14, 1, 255, 200],
+    [15, 1, 255, 200],
+    [16, 1, 255, 160],
+    [17, 1, 255, 160],
+    [18, 1, 255, 160],
+    [19, 1, 255, 160],
+    [20, 1, 255, 160],
+    [21, 24, 100, 350],
+    [22, 24, 100, 350],
+    [23, 24, 100, 350],
+    [24, 138, 182, 0]
+].map(toHSV);
+
+const terrainAmbient = [
+    [0, 51, 98, 122],
+    [1, 51, 98, 122],
+    [2, 51, 98, 122],
+    [3, 51, 98, 122],
+    [4, 51, 98, 122],
+    [5, 51, 98, 122],
+    [6, 100, 108, 132],
+    [7, 82, 89, 109],
+    [8, 82, 89, 109],
+    [9, 82, 89, 109],
+    [10, 100, 100, 100],
+    [11, 120, 120, 120],
+    [12, 120, 120, 120],
+    [13, 120, 120, 120],
+    [14, 120, 120, 120],
+    [15, 120, 120, 120],
+    [16, 120, 120, 120],
+    [17, 100, 100, 100],
+    [18, 122, 107, 99],
+    [19, 122, 107, 99],
+    [20, 122, 107, 99],
+    [21, 122, 107, 99],
+    [22, 122, 107, 99],
+    [23, 123, 96, 72],
+    [24, 51, 98, 122]
+].map(toColor);
 
 const staticMeshLight = [
     [0, 138, 182, 0],
@@ -29,7 +86,7 @@ const staticMeshLight = [
     [22, 24, 100, 190],
     [23, 24, 100, 190],
     [24, 24, 100, 0]
-].map(([t, h, s, v]) => new FNTimeHSV(t, h, s, v));
+].map(toHSV);
 
 const staticMeshAmbient = [
     [0, 75, 103, 131],
@@ -57,7 +114,7 @@ const staticMeshAmbient = [
     [22, 132, 118, 104],
     [23, 132, 118, 104],
     [24, 75, 103, 131],
-].map(([t, r, g, b]) => new FNTimeColor(t, r, g, b));
+].map(toColor);
 
 function selectByTime<T extends IBaseTimedConstructable>(timeOfDay: number, array: T[]): T {
     for (let i = 0, len = array.length; i < len; i++) {
@@ -70,4 +127,4 @@ function selectByTime<T extends IBaseTimedConstructable>(timeOfDay: number, arra
     return null;
 }
 
-export { selectByTime, staticMeshLight, staticMeshAmbient };
+export { selectByTime, terrainLight, terrainAmbient, staticMeshLight, staticMeshAmbient };

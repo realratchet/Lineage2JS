@@ -1,6 +1,6 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute } from "three";
 import decodeMaterial from "./material-decoder";
-import ZoneObject from "../../zone-object";
+import ZoneObject, { SectorObject } from "../../zone-object";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -159,22 +159,47 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
 }
 
 function decodeZoneObject(library: IDecodeLibrary, info: IBaseZoneDecodeInfo) {
-    const object = new ZoneObject();
+    const Constructor = info.type === "Sector" ? SectorObject : ZoneObject;
+    const object = new Constructor();
 
     if (info.name) object.name = info.name;
-    if (info.bounds && info.bounds.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
-    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    if (info.bounds?.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
+    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
     return object;
 }
 
 function decodeSector(library: IDecodeLibrary) {
     const sectorUuid = library.sector;
+    const sectorInfo = library.zones[sectorUuid];
     const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
-    const sector = decodeZoneObject(library, library.zones[sectorUuid]);
+    const sector = decodeZoneObject(library, sectorInfo);
 
-    zonesUuids.forEach(uuid => sector.add(decodeZoneObject(library, library.zones[uuid])));
+    let boundsNeedUpdate = false;
+
+    zonesUuids.forEach(uuid => {
+        const zoneInfo = library.zones[uuid];
+
+        sector.add(decodeZoneObject(library, zoneInfo));
+
+        if (zoneInfo.bounds?.isValid) {
+            const { min, max } = zoneInfo.bounds;
+
+            boundsNeedUpdate = true;
+            [[Math.min, sectorInfo.bounds.min], [Math.max, sectorInfo.bounds.max]].forEach(
+                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                    for (let i = 0; i < 3; i++)
+                        arr[i] = fn(arr[i], min[i], max[i]);
+                }
+            );
+        }
+    });
+
+    if (boundsNeedUpdate) {
+        sectorInfo.bounds.isValid = true;
+        sector.setRenderBounds(sectorInfo.bounds.min, sectorInfo.bounds.max);
+    }
 
     return sector;
 }

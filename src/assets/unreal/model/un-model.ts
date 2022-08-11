@@ -120,15 +120,13 @@ class UModel extends UPrimitive {
         // if (this.lightmaps.length > 0)
         //     debugger;
 
-        // debugger;
-
         return this;
     }
 
     public async getDecodeInfo(library: IDecodeLibrary): Promise<string[][]> {
         await this.onLoaded();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
-
+ 
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
@@ -263,7 +261,6 @@ class UModel extends UPrimitive {
                                 positions[vOffset + 2] = position.y;
 
                                 zoneInfo.bounds.isValid = true;
-
                                 [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
                                     ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                                         for (let i = 0; i < 3; i++)
