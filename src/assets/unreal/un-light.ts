@@ -2,7 +2,8 @@ import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
-import { FPrimitiveArray } from "./un-array";
+import FArray from "./un-array";
+import FNumber from "./un-number";
 import FVector from "./un-vector";
 
 class ULight extends UAActor {
@@ -20,7 +21,7 @@ class ULight extends UAActor {
     public isDynamic: boolean = false;
     public lightOnTime: number;
     public lightOffTime: number;
-    public skins: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    public skins: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
 
     protected isIgnoredRange: boolean;
 

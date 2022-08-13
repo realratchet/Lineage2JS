@@ -118,9 +118,13 @@ function decodeGroup(library: IDecodeLibrary, info: IMaterialGroupDecodeInfo): M
     return info.materials.map(info => decodeMaterial(library, library.materials[info]) as MeshStaticMaterial);
 }
 
-function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo): any {
+function decodeTerrainSegment(library: IDecodeLibrary, info: IMaterialTerrainSegmentDecodeInfo) {
+    const terrainMaterial = library.materials[info.terrainMaterial] as IMaterialTerrainDecodeInfo;
+    const uvs = fetchTexture(library, info.uvs);
+
     return new MeshTerrainMaterial({
-        layers: info.layers.map(({ map, alphaMap }) => {
+        uvs,
+        layers: terrainMaterial.layers.map(({ map, alphaMap }) => {
             return {
                 map: map ? decodeParameter(library, library.materials[map]) : null,
                 alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
@@ -128,6 +132,17 @@ function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo
         })
     });
 }
+
+// function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo) {
+//     return new MeshTerrainMaterial({
+//         layers: info.layers.map(({ map, alphaMap }) => {
+//             return {
+//                 map: map ? decodeParameter(library, library.materials[map]) : null,
+//                 alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
+//             };
+//         })
+//     });
+// }
 
 function decodeLightmapped(library: IDecodeLibrary, info: ILightmappedDecodeInfo) {
     return (decodeMaterial(library, library.materials[info["material"]]) as MeshStaticMaterial)
@@ -172,21 +187,22 @@ function decodeInstancedMaterial(library: IDecodeLibrary, info: IMaterialInstanc
 
     (materials instanceof Array ? materials : [materials])
         .filter(x => x)
-        .forEach(material => applyModifiers(library, material, modifiers));
+        .forEach(material => applyModifiers(library, material as MeshStaticMaterial, modifiers));
 
     return materials;
 }
 
-function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): MeshStaticMaterial | MeshStaticMaterial[] {
+function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return null;
     switch (info.materialType) {
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);
         case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
         case "modifier": return decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
-        case "terrain": return decodeTerrain(library, info as IMaterialTerrainDecodeInfo);
+        // case "terrain": return decodeTerrain(library, info as IMaterialTerrainDecodeInfo);
         case "lightmapped": return decodeLightmapped(library, info as ILightmappedDecodeInfo);
         case "instance": return decodeInstancedMaterial(library, info as IMaterialInstancedDecodeInfo);
+        case "terrainSegment": return decodeTerrainSegment(library, info as IMaterialTerrainSegmentDecodeInfo);
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
 }

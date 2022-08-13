@@ -47,15 +47,16 @@ class UTerrainSector extends UObject {
         }
     });
 
-    // likely lighting
-    protected unkArr0: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr1: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr2: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr3: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr4: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr5: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr6: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr7: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected shadowMaps = [
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8)
+    ];
 
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
 
@@ -94,20 +95,22 @@ class UTerrainSector extends UObject {
                 const hmx = x + this.offsetX;
                 const hmy = y + this.offsetY;
                 const offset = Math.min(hmy, 255) * width + Math.min(hmx, 255);
-                const idxOffset = (y * 17 + x) * 3;
+                const idxOffset = y * 17 + x;
+                const idxVertOffset = idxOffset * 3;
                 const px = hmx * sx;
                 const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
                 const pz = hmy * sz;
+                const shadowMap = 1.0;//this.shadowMaps[0].getElem(idxOffset) / 255;
 
-                positions[idxOffset + 0] = px;
-                positions[idxOffset + 1] = py;
-                positions[idxOffset + 2] = pz;
+                positions[idxVertOffset + 0] = px;
+                positions[idxVertOffset + 1] = py;
+                positions[idxVertOffset + 2] = pz;
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
-                colors[idxOffset + 0] = ambient[0];
-                colors[idxOffset + 1] = ambient[1];
-                colors[idxOffset + 2] = ambient[2];
+                colors[idxVertOffset + 0] = ambient[0] * shadowMap;
+                colors[idxVertOffset + 1] = ambient[1] * shadowMap;
+                colors[idxVertOffset + 2] = ambient[2] * shadowMap;
             }
         }
 
@@ -145,37 +148,73 @@ class UTerrainSector extends UObject {
             }
         }
 
+        const uvMultiplier = 2;
+        const uvOffset = 17 * 17 * uvMultiplier;
         const itLayer = info.layers.values();
         const layerCount = info.layers.size;
-        const uvs: Float32Array[] = new Array(layerCount);
+        const uvs = new Float32Array(uvOffset * (layerCount + 1));
 
         for (let k = 0; k < layerCount; k++) {
             const layer = itLayer.next().value as UTerrainLayer;
-            const uv = uvs[k] = new Float32Array(17 * 17 * 2)
 
             if (!layer.alphaMap && !layer.map)
                 continue;
 
+            const layerOffset = uvOffset * k;
+
             // const usx = layer.scaleW * sx * 2.0;
             // const usy = layer.scaleH * sy * 2.0;
 
-            const layerWidth = layer.map.width, layerHeight = layer.map.height;
+            // const layerWidth = layer.map.width, layerHeight = layer.map.height;
 
             for (let y = 0; y < 17; y++) {
                 for (let x = 0; x < 17; x++) {
                     const hmx = x + this.offsetX;
                     const hmy = y + this.offsetY;
-                    const idxOffset = (y * 17 + x) * 2;
+                    const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    uv[idxOffset + 0] = hmx / layerWidth;
-                    uv[idxOffset + 1] = hmy / layerHeight;
+                    // if (k % 3 == 0) {
+                    //     uvs[layerOffset + idxOffset + 0] = 1.0;
+                    //     uvs[layerOffset + idxOffset + 1] = 0;
+                    // } else if (k % 3 == 1) {
+                    //     uvs[layerOffset + idxOffset + 0] = 0.0;
+                    //     uvs[layerOffset + idxOffset + 1] = 1.0;
+                    // } else if (k % 3 == 2) {
+                    //     uvs[layerOffset + idxOffset + 0] = 1.0;
+                    //     uvs[layerOffset + idxOffset + 1] = 1.0;
+                    // }
 
-                    // uv[idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
-                    // uv[idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
+                    // uvs[layerOffset + idxOffset + 0] = hmx / layerWidth;
+                    // uvs[layerOffset + idxOffset + 1] = hmy / layerHeight;
+
+                    // uvs[layerOffset + idxOffset + 0] = 1.0;
+                    // uvs[layerOffset + idxOffset + 1] = 0;
+                    // uvs[layerOffset + idxOffset + 2] = 255;
+                    // uvs[layerOffset + idxOffset + 3] = 255;
+
+                    uvs[layerOffset + idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
+                    uvs[layerOffset + idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
 
                 }
             }
         }
+
+        // alpha uvs
+        const layerOffset = uvOffset * layerCount;
+        for (let y = 0; y < 17; y++) {
+            for (let x = 0; x < 17; x++) {
+                const hmx = x + this.offsetX;
+                const hmy = y + this.offsetY;
+                const idxOffset = (y * 17 + x) * uvMultiplier;
+
+                uvs[layerOffset + idxOffset + 0] = hmx / 255;
+                uvs[layerOffset + idxOffset + 1] = hmy / 255;
+            }
+        }
+
+        // debugger;
+
+        // uvs.fill(255);
 
         // -3793.68212890625
 
@@ -185,22 +224,43 @@ class UTerrainSector extends UObject {
             attributes: {
                 positions,
                 colors,
-                uvs
+                // uvs
             },
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: [trueBoundingBox.min.x, trueBoundingBox.min.y, trueBoundingBox.min.z],
-                    max: [trueBoundingBox.max.x, trueBoundingBox.max.y, trueBoundingBox.max.z]
+                    min: trueBoundingBox.min.toArray() as Vector3Arr,
+                    max: trueBoundingBox.max.toArray() as Vector3Arr
                 } : null
+                // box: trueBoundingBox.isValid ? {
+                //     min: this.boundingBox.min.getVectorElements(),
+                //     max: this.boundingBox.min.getVectorElements()
+                // } : null
             }
         };
+
+        // debugger;
+
+        library.materials[this.uuid] = {
+            materialType: "terrainSegment",
+            terrainMaterial: info.uuid,
+            uvs: {
+                textureType: "float",
+                buffer: uvs,
+                materialType: "texture",
+                width: 17 * 17,
+                height: layerCount + 1,
+                format: "rg"
+            } as IDataTextureDecodeInfo
+        } as IMaterialTerrainSegmentDecodeInfo;
+
+        // debugger;
 
         return {
             uuid: this.uuid,
             type: "TerrainSegment",
             geometry: this.uuid,
-            materials: info.uuid
+            materials: this.uuid
         };
     }
 
@@ -258,14 +318,7 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.unkArr0 = this.unkArr0.load(pkg).getTypedArray();
-        this.unkArr1 = this.unkArr1.load(pkg).getTypedArray();
-        this.unkArr2 = this.unkArr2.load(pkg).getTypedArray();
-        this.unkArr3 = this.unkArr3.load(pkg).getTypedArray();
-        this.unkArr4 = this.unkArr4.load(pkg).getTypedArray();
-        this.unkArr5 = this.unkArr5.load(pkg).getTypedArray();
-        this.unkArr6 = this.unkArr6.load(pkg).getTypedArray();
-        this.unkArr7 = this.unkArr7.load(pkg).getTypedArray();
+        this.shadowMaps.forEach(sm => sm.load(pkg));
 
         this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
 

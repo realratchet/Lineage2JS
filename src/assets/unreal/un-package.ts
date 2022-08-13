@@ -11,7 +11,7 @@ import UClass from "./un-class";
 import UStruct from "./un-struct";
 import UPlatte from "./un-palette";
 import UStaticMesh from "./static-mesh/un-static-mesh";
-import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend } from "./un-material";
+import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, UTexEnvMap } from "./un-material";
 import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
 import UZoneInfo from "./un-zone-info";
@@ -42,6 +42,7 @@ import ULevelSummary from "./un-level-summary";
 import UDefaultPhysicsVolume from "./un-physics";
 import UEncodedFile from "./un-encoded-file";
 import UTextBuffer from "./un-text-buffer";
+import UCubemap from "./un-cubemap";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -238,6 +239,8 @@ class UPackage extends UEncodedFile {
             case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
             case "TextBuffer": Constructor = UTextBuffer; break;
             case "FinalBlend": Constructor = UFinalBlend; break;
+            case "TexEnvMap": Constructor = UTexEnvMap; break;
+            case "Cubemap": Constructor = UCubemap; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

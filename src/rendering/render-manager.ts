@@ -33,6 +33,7 @@ class RenderManager {
             antialias: true,
             preserveDrawingBuffer: true,
             // premultipliedAlpha: false,
+            logarithmicDepthBuffer: true,
             alpha: true
         });
 
@@ -69,7 +70,7 @@ class RenderManager {
         this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
         this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
 
-        // tower ceiling fixture
+        // // tower ceiling fixture
         this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         this.camera.lookAt(17611.91280729978, -5819.704399240179, 116526.32678153258);
         this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);

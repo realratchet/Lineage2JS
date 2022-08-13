@@ -17,7 +17,7 @@ class UTerrainLayer extends UObject {
     protected friction: number;
     protected restitution: number;
     protected weightMap: UTexture;
-    protected scale: FVector;
+    public scale: FVector;
     protected toWorld = new Set();
     protected toMaskmap = new Set();
     protected useAlpha: boolean;

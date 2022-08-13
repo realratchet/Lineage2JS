@@ -20,44 +20,6 @@ import decodeObject3D, { decodeSector } from "./assets/decoders/object3d-decoder
 import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 
-async function addMaterialPreviews(pkgLoad: UPackage, impGroups: GenericObjectContainer_T<{
-    import: UImport;
-    index: number;
-}[]>, decodeLibrary: IDecodeLibrary, objectGroup: Object3D) {
-    let index = 0;
-    const geometry = new PlaneBufferGeometry(1000, 1000);
-    const uShaders = await Promise.all(impGroups["Shader"].map(imp => pkgLoad.fetchObject<UShader>(imp.index)));
-    const iShaders = await Promise.all(uShaders.map(obj => obj.getDecodeInfo(decodeLibrary)));
-
-    iShaders.forEach(async (iShader, i) => {
-        const material = decodeMaterial(decodeLibrary, decodeLibrary.materials[iShader]) as MeshStaticMaterial;
-        const mesh = new Mesh(geometry, material);
-
-        mesh.name = uShaders[i].objectName;
-        mesh.position.set(16317.62354947573 + 1000 * index++, -11492.261077168214 - 500, 114151.68197851974 - 500);
-
-        objectGroup.add(new BoxHelper(mesh));
-        objectGroup.add(mesh);
-    });
-
-    const uTextures = await Promise.all(impGroups["Texture"].map(imp => pkgLoad.fetchObject<UTexture>(imp.index)));
-    const iTextures = await Promise.all(uTextures.map(obj => obj.getDecodeInfo(decodeLibrary)));
-
-    index = 0;
-    iTextures.forEach(async (iTexture, i) => {
-        const material = decodeMaterial(decodeLibrary, decodeLibrary.materials[iTexture]) as MeshStaticMaterial;
-        const mesh = new Mesh(geometry, material);
-
-        mesh.name = uTextures[i].objectName;
-        mesh.position.set(16317.62354947573 + 1000 * index++, -11492.261077168214 - 500 - 1000, 114151.68197851974 - 500);
-
-        objectGroup.add(new BoxHelper(mesh));
-        objectGroup.add(mesh);
-    });
-}
-
-// export default loadTexture;
-
 async function startCore() {
     const geoHelperDirecional = new BoxBufferGeometry();
     const geoHelperPoint = new SphereBufferGeometry();
@@ -75,7 +37,7 @@ async function startCore() {
     const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
     const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
     // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
-    // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // /crashes always
+    const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // dion /crashes always
     // const pkg_21_22 = assetLoader.getPackage("21_22", "Level"); // execution grounds /crashes on static meshes
     // const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes on static meshes
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
@@ -91,7 +53,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_20_21;
+    const pkgLoadPromise = pkg_20_22;
 
     // await assetLoader.load(pkg_meffects);
 
@@ -144,8 +106,6 @@ async function startCore() {
 
     // debugger;
 
-    // return;
-
 
     // for (let { index } of expGroups["Light"]) {
     //     const uLight = await pkgLoad.fetchObject<ULight>(index + 1);
@@ -163,12 +123,6 @@ async function startCore() {
 
     //     objectGroup.add(helper);
     // }
-
-    // const sunlight = await pkgLoad.fetchObject<UNMovableSunLight>(expGroups.NMovableSunLight[0].index + 1);
-
-    // debugger;
-
-    // const nonDirectional = lights.filter(x => !x.isDirectional);
 
     const uLevel = await pkgLoad.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 
@@ -199,12 +153,11 @@ async function startCore() {
 
     await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
 
+    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
+    await uModel.getDecodeInfo(decodeLibrary);
 
     const uTerrainInfo = await pkgLoad.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1);
     await uTerrainInfo.getDecodeInfo(decodeLibrary);
-
-    const uModel = await pkgLoad.fetchObject<UModel>(uLevel.baseModelId); // base model
-    await uModel.getDecodeInfo(decodeLibrary);
 
     // (await Promise.all([
     //     // 1441,
@@ -241,6 +194,23 @@ async function startCore() {
     await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)))//.filter(x => x.children[0]?.name === "Exp_obj49");
 
     objectGroup.add(decodeSector(decodeLibrary));
+
+    // const boundsGroup = new Object3D();
+    // objectGroup.add(boundsGroup);
+    // objectGroup.name = "Bounds Helpers";
+    // Object.values(decodeLibrary.zones).forEach(zone => {
+    //     const { min, max } = zone.bounds;
+    //     const box = new Box3();
+    //     const color = new Color(Math.floor(Math.random() * 0xffffff));
+
+    //     box.min.fromArray(min);
+    //     box.max.fromArray(max);
+
+    //     const helper = new Box3Helper(box, color);
+    //     if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
+
+    //     boundsGroup.add(helper);
+    // });
 
     console.info("System has loaded!");
 

@@ -39,7 +39,7 @@ class FBSPNode extends FConstructable {
     public unkInt0: number;                  // 4 bytes, static between same surface nodes
     public unkInt1: number;                  // 4 bytes, change between same surface nodes
 
-    public surfaceOrigin = new FVector();                 // 12 bytes, origin of the bsp surface node
+    public plane2 = new FPlane();                 // 12 bytes, origin of the bsp surface node
     public unkFloat: number;
     public unkBytes = BufferValue.allocBytes(16) // 16 bytes, usually 0?
 
@@ -65,8 +65,7 @@ class FBSPNode extends FConstructable {
         this.iCollisionBound = pkg.read(compat32).value as number;
         this.iRenderBound = pkg.read(compat32).value as number;
 
-        this.surfaceOrigin.load(pkg);
-        this.unkFloat = pkg.read(float).value as number;
+        this.plane2.load(pkg);
 
         pkg.read(this.unkBytes);
 
@@ -86,6 +85,9 @@ class FBSPNode extends FConstructable {
         this.unkInt1 = pkg.read(uint32).value as number;
 
         this.iLightmapIndex = pkg.read(int32).value as number;
+    
+
+        // debugger;
 
         return this;
     }

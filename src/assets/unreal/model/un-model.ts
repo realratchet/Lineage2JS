@@ -127,6 +127,8 @@ class UModel extends UPrimitive {
         await this.onLoaded();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
  
+        // debugger;
+
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {

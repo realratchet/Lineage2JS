@@ -135,17 +135,17 @@ class ULevel extends UObject {
             return accum;
         }, {} as GenericObjectContainer_T<UObject[]>);
 
-        // debugger;
+        debugger;
 
-        return {
-            type: "Level",
-            name: this.url.map,
-            children: (await Promise.all([
-                this.baseModel.getDecodeInfo(library),
-                "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-                "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
-            ])).flat()
-        };
+        // return {
+        //     type: "Level",
+        //     name: this.url.map,
+        //     children: (await Promise.all([
+        //         this.baseModel.getDecodeInfo(library),
+        //         "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+        //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
+        //     ])).flat()
+        // };
     }
 }
 

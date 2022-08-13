@@ -8,6 +8,7 @@ const CLEANUP_NAMESPACE = true;
 abstract class UObject {
     public objectName = "Exp_None";
     public exportIndex?: number = null;
+    public exp?: UExport = null;
 
     public readonly uuid = generateUUID();
     public readonly careUnread: boolean = true;
@@ -223,7 +224,7 @@ abstract class UObject {
         const { name: propName, arrayIndex } = tag;
 
         if (!varName)
-            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
+            throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of type '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
         if (!this.hasOwnProperty(varName))
             throw new Error(`Cannot map property '${propName}' -> ${varName}`);;

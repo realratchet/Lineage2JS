@@ -61,6 +61,23 @@ enum TexRotationType_T {
     }
  */
 
+class UTexEnvMap extends UBaseModifier {
+    protected texCoordSource: number;
+    protected material: UCubemap;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "TexCoordSource": "texCoordSource",
+            "Material": "material"
+        });
+    }
+
+    public getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        // throw new Error("Method not implemented.");
+        return null;
+    }
+}
+
 class UFinalBlend extends UBaseModifier {
     protected material: UMaterial;
     protected frameBufferBlending: number;
@@ -304,6 +321,8 @@ class UTexRotator extends UBaseModifier {
     }
 }
 
+
+
 class UTexOscillator extends UBaseModifier {
     protected matrix: UMatrix;
     protected rateU: number;
@@ -431,4 +450,4 @@ class FStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T };
+export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap };

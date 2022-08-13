@@ -7,6 +7,7 @@ type UExport<T extends UObject = UObject> = import("./un-export").UExport;
 type UName = import("./un-name").UName;
 type UImport = import("./un-import").UImport;
 type UTexture = import("./un-texture").UTexture;
+type UCubemap = import("./un-cubemap").UCubemap;
 type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 type UObject = import("./un-object").UObject;
 type UClass = import("./un-class").UClass;
@@ -56,6 +57,7 @@ type UTexRotator = import("./un-material").UTexRotator;
 type UTexPanner = import("./un-material").UTexPanner;
 type UColorModifier = import("./un-material").UColorModifier;
 type UTexOscillator = import("./un-material").UTexOscillator;
+type UTexEnvMap = import("./un-material").UTexEnvMap;
 type URangeVector = import("./un-range").URangeVector;
 type URange = import("./un-range").URange;
 type FPlane = import("./un-plane").FPlane;
@@ -85,13 +87,19 @@ type FStaticLightmapTexture = import("./model/un-multilightmap-texture").FStatic
 type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
-type DecodableTexture_T = "rgba" | "dds" | "g16";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance";
+type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T, color?: boolean }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "modifier",
     modifierType: DecodableMaterialModifier_T
+}
+
+interface IMaterialTerrainSegmentDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "terrainSegment";
+    terrainMaterial: string,
+    uvs: IDataTextureDecodeInfo
 }
 
 interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -109,9 +117,12 @@ interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "texture",
     textureType: DecodableTexture_T,
     buffer: ArrayBuffer,
-    wrapS: number, wrapT: number,
-    width: number, height: number
+    wrapS?: number, wrapT?: number,
+    width: number, height: number,
 }
+
+type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
+interface IDataTextureDecodeInfo extends ITextureDecodeInfo { format?: DataTextureFormats_T }
 
 interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "group",
