@@ -1,7 +1,8 @@
 import ULevelSummary from "./un-level-summary";
 import UAActor from "./un-aactor";
+import FBox from "./un-box";
 
-class ULevelInfo extends UAActor {
+class ULevelInfo extends UAActor implements IInfo {
     protected readHeadOffset: number = 17;
 
     protected time: number;
@@ -42,14 +43,29 @@ class ULevelInfo extends UAActor {
         });
     }
 
-    // public doLoad(pkg: UPackage, exp: UExport) {
-    //     super.doLoad(pkg, exp);
+    public doLoad(pkg: UPackage, exp: UExport) {
+        super.doLoad(pkg, exp);
 
-    //     this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-    //     debugger;
-        
-    // }
+        // debugger;
+
+    }
+
+    async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        await this.onLoaded();
+
+        library.sector = this.uuid;
+        library.zones[this.uuid] = {
+            uuid: this.uuid,
+            type: "Sector",
+            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            name: this.objectName,
+            children: []
+        };
+
+        return this.uuid;
+    }
 }
 
 export default ULevelInfo;

@@ -21,7 +21,9 @@ const impToType = Object.freeze(
             "Texture",
             "TexOscillator",
             "Shader",
-            "ColorModifier"
+            "ColorModifier",
+            "FinalBlend",
+            "TexEnvMap"
         ].map(v => ([v, extToType.get("UTX")] as [SupportedImports_T, SupportedPackages_T])),
         ["Sound", extToType.get("UAX")],
         ["StaticMesh", extToType.get("USX")],

@@ -25,6 +25,8 @@ class FVector extends FConstructable {
         this.x = x;
         this.y = y;
         this.z = z;
+
+        return this;
     }
 
     public getElements(): [number, number, number] { return [this.x, this.y, this.z]; }
@@ -120,7 +122,7 @@ class FVector extends FConstructable {
         );
     }
 
-    getVectorElements(): [number, number, number] { return [this.x, this.z, this.y]; }
+    getVectorElements(): Vector3Arr { return [this.x, this.z, this.y]; }
 
     applyRotator(rotator: FRotator, negate: boolean): FVector {
 

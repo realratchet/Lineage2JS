@@ -1,23 +1,20 @@
 import UAActor from "../un-aactor";
-import { FPrimitiveArray } from "../un-array";
+import FArray, { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
 import FVector from "../un-vector";
-import { generateUUID } from "three/src/math/MathUtils";
-import hsvToRgb from "@client/utils/hsv-to-rgb";
+import { clamp } from "three/src/math/MathUtils";
 import { FPlane } from "../un-plane";
-import { FNTimeHSV } from "../un-time-light";
-import FCoords from "../un-coords";
-import FRotator from "../un-rotator";
 import { sampleLightIntensity } from "../un-sample-light";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
-import { selectByTime, staticMeshAmbient, staticMeshLight } from "../un-time-list";
+import { selectByTime, staticMeshAmbient } from "../un-time-list";
+import FNumber from "../un-number";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
     protected instance: UStaticMeshInstance;
     protected isRangeIgnored: boolean;
     protected colLocation: FVector;
-    protected touching: FPrimitiveArray = new FPrimitiveArray(BufferValue.int16);
+    protected touching: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
     protected isUpdatingShadow: boolean;
     protected stepSound1: USound;
     protected stepSound2: USound;
@@ -38,6 +35,10 @@ class UStaticMeshActor extends UAActor {
     protected serverObjectID: number;
     protected serverObjectRealID: number;
     protected serverObjectType: number;
+
+    protected ambientGlow: number;
+    protected hasStaticLighting: boolean;
+    protected isLightingVisibile: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -65,7 +66,11 @@ class UStaticMeshActor extends UAActor {
 
             "L2ServerObjectType": "serverObjectType",
             "L2ServerObjectID": "serverObjectID",
-            "L2ServerObjectRealID": "serverObjectRealID"
+            "L2ServerObjectRealID": "serverObjectRealID",
+
+            "AmbientGlow": "ambientGlow",
+            "bStaticLighting": "hasStaticLighting",
+            "bLightingVisibility": "isLightingVisibile"
         });
     }
 
@@ -181,7 +186,7 @@ class UStaticMeshActor extends UAActor {
         }
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         if (this.instance) this.instance.setActor(this);
@@ -198,7 +203,7 @@ class UStaticMeshActor extends UAActor {
         // debugger;
 
         const siblings = [...lights];
-        const zone = this.getZone();
+        // const zone = this.getZone();
 
         let hasModifier = false;
         let modifierUuid: string;
@@ -254,28 +259,25 @@ class UStaticMeshActor extends UAActor {
 
         const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
 
-        // const _Vector3 = Vector3;
-
-        // debugger;
-
-        // const invLightPosition = currentPosition.sub(lightPosition);
-
-        let someFlag = 1;
+        let someFlag = 0x1;
 
         const lightPosition = new Vector3();
         const timeOfDay = 0;
 
         if (this.isSunAffected) {
-            const ambient = selectByTime(timeOfDay, staticMeshAmbient);
+            const ambient = selectByTime(timeOfDay, staticMeshAmbient).getColor();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += ambient.r / 255;
-                instanceColors[i + 1] += ambient.g / 255;
-                instanceColors[i + 2] += ambient.b / 255;
+                instanceColors[i + 0] += ambient[0];
+                instanceColors[i + 1] += ambient[1];
+                instanceColors[i + 2] += ambient[2];
             }
         }
 
-        const trackingLight = new Array(vertexArrayLen / 3).fill(0);
+        // if ((vertexArrayLen / 3) === 0x84 && this.instance.sceneLights.length === 0xE) {
+        //     console.log("correct:", this.objectName, "exp:", this.exportIndex + 1);
+        //     // debugger;
+        // }
 
         // debugger;
 
@@ -292,11 +294,8 @@ class UStaticMeshActor extends UAActor {
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 if ((objectFlag & someFlag) !== 0) {
 
-                    position.fromArray(attributes.positions, i);
-                    normal.fromArray(attributes.normals, i);
-
-                    position.applyMatrix4(matrix);
-                    normal.applyMatrix4(matrix).normalize();
+                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                    normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
@@ -305,29 +304,20 @@ class UStaticMeshActor extends UAActor {
                         radius: (lightInfo.radius + 1) * 25
                     }, position, normal);
 
-
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity * lightInfo.lightness);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity * lightInfo.lightness);
                     instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity * lightInfo.lightness);
-
-                    trackingLight[i / 3]++;
                 }
-
-                // debugger;
-
-                someFlag = someFlag << 0x1;
 
                 if ((someFlag & 0x7f) === 0x0) {
-                    lightArrIterator = lightArray[++lightArrIterator];
+                    objectFlag = lightArray[++lightArrIterator];
                     someFlag = 0x1;
-                }
+                } else someFlag = someFlag << 0x1;
             }
         }
 
-        // const { x: px, y: pz, z: py } = this.location;
-        // const pw = 1;
+        // debugger;    
 
-        // debugger;
         instance.lights.scene.forEach((lightInfo, index) => {
             const lightArray = lightInfo.vertexFlags;
             const euler = new Euler().fromArray(lightInfo.rotation);
@@ -336,188 +326,18 @@ class UStaticMeshActor extends UAActor {
 
             const [r, g, b] = lightInfo.color;
 
-            // console.log(lightInfo.color);
+            //  debugger;
 
-            // debugger;
 
             someFlag = 0x1;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
 
-                const vertexIndex = i / 3;
-
-                // if (i / 3 === 0x1e) {
-                //     debugger;
-                // }
-
                 if ((objectFlag & someFlag) !== 0) {
-                    position.fromArray(attributes.positions, i);
-                    normal.fromArray(attributes.normals, i);
+                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+                    normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
                     // debugger;
-
-                    // const { x: vx, y: vz, z: vy } = position.fromArray(attributes.positions, i);
-                    // const { x: nx, y: nz, z: ny } = normal.fromArray(attributes.normals, i);
-
-                    // // const _matrix = [
-                    // //     -0.5, 6.12303176911188629105709e-17,  0, 0,
-                    // //     -6.12303176911188629105709e-17, -0.5, 0, 0,
-                    // //     0, 0, 0.5, 0,
-                    // //     px, py, pz, pw
-                    // // ];
-
-                    // const _matrix = [
-                    //     -0.5, +0.0, +0.0, +0.0,
-                    //     +0.0, -0.5, +0.0, +0.0,
-                    //     +0.0, +0.0, +0.5, +0.0,
-                    //     + px, + py, + pz, + pw
-                    // ];
-
-                    // matrix;
-                    // scale;
-                    // euler;
-                    // this;
-
-                    // const vector = new Vector3().setFromMatrixScale(matrix);
-
-                    // debugger;
-
-                    // const x0 = vx * -0.5;
-                    // const y0 = vx * 6.12303176911188629105709e-17;
-                    // const z0 = vx * 0;
-                    // const w0 = vx * 0;
-
-                    // const x1 = vy * -6.12303176911188629105709e-17;
-                    // const y1 = vy * -0.5;
-                    // const z1 = vy * 0;
-                    // const w1 = vy * 0;
-
-                    // function swap(stack: number[], i: number) {
-                    //     const a = stack[0], b = stack[i];
-
-                    //     stack[i] = a;
-                    //     stack[0] = b;
-
-                    //     return stack;
-                    // }
-
-                    // function add(stack: number[], destination: number, source: number) {
-                    //     const sum = stack[source] + stack[destination];
-
-
-                    //     // stack.splice(destination, 0, sum);
-                    //     stack[destination] = sum;
-                    //     stack.push(stack.shift());
-                    //     // stack.push(sum);
-
-                    //     return stack;
-                    // }
-
-                    // function rollingPopAndStore(stack: number[]) {
-                    //     const value = stack.shift();
-
-                    //     stack.push(value);
-
-                    //     return value;
-                    // }
-
-                    // const stack1 = [x0, y0, z0, w0, x1, y1, z1, w1].reverse();
-
-                    // /*
-                    //     ST0 5.006925732572676e-16
-                    //     ST1 0
-                    //     ST2 4.088600158691406
-                    //     ST3 0
-                    //     ST4 0
-                    //     ST5 0
-                    //     ST6 5.181921822403534e-17
-                    //     ST7 -0.4231500029563904
-                    // */
-                    // swap(stack1, 3);
-
-                    // /*
-                    //     ST0 0
-                    //     ST1 4.088600158691406
-                    //     ST2 0
-                    //     ST3 0
-                    //     ST4 0
-                    //     ST5 5.181921822403534e-17
-                    //     ST6 -0.4231500029563904
-                    //     ST7 5.525117914813029e-16
-                    // */
-                    // add(stack1, 7, 0);
-                    // add(stack1, 4, 0);
-                    // add(stack1, 4, 0);
-                    // add(stack1, 1, 0);
-
-                    // const x2 = vz * 0;
-                    // const y2 = vz * 0;
-                    // const z2 = vz * 0.5;
-                    // const w2 = vz * 0;
-
-                    // const stack2 = [w2, z2, y2, x2, ...stack1.slice(0, 4)];
-
-                    // swap(stack2, 3);
-                    // add(stack2, 7, 0);
-                    // add(stack2, 4, 0);
-                    // add(stack2, 4, 0);
-                    // add(stack2, 1, 0);
-
-
-
-                    // const stack3 = [pw, py, pz, px, ...stack2.slice(0, 4)];
-
-                    // swap(stack3, 3);
-                    // add(stack3, 7, 0);
-                    // add(stack3, 4, 0);
-                    // add(stack3, 4, 0);
-                    // add(stack3, 1, 0);
-
-                    // swap(stack3, 3);
-
-                    // const stored1 = rollingPopAndStore(stack3);
-                    // swap(stack3, 1);
-                    // const stored2 = rollingPopAndStore(stack3);
-                    // const stored3 = rollingPopAndStore(stack3);
-                    // const stored4 = rollingPopAndStore(stack3);
-
-                    // debugger;
-
-                    // const calculated = new Vector3(stored1, stored3, stored2);
-
-                    // if (i / 3 === 0xA) {
-                    //     const likelyDirection = new Vector3().fromArray([-4.65637147426605224609375e-1, 8.84819507598876953125e-1, 1.66288353502750396728516e-2]);
-
-                    //     direction;
-
-                    //     // const euler = new Euler().fromArray(lightInfo.rotation);
-
-                    //     // console.log(likelyDirection.toArray());
-                    //     // console.log("-----------------------");
-
-                    //     // [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach(vec => {
-                    //     //     const dir0 = new Vector3().fromArray(vec).applyEuler(euler);
-                    //     //     const dir1 = new Vector3().fromArray(vec).negate().applyEuler(euler);
-
-                    //     //     console.log(dir0.toArray());
-                    //     //     console.log(dir1.toArray());
-                    //     // });
-
-
-                    //     // console.log(dir.clone().sub(likelyDirection));
-
-                    //     debugger;
-                    // }
-
-                    // debugger;
-
-                    position.applyMatrix4(matrix);
-                    normal.multiply(scale).applyQuaternion(quaternion).normalize();
-                
-
-                    if (i / 3 === 0x1e) {
-                        // debugger;
-                    }
 
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
@@ -527,42 +347,19 @@ class UStaticMeshActor extends UAActor {
                         radius: (lightInfo.radius + 1) * 25
                     }, position, normal);
 
-                    // if (i / 3 === 0x1e) {
-                    //     console.log(`light ${index}:`, intensity);
-                    //     // debugger;
-                    // }
+                    instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + clamp(r * intensity * 255, 0, 255) / 255);
+                    instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
+                    instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + clamp(b * intensity * 255, 0, 255) / 255);
 
-                    instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity);
-                    instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity);
-                    instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity);
 
-                    trackingLight[i / 3]++;
-
-                    // debugger;
                 }
-
 
                 if ((someFlag & 0x7f) === 0x0) {
                     objectFlag = lightArray[++lightArrIterator];
                     someFlag = 0x1;
                 } else someFlag = someFlag << 0x1;
-
             }
         });
-
-        for (let i = 0; i < vertexArrayLen; i += 3) {
-            const d = trackingLight[i / 3];
-
-            // if (d > 0) {
-            //     instanceColors[i + 0] /= d;
-            //     instanceColors[i + 1] /= d;
-            //     instanceColors[i + 2] /= d;
-            // }
-
-            // instanceColors[i + 0] = 1;
-            // instanceColors[i + 1] = 1;
-            // instanceColors[i + 2] = 1;
-        }
 
         // const attributes = library.geometries[mesh.geometry].attributes;
         // const colors = new Float32Array(attributes.positions.length);
@@ -575,10 +372,14 @@ class UStaticMeshActor extends UAActor {
         //     colors[i + 2] = b / 255;
         // }
 
-        const info = {
+        const zoneInfo = library.zones[this.getZone().uuid];
+        const _position = this.colLocation.getVectorElements();
+
+        zoneInfo.children.push({
+            uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
-            position: this.colLocation.getVectorElements(),
+            position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
             children: [
@@ -587,17 +388,31 @@ class UStaticMeshActor extends UAActor {
                 /*, this.getRegionLineHelper(library)*/
             ],
             siblings,
-        } as IBaseObjectDecodeInfo;
+        } as IBaseObjectDecodeInfo);
 
         library.geometryInstances[mesh.geometry]++;
 
-        // if(this.mesh.objectName === "Exp_StoneH_06") {
+        zoneInfo.bounds.isValid = true;
+
+        const { min, max } = library.geometries[mesh.geometry].bounds.box;
+        const _min = min.map((v, i) => v + _position[i]);
+        const _max = max.map((v, i) => v + _position[i]);
+
+        zoneInfo.bounds.isValid = true;
+        [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+            ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                for (let i = 0; i < 3; i++)
+                    arr[i] = fn(arr[i], _min[i], _max[i]);
+            }
+        );
+
+        // if(this.objectName === "Exp_StaticMeshActor1893") {
         //     debugger;
         // }
 
         // debugger;
 
-        return info;
+        return this.uuid;
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
@@ -605,9 +420,12 @@ class UStaticMeshActor extends UAActor {
 
         this.readHead = pkg.tell();
 
-
-        // if (this.objectName === 'Exp_StaticMeshActor449')
+        // if (this.objectName === "Exp_StaticMeshActor1109")
         //     debugger;
+
+        // if(this.objectName === "Exp_StaticMeshActor1893") {
+        //     debugger;
+        // }
 
         return this;
     }

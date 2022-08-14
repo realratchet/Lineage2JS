@@ -127,4 +127,4 @@ class FMultiLightmapTexture extends FConstructable {
 }
 
 export default FMultiLightmapTexture;
-export { FMultiLightmapTexture };
+export { FMultiLightmapTexture, FStaticLightmapTexture };

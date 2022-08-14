@@ -10,12 +10,17 @@ class UWaterVolume extends UBrush {
     protected touching: FPrimitiveArray = new FPrimitiveArray(BufferValue.int16);
     protected locationName: string;
 
+    protected useDistanceFogColor: boolean;
+    protected useCellophane: boolean;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "ColLocation": "colLocation",
             "NextPhysicsVolume": "nextPhysicsVolume",
             "Touching": "touching",
-            "LocationName": "locationName"
+            "LocationName": "locationName",
+            "bUseDistanceFogColor": "useDistanceFogColor",
+            "bUseCellophane": "useCellophane"
         });
     }
 

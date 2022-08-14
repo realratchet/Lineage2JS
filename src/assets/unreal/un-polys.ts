@@ -1,9 +1,7 @@
 import UObject from "./un-object";
+import FVector from "./un-vector";
 import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
-import FVector from "./un-vector";
-import UTexture from "./un-texture";
-import UMaterial from "./un-material";
 
 enum PolyFlags_T {
     // Regular in-game flags.
@@ -96,7 +94,7 @@ class FPoly extends FConstructable {
             resolve();
         }));
         if (textureId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.texture = await pkg.fetchObject<UTexture>(textureId);
+            this.texture = await pkg.fetchObject<UMaterial>(textureId);
             resolve();
         }));
         pkg.seek(offset, "set");

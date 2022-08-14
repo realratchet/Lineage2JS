@@ -3,12 +3,12 @@ import FArray from "./un-array";
 import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
 
-class UZoneInfo extends UAActor {
+class UZoneInfo extends UAActor implements IInfo {
     protected isFogZone: boolean;
     protected hasTerrain: boolean;
-    
+
     protected useFogColorClear: boolean;
-    
+
     public ambientBrightness: number;
     public ambientVector: FVector;
 
@@ -53,26 +53,51 @@ class UZoneInfo extends UAActor {
     public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
         pkg.seek(this.readHead, "set");
 
-    //     // for (let i = 0; i < (exp.size.value as number); i++) {
-    //     //     const tag = PropertyTag.from(pkg, this.readHead + i);
+        //     // for (let i = 0; i < (exp.size.value as number); i++) {
+        //     //     const tag = PropertyTag.from(pkg, this.readHead + i);
 
-    //     //     if (tag.name === "None") continue;
+        //     //     if (tag.name === "None") continue;
 
-    //     //     console.log(`${this.readHeadOffset + i} => ${tag.index} '${tag.name}' (${tag.structName}) of size ${tag.dataSize}`);
-    //     // }
+        //     //     console.log(`${this.readHeadOffset + i} => ${tag.index} '${tag.name}' (${tag.structName}) of size ${tag.dataSize}`);
+        //     // }
 
-    //     debugger;
+        //     debugger;
 
 
         super.doLoad(pkg, exp);
 
-        // debugger;
+        this.readHead = pkg.tell();
+
+        const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const value3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        this.readHead = pkg.tell();
 
         // debugger;
 
         // console.log(this.bytesUnread);
 
         // debugger;
+    }
+
+    async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        await this.onLoaded();
+
+        library.zones[this.uuid] = {
+            uuid: this.uuid,
+            type: "Zone",
+            name: this.objectName,
+            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            children: [],
+            fog: !this.hasDistanceFog ? null : {
+                start: this.distanceFogStart,
+                end: this.distanceFogEnd,
+                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
+            }
+        };
+
+        return this.uuid;
     }
 }
 

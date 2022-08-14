@@ -21,6 +21,8 @@ class FNTimeColor extends FNBaseTimedConstructable {
         this.b = b;
     }
 
+    public getColor(): [number, number, number] { return [this.r / 255, this.g / 255, this.b / 255]; }
+
     public load(pkg: UPackage): this {
         const int8 = new BufferValue(BufferValue.int8);
         const int32 = new BufferValue(BufferValue.int32);

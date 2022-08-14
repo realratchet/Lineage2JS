@@ -142,7 +142,7 @@ function calculateIntensity(
 
         planeOffset = (planeOffset / fVar1) * (((fVar2 + fVar2) - fVar1 * fVar1 * 3.0) + 1.0);
 
-        return planeOffset + planeOffset;
+        return 2 * planeOffset;
     }
     return 0.0;
 }

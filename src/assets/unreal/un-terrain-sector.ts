@@ -4,17 +4,22 @@ import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import { selectByTime, terrainAmbient, terrainLight } from "./un-time-list";
+import { mapLinear } from "three/src/math/MathUtils";
+import FVector from "./un-vector";
+import saveFile from "@client/utils/save-file";
+
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
-    protected boundingBox: FBox = new FBox();
+    public readonly boundingBox: FBox = new FBox();
     protected offsetX: number;
     protected offsetY: number;
-    protected info: UTerrainInfo;
+    public info: UTerrainInfo;
     protected cellNum: number;
     protected sectorWidth: number;
 
-    protected unkId0: number;
+    protected infoId: number;
     protected unkNum0: number;
     protected unkNum1: number;
     protected unkNum2: number;
@@ -44,19 +49,20 @@ class UTerrainSector extends UObject {
         }
     });
 
-    // likely lighting
-    protected unkArr0: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr1: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr2: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr3: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr4: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr5: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr6: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
-    protected unkArr7: FPrimitiveArray<"uint8"> = new FPrimitiveArray(BufferValue.uint8);
+    protected shadowMaps = [
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8),
+        new FPrimitiveArray(BufferValue.uint8)
+    ];
 
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
 
-    public async getDecodeInfo(library: IDecodeLibrary, info: UTerrainInfo): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary, info: UTerrainInfo, { min, max, data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
         if (this.uuid in library.geometries) return {
             type: "TerrainSegment",
             name: this.objectName,
@@ -69,30 +75,60 @@ class UTerrainSector extends UObject {
 
         await this.onLoaded();
 
-        const iTerrainMap = library.materials[info.terrainMap.uuid] as ITextureDecodeInfo;
+
         const width = iTerrainMap.width;
-        const data = new Uint16Array(iTerrainMap.buffer);
         const TypedIndicesArray = getTypedArrayConstructor(17 * 17);
 
-        const vertices = new Float32Array(17 * 17 * 3), indices = new TypedIndicesArray(16 * 16 * 6);
-        const { x: sx, y: sy, z: sz } = info.terrainScale;
+        const positions = new Float32Array(17 * 17 * 3), colors = new Float32Array(17 * 17 * 3);
+        const indices = new TypedIndicesArray(16 * 16 * 6);
+        const [sx, , sz] = info.terrainScale.getVectorElements();
 
-        // const sectorX = this.offsetX / 2 / 2048;
-        // const sectorY = this.offsetY / 2 / 2048;
+        const sectorX = this.offsetX / 2 / 2048;
+        const sectorY = this.offsetY / 2 / 2048;
+
+        const timeOfDay = 0;
+        const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
+
+        const trueBoundingBox = new FBox();
+        const tmpVector = new FVector();
+
+        const quadVisibilityBitmap = new Uint16Array(info.quadVisibilityBitmap.getTypedArray().buffer);
+
+        // const color = (((this.offsetY / 16) * 16) + (this.offsetY / 16)) % 2;
+        // const g = (this.offsetX / 16) % 2;
+        // const b = (this.offsetY / 16) % 2;
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
                 const hmy = y + this.offsetY;
-                const offset = Math.min(hmy, 255) * width + Math.min(hmx, 255);
-                const height = (data[offset] - 32768) / 128;
-                const idxOffset = (y * 17 + x) * 3;
+                const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                // const offsetVis = Math.min(hmy, 63) * 64 + Math.min(hmx, 63);
+                const idxOffset = y * 17 + x;
+                const idxVertOffset = idxOffset * 3;
+                const px = hmx * sx;
+                const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
+                const pz = hmy * sz;
+                const shadowMap = this.shadowMaps[0].getElem(idxOffset) / 255;
 
-                vertices[idxOffset + 0] = hmx * sx;
-                vertices[idxOffset + 1] = height * sz / 2;
-                vertices[idxOffset + 2] = hmy * sy;
+                positions[idxVertOffset + 0] = px;
+                positions[idxVertOffset + 1] = py;
+                positions[idxVertOffset + 2] = pz;
+
+                trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
+
+                colors[idxVertOffset + 0] = ambient[0] * shadowMap;
+                colors[idxVertOffset + 1] = ambient[1] * shadowMap;
+                colors[idxVertOffset + 2] = ambient[2] * shadowMap;
+
             }
         }
+
+
+        // debugger;
+
+
+        // debugger;
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -101,10 +137,26 @@ class UTerrainSector extends UObject {
                 // const quadIndex = quadY * 256 + quadX;
                 // const quadValue = info.quadVisibilityBitmap.getElem(quadIndex >> 3);
                 // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
+
+                // const quadX = Math.trunc(x + sectorX * 16);
+                // const quadY = Math.trunc(y + sectorY * 16);
+                // const quadIndex = quadY * 256 + quadX;
+                // // console.log(quadIndex);
+                // const quadValue = quadVisibilityBitmap[Math.trunc(quadIndex / 8)];
+                // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
+
+                // // debugger;
+
+                // if (quadValue !== 255)
+                //     debugger;
+
+                // debugger;
+
                 const isVisible = true;
                 const idxOffset = (y * 16 + x) * 6;
 
                 if (!isVisible) {
+                    debugger;
 
                     indices[idxOffset + 0] = y * 17 + x;
                     indices[idxOffset + 1] = y * 17 + x;
@@ -126,56 +178,121 @@ class UTerrainSector extends UObject {
             }
         }
 
+        // debugger;
+
+        const uvMultiplier = 2;
+        const uvOffset = 17 * 17 * uvMultiplier;
         const itLayer = info.layers.values();
         const layerCount = info.layers.size;
-        const uvs: Float32Array[] = new Array(layerCount);
+        const uvs = new Float32Array(uvOffset * (layerCount + 1));
 
         for (let k = 0; k < layerCount; k++) {
             const layer = itLayer.next().value as UTerrainLayer;
-            const uv = uvs[k] = new Float32Array(17 * 17 * 2)
 
             if (!layer.alphaMap && !layer.map)
                 continue;
 
+            const layerOffset = uvOffset * k;
+
             // const usx = layer.scaleW * sx * 2.0;
             // const usy = layer.scaleH * sy * 2.0;
 
-            const layerWidth = layer.map.width, layerHeight = layer.map.height;
+            // const layerWidth = layer.map.width, layerHeight = layer.map.height;
 
             for (let y = 0; y < 17; y++) {
                 for (let x = 0; x < 17; x++) {
                     const hmx = x + this.offsetX;
                     const hmy = y + this.offsetY;
-                    const idxOffset = (y * 17 + x) * 2;
+                    const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    uv[idxOffset + 0] = hmx / layerWidth;
-                    uv[idxOffset + 1] = hmy / layerHeight;
+                    // if (k % 3 == 0) {
+                    //     uvs[layerOffset + idxOffset + 0] = 1.0;
+                    //     uvs[layerOffset + idxOffset + 1] = 0;
+                    // } else if (k % 3 == 1) {
+                    //     uvs[layerOffset + idxOffset + 0] = 0.0;
+                    //     uvs[layerOffset + idxOffset + 1] = 1.0;
+                    // } else if (k % 3 == 2) {
+                    //     uvs[layerOffset + idxOffset + 0] = 1.0;
+                    //     uvs[layerOffset + idxOffset + 1] = 1.0;
+                    // }
+
+                    // uvs[layerOffset + idxOffset + 0] = hmx / layerWidth;
+                    // uvs[layerOffset + idxOffset + 1] = hmy / layerHeight;
+
+                    // uvs[layerOffset + idxOffset + 0] = 1.0;
+                    // uvs[layerOffset + idxOffset + 1] = 0;
+                    // uvs[layerOffset + idxOffset + 2] = 255;
+                    // uvs[layerOffset + idxOffset + 3] = 255;
+
+                    uvs[layerOffset + idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
+                    uvs[layerOffset + idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
+
                 }
             }
         }
 
+        // alpha uvs
+        const layerOffset = uvOffset * layerCount;
+        for (let y = 0; y < 17; y++) {
+            for (let x = 0; x < 17; x++) {
+                const hmx = x + this.offsetX;
+                const hmy = y + this.offsetY;
+                const idxOffset = (y * 17 + x) * uvMultiplier;
+
+                uvs[layerOffset + idxOffset + 0] = hmx / 255;
+                uvs[layerOffset + idxOffset + 1] = hmy / 255;
+            }
+        }
+
+        // debugger;
+
+        // uvs.fill(255);
+
+        // -3793.68212890625
+
+        // debugger;
+
         library.geometries[this.uuid] = {
             attributes: {
-                positions: vertices,
-                uvs
+                positions,
+                colors,
+                // uvs
             },
             indices,
-            bounds: this.decodeBoundsInfo()
+            bounds: {
+                box: trueBoundingBox.isValid ? {
+                    min: trueBoundingBox.min.toArray() as Vector3Arr,
+                    max: trueBoundingBox.max.toArray() as Vector3Arr
+                } : null
+                // box: trueBoundingBox.isValid ? {
+                //     min: this.boundingBox.min.getVectorElements(),
+                //     max: this.boundingBox.min.getVectorElements()
+                // } : null
+            }
         };
 
+        // debugger;
+
+        library.materials[this.uuid] = {
+            materialType: "terrainSegment",
+            terrainMaterial: info.uuid,
+            uvs: {
+                textureType: "float",
+                buffer: uvs,
+                materialType: "texture",
+                width: 17 * 17,
+                height: layerCount + 1,
+                format: "rg"
+            } as IDataTextureDecodeInfo
+        } as IMaterialTerrainSegmentDecodeInfo;
+
+        // debugger;
+
         return {
+            uuid: this.uuid,
             type: "TerrainSegment",
             geometry: this.uuid,
-            materials: info.uuid
-        };
-    }
-
-    public decodeBoundsInfo(): IBoundsDecodeInfo {
-        return {
-            box: this.boundingBox.isValid ? {
-                min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
-                max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
-            } : null
+            materials: this.uuid
         };
     }
 
@@ -189,7 +306,7 @@ class UTerrainSector extends UObject {
         // pkg.dump(1, true, false);
         pkg.seek(1);
 
-        this.unkId0 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
 
         // const uint16 = new BufferValue(BufferValue.uint16);
         // const int32 = new BufferValue(BufferValue.int32);
@@ -233,17 +350,10 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.unkArr0.load(pkg);
+        this.shadowMaps.forEach(sm => sm.load(pkg));
 
-        this.unkArr1.load(pkg);
-        this.unkArr2.load(pkg);
-        this.unkArr3.load(pkg);
-        this.unkArr4.load(pkg);
-        this.unkArr5.load(pkg);
-        this.unkArr6.load(pkg);
-        this.unkArr7.load(pkg);
+        this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
 
-        pkg.seek(64); // unknown 
 
         this.texInfo.load(pkg);
 
@@ -255,3 +365,5 @@ class UTerrainSector extends UObject {
 
 export default UTerrainSector;
 export { UTerrainSector };
+
+type HeightMapInfo_T = { min: number, max: number, data: Uint16Array, info: ITextureDecodeInfo };

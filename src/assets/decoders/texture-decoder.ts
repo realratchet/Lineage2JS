@@ -1,8 +1,7 @@
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2, DataTexture, PixelFormat, RGBAFormat } from "three";
+import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2, DataTexture, PixelFormat, RGBAFormat, RGFormat, FloatType, UVMapping, RedFormat, RGBFormat } from "three";
 
 function getClamping(mode: number): THREE.Wrapping {
-
     switch (mode) {
         case 1024: return RepeatWrapping;
         case 512: return RepeatWrapping;
@@ -13,6 +12,19 @@ function getClamping(mode: number): THREE.Wrapping {
         default:
             console.warn(`Unknown clamping mode: ${mode}`);
             return ClampToEdgeWrapping;
+    }
+}
+
+function getFormat(type: DataTextureFormats_T) {
+    if (typeof type !== "string")
+        return RGBAFormat;
+
+    switch (type) {
+        case "r": return RedFormat;
+        case "rg": return RGFormat;
+        case "rgb": return RGBFormat;
+        case "rgba": return RGBAFormat;
+        default: throw new Error(`Unsupported texture format: ${type}`);
     }
 }
 
@@ -27,6 +39,8 @@ const decodeDDS = (function () {
         if (mipmapCount === 1) texture.minFilter = LinearFilter;
         // texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
 
+        // debugger;
+
         texture.needsUpdate = true;
         texture.flipY = false;
 
@@ -34,28 +48,52 @@ const decodeDDS = (function () {
     };
 })();
 
-function decodeRGBA(info: ITextureDecodeInfo): DataTexture {
+function decodeRGBA(info: IDataTextureDecodeInfo): DataTexture {
     const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);
-    const texture = new DataTexture(image, info.width, info.height);
+    const texture = new DataTexture(image, info.width, info.height, getFormat(info.format));
 
     texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+
+    texture.flipY = false;
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
+function decodeG16(info: IDataTextureDecodeInfo): DataTexture {
+    const buff = new Uint16Array(info.buffer);
+    const image = new Uint8Array(info.width * info.height * 4);
+    const texture = new DataTexture(image, info.width, info.height, getFormat(info.format));
+
+    debugger;
+
+    for (let i = 0, len = info.width * info.height; i < len; i++) {
+        image[i * 4 + 0] = image[i * 4 + 1] = image[i * 4 + 2] = buff[i] / 255;
+        image[i * 4 + 3] = 255;
+    }
 
     texture.flipY = false;
 
     return texture;
 }
 
-function decodeG16(info: ITextureDecodeInfo): DataTexture {
-    const buff = new Uint16Array(info.buffer);
-    const image = new Uint8Array(info.width * info.height * 4);
-    const texture = new DataTexture(image, info.width, info.height);
+function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
+    const texture = new DataTexture(
+        info.buffer,
+        info.width, info.height,
+        getFormat(info.format),
+        FloatType,
+        // UVMapping,
+        // ClampToEdgeWrapping,
+        // ClampToEdgeWrapping,
+        // LinearFilter,
+        // LinearFilter
+    );
 
-    for (let i = 0, len = info.width * info.height; i < len; i++) {
-        image[i * 4 + 0] = image[i * 4 + 1] = image[i * 4 + 2] = buff[i] / 256;
-        image[i * 4 + 3] = 255;
-    }
+    // debugger;
 
     texture.flipY = false;
+    texture.needsUpdate = true;
 
     return texture;
 }
@@ -67,11 +105,12 @@ function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapDa
         case "dds": texture = decodeDDS(info.buffer); break;
         case "rgba": texture = decodeRGBA(info); break;
         case "g16": texture = decodeG16(info); break;
+        case "float": texture = decodeFloat(info); break;
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
     }
 
-    texture.wrapS = getClamping(info.wrapS);
-    texture.wrapT = getClamping(info.wrapT);
+    if (info.wrapS) texture.wrapS = getClamping(info.wrapS);
+    if (info.wrapT) texture.wrapT = getClamping(info.wrapT);
 
     texture.anisotropy = library.anisotropy;
 

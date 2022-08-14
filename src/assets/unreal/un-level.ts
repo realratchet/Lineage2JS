@@ -3,7 +3,7 @@ import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 
-const LOAD_SUB_OBJECTS = true;
+const LOAD_SUB_OBJECTS = false;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
@@ -25,27 +25,27 @@ class ULevel extends UObject {
 
         this.readNamedProps(pkg);
 
-        // debugger;
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-        let dbNum = pkg.read(int32).value as number;
-        let dbMax = pkg.read(int32).value as number;
-
-        const ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
-
-        this.readHead = pkg.tell();
-
-        // debugger;
-
+        let dbNum: number;
+        let dbMax: number;
+        let ambientSoundIds: number[] = [];
         let objectIds: number[];
-        if (ambientSoundIds.length === dbMax) {
+
+        if (0x16 < verLicense) {
             dbNum = pkg.read(int32).value as number;
             dbMax = pkg.read(int32).value as number;
 
-            objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number);
-        } else {
-            debugger;
-            objectIds = [];
+            ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
         }
+
+        this.readHead = pkg.tell();
+
+        dbNum = pkg.read(int32).value as number;
+        dbMax = pkg.read(int32).value as number;
+
+        objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
 
         this.url.load(pkg);
 
@@ -56,10 +56,14 @@ class ULevel extends UObject {
 
         this.reachSpecs.load(pkg);
 
+        // debugger;
+
         this.readHead = pkg.tell();
 
         this.baseModelId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
+
+        // debugger;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
             if (!LOAD_SUB_OBJECTS) {
@@ -90,6 +94,8 @@ class ULevel extends UObject {
                     resolve();
                     return;
                 }
+
+                // debugger;
                 const object = await pkg.fetchObject(objectId);
 
                 if (object) this.objectList.push(object);
@@ -127,19 +133,19 @@ class ULevel extends UObject {
             accum[obj.constructor.name].push(obj);
 
             return accum;
-        }, {} as { [key: string]: UObject[] });
+        }, {} as GenericObjectContainer_T<UObject[]>);
 
-        // debugger;
+        debugger;
 
-        return {
-            type: "Level",
-            name: this.url.map,
-            children: (await Promise.all([
-                this.baseModel.getDecodeInfo(library),
-                "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-                "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
-            ])).flat()
-        };
+        // return {
+        //     type: "Level",
+        //     name: this.url.map,
+        //     children: (await Promise.all([
+        //         this.baseModel.getDecodeInfo(library),
+        //         "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+        //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
+        //     ])).flat()
+        // };
     }
 }
 

@@ -6,6 +6,7 @@ import UAActor from "./un-aactor";
 import FTIntMap from "./un-tint-map";
 import FNumber from "./un-number";
 import FColor from "./un-color";
+import FBox from "./un-box";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -47,6 +48,10 @@ class UTerrainInfo extends UAActor {
     protected unkInt3: number;
     protected unkColorArr = new FArray(FColor);
 
+    public readonly boundingBox = new FBox();
+    public heightmapMin: number;
+    public heightmapMax: number;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
@@ -82,6 +87,8 @@ class UTerrainInfo extends UAActor {
 
     public doLoad(pkg: UPackage, exp: UExport<UTerrainInfo>) {
 
+        // debugger;
+
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -107,6 +114,11 @@ class UTerrainInfo extends UAActor {
 
             this.promisesLoading.push(Promise.all(sectorIds.map(async id => {
                 const object = await pkg.fetchObject<UTerrainSector>(id);
+
+                object.info = this;
+
+                this.boundingBox.expandByPoint(object.boundingBox.min);
+                this.boundingBox.expandByPoint(object.boundingBox.max);
 
                 this.sectors.push(object);
             })));
@@ -174,10 +186,12 @@ class UTerrainInfo extends UAActor {
 
         this.readHead = pkg.tell();
 
+        // debugger;
+
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         const itLayer = this.layers.values();
@@ -188,7 +202,16 @@ class UTerrainInfo extends UAActor {
             terrainLayers[i] = itLayer.next().value as UTerrainLayer;
 
         await Promise.all(terrainLayers.map(x => x.onLoaded()));
-        await this.terrainMap.getDecodeInfo(library);
+
+        const terrainUuid = await this.terrainMap.getDecodeInfo(library);
+        const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
+        const terrainData = new Uint16Array(iTerrainMap.buffer);
+        const heightmapData = {
+            info: iTerrainMap,
+            data: terrainData,
+            min: Math.min(...terrainData),
+            max: Math.max(...terrainData)
+        };
 
         const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
 
@@ -223,12 +246,49 @@ class UTerrainInfo extends UAActor {
             layers
         } as IMaterialTerrainDecodeInfo;
 
-        return {
+        const zoneInfo = library.zones[this.getZone().uuid];
+        let sectors = [
+            // this.sectors[83],
+            this.sectors[99],
+            // this.sectors[255]
+        ];
+        sectors = this.sectors;
+        const children = (await Promise.all(sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))));
+        // const _children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))))//.slice(16, 18);
+
+        // const children = _children.slice(0, 99);
+        // const children = [_children[83], _children[99]];
+        // debugger;
+
+        const position = [this.location.x, 0, this.location.z] as Vector3Arr;
+        const decodeInfo = {
+            uuid: this.uuid,
             type: "TerrainInfo",
             name: this.objectName,
-            position: [this.location.x, 0, this.location.z],
-            children: await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this)))
-        };
+            position,
+            children
+        } as IBaseObjectDecodeInfo;
+
+        // debugger;
+
+        zoneInfo.children.push(decodeInfo);
+        zoneInfo.bounds.isValid = true;
+
+        children.forEach(({ geometry: uuid }) => {
+            const { min, max } = library.geometries[uuid].bounds.box;
+
+            const _min = min.map((v, i) => v + position[i]);
+            const _max = max.map((v, i) => v + position[i]);
+
+            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                    for (let i = 0; i < 3; i++)
+                        arr[i] = fn(arr[i], _min[i], _max[i]);
+                }
+            );
+        });
+
+        return this.uuid;
     }
 }
 

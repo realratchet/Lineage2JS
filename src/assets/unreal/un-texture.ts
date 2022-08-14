@@ -33,6 +33,13 @@ class UTexture extends UObject {
     protected maxFrameRate: number;
     protected totalFrameNum: number;
     protected animNext: UTexture;
+    
+    protected isTwoSided = false;
+    protected isAlphaTexture = false;
+    protected isMasked = false;
+
+    protected clampModeU: number;
+    protected clampModeV: number;
 
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
@@ -52,6 +59,9 @@ class UTexture extends UObject {
             "UClamp": "wrapS",
             "VClamp": "wrapT",
 
+            "UClampMode": "clampModeU",
+            "VClampMode": "clampModeV",
+
             "MaxColor": "maxColor",
 
             "MipZero": "mipZero",
@@ -59,7 +69,11 @@ class UTexture extends UObject {
             "MinFrameRate": "minFrameRate",
             "MaxFrameRate": "maxFrameRate",
             "TotalFrameNum": "totalFrameNum",
-            "AnimNext": "animNext"
+            "AnimNext": "animNext",
+
+            "bTwoSided": "isTwoSided",
+            "bAlphaTexture": "isAlphaTexture",
+            "bMasked": "isMasked"
         });
     }
 
@@ -216,7 +230,6 @@ class UTexture extends UObject {
             case ETexturePixelFormat.TPF_BGRA8:
             case ETexturePixelFormat.TPF_RGBA8: {
                 textureType = "rgba";
-
                 if (!this.palette) {
                     decodedBuffer = data.buffer;
                 } else {

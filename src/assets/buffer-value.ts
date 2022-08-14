@@ -115,7 +115,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
 
     public set value(bytes: BigInt | number | string | DataView) {
         if (typeof bytes === "number") {
-            let funName: string = null;
+            let funName: SetValueFun_T = null;
 
             switch (this.type.name) {
                 case "int64": funName = "setBigInt64"; break;
@@ -130,14 +130,14 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
                 default: throw new Error(`Unknown type: ${this.type.name}`);
             }
 
-            (this.bytes as any)[funName](this.bytes.byteOffset + 0, bytes, this.endianess === "little");
+            (this.bytes[funName] as any)(this.bytes.byteOffset + 0, bytes, this.endianess === "little");
         }
         else throw new Error("Invalid action.");
     }
 
     public get value(): BigInt | number | string | DataView {
         const buffer = this.bytes;
-        let funName: string = null;
+        let funName: GetValueFun_T = null;
 
         switch (this.type.name) {
             case "int64": funName = "getBigInt64"; break;
@@ -158,7 +158,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             default: throw new Error(`Unknown type: ${this.type.name}`);
         }
 
-        if (funName) return (buffer as any)[funName](buffer.byteOffset, this.endianess === "little");
+        if (funName) return buffer[funName](buffer.byteOffset, this.endianess === "little");
         else if (this.type.name === "guid") return this.bytes;
         else if (this.type.name === "char") return this.string;
 
@@ -192,3 +192,6 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
 
 export default BufferValue;
 export { BufferValue };
+
+type SetValueFun_T = "setBigInt64" | "setBigUint64" | "setInt32" | "setFloat32" | "setUint32" | "setInt16" | "setUint16" | "setInt8" | "setUint8";
+type GetValueFun_T = "getBigInt64" | "getBigUint64" | "getFloat32" | "getUint32" | "getInt32" | "getInt8" | "getUint8" | "getInt16" | "getUint16";
