@@ -36,6 +36,7 @@ class UTexture extends UObject {
     
     protected isTwoSided = false;
     protected isAlphaTexture = false;
+    protected isMasked = false;
 
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
@@ -65,7 +66,8 @@ class UTexture extends UObject {
             "AnimNext": "animNext",
 
             "bTwoSided": "isTwoSided",
-            "bAlphaTexture": "isAlphaTexture"
+            "bAlphaTexture": "isAlphaTexture",
+            "bMasked": "isMasked"
         });
     }
 

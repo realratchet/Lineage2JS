@@ -344,6 +344,7 @@ export { UPackage };
     if (dontThrow) {
         debugger;
     } else {
+        debugger;
         throw new Error(text || "Assertion failed!");
     }
 };

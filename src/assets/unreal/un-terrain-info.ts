@@ -247,7 +247,19 @@ class UTerrainInfo extends UAActor {
         } as IMaterialTerrainDecodeInfo;
 
         const zoneInfo = library.zones[this.getZone().uuid];
-        const children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))))//.slice(16, 18);
+        let sectors = [
+            // this.sectors[83],
+            this.sectors[99],
+            // this.sectors[255]
+        ];
+        sectors = this.sectors;
+        const children = (await Promise.all(sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))));
+        // const _children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))))//.slice(16, 18);
+
+        // const children = _children.slice(0, 99);
+        // const children = [_children[83], _children[99]];
+        // debugger;
+
         const position = [this.location.x, 0, this.location.z] as Vector3Arr;
         const decodeInfo = {
             uuid: this.uuid,

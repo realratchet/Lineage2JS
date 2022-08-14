@@ -73,7 +73,7 @@ class UTexEnvMap extends UBaseModifier {
     }
 
     public getDecodeInfo(library: IDecodeLibrary): Promise<string> {
-        // throw new Error("Method not implemented.");
+        debugger;
         return null;
     }
 }

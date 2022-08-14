@@ -96,7 +96,7 @@ function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecode
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
-    const materials = decodeMaterial(library, infoMats);
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff })
     const mesh = new Mesh(fetchGeometry(infoGeo as IGeometryDecodeInfo), materials);
 
     if (infoGeo.attributes.colors) {
@@ -140,12 +140,12 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
 
     const infoMats = library.materials[meshInfo.materials];
 
-    const materials = decodeMaterial(library, infoMats);
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const mesh = new Mesh(geometry, materials);
 
     applySimpleProperties(library, mesh, meshInfo);
 
-    (materials instanceof Array ? materials : [materials]).forEach(mat => mat?.setInstanced());
+    (materials instanceof Array ? materials : [materials]).forEach(mat => mat?.setInstanced?.());
 
     if (infoGeo.attributes.colors) {
         (materials instanceof Array ? materials : [materials]).forEach(mat => {

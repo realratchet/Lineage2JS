@@ -419,4 +419,6 @@ void main() {
 
     // gl_FragColor = vec4(vUv[MASK_UV_INDEX], 0.0, 1.0);
     // gl_FragColor = addLayer(vec4(texture2D(layer1.map.texture, vUv[MASK_UV_INDEX]).rgb, 1.0), texelDiffuse) * texture2D(layer0.alphaMap.texture, vUv[MASK_UV_INDEX]).r;
+
+    // gl_FragColor = vec4(vColor, 1.0);
 }

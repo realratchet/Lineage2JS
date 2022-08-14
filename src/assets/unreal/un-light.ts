@@ -23,7 +23,11 @@ class ULight extends UAActor {
     public lightOffTime: number;
     public skins: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
 
+    public style: number;
+
     protected isIgnoredRange: boolean;
+    protected isCastingShadow: boolean;
+    protected isStaticLighting: boolean;
 
     protected getSignedMap() {
         return Object.assign({}, super.getSignedMap(), {
@@ -50,6 +54,10 @@ class ULight extends UAActor {
             "bIgnoredRange": "isIgnoredRange",
             "LightOnTime": "lightOnTime",
             "LightOffTime": "lightOffTime",
+
+            "Style": "style",
+            "bShadowCast": "isCastingShadow",
+            "bStaticLighting": "isStaticLighting"
         });
     }
 

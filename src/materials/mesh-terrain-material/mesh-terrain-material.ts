@@ -199,7 +199,7 @@ class MeshTerrainMaterial extends ShaderMaterial {
         super({
             defines,
             uniforms,
-            transparent: true,
+            // transparent: true,
             vertexShader: VERTEX_SHADER,
             fragmentShader: fragmentShader,
             side: DoubleSide

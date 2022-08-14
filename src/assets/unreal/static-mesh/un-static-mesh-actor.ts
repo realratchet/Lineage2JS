@@ -1,5 +1,5 @@
 import UAActor from "../un-aactor";
-import { FPrimitiveArray } from "../un-array";
+import FArray, { FPrimitiveArray } from "../un-array";
 import BufferValue from "../../buffer-value";
 import FVector from "../un-vector";
 import { clamp } from "three/src/math/MathUtils";
@@ -7,13 +7,14 @@ import { FPlane } from "../un-plane";
 import { sampleLightIntensity } from "../un-sample-light";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import { selectByTime, staticMeshAmbient } from "../un-time-list";
+import FNumber from "../un-number";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
     protected instance: UStaticMeshInstance;
     protected isRangeIgnored: boolean;
     protected colLocation: FVector;
-    protected touching: FPrimitiveArray = new FPrimitiveArray(BufferValue.int16);
+    protected touching: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
     protected isUpdatingShadow: boolean;
     protected stepSound1: USound;
     protected stepSound2: USound;
@@ -34,6 +35,9 @@ class UStaticMeshActor extends UAActor {
     protected serverObjectID: number;
     protected serverObjectRealID: number;
     protected serverObjectType: number;
+
+    protected ambientGlow: number;
+    protected hasStaticLighting: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -61,7 +65,10 @@ class UStaticMeshActor extends UAActor {
 
             "L2ServerObjectType": "serverObjectType",
             "L2ServerObjectID": "serverObjectID",
-            "L2ServerObjectRealID": "serverObjectRealID"
+            "L2ServerObjectRealID": "serverObjectRealID",
+
+            "AmbientGlow": "ambientGlow",
+            "bStaticLighting": "hasStaticLighting"
         });
     }
 

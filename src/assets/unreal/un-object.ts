@@ -145,20 +145,20 @@ abstract class UObject {
                 // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                 // const offset = pkg.tell() - start;
                 // pkg.seek(4 * 3);
-                debugger;
+                // debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
             case UNP_PropertyTypes.UNP_RotatorProperty:
-                debugger;
-                this.setProperty(tag, (function () {
-                    const f = new BufferValue(BufferValue.float);
-                    const out = new Array<number>(3);
+                // debugger;
+                // this.setProperty(tag, (function () {
+                //     const f = new BufferValue(BufferValue.float);
+                //     const out = new Array<number>(3);
 
-                    for (let i = 0; i < 3; i++)
-                        out[i] = pkg.read(f).value as number;
+                //     for (let i = 0; i < 3; i++)
+                //         out[i] = pkg.read(f).value as number;
 
-                    return out;
-                })());
+                //     return out;
+                // })());
                 break;
             case UNP_PropertyTypes.UNP_MapProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_FixedArrayProperty: throw new Error("Not yet implemented");

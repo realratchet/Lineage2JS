@@ -100,6 +100,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
 
         pkg.seek(byteLength);
 
+        if (hasTag && (pkg.tell() - beginIndex - tag.dataSize) !== 0) debugger;
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
 
         return this;
