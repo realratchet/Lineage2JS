@@ -1,17 +1,23 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor } from "three";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
+    sprites: GenericObjectContainer_T<SpriteParam_T>,
     parameters: IDecodedParameter,
     uniforms: GenericObjectContainer_T<Uniform>,
     defines: GenericObjectContainer_T<any>
 }
 
-function applyParameters({ name, parameters, uniforms, defines }: ApplyParams_T): void {
+type SpriteParam_T = {
+    framerate: number,
+    sprites: any[]
+}
+
+function applyParameters({ name, parameters, uniforms, defines, sprites }: ApplyParams_T): void {
 
     let defName;
 
@@ -28,6 +34,13 @@ function applyParameters({ name, parameters, uniforms, defines }: ApplyParams_T)
     Object.assign(defines, parameters.defines);
 
     if (parameters.isUsingMap) {
+        if ((parameters as IDecodedSpriteParameter).isSprite) {
+            sprites[name] = {
+                framerate: (parameters as IDecodedSpriteParameter).framerate,
+                sprites: (parameters as IDecodedSpriteParameter).sprites,
+            } as SpriteParam_T;
+        }
+
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
 
@@ -40,6 +53,11 @@ function applyParameters({ name, parameters, uniforms, defines }: ApplyParams_T)
 }
 
 class MeshStaticMaterial extends ShaderMaterial {
+    protected sprites: GenericObjectContainer_T<SpriteParam_T>;
+
+    public readonly isStaticMeshMaterial = true;
+    public readonly isUpdatable = true;
+
     // @ts-ignore
     constructor(info: MeshStaticMaterialParameters) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
@@ -55,7 +73,7 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         // debugger;
 
-
+        const sprites = {};
 
         const defines: GenericObjectContainer_T<any> = { USE_FOG: "" };
         const uniforms: GenericObjectContainer_T<Uniform> = appendGlobalUniforms(UniformsUtils.merge([
@@ -95,6 +113,7 @@ class MeshStaticMaterial extends ShaderMaterial {
 
             applyParameters({
                 name,
+                sprites,
                 defines,
                 uniforms,
                 parameters
@@ -106,9 +125,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
 
-        if (info.opacity) {
-            defines["USE_ALPHATEST"] = "";
-        }
+        if (info.opacity) defines["USE_ALPHATEST"] = "";
 
         // defines["USE_DIRECTIONAL_AMBIENT"] = "";
 
@@ -161,6 +178,8 @@ class MeshStaticMaterial extends ShaderMaterial {
             // wireframe: true
         });
 
+        this.sprites = sprites;
+
         if (info.opacity) this.transparent = true;
 
         switch (info.blendingMode) {
@@ -168,19 +187,27 @@ class MeshStaticMaterial extends ShaderMaterial {
             case "masked":
                 this.blending = NormalBlending;
                 break;
+            case "brighten":
+                this.blending = AdditiveBlending;
+                this.transparent = true;
+                break;
             // case "masked":
             //     this.blending = CustomBlending;
             //     this.blendSrc = SrcAlphaFactor;
             //     this.blendDst = OneMinusSrcAlphaFactor;
             //     this.alphaTest = 0;
             //     break;
-            case "translucent": this.transparent = true; break;
+            case "translucent":
+                this.blending = CustomBlending;
+                this.blendSrc = OneFactor;
+                this.blendDst = OneMinusSrcColorFactor;
+                this.transparent = true;
+                break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
-
     }
 
-    setLightmap(lightmap: MapData_T) {
+    public setLightmap(lightmap: MapData_T) {
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -191,7 +218,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    disableDirectionalAmbient() {
+    public disableDirectionalAmbient() {
         delete this.defines.USE_DIRECTIONAL_AMBIENT;
 
         this.needsUpdate = true;
@@ -199,7 +226,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    enableAmbient({ color, brightness }: IAmbientLighting) {
+    public enableAmbient({ color, brightness }: IAmbientLighting) {
         const u = this.uniforms.ambient.value;
 
         u.color.copy(color);
@@ -212,7 +239,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbientLighting) {
+    public enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbientLighting) {
         const u = this.uniforms.directionalAmbient.value;
 
         u.color.copy(color);
@@ -226,12 +253,16 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    setInstanced() {
+    public setInstanced() {
         this.defines["USE_INSTANCED_ATTRIBUTES"] = "";
 
         this.needsUpdate = true;
 
         return this;
+    }
+
+    public update(time: number) {
+        debugger;
     }
 }
 

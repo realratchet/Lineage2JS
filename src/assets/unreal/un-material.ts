@@ -172,6 +172,8 @@ class UShader extends UMaterial {
             default: console.warn("Unknown blending mode:", this.outputBlending); break;
         }
 
+        // debugger;
+
         library.materials[this.uuid] = {
             materialType: "shader",
             blendingMode,
@@ -443,6 +445,8 @@ class FStaticMeshMaterial extends UBaseMaterial {
 
         if (this.material)
             await this.material.getDecodeInfo(library);
+
+        // debugger;
 
         return this.material?.uuid || null;
     }

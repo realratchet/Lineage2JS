@@ -70,6 +70,18 @@ function decodeParameter(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo)
     if (!info) return null;
 
     switch (info.materialType) {
+        case "sprite":
+            const decodedSprites = (info as IAnimatedSpriteDecodeInfo).sprites.map(info => fetchTexture(library, info));
+
+            return {
+                uniforms: { map: decodedSprites[0] },
+                sprites: decodedSprites,
+                framerate: (info as IAnimatedSpriteDecodeInfo).framerate,
+                defines: {},
+                isUsingMap: true,
+                isSprite: true,
+                transformType: "none"
+            } as IDecodedSpriteParameter;
         case "modifier": return _decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
         case "texture": return {
             uniforms: { map: fetchTexture(library, info as ITextureDecodeInfo) },
@@ -93,6 +105,10 @@ function decodeShader(library: IDecodeLibrary, info: IShaderDecodeInfo): MeshSta
         depthWrite: info.depthWrite,
         visible: info.visible
     });
+}
+
+function decodeSprite(library: IDecodeLibrary, info: IDecodeLibrary): MeshStaticMaterial {
+    debugger;
 }
 
 function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MeshStaticMaterial {
@@ -195,6 +211,7 @@ function decodeInstancedMaterial(library: IDecodeLibrary, info: IMaterialInstanc
 function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return null;
     switch (info.materialType) {
+        case "sprite": return decodeSprite(library, info as IAnimatedSpriteDecodeInfo);
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);
         case "texture": return decodeTexture(library, info as ITextureDecodeInfo);

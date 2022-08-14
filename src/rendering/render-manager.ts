@@ -65,21 +65,21 @@ class RenderManager {
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
 
-        // // elven ruins colon
-        // this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
-        // this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
-        // this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
+        // elven ruins colon
+        this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
+        this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
+        this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
 
         // // // tower ceiling fixture
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         // this.camera.lookAt(17611.91280729978, -5819.704399240179, 116526.32678153258);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
-        // tower outside
-        this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-        this.camera.lookAt(19313.26359342052, -1077.117687144737, 114494.24459571407);
-        this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
-        
+        // // tower outside
+        // this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
+        // this.camera.lookAt(19313.26359342052, -1077.117687144737, 114494.24459571407);
+        // this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+
 
         this.controls.orbit.update();
         // this.controls.fps.update(0);
@@ -239,7 +239,9 @@ class RenderManager {
     protected _updateObjects(currentTime: number, deltaTime: number) {
         let fog: THREE.Fog;
 
-        this.scene.traverse((object: any) => {
+        const globalTime = currentTime / 600;
+
+        this.scene.traverse((object: THREE.Object3D) => {
 
             if ((object as ZoneObject).isZoneObject) {
 
@@ -247,11 +249,22 @@ class RenderManager {
 
                 if (inBounds) fog = (object as ZoneObject).fog;
 
-                (object as ZoneObject).update(this.enableZoneCulling, this.frustum);
+                if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
+
+                (object as THREE.Object3D).traverseVisible(object => {
+                    if ((object as THREE.Mesh).isMesh)
+                        (((((object as THREE.Mesh).material as THREE.Material).isMaterial)
+                            ? [(object as THREE.Mesh).material]
+                            : (object as THREE.Mesh).material) as THREE.Material[])
+                            .forEach(mat => {
+                                if ((mat as any).isUpdatable)
+                                    (mat as any).update(globalTime);
+                            });
+                });
             }
         });
 
-        GLOBAL_UNIFORMS.globalTime.value = currentTime / 600;
+        GLOBAL_UNIFORMS.globalTime.value = globalTime;
 
         const oldFar = this.camera.far;
 
@@ -263,11 +276,11 @@ class RenderManager {
             this.renderer.setClearColor(fog.color);
             this.camera.far = fog.far * 1.2;
         } else {
-            GLOBAL_UNIFORMS.fogColor.value.setHex(0x000000);
+            GLOBAL_UNIFORMS.fogColor.value.setHex(0x0c0c0c);
             GLOBAL_UNIFORMS.fogNear.value = DEFAULT_FAR * 10;
             GLOBAL_UNIFORMS.fogFar.value = DEFAULT_FAR * 10 + 1;
 
-            this.renderer.setClearColor(0x000000);
+            this.renderer.setClearColor(0x0c0c0c);
             this.camera.far = DEFAULT_FAR;
         }
 
