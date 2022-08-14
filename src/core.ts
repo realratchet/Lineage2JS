@@ -37,7 +37,7 @@ async function startCore() {
     const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
     const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
     // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
-    // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // dion/ works
+    const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // dion/ works
     const pkg_21_22 = assetLoader.getPackage("21_22", "Level"); // execution grounds /crashes on static meshes
     const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes on static meshes
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
@@ -53,7 +53,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_22_22;
+    const pkgLoadPromise = pkg_20_21;
 
     // await assetLoader.load(pkg_meffects);
 
@@ -212,12 +212,12 @@ async function startCore() {
         }
     }
 
-    console.log(loaded);
-    console.log(failedDecode);
-    console.log(failedLoad);
-    console.log(failed);
+    // console.log(loaded);
+    // console.log(failedDecode);
+    // console.log(failedLoad);
+    // console.log(failed);
 
-    debugger;
+    // debugger;
 
     // (expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))
 
