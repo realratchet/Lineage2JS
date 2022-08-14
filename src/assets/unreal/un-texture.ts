@@ -38,6 +38,9 @@ class UTexture extends UObject {
     protected isAlphaTexture = false;
     protected isMasked = false;
 
+    protected clampModeU: number;
+    protected clampModeV: number;
+
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
@@ -55,6 +58,9 @@ class UTexture extends UObject {
             "VBits": "bitsH",
             "UClamp": "wrapS",
             "VClamp": "wrapT",
+
+            "UClampMode": "clampModeU",
+            "VClampMode": "clampModeV",
 
             "MaxColor": "maxColor",
 

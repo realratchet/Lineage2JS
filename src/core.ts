@@ -39,7 +39,7 @@ async function startCore() {
     // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
     // const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // dion/ works
     const pkg_21_22 = assetLoader.getPackage("21_22", "Level"); // execution grounds /crashes on static meshes
-    // const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes on static meshes
+    const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes on static meshes
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
     // const pkg_engine = assetLoader.getPackage("Engine");
     // const pkg_core = assetLoader.getPackage("Core");
@@ -53,7 +53,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_21_22;
+    const pkgLoadPromise = pkg_22_22;
 
     // await assetLoader.load(pkg_meffects);
 

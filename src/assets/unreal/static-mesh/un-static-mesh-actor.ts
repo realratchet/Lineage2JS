@@ -38,6 +38,7 @@ class UStaticMeshActor extends UAActor {
 
     protected ambientGlow: number;
     protected hasStaticLighting: boolean;
+    protected isLightingVisibile: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -68,7 +69,8 @@ class UStaticMeshActor extends UAActor {
             "L2ServerObjectRealID": "serverObjectRealID",
 
             "AmbientGlow": "ambientGlow",
-            "bStaticLighting": "hasStaticLighting"
+            "bStaticLighting": "hasStaticLighting",
+            "bLightingVisibility": "isLightingVisibile"
         });
     }
 
