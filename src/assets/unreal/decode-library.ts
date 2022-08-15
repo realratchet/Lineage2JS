@@ -1,0 +1,90 @@
+const ALLOW_FAILED_OBJECTS = true;
+
+class DecodeLibrary {
+    public name: string = "Untitled";
+    public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
+    public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
+    public sector: string = null;                                                           // sector zone id
+    public readonly zones: GenericObjectContainer_T<IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
+    public readonly geometries: GenericObjectContainer_T<IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
+    public readonly geometryInstances: GenericObjectContainer_T<number> = {};               // a dictionary containing all geometray instance decode info
+    public readonly materials: GenericObjectContainer_T<IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
+    public readonly materialModifiers: GenericObjectContainer_T<IMaterialModifier> = {};    // a dictionary containing all material modifiers
+
+    public failed: any[] = [];
+    public failedLoad: any[] = [];
+    public failedDecode: any[] = [];
+
+    public static async fromPackage(pkg: UPackage) {
+        // const impGroups = pkgLoad.imports.reduce((accum, imp, index) => {
+        //     const impType = imp.className;
+        //     const list = accum[impType] = accum[impType] || [];
+
+        //     list.push({ import: imp, index: -index - 1 });
+
+        //     return accum;
+        // }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
+
+        const decodeLibrary = new DecodeLibrary();
+        const expGroups = pkg.exports.reduce((accum, exp, index) => {
+
+            const expType = pkg.getPackageName(exp.idClass.value as number);
+            const list = accum[expType] = accum[expType] || [];
+
+            list.push({ index, export: exp });
+
+            return accum;
+        }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>);
+
+        const uLevel = await pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1);
+
+        const uLevelInfo = await pkg.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1);
+        const uZonesInfo = await Promise.all((expGroups["ZoneInfo"] || []).map(exp => pkg.fetchObject<UZoneInfo>(exp.index + 1)));
+
+        await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
+
+        const uModel = await pkg.fetchObject<UModel>(uLevel.baseModelId); // base model
+        await uModel.getDecodeInfo(decodeLibrary);
+
+        const uTerrainInfo = await pkg.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1);
+        await uTerrainInfo.getDecodeInfo(decodeLibrary);
+
+        decodeLibrary.name = uLevel.url.map;
+
+        if (ALLOW_FAILED_OBJECTS) {
+            const failed = decodeLibrary.failed, failedLoad = decodeLibrary.failedLoad, failedDecode = decodeLibrary.failedDecode;
+
+            for (let exp of (expGroups["StaticMeshActor"] || [])) {
+                try {
+                    const actor = await pkg.fetchObject<UStaticMeshActor>(exp.index + 1);
+                    try {
+                        await actor.onLoaded();
+
+                        try {
+                            await actor.getDecodeInfo(decodeLibrary)
+                        } catch (e) {
+                            failedDecode.push([actor, e]);
+                        }
+                    } catch (e) {
+                        failedLoad.push([actor, e]);
+                    }
+                } catch (e) {
+                    failed.push([exp, e]);
+                }
+            }
+
+            if (failed.length > 0 || failedLoad.length > 0 || failedDecode.length > 0) {
+                console.warn("Some objects failed to load");
+                debugger;
+            }
+        } else {
+            const uStaticMeshActors = await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkg.fetchObject<UStaticMeshActor>(exp.index + 1)))//.filter(x => x.isSunAffected);
+            await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
+        }
+
+        return decodeLibrary;
+    }
+}
+
+export default DecodeLibrary;
+export { DecodeLibrary };

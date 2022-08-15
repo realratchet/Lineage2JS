@@ -191,7 +191,7 @@ class UTerrainInfo extends UAActor {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         const itLayer = this.layers.values();

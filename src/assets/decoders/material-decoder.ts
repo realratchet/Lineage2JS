@@ -5,7 +5,7 @@ import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-te
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
 
-function fetchTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapData_T {
+function fetchTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
@@ -16,7 +16,7 @@ function fetchTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapDat
     return data;
 }
 
-function decodeFadeColorModifier(library: IDecodeLibrary, info: IFadeColorDecodeInfo): IDecodedParameter {
+function decodeFadeColorModifier(library: DecodeLibrary, info: IFadeColorDecodeInfo): IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
     const period = info.fadeColors.period;
@@ -38,7 +38,7 @@ function decodeFadeColorModifier(library: IDecodeLibrary, info: IFadeColorDecode
     };
 }
 
-function decodeTexPannerModifer(library: IDecodeLibrary, info: ITexPannerDecodeInfo): IDecodedParameter {
+function decodeTexPannerModifer(library: DecodeLibrary, info: ITexPannerDecodeInfo): IDecodedParameter {
     const isUsingMap = info.transform.map !== null;
 
     return {
@@ -58,7 +58,7 @@ function decodeTexPannerModifer(library: IDecodeLibrary, info: ITexPannerDecodeI
     };
 }
 
-function _decodeModifier(library: IDecodeLibrary, info: IBaseMaterialModifierDecodeInfo): IDecodedParameter {
+function _decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecodeInfo): IDecodedParameter {
     switch (info.modifierType) {
         case "fadeColor": return decodeFadeColorModifier(library, info as IFadeColorDecodeInfo);
         case "panTexture": return decodeTexPannerModifer(library, info as ITexPannerDecodeInfo);
@@ -66,7 +66,7 @@ function _decodeModifier(library: IDecodeLibrary, info: IBaseMaterialModifierDec
     }
 }
 
-function decodeParameter(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): IDecodedParameter {
+function decodeParameter(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): IDecodedParameter {
     if (!info) return null;
 
     switch (info.materialType) {
@@ -93,7 +93,7 @@ function decodeParameter(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo)
     }
 }
 
-function decodeShader(library: IDecodeLibrary, info: IShaderDecodeInfo): MeshStaticMaterial {
+function decodeShader(library: DecodeLibrary, info: IShaderDecodeInfo): MeshStaticMaterial {
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, library.materials[info.diffuse]),
         opacity: decodeParameter(library, library.materials[info.opacity]),
@@ -107,7 +107,7 @@ function decodeShader(library: IDecodeLibrary, info: IShaderDecodeInfo): MeshSta
     });
 }
 
-function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MeshStaticMaterial {
+function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MeshStaticMaterial {
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, info),
         opacity: null,
@@ -121,16 +121,16 @@ function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MeshS
     });
 }
 
-function decodeModifier(library: IDecodeLibrary, info: IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
+function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
     debugger;
     throw new Error("Does this ever happen?");
 }
 
-function decodeGroup(library: IDecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
+function decodeGroup(library: DecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
     return info.materials.map(info => decodeMaterial(library, library.materials[info]) as MeshStaticMaterial);
 }
 
-function decodeTerrainSegment(library: IDecodeLibrary, info: IMaterialTerrainSegmentDecodeInfo) {
+function decodeTerrainSegment(library: DecodeLibrary, info: IMaterialTerrainSegmentDecodeInfo) {
     const terrainMaterial = library.materials[info.terrainMaterial] as IMaterialTerrainDecodeInfo;
     const uvs = fetchTexture(library, info.uvs);
 
@@ -145,7 +145,7 @@ function decodeTerrainSegment(library: IDecodeLibrary, info: IMaterialTerrainSeg
     });
 }
 
-// function decodeTerrain(library: IDecodeLibrary, info: IMaterialTerrainDecodeInfo) {
+// function decodeTerrain(library: DecodeLibrary, info: IMaterialTerrainDecodeInfo) {
 //     return new MeshTerrainMaterial({
 //         layers: info.layers.map(({ map, alphaMap }) => {
 //             return {
@@ -156,19 +156,19 @@ function decodeTerrainSegment(library: IDecodeLibrary, info: IMaterialTerrainSeg
 //     });
 // }
 
-function decodeLightmapped(library: IDecodeLibrary, info: ILightmappedDecodeInfo) {
+function decodeLightmapped(library: DecodeLibrary, info: ILightmappedDecodeInfo) {
     return (decodeMaterial(library, library.materials[info["material"]]) as MeshStaticMaterial)
         .setLightmap(fetchTexture(library, library.materials[info["lightmap"]] as ITextureDecodeInfo));
 }
 
-function applyModAmbient(library: IDecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: ILightAmbientMaterialModifier) {
+function applyModAmbient(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: ILightAmbientMaterialModifier) {
     material.enableAmbient({
         color: new Color().fromArray(color),
         brightness
     });
 }
 
-function applyModDirectional(library: IDecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], direction, brightness }: ILightDirectionalMaterialModifier) {
+function applyModDirectional(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], direction, brightness }: ILightDirectionalMaterialModifier) {
     material.enableDirectionalAmbient({
         color: new Color().fromArray(color),
         direction: new Vector3().fromArray(direction),
@@ -176,7 +176,7 @@ function applyModDirectional(library: IDecodeLibrary, material: MeshStaticMateri
     });
 }
 
-function applyModLighting(library: IDecodeLibrary, material: MeshStaticMaterial, modifier: IBaseLightingMaterialModifier) {
+function applyModLighting(library: DecodeLibrary, material: MeshStaticMaterial, modifier: IBaseLightingMaterialModifier) {
     switch (modifier.lightType) {
         case "Ambient": applyModAmbient(library, material, modifier as ILightAmbientMaterialModifier); break;
         case "Directional": applyModDirectional(library, material, modifier as ILightDirectionalMaterialModifier); break;
@@ -184,7 +184,7 @@ function applyModLighting(library: IDecodeLibrary, material: MeshStaticMaterial,
     }
 }
 
-function applyModifiers(library: IDecodeLibrary, material: MeshStaticMaterial, modifiers: IMaterialModifier[]) {
+function applyModifiers(library: DecodeLibrary, material: MeshStaticMaterial, modifiers: IMaterialModifier[]) {
     modifiers.forEach(mod => {
         switch (mod.type) {
             case "Lighting": applyModLighting(library, material, mod as IBaseLightingMaterialModifier); break;
@@ -193,7 +193,7 @@ function applyModifiers(library: IDecodeLibrary, material: MeshStaticMaterial, m
     });
 }
 
-function decodeInstancedMaterial(library: IDecodeLibrary, info: IMaterialInstancedDecodeInfo) {
+function decodeInstancedMaterial(library: DecodeLibrary, info: IMaterialInstancedDecodeInfo) {
     const materials = decodeMaterial(library, library.materials[info.baseMaterial]);
     const modifiers = info.modifiers.map(uuid => library.materialModifiers[uuid]);
 
@@ -204,7 +204,7 @@ function decodeInstancedMaterial(library: IDecodeLibrary, info: IMaterialInstanc
     return materials;
 }
 
-function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return null;
     switch (info.materialType) {
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);

@@ -187,7 +187,7 @@ class UStaticMeshActor extends UAActor {
         }
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         if (this.instance) this.instance.setActor(this);

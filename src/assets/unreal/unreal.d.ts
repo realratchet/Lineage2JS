@@ -1,4 +1,5 @@
 type GenericObjectContainer_T<T> = { [key: string]: T };
+type DecodeLibrary = import("./decode-library").DecodeLibrary;
 type UPackage = import("./un-package").UPackage;
 type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
 type UHeader = import("./un-header").UHeader;
@@ -304,17 +305,6 @@ interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
     lightType: "Ambient"
 }
 
-interface IDecodeLibrary {
-    loadMipmaps: boolean,
-    anisotropy: number,
-    materialModifiers: GenericObjectContainer_T<IMaterialModifier>,
-    materials: GenericObjectContainer_T<IBaseMaterialDecodeInfo>,
-    geometries: GenericObjectContainer_T<IGeometryDecodeInfo>,
-    geometryInstances: GenericObjectContainer_T<number>,
-    sector: string,
-    zones: GenericObjectContainer_T<IBaseZoneDecodeInfo>
-}
-
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
 type LightType_T = number | {
@@ -348,7 +338,7 @@ type LightEffect_T = number | {
     Unused: 0xF
 };
 
-interface IInfo { getDecodeInfo(library: IDecodeLibrary): Promise<string>; }
+interface IInfo { getDecodeInfo(library: DecodeLibrary): Promise<string>; }
 
 interface IZoneFogInfo {
     start: number,

@@ -7,7 +7,7 @@ const LOAD_SUB_OBJECTS = false;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
-    protected url: FURL = new FURL();
+    public readonly url: FURL = new FURL();
     protected reachSpecs: FPrimitiveArray = new FPrimitiveArray(BufferValue.uint32);
     public baseModelId: number;
     protected baseModel: UModel;

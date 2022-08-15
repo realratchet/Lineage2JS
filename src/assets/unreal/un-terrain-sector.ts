@@ -63,7 +63,7 @@ class UTerrainSector extends UObject {
 
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
 
-    public async getDecodeInfo(library: IDecodeLibrary, info: UTerrainInfo, { min, max, data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { min, max, data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
         if (this.uuid in library.geometries) return {
             type: "TerrainSegment",
             name: this.objectName,

@@ -61,7 +61,7 @@ class ULight extends UAActor {
         });
     }
 
-    protected getRegionLineHelper(library: IDecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+    protected getRegionLineHelper(library: DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();
         const _a = this.region.getZone().location;
         const _b = this.location;
@@ -126,7 +126,7 @@ class ULight extends UAActor {
         return [x * brightness, y * brightness, z * brightness];
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<ILightDecodeInfo> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<ILightDecodeInfo> {
         await this.onLoaded();
 
         // debugger;

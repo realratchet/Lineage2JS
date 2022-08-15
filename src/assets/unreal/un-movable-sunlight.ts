@@ -18,7 +18,7 @@ class UNMovableSunLight extends UAActor {
         this.readHead = pkg.tell();
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<any> {
         await this.onLoaded();
 
         return {

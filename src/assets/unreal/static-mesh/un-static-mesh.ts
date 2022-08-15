@@ -173,7 +173,7 @@ class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: DecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
         await this.onLoaded();
 
         let materialUuid = this.uuid;
@@ -347,7 +347,7 @@ class UStaticMesh extends UPrimitive {
         };
     }
 
-    protected getDecodeTrisInfo(library: IDecodeLibrary): IBaseObjectDecodeInfo {
+    protected getDecodeTrisInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
         const trisCount = this.staticMeshTris.length;
         const trisGeometryUuid = generateUUID();
         const TypedIndicesArray = getTypedArrayConstructor(trisCount);

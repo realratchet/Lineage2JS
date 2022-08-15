@@ -98,7 +98,7 @@ function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapData_T {
+function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
@@ -113,8 +113,7 @@ function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapDa
     if (info.wrapT) texture.wrapT = getClamping(info.wrapT);
 
     if (info.name) texture.name = info.name;
-
-    texture.anisotropy = library.anisotropy;
+    if (library.anisotropy >= 0) texture.anisotropy = library.anisotropy;
 
     return { texture, size: new Vector2(texture.image.width, texture.image.height) };
 }

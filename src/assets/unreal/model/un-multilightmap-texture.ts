@@ -31,7 +31,7 @@ class FStaticLightmapTexture extends FConstructable {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
