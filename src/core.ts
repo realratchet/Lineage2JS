@@ -53,7 +53,7 @@ async function startCore() {
 
     // debugger;
 
-    const pkgLoadPromise = pkg_22_22;
+    const pkgLoadPromise = pkg_20_21;
 
     // await assetLoader.load(pkg_meffects);
 
@@ -177,8 +177,7 @@ async function startCore() {
     //     // 47, // rock with ambient light
     //     // 2369,
     //     // 2011, // ceiling fixture that's too red
-    //     481, // waterfall
-    //     // 1761, // flame
+    //     6695,
     //     // 4609, // transparency issue
     //     // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
     //     // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
@@ -228,22 +227,22 @@ async function startCore() {
 
     objectGroup.add(decodeSector(decodeLibrary));
 
-    // const boundsGroup = new Object3D();
-    // objectGroup.add(boundsGroup);
-    // objectGroup.name = "Bounds Helpers";
-    // Object.values(decodeLibrary.zones).forEach(zone => {
-    //     const { min, max } = zone.bounds;
-    //     const box = new Box3();
-    //     const color = new Color(Math.floor(Math.random() * 0xffffff));
+    const boundsGroup = new Object3D();
+    objectGroup.add(boundsGroup);
+    objectGroup.name = "Bounds Helpers";
+    Object.values(decodeLibrary.zones).forEach(zone => {
+        const { min, max } = zone.bounds;
+        const box = new Box3();
+        const color = new Color(Math.floor(Math.random() * 0xffffff));
 
-    //     box.min.fromArray(min);
-    //     box.max.fromArray(max);
+        box.min.fromArray(min);
+        box.max.fromArray(max);
 
-    //     const helper = new Box3Helper(box, color);
-    //     if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
+        const helper = new Box3Helper(box, color);
+        if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
 
-    //     boundsGroup.add(helper);
-    // });
+        boundsGroup.add(helper);
+    });
 
     console.info("System has loaded!");
 

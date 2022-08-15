@@ -126,6 +126,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         apply("shSpecularMask", info.specularMask);
 
         if (info.opacity) defines["USE_ALPHATEST"] = "";
+        if (info.blendingMode === "masked") {
+            defines["USE_MASKING"] = "";
+            defines["USE_ALPHATEST"] = "";
+        }
 
         // defines["USE_DIRECTIONAL_AMBIENT"] = "";
 
@@ -174,6 +178,7 @@ class MeshStaticMaterial extends ShaderMaterial {
             transparent: info.transparent,
             depthWrite: info.depthWrite,
             visible: info.visible,
+            // premultipliedAlpha: true,
             // lights: true
             // wireframe: true
         });
@@ -184,19 +189,17 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         switch (info.blendingMode) {
             case "normal":
-            case "masked":
+                // case "masked":
                 this.blending = NormalBlending;
                 break;
             case "brighten":
                 this.blending = AdditiveBlending;
                 this.transparent = true;
                 break;
-            // case "masked":
-            //     this.blending = CustomBlending;
-            //     this.blendSrc = SrcAlphaFactor;
-            //     this.blendDst = OneMinusSrcAlphaFactor;
-            //     this.alphaTest = 0;
-            //     break;
+            case "masked":
+                this.blending = NormalBlending;
+                this.transparent = true;
+                break;
             case "translucent":
                 this.blending = CustomBlending;
                 this.blendSrc = OneFactor;

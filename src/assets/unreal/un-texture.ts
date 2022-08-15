@@ -250,6 +250,7 @@ class UTexture extends UObject {
         return {
             materialType: "texture",
             textureType,
+            name: this.objectName,
             buffer: decodedBuffer,
             width,
             height,
@@ -275,6 +276,7 @@ class UTexture extends UObject {
             }
 
             library.materials[this.uuid] = {
+                name: `Sprite_${this.objectName}`,
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate

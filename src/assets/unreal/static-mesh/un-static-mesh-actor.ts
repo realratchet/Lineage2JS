@@ -420,18 +420,8 @@ class UStaticMeshActor extends UAActor {
 
         this.readHead = pkg.tell();
 
-        // if (this.objectName === "Exp_StaticMeshActor470")
+        // if (this.objectName === "Exp_StaticMeshActor45")
         //     debugger;
-
-        // if (this.objectName === "Exp_StaticMeshActor729")
-        //     debugger;
-
-        // if (this.objectName === "Exp_StaticMeshActor1109")
-        //     debugger;
-
-        // if(this.objectName === "Exp_StaticMeshActor1893") {
-        //     debugger;
-        // }
 
         return this;
     }
