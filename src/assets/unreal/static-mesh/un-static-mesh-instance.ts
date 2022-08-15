@@ -5,7 +5,7 @@ import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
 import { selectByTime, staticMeshLight } from "../un-time-list";
 import ULight from "../un-light";
-import timeOfDay from "../un-time-of-day-helper";
+import timeOfDay, { indexToTime } from "../un-time-of-day-helper";
 
 class FAssignedLight extends FConstructable {
     public lightIndex: number; // seems to be light index
@@ -149,9 +149,3 @@ class UStaticMeshInstance extends UObject {
 
 export default UStaticMeshInstance;
 export { UStaticMeshInstance };
-
-
-function indexToTime(index: number, totalElements: number) {
-    return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements;
-}
-

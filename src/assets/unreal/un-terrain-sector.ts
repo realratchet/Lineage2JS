@@ -8,7 +8,7 @@ import { selectByTime, terrainAmbient, terrainLight } from "./un-time-list";
 import { mapLinear } from "three/src/math/MathUtils";
 import FVector from "./un-vector";
 import saveFile from "@client/utils/save-file";
-import timeOfDay from "./un-time-of-day-helper";
+import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
 
 
 class UTerrainSector extends UObject {
@@ -98,6 +98,25 @@ class UTerrainSector extends UObject {
         // const g = (this.offsetX / 16) % 2;
         // const b = (this.offsetY / 16) % 2;
 
+
+        let validShadowmap: FPrimitiveArray = null;
+        let startIndex: number, finishIndex: number;
+        let startTime: number, finishTime: number;
+
+        for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
+            const timeForIndex = indexToTime(i, len);
+
+            if ((Number(timeForIndex < timeOfDay) << 0x8 | Number(timeForIndex === timeOfDay) << 0xe) === 0x0) {
+                validShadowmap = this.shadowMaps[i];
+                startIndex = i;
+                finishIndex = i + 1;
+                startTime = timeForIndex;
+                finishTime = indexToTime(finishIndex, len);
+
+                break;
+            }
+        }
+
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
@@ -109,7 +128,7 @@ class UTerrainSector extends UObject {
                 const px = hmx * sx;
                 const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
                 const pz = hmy * sz;
-                const shadowMap = this.shadowMaps[0].getElem(idxOffset) / 255;
+                const shadowMap = validShadowmap.getElem(idxOffset) / 255;
 
                 positions[idxVertOffset + 0] = px;
                 positions[idxVertOffset + 1] = py;
@@ -117,9 +136,9 @@ class UTerrainSector extends UObject {
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
-                colors[idxVertOffset + 0] = ambient[0] * shadowMap;
-                colors[idxVertOffset + 1] = ambient[1] * shadowMap;
-                colors[idxVertOffset + 2] = ambient[2] * shadowMap;
+                colors[idxVertOffset + 0] =  ambient[0] * shadowMap;
+                colors[idxVertOffset + 1] =  ambient[1] * shadowMap;
+                colors[idxVertOffset + 2] =  ambient[2] * shadowMap;
 
             }
         }

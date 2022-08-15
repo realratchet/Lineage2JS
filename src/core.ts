@@ -21,9 +21,11 @@ import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: UPackage | Promise<UPackage>) {
-    const decodeLibrary = await DecodeLibrary.fromPackage(await assetLoader.load(pkg));
+async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: UPackage | Promise<UPackage>, settings: LoadSettings_T) {
+    const decodeLibrary = await DecodeLibrary.fromPackage(await assetLoader.load(pkg), settings);
+
     decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
+
     return decodePackage(decodeLibrary);
 }
 
@@ -62,47 +64,45 @@ async function startCore() {
     // const engineData = await new UEncodedFile("assets/system/l2.ini").decode();
 
     // debugger;
-    
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_21));
+
+    const loadSettings = {
+        loadTerrain: true,
+        loadBaseModel: false,
+        loadStaticModels: true,
+        loadStaticModelList: [
+            // 1441,
+            // 1770,
+            // 1802,
+            // 1804,
+            // 4284,
+            // 10253, // scluptures
+            // 10254, // scluptures
+            // 8028,
+            // 1370, // wall object
+            // 9742, // some ground from cruma loaded first, fails lighting
+            // ...[9742, 9646, 10157, 9675], // some ground from cruma loaded first, fails lighting
+            // 5680, // floor near wall objects
+            // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+            // 555,// elven ruins colon
+            // 47, // rock with ambient light
+            // 2369,
+            // 2011, // ceiling fixture that's too red
+            2774, // necropolis entrance
+            // 4609, // transparency issue
+            // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
+            // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
+            // 610, // light fixture with 2 lights near elven ruins
+            // 1755, // light fixture with 3 lights near elven ruins
+            // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+        ]
+    } as LoadSettings_T;
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_21, loadSettings));
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_20));
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_19));
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_22));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_21_22));
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_21_22, loadSettings));
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_22_22));
-
-
-
-    // (await Promise.all([
-    //     // 1441,
-    //     // 1770,
-    //     // 1802,
-    //     // 1804,
-    //     // 4284,
-    //     // 10253, // scluptures
-    //     // 10254, // scluptures
-    //     // 8028,
-    //     // 1370, // wall object
-    //     // 9742, // some ground from cruma loaded first, fails lighting
-    //     // ...[9742, 9646, 10157, 9675], // some ground from cruma loaded first, fails lighting
-    //     // 5680, // floor near wall objects
-    //     // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
-    //     // 555,// elven ruins colon
-    //     // 47, // rock with ambient light
-    //     // 2369,
-    //     // 2011, // ceiling fixture that's too red
-    //     2774, // necropolis entrance
-    //     // 4609, // transparency issue
-    //     // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
-    //     // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
-    //     // 610, // light fixture with 2 lights near elven ruins
-    //     // 1755, // light fixture with 3 lights near elven ruins
-    //     // ...[608, 610, 1755, 1781] // elven ruins light fixtures
-    // ].map(async id => {
-    //     const uMesh = await pkgLoad.fetchObject(id) as UStaticMeshActor;
-    //     await uMesh.getDecodeInfo(decodeLibrary);
-
-    // })));
-
 
     // const boundsGroup = new Object3D();
     // objectGroup.add(boundsGroup);

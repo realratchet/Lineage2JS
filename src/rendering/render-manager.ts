@@ -81,6 +81,11 @@ class RenderManager {
         this.camera.lookAt(19313.26359342052, -1077.117687144737, 114494.24459571407);
         this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
 
+        // execution grounds necropolis
+        this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
+        this.camera.lookAt(39689.71781138217, -2528.306592105407, 145400.2027798047);
+        this.controls.orbit.target.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
+
 
         this.controls.orbit.update();
         // this.controls.fps.update(0);

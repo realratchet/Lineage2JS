@@ -345,3 +345,10 @@ interface IZoneFogInfo {
     end: number,
     color: ColorArr
 }
+
+type LoadSettings_T = {
+    loadTerrain?: boolean,
+    loadBaseModel?: boolean,
+    loadStaticModels?: boolean,
+    loadStaticModelList?: number[]
+};
