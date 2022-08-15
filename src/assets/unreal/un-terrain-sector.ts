@@ -8,6 +8,7 @@ import { selectByTime, terrainAmbient, terrainLight } from "./un-time-list";
 import { mapLinear } from "three/src/math/MathUtils";
 import FVector from "./un-vector";
 import saveFile from "@client/utils/save-file";
+import timeOfDay from "./un-time-of-day-helper";
 
 
 class UTerrainSector extends UObject {
@@ -86,7 +87,6 @@ class UTerrainSector extends UObject {
         const sectorX = this.offsetX / 2 / 2048;
         const sectorY = this.offsetY / 2 / 2048;
 
-        const timeOfDay = 0;
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
         const trueBoundingBox = new FBox();

@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat, OneFactor, CustomBlending } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -82,22 +82,17 @@ class MeshTerrainMaterial extends ShaderMaterial {
         let needsPreamble = false;
         let needsOpacityPreamble = false;
 
-        let done = false;
+        let isFirst = false;
 
         info.layers.forEach((layer, i) => {
             if (!layer.map) return;
-
-            // if (done) return;
-
-            // debugger;
-
-            // done = true;
 
             needsPreamble = true;
 
             const u = uniforms[`layer${i}`].value = { map: {}, alphaMap: {} };
 
             defines[`USE_LAYER_${i}`] = "";
+
 
             if (layer.alphaMap) {
                 needsOpacityPreamble = true;
@@ -107,20 +102,26 @@ class MeshTerrainMaterial extends ShaderMaterial {
                 paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
 
                 Object.assign(u.alphaMap, layer.alphaMap.uniforms.map);
+                layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
+                layer.alphaMap.uniforms.map.texture.needsUpdate = true;
             } else {
                 layerCode.push(`${ws}layerMask = vec4(1.0);`);
                 paramsCode.push(`${wsParams}uniform LayerData layer${i};`);
             }
 
-            // debugger;s
-
-
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i}]).rgb, 1.0) * layerMask.r;`)
-            layerCode.push(`${ws}texelDiffuse = addLayer(layer, texelDiffuse);`);
+            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i}]).rgb, layerMask.r);`)
+            if (!isFirst) {
+                layerCode.push(`${ws}texelDiffuse = addLayer(layer, texelDiffuse);`);
+            } else {
+                layerCode.push(`${ws}texelDiffuse = layer;`);
+                isFirst = true;
+            }
             layerCode.push("");
 
-            Object.assign(u.map, layer.map.uniforms.map);
+            layer.map.uniforms.map.texture.premultiplyAlpha = true;
+            layer.map.uniforms.map.texture.needsUpdate = true;
 
+            Object.assign(u.map, layer.map.uniforms.map);
         });
 
         // debugger;
@@ -203,7 +204,9 @@ class MeshTerrainMaterial extends ShaderMaterial {
             // premultipliedAlpha: true,
             vertexShader: VERTEX_SHADER,
             fragmentShader: fragmentShader,
-            side: DoubleSide
+            side: DoubleSide,
+            blendSrc: OneFactor,
+            blending: CustomBlending
         });
     }
 }

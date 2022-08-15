@@ -33,7 +33,7 @@ class RenderManager {
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
-            // premultipliedAlpha: false,
+            premultipliedAlpha: false,
             logarithmicDepthBuffer: true,
             alpha: true
         });
