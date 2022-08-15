@@ -269,8 +269,8 @@ class UTexture extends UObject {
 
             let tex: UTexture = this;
 
-            for (let i = 0, len = this.totalFrameNum; i < len; i++) {
-                sprites.push(await this.decodeTexture(library));
+            for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
+                sprites.push(await tex.decodeTexture(library));
                 tex = tex.animNext;
             }
 

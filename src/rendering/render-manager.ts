@@ -257,8 +257,8 @@ class RenderManager {
                             ? [(object as THREE.Mesh).material]
                             : (object as THREE.Mesh).material) as THREE.Material[])
                             .forEach(mat => {
-                                if ((mat as any).isUpdatable)
-                                    (mat as any).update(globalTime);
+                                if (mat && (mat as any).isUpdatable)
+                                    (mat as any).update(currentTime);
                             });
                 });
             }

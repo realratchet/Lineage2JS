@@ -262,7 +262,17 @@ class MeshStaticMaterial extends ShaderMaterial {
     }
 
     public update(time: number) {
-        debugger;
+        Object.entries(this.sprites).forEach(([k, { sprites, framerate }]) => {
+            const frameCount = sprites.length;
+
+            if (frameCount <= 1) return;
+
+            const uniform = this.uniforms[k];
+            const activeFrameIndex = Math.floor(time / framerate) % frameCount;
+            const activeFrame = sprites[activeFrameIndex];
+
+            uniform.value.map = activeFrame;
+        });
     }
 }
 

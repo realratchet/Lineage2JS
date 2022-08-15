@@ -107,10 +107,6 @@ function decodeShader(library: IDecodeLibrary, info: IShaderDecodeInfo): MeshSta
     });
 }
 
-function decodeSprite(library: IDecodeLibrary, info: IDecodeLibrary): MeshStaticMaterial {
-    debugger;
-}
-
 function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MeshStaticMaterial {
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, info),
@@ -211,7 +207,6 @@ function decodeInstancedMaterial(library: IDecodeLibrary, info: IMaterialInstanc
 function decodeMaterial(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return null;
     switch (info.materialType) {
-        case "sprite": return decodeSprite(library, info as IAnimatedSpriteDecodeInfo);
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);
         case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
