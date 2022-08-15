@@ -227,22 +227,22 @@ async function startCore() {
 
     objectGroup.add(decodeSector(decodeLibrary));
 
-    const boundsGroup = new Object3D();
-    objectGroup.add(boundsGroup);
-    objectGroup.name = "Bounds Helpers";
-    Object.values(decodeLibrary.zones).forEach(zone => {
-        const { min, max } = zone.bounds;
-        const box = new Box3();
-        const color = new Color(Math.floor(Math.random() * 0xffffff));
+    // const boundsGroup = new Object3D();
+    // objectGroup.add(boundsGroup);
+    // objectGroup.name = "Bounds Helpers";
+    // Object.values(decodeLibrary.zones).forEach(zone => {
+    //     const { min, max } = zone.bounds;
+    //     const box = new Box3();
+    //     const color = new Color(Math.floor(Math.random() * 0xffffff));
 
-        box.min.fromArray(min);
-        box.max.fromArray(max);
+    //     box.min.fromArray(min);
+    //     box.max.fromArray(max);
 
-        const helper = new Box3Helper(box, color);
-        if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
+    //     const helper = new Box3Helper(box, color);
+    //     if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
 
-        boundsGroup.add(helper);
-    });
+    //     boundsGroup.add(helper);
+    // });
 
     console.info("System has loaded!");
 
