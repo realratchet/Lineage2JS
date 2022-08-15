@@ -6,6 +6,7 @@ import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const DEFAULT_FAR = 100_000;
+const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 
 class RenderManager {
     public readonly renderer: WebGLRenderer;
@@ -37,7 +38,7 @@ class RenderManager {
             alpha: true
         });
 
-        this.renderer.setClearColor(0x000000);
+        this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
         this.controls.orbit = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.fps = new PointerLockControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 5, 15);
@@ -82,7 +83,7 @@ class RenderManager {
         this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
         this.camera.lookAt(19313.26359342052, -1077.117687144737, 114494.24459571407);
         this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
-        
+
         this.controls.orbit.update();
         // this.controls.fps.update(0);
 
@@ -278,11 +279,11 @@ class RenderManager {
             this.renderer.setClearColor(fog.color);
             this.camera.far = fog.far * 1.2;
         } else {
-            GLOBAL_UNIFORMS.fogColor.value.setHex(0x0c0c0c);
+            GLOBAL_UNIFORMS.fogColor.value.setHex(DEFAULT_CLEAR_COLOR);
             GLOBAL_UNIFORMS.fogNear.value = DEFAULT_FAR * 10;
             GLOBAL_UNIFORMS.fogFar.value = DEFAULT_FAR * 10 + 1;
 
-            this.renderer.setClearColor(0x0c0c0c);
+            this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
             this.camera.far = DEFAULT_FAR;
         }
 

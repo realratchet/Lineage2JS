@@ -200,6 +200,7 @@ class MeshTerrainMaterial extends ShaderMaterial {
             defines,
             uniforms,
             // transparent: true,
+            // premultipliedAlpha: true,
             vertexShader: VERTEX_SHADER,
             fragmentShader: fragmentShader,
             side: DoubleSide

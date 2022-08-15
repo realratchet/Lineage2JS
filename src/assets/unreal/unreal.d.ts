@@ -90,7 +90,7 @@ type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
 type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
-interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T, color?: boolean }
+interface IBaseMaterialDecodeInfo { name?: string, materialType: DecodableMaterial_T, color?: boolean }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "modifier",
     modifierType: DecodableMaterialModifier_T

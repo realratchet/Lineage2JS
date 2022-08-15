@@ -236,6 +236,10 @@ void main() {
             vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
             diffuseColor.rgb *= texelDiffuse.rgb;
+
+            #ifdef USE_MASKING
+                diffuseColor.a *= texelDiffuse.a;
+            #endif
         #endif
     #endif
 
@@ -347,4 +351,6 @@ void main() {
     // #endif
 
     // gl_FragColor = vec4((directLight.color * (saturate( dot( geometry.normal, directLight.direction ) ))) * BRDF_Lambert( material.diffuseColor ) * 10.0, 1.0);
+
+    // gl_FragColor.a = texture2D(shDiffuse.map.texture, UV_DIFFUSE).a;
 }

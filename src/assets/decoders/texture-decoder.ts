@@ -112,6 +112,8 @@ function decodeTexture(library: IDecodeLibrary, info: ITextureDecodeInfo): MapDa
     if (info.wrapS) texture.wrapS = getClamping(info.wrapS);
     if (info.wrapT) texture.wrapT = getClamping(info.wrapT);
 
+    if (info.name) texture.name = info.name;
+
     texture.anisotropy = library.anisotropy;
 
     return { texture, size: new Vector2(texture.image.width, texture.image.height) };
