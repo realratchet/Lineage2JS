@@ -33,10 +33,10 @@ class UTexture extends UObject {
     protected maxFrameRate: number;
     protected totalFrameNum: number;
     protected animNext: UTexture;
-    
-    protected isTwoSided = false;
-    protected isAlphaTexture = false;
-    protected isMasked = false;
+
+    protected isTwoSided: boolean;
+    protected isAlphaTexture: boolean;
+    protected isMasked: boolean;
 
     protected clampModeU: number;
     protected clampModeV: number;
@@ -128,11 +128,7 @@ class UTexture extends UObject {
         }
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
-        if (this.uuid in library.materials) return this.uuid;
-
-        library.materials[this.uuid] = null;
-
+    protected async decodeTexture(library: IDecodeLibrary) {
         await this.onLoaded();
 
         const totalMipCount = this.mipmaps.length;
@@ -251,7 +247,7 @@ class UTexture extends UObject {
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
-        library.materials[this.uuid] = {
+        return {
             materialType: "texture",
             textureType,
             buffer: decodedBuffer,
@@ -261,6 +257,31 @@ class UTexture extends UObject {
             wrapT: this.wrapT,
             useMipmaps: mipCount > 0
         } as ITextureDecodeInfo;
+    }
+
+    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+        if (this.uuid in library.materials) return this.uuid;
+
+        library.materials[this.uuid] = null;
+
+        if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
+            const sprites: ITextureDecodeInfo[] = [];
+
+            let tex: UTexture = this;
+
+            for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
+                sprites.push(await tex.decodeTexture(library));
+                tex = tex.animNext;
+            }
+
+            library.materials[this.uuid] = {
+                materialType: "sprite",
+                sprites,
+                framerate: 1000 / this.maxFrameRate
+            } as IAnimatedSpriteDecodeInfo;
+        } else {
+            library.materials[this.uuid] = await this.decodeTexture(library);
+        }
 
         return this.uuid;
     }

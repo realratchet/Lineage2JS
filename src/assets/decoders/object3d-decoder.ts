@@ -145,7 +145,7 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
 
     applySimpleProperties(library, mesh, meshInfo);
 
-    (materials instanceof Array ? materials : [materials]).forEach(mat => mat?.setInstanced?.());
+    (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setInstanced?.());
 
     if (infoGeo.attributes.colors) {
         (materials instanceof Array ? materials : [materials]).forEach(mat => {

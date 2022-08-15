@@ -241,7 +241,9 @@ class RenderManager {
     protected _updateObjects(currentTime: number, deltaTime: number) {
         let fog: THREE.Fog;
 
-        this.scene.traverse((object: any) => {
+        const globalTime = currentTime / 600;
+
+        this.scene.traverse((object: THREE.Object3D) => {
 
             if ((object as ZoneObject).isZoneObject) {
 
@@ -249,11 +251,22 @@ class RenderManager {
 
                 if (inBounds) fog = (object as ZoneObject).fog;
 
-                (object as ZoneObject).update(this.enableZoneCulling, this.frustum);
+                if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
+
+                (object as THREE.Object3D).traverseVisible(object => {
+                    if ((object as THREE.Mesh).isMesh)
+                        (((((object as THREE.Mesh).material as THREE.Material).isMaterial)
+                            ? [(object as THREE.Mesh).material]
+                            : (object as THREE.Mesh).material) as THREE.Material[])
+                            .forEach(mat => {
+                                if (mat && (mat as any).isUpdatable)
+                                    (mat as any).update(currentTime);
+                            });
+                });
             }
         });
 
-        GLOBAL_UNIFORMS.globalTime.value = currentTime / 600;
+        GLOBAL_UNIFORMS.globalTime.value = globalTime;
 
         const oldFar = this.camera.far;
 
@@ -265,11 +278,11 @@ class RenderManager {
             this.renderer.setClearColor(fog.color);
             this.camera.far = fog.far * 1.2;
         } else {
-            GLOBAL_UNIFORMS.fogColor.value.setHex(0x000000);
+            GLOBAL_UNIFORMS.fogColor.value.setHex(0x0c0c0c);
             GLOBAL_UNIFORMS.fogNear.value = DEFAULT_FAR * 10;
             GLOBAL_UNIFORMS.fogFar.value = DEFAULT_FAR * 10 + 1;
 
-            this.renderer.setClearColor(0x000000);
+            this.renderer.setClearColor(0x0c0c0c);
             this.camera.far = DEFAULT_FAR;
         }
 

@@ -39,7 +39,7 @@ async function startCore() {
     // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
     const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // dion/ works
     const pkg_21_22 = assetLoader.getPackage("21_22", "Level"); // execution grounds /crashes on static meshes
-    const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /crashes on static meshes
+    const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /works
     // const pkg_shader = assetLoader.getPackage("T_SHADER");
     // const pkg_engine = assetLoader.getPackage("Engine");
     // const pkg_core = assetLoader.getPackage("Core");
@@ -177,7 +177,9 @@ async function startCore() {
     //     // 47, // rock with ambient light
     //     // 2369,
     //     // 2011, // ceiling fixture that's too red
-    //     4609, // transparency issue
+    //     481, // waterfall
+    //     // 1761, // flame
+    //     // 4609, // transparency issue
     //     // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
     //     // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
     //     // 610, // light fixture with 2 lights near elven ruins
@@ -190,27 +192,27 @@ async function startCore() {
     // })));
 
 
-    const failed = [], failedLoad = [], failedDecode = [], loaded = [];
+    // const failed = [], failedLoad = [], failedDecode = [], loaded = [];
 
-    for (let exp of (expGroups["StaticMeshActor"] || [])) {
-        try {
-            const actor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);
-            try {
-                await actor.onLoaded();
+    // for (let exp of (expGroups["StaticMeshActor"] || [])) {
+    //     try {
+    //         const actor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);
+    //         try {
+    //             await actor.onLoaded();
 
-                try {
-                    await actor.getDecodeInfo(decodeLibrary)
-                    loaded.push(actor);
-                } catch (e) {
-                    failedDecode.push([actor, e]);
-                }
-            } catch (e) {
-                failedLoad.push([actor, e]);
-            }
-        } catch (e) {
-            failed.push([exp, e]);
-        }
-    }
+    //             try {
+    //                 await actor.getDecodeInfo(decodeLibrary)
+    //                 loaded.push(actor);
+    //             } catch (e) {
+    //                 failedDecode.push([actor, e]);
+    //             }
+    //         } catch (e) {
+    //             failedLoad.push([actor, e]);
+    //         }
+    //     } catch (e) {
+    //         failed.push([exp, e]);
+    //     }
+    // }
 
     // console.log(loaded);
     // console.log(failedDecode);
@@ -221,8 +223,8 @@ async function startCore() {
 
     // (expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1))
 
-    // const uStaticMeshActors = await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)))//.filter(x => x.isSunAffected);
-    // await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)))//.filter(x => x.children[0]?.name === "Exp_obj49");
+    const uStaticMeshActors = await Promise.all((expGroups["StaticMeshActor"] || []).map(exp => pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1)))//.filter(x => x.isSunAffected);
+    await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)))//.filter(x => x.children[0]?.name === "Exp_obj49");
 
     objectGroup.add(decodeSector(decodeLibrary));
 

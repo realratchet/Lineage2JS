@@ -70,6 +70,18 @@ function decodeParameter(library: IDecodeLibrary, info: IBaseMaterialDecodeInfo)
     if (!info) return null;
 
     switch (info.materialType) {
+        case "sprite":
+            const decodedSprites = (info as IAnimatedSpriteDecodeInfo).sprites.map(info => fetchTexture(library, info));
+
+            return {
+                uniforms: { map: decodedSprites[0] },
+                sprites: decodedSprites,
+                framerate: (info as IAnimatedSpriteDecodeInfo).framerate,
+                defines: {},
+                isUsingMap: true,
+                isSprite: true,
+                transformType: "none"
+            } as IDecodedSpriteParameter;
         case "modifier": return _decodeModifier(library, info as IBaseMaterialModifierDecodeInfo);
         case "texture": return {
             uniforms: { map: fetchTexture(library, info as ITextureDecodeInfo) },

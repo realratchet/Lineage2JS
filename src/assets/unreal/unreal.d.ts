@@ -88,12 +88,18 @@ type ETextureFormat = import("./un-tex-format").ETextureFormat;
 type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
 type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment";
+type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite";
 type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 interface IBaseMaterialDecodeInfo { materialType: DecodableMaterial_T, color?: boolean }
 interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "modifier",
     modifierType: DecodableMaterialModifier_T
+}
+
+interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {
+    materialType: "sprite",
+    sprites: ITextureDecodeInfo[],
+    framerate: number
 }
 
 interface IMaterialTerrainSegmentDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -176,6 +182,12 @@ interface IDecodedParameter {
     defines: GenericObjectContainer_T<any>,
     isUsingMap: boolean,
     transformType: "none" | "pan" | "rotate",
+}
+
+interface IDecodedSpriteParameter extends IDecodedParameter {
+    isSprite: true,
+    sprites: any[],
+    framerate: number
 }
 
 type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound";
