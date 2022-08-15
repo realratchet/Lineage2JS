@@ -33,6 +33,8 @@ async function startCore() {
     // const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // /crashes on terrain
     // const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
     // const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
+    // const pkg_20_18 = assetLoader.getPackage("20_18", "Level"); // d.elf village /crashes on some objects
+    const pkg_23_20 = assetLoader.getPackage("23_20", "Level"); // hunters village
     const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
     const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
     const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
@@ -177,7 +179,7 @@ async function startCore() {
     //     // 47, // rock with ambient light
     //     // 2369,
     //     // 2011, // ceiling fixture that's too red
-    //     6695,
+    //     2774, // necropolis entrance
     //     // 4609, // transparency issue
     //     // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
     //     // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
@@ -192,7 +194,6 @@ async function startCore() {
 
 
     // const failed = [], failedLoad = [], failedDecode = [], loaded = [];
-
     // for (let exp of (expGroups["StaticMeshActor"] || [])) {
     //     try {
     //         const actor = await pkgLoad.fetchObject<UStaticMeshActor>(exp.index + 1);

@@ -5,6 +5,7 @@ import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
 import { selectByTime, staticMeshLight } from "../un-time-list";
 import ULight from "../un-light";
+import timeOfDay from "../un-time-of-day-helper";
 
 class FAssignedLight extends FConstructable {
     public lightIndex: number; // seems to be light index
@@ -72,8 +73,6 @@ class UStaticMeshInstance extends UObject {
             color[offset + 1] = g / 255;
             color[offset + 2] = b / 255;
         }
-
-        const timeOfDay = 0;
 
         let validEnvironment: FAssignedLight = null;
         let startIndex: number, finishIndex: number;

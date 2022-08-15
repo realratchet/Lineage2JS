@@ -8,6 +8,7 @@ import { sampleLightIntensity } from "../un-sample-light";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import { selectByTime, staticMeshAmbient } from "../un-time-list";
 import FNumber from "../un-number";
+import timeOfDay from "../un-time-of-day-helper";
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -257,12 +258,10 @@ class UStaticMeshActor extends UAActor {
         const euler = new Euler().fromArray(this.rotation.getEulerElements());
         const quaternion = new Quaternion().setFromEuler(euler);
 
-        const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
-
         let someFlag = 0x1;
 
+        const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
         const lightPosition = new Vector3();
-        const timeOfDay = 0;
 
         if (this.isSunAffected) {
             const ambient = selectByTime(timeOfDay, staticMeshAmbient).getColor();
@@ -420,7 +419,7 @@ class UStaticMeshActor extends UAActor {
 
         this.readHead = pkg.tell();
 
-        // if (this.objectName === "Exp_StaticMeshActor45")
+        // if (this.objectName === "Exp_StaticMeshActor1106")
         //     debugger;
 
         return this;
