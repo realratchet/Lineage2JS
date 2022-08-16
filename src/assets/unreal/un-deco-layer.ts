@@ -1,6 +1,8 @@
 import UObject from "./un-object";
 
 class UDecoLayer extends UObject {
+    public readonly careUnread: boolean = false;
+
     protected showOnTerrain: number;
     protected scaleMap: UTexture;
     protected densityMap: UTexture;
@@ -51,15 +53,13 @@ class UDecoLayer extends UObject {
     }
 
     public preLoad(pkg: UPackage) {
+        
         this.readStart = this.readHead = pkg.tell();
-        this.readTail = this.readHead + this.size;
+        this.readTail = this.readHead + Infinity;
     }
 
     public doLoad(pkg: UPackage): this {
-
         this.readNamedProps(pkg);
-
-        pkg.seek(this.readTail, "set");
 
         return this;
     }
