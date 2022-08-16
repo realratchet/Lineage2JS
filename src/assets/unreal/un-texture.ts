@@ -128,7 +128,7 @@ class UTexture extends UObject {
         }
     }
 
-    protected async decodeTexture(library: IDecodeLibrary) {
+    protected async decodeTexture(library: DecodeLibrary) {
         await this.onLoaded();
 
         const totalMipCount = this.mipmaps.length;
@@ -260,7 +260,7 @@ class UTexture extends UObject {
         } as ITextureDecodeInfo;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;

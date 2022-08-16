@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../zone-object";
 
@@ -57,7 +57,7 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     return geometry;
 }
 
-function applySimpleProperties<T extends THREE.Object3D>(library: IDecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
+function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
 
     if (info.name) object.name = info.name;
     if (info.position) object.position.fromArray(info.position);
@@ -68,7 +68,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: IDecodeLibrary
     return object;
 }
 
-function decodeSimpleObject(library: IDecodeLibrary, Constructor: (typeof Object3D | typeof Group), info: IBaseObjectDecodeInfo) {
+function decodeSimpleObject(library: DecodeLibrary, Constructor: (typeof Object3D | typeof Group), info: IBaseObjectDecodeInfo) {
     const object = new Constructor();
 
     applySimpleProperties(library, object, info);
@@ -76,7 +76,7 @@ function decodeSimpleObject(library: IDecodeLibrary, Constructor: (typeof Object
     return object;
 }
 
-function decodeEdges(library: IDecodeLibrary, info: IEdgesObjectDecodeInfo): THREE.Line {
+function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THREE.Line {
     const ignoreDepth = "ignoreDepth" in info ? info.ignoreDepth : false;
     const material = new LineBasicMaterial({
         color: info.color ? new Color().fromArray(info.color) : 0xffff00,
@@ -92,7 +92,7 @@ function decodeEdges(library: IDecodeLibrary, info: IEdgesObjectDecodeInfo): THR
     return mesh;
 }
 
-function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
+function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
@@ -112,7 +112,7 @@ function decodeStaticMesh(library: IDecodeLibrary, info: IStaticMeshObjectDecode
     return mesh;
 }
 
-function decodeLight(library: IDecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
+function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
     const geo = new SphereBufferGeometry(info.radius, 32, 32);
     const mat = new MeshBasicMaterial({ color: new Color().fromArray(info.color), wireframe: true });
     const msh = new Mesh(geo, mat);
@@ -124,7 +124,7 @@ function decodeLight(library: IDecodeLibrary, info: ILightDecodeInfo): THREE.Mes
     return msh;
 }
 
-function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInstanceDecodeInfo) {
+function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInstanceDecodeInfo) {
 
     const geometryUuid = info.mesh.geometry;
     const infoGeo = {
@@ -158,7 +158,7 @@ function decodeStaticMeshInstance(library: IDecodeLibrary, info: IStaticMeshInst
     return mesh;
 }
 
-function decodeZoneObject(library: IDecodeLibrary, info: IBaseZoneDecodeInfo) {
+function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     const Constructor = info.type === "Sector" ? SectorObject : ZoneObject;
     const object = new Constructor();
 
@@ -170,7 +170,7 @@ function decodeZoneObject(library: IDecodeLibrary, info: IBaseZoneDecodeInfo) {
     return object;
 }
 
-function decodeSector(library: IDecodeLibrary) {
+function decodeSector(library: DecodeLibrary) {
     const sectorUuid = library.sector;
     const sectorInfo = library.zones[sectorUuid];
     const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
@@ -204,7 +204,35 @@ function decodeSector(library: IDecodeLibrary) {
     return sector;
 }
 
-function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
+function decodePackage(library: DecodeLibrary) {
+    const map = new Object3D();
+
+    map.name = library.name;
+    map.add(decodeSector(library));
+
+    if (library.helpersZoneBounds) {
+        const boundsGroup = new Object3D();
+        map.add(boundsGroup);
+        map.name = "Bounds Helpers";
+        Object.values(library.zones).forEach(zone => {
+            const { min, max } = zone.bounds;
+            const box = new Box3();
+            const color = new Color(Math.floor(Math.random() * 0xffffff));
+
+            box.min.fromArray(min);
+            box.max.fromArray(max);
+
+            const helper = new Box3Helper(box, color);
+            if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
+
+            boundsGroup.add(helper);
+        });
+    }
+
+    return map;
+}
+
+function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":
@@ -221,4 +249,4 @@ function decodeObject3D(library: IDecodeLibrary, info: IBaseObjectOrInstanceDeco
 }
 
 export default decodeObject3D;
-export { decodeObject3D, decodeSector };
+export { decodeObject3D, decodePackage };

@@ -187,7 +187,7 @@ class UStaticMeshActor extends UAActor {
         }
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         if (this.instance) this.instance.setActor(this);
@@ -419,7 +419,7 @@ class UStaticMeshActor extends UAActor {
 
         this.readHead = pkg.tell();
 
-        // if (this.objectName === "Exp_StaticMeshActor1106")
+        // if (this.objectName === "Exp_StaticMeshActor1814")
         //     debugger;
 
         return this;

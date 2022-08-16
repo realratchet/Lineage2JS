@@ -5,7 +5,7 @@ import { FPrimitiveArray } from "./un-array";
 
 abstract class UBaseMaterial extends UObject {
     public readonly skipRemaining = true;
-    public abstract getDecodeInfo(library: IDecodeLibrary): Promise<string>;
+    public abstract getDecodeInfo(library: DecodeLibrary): Promise<string>;
 }
 
 abstract class UBaseModifier extends UBaseMaterial { }
@@ -72,7 +72,7 @@ class UTexEnvMap extends UBaseModifier {
         });
     }
 
-    public getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): Promise<string> {
         return null;
     }
 }
@@ -88,7 +88,7 @@ class UFinalBlend extends UBaseModifier {
         });
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
@@ -143,7 +143,7 @@ class UShader extends UMaterial {
         });
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
@@ -197,7 +197,7 @@ class UFadeColor extends UBaseModifier {
     public color2: FColor = new FColor();
     public period: number = 0;
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
@@ -243,7 +243,7 @@ class UColorModifier extends UBaseMaterial {
     //     return material;
     // }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
@@ -298,7 +298,7 @@ class UTexRotator extends UBaseModifier {
     //     };
     // }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
@@ -340,7 +340,7 @@ class UTexOscillator extends UBaseModifier {
     protected currentUJitter: number;
     protected currentVJitter: number;
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
@@ -379,7 +379,7 @@ class UTexPanner extends UBaseModifier {
     protected material: UTexture;
     protected internalTime = new FPrimitiveArray(BufferValue.int32);
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
@@ -435,7 +435,7 @@ class FStaticMeshMaterial extends UBaseMaterial {
         this.readTail = pkg.tell();
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
 
         if (this.uuid in library.materials) return this.material?.uuid || null;
 

@@ -11,7 +11,7 @@ class UCubemap extends UTexture {
         });
     }
 
-    public getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): Promise<string> {
         throw new Error("Method not implemented.");
     }
 }

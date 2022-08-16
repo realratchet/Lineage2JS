@@ -52,7 +52,7 @@ class ULevelInfo extends UAActor implements IInfo {
 
     }
 
-    async getDecodeInfo(library: IDecodeLibrary): Promise<string> {
+    async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         await this.onLoaded();
 
         library.sector = this.uuid;

@@ -5,7 +5,7 @@ import FRawColorStream from "../un-raw-color-stream";
 import FArray, { FPrimitiveArray } from "../un-array";
 import { selectByTime, staticMeshLight } from "../un-time-list";
 import ULight from "../un-light";
-import timeOfDay from "../un-time-of-day-helper";
+import timeOfDay, { indexToTime } from "../un-time-of-day-helper";
 
 class FAssignedLight extends FConstructable {
     public lightIndex: number; // seems to be light index
@@ -37,7 +37,7 @@ class FAssignedLight extends FConstructable {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<any> {
 
         await Promise.all(this.promisesLoading);
 
@@ -60,7 +60,7 @@ class UStaticMeshInstance extends UObject {
 
     public setActor(actor: UStaticMeshActor) { this.actor = actor; }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<any> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<any> {
         await this.onLoaded();
 
         const color = new Float32Array(this.colorStream.color.length * 3);
@@ -149,9 +149,3 @@ class UStaticMeshInstance extends UObject {
 
 export default UStaticMeshInstance;
 export { UStaticMeshInstance };
-
-
-function indexToTime(index: number, totalElements: number) {
-    return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements;
-}
-

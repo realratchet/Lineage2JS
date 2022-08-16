@@ -37,7 +37,7 @@ class UAActor extends UObject {
     public getRegion() { return this.region; }
     public getZone() { return this.region.getZone(); }
 
-    protected getRegionLineHelper(library: IDecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+    protected getRegionLineHelper(library: DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();
         const _a = this.region.getZone().location;
         const _b = this.location;

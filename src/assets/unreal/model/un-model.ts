@@ -123,7 +123,7 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<string[][]> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<string[][]> {
         await this.onLoaded();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
  
