@@ -4,18 +4,9 @@ import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import { selectByTime, terrainAmbient, terrainLight } from "./un-time-list";
+import { selectByTime, terrainAmbient } from "./un-time-list";
 import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
-
-function getQuadVisibilityBitmap(_this: any, likelyImagePtr: any, a3: number): boolean {
-    return ((1 << ((likelyImagePtr + a3 * _this.byte20F8) & 0x1F)) & (_this.dword2188
-        + 4
-        * (
-            (likelyImagePtr + a3 * _this.byte20F8) >> 5))
-    ) !== 0;
-}
-
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
@@ -68,8 +59,9 @@ class UTerrainSector extends UObject {
     ];
 
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
+    protected unk64Bytes: Int32Array;
 
-    public async getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { min, max, data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
+    public async getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
         if (this.uuid in library.geometries) return {
             type: "TerrainSegment",
             name: this.objectName,
@@ -88,39 +80,17 @@ class UTerrainSector extends UObject {
 
         const positions = new Float32Array(17 * 17 * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
-        const [sx, , sz] = info.terrainScale.getVectorElements();
-
-        const sectorX = this.offsetX / 2 / 2048;
-        const sectorY = this.offsetY / 2 / 2048;
-
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
         const trueBoundingBox = new FBox();
         const tmpVector = new FVector();
 
-        const quadVisibilityBitmap = new Uint16Array(info.quadVisibilityBitmap.getTypedArray().buffer);
-
-        // const color = (((this.offsetY / 16) * 16) + (this.offsetY / 16)) % 2;
-        // const g = (this.offsetX / 16) % 2;
-        // const b = (this.offsetY / 16) % 2;
-
-        // debugger;
-
-
         let validShadowmap: FPrimitiveArray = null;
-        let startIndex: number, finishIndex: number;
-        let startTime: number, finishTime: number;
-
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
             if ((Number(timeForIndex < timeOfDay) << 0x8 | Number(timeForIndex === timeOfDay) << 0xe) === 0x0) {
                 validShadowmap = this.shadowMaps[i];
-                startIndex = i;
-                finishIndex = i + 1;
-                startTime = timeForIndex;
-                finishTime = indexToTime(finishIndex, len);
-
                 break;
             }
         }
@@ -132,20 +102,12 @@ class UTerrainSector extends UObject {
                 const hmx = x + this.offsetX;
                 const hmy = y + this.offsetY;
                 const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
-                // const offsetVis = Math.min(hmy, 63) * 64 + Math.min(hmx, 63);
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
 
-                // const px = hmx * sx;
-                // const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
-                // const pz = hmy * sz;
                 const shadowMap = validShadowmap.getElem(idxOffset) / 255;
-
-                if ((offset >> 5) > 8191)
-                    debugger;
-                // debugger;
 
                 positions[idxVertOffset + 0] = px;
                 positions[idxVertOffset + 1] = py;
@@ -161,11 +123,6 @@ class UTerrainSector extends UObject {
         }
 
 
-        // debugger;
-
-
-        // debugger;
-
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
                 let isVisible = true;
@@ -174,11 +131,9 @@ class UTerrainSector extends UObject {
                 {
                     const hmx = x + this.offsetX;
                     const hmy = y + this.offsetY;
-                    // const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
 
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
 
-                    // const offset = 29068;
                     let ecx = offset;
                     let edx = offset;
 
@@ -198,12 +153,9 @@ class UTerrainSector extends UObject {
                     // debugger;
 
                     isVisible = eax !== 0;
-
                 }
 
-
                 if (!isVisible) {
-                    // debugger;
 
                     indices[idxOffset + 0] = y * 17 + x;
                     indices[idxOffset + 1] = y * 17 + x;
@@ -225,8 +177,6 @@ class UTerrainSector extends UObject {
             }
         }
 
-        // debugger;
-
         const uvMultiplier = 2;
         const uvOffset = 17 * 17 * uvMultiplier;
         const itLayer = info.layers.values();
@@ -241,39 +191,14 @@ class UTerrainSector extends UObject {
 
             const layerOffset = uvOffset * k;
 
-            // const usx = layer.scaleW * sx * 2.0;
-            // const usy = layer.scaleH * sy * 2.0;
-
-            // const layerWidth = layer.map.width, layerHeight = layer.map.height;
-
             for (let y = 0; y < 17; y++) {
                 for (let x = 0; x < 17; x++) {
                     const hmx = x + this.offsetX;
                     const hmy = y + this.offsetY;
                     const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    // if (k % 3 == 0) {
-                    //     uvs[layerOffset + idxOffset + 0] = 1.0;
-                    //     uvs[layerOffset + idxOffset + 1] = 0;
-                    // } else if (k % 3 == 1) {
-                    //     uvs[layerOffset + idxOffset + 0] = 0.0;
-                    //     uvs[layerOffset + idxOffset + 1] = 1.0;
-                    // } else if (k % 3 == 2) {
-                    //     uvs[layerOffset + idxOffset + 0] = 1.0;
-                    //     uvs[layerOffset + idxOffset + 1] = 1.0;
-                    // }
-
-                    // uvs[layerOffset + idxOffset + 0] = hmx / layerWidth;
-                    // uvs[layerOffset + idxOffset + 1] = hmy / layerHeight;
-
-                    // uvs[layerOffset + idxOffset + 0] = 1.0;
-                    // uvs[layerOffset + idxOffset + 1] = 0;
-                    // uvs[layerOffset + idxOffset + 2] = 255;
-                    // uvs[layerOffset + idxOffset + 3] = 255;
-
                     uvs[layerOffset + idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
                     uvs[layerOffset + idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
-
                 }
             }
         }
@@ -290,14 +215,6 @@ class UTerrainSector extends UObject {
                 uvs[layerOffset + idxOffset + 1] = hmy / 255;
             }
         }
-
-        // debugger;
-
-        // uvs.fill(255);
-
-        // -3793.68212890625
-
-        // debugger;
 
         library.geometries[this.uuid] = {
             attributes: {
@@ -318,8 +235,6 @@ class UTerrainSector extends UObject {
             }
         };
 
-        // debugger;
-
         library.materials[this.uuid] = {
             materialType: "terrainSegment",
             terrainMaterial: info.uuid,
@@ -332,8 +247,6 @@ class UTerrainSector extends UObject {
                 format: "rg"
             } as IDataTextureDecodeInfo
         } as IMaterialTerrainSegmentDecodeInfo;
-
-        // debugger;
 
         return {
             uuid: this.uuid,
@@ -414,4 +327,4 @@ class UTerrainSector extends UObject {
 export default UTerrainSector;
 export { UTerrainSector };
 
-type HeightMapInfo_T = { min: number, max: number, data: Uint16Array, info: ITextureDecodeInfo };
+type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo };

@@ -61,26 +61,5 @@ interface IConstructable {
 }
 
 type ValidConstructables_T<T> = typeof import("./unreal/un-constructable").FConstructable
-    // | typeof import("./unreal/un-color").FColor
-    // | typeof import("./unreal/un-vector").FVector
-    // | typeof import("./unreal/un-mipmap").FMipmap
-    // | typeof import("./unreal/un-mipmap").FNumber
-    // | typeof import("./unreal/un-deco-layer").UDecoLayer
-    // | typeof import("./unreal/un-unknown-struct").FUnknownStruct
-    // | typeof import("./unreal/bsp/un-bsp-node").FBSPNode
-    // | typeof import("./unreal/bsp/un-bsp-surf").FBSPSurf
-    // | typeof import("./unreal/bsp/un-bsp-section").FBSPSection
-    // | typeof import("./unreal/model/un-vert").FVert
-    // | typeof import("./unreal/un-material").FStaticMeshMaterial
-    // | typeof import("./unreal/un-tint-map").FTIntMap
-    // | typeof import("./unreal/bsp/un-bsp-section").FBSPVertex
-    // | typeof import("./unreal/model/un-lightmap-index").FLightmapIndex
-    // | typeof import("./unreal/model/un-multilightmap-texture").FMultiLightmapTexture
-    // | typeof import("./unreal/un-box").FBox
-    // | typeof import("./unreal/un-leaf").FLeaf
-    // | typeof import("./unreal/static-mesh/un-static-mesh-section").FStaticMeshSection
-    // | typeof import("./unreal/static-mesh/un-static-mesh-uv-stream").FStaticMeshUVStream
-    // | typeof import("./unreal/static-mesh/un-static-mesh-collision").FStaticMeshCollisionNode
-    // | typeof import("./unreal/static-mesh/un-static-mesh-collision").FStaticMeshCollisionTriangle
-    // | typeof import("./unreal/static-mesh/un-static-mesh-triangle").FStaticMeshTriangle
+    | typeof import("./unreal/un-object").UObject
     | FNumberExt<T>;
