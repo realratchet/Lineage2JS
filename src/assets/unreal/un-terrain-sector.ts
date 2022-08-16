@@ -5,10 +5,16 @@ import FArray, { FPrimitiveArray } from "./un-array";
 import FUnknownStruct from "./un-unknown-struct";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient, terrainLight } from "./un-time-list";
-import { mapLinear } from "three/src/math/MathUtils";
 import FVector from "./un-vector";
-import saveFile from "@client/utils/save-file";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
+
+function getQuadVisibilityBitmap(_this: any, likelyImagePtr: any, a3: number): boolean {
+    return ((1 << ((likelyImagePtr + a3 * _this.byte20F8) & 0x1F)) & (_this.dword2188
+        + 4
+        * (
+            (likelyImagePtr + a3 * _this.byte20F8) >> 5))
+    ) !== 0;
+}
 
 
 class UTerrainSector extends UObject {
@@ -98,6 +104,8 @@ class UTerrainSector extends UObject {
         // const g = (this.offsetX / 16) % 2;
         // const b = (this.offsetY / 16) % 2;
 
+        // debugger;
+
 
         let validShadowmap: FPrimitiveArray = null;
         let startIndex: number, finishIndex: number;
@@ -117,6 +125,8 @@ class UTerrainSector extends UObject {
             }
         }
 
+        const v = new FVector();
+
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
@@ -125,10 +135,17 @@ class UTerrainSector extends UObject {
                 // const offsetVis = Math.min(hmy, 63) * 64 + Math.min(hmx, 63);
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
-                const px = hmx * sx;
-                const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
-                const pz = hmy * sz;
+
+                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
+
+                // const px = hmx * sx;
+                // const py = mapLinear(data[offset], min, max, this.info.boundingBox.min.z, this.info.boundingBox.max.z);
+                // const pz = hmy * sz;
                 const shadowMap = validShadowmap.getElem(idxOffset) / 255;
+
+                if ((offset >> 5) > 8191)
+                    debugger;
+                // debugger;
 
                 positions[idxVertOffset + 0] = px;
                 positions[idxVertOffset + 1] = py;
@@ -136,10 +153,10 @@ class UTerrainSector extends UObject {
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
-                colors[idxVertOffset + 0] =  ambient[0] * shadowMap;
-                colors[idxVertOffset + 1] =  ambient[1] * shadowMap;
-                colors[idxVertOffset + 2] =  ambient[2] * shadowMap;
 
+                colors[idxVertOffset + 0] = ambient[0] * shadowMap;
+                colors[idxVertOffset + 1] = ambient[1] * shadowMap;
+                colors[idxVertOffset + 2] = ambient[2] * shadowMap;
             }
         }
 
@@ -151,31 +168,42 @@ class UTerrainSector extends UObject {
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
-                // const quadX = sectorX * 16 + x;
-                // const quadY = sectorY * 16 + y;
-                // const quadIndex = quadY * 256 + quadX;
-                // const quadValue = info.quadVisibilityBitmap.getElem(quadIndex >> 3);
-                // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
-
-                // const quadX = Math.trunc(x + sectorX * 16);
-                // const quadY = Math.trunc(y + sectorY * 16);
-                // const quadIndex = quadY * 256 + quadX;
-                // // console.log(quadIndex);
-                // const quadValue = quadVisibilityBitmap[Math.trunc(quadIndex / 8)];
-                // const isVisible = quadValue & (0x00000001 << (quadIndex % 8));
-
-                // // debugger;
-
-                // if (quadValue !== 255)
-                //     debugger;
-
-                // debugger;
-
-                const isVisible = true;
+                let isVisible = true;
                 const idxOffset = (y * 16 + x) * 6;
 
+                {
+                    const hmx = x + this.offsetX;
+                    const hmy = y + this.offsetY;
+                    // const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+
+                    const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+
+                    // const offset = 29068;
+                    let ecx = offset;
+                    let edx = offset;
+
+                    ecx = ecx & 0x1F;
+
+                    let cl = ecx;
+                    let edi = 1;
+
+                    edi = edi << cl;
+                    edx = edx >> 5;
+
+                    let eax = info.quadVisibilityBitmap.getElem(edx);
+
+                    eax = eax & edi;
+                    // eax = 0xFFFFFFFF - eax + 1;
+
+                    // debugger;
+
+                    isVisible = eax !== 0;
+
+                }
+
+
                 if (!isVisible) {
-                    debugger;
+                    // debugger;
 
                     indices[idxOffset + 0] = y * 17 + x;
                     indices[idxOffset + 1] = y * 17 + x;
@@ -283,7 +311,7 @@ class UTerrainSector extends UObject {
                     min: trueBoundingBox.min.toArray() as Vector3Arr,
                     max: trueBoundingBox.max.toArray() as Vector3Arr
                 } : null
-                // box: trueBoundingBox.isValid ? {
+                // box: this.boundingBox.isValid ? {
                 //     min: this.boundingBox.min.getVectorElements(),
                 //     max: this.boundingBox.min.getVectorElements()
                 // } : null
@@ -309,6 +337,7 @@ class UTerrainSector extends UObject {
 
         return {
             uuid: this.uuid,
+            name: this.objectName,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid

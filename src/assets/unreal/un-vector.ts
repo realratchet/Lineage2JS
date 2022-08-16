@@ -225,6 +225,38 @@ class FVector extends FConstructable {
 
         return new FVector(nx, ny, nz);
     }
+
+    transformBy(coord: FCoords) {
+        const inVector = this;
+        const outVector = new FVector();
+
+        let fVar1: number;
+        let fVar2: number;
+        let fVar3: number;
+        let fVar4: number;
+        let fVar5: number;
+        let fVar6: number;
+        let fVar7: number;
+        let fVar8: number;
+        let fVar9: number;
+
+        fVar7 = inVector.x - (coord.origin).x;
+        fVar8 = inVector.y - (coord.origin).y;
+        fVar9 = inVector.z - (coord.origin).z;
+
+        fVar1 = (coord.yAxis).x;
+        fVar2 = (coord.zAxis).x;
+        fVar3 = (coord.yAxis).y;
+        fVar4 = (coord.zAxis).y;
+        fVar5 = (coord.yAxis).z;
+        fVar6 = (coord.zAxis).z;
+
+        outVector.x = fVar9 * (coord.xAxis).z + fVar8 * (coord.xAxis).y + fVar7 * (coord.xAxis).x;
+        outVector.y = fVar9 * fVar5 + fVar8 * fVar3 + fVar7 * fVar1;
+        outVector.z = fVar9 * fVar6 + fVar8 * fVar4 + fVar7 * fVar2;
+
+        return outVector;
+    }
 }
 
 export default FVector;

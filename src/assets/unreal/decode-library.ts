@@ -5,6 +5,7 @@ class DecodeLibrary {
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: string = null;                                                           // sector zone id
+    public helpersZoneBounds = false;
     public readonly zones: GenericObjectContainer_T<IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
     public readonly geometries: GenericObjectContainer_T<IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
     public readonly geometryInstances: GenericObjectContainer_T<number> = {};               // a dictionary containing all geometray instance decode info
@@ -19,7 +20,8 @@ class DecodeLibrary {
         loadBaseModel = true,
         loadStaticModels = true,
         loadStaticModelList = null,
-        loadTerrain = true
+        loadTerrain = true,
+        helpersZoneBounds = false
     }: LoadSettings_T) {
         // const impGroups = pkgLoad.imports.reduce((accum, imp, index) => {
         //     const impType = imp.className;
@@ -45,6 +47,7 @@ class DecodeLibrary {
         const uLevel = await pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 
         decodeLibrary.name = uLevel.url.map;
+        decodeLibrary.helpersZoneBounds = helpersZoneBounds;
 
         const uLevelInfo = await pkg.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1);
         const uZonesInfo = await Promise.all((expGroups["ZoneInfo"] || []).map(exp => pkg.fetchObject<UZoneInfo>(exp.index + 1)));

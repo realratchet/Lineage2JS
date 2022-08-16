@@ -43,7 +43,7 @@ async function startCore() {
     // const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
     // const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
     // const pkg_20_18 = assetLoader.getPackage("20_18", "Level"); // d.elf village /crashes on some objects
-    const pkg_23_20 = assetLoader.getPackage("23_20", "Level"); // hunters village
+    // const pkg_23_20 = assetLoader.getPackage("23_20", "Level"); // hunters village
     const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
     const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
     const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
@@ -66,10 +66,11 @@ async function startCore() {
     // debugger;
 
     const loadSettings = {
+        helpersZoneBounds: false,
         loadTerrain: true,
-        loadBaseModel: false,
+        loadBaseModel: true,
         loadStaticModels: true,
-        loadStaticModelList: [
+        _loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -88,6 +89,7 @@ async function startCore() {
             // 2369,
             // 2011, // ceiling fixture that's too red
             2774, // necropolis entrance
+            // 4718, // cruma base
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
             // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
@@ -97,12 +99,13 @@ async function startCore() {
         ]
     } as LoadSettings_T;
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_21, loadSettings));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_20));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_19));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_22));
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_21_22, loadSettings));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_22_22));
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_21, loadSettings));  // cruma tower
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_20, loadSettings));  // elven fortress
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_19, loadSettings));
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_22, loadSettings));
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_21_22, loadSettings));  // execution grounds
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_16_25, loadSettings));  // elven ruins
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_22_22, loadSettings));  // giran
 
     // const boundsGroup = new Object3D();
     // objectGroup.add(boundsGroup);

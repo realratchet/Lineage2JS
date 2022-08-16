@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../zone-object";
 
@@ -206,9 +206,28 @@ function decodeSector(library: DecodeLibrary) {
 
 function decodePackage(library: DecodeLibrary) {
     const map = new Object3D();
-    
+
     map.name = library.name;
     map.add(decodeSector(library));
+
+    if (library.helpersZoneBounds) {
+        const boundsGroup = new Object3D();
+        map.add(boundsGroup);
+        map.name = "Bounds Helpers";
+        Object.values(library.zones).forEach(zone => {
+            const { min, max } = zone.bounds;
+            const box = new Box3();
+            const color = new Color(Math.floor(Math.random() * 0xffffff));
+
+            box.min.fromArray(min);
+            box.max.fromArray(max);
+
+            const helper = new Box3Helper(box, color);
+            if ("name" in zone) helper.name = `Bounds[${zone.name}]`;
+
+            boundsGroup.add(helper);
+        });
+    }
 
     return map;
 }

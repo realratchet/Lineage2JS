@@ -350,5 +350,6 @@ type LoadSettings_T = {
     loadTerrain?: boolean,
     loadBaseModel?: boolean,
     loadStaticModels?: boolean,
-    loadStaticModelList?: number[]
+    loadStaticModelList?: number[],
+    helpersZoneBounds?: boolean
 };

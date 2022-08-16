@@ -7,6 +7,7 @@ import FTIntMap from "./un-tint-map";
 import FNumber from "./un-number";
 import FColor from "./un-color";
 import FBox from "./un-box";
+import FCoords from "./un-coords";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -20,12 +21,12 @@ class UTerrainInfo extends UAActor {
     public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
-    public readonly quadVisibilityBitmap: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
-    public readonly edgeTurnBitmap: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
+    public readonly quadVisibilityBitmap: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
+    public readonly edgeTurnBitmap: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
     protected mapX: number;
     protected mapY: number;
-    public readonly quadVisibilityBitmapOrig: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
-    public readonly edgeTurnBitmapOrig: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
+    public readonly quadVisibilityBitmapOrig: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
+    public readonly edgeTurnBitmapOrig: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
     protected generatedSectorCounter: number;
     protected numIntMap: number;
     protected autoTimeGeneration: boolean;
@@ -42,7 +43,7 @@ class UTerrainInfo extends UAActor {
 
     protected sectorsX: number;
     protected sectorsY: number;
-    protected unkIntArr0: number[];
+    protected terrainCoords = new FCoords();
     protected unkIntArr1: number[];
     protected unkInt2: number;
     protected unkInt3: number;
@@ -133,7 +134,7 @@ class UTerrainInfo extends UAActor {
         }
 
         if (verArchive >= 0x53) {
-            this.unkIntArr0 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
+            this.terrainCoords.load(pkg);
             this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
         } else {
             console.warn("Unsupported yet");
@@ -186,7 +187,6 @@ class UTerrainInfo extends UAActor {
 
         this.readHead = pkg.tell();
 
-        // debugger;
 
         return this;
     }
@@ -207,11 +207,14 @@ class UTerrainInfo extends UAActor {
         const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
         const heightmapData = {
+            terrainCoords: this.terrainCoords,
             info: iTerrainMap,
             data: terrainData,
             min: Math.min(...terrainData),
             max: Math.max(...terrainData)
         };
+
+        // debugger;
 
         const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
 
@@ -265,7 +268,7 @@ class UTerrainInfo extends UAActor {
             uuid: this.uuid,
             type: "TerrainInfo",
             name: this.objectName,
-            position,
+            // position,
             children
         } as IBaseObjectDecodeInfo;
 
@@ -277,13 +280,10 @@ class UTerrainInfo extends UAActor {
         children.forEach(({ geometry: uuid }) => {
             const { min, max } = library.geometries[uuid].bounds.box;
 
-            const _min = min.map((v, i) => v + position[i]);
-            const _max = max.map((v, i) => v + position[i]);
-
             [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
                 ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                     for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], _min[i], _max[i]);
+                        arr[i] = fn(arr[i], min[i], max[i]);
                 }
             );
         });
