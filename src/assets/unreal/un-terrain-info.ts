@@ -43,7 +43,7 @@ class UTerrainInfo extends UAActor {
 
     protected sectorsX: number;
     protected sectorsY: number;
-    protected terrainCoords = new FCoords();
+    public readonly terrainCoords = new FCoords();
     protected unkIntArr1: number[];
     protected unkInt2: number;
     protected unkInt3: number;
@@ -87,9 +87,6 @@ class UTerrainInfo extends UAActor {
     }
 
     public doLoad(pkg: UPackage, exp: UExport<UTerrainInfo>) {
-
-        // debugger;
-
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -206,23 +203,12 @@ class UTerrainInfo extends UAActor {
         const terrainUuid = await this.terrainMap.getDecodeInfo(library);
         const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
-        const heightmapData = {
-            terrainCoords: this.terrainCoords,
-            info: iTerrainMap,
-            data: terrainData,
-            min: Math.min(...terrainData),
-            max: Math.max(...terrainData)
-        };
-
-        // debugger;
+        const heightmapData = { info: iTerrainMap, data: terrainData };
 
         const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
 
         for (let k = 0; k < layerCount; k++) {
             const layer = terrainLayers[k];
-
-            // if (layer.alphaMap === null || layer.map === null)
-            //     debugger;
 
             if (!layer.map && !layer.alphaMap) {
                 layers[k] = { map: null, alphaMap: null };
@@ -250,20 +236,8 @@ class UTerrainInfo extends UAActor {
         } as IMaterialTerrainDecodeInfo;
 
         const zoneInfo = library.zones[this.getZone().uuid];
-        let sectors = [
-            // this.sectors[83],
-            this.sectors[99],
-            // this.sectors[255]
-        ];
-        sectors = this.sectors;
-        const children = (await Promise.all(sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))));
-        // const _children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))))//.slice(16, 18);
+        const children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))));
 
-        // const children = _children.slice(0, 99);
-        // const children = [_children[83], _children[99]];
-        // debugger;
-
-        const position = [this.location.x, 0, this.location.z] as Vector3Arr;
         const decodeInfo = {
             uuid: this.uuid,
             type: "TerrainInfo",
@@ -271,8 +245,6 @@ class UTerrainInfo extends UAActor {
             // position,
             children
         } as IBaseObjectDecodeInfo;
-
-        // debugger;
 
         zoneInfo.children.push(decodeInfo);
         zoneInfo.bounds.isValid = true;
