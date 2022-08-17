@@ -91,14 +91,14 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         const dVar1 = Math.sqrt(lightSize);
         const dx = calculateIntensity(dVar1, radius, dt.x, dt.y, dt.z, sampNormal.x, sampNormal.y, sampNormal.z);
 
-        if ((Number(dx < 0.0) << 0x8 | Number(dx === 0.0) << 0xe) === 0x0) {
+        if (dx < 0.0) {
             const magicVariable = 128; // might be saturation
             const dy = 1.0 - magicVariable * 0.00390625;
             const dz = 1.0 / (1.0 - dy);
             const direction = light.direction;
             const fVar2 = -dt.x * direction.x + -dt.y * direction.y + -dt.z * direction.z;
 
-            if (((Number(fVar2 < 0.0) << 0x8 | Number(fVar2 == 0.0) << 0xe) === 0x0) &&
+            if (fVar2 < 0.0 &&
                 (dy * dy * lightSize < fVar2 * fVar2)) {
                 const finalLightSize = (fVar2 / dVar1) * dz - dz * dy;
                 const value = finalLightSize * finalLightSize * dx;
@@ -127,13 +127,7 @@ function calculateIntensity(
 
     planeOffset = nx * x + ny * y + nz * z;
 
-    // debugger;
-
-    if (
-        (((Number(planeOffset < 0.0)) << 0x8 | (Number(planeOffset === 0.0)) << 0xe) === 0x0) &&
-        (distance < lightRadius !== (distance === lightRadius))
-    ) {
-
+    if (planeOffset < 0.0 && distance <= lightRadius) {
         fVar1 = distance * (1.0 / lightRadius);
         fVar2 = fVar1 * fVar1 * fVar1;
         planeOffset = (1.0 / lightRadius) * planeOffset;

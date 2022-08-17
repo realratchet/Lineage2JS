@@ -53,6 +53,9 @@ class UTerrainInfo extends UAActor {
     public heightmapMin: number;
     public heightmapMax: number;
 
+    protected hasDynamicLight: boolean;
+    protected forcedRegion: number;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
@@ -74,7 +77,9 @@ class UTerrainInfo extends UAActor {
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
-            "bForceRender": "bForceRender"
+            "bForceRender": "bForceRender",
+            "bDynamicLight": "hasDynamicLight",
+            "ForcedRegion": "forcedRegion"
         });
     }
 
@@ -98,8 +103,6 @@ class UTerrainInfo extends UAActor {
 
         super.doLoad(pkg, exp);
 
-        this.location.x = (this.mapX - 20) * MAP_SIZE_X;
-        this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
 
         this.readHead = pkg.tell();
 

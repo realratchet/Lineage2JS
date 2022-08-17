@@ -75,10 +75,11 @@ class UTerrainSector extends UObject {
         await this.onLoaded();
 
 
+        const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
-        const TypedIndicesArray = getTypedArrayConstructor(17 * 17);
+        const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
-        const positions = new Float32Array(17 * 17 * 3), colors = new Float32Array(17 * 17 * 3);
+        const positions = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
@@ -89,7 +90,7 @@ class UTerrainSector extends UObject {
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if ((Number(timeForIndex < timeOfDay) << 0x8 | Number(timeForIndex === timeOfDay) << 0xe) === 0x0) {
+            if (timeForIndex < timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
                 validShadowmap = this.shadowMaps[i];
                 break;
             }
@@ -107,7 +108,6 @@ class UTerrainSector extends UObject {
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
 
-                const shadowMap = validShadowmap.getElem(idxOffset) / 255;
 
                 positions[idxVertOffset + 0] = px;
                 positions[idxVertOffset + 1] = py;
@@ -115,6 +115,7 @@ class UTerrainSector extends UObject {
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
+                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
 
                 colors[idxVertOffset + 0] = ambient[0] * shadowMap;
                 colors[idxVertOffset + 1] = ambient[1] * shadowMap;
@@ -258,11 +259,53 @@ class UTerrainSector extends UObject {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-        // pkg.seek(exp.offset.value as number, "set");
-        // console.info(exp.objectName);
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
+
+        // debugger;
 
         this.setReadPointers(exp);
         pkg.seek(this.readHead, "set");
+
+        // if (verArchive <= 0x5E) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verArchive >= 0x75) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verArchive < 0x59) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verArchive < 0x75) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verLicense >= 4) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verLicense < 8) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // } else {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verLicense < 10) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // debugger;
 
         // pkg.dump(1, true, false);
         pkg.seek(1);
@@ -287,11 +330,14 @@ class UTerrainSector extends UObject {
         this.offsetX = pkg.read(uint32).value as number;
         this.offsetY = pkg.read(uint32).value as number;
 
+
         // console.log(this.offsetX, this.offsetY);
 
         // debugger;
 
         this.boundingBox.load(pkg);
+
+        // debugger;
         this.unkArr8.load(pkg);
 
         // if (this.unkArr8.length > 0)
@@ -311,7 +357,17 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.shadowMaps.forEach(sm => sm.load(pkg));
+        // debugger;
+
+        this.shadowMaps.forEach(sm => {
+            try {
+                sm.load(pkg);
+            } catch (e) {
+                debugger;
+            }
+        });
+
+        // debugger;
 
         this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
 

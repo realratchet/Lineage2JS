@@ -29,6 +29,8 @@ class ULight extends UAActor {
     protected isCastingShadow: boolean;
     protected isStaticLighting: boolean;
 
+    protected forcedRegionTag: string;
+
     protected getSignedMap() {
         return Object.assign({}, super.getSignedMap(), {
             "LightHue": false,
@@ -57,7 +59,8 @@ class ULight extends UAActor {
 
             "Style": "style",
             "bShadowCast": "isCastingShadow",
-            "bStaticLighting": "isStaticLighting"
+            "bStaticLighting": "isStaticLighting",
+            "ForcedRegionTag": "forcedRegionTag"
         });
     }
 

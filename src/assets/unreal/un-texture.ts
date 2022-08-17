@@ -140,9 +140,10 @@ class UTexture extends UObject {
         const firstMipmap = this.mipmaps[0] as FMipmap;
         const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] as FMipmap : firstMipmap;
         const insertMipmap = loadMipmaps ? lastMipmap.sizeW !== 1 || lastMipmap.sizeH !== 1 : false;
+        const levelsToInsert = loadMipmaps ? Math.log2(Math.max(lastMipmap.sizeW, lastMipmap.sizeH)) : 0;
 
         const embededMipCount = loadMipmaps ? totalMipCount : 1;
-        const mipCount = loadMipmaps ? totalMipCount + (insertMipmap ? 1 : 0) : 1;
+        const mipCount = loadMipmaps ? totalMipCount + levelsToInsert : 1;
 
         const format = this.getTexturePixelFormat();
 
@@ -163,14 +164,19 @@ class UTexture extends UObject {
             imSize += (this.mipmaps[i] as FMipmap).getByteLength();
         }
 
-        if (insertMipmap) imSize += blockSize;
+        for (let i = levelsToInsert - 1, w = lastMipmap.sizeW, h = lastMipmap.sizeH; i >= 0; i--) {
+            w = Math.max(1, w / 2);
+            h = Math.max(1, h / 2);
+
+            const dataLength = Math.max(4, w) / 4 * Math.max(4, h) / 4 * blockSize;
+
+            imSize += dataLength;
+        }
 
         const data = new Uint8Array(imSize);
 
         firstMipmap.getImageBuffer(data, 0);
         byteOffset += firstMipmap.getByteLength();
-
-        // debugger;
 
         for (let i = 1, len = embededMipCount; i < len; i++) {
             const mipmap = this.mipmaps[i] as FMipmap;
@@ -197,11 +203,20 @@ class UTexture extends UObject {
             color[2] = Math.round(color[2] / pixelCount);
             color[3] = Math.round(color[3] / pixelCount);
 
-            for (let i = 0; i < blockSize; i += 4) {
-                data[byteOffset + i + 0] = color[0];
-                data[byteOffset + i + 1] = color[1];
-                data[byteOffset + i + 2] = color[2];
-                data[byteOffset + i + 3] = color[3];
+            for (let j = levelsToInsert - 1, w = lastMipmap.sizeW, h = lastMipmap.sizeH; j >= 0; j--) {
+                w = Math.max(1, w / 2);
+                h = Math.max(1, h / 2);
+
+                const dataLength = Math.max(4, w) / 4 * Math.max(4, h) / 4 * blockSize;
+
+                for (let i = 0; i < blockSize; i += 4) {
+                    data[byteOffset + i + 0] = color[0];
+                    data[byteOffset + i + 1] = color[1];
+                    data[byteOffset + i + 2] = color[2];
+                    data[byteOffset + i + 3] = color[3];
+                }
+
+                byteOffset = byteOffset + dataLength;
             }
         }
 
@@ -216,8 +231,6 @@ class UTexture extends UObject {
             case ETexturePixelFormat.TPF_DXT5N:
                 textureType = "dds";
                 decodedBuffer = decompressDDS(format, mipCount, width, height, data);
-                // texture.wrapS = RepeatWrapping;
-                // texture.wrapT = RepeatWrapping;
                 break;
             case ETexturePixelFormat.TPF_G16:
                 textureType = "g16";
