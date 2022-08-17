@@ -17,6 +17,11 @@ class UZoneInfo extends UAActor implements IInfo {
     protected readHeadOffset: number = 15;
     protected terrains: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
 
+    protected ambientHue: number;
+    protected ambientSaturation: number;
+
+    protected zoneTag: string;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "bFogZone": "isFogZone",
@@ -25,7 +30,12 @@ class UZoneInfo extends UAActor implements IInfo {
             "AmbientBrightness": "ambientBrightness",
             "AmbientVector": "ambientVector",
             "KillZ": "killZ",
-            "bClearToFogColor": "useFogColorClear"
+            "bClearToFogColor": "useFogColorClear",
+
+            "AmbientHue": "ambientHue",
+            "AmbientSaturation": "ambientSaturation",
+
+            "ZoneTag": "zoneTag"
         });
     }
 
@@ -50,6 +60,28 @@ class UZoneInfo extends UAActor implements IInfo {
     //     // debugger;
     // }
 
+    // protected preLoad(pkg: UPackage, exp: UExport): void {
+    //     super.preLoad(pkg, exp);
+
+    //     pkg.seek(exp.offset.value as number, "set");
+
+    //     this.readStart = this.readHead = exp.offset.value as number;
+    //     this.readTail = this.readHead + (exp.size.value as number);
+
+    //     // debugger;
+
+    //     const compat32 = new BufferValue(BufferValue.compat32);
+
+    //     const a = new Array(17).fill(1).map(() => {
+    //         const b = pkg.read(compat32).value;
+    //         const offset = pkg.tell() - (exp.offset.value as number);
+
+    //         return [b, offset];
+    //     });
+
+    //     debugger;
+    // }
+
     public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
         pkg.seek(this.readHead, "set");
 
@@ -61,24 +93,52 @@ class UZoneInfo extends UAActor implements IInfo {
         //     //     console.log(`${this.readHeadOffset + i} => ${tag.index} '${tag.name}' (${tag.structName}) of size ${tag.dataSize}`);
         //     // }
 
-        //     debugger;
+        // debugger;
 
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
 
-        const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const value3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
 
-        this.readHead = pkg.tell();
+
+        // console.assert(leftoverBytes.length >= this.readHeadOffset);
+
+        // if (leftoverBytes.length === this.readHeadOffset)
+        //     return;
+
+        // pkg.seek(this.readHead, "set");
+
+        // this.unkValue = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        // // super.doLoad(pkg, exp);
+        // this.readHead = pkg.tell();
+
+        // // debugger;
+
+        // super.doLoad(pkg, exp);
+        // this.readHead = pkg.tell();
+
+        // const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
 
         // debugger;
 
-        // console.log(this.bytesUnread);
 
-        // debugger;
+        // const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        // // const value3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+
+        // this.readHead = pkg.tell();
+
+        // // debugger;
+
+        // // console.log(this.bytesUnread);
+
+        // // debugger;
     }
 
     async getDecodeInfo(library: DecodeLibrary): Promise<string> {
@@ -90,7 +150,7 @@ class UZoneInfo extends UAActor implements IInfo {
             name: this.objectName,
             bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
             children: [],
-            fog: !this.hasDistanceFog ? null : {
+            fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
                 start: this.distanceFogStart,
                 end: this.distanceFogEnd,
                 color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr

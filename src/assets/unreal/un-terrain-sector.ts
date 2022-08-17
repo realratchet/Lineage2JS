@@ -24,24 +24,17 @@ class UTerrainSector extends UObject {
 
     protected unkBuf0: any;
 
+    // likely mesh lights?
     protected unkArr8: FArray<FUnknownStruct> = new FArray(class FUnknownStructExt extends FUnknownStruct {
-        constructor() { super(40); }
+        public lightIndex: number;
+        public someData = new FPrimitiveArray(BufferValue.uint8);
 
         public load(pkg: UPackage): this {
 
-            const start = pkg.tell();
-
-            // debugger;
-
             const compat32 = new BufferValue(BufferValue.compat32);
 
-            const d = pkg.read(compat32).value as number;
-
-            // debugger;
-
-            // pkg.read(this.buffer);
-
-            pkg.seek(start + 40, "set");
+            this.lightIndex = pkg.read(compat32).value as number;
+            this.someData.load(pkg);
 
             return this;
         }
@@ -343,8 +336,27 @@ class UTerrainSector extends UObject {
         // if (this.unkArr8.length > 0)
         //     debugger;
 
-        this.cellNum = pkg.read(uint32).value as number;
-        this.sectorWidth = pkg.read(uint32).value as number;
+        // debugger;
+
+        // if (this.objectName === "Exp_TerrainSector86")
+        //     debugger;
+
+        let pos = pkg.tell();
+        let offset = 0;
+
+        do {
+            pkg.seek(pos + offset, "set");
+            this.cellNum = pkg.read(uint32).value as number;
+            this.sectorWidth = pkg.read(uint32).value as number;
+
+            if (this.cellNum === 1 && this.sectorWidth === 8)
+                break;
+
+            offset++;
+        } while (true);
+
+        if (offset > 0)
+            debugger;
 
         this.readHead = pkg.tell();
 

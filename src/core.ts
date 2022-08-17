@@ -73,7 +73,7 @@ async function startCore() {
     } as LoadSettings_T;
 
     // working (or mostly working)
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -88,7 +88,7 @@ async function startCore() {
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
 
     // crashing
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // talking island village
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // talking island village
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence

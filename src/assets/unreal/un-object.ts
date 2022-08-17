@@ -66,6 +66,195 @@ abstract class UObject {
         this.exportIndex = exp.index;
         this.exp = exp;
 
+        // const compat32 = new BufferValue(BufferValue.compat32);
+        // const int32 = new BufferValue(BufferValue.int32);
+        // const int8 = new BufferValue(BufferValue.int8);
+        // const uint8 = new BufferValue(BufferValue.uint8);
+        // pkg.seek(exp.offset.value as number, "set");
+
+        // let hasOffset = false;
+        // let headOffset: number = 0;
+
+        // const imports = [];
+        // const exports = [];
+
+
+        // // if (this.readHeadOffset > 0)
+        // //     debugger;
+
+        // if (this.objectName === "Exp_Brush150")
+        //     debugger;
+
+        // if (this.readHeadOffset > 0/*this.objectName === "Exp_Brush52"*/) {
+        //     // debugger;
+        //     // pkg.seek(exp.offset.value as number, "set");
+        //     // pkg.dump(2);
+
+        //     // pkg.seek((exp.offset.value as number) + (exp.size.value as number) - 32, "set");
+        //     // pkg.dump(2);
+
+
+        //     // debugger;
+
+        //     // const a = pkg.read(uint8).value as number;
+        //     // const offset = pkg.tell() - (exp.offset.value as number)
+
+        //     // pkg.seek((exp.offset.value as number) + (exp.size.value as number) - offset, "set");
+
+        //     // const b = pkg.read(uint8).value as number;
+
+        //     // debugger;
+
+
+
+        //     // debugger;
+        //     const b1 = pkg.read(compat32).value as number;
+
+        //     if (b1 < 0) {
+        //         const b2 = pkg.read(compat32).value as number;
+        //         const runningOffset_2 = pkg.tell() - (exp.offset.value as number)
+
+        //         const b3 = pkg.read(compat32).value as number;
+        //         const runningOffset_3 = pkg.tell() - (exp.offset.value as number)
+
+        //         if (b3 !== 1)
+        //             debugger;
+
+        //         // debugger;
+
+        //         const b4 = pkg.read(compat32).value as number;
+        //         const runningOffset_4 = pkg.tell() - (exp.offset.value as number)
+
+        //         if (b4 !== 0) {
+        //             const b5 = pkg.read(compat32).value as number;
+        //             const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
+
+        //             debugger;
+        //         }
+
+
+        //         // const b5 = pkg.read(compat32).value as number;
+        //         // const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
+
+
+        //         let runningOffset = runningOffset_4;
+
+        //         // const bytes = [];
+        //         // let moreThanOne = false;
+
+        //         // do {
+        //         //     const b4 = pkg.read(uint8).value as number;
+        //         //     runningOffset = pkg.tell() - (exp.offset.value as number)
+
+        //         //     bytes.push(`0x${b4.toString(16)}`)
+
+        //         //     if (b4 & 0x80) {
+        //         //         if (!moreThanOne) continue;
+        //         //         break;
+        //         //     }
+
+
+        //         //     moreThanOne = b4 !== 0;
+        //         // } while (true);
+
+        //         // debugger;
+
+        //         // const b4 = pkg.read(uint8).value as number;
+        //         // const runningOffset_4 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b5 = pkg.read(uint8).value as number;
+        //         // const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b6 = pkg.read(uint8).value as number;
+        //         // const runningOffset_6 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b7 = pkg.read(uint8).value as number;
+        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
+
+
+        //         // debugger;
+
+        //         // const b7 = pkg.read(int32).value as number;
+        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
+
+        //         // console.assert(runningOffset_7 === this.readHeadOffset);
+
+        //         // pkg.seek(8)
+
+        //         // const b7 = pkg.read(compat32).value as number;
+        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b3 = pkg.read(int32).value as number;
+        //         // const runningOffset_3 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b4 = pkg.read(int32).value as number;
+        //         // const runningOffset_4 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b5 = pkg.read(int8).value as number;
+        //         // const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b6 = pkg.read(int8).value as number;
+        //         // const runningOffset_6 = pkg.tell() - (exp.offset.value as number)
+
+        //         // const b7 = pkg.read(compat32).value as number;
+        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
+
+
+        //         // debugger;
+
+        //         // if (runningOffset !== 15 && runningOffset !== 17)
+        //         //     debugger;
+
+        //         if (this.objectName === "Exp_Brush150")
+        //             debugger;
+
+        //         if (this.objectName === "Exp_Brush52")
+        //             debugger;
+
+        //         // debugger;
+
+        //         // if (runningOffset < 15)
+        //         //     debugger;
+
+
+        //         // if (this.readHeadOffset === runningOffset) {
+        //         //     debugger;
+        //         // } else {
+        //         //     debugger;
+        //         // }
+
+        //         // this.readHeadOffset = runningOffset + 4;
+        //     }
+        // }
+
+        // // do {
+        // //     const b = pkg.read(compat32).value as number;
+        // //     const runningOffset = pkg.tell() - (exp.offset.value as number)
+
+        // //     if (b < 0) {
+        // //         hasOffset = true;
+
+        // //         // if (b === -1) {
+        // //         //     headOffset = runningOffset;
+        // //         //     break;
+        // //         // }
+
+        // //         // imports.push(pkg.imports[-b - 1].objectName);
+
+        // //         continue;
+        // //     }
+
+        // //     if (!hasOffset) { //  roll back
+        // //         headOffset = 0;
+        // //         break;
+        // //     } else {
+        // //         exports.push(pkg.nameTable[b].name.value);
+        // //     }
+
+        // // } while (true);
+
+        // // this.readHeadOffset = headOffset;
+
         this.setReadPointers(exp);
     }
 
@@ -145,11 +334,11 @@ abstract class UObject {
                 // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                 // const offset = pkg.tell() - start;
                 // pkg.seek(4 * 3);
-                // debugger;
+                debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
             case UNP_PropertyTypes.UNP_RotatorProperty:
-                // debugger;
+                debugger;
                 // this.setProperty(tag, (function () {
                 //     const f = new BufferValue(BufferValue.float);
                 //     const out = new Array<number>(3);
@@ -166,6 +355,7 @@ abstract class UObject {
                 this.setProperty(tag, this.readStruct(pkg, tag));
                 break;
             default:
+                debugger;
                 pkg.seek(tag.dataSize);
                 console.warn(`Unknown data type '${tag.type}' for '${tag.name}' skipping ${tag.dataSize} bytes.`);
                 break;
