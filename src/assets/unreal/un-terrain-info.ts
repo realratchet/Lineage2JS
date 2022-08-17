@@ -98,8 +98,8 @@ class UTerrainInfo extends UAActor {
         const int32 = new BufferValue(BufferValue.int32);
         const float = new BufferValue(BufferValue.float);
 
-        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
-        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
+        // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
         super.doLoad(pkg, exp);
 

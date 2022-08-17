@@ -88,10 +88,10 @@ async function startCore() {
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
 
     // crashing
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // talking island village
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // talking island village
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
 
     console.info("System has loaded!");
 

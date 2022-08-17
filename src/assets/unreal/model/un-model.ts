@@ -51,8 +51,8 @@ class UModel extends UPrimitive {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
-        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
-        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
+        // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
         const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);

@@ -16,8 +16,12 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
-                    // { from: "../assets-c4", to: "assets/" }
-                    { from: "../assets", to: "assets/" }
+                    {
+                        from: "../assets-c4", to: ({ context: dir, absoluteFilename: fname }) => {
+                            return fname.replace(dir, "./assets/").toLowerCase();
+                        }
+                    }
+                    // { from: "../assets", to: "assets/" }
                 ],
             })
         ];

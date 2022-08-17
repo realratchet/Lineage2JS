@@ -629,13 +629,13 @@ const assetList = Object.freeze([
     "sounds/AmbSound.uax",
     "sounds/SkillSound.uax",
     "sounds/AmbSound2.uax",
-    
+
 
     "system/Engine.u",
     "system/Core.u",
 
     "animations/LineageEffectMeshes.ukx"
-]);
+]).map(x => x.toLowerCase());
 
 export default assetList;
 export { assetList };

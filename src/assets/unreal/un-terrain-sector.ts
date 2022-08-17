@@ -2,11 +2,26 @@ import UObject from "./un-object";
 import FBox from "./un-box";
 import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
-import FUnknownStruct from "./un-unknown-struct";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient } from "./un-time-list";
 import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
+import FConstructable from "./un-constructable";
+
+class FTerrainLightInfo extends FConstructable {
+    public lightIndex: number;
+    public someData = new FPrimitiveArray(BufferValue.uint8);
+
+    public load(pkg: UPackage): this {
+
+        const compat32 = new BufferValue(BufferValue.compat32);
+
+        this.lightIndex = pkg.read(compat32).value as number;
+        this.someData.load(pkg);
+
+        return this;
+    }
+}
 
 class UTerrainSector extends UObject {
     protected readHeadOffset = 0;
@@ -25,20 +40,7 @@ class UTerrainSector extends UObject {
     protected unkBuf0: any;
 
     // likely mesh lights?
-    protected unkArr8: FArray<FUnknownStruct> = new FArray(class FUnknownStructExt extends FUnknownStruct {
-        public lightIndex: number;
-        public someData = new FPrimitiveArray(BufferValue.uint8);
-
-        public load(pkg: UPackage): this {
-
-            const compat32 = new BufferValue(BufferValue.compat32);
-
-            this.lightIndex = pkg.read(compat32).value as number;
-            this.someData.load(pkg);
-
-            return this;
-        }
-    });
+    protected likelySegmentLights = new FArray(FTerrainLightInfo);
 
     protected shadowMaps = [
         new FPrimitiveArray(BufferValue.uint8),
@@ -331,7 +333,7 @@ class UTerrainSector extends UObject {
         this.boundingBox.load(pkg);
 
         // debugger;
-        this.unkArr8.load(pkg);
+        this.likelySegmentLights.load(pkg);
 
         // if (this.unkArr8.length > 0)
         //     debugger;
@@ -341,22 +343,22 @@ class UTerrainSector extends UObject {
         // if (this.objectName === "Exp_TerrainSector86")
         //     debugger;
 
-        let pos = pkg.tell();
-        let offset = 0;
+        // let pos = pkg.tell();
+        // let offset = 0;
 
-        do {
-            pkg.seek(pos + offset, "set");
+        // do {
+        //     pkg.seek(pos + offset, "set");
             this.cellNum = pkg.read(uint32).value as number;
             this.sectorWidth = pkg.read(uint32).value as number;
 
-            if (this.cellNum === 1 && this.sectorWidth === 8)
-                break;
+        //     if (this.cellNum === 1 && this.sectorWidth === 8)
+        //         break;
 
-            offset++;
-        } while (true);
+        //     offset++;
+        // } while (true);
 
-        if (offset > 0)
-            debugger;
+        // if (offset > 0)
+        //     debugger;
 
         this.readHead = pkg.tell();
 
