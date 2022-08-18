@@ -83,7 +83,7 @@ class UStaticMeshInstance extends UObject {
         for (let i = 0, len = this.environmentLights.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if (timeForIndex < timeOfDay) {
+            if (timeForIndex > timeOfDay) {
                 validEnvironment = this.environmentLights[i];
                 startIndex = i;
                 finishIndex = i + 1;

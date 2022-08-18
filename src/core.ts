@@ -33,10 +33,10 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 }
 
 async function startCore() {
-    const objectGroup = new Object3D();
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
+    const objectGroup = renderManager.objectGroup;
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -60,8 +60,8 @@ async function startCore() {
             // 555,// elven ruins colon
             // 47, // rock with ambient light
             // 2369,
-            // 2011, // ceiling fixture that's too red
-            2774, // necropolis entrance
+            2011, // ceiling fixture that's too red
+            // 2774, // necropolis entrance
             // 4718, // cruma base
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
@@ -73,25 +73,26 @@ async function startCore() {
     } as LoadSettings_T;
 
     // working (or mostly working)
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // elven ruins
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_22", loadSettings));  // ruins of despair
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_23", loadSettings));  // ants nest
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_21", loadSettings));  // death pass
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_22", loadSettings));  // giran castle
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
     // crashing
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // talking island village
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
 
     console.info("System has loaded!");
 

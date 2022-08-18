@@ -30,6 +30,7 @@ class ULight extends UAActor {
     protected isStaticLighting: boolean;
 
     protected forcedRegionTag: string;
+    protected maxCoronaSize: number;
 
     protected getSignedMap() {
         return Object.assign({}, super.getSignedMap(), {
@@ -60,7 +61,9 @@ class ULight extends UAActor {
             "Style": "style",
             "bShadowCast": "isCastingShadow",
             "bStaticLighting": "isStaticLighting",
-            "ForcedRegionTag": "forcedRegionTag"
+            "ForcedRegionTag": "forcedRegionTag",
+
+            "MaxCoronaSize": "maxCoronaSize"
         });
     }
 

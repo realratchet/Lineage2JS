@@ -63,6 +63,8 @@ class UStaticMeshActor extends UAActor {
     protected disableSorting: boolean;
     protected lodBias: number;
 
+    protected style: number;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMesh": "mesh",
@@ -101,7 +103,9 @@ class UStaticMeshActor extends UAActor {
             "AccessoryTypeList": "accessoryTypeList",
 
             "bDisableSorting": "disableSorting",
-            "LODBias": "lodBias"
+            "LODBias": "lodBias",
+
+            "Style": "style"
         });
     }
 
@@ -357,7 +361,6 @@ class UStaticMeshActor extends UAActor {
 
             //  debugger;
 
-
             someFlag = 0x1;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
@@ -380,7 +383,7 @@ class UStaticMeshActor extends UAActor {
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
                     instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + clamp(b * intensity * 255, 0, 255) / 255);
 
-
+                    // debugger;
                 }
 
                 if ((someFlag & 0x7f) === 0x0) {

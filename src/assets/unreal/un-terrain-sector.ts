@@ -85,7 +85,7 @@ class UTerrainSector extends UObject {
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if (timeForIndex < timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
+            if (timeForIndex > timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
                 validShadowmap = this.shadowMaps[i];
                 break;
             }
@@ -335,53 +335,13 @@ class UTerrainSector extends UObject {
         // debugger;
         this.likelySegmentLights.load(pkg);
 
-        // if (this.unkArr8.length > 0)
-        //     debugger;
 
-        // debugger;
-
-        // if (this.objectName === "Exp_TerrainSector86")
-        //     debugger;
-
-        // let pos = pkg.tell();
-        // let offset = 0;
-
-        // do {
-        //     pkg.seek(pos + offset, "set");
-            this.cellNum = pkg.read(uint32).value as number;
-            this.sectorWidth = pkg.read(uint32).value as number;
-
-        //     if (this.cellNum === 1 && this.sectorWidth === 8)
-        //         break;
-
-        //     offset++;
-        // } while (true);
-
-        // if (offset > 0)
-        //     debugger;
+        this.cellNum = pkg.read(uint32).value as number;
+        this.sectorWidth = pkg.read(uint32).value as number;
 
         this.readHead = pkg.tell();
 
-        // pkg.seek(1);
-
-        // const buff = pkg.buffer.slice(this.readHead, this.readTail);
-        // const blob = new Blob([buff], { type: "application/octet-stream" });
-        // const url = URL.createObjectURL(blob);
-        // window.open(url, "_blank");
-
-        // debugger;
-
-        // debugger;
-
-        this.shadowMaps.forEach(sm => {
-            try {
-                sm.load(pkg);
-            } catch (e) {
-                debugger;
-            }
-        });
-
-        // debugger;
+        this.shadowMaps.forEach(sm => sm.load(pkg));
 
         this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
 
