@@ -5,8 +5,6 @@ import UObject from "./un-object";
 import UPackage from "./un-package";
 
 class UPhysicsVolume extends UBrush {
-    protected readHeadOffset = 17;
-
     protected priority: number;
     protected locationName: number;
     protected isNoDelete: boolean;

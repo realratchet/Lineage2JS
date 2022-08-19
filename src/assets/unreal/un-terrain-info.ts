@@ -13,8 +13,6 @@ const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
 class UTerrainInfo extends UAActor {
-    protected readHeadOffset: number = 17;
-
     public terrainMap: UTexture;
     public terrainScale: FVector;
 

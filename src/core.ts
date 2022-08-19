@@ -78,9 +78,6 @@ async function startCore() {
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_22", loadSettings));  // ruins of despair
@@ -90,6 +87,19 @@ async function startCore() {
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
+
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_26", loadSettings));  // TI
 
     // crashing
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin

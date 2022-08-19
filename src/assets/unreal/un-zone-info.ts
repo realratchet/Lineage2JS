@@ -14,7 +14,6 @@ class UZoneInfo extends UAActor implements IInfo {
 
     protected killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
 
-    protected readHeadOffset: number = 15;
     protected terrains: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
 
     protected ambientHue: number;
@@ -85,16 +84,6 @@ class UZoneInfo extends UAActor implements IInfo {
     public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
         pkg.seek(this.readHead, "set");
 
-        //     // for (let i = 0; i < (exp.size.value as number); i++) {
-        //     //     const tag = PropertyTag.from(pkg, this.readHead + i);
-
-        //     //     if (tag.name === "None") continue;
-
-        //     //     console.log(`${this.readHeadOffset + i} => ${tag.index} '${tag.name}' (${tag.structName}) of size ${tag.dataSize}`);
-        //     // }
-
-        // debugger;
-
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -104,41 +93,7 @@ class UZoneInfo extends UAActor implements IInfo {
 
         const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
 
-
-        // console.assert(leftoverBytes.length >= this.readHeadOffset);
-
-        // if (leftoverBytes.length === this.readHeadOffset)
-        //     return;
-
-        // pkg.seek(this.readHead, "set");
-
-        // this.unkValue = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // // super.doLoad(pkg, exp);
-        // this.readHead = pkg.tell();
-
-        // // debugger;
-
-        // super.doLoad(pkg, exp);
-        // this.readHead = pkg.tell();
-
-        // const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // debugger;
-
-
-        // const value = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // const value2 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        // // const value3 = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // this.readHead = pkg.tell();
-
-        // // debugger;
-
-        // // console.log(this.bytesUnread);
-
-        // // debugger;
+        
     }
 
     async getDecodeInfo(library: DecodeLibrary): Promise<string> {

@@ -3,13 +3,15 @@ import UAActor from "./un-aactor";
 class UPlayerStart extends UAActor {
     public readonly careUnread = false;
 
-    public nextNavigationPoint: UPlayerStart;
-    public base: UStaticMeshActor;
+    protected nextNavigationPoint: UPlayerStart;
+    protected base: UStaticMeshActor;
+    protected relativeLocation: FVector;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "nextNavigationPoint": "nextNavigationPoint",
-            "Base": "base"
+            "Base": "base",
+            "RelativeLocation": "relativeLocation"
         });
     }
 }

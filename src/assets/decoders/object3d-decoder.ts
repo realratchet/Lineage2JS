@@ -93,6 +93,7 @@ function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THRE
 }
 
 function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
+    const obj = new Object3D();
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
@@ -109,7 +110,10 @@ function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeI
 
     applySimpleProperties(library, mesh, info);
 
-    return mesh;
+    // obj.add(new Mesh(mesh.geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
+    obj.add(mesh);
+
+    return obj;
 }
 
 function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {

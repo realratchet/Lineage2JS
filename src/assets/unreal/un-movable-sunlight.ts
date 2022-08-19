@@ -1,8 +1,6 @@
 import UAActor from "./un-aactor";
 
 class UNMovableSunLight extends UAActor {
-    protected readHeadOffset: number = 17;
-
     protected lightness: number = 128;
     protected type = 0x13;
 

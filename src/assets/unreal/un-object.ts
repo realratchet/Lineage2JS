@@ -2,6 +2,7 @@ import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
+import { ObjectFlags_T } from "./un-export";
 
 const CLEANUP_NAMESPACE = true;
 
@@ -9,6 +10,8 @@ abstract class UObject {
     public objectName = "Exp_None";
     public exportIndex?: number = null;
     public exp?: UExport = null;
+
+    protected readHeadOffset = 0;
 
     public readonly uuid = generateUUID();
     public readonly careUnread: boolean = true;
@@ -19,7 +22,6 @@ abstract class UObject {
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
-    protected readHeadOffset: number = 0;
 
     public constructor(...params: any[]) { }
 
@@ -66,194 +68,30 @@ abstract class UObject {
         this.exportIndex = exp.index;
         this.exp = exp;
 
-        // const compat32 = new BufferValue(BufferValue.compat32);
-        // const int32 = new BufferValue(BufferValue.int32);
-        // const int8 = new BufferValue(BufferValue.int8);
-        // const uint8 = new BufferValue(BufferValue.uint8);
-        // pkg.seek(exp.offset.value as number, "set");
+        const flags = exp.flags.value as number;
 
-        // let hasOffset = false;
-        // let headOffset: number = 0;
 
-        // const imports = [];
-        // const exports = [];
 
+        pkg.seek(exp.offset.value as number, "set");
 
-        // // if (this.readHeadOffset > 0)
-        // //     debugger;
 
-        // if (this.objectName === "Exp_Brush150")
-        //     debugger;
+        if (flags & ObjectFlags_T.HasStack) {
+            const offset = pkg.tell();
+            const compat32 = new BufferValue(BufferValue.compat32);
+            const int64 = new BufferValue(BufferValue.int64);
+            const int32 = new BufferValue(BufferValue.int32);
 
-        // if (this.readHeadOffset > 0/*this.objectName === "Exp_Brush52"*/) {
-        //     // debugger;
-        //     // pkg.seek(exp.offset.value as number, "set");
-        //     // pkg.dump(2);
+            const node = pkg.read(compat32).value as number;
+            /*const stateNode =*/ pkg.read(compat32).value as number;
+            /*const probeMask =*/ pkg.read(int64).value as number;
+            /*const latentAction =*/ pkg.read(int32).value as number;
 
-        //     // pkg.seek((exp.offset.value as number) + (exp.size.value as number) - 32, "set");
-        //     // pkg.dump(2);
+            if (node !== 0) {
+                /*const offset =*/ pkg.read(compat32).value as number;
+            }
 
-
-        //     // debugger;
-
-        //     // const a = pkg.read(uint8).value as number;
-        //     // const offset = pkg.tell() - (exp.offset.value as number)
-
-        //     // pkg.seek((exp.offset.value as number) + (exp.size.value as number) - offset, "set");
-
-        //     // const b = pkg.read(uint8).value as number;
-
-        //     // debugger;
-
-
-
-        //     // debugger;
-        //     const b1 = pkg.read(compat32).value as number;
-
-        //     if (b1 < 0) {
-        //         const b2 = pkg.read(compat32).value as number;
-        //         const runningOffset_2 = pkg.tell() - (exp.offset.value as number)
-
-        //         const b3 = pkg.read(compat32).value as number;
-        //         const runningOffset_3 = pkg.tell() - (exp.offset.value as number)
-
-        //         if (b3 !== 1)
-        //             debugger;
-
-        //         // debugger;
-
-        //         const b4 = pkg.read(compat32).value as number;
-        //         const runningOffset_4 = pkg.tell() - (exp.offset.value as number)
-
-        //         if (b4 !== 0) {
-        //             const b5 = pkg.read(compat32).value as number;
-        //             const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
-
-        //             debugger;
-        //         }
-
-
-        //         // const b5 = pkg.read(compat32).value as number;
-        //         // const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
-
-
-        //         let runningOffset = runningOffset_4;
-
-        //         // const bytes = [];
-        //         // let moreThanOne = false;
-
-        //         // do {
-        //         //     const b4 = pkg.read(uint8).value as number;
-        //         //     runningOffset = pkg.tell() - (exp.offset.value as number)
-
-        //         //     bytes.push(`0x${b4.toString(16)}`)
-
-        //         //     if (b4 & 0x80) {
-        //         //         if (!moreThanOne) continue;
-        //         //         break;
-        //         //     }
-
-
-        //         //     moreThanOne = b4 !== 0;
-        //         // } while (true);
-
-        //         // debugger;
-
-        //         // const b4 = pkg.read(uint8).value as number;
-        //         // const runningOffset_4 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b5 = pkg.read(uint8).value as number;
-        //         // const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b6 = pkg.read(uint8).value as number;
-        //         // const runningOffset_6 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b7 = pkg.read(uint8).value as number;
-        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
-
-
-        //         // debugger;
-
-        //         // const b7 = pkg.read(int32).value as number;
-        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
-
-        //         // console.assert(runningOffset_7 === this.readHeadOffset);
-
-        //         // pkg.seek(8)
-
-        //         // const b7 = pkg.read(compat32).value as number;
-        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b3 = pkg.read(int32).value as number;
-        //         // const runningOffset_3 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b4 = pkg.read(int32).value as number;
-        //         // const runningOffset_4 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b5 = pkg.read(int8).value as number;
-        //         // const runningOffset_5 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b6 = pkg.read(int8).value as number;
-        //         // const runningOffset_6 = pkg.tell() - (exp.offset.value as number)
-
-        //         // const b7 = pkg.read(compat32).value as number;
-        //         // const runningOffset_7 = pkg.tell() - (exp.offset.value as number)
-
-
-        //         // debugger;
-
-        //         // if (runningOffset !== 15 && runningOffset !== 17)
-        //         //     debugger;
-
-        //         if (this.objectName === "Exp_Brush150")
-        //             debugger;
-
-        //         if (this.objectName === "Exp_Brush52")
-        //             debugger;
-
-        //         // debugger;
-
-        //         // if (runningOffset < 15)
-        //         //     debugger;
-
-
-        //         // if (this.readHeadOffset === runningOffset) {
-        //         //     debugger;
-        //         // } else {
-        //         //     debugger;
-        //         // }
-
-        //         // this.readHeadOffset = runningOffset + 4;
-        //     }
-        // }
-
-        // // do {
-        // //     const b = pkg.read(compat32).value as number;
-        // //     const runningOffset = pkg.tell() - (exp.offset.value as number)
-
-        // //     if (b < 0) {
-        // //         hasOffset = true;
-
-        // //         // if (b === -1) {
-        // //         //     headOffset = runningOffset;
-        // //         //     break;
-        // //         // }
-
-        // //         // imports.push(pkg.imports[-b - 1].objectName);
-
-        // //         continue;
-        // //     }
-
-        // //     if (!hasOffset) { //  roll back
-        // //         headOffset = 0;
-        // //         break;
-        // //     } else {
-        // //         exports.push(pkg.nameTable[b].name.value);
-        // //     }
-
-        // // } while (true);
-
-        // // this.readHeadOffset = headOffset;
+            this.readHeadOffset = pkg.tell() - offset;
+        }
 
         this.setReadPointers(exp);
     }
@@ -262,7 +100,7 @@ abstract class UObject {
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
         if (this.skipRemaining) this.readHead = this.readTail;
-        if (this.bytesUnread > this.readHeadOffset && this.careUnread)
+        if (this.bytesUnread > 0 && this.careUnread)
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();

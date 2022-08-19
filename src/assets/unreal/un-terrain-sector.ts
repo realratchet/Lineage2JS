@@ -24,7 +24,6 @@ class FTerrainLightInfo extends FConstructable {
 }
 
 class UTerrainSector extends UObject {
-    protected readHeadOffset = 0;
     public readonly boundingBox: FBox = new FBox();
     protected offsetX: number;
     protected offsetY: number;
@@ -115,6 +114,27 @@ class UTerrainSector extends UObject {
                 colors[idxVertOffset + 0] = ambient[0] * shadowMap;
                 colors[idxVertOffset + 1] = ambient[1] * shadowMap;
                 colors[idxVertOffset + 2] = ambient[2] * shadowMap;
+
+                // {
+                //     const hmx = x + this.offsetX;
+                //     const hmy = y + this.offsetY;
+
+                //     const vertexIndex = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                //     const indexOffset = vertexIndex >> 5;
+                //     const vertexMask = 1 << (vertexIndex & 0x1F);
+
+                //     const isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask);
+
+                //     const idxOffset = y * 17 + x;
+                //     const idxVertOffset = idxOffset * 3;
+
+                //     if (isVisible > 32)
+                //         debugger;
+
+                //     colors[idxVertOffset + 0] = 0;
+                //     colors[idxVertOffset + 1] = Number(isVisible === 32);
+                //     colors[idxVertOffset + 2] = Number(isVisible === 0);
+                // }
             }
         }
 
@@ -128,27 +148,18 @@ class UTerrainSector extends UObject {
                     const hmx = x + this.offsetX;
                     const hmy = y + this.offsetY;
 
-                    const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                    const vertexIndex = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                    const indexOffset = vertexIndex >> 5;
+                    const vertexMask = 1 << (vertexIndex & 0x1F);
 
-                    let ecx = offset;
-                    let edx = offset;
+                    isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask) !== 0;
 
-                    ecx = ecx & 0x1F;
+                    // const idxOffset = y * 17 + x;
+                    // const idxVertOffset = idxOffset * 3;
 
-                    let cl = ecx;
-                    let edi = 1;
-
-                    edi = edi << cl;
-                    edx = edx >> 5;
-
-                    let eax = info.quadVisibilityBitmap.getElem(edx);
-
-                    eax = eax & edi;
-                    // eax = 0xFFFFFFFF - eax + 1;
-
-                    // debugger;
-
-                    isVisible = eax !== 0;
+                    // colors[idxVertOffset + 0] = 0;
+                    // colors[idxVertOffset + 1] = 0;
+                    // colors[idxVertOffset + 2] = Number(!isVisible);
                 }
 
                 if (!isVisible) {

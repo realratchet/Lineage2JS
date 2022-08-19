@@ -4,8 +4,6 @@ import BufferValue from "../buffer-value";
 import FNumber from "./un-number";
 
 class UWaterVolume extends UBrush {
-    protected readHeadOffset = 17;
-
     protected colLocation: FVector;
     protected nextPhysicsVolume: UPhysicsVolume;
     protected touching: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);

@@ -1,10 +1,7 @@
 import ULevelSummary from "./un-level-summary";
 import UAActor from "./un-aactor";
-import FBox from "./un-box";
 
 class ULevelInfo extends UAActor implements IInfo {
-    protected readHeadOffset: number = 17;
-
     protected time: number;
     protected summary: ULevelSummary;
     protected visibleGroups: string;
@@ -44,6 +41,9 @@ class ULevelInfo extends UAActor implements IInfo {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
+
+        // debugger;
+
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
