@@ -54,7 +54,7 @@ class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
 class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements IConstructable {
     protected Constructor: ValidTypes_T<T>;
 
-    public getElemCount() { return this.array.byteLength / this.Constructor.bytes; }
+    public getElemCount() { return this.array ? this.array.byteLength / this.Constructor.bytes : 0; }
     public getElem(idx: number): number {
         let funName: string = null;
 

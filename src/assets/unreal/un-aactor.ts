@@ -4,8 +4,6 @@ import FRotator from "./un-rotator";
 import { generateUUID } from "three/src/math/MathUtils";
 
 class UAActor extends UObject {
-    protected readHeadOffset: number = 15;
-
     protected texModifyInfo: UTextureModifyInfo;
     protected isDynamicActorFilterState: boolean;
     protected level: ULevel;

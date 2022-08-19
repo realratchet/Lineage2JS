@@ -64,11 +64,13 @@ enum TexRotationType_T {
 class UTexEnvMap extends UBaseModifier {
     protected texCoordSource: number;
     protected material: UCubemap;
+    protected type: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TexCoordSource": "texCoordSource",
-            "Material": "material"
+            "Material": "material",
+            "EnvMapType": "type"
         });
     }
 
@@ -80,11 +82,13 @@ class UTexEnvMap extends UBaseModifier {
 class UFinalBlend extends UBaseModifier {
     protected material: UMaterial;
     protected frameBufferBlending: number;
+    protected doubleSide: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Material": "material",
-            "FrameBufferBlending": "frameBufferBlending"
+            "FrameBufferBlending": "frameBufferBlending",
+            "TwoSided": "doubleSide"
         });
     }
 
@@ -378,6 +382,7 @@ class UTexPanner extends UBaseModifier {
     protected matrix: UMatrix;
     protected material: UTexture;
     protected internalTime = new FPrimitiveArray(BufferValue.int32);
+    protected direction: FRotator;
 
     public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
         if (this.uuid in library.materials) return this.uuid;
@@ -405,7 +410,8 @@ class UTexPanner extends UBaseModifier {
             "M": "matrix",
             "InternalTime": "internalTime",
             "Z": "z",
-            "Material": "material"
+            "Material": "material",
+            "PanDirection": "direction"
         });
     }
 }

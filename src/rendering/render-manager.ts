@@ -1,10 +1,12 @@
 import ZoneObject from "../zone-object";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2 } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 
+const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
+
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 
@@ -14,6 +16,7 @@ class RenderManager {
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(75, 1, 0.1, DEFAULT_FAR);
     public readonly scene = new Scene();
+    public readonly objectGroup = new Object3D();
     public readonly lastSize: Vector2 = new Vector2();
     public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = {} as any;
     public needsUpdate: boolean = true;
@@ -45,6 +48,9 @@ class RenderManager {
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxBufferGeometry()));
 
+        this.objectGroup.name = "SectorGroup"
+        this.scene.add(this.objectGroup);
+
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
         // this.controls.target.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
@@ -52,9 +58,7 @@ class RenderManager {
 
         // // tower planes
         // this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
-        // this.camera.lookAt(17908.226612501945, -11639.21923814191, 114223.45684942426)
         // this.controls.orbit.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
-        // // this.controls.fps.lookAt(17908.226612501945, -11639.21923814191, 114223.45684942426);
 
         // blinking roof
         // this.camera.position.set(20532.18926265955, -11863.06999059111, 117553.43156512016);
@@ -69,32 +73,31 @@ class RenderManager {
 
         // // elven ruins colon
         // this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
-        // this.camera.lookAt(-113585.15625, -3498.14697265625, 235815.328125);
         // this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
 
-        // // // tower ceiling fixture
+        // // // tower ceiling fixture (too red)
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
-        // this.camera.lookAt(17611.91280729978, -5819.704399240179, 116526.32678153258);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // tower outside
         this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-        this.camera.lookAt(19313.26359342052, -1077.117687144737, 114494.24459571407);
         this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
-        // this.camera.lookAt(39689.71781138217, -2528.306592105407, 145400.2027798047);
         // this.controls.orbit.target.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
 
         // // cruma top
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
-        // this.camera.lookAt(17494.774633985846, 20560.86218601999, 112602.20697106984);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        this.controls.orbit.update();
-        // this.controls.fps.update(0);
+        // // talking island
+        // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
+        // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
+
+        this.camera.lookAt(this.controls.orbit.target);
+        this.controls.orbit.update();
 
         viewport.appendChild(this.renderer.domElement);
 

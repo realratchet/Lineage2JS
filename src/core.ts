@@ -21,7 +21,10 @@ import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: UPackage | Promise<UPackage>, settings: LoadSettings_T) {
+async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
+
+    if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
+
     const decodeLibrary = await DecodeLibrary.fromPackage(await assetLoader.load(pkg), settings);
 
     decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
@@ -30,40 +33,10 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 }
 
 async function startCore() {
-    const geoHelperDirecional = new BoxBufferGeometry();
-    const geoHelperPoint = new SphereBufferGeometry();
-
-    const objectGroup = new Object3D();
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
     const assetLoader = new AssetLoader(assetList);
-    const pkg_16_24 = assetLoader.getPackage("16_24", "Level"); // talking island top, no lights / works
-    const pkg_16_25 = assetLoader.getPackage("16_25", "Level"); // elven ruins entrance /works
-    // const pkg_17_25 = assetLoader.getPackage("17_25", "Level"); // /crashes on terrain
-    // const pkg_17_22 = assetLoader.getPackage("17_22", "Level"); // gludio /crashes
-    // const pkg_19_21 = assetLoader.getPackage("19_21", "Level"); // crashes
-    // const pkg_20_18 = assetLoader.getPackage("20_18", "Level"); // d.elf village /crashes on some objects
-    // const pkg_23_20 = assetLoader.getPackage("23_20", "Level"); // hunters village
-    const pkg_20_19 = assetLoader.getPackage("20_19", "Level"); // <-- works
-    const pkg_20_20 = assetLoader.getPackage("20_20", "Level"); // <-- elven fortress/ works
-    const pkg_20_21 = assetLoader.getPackage("20_21", "Level"); // cruma tower
-    // const pkg_21_19 = assetLoader.getPackage("21_19", "Level"); // elven village /crashes
-    const pkg_20_22 = assetLoader.getPackage("20_22", "Level"); // dion/ works
-    const pkg_21_22 = assetLoader.getPackage("21_22", "Level"); // execution grounds /crashes on static meshes
-    const pkg_22_22 = assetLoader.getPackage("22_22", "Level"); // giran /works
-    // const pkg_17_24 = assetLoader.getPackage("17_24", "Level"); // crashes
-    // const pkg_shader = assetLoader.getPackage("T_SHADER");
-    // const pkg_engine = assetLoader.getPackage("Engine");
-    // const pkg_core = assetLoader.getPackage("Core");
-    // const pkg_entry = assetLoader.getPackage("Entry", "Level"); // login screen?
-    // const pkg_skylevel = assetLoader.getPackage("SkyLevel");
-    // const pkg_meffects = assetLoader.getPackage("LineageEffectMeshes");
-
-    // debugger;
-
-    // const engineData = await new UEncodedFile("assets/system/l2.ini").decode();
-
-    // debugger;
+    const objectGroup = renderManager.objectGroup;
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -87,8 +60,8 @@ async function startCore() {
             // 555,// elven ruins colon
             // 47, // rock with ambient light
             // 2369,
-            // 2011, // ceiling fixture that's too red
-            2774, // necropolis entrance
+            2011, // ceiling fixture that's too red
+            // 2774, // necropolis entrance
             // 4718, // cruma base
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
@@ -99,13 +72,36 @@ async function startCore() {
         ]
     } as LoadSettings_T;
 
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_21, loadSettings));  // cruma tower
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_20, loadSettings));  // elven fortress
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_19, loadSettings));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_20_22, loadSettings));
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_21_22, loadSettings));  // execution grounds
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_16_25, loadSettings));  // elven ruins
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, pkg_22_22, loadSettings));  // giran
+    // working (or mostly working)
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_22", loadSettings));  // ruins of despair
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_23", loadSettings));  // ants nest
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_21", loadSettings));  // death pass
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_22", loadSettings));  // giran castle
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_26", loadSettings));  // TI
+
+    // crashing
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
 
     console.info("System has loaded!");
 

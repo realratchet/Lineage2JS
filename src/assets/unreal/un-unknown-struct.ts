@@ -1,19 +1,21 @@
-import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
 import BufferValue from "../buffer-value";
+import FConstructable from "./un-constructable";
 
-type PropertyTag = import("./un-property").PropertyTag;
 
 class FUnknownStruct extends FConstructable {
     public readonly buffer: BufferValue<"buffer">;
 
-    public constructor(elementSize: number) {
+    public constructor(elementSize: number = null) {
         super();
 
-        this.buffer = BufferValue.allocBytes(elementSize);
+        this.buffer = elementSize ? BufferValue.allocBytes(elementSize) : null;
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: UPackage): this {
+
+        if (this.buffer)
+            throw new Error("Buffer not defined");
+
         pkg.read(this.buffer);
 
         return this;

@@ -2,6 +2,7 @@ import BufferValue from "../buffer-value";
 import { UNP_PropertyTypes, PropertyTag } from "./un-property";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
+import { ObjectFlags_T } from "./un-export";
 
 const CLEANUP_NAMESPACE = true;
 
@@ -9,6 +10,8 @@ abstract class UObject {
     public objectName = "Exp_None";
     public exportIndex?: number = null;
     public exp?: UExport = null;
+
+    protected readHeadOffset = 0;
 
     public readonly uuid = generateUUID();
     public readonly careUnread: boolean = true;
@@ -19,7 +22,6 @@ abstract class UObject {
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
-    protected readHeadOffset: number = 0;
 
     public constructor(...params: any[]) { }
 
@@ -66,6 +68,31 @@ abstract class UObject {
         this.exportIndex = exp.index;
         this.exp = exp;
 
+        const flags = exp.flags.value as number;
+
+
+
+        pkg.seek(exp.offset.value as number, "set");
+
+
+        if (flags & ObjectFlags_T.HasStack) {
+            const offset = pkg.tell();
+            const compat32 = new BufferValue(BufferValue.compat32);
+            const int64 = new BufferValue(BufferValue.int64);
+            const int32 = new BufferValue(BufferValue.int32);
+
+            const node = pkg.read(compat32).value as number;
+            /*const stateNode =*/ pkg.read(compat32).value as number;
+            /*const probeMask =*/ pkg.read(int64).value as number;
+            /*const latentAction =*/ pkg.read(int32).value as number;
+
+            if (node !== 0) {
+                /*const offset =*/ pkg.read(compat32).value as number;
+            }
+
+            this.readHeadOffset = pkg.tell() - offset;
+        }
+
         this.setReadPointers(exp);
     }
 
@@ -73,7 +100,7 @@ abstract class UObject {
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
         if (this.skipRemaining) this.readHead = this.readTail;
-        if (this.bytesUnread > this.readHeadOffset && this.careUnread)
+        if (this.bytesUnread > 0 && this.careUnread)
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();
@@ -145,11 +172,11 @@ abstract class UObject {
                 // const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
                 // const offset = pkg.tell() - start;
                 // pkg.seek(4 * 3);
-                // debugger;
+                debugger;
             } break;
             case UNP_PropertyTypes.UNP_VectorProperty:
             case UNP_PropertyTypes.UNP_RotatorProperty:
-                // debugger;
+                debugger;
                 // this.setProperty(tag, (function () {
                 //     const f = new BufferValue(BufferValue.float);
                 //     const out = new Array<number>(3);
@@ -166,6 +193,7 @@ abstract class UObject {
                 this.setProperty(tag, this.readStruct(pkg, tag));
                 break;
             default:
+                debugger;
                 pkg.seek(tag.dataSize);
                 console.warn(`Unknown data type '${tag.type}' for '${tag.name}' skipping ${tag.dataSize} bytes.`);
                 break;

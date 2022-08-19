@@ -13,8 +13,6 @@ const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
 class UTerrainInfo extends UAActor {
-    protected readHeadOffset: number = 17;
-
     public terrainMap: UTexture;
     public terrainScale: FVector;
 
@@ -53,6 +51,9 @@ class UTerrainInfo extends UAActor {
     public heightmapMin: number;
     public heightmapMax: number;
 
+    protected hasDynamicLight: boolean;
+    protected forcedRegion: number;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
@@ -74,7 +75,9 @@ class UTerrainInfo extends UAActor {
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
-            "bForceRender": "bForceRender"
+            "bForceRender": "bForceRender",
+            "bDynamicLight": "hasDynamicLight",
+            "ForcedRegion": "forcedRegion"
         });
     }
 
@@ -93,13 +96,11 @@ class UTerrainInfo extends UAActor {
         const int32 = new BufferValue(BufferValue.int32);
         const float = new BufferValue(BufferValue.float);
 
-        console.assert(verArchive === 123, "Archive version differs, will likely not work.");
-        console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
+        // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
         super.doLoad(pkg, exp);
 
-        this.location.x = (this.mapX - 20) * MAP_SIZE_X;
-        this.location.z = (this.mapY - 18) * MAP_SIZE_Y;
 
         this.readHead = pkg.tell();
 

@@ -1,10 +1,6 @@
-import UObject from "./un-object";
 import UAActor from "./un-aactor";
-import { PropertyTag } from "./un-property";
 
 class USkyZoneInfo extends UAActor {
-    protected readHeadOffset: number = 17;
-
     protected panSpeedU: number;
     protected panSpeedV: number;
 

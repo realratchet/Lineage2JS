@@ -8,6 +8,37 @@
         //     "name": "(gdb) Launch",
         //     "type": "cppdbg",
         //     "request": "launch",
+        //     "program": "${workspaceFolder}/cpp/ue_viewer/umodel",
+        //     "args": [
+        //         // "/home/ratchet/Documents/lineage-js/assets/maps/20_21.unr",
+        //         // "/home/ratchet/Documents/lineage-js/assets/textures/T_20_21.utx",
+        //         // "/home/ratchet/Documents/lineage-js/assets/textures/T_Dion.utx",
+        //         "/home/ratchet/Documents/lineage-js/assets/models/field_deco_S.usx",
+        //         // "-list"
+        //         "-path=/home/ratchet/Documents/lineage-js/assets"
+        //     ],
+        //     "stopAtEntry": false,
+        //     "cwd": "${fileDirname}",
+        //     "environment": [],
+        //     "externalConsole": false,
+        //     "MIMode": "gdb",
+        //     "setupCommands": [
+        //         {
+        //             "description": "Enable pretty-printing for gdb",
+        //             "text": "-enable-pretty-printing",
+        //             "ignoreFailures": true
+        //         },
+        //         {
+        //             "description": "Set Disassembly Flavor to Intel",
+        //             "text": "-gdb-set disassembly-flavor intel",
+        //             "ignoreFailures": true
+        //         }
+        //     ]
+        // },
+        // {
+        //     "name": "(gdb) Launch",
+        //     "type": "cppdbg",
+        //     "request": "launch",
         //     "program": "${workspaceFolder}/build/cpp.out",
         //     "args": [],
         //     "stopAtEntry": false,
@@ -28,7 +59,6 @@
         //         }
         //     ]
         // },
-        
         // {
         //     "name": "(gdb) Launch L2",
         //     "type": "cppdbg",

@@ -1,7 +1,19 @@
-import UObject from "./un-object";
+import UAActor from "./un-aactor";
 
-class UPlayerStart extends UObject {
+class UPlayerStart extends UAActor {
     public readonly careUnread = false;
+
+    protected nextNavigationPoint: UPlayerStart;
+    protected base: UStaticMeshActor;
+    protected relativeLocation: FVector;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "nextNavigationPoint": "nextNavigationPoint",
+            "Base": "base",
+            "RelativeLocation": "relativeLocation"
+        });
+    }
 }
 
 export default UPlayerStart;

@@ -9,6 +9,20 @@ import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import { selectByTime, staticMeshAmbient } from "../un-time-list";
 import FNumber from "../un-number";
 import timeOfDay from "../un-time-of-day-helper";
+import FConstructable from "../un-constructable";
+import UPackage from "../un-package";
+import { PropertyTag } from "../un-property";
+
+class FAccessory extends FConstructable {
+    public unkBytes: Uint8Array;
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        this.unkBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(11)).bytes.buffer);
+
+        return this;
+    }
+
+}
 
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh;
@@ -41,6 +55,16 @@ class UStaticMeshActor extends UAActor {
     protected hasStaticLighting: boolean;
     protected isLightingVisibile: boolean;
 
+    protected isAgitDefaultStaticMesh: boolean;
+    protected agitID: number;
+    protected accessoryIndex: number;
+    protected accessoryTypeList: FArray<FAccessory> = new FArray(FAccessory);
+
+    protected disableSorting: boolean;
+    protected lodBias: number;
+
+    protected style: number;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMesh": "mesh",
@@ -71,7 +95,17 @@ class UStaticMeshActor extends UAActor {
 
             "AmbientGlow": "ambientGlow",
             "bStaticLighting": "hasStaticLighting",
-            "bLightingVisibility": "isLightingVisibile"
+            "bLightingVisibility": "isLightingVisibile",
+
+            "bAgitDefaultStaticMesh": "isAgitDefaultStaticMesh",
+            "AgitID": "agitID",
+            "AccessoryIndex": "accessoryIndex",
+            "AccessoryTypeList": "accessoryTypeList",
+
+            "bDisableSorting": "disableSorting",
+            "LODBias": "lodBias",
+
+            "Style": "style"
         });
     }
 
@@ -327,7 +361,6 @@ class UStaticMeshActor extends UAActor {
 
             //  debugger;
 
-
             someFlag = 0x1;
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
@@ -350,7 +383,7 @@ class UStaticMeshActor extends UAActor {
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
                     instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + clamp(b * intensity * 255, 0, 255) / 255);
 
-
+                    // debugger;
                 }
 
                 if ((someFlag & 0x7f) === 0x0) {

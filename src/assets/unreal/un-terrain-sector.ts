@@ -2,14 +2,28 @@ import UObject from "./un-object";
 import FBox from "./un-box";
 import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
-import FUnknownStruct from "./un-unknown-struct";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient } from "./un-time-list";
 import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
+import FConstructable from "./un-constructable";
+
+class FTerrainLightInfo extends FConstructable {
+    public lightIndex: number;
+    public someData = new FPrimitiveArray(BufferValue.uint8);
+
+    public load(pkg: UPackage): this {
+
+        const compat32 = new BufferValue(BufferValue.compat32);
+
+        this.lightIndex = pkg.read(compat32).value as number;
+        this.someData.load(pkg);
+
+        return this;
+    }
+}
 
 class UTerrainSector extends UObject {
-    protected readHeadOffset = 0;
     public readonly boundingBox: FBox = new FBox();
     protected offsetX: number;
     protected offsetY: number;
@@ -24,28 +38,8 @@ class UTerrainSector extends UObject {
 
     protected unkBuf0: any;
 
-    protected unkArr8: FArray<FUnknownStruct> = new FArray(class FUnknownStructExt extends FUnknownStruct {
-        constructor() { super(40); }
-
-        public load(pkg: UPackage): this {
-
-            const start = pkg.tell();
-
-            // debugger;
-
-            const compat32 = new BufferValue(BufferValue.compat32);
-
-            const d = pkg.read(compat32).value as number;
-
-            // debugger;
-
-            // pkg.read(this.buffer);
-
-            pkg.seek(start + 40, "set");
-
-            return this;
-        }
-    });
+    // likely mesh lights?
+    protected likelySegmentLights = new FArray(FTerrainLightInfo);
 
     protected shadowMaps = [
         new FPrimitiveArray(BufferValue.uint8),
@@ -75,10 +69,11 @@ class UTerrainSector extends UObject {
         await this.onLoaded();
 
 
+        const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
-        const TypedIndicesArray = getTypedArrayConstructor(17 * 17);
+        const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
-        const positions = new Float32Array(17 * 17 * 3), colors = new Float32Array(17 * 17 * 3);
+        const positions = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
@@ -89,7 +84,7 @@ class UTerrainSector extends UObject {
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if ((Number(timeForIndex < timeOfDay) << 0x8 | Number(timeForIndex === timeOfDay) << 0xe) === 0x0) {
+            if (timeForIndex > timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
                 validShadowmap = this.shadowMaps[i];
                 break;
             }
@@ -107,7 +102,6 @@ class UTerrainSector extends UObject {
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
 
-                const shadowMap = validShadowmap.getElem(idxOffset) / 255;
 
                 positions[idxVertOffset + 0] = px;
                 positions[idxVertOffset + 1] = py;
@@ -115,10 +109,32 @@ class UTerrainSector extends UObject {
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
+                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
 
                 colors[idxVertOffset + 0] = ambient[0] * shadowMap;
                 colors[idxVertOffset + 1] = ambient[1] * shadowMap;
                 colors[idxVertOffset + 2] = ambient[2] * shadowMap;
+
+                // {
+                //     const hmx = x + this.offsetX;
+                //     const hmy = y + this.offsetY;
+
+                //     const vertexIndex = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                //     const indexOffset = vertexIndex >> 5;
+                //     const vertexMask = 1 << (vertexIndex & 0x1F);
+
+                //     const isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask);
+
+                //     const idxOffset = y * 17 + x;
+                //     const idxVertOffset = idxOffset * 3;
+
+                //     if (isVisible > 32)
+                //         debugger;
+
+                //     colors[idxVertOffset + 0] = 0;
+                //     colors[idxVertOffset + 1] = Number(isVisible === 32);
+                //     colors[idxVertOffset + 2] = Number(isVisible === 0);
+                // }
             }
         }
 
@@ -132,27 +148,18 @@ class UTerrainSector extends UObject {
                     const hmx = x + this.offsetX;
                     const hmy = y + this.offsetY;
 
-                    const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                    const vertexIndex = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                    const indexOffset = vertexIndex >> 5;
+                    const vertexMask = 1 << (vertexIndex & 0x1F);
 
-                    let ecx = offset;
-                    let edx = offset;
+                    isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask) !== 0;
 
-                    ecx = ecx & 0x1F;
+                    // const idxOffset = y * 17 + x;
+                    // const idxVertOffset = idxOffset * 3;
 
-                    let cl = ecx;
-                    let edi = 1;
-
-                    edi = edi << cl;
-                    edx = edx >> 5;
-
-                    let eax = info.quadVisibilityBitmap.getElem(edx);
-
-                    eax = eax & edi;
-                    // eax = 0xFFFFFFFF - eax + 1;
-
-                    // debugger;
-
-                    isVisible = eax !== 0;
+                    // colors[idxVertOffset + 0] = 0;
+                    // colors[idxVertOffset + 1] = 0;
+                    // colors[idxVertOffset + 2] = Number(!isVisible);
                 }
 
                 if (!isVisible) {
@@ -258,11 +265,53 @@ class UTerrainSector extends UObject {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-        // pkg.seek(exp.offset.value as number, "set");
-        // console.info(exp.objectName);
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
+
+        // debugger;
 
         this.setReadPointers(exp);
         pkg.seek(this.readHead, "set");
+
+        // if (verArchive <= 0x5E) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verArchive >= 0x75) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verArchive < 0x59) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verArchive < 0x75) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verLicense >= 4) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verLicense < 8) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // } else {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // if (verLicense < 10) {
+        //     console.warn("Unsupported yet");
+        //     debugger;
+        // }
+
+        // debugger;
 
         // pkg.dump(1, true, false);
         pkg.seek(1);
@@ -287,29 +336,21 @@ class UTerrainSector extends UObject {
         this.offsetX = pkg.read(uint32).value as number;
         this.offsetY = pkg.read(uint32).value as number;
 
+
         // console.log(this.offsetX, this.offsetY);
 
         // debugger;
 
         this.boundingBox.load(pkg);
-        this.unkArr8.load(pkg);
 
-        // if (this.unkArr8.length > 0)
-        //     debugger;
+        // debugger;
+        this.likelySegmentLights.load(pkg);
+
 
         this.cellNum = pkg.read(uint32).value as number;
         this.sectorWidth = pkg.read(uint32).value as number;
 
         this.readHead = pkg.tell();
-
-        // pkg.seek(1);
-
-        // const buff = pkg.buffer.slice(this.readHead, this.readTail);
-        // const blob = new Blob([buff], { type: "application/octet-stream" });
-        // const url = URL.createObjectURL(blob);
-        // window.open(url, "_blank");
-
-        // debugger;
 
         this.shadowMaps.forEach(sm => sm.load(pkg));
 
