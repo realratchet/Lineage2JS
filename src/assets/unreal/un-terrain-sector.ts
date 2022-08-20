@@ -190,6 +190,8 @@ class UTerrainSector extends UObject {
         const layerCount = info.layers.size;
         const uvs = new Float32Array(uvOffset * (layerCount + 1));
 
+        // debugger;
+
         for (let k = 0; k < layerCount; k++) {
             const layer = itLayer.next().value as UTerrainLayer;
 

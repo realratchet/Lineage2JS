@@ -15,6 +15,7 @@ import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import { FPlane } from "../un-plane";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -123,17 +124,26 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string[][]> {
+    public async getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): Promise<string[][]> {
         await this.onLoaded();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
- 
-        // debugger;
+
+        this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
+        await Promise.all(this.zones.map(async (zone: FZoneProperties, index: number) => {
+            const bspZone = await zone.getDecodeInfo(library, uLevelInfo);
+
+            library.bspZones.push(bspZone);
+
+            library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
+        }));
 
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+
+            library.bspNodes.push(node.getBSPDecodeInfo());
 
             await Promise.all(surf.promisesLoading);
 
@@ -145,6 +155,8 @@ class UModel extends UPrimitive {
             if (testY <= -16000 || testY >= 16000) continue;
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+
+            debugger;
 
             const zone = surf.actor.getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
@@ -184,7 +196,7 @@ class UModel extends UPrimitive {
         }
 
         const createZoneInfo = async (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): Promise<string> => {
-            const zoneInfo = library.zones[zone.uuid];
+            const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);

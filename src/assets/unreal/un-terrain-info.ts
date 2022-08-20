@@ -236,7 +236,7 @@ class UTerrainInfo extends UAActor {
             layers
         } as IMaterialTerrainDecodeInfo;
 
-        const zoneInfo = library.zones[this.getZone().uuid];
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
         const children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))));
 
         const decodeInfo = {

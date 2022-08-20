@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3 } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../zone-object";
 
@@ -113,7 +113,7 @@ function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeI
     // obj.add(new Mesh(mesh.geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
     obj.add(mesh);
 
-    return obj;
+    return obj as any;
 }
 
 function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
@@ -163,47 +163,68 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
 }
 
 function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
-    const Constructor = info.type === "Sector" ? SectorObject : ZoneObject;
-    const object = new Constructor();
+    const object = new ZoneObject();
 
     if (info.name) object.name = info.name;
     if (info.bounds?.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
+    object.visible = false;
+
     return object;
 }
 
 function decodeSector(library: DecodeLibrary) {
-    const sectorUuid = library.sector;
-    const sectorInfo = library.zones[sectorUuid];
-    const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
-    const sector = decodeZoneObject(library, sectorInfo);
+    const sector = new SectorObject();
 
-    let boundsNeedUpdate = false;
+    library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
 
-    zonesUuids.forEach(uuid => {
-        const zoneInfo = library.zones[uuid];
+    sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
 
-        sector.add(decodeZoneObject(library, zoneInfo));
+    // sector.bspNodes.forEach(node => {
+    //     if (node.zones[0] === 1 || node.zones[1] === 1) {
+    //         const normal = new Vector3(node.plane.x, node.plane.y, node.plane.z);
+    //         const constant = node.plane.w;
+    //         const plane = new Plane(normal, constant);
 
-        if (zoneInfo.bounds?.isValid) {
-            const { min, max } = zoneInfo.bounds;
+    //         sector.add(new PlaneHelper(plane, 10000, Math.floor(0xffffff * Math.random())));
+    //     }
+    // });
 
-            boundsNeedUpdate = true;
-            [[Math.min, sectorInfo.bounds.min], [Math.max, sectorInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
-                    for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], min[i], max[i]);
-                }
-            );
-        }
-    });
+    // debugger;
 
-    if (boundsNeedUpdate) {
-        sectorInfo.bounds.isValid = true;
-        sector.setRenderBounds(sectorInfo.bounds.min, sectorInfo.bounds.max);
-    }
+    // const sectorUuid = library.sector;
+    // const sectorInfo = library.bspZones[sectorUuid];
+    // const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
+    // const sector = decodeZoneObject(library, sectorInfo);
+
+    // let boundsNeedUpdate = false;
+
+    // zonesUuids.forEach(uuid => {
+    //     const zoneInfo = library.zones[uuid];
+
+    //     sector.add(decodeZoneObject(library, zoneInfo));
+
+    //     if (zoneInfo.bounds?.isValid) {
+    //         const { min, max } = zoneInfo.bounds;
+
+    //         boundsNeedUpdate = true;
+    //         [[Math.min, sectorInfo.bounds.min], [Math.max, sectorInfo.bounds.max]].forEach(
+    //             ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+    //                 for (let i = 0; i < 3; i++)
+    //                     arr[i] = fn(arr[i], min[i], max[i]);
+    //             }
+    //         );
+    //     }
+    // });
+
+    // if (boundsNeedUpdate) {
+    //     sectorInfo.bounds.isValid = true;
+    //     sector.setRenderBounds(sectorInfo.bounds.min, sectorInfo.bounds.max);
+    // }
+
+    // (sector as SectorObject).setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
 
     return sector;
 }
@@ -218,7 +239,8 @@ function decodePackage(library: DecodeLibrary) {
         const boundsGroup = new Object3D();
         map.add(boundsGroup);
         map.name = "Bounds Helpers";
-        Object.values(library.zones).forEach(zone => {
+        Object.values(library.bspZones).forEach(bspZone => {
+            const zone = bspZone.zoneInfo;
             const { min, max } = zone.bounds;
             const box = new Box3();
             const color = new Color(Math.floor(Math.random() * 0xffffff));

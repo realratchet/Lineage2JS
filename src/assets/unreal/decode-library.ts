@@ -6,7 +6,11 @@ class DecodeLibrary {
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: string = null;                                                           // sector zone id
     public helpersZoneBounds = false;
-    public readonly zones: GenericObjectContainer_T<IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
+    public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
+    public readonly bspLeaves: IBSPLeafDecodeInfo_T[] = [];
+    public readonly bspZones: IBSPZoneDecodeInfo_T[] = [];
+    public readonly bspZoneIndexMap: GenericObjectContainer_T<number> = {};
+    // public readonly zones: GenericObjectContainer_T<IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
     public readonly geometries: GenericObjectContainer_T<IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
     public readonly geometryInstances: GenericObjectContainer_T<number> = {};               // a dictionary containing all geometray instance decode info
     public readonly materials: GenericObjectContainer_T<IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
@@ -43,8 +47,6 @@ class DecodeLibrary {
             return accum;
         }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>);
 
-        // debugger;
-
         const uLevel = await pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 
         decodeLibrary.name = uLevel.url.map;
@@ -57,7 +59,7 @@ class DecodeLibrary {
 
         if (loadBaseModel) {
             const uModel = await pkg.fetchObject<UModel>(uLevel.baseModelId); // base model
-            await uModel.getDecodeInfo(decodeLibrary);
+            await uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         }
 
         if (loadTerrain) {

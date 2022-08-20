@@ -24,7 +24,10 @@ class FPlane extends FConstructable {
         return new FPlane(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
     }
 
-    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
+    public dot(other: FPlane) { return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w; }
+
+
+    public toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.x;
         (array as number[])[offset + 1] = this.y;

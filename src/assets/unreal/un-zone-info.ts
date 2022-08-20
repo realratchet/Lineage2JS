@@ -93,13 +93,13 @@ class UZoneInfo extends UAActor implements IInfo {
 
         const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
 
-        
+
     }
 
-    async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    async getDecodeInfo(library: DecodeLibrary): Promise<IZoneDecodeInfo> {
         await this.onLoaded();
 
-        library.zones[this.uuid] = {
+        return {
             uuid: this.uuid,
             type: "Zone",
             name: this.objectName,
@@ -111,8 +111,6 @@ class UZoneInfo extends UAActor implements IInfo {
                 color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
             }
         };
-
-        return this.uuid;
     }
 }
 

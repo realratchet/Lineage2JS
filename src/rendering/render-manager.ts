@@ -90,7 +90,7 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // // talking island
+        // // // talking island
         // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
@@ -262,7 +262,7 @@ class RenderManager {
 
                 if (inBounds) fog = (object as ZoneObject).fog;
 
-                if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
+                // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
 
                 (object as THREE.Object3D).traverseVisible(object => {
                     if ((object as THREE.Mesh).isMesh)
@@ -325,6 +325,26 @@ class RenderManager {
         }
 
         this.renderer.clear();
+
+        const sector = this.scene.children[1].children[0].children[0] as any;
+
+        // debugger;
+
+        const zoneIndex = sector.findPositionZone(this.camera.position);
+        // sector.children.forEach((ch: any) => ch.visible = false);
+        // sector.children[zoneIndex].visible = true;
+
+        const bspZone = sector.bspZones[zoneIndex];
+        const connectivityFlags = bspZone.connectivity
+
+        for (let i = 0, len = sector.bspZones.length, flag = 1n; i < len; i++, flag = flag << 1n) {
+            const flagValue = connectivityFlags & flag;
+            const isZoneVisible = Boolean(flagValue).valueOf();
+
+            sector.zones.children[i].visible = isZoneVisible;
+        }
+
+
         this._updateObjects(currentTime, deltaTime);
     }
 

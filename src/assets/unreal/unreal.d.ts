@@ -97,6 +97,26 @@ interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
     modifierType: DecodableMaterialModifier_T
 }
 
+interface IBSPLeafDecodeInfo_T {
+    zone: number,
+    permiating: number,
+    volumetric: number,
+    visibleZones: bigint
+}
+
+interface IBSPZoneDecodeInfo_T {
+    connectivity: bigint,
+    visibility: bigint,
+    zoneInfo: IBaseZoneDecodeInfo
+}
+
+interface IBSPNodeDecodeInfo_T {
+    children: [number, number],
+    plane: Vector4Arr,
+    leaves: [number, number],
+    zones: [number, number]
+}
+
 interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {
     materialType: "sprite",
     sprites: ITextureDecodeInfo[],
@@ -196,6 +216,7 @@ type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent"
 
 type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
 
+type Vector2Arr = [number, number];
 type Vector4Arr = [number, number, number, number];
 type ColorArr = Vector4Arr;
 type Vector3Arr = [number, number, number];
@@ -209,7 +230,7 @@ interface IBaseObjectOrInstanceDecodeInfo {
 }
 
 interface IBaseZoneDecodeInfo {
-    type: "Sector" | "Zone",
+    type: "Sector" | "Zone" | "Sky",
     uuid: string,
     name?: string,
     bounds: { isValid: boolean, min: Vector3Arr, max: Vector3Arr },
@@ -218,7 +239,8 @@ interface IBaseZoneDecodeInfo {
 }
 
 interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
-interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector", zones: GenericObjectContainer_T<IZoneDecodeInfo> }
+interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
+interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
 
 interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
     type: "StaticMeshInstance",
@@ -338,7 +360,7 @@ type LightEffect_T = number | {
     Unused: 0xF
 };
 
-interface IInfo { getDecodeInfo(library: DecodeLibrary): Promise<string>; }
+interface IInfo { getDecodeInfo(library: DecodeLibrary): Promise<IBaseZoneDecodeInfo>; }
 
 interface IZoneFogInfo {
     start: number,

@@ -1,11 +1,9 @@
-import { Box3, Color, Fog, Object3D, Sphere } from "three";
+import { Box3, Color, Fog, Object3D, Sphere, Vector4 } from "three";
 
 const tmpColor = new Color();
+const tmpVec4 = new Vector4();
 
 class ZoneObject extends Object3D {
-    protected readonly childZones: ZoneObject[] = [];
-    protected readonly childObjects: Object3D[] = [];
-
     public fog: Fog = null;
 
     public readonly boundsRender = new Box3();
@@ -30,33 +28,142 @@ class ZoneObject extends Object3D {
         return this;
     }
 
-    public add(object: Object3D): this {
+    // public update(enableZoneCulling: boolean, frustum: THREE.Frustum) {
+    //     if (this.isCullable && enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere)) {
+    //         this.children = [];
+    //         return false;
+    //     }
 
-        object.parent = this;
+    //     this.children = this.childObjects;
+    //     this.childZones.forEach(z => z.update(enableZoneCulling, frustum));
 
-        if ((object as ZoneObject).isZoneObject) this.childZones.push(object as ZoneObject);
+    //     return true;
+    // }
+}
 
-        this.childObjects.push(object);
+class SectorObject extends Object3D {
+    public readonly isSectorObject = true;
+    public readonly type = "Sector";
+    public readonly zones = new Object3D();
+    public readonly helpers = new Object3D();
 
-        return this;
+    protected bspZones: BSPZoneData[];
+    protected bspNodes: BSPNodeData[];
+    protected bspLeaves: BSPLeafData[];
+
+    constructor() {
+        super();
+
+        this.helpers.name = "SectorHelpers";
+        this.zones.name = "SectorZones";
+
+        this.add(this.helpers, this.zones);
     }
 
-    public update(enableZoneCulling: boolean, frustum: THREE.Frustum) {
-        if (this.isCullable && enableZoneCulling && !frustum.intersectsSphere(this.boundsRenderSphere)) {
-            this.children = [];
-            return false;
+    public setBSPInfo(bspZones: IBSPZoneDecodeInfo_T[], bspNodes: IBSPNodeDecodeInfo_T[], bspLeaves: IBSPLeafDecodeInfo_T[]) {
+        this.bspZones = bspZones.map(BSPZoneData.fromInfo);
+        this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
+        this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
+
+        // this.bspNodes.forEach(x => { 
+
+        // })
+    }
+
+    public findPositionZone(position: THREE.Vector3) {
+        const findZonePosition = tmpVec4.set(position.x, position.y, position.z, -1);
+
+        let nodeIndex = 0;
+        let leaf: number;
+        let node: BSPNodeData;
+
+        while (true) {
+            node = this.bspNodes[nodeIndex];
+            const plane = node.plane;
+            const side = findZonePosition.dot(plane);
+
+            if (node.front >= 0 && side >= 0) nodeIndex = node.front;
+            else if (node.back >= 0 && side <= 0) nodeIndex = node.back;
+            else {
+                leaf = side >= 0 ? node.leaves[0] : node.leaves[1];
+                break;
+            }
         }
 
-        this.children = this.childObjects;
-        this.childZones.forEach(z => z.update(enableZoneCulling, frustum));
 
-        return true;
+        // debugger;
+
+        const foundZone = node.zones[1];
+
+        console.log(foundZone, nodeIndex, `(${node.leaves.join(", ")})`, `[${leaf}]`);
+
+        // debugger;
+
+
+        return foundZone;
     }
 }
 
-class SectorObject extends ZoneObject {
-    public readonly isSectorObject = true;
-    public readonly type = "Sector";
+class BSPZoneData {
+    public connectivity: bigint;
+    public visibility: bigint;
+
+    protected constructor() { }
+
+    public static fromInfo(info: IBSPZoneDecodeInfo_T) {
+        const zone = new BSPZoneData();
+
+        zone.connectivity = info.connectivity
+        zone.visibility = info.visibility;
+
+        return zone;
+    }
+}
+
+class BSPLeafData {
+    public zone: number
+    public permiating: number
+    public volumetric: number
+    public visibleZones: bigint
+
+    protected constructor() { }
+
+    public static fromInfo(info: IBSPLeafDecodeInfo_T) {
+        const leaf = new BSPLeafData();
+
+        leaf.zone = info.zone;
+        leaf.permiating = info.permiating;
+        leaf.volumetric = info.volumetric;
+        leaf.visibleZones = info.visibleZones;
+
+        return leaf;
+    }
+}
+
+class BSPNodeData {
+    public back: number;
+    public front: number;
+    public plane = new Vector4();
+    public readonly leaves: [number, number] = [0, 0];
+    public readonly zones: [number, number] = [0, 0];
+
+    protected constructor() { }
+
+    public static fromInfo(info: IBSPNodeDecodeInfo_T) {
+        const node = new BSPNodeData();
+
+        [node.front, node.back] = info.children;
+
+        node.plane.fromArray(info.plane);
+
+        node.leaves[0] = info.leaves[0];
+        node.leaves[1] = info.leaves[1];
+
+        node.zones[0] = info.zones[0];
+        node.zones[1] = info.zones[1];
+
+        return node;
+    }
 }
 
 export default ZoneObject;

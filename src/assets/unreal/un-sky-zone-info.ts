@@ -1,6 +1,7 @@
+import DecodeLibrary from "./decode-library";
 import UAActor from "./un-aactor";
 
-class USkyZoneInfo extends UAActor {
+class USkyZoneInfo extends UAActor implements IInfo {
     protected panSpeedU: number;
     protected panSpeedV: number;
 
@@ -16,6 +17,18 @@ class USkyZoneInfo extends UAActor {
             "LensFlareOffset": "lensFlareOffset",
             "LensFlareScale": "lensFlareScale",
         });
+    }
+
+    public async getDecodeInfo(library: DecodeLibrary): Promise<ISkyZoneDecodeInfo> {
+        await this.onLoaded();
+
+        return {
+            uuid: this.uuid,
+            type: "Sky",
+            name: this.objectName,
+            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            children: []
+        }
     }
 }
 

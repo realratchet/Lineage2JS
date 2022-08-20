@@ -52,19 +52,16 @@ class ULevelInfo extends UAActor implements IInfo {
 
     }
 
-    async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<ISectorDecodeInfo> {
         await this.onLoaded();
 
-        library.sector = this.uuid;
-        library.zones[this.uuid] = {
+        return {
             uuid: this.uuid,
             type: "Sector",
             bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
             name: this.objectName,
             children: []
         };
-
-        return this.uuid;
     }
 }
 
