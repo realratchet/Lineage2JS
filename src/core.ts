@@ -34,9 +34,13 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
+    
+    (global as any).renderManager = renderManager;
+    
     const assetList = await (await fetch("asset-list.json")).json();
     const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
+
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -73,7 +77,7 @@ async function startCore() {
     } as LoadSettings_T;
 
     // working (or mostly working)
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -95,7 +99,7 @@ async function startCore() {
 
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
@@ -112,8 +116,6 @@ async function startCore() {
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
     renderManager.startRendering();
-
-    (global as any).renderManager = renderManager;
 }
 
 export default startCore;

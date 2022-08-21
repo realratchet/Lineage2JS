@@ -3,6 +3,7 @@ import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeomet
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
+import Player from "@client/player";
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -30,6 +31,8 @@ class RenderManager {
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
+
+    public readonly player = new Player();
 
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
@@ -90,9 +93,9 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // // // talking island
-        // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
-        // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
+        // // talking island
+        this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
+        this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
 
         this.camera.lookAt(this.controls.orbit.target);
@@ -110,6 +113,10 @@ class RenderManager {
             this.controls.orbit.enabled = false;
             this.controls.fps.lock();
         }
+
+        this.scene.add(this.player);
+        this.player.name = "Player";
+        this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);
 
         addResizeListeners(this);
     }
@@ -194,6 +201,8 @@ class RenderManager {
     }
 
     public onHandleMouseUp(event: MouseEvent) {
+        if (event.button !== 0 || !this.isOrbitControls) return;
+
         try {
             const position = new Vector2(event.pageX, event.pageY);
             const ssPosition = this.toScreenSpaceCoords(position);
@@ -205,6 +214,8 @@ class RenderManager {
             if (intersections.length === 0) return;
 
             const intersection = intersections[0];
+
+            this.player.goTo(intersection.point);
 
             console.log(intersection.object);
         } catch (e) { }
@@ -324,8 +335,6 @@ class RenderManager {
             this.camera.position.add(cameraVelocity);
         }
 
-        this.renderer.clear();
-
         // const sector = this.scene.children[1].children[0].children[0] as any;
 
         // // debugger;
@@ -344,8 +353,10 @@ class RenderManager {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
-
+        this.player.update(this, currentTime, deltaTime);
         this._updateObjects(currentTime, deltaTime);
+
+        this.renderer.clear();
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
@@ -354,7 +365,10 @@ class RenderManager {
 
     protected _postRender(currentTime: number, deltaTime: number) { }
 
-    public startRendering() { this.onHandleRender(0); }
+    public startRendering() {
+        this.scene.updateMatrixWorld(true);
+        this.onHandleRender(0);
+    }
 }
 
 export default RenderManager;
