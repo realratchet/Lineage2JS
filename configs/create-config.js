@@ -27,46 +27,34 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             ]);
 
         const dirAssets = "assets-c4/";
-        const copyFiles = [];
-        const fileList = [
-            "/* This file is auto-generated, any changes will be lost. */",
-            "",
-            "const assetList = Object.freeze(["
-        ];
+        const fileList = {
+            comment: "This file is auto-generated, any changes will be lost.",
+            supported: {},
+            unsupported: []
+        };
 
         for (const fname of walkSync(dirAssets)) {
 
             const ext = path.extname(fname).slice(1).toUpperCase();
-            const relPath = fname.replace(dirAssets, "").toLowerCase();
+            const relPath = fname.replace(dirAssets, "");
 
             if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-                fileList.push(`    // "${relPath}", // '${ext}' extension is not supported`);
+                fileList.unsupported.push(relPath);
                 continue;
             }
 
-            fileList.push(`    "${relPath}",`);
-
-            copyFiles.push({
-                from: path.join(__dirname, `../${fname}`),
-                to: `./assets/${relPath}`
-            });
+            fileList.supported[relPath.toLowerCase()] = relPath;
         }
 
-        fileList.push(
-            "]);",
-            "",
-            "export default assetList;",
-            "export { assetList };"
-        );
-
-        fs.writeFileSync(path.join(__dirname, "../src/assets/asset-list.ts"), fileList.join("\n"));
+        fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
 
 
         const plugins = [
             new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
-                    ...copyFiles
+                    { from: "../asset-list.json", to: "asset-list.json" },
+                    // ...copyFiles
                 ],
             })
         ];
@@ -165,7 +153,15 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             module: { rules },
             plugins,
             output,
-            devServer: { port: 8080, allowedHosts: "all", hot: false },
+            devServer: {
+                port: 8080,
+                allowedHosts: "all",
+                hot: false,
+                static: {
+                    directory: path.resolve(__dirname, "../", dirAssets),
+                    publicPath: "/assets"
+                }
+            },
             devtool,
             context: __dirname
         };

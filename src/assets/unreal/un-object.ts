@@ -100,7 +100,7 @@ abstract class UObject {
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
         if (this.skipRemaining) this.readHead = this.readTail;
-        if (this.bytesUnread > 0 && this.careUnread)
+        if (this.bytesUnread > 0 && this.bytesUnread !== this.readHeadOffset && this.careUnread)
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
 
         this.readHead = pkg.tell();

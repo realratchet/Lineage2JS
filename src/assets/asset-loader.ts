@@ -33,8 +33,8 @@ const impToType = Object.freeze(
 class AssetLoader {
     private packages = new Map<string, Promise<UPackage>>();
 
-    constructor(assetList: string[] | readonly string[]) {
-        assetList.forEach(path => {
+    constructor(assetList: IAssetListInfo) {
+        for (let [path, downloadPath] of Object.entries(assetList)) {
             const pkgName = pathToPkgName(path);
 
             if (this.packages.has(pkgName))
@@ -42,11 +42,11 @@ class AssetLoader {
 
             this.packages.set(pkgName.toLowerCase(), new Promise(async resolve => {
                 const { UPackage } = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
-                const pkg = new UPackage(this, `assets/${path}`);
+                const pkg = new UPackage(this, `assets/${downloadPath}`);
 
                 resolve(pkg);
             }));
-        });
+        };
     }
 
     public getPackage(pkgName: string, impType: SupportedImports_T): Promise<UPackage> { return this.packages.get(importToPkgName(pkgName, impType)); }
