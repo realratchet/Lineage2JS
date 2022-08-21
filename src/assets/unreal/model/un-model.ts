@@ -156,7 +156,7 @@ class UModel extends UPrimitive {
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
-            debugger;
+            // debugger;
 
             const zone = surf.actor.getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];

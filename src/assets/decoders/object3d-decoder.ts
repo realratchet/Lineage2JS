@@ -170,7 +170,7 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
-    object.visible = false;
+    // object.visible = false;
 
     return object;
 }

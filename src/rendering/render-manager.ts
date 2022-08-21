@@ -326,23 +326,23 @@ class RenderManager {
 
         this.renderer.clear();
 
-        const sector = this.scene.children[1].children[0].children[0] as any;
+        // const sector = this.scene.children[1].children[0].children[0] as any;
 
-        // debugger;
+        // // debugger;
 
-        const zoneIndex = sector.findPositionZone(this.camera.position);
-        // sector.children.forEach((ch: any) => ch.visible = false);
-        // sector.children[zoneIndex].visible = true;
+        // const zoneIndex = sector.findPositionZone(this.camera.position);
+        // // sector.children.forEach((ch: any) => ch.visible = false);
+        // // sector.children[zoneIndex].visible = true;
 
-        const bspZone = sector.bspZones[zoneIndex];
-        const connectivityFlags = bspZone.connectivity
+        // const bspZone = sector.bspZones[zoneIndex];
+        // const connectivityFlags = bspZone.connectivity
 
-        for (let i = 0, len = sector.bspZones.length, flag = 1n; i < len; i++, flag = flag << 1n) {
-            const flagValue = connectivityFlags & flag;
-            const isZoneVisible = Boolean(flagValue).valueOf();
+        // for (let i = 0, len = sector.bspZones.length, flag = 1n; i < len; i++, flag = flag << 1n) {
+        //     const flagValue = connectivityFlags & flag;
+        //     const isZoneVisible = Boolean(flagValue).valueOf();
 
-            sector.zones.children[i].visible = isZoneVisible;
-        }
+        //     sector.zones.children[i].visible = isZoneVisible;
+        // }
 
 
         this._updateObjects(currentTime, deltaTime);
