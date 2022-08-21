@@ -63,3 +63,5 @@ interface IConstructable {
 type ValidConstructables_T<T> = typeof import("./unreal/un-constructable").FConstructable
     | typeof import("./unreal/un-object").UObject
     | FNumberExt<T>;
+
+type IAssetListInfo = GenericObjectContainer_T<string>;

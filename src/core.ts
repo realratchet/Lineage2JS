@@ -1,6 +1,5 @@
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
-import assetList from "./assets/asset-list";
 // import UTerrainInfo from "./assets/unreal/un-terrain-info";
 // import UTerrainSector from "./assets/unreal/un-terrain-sector";
 // import UTexture from "./assets/unreal/un-texture";
@@ -35,7 +34,8 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
-    const assetLoader = new AssetLoader(assetList);
+    const assetList = await (await fetch("asset-list.json")).json();
+    const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
     const loadSettings = {

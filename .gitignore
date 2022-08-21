@@ -8,4 +8,4 @@ cpp/l2_viewer/
 cpp/ue_viewer/
 cpp/l2_editor/
 *.log
-src/assets/asset-list.ts
+asset-list.json
