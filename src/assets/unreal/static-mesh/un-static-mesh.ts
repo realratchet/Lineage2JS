@@ -108,6 +108,8 @@ class UStaticMesh extends UPrimitive {
             } else {
                 this.collisionFaces.load(pkg);
                 this.collisionNodes.load(pkg);
+
+                // debugger;
             }
         }
 

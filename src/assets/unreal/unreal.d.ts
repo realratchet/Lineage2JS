@@ -110,11 +110,17 @@ interface IBSPZoneDecodeInfo_T {
     zoneInfo: IBaseZoneDecodeInfo
 }
 
+interface IBSPNodeCollisionInfo_T {
+    flags: number[],
+    bounds: IBoxDecodeInfo
+}
+
 interface IBSPNodeDecodeInfo_T {
     children: [number, number],
     plane: Vector4Arr,
     leaves: [number, number],
-    zones: [number, number]
+    zones: [number, number],
+    collision?: IBSPNodeCollisionInfo_T
 }
 
 interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {

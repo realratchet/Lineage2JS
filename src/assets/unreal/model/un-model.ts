@@ -164,15 +164,18 @@ class UModel extends UPrimitive {
                 while (hullIndexList[hullPlanesCount] >= 0)
                     hullIndexList[hullPlanesCount++];
 
-                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6 + 6)).buffer);
+                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
                 const bbox = new FBox();
 
                 bbox.isValid = true;
                 bbox.min.set(initialVector[0], initialVector[1], initialVector[2]);
                 bbox.max.set(initialVector[3], initialVector[4], initialVector[5]);
 
+                const hullFlags = hullIndexList.slice(0, hullPlanesCount);
 
-                library.bspColliders.push(bbox.getDecodeInfo());
+                debugger;
+
+                // library.bspColliders.push(bbox.getDecodeInfo());
 
                 // let tmax;
 
@@ -180,9 +183,9 @@ class UModel extends UPrimitive {
                 //     let hullIndex = hullIndexList[i];
 
                 //     const hullFlip = Boolean(hullIndex & 0x40000000);
-			        
+
                 //     hullIndex = hullIndex & ~0x40000000;
-			    //     let hullnode = this.bspNodes[hullIndex];
+                //     let hullnode = this.bspNodes[hullIndex];
 
                 //     debugger;
                 // }

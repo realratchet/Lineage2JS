@@ -28,14 +28,14 @@ class DecodeLibrary {
         loadTerrain = true,
         helpersZoneBounds = false
     }: LoadSettings_T) {
-        // const impGroups = pkg.imports.reduce((accum, imp, index) => {
-        //     const impType = imp.className;
-        //     const list = accum[impType] = accum[impType] || [];
+        const impGroups = pkg.imports.reduce((accum, imp, index) => {
+            const impType = imp.className;
+            const list = accum[impType] = accum[impType] || [];
 
-        //     list.push({ import: imp, index: -index - 1 });
+            list.push({ import: imp, index: -index - 1 });
 
-        //     return accum;
-        // }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
+            return accum;
+        }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
 
         const decodeLibrary = new DecodeLibrary();
         const expGroups = pkg.exports.reduce((accum, exp, index) => {
@@ -47,6 +47,8 @@ class DecodeLibrary {
 
             return accum;
         }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>);
+
+        // debugger;
 
         const uLevel = await pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 

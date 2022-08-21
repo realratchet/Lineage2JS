@@ -118,9 +118,9 @@ class Player extends BaseActor {
             this.position.y += feetLevel;
 
             
-            const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), intersection.face.normal);
+            // const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), intersection.face.normal);
 
-            this.quaternion.multiply(quaternion);
+            // this.quaternion.multiply(quaternion);
         }
     }
 
