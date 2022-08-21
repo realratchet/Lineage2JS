@@ -156,7 +156,43 @@ class UModel extends UPrimitive {
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
-            // debugger;
+            if (node.iCollisionBound >= 0) {
+                const hulls = this.leafHulls.getTypedArray() as Int32Array;
+                const hullIndexList = hulls.slice(node.iCollisionBound);
+
+                let hullPlanesCount = 0;
+                while (hullIndexList[hullPlanesCount] >= 0)
+                    hullIndexList[hullPlanesCount++];
+
+                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6 + 6)).buffer);
+                const bbox = new FBox();
+
+                bbox.isValid = true;
+                bbox.min.set(initialVector[0], initialVector[1], initialVector[2]);
+                bbox.max.set(initialVector[3], initialVector[4], initialVector[5]);
+
+
+                library.bspColliders.push(bbox.getDecodeInfo());
+
+                // let tmax;
+
+                // for (let i = 0; i < hullPlanesCount; i++) {
+                //     let hullIndex = hullIndexList[i];
+
+                //     const hullFlip = Boolean(hullIndex & 0x40000000);
+			        
+                //     hullIndex = hullIndex & ~0x40000000;
+			    //     let hullnode = this.bspNodes[hullIndex];
+
+                //     debugger;
+                // }
+
+                // debugger;
+
+                // while (hullIndexList[hullPlanesCount] >= 0)
+                //     hullIndexList[hullPlanesCount++];
+                // vec3* bboxStart = (vec3*)(&hullIndexList[hullPlanesCount + 1]);
+            }
 
             const zone = surf.actor.getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];

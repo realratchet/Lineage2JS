@@ -229,11 +229,13 @@ interface IBaseObjectOrInstanceDecodeInfo {
     type: DecodableObject_T | "StaticMeshInstance"
 }
 
+interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
+
 interface IBaseZoneDecodeInfo {
     type: "Sector" | "Zone" | "Sky",
     uuid: string,
     name?: string,
-    bounds: { isValid: boolean, min: Vector3Arr, max: Vector3Arr },
+    bounds: IBoxDecodeInfo,
     children: IBaseObjectOrInstanceDecodeInfo[],
     fog?: IZoneFogInfo
 }

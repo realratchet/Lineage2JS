@@ -182,6 +182,19 @@ function decodeSector(library: DecodeLibrary) {
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
 
+    library.bspColliders.forEach(collider => {
+        const box = new Box3();
+
+        if (collider.isValid) {
+            box.min.fromArray(collider.min)
+            box.max.fromArray(collider.max)
+        }
+
+        const helper = new Box3Helper(box);
+
+        sector.helpers.add(helper);
+    })
+
     // sector.bspNodes.forEach(node => {
     //     if (node.zones[0] === 1 || node.zones[1] === 1) {
     //         const normal = new Vector3(node.plane.x, node.plane.y, node.plane.z);

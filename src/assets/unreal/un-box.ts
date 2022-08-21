@@ -5,7 +5,7 @@ import FVector from "./un-vector";
 class FBox extends FConstructable {
     public readonly min: FVector = new FVector();
     public readonly max: FVector = new FVector();
-    
+
     public isValid: boolean = false;
 
     public load(pkg: UPackage): this {
@@ -35,6 +35,14 @@ class FBox extends FConstructable {
         this.isValid = true;
 
         return this;
+    }
+
+    public getDecodeInfo(): IBoxDecodeInfo {
+        return {
+            isValid: this.isValid,
+            min: this.min.getVectorElements(),
+            max: this.max.getVectorElements()
+        };
     }
 }
 

@@ -7,6 +7,7 @@ class DecodeLibrary {
     public sector: string = null;                                                           // sector zone id
     public helpersZoneBounds = false;
     public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
+    public readonly bspColliders: IBoxDecodeInfo[] = [];
     public readonly bspLeaves: IBSPLeafDecodeInfo_T[] = [];
     public readonly bspZones: IBSPZoneDecodeInfo_T[] = [];
     public readonly bspZoneIndexMap: GenericObjectContainer_T<number> = {};
