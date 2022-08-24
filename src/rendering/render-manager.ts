@@ -1,9 +1,11 @@
-import ZoneObject from "../zone-object";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3 } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereBufferGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneBufferGeometry } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
+import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
+import RAPIER from "@dimforge/rapier3d";
+import type { ICollidable } from "@client/objects/objects";
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -11,20 +13,24 @@ const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 
+type ZoneObject = import("../objects/zone-object").ZoneObject;
+type SectorObject = import("../objects/zone-object").SectorObject;
+
 class RenderManager {
-    public readonly renderer: WebGLRenderer;
+    public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(75, 1, 0.1, DEFAULT_FAR);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
-    public readonly lastSize: Vector2 = new Vector2();
-    public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = {} as any;
+    public readonly lastSize = new Vector2();
+    public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = { orbit: null, fps: null };
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public readonly raycaster = new Raycaster();
     public speedCameraFPS = 50;
 
+    protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
     protected lastRender: number = 0;
@@ -34,6 +40,11 @@ class RenderManager {
 
     public readonly player = new Player();
 
+    protected readonly sun: THREE.Mesh;
+    protected readonly sunCam: THREE.Camera;
+
+    public readonly physicsWorld: RAPIER.World;
+
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
         this.renderer = new WebGLRenderer({
@@ -41,8 +52,10 @@ class RenderManager {
             preserveDrawingBuffer: true,
             premultipliedAlpha: false,
             logarithmicDepthBuffer: true,
-            alpha: true
+            alpha: true,
         });
+
+        this.renderer.autoClear = false;
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
         this.controls.orbit = new OrbitControls(this.camera, this.renderer.domElement);
@@ -53,6 +66,13 @@ class RenderManager {
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+
+        this.sun = new Mesh(new PlaneBufferGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
+        this.sunCam = new Camera();
+
+        this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8, 0));
+
+        // this.scene.add(this.sun);
 
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
@@ -97,6 +117,10 @@ class RenderManager {
         this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
+        // // world origin
+        // this.camera.position.set(20, 20, 20);
+        // this.controls.orbit.target.set(0, 0, 0);
+
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -117,6 +141,8 @@ class RenderManager {
         this.scene.add(this.player);
         this.player.name = "Player";
         this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);
+        // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);
+        // this.player.position.set(0, 26, 0);
 
         addResizeListeners(this);
     }
@@ -215,7 +241,10 @@ class RenderManager {
 
             const intersection = intersections[0];
 
-            this.player.goTo(intersection.point);
+            const sector = intersections.find(i => i.object.name.includes("TerrainSector"));
+
+            if (sector)
+                this.player.goTo(sector.point);
 
             console.log(intersection.object);
         } catch (e) { }
@@ -260,20 +289,34 @@ class RenderManager {
 
     public enableZoneCulling = true;
 
-    protected _updateObjects(currentTime: number, deltaTime: number) {
-        let fog: THREE.Fog;
+    public getSector(position: THREE.Vector3) {
+        const sectorSize = 256 * 128;
+        const sectorX = Math.floor(position.x / sectorSize) + 20;
+        const sectorY = Math.floor(position.z / sectorSize) + 18;
 
+        if (!this.sectors.has(sectorX))
+            return null;
+
+        const xsect = this.sectors.get(sectorX);
+
+        if (!xsect.has(sectorY))
+            return null;
+
+        return xsect.get(sectorY);
+    }
+
+    protected _updateObjects(currentTime: number, deltaTime: number) {
         const globalTime = currentTime / 600;
 
         this.scene.traverse((object: THREE.Object3D) => {
 
             if ((object as ZoneObject).isZoneObject) {
 
-                const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
+                // const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
 
-                if (inBounds) fog = (object as ZoneObject).fog;
+                // if (inBounds) fog = (object as ZoneObject).fog;
 
-                // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
+                // // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
 
                 (object as THREE.Object3D).traverseVisible(object => {
                     if ((object as THREE.Mesh).isMesh)
@@ -287,6 +330,16 @@ class RenderManager {
                 });
             }
         });
+
+        let fog: THREE.Fog;
+
+        const sector = this.getSector(this.camera.position);
+
+        if (sector) {
+            const zoneIndex = sector.findPositionZone(this.camera.position);
+            const zone = sector.zones.children[zoneIndex] as ZoneObject;
+            fog = zone.fog;
+        }
 
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
 
@@ -312,6 +365,8 @@ class RenderManager {
 
         // this.scene.fog = new FogExp2(0xff00ff, 0.1);
     }
+
+    protected nextPhysicsTick: number;
 
     protected _preRender(currentTime: number, deltaTime: number) {
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
@@ -353,21 +408,94 @@ class RenderManager {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
+        if (this.nextPhysicsTick < currentTime) {
+            this.physicsWorld.step();
+
+            this.player.position.copy(this.player.getRigidbody().translation() as THREE.Vector3);
+
+            console.log(this.player.position);
+
+            this.nextPhysicsTick = currentTime + 1000 / 100;
+        }
+
         this.player.update(this, currentTime, deltaTime);
         this._updateObjects(currentTime, deltaTime);
+        this._updateSun();
 
         this.renderer.clear();
     }
 
+    protected _updateSun() {
+        const sector = this.getSector(this.camera.position);
+
+        if (sector) {
+            const sunMaterial = sector.sunTexture;
+            (this.sun.material as THREE.MeshBasicMaterial).map = sunMaterial.texture;
+        }
+
+        // debugger;
+
+        const radius = 3000;
+        const multiplier = (2 * Math.PI) / 24;
+        const px = (radius * Math.cos(Math.PI + multiplier * 9));
+        const py = (radius * Math.sin(Math.PI + multiplier * 9));
+
+        this.sun.position.copy(this.camera.position);
+        this.sun.position.z += py;
+        this.sun.position.y += px;
+
+        // this.sun.material.color.setRGB(255 / 255, 219 / 255, 151 / 255);
+        this.sun.scale.set(10000 * 0.5, 10000 * 0.5, 10000 * 0.5);
+        this.sun.lookAt(this.camera.position);
+
+        // this.renderer.setClearColor(new Color(66 / 255, 124 / 255, 176 / 255));
+
+        this.sun.updateMatrixWorld(true);
+    }
+
     protected _doRender(currentTime: number, deltaTime: number) {
+        this.renderer.render(this.sun, this.camera);
         this.renderer.render(this.scene, this.camera);
     }
 
     protected _postRender(currentTime: number, deltaTime: number) { }
 
     public startRendering() {
+        this.nextPhysicsTick = 1000 / 100;
         this.scene.updateMatrixWorld(true);
+
+        this.collectColliders();
+
         this.onHandleRender(0);
+    }
+
+    protected collidables: ICollidable[] = [];
+
+    protected collectColliders() {
+        this.scene.traverse((obj: ICollidable) => {
+            if (!obj.isCollidable) return;
+
+            // if (this.collidables.length > 1) return;
+
+            this.collidables.push(obj);
+
+            obj.createCollider(this.physicsWorld);
+        });
+
+        // debugger;
+
+        // this.collidables.push(this.player.createCollider(this.physicsWorld));
+    }
+
+    public addSector(sector: SectorObject) {
+        if (sector.index) {
+            if (!this.sectors.has(sector.index.x))
+                this.sectors.set(sector.index.x, new Map());
+
+            this.sectors.get(sector.index.x).set(sector.index.y, sector);
+        }
+
+        this.objectGroup.add(sector);
     }
 }
 

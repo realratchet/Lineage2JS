@@ -19,9 +19,10 @@ class FBox extends FConstructable {
         return this;
     }
 
-    getSize() { return !this.isValid ? new FVector() : this.max.sub(this.min); }
+    public getSize() { return !this.isValid ? new FVector() : this.max.sub(this.min); }
+    public getCenter() { return !this.isValid ? new FVector() : this.max.add(this.min).multiplyScalar(0.5); }
 
-    expandByPoint(point: FVector) {
+    public expandByPoint(point: FVector) {
         if (!this.isValid) {
             this.min.set(Infinity, Infinity, Infinity);
             this.max.set(-Infinity, -Infinity, -Infinity);

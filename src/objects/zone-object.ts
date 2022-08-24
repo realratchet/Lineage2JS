@@ -47,9 +47,11 @@ class SectorObject extends Object3D {
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
 
-    protected bspZones: BSPZoneData[];
-    protected bspNodes: BSPNodeData[];
-    protected bspLeaves: BSPLeafData[];
+    public bspZones: BSPZoneData[];
+    public bspNodes: BSPNodeData[];
+    public bspLeaves: BSPLeafData[];
+    public index: THREE.Vector2;
+    public sunTexture: MapData_T;
 
     constructor() {
         super();
@@ -64,10 +66,6 @@ class SectorObject extends Object3D {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
-
-        // this.bspNodes.forEach(x => { 
-
-        // })
     }
 
     public findPositionZone(position: THREE.Vector3) {
@@ -95,13 +93,15 @@ class SectorObject extends Object3D {
 
         const foundZone = node.zones[1];
 
-        console.log(foundZone, nodeIndex, `(${node.leaves.join(", ")})`, `[${leaf}]`);
+        // console.log(foundZone, nodeIndex, `(${node.leaves.join(", ")})`, `[${leaf}]`);
 
         // debugger;
 
 
         return foundZone;
     }
+
+    public setSun(sunMaterial: MapData_T) { this.sunTexture = sunMaterial; }
 }
 
 class BSPZoneData {
@@ -146,6 +146,7 @@ class BSPNodeData {
     public plane = new Vector4();
     public readonly leaves: [number, number] = [0, 0];
     public readonly zones: [number, number] = [0, 0];
+    public collision?: ICollisionInfo;
 
     protected constructor() { }
 
@@ -162,9 +163,26 @@ class BSPNodeData {
         node.zones[0] = info.zones[0];
         node.zones[1] = info.zones[1];
 
+        if ("collision" in info) {
+            const bounds = new Box3();
+
+            bounds.min.fromArray(info.collision.bounds.min);
+            bounds.max.fromArray(info.collision.bounds.max);
+
+            node.collision = {
+                flags: info.collision.flags,
+                bounds
+            };
+        }
+
         return node;
     }
 }
 
 export default ZoneObject;
 export { ZoneObject, SectorObject };
+
+interface ICollisionInfo {
+    bounds: THREE.Box3,
+    flags: number[]
+}

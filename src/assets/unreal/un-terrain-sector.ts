@@ -91,6 +91,9 @@ class UTerrainSector extends UObject {
         }
 
         const v = new FVector();
+        const { x: ox, y: oz, z: oy } = this.boundingBox.getCenter();
+
+        // debugger;
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -102,10 +105,9 @@ class UTerrainSector extends UObject {
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
 
-
-                positions[idxVertOffset + 0] = px;
-                positions[idxVertOffset + 1] = py;
-                positions[idxVertOffset + 2] = pz;
+                positions[idxVertOffset + 0] = px - ox;
+                positions[idxVertOffset + 1] = py - oy;
+                positions[idxVertOffset + 2] = pz - oz;
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
@@ -262,7 +264,8 @@ class UTerrainSector extends UObject {
             name: this.objectName,
             type: "TerrainSegment",
             geometry: this.uuid,
-            materials: this.uuid
+            materials: this.uuid,
+            position: [ox, oy, oz]
         };
     }
 
@@ -337,7 +340,6 @@ class UTerrainSector extends UObject {
 
         this.offsetX = pkg.read(uint32).value as number;
         this.offsetY = pkg.read(uint32).value as number;
-
 
         // console.log(this.offsetX, this.offsetY);
 

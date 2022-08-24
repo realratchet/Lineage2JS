@@ -383,3 +383,8 @@ type LoadSettings_T = {
     loadStaticModelList?: number[],
     helpersZoneBounds?: boolean
 };
+
+type ISunDecodeInfo_T = {
+    type: "Sun",
+    sprites: string[]
+}

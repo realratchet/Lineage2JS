@@ -51,6 +51,8 @@ class UPackage extends UEncodedFile {
     public imports: readonly UImport[];
     public nameTable: readonly UName[];
     public header: UHeader;
+    public exportGroups: GenericObjectContainer_T<{ index: number; export: UExport; }[]>;
+    public importGroups: GenericObjectContainer_T<{ import: UImport; index: number; }[]>;
 
     constructor(loader: AssetLoader, path: string) {
         super(path);
@@ -80,10 +82,6 @@ class UPackage extends UEncodedFile {
         readable.read(header.exportOffset);
         readable.read(header.importCount);
         readable.read(header.importOffset);
-
-        // // Sanity check
-        // console.assert(header.getArchiveFileVersion() === 123);
-        // console.assert(header.getLicenseeVersion() === 23);
 
         const dbgNameCount = header.nameCount.value;
         const dbgNameOffset = header.nameOffset.value.toString(16).toUpperCase();
@@ -135,6 +133,25 @@ class UPackage extends UEncodedFile {
         readable.imports = Object.freeze(imports);
         readable.nameTable = Object.freeze(nameTable);
         readable.header = header;
+
+        readable.importGroups = readable.imports.reduce((accum, imp, index) => {
+            const impType = imp.className;
+            const list = accum[impType] = accum[impType] || [];
+
+            list.push({ import: imp, index: -index - 1 });
+
+            return accum;
+        }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
+
+        readable.exportGroups = readable.exports.reduce((accum, exp, index) => {
+
+            const expType = readable.getPackageName(exp.idClass.value as number);
+            const list = accum[expType] = accum[expType] || [];
+
+            list.push({ index, export: exp });
+
+            return accum;
+        }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>)
 
         Object.assign(this, readable, { isReadable: false });
 

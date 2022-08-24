@@ -142,8 +142,31 @@ class UModel extends UPrimitive {
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+            const nodeInfo = node.getBSPDecodeInfo();
 
-            library.bspNodes.push(node.getBSPDecodeInfo());
+            library.bspNodes.push(nodeInfo);
+
+            if (node.iCollisionBound >= 0) {
+                const hulls = this.leafHulls.getTypedArray() as Int32Array;
+                const hullIndexList = hulls.slice(node.iCollisionBound);
+
+                let hullPlanesCount = 0;
+                while (hullIndexList[hullPlanesCount] >= 0)
+                    hullIndexList[hullPlanesCount++];
+
+                // reinterpret as floats
+                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
+                const hullFlags = hullIndexList.slice(0, hullPlanesCount);
+
+                nodeInfo.collision = {
+                    flags: [...hullFlags],
+                    bounds: {
+                        isValid: true,
+                        min: [initialVector[0], initialVector[2], initialVector[1]],
+                        max: [initialVector[3], initialVector[5], initialVector[4]]
+                    }
+                };
+            }
 
             await Promise.all(surf.promisesLoading);
 
@@ -157,45 +180,32 @@ class UModel extends UPrimitive {
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
             if (node.iCollisionBound >= 0) {
-                const hulls = this.leafHulls.getTypedArray() as Int32Array;
-                const hullIndexList = hulls.slice(node.iCollisionBound);
-
-                let hullPlanesCount = 0;
-                while (hullIndexList[hullPlanesCount] >= 0)
-                    hullIndexList[hullPlanesCount++];
-
-                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
-                const bbox = new FBox();
-
-                bbox.isValid = true;
-                bbox.min.set(initialVector[0], initialVector[1], initialVector[2]);
-                bbox.max.set(initialVector[3], initialVector[4], initialVector[5]);
-
-                const hullFlags = hullIndexList.slice(0, hullPlanesCount);
-
-                debugger;
-
-                // library.bspColliders.push(bbox.getDecodeInfo());
-
-                // let tmax;
-
-                // for (let i = 0; i < hullPlanesCount; i++) {
-                //     let hullIndex = hullIndexList[i];
-
-                //     const hullFlip = Boolean(hullIndex & 0x40000000);
-
-                //     hullIndex = hullIndex & ~0x40000000;
-                //     let hullnode = this.bspNodes[hullIndex];
-
-                //     debugger;
-                // }
-
-                // debugger;
-
-                // while (hullIndexList[hullPlanesCount] >= 0)
-                //     hullIndexList[hullPlanesCount++];
-                // vec3* bboxStart = (vec3*)(&hullIndexList[hullPlanesCount + 1]);
+                library.bspColliders.push(nodeInfo.collision.bounds);
             }
+
+            // if (node.iCollisionBound >= 0 && node.iLeaf[0] === -1 && node.iLeaf[1] === -1 && nodeIndex === 1211) {
+            //     const hulls = this.leafHulls.getTypedArray() as Int32Array;
+            //     const hullIndexList = hulls.slice(node.iCollisionBound);
+
+            //     let hullPlanesCount = 0;
+            //     while (hullIndexList[hullPlanesCount] >= 0)
+            //         hullIndexList[hullPlanesCount++];
+
+            //     // reinterpret as floats
+            //     const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
+            //     const hullFlags = hullIndexList.slice(0, hullPlanesCount);
+
+            //     nodeInfo.collision = {
+            //         flags: [...hullFlags],
+            //         bounds: {
+            //             isValid: true,
+            //             min: [initialVector[0], initialVector[2], initialVector[1]],
+            //             max: [initialVector[3], initialVector[5], initialVector[4]]
+            //         }
+            //     };
+            // }
+
+            // continue;
 
             const zone = surf.actor.getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
@@ -299,6 +309,7 @@ class UModel extends UPrimitive {
                                 groupOffset = groupOffset + fcount;
                             }
 
+ 
                             for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
                                 const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
                                 const position: FVector = this.points.getElem(vert.pVertex);
@@ -351,6 +362,7 @@ class UModel extends UPrimitive {
                                 dstVertices++;
                             }
                         }
+
 
                         vertexOffset = vertexOffset + numVertices;
 

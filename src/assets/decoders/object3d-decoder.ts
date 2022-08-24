@@ -1,6 +1,8 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3 } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2 } from "three";
 import decodeMaterial from "./material-decoder";
-import ZoneObject, { SectorObject } from "../../zone-object";
+import ZoneObject, { SectorObject } from "../../objects/zone-object";
+import decodeTexture from "./texture-decoder";
+import Terrain from "@client/objects/terrain";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -93,7 +95,6 @@ function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THRE
 }
 
 function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
-    const obj = new Object3D();
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
@@ -110,10 +111,17 @@ function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeI
 
     applySimpleProperties(library, mesh, info);
 
+    return mesh;
+}
+
+function decodeStaticMeshWrapped(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Object3D {
+    const obj = new Object3D();
+    const mesh = decodeStaticMesh(library, info);
+
     // obj.add(new Mesh(mesh.geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
     obj.add(mesh);
 
-    return obj as any;
+    return obj;
 }
 
 function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
@@ -178,9 +186,18 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
 function decodeSector(library: DecodeLibrary) {
     const sector = new SectorObject();
 
+    sector.name = library.name;
+
+    if (library.sector) sector.index = new Vector2().fromArray(library.sector);
+
     library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
+
+    const spriteUuid = library.sun.sprites[0];
+    const spriteInfo = library.materials[spriteUuid] as ITextureDecodeInfo;
+
+    sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
 
     library.bspColliders.forEach(collider => {
         const box = new Box3();
@@ -193,7 +210,7 @@ function decodeSector(library: DecodeLibrary) {
         const helper = new Box3Helper(box);
 
         sector.helpers.add(helper);
-    })
+    });
 
     // sector.bspNodes.forEach(node => {
     //     if (node.zones[0] === 1 || node.zones[1] === 1) {
@@ -243,15 +260,12 @@ function decodeSector(library: DecodeLibrary) {
 }
 
 function decodePackage(library: DecodeLibrary) {
-    const map = new Object3D();
-
-    map.name = library.name;
-    map.add(decodeSector(library));
+    const sector = decodeSector(library);
 
     if (library.helpersZoneBounds) {
         const boundsGroup = new Object3D();
-        map.add(boundsGroup);
-        map.name = "Bounds Helpers";
+        sector.helpers.add(boundsGroup);
+        sector.helpers.name = "Bounds Helpers";
         Object.values(library.bspZones).forEach(bspZone => {
             const zone = bspZone.zoneInfo;
             const { min, max } = zone.bounds;
@@ -268,7 +282,39 @@ function decodePackage(library: DecodeLibrary) {
         });
     }
 
-    return map;
+    return sector;
+}
+
+function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
+    const terrain = new Terrain();
+    const geometry = library.geometries[info.geometry];
+
+    const positions = geometry.attributes.positions;
+    const vcount = 17 * 17;
+    const heightfield = new Float32Array(vcount);
+    const { min, max } = geometry.bounds.box;
+
+    const bounds = new Box3();
+
+    bounds.min.fromArray(min);
+    bounds.max.fromArray(max);
+
+    for (let i = 0; i < vcount; i++)
+        heightfield[i] = positions[i * 3 + 1];
+
+    const visibleMesh = decodeStaticMesh(library, info);
+
+    terrain.position.copy(visibleMesh.position);
+    visibleMesh.position.set(0, 0, 0);
+
+    terrain.setTerrainField(16, 16, heightfield, bounds);
+    terrain.add(visibleMesh);
+
+    // debugger;
+
+    // debugger;
+
+    return terrain;
 }
 
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
@@ -279,9 +325,9 @@ function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecod
         case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
         case "StaticMeshInstance": return decodeStaticMeshInstance(library, info as IStaticMeshInstanceDecodeInfo);
         case "Light": return decodeLight(library, info as ILightDecodeInfo);
+        case "TerrainSegment": return decodeTerrainSegment(library, info as IStaticMeshObjectDecodeInfo);
         case "Model":
-        case "TerrainSegment":
-        case "StaticMesh": return decodeStaticMesh(library, info as IStaticMeshObjectDecodeInfo);
+        case "StaticMesh": return decodeStaticMeshWrapped(library, info as IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }

@@ -163,7 +163,10 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 }
             },
             devtool,
-            context: __dirname
+            context: __dirname,
+            experiments: {
+                asyncWebAssembly: true
+            }
         };
     }
 }

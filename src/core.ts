@@ -34,9 +34,9 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
-    
+
     (global as any).renderManager = renderManager;
-    
+
     const assetList = await (await fetch("asset-list.json")).json();
     const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
@@ -77,36 +77,36 @@ async function startCore() {
     } as LoadSettings_T;
 
     // working (or mostly working)
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_22", loadSettings));  // ruins of despair
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "19_23", loadSettings));  // ants nest
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "22_21", loadSettings));  // death pass
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_22", loadSettings));  // giran castle
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_22", loadSettings));  // ruins of despair
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_23", loadSettings));  // ants nest
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_21", loadSettings));  // death pass
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_22", loadSettings));  // giran castle
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_26", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_26", loadSettings));  // TI
 
     // crashing
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
 
     console.info("System has loaded!");
 

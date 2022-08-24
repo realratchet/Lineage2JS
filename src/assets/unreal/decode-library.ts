@@ -4,7 +4,7 @@ class DecodeLibrary {
     public name: string = "Untitled";
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
-    public sector: string = null;                                                           // sector zone id
+    public sector: [number, number];
     public helpersZoneBounds = false;
     public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
     public readonly bspColliders: IBoxDecodeInfo[] = [];
@@ -20,6 +20,7 @@ class DecodeLibrary {
     public failed: any[] = [];
     public failedLoad: any[] = [];
     public failedDecode: any[] = [];
+    public sun: ISunDecodeInfo_T;
 
     public static async fromPackage(pkg: UPackage, {
         loadBaseModel = true,
@@ -28,37 +29,29 @@ class DecodeLibrary {
         loadTerrain = true,
         helpersZoneBounds = false
     }: LoadSettings_T) {
-        const impGroups = pkg.imports.reduce((accum, imp, index) => {
-            const impType = imp.className;
-            const list = accum[impType] = accum[impType] || [];
 
-            list.push({ import: imp, index: -index - 1 });
-
-            return accum;
-        }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
+        const impGroups = pkg.importGroups;
+        const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
-        const expGroups = pkg.exports.reduce((accum, exp, index) => {
-
-            const expType = pkg.getPackageName(exp.idClass.value as number);
-            const list = accum[expType] = accum[expType] || [];
-
-            list.push({ index, export: exp });
-
-            return accum;
-        }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>);
-
-        // debugger;
-
         const uLevel = await pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1);
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
 
         const uLevelInfo = await pkg.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1);
-        const uZonesInfo = await Promise.all((expGroups["ZoneInfo"] || []).map(exp => pkg.fetchObject<UZoneInfo>(exp.index + 1)));
 
-        await Promise.all((uZonesInfo as IInfo[]).concat(uLevelInfo).map(z => z.getDecodeInfo(decodeLibrary)));
+        const sun = await pkg.fetchObject<UNSun>(expGroups["NSun"][0].index + 1);
+
+        decodeLibrary.sun = await sun.getDecodeInfo(decodeLibrary);
+
+        const sectorIndex = uLevel.url.map.split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
+
+        const isNotSector = sectorIndex.some(x => typeof (x) !== "number" || !isFinite(x));
+
+        if (isNotSector) debugger;
+
+        decodeLibrary.sector = sectorIndex;
 
         if (loadBaseModel) {
             const uModel = await pkg.fetchObject<UModel>(uLevel.baseModelId); // base model
