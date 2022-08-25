@@ -140,9 +140,9 @@ class RenderManager {
 
         this.scene.add(this.player);
         this.player.name = "Player";
-        this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);
-        // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);
-        // this.player.position.set(0, 26, 0);
+        this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
+        // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
+        // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
         addResizeListeners(this);
     }
@@ -246,7 +246,7 @@ class RenderManager {
             if (sector)
                 this.player.goTo(sector.point);
 
-            console.log(intersection.object);
+            console.log(intersection);
         } catch (e) { }
     }
 
@@ -408,12 +408,12 @@ class RenderManager {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
-        if (this.nextPhysicsTick < currentTime) {
+        if (this.nextPhysicsTick <= currentTime) {
             this.physicsWorld.step();
 
             this.player.position.copy(this.player.getRigidbody().translation() as THREE.Vector3);
 
-            console.log(this.player.position);
+            // console.log(this.player.position);
 
             this.nextPhysicsTick = currentTime + 1000 / 100;
         }
@@ -461,7 +461,7 @@ class RenderManager {
     protected _postRender(currentTime: number, deltaTime: number) { }
 
     public startRendering() {
-        this.nextPhysicsTick = 1000 / 100;
+        this.nextPhysicsTick = 0;
         this.scene.updateMatrixWorld(true);
 
         this.collectColliders();
@@ -469,7 +469,8 @@ class RenderManager {
         this.onHandleRender(0);
     }
 
-    protected collidables: ICollidable[] = [];
+    protected readonly collidables: ICollidable[] = [];
+    public readonly colliderMap = new WeakMap<RAPIER.Collider, ICollidable>()
 
     protected collectColliders() {
         this.scene.traverse((obj: ICollidable) => {
@@ -478,8 +479,7 @@ class RenderManager {
             // if (this.collidables.length > 1) return;
 
             this.collidables.push(obj);
-
-            obj.createCollider(this.physicsWorld);
+            this.colliderMap.set(obj.createCollider(this.physicsWorld), obj);
         });
 
         // debugger;

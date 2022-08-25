@@ -36,12 +36,17 @@ class Player extends BaseActor implements ICollidable {
         const geometry = new BoxBufferGeometry(this.collisionSize.x, this.collisionSize.y, this.collisionSize.z);
         const material = new MeshBasicMaterial({ color: 0xfcfcfc });
 
+        geometry.translate(0, this.collisionSize.y * 0.5, 0);
+
         const mesh = new Mesh(geometry, material);
 
         this.gravityHelper = new Line(this.createGravityGeometry(), new LineBasicMaterial({ color: 0xff00ff, depthWrite: false, transparent: true }));
 
-        this.add(mesh, this.gravityHelper);
-        this.add(new AxesHelper(15));
+        const axes = new AxesHelper(20);
+
+        axes.position.set(0, this.collisionSize.y, 0);
+
+        this.add(mesh, this.gravityHelper, axes);
     }
 
     public readonly isCollidable = true;
@@ -52,17 +57,22 @@ class Player extends BaseActor implements ICollidable {
     protected collider: RAPIER.Collider;
     protected rigidbody: RAPIER.RigidBody;
 
-    createCollider(physicsWorld: RAPIER.World): this {
+    public createCollider(physicsWorld: RAPIER.World) {
         this.colliderDesc = RAPIER.ColliderDesc.cuboid(this.collisionSize.x * 0.5, this.collisionSize.y * 0.5, this.collisionSize.z * 0.5);
-        this.rigidbodyDesc = RAPIER.RigidBodyDesc.dynamic();
+        this.rigidbodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased();
+        this.rigidbodyDesc
+            .setGravityScale(0)
+            .lockTranslations()
+            .enabledTranslations(false, true, false)
+            .lockRotations()
+            .setTranslation(this.position.x, this.position.y, this.position.z);
+
+        this.rigidbodyDesc.mass = 70;
 
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
-        this.rigidbody.lockRotations(true, false);
-        this.rigidbody.setTranslation(this.position, true);
-
-        return this;
+        return this.collider;
     }
 
     getCollider(): RAPIER.Collider { return this.collider; }
@@ -86,8 +96,42 @@ class Player extends BaseActor implements ICollidable {
         this.goToPosition.position.copy(position);
     }
 
-    public tryToGo(deltaTime: number) {
-        if (!this.goToPosition.needsToGo) return;
+    public getRayIntersection(position: THREE.Vector3, direction: THREE.Vector3, maxToi: number) {
+        const rm = this.getRenderManager();
+        const ray = new RAPIER.Ray(position, direction);
+        const collection: IntersectionResult[] = [];
+
+        rm.physicsWorld.intersectionsWithRay(ray, maxToi, false, i => {
+            const object = rm.colliderMap.get(i.collider);
+
+            if (object !== this) {
+                const position = new Vector3()
+                    .copy(ray.dir as THREE.Vector3)
+                    .multiplyScalar(i.toi)
+                    .add(ray.origin as THREE.Vector3);
+
+                collection.push({
+                    ...i,
+                    position,
+                    object
+                });
+            }
+
+            return true;
+        });
+
+        return collection;
+    }
+
+    public getGravityIntersections() { return this.getRayIntersection(this.rigidbody.translation() as THREE.Vector3, new Vector3(0, -1, 0), Infinity); }
+
+    public tryToGo(groundObjects: IntersectionResult[], deltaTime: number) {
+        if (!this.goToPosition.needsToGo) {
+            const linVel = new Vector3().copy(this.velocity).add(this.rigidbody.translation() as THREE.Vector3);
+            this.rigidbody.setNextKinematicTranslation(linVel);
+            // this.rigidbody.setLinvel(this.velocity, true);
+            return;
+        }
 
         this.addPointHelper(this.goToPosition.position);
 
@@ -97,59 +141,70 @@ class Player extends BaseActor implements ICollidable {
 
         this.lookAt(lookPosition);
 
-        const feetLevel = this.collisionSize.y * 0.5;
-        const feetPosition = new Vector3().copy(this.position);
-        feetPosition.y -= feetLevel;
+        const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize();
 
-        const desiredDistance = feetPosition.distanceTo(this.goToPosition.position);
+        // if (groundObjects.length > 0) {
+        const dirVelocity = new Vector3().copy(lookDirection).multiplyScalar(125 * 4).multiplyScalar(deltaTime);
+        const linVel = new Vector3().copy(this.velocity).add(dirVelocity).add(this.rigidbody.translation() as THREE.Vector3);
 
-        const playerSpeed = 125 * 4;
-        const stepSize = Math.min(desiredDistance, playerSpeed * (deltaTime / 1000));
+        this.rigidbody.setNextKinematicTranslation(linVel);
+        // } else {
+        //     this.rigidbody.setLinvel(this.velocity, true);
+        // }
 
-        const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize()
-        const newPosition = new Vector3().copy(lookDirection).multiplyScalar(stepSize).add(this.position);
+        // const feetLevel = this.collisionSize.y * 0.5;
+        // const feetPosition = new Vector3().copy(this.position);
+        // feetPosition.y -= feetLevel;
 
-        this.raycaster.ray.origin.copy(newPosition);
-        this.raycaster.ray.origin.y += 1e10;
+        // const desiredDistance = feetPosition.distanceTo(this.goToPosition.position);
 
-        this.raycaster.ray.direction.set(0, -1, 0).applyQuaternion(new Quaternion().setFromRotationMatrix(this.matrixWorld)).normalize();
-        this.raycaster.far = Infinity;
+        // const playerSpeed = 125 * 4;
+        // const stepSize = Math.min(desiredDistance, playerSpeed * (deltaTime / 1000));
 
-        const terrains = this.getTerrains();
-        const intersection = this.raycaster.intersectObjects(terrains)[0] || null;
+        // const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize()
+        // const newPosition = new Vector3().copy(lookDirection).multiplyScalar(stepSize).add(this.position);
 
+        // this.raycaster.ray.origin.copy(newPosition);
+        // this.raycaster.ray.origin.y += 1e10;
 
-        if (intersection) {
-            // const normalIntersection = new Vector3().copy(intersection.point).sub(feetPosition).normalize();
+        // this.raycaster.ray.direction.set(0, -1, 0).applyQuaternion(new Quaternion().setFromRotationMatrix(this.matrixWorld)).normalize();
+        // this.raycaster.far = Infinity;
 
-            // console.log(intersection.point.y - feetPosition.y);
-            if (intersection.point.y - feetPosition.y > 15) {
-                // const slope = normalIntersection.angleTo(lookDirection) * RAD2DEG;
-
-                // if (slope > 15) {
-                this.goToPosition.needsToGo = false;
-                return;
-                // }
-
-                // console.log(slope * RAD2DEG);
-            }
+        // const terrains = this.getTerrains();
+        // const intersection = this.raycaster.intersectObjects(terrains)[0] || null;
 
 
-            this.position.copy(intersection.point);
+        // if (intersection) {
+        //     // const normalIntersection = new Vector3().copy(intersection.point).sub(feetPosition).normalize();
 
-            this.lastGoodGravityIntersection = intersection;
-            this.addPointHelper(intersection.point, 0x0000ff);
+        //     // console.log(intersection.point.y - feetPosition.y);
+        //     if (intersection.point.y - feetPosition.y > 15) {
+        //         // const slope = normalIntersection.angleTo(lookDirection) * RAD2DEG;
 
-            if (this.goToPosition.position.distanceToSquared(this.position) < 1)
-                this.goToPosition.needsToGo = false;
+        //         // if (slope > 15) {
+        //         this.goToPosition.needsToGo = false;
+        //         return;
+        //         // }
 
-            this.position.y += feetLevel;
+        //         // console.log(slope * RAD2DEG);
+        //     }
 
 
-            // const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), intersection.face.normal);
+        //     this.position.copy(intersection.point);
 
-            // this.quaternion.multiply(quaternion);
-        }
+        //     this.lastGoodGravityIntersection = intersection;
+        //     this.addPointHelper(intersection.point, 0x0000ff);
+
+        //     if (this.goToPosition.position.distanceToSquared(this.position) < 1)
+        //         this.goToPosition.needsToGo = false;
+
+        //     this.position.y += feetLevel;
+
+
+        //     // const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), intersection.face.normal);
+
+        //     // this.quaternion.multiply(quaternion);
+        // }
     }
 
     public addPointHelper(point: Vector3, color: number = 0xff0000, time: number = 100) {
@@ -190,53 +245,62 @@ class Player extends BaseActor implements ICollidable {
         return terrains;
     }
 
-    public getGravityIntersection() {
-        this.raycaster.ray.origin.set(0, -this.collisionSize.y * 0.5, 0).applyMatrix4(this.matrixWorld);
-        this.raycaster.ray.direction.set(0, -1, 0).applyQuaternion(new Quaternion().setFromRotationMatrix(this.matrixWorld)).normalize();
-        this.raycaster.far = Infinity;
+    // public getGravityIntersection() {
+    //     this.raycaster.ray.origin.set(0, -this.collisionSize.y * 0.5, 0).applyMatrix4(this.matrixWorld);
+    //     this.raycaster.ray.direction.set(0, -1, 0).applyQuaternion(new Quaternion().setFromRotationMatrix(this.matrixWorld)).normalize();
+    //     this.raycaster.far = Infinity;
 
-        const terrains = this.getTerrains();
-        const intersection = this.raycaster.intersectObjects(terrains);
+    //     const terrains = this.getTerrains();
+    //     const intersection = this.raycaster.intersectObjects(terrains);
 
-        return intersection[0] || null;
-    }
+    //     return intersection[0] || null;
+    // }
 
-    protected applyGravity(deltaTime: number) {
-        const gravityIntersection = this.getGravityIntersection();
-        const feetLevel = this.collisionSize.y * 0.5;
-
-        this.updateMatrixWorld(true);
-
-        if (!gravityIntersection) {
-            if (this.lastGoodGravityIntersection) {
-                this.position.y = this.lastGoodGravityIntersection.point.y + feetLevel;
-                this.velocity.y = 0;
-            }
-        } else {
-            const distanceSq = this.position.distanceToSquared(gravityIntersection.point);
-            const feetLevelSq = feetLevel * feetLevel;
-
-            if (distanceSq > feetLevelSq) {
-                this.lastGoodGravityIntersection = gravityIntersection;
-
-                this.velocity.y -= 9.8 * (deltaTime / 1000);
-
-                const vDelta = new Vector3().copy(this.velocity).multiplyScalar(deltaTime / 1000);
-
-                this.position.add(vDelta);
-
-                this.position.y = Math.max(gravityIntersection.point.y, this.position.y)
-
-                const distanceSq = this.position.distanceToSquared(gravityIntersection.point);
-
-                if (distanceSq <= feetLevelSq)
-                    this.velocity.y = 0;
-
-                // this.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), gravityIntersection.face.normal);
-            } else {
-                this.velocity.y = 0;
-            }
+    protected applyGravity(groundObjects: IntersectionResult[], deltaTime: number) {
+        if (groundObjects.length > 0) {
+            this.velocity.set(0, 0, 0);
+            return;
         }
+
+        const rm = this.getRenderManager();
+
+        this.velocity.add(rm.physicsWorld.gravity as THREE.Vector3).multiplyScalar(deltaTime);
+
+        // const gravityIntersection = this.getGravityIntersection();
+        // const feetLevel = this.collisionSize.y * 0.5;
+
+        // this.updateMatrixWorld(true);
+
+        // if (!gravityIntersection) {
+        //     if (this.lastGoodGravityIntersection) {
+        //         this.position.y = this.lastGoodGravityIntersection.point.y + feetLevel;
+        //         this.velocity.y = 0;
+        //     }
+        // } else {
+        //     const distanceSq = this.position.distanceToSquared(gravityIntersection.point);
+        //     const feetLevelSq = feetLevel * feetLevel;
+
+        //     if (distanceSq > feetLevelSq) {
+        //         this.lastGoodGravityIntersection = gravityIntersection;
+
+        //         this.velocity.y -= 9.8 * (deltaTime / 1000);
+
+        //         const vDelta = new Vector3().copy(this.velocity).multiplyScalar(deltaTime / 1000);
+
+        //         this.position.add(vDelta);
+
+        //         this.position.y = Math.max(gravityIntersection.point.y, this.position.y)
+
+        //         const distanceSq = this.position.distanceToSquared(gravityIntersection.point);
+
+        //         if (distanceSq <= feetLevelSq)
+        //             this.velocity.y = 0;
+
+        //         // this.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), gravityIntersection.face.normal);
+        //     } else {
+        //         this.velocity.y = 0;
+        //     }
+        // }
     }
 
     protected nextTrace = 0;
@@ -837,13 +901,107 @@ class Player extends BaseActor implements ICollidable {
     //     return 0;
     // }
 
+    protected lastGoodIntersection: IntersectionResult = null;
+
     public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {
         super.update(renderManager, currentTime, deltaTime);
 
         // if (!global.physicsEnabled) return;
 
-        // this.tryToGo(deltaTime);
-        // this.applyGravity(deltaTime);
+        const dt = deltaTime / 1000;
+        const groundObjects = this.getGravityIntersections();
+
+        const rm = this.getRenderManager();
+        const desiredPosition = new Vector3().copy(this.position);
+        const gravityStep = new Vector3().copy(rm.physicsWorld.gravity as THREE.Vector3).multiplyScalar(dt);
+
+        const gravityIntersection = groundObjects.length === 0 ? this.lastGoodIntersection : groundObjects[0];
+
+        this.lastGoodIntersection = gravityIntersection;
+
+        const isOnFloor = gravityIntersection && gravityIntersection.toi <= this.collisionSize.y * 0.5;
+        const friction = 0.9;
+        const playerSpeed = 125 * 4;
+
+        // if (this.goToPosition.position.distanceToSquared(desiredPosition) < 2) {
+        //     desiredPosition.copy(this.goToPosition.position);
+        //     this.goToPosition.needsToGo = false;
+        // }
+
+        (() => {
+            if (isOnFloor) {
+                this.velocity.set(0, 0, 0);
+                return;
+            }
+
+            console.log(gravityStep.toArray().join(", "));
+            this.velocity.add(gravityStep);
+        })();
+
+
+        const runVelocity = (() => {
+            if (!this.goToPosition.needsToGo) return new Vector3();
+
+            this.addPointHelper(this.goToPosition.position);
+
+            const lookPosition = new Vector3()
+                .copy(this.goToPosition.position)
+                .setY(this.position.y);
+
+            this.lookAt(lookPosition);
+
+            const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize();
+            const distanceVector = new Vector3().copy(lookDirection).multiplyScalar(playerSpeed * dt);
+
+            const highUpVector = new Vector3().copy(distanceVector).setY(1e5).add(this.position);
+            const collisions = this.getRayIntersection(highUpVector, new Vector3(0, -1, 0), Infinity);
+
+            if (collisions.length === 0) return new Vector3();
+
+            const intersection = collisions[0];
+
+            this.addPointHelper(intersection.position, 0x0000ff);
+
+            const runVelocity = new Vector3().subVectors(intersection.position, this.position);
+
+            const dtOffset = new Vector3().subVectors(this.goToPosition.position, intersection.position);
+
+            const lenToDestinionSq = dtOffset.lengthSq();
+            const lenVelocitySq = runVelocity.lengthSq();
+
+            if (lenToDestinionSq < lenVelocitySq) {
+                // runVelocity.copy(dtOffset);
+                runVelocity.set(0, 0, 0);
+                this.goToPosition.needsToGo = false;
+                desiredPosition.copy(this.goToPosition.position);
+            }
+
+            return runVelocity;
+        })();
+
+        if (!isOnFloor) //dampen sideways movement when falling
+            this.velocity.multiplyScalar(friction)
+
+        desiredPosition.add(this.velocity).add(runVelocity);
+
+
+        desiredPosition.y = Math.max(desiredPosition.y, gravityIntersection.position.y);
+
+
+
+        this.rigidbody.setTranslation(desiredPosition as THREE.Vector3, true);
+
+        // this.rigidbody.setTranslation(gravityIntersection.position as THREE.Vector3, true);
+
+        // this.rigidbody.setNextKinematicTranslation(desiredPosition);
+        // this.rigidbody.nextTranslation();
+
+        // this.rigidbody.setLinvel(this.velocity, true);
+
+        // this.applyGravity(groundObjects, deltaTime);
+        // this.tryToGo(groundObjects, deltaTime);
+
+
 
 
         // if (this.nextTrace < currentTime) {
@@ -902,3 +1060,8 @@ function min(lhs: THREE.Vector3, rhs: THREE.Vector3) {
         lhs.z < rhs.z ? lhs.z : rhs.z
     );
 }
+
+type IntersectionResult = {
+    position: THREE.Vector3,
+    object: ICollidable
+} & RAPIER.RayColliderIntersection;

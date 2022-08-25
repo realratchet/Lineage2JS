@@ -91,9 +91,8 @@ class UTerrainSector extends UObject {
         }
 
         const v = new FVector();
-        const { x: ox, y: oz, z: oy } = this.boundingBox.getCenter();
-
-        // debugger;
+        const center = this.boundingBox.getCenter();
+        const { x: ox, y: oz, z: oy } = center;
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -236,13 +235,9 @@ class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: trueBoundingBox.min.toArray() as Vector3Arr,
-                    max: trueBoundingBox.max.toArray() as Vector3Arr
+                    min: this.boundingBox.min.sub(center).getVectorElements() as Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getVectorElements() as Vector3Arr
                 } : null
-                // box: this.boundingBox.isValid ? {
-                //     min: this.boundingBox.min.getVectorElements(),
-                //     max: this.boundingBox.min.getVectorElements()
-                // } : null
             }
         };
 

@@ -290,8 +290,7 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     const geometry = library.geometries[info.geometry];
 
     const positions = geometry.attributes.positions;
-    const vcount = 17 * 17;
-    const heightfield = new Float32Array(vcount);
+    const heightfield = new Float32Array(17 * 17);
     const { min, max } = geometry.bounds.box;
 
     const bounds = new Box3();
@@ -299,8 +298,13 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     bounds.min.fromArray(min);
     bounds.max.fromArray(max);
 
-    for (let i = 0; i < vcount; i++)
-        heightfield[i] = positions[i * 3 + 1];
+    for (let x = 0; x < 17; x++) {
+        for (let y = 0; y < 17; y++) {
+            const value = positions[(y * 17 + x) * 3 + 1];
+
+            heightfield[x * 17 + y] = value;
+        }
+    }
 
     const visibleMesh = decodeStaticMesh(library, info);
 
@@ -309,10 +313,6 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
 
     terrain.setTerrainField(16, 16, heightfield, bounds);
     terrain.add(visibleMesh);
-
-    // debugger;
-
-    // debugger;
 
     return terrain;
 }

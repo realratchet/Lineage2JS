@@ -19,25 +19,20 @@ class Terrain extends Object3D implements ICollidable {
         this.bounds = bounds;
         this.boundsSize = bounds.getSize(new Vector3());
         this.boundsPosition = bounds.getCenter(new Vector3());
-        this.colliderDesc = ColliderDesc.heightfield(vx, vz, heightfield, { x: this.boundsSize.x, y: 0, z: this.boundsSize.z });
+        this.colliderDesc = ColliderDesc.heightfield(vx, vz, heightfield, { x: this.boundsSize.x, y: 1, z: this.boundsSize.z });
         this.rigidbodyDesc = RAPIER.RigidBodyDesc.fixed();
-
-        // debugger;
     }
 
     public getCollider() { return this.collider; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
 
-    public createCollider(physicsWorld: RAPIER.World): this {
+    public createCollider(physicsWorld: RAPIER.World) {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
-        this.rigidbody.setTranslation(this.position, true);
-        // this.collider.setTranslation(this.position);
+        this.rigidbody.setTranslation(this.position, false);
 
-        // debugger;
-
-        return this;
+        return this.collider;
 
     }
 }
