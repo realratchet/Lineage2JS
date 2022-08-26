@@ -13,7 +13,8 @@ import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import StringSet from "@client/utils/string-set";
 
-const triggerDebuggerOnUnsupported = false;
+const triggerDebuggerOnUnsupported = true;
+
 
 class UStaticMesh extends UPrimitive {
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
@@ -33,8 +34,8 @@ class UStaticMesh extends UPrimitive {
     protected isUsingBillboard: boolean;
     protected frequency: number;
 
-    protected collisionFaces: FArrayLazy<FStaticMeshCollisionTriangle> = new FArrayLazy(FStaticMeshCollisionTriangle);
-    protected collisionNodes: FArrayLazy<FStaticMeshCollisionNode> = new FArrayLazy(FStaticMeshCollisionNode);
+    protected collisionFaces: FStaticMeshCollisionTriangle[];
+    protected collisionNodes: FStaticMeshCollisionNode[];
     protected staticMeshTris: FArrayLazy<FStaticMeshTriangle> = new FArrayLazy(FStaticMeshTriangle);
 
     protected unkIndex0: number;
@@ -91,14 +92,16 @@ class UStaticMesh extends UPrimitive {
         this.edgesStream.load(pkg);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
-        
+
         // debugger;
 
         if (verLicense < 0x11) {
-            console.warn("Not supported yet");
-            this.skipRemaining = true;
-            if (triggerDebuggerOnUnsupported) debugger;
-            return;
+            if (this.unkIndex0 > 0) {
+                debugger;
+            }
+
+            this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
+            this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg).map(x => x);
         } else {
             if (verArchive < 0x3E) {
                 console.warn("Not supported yet");
@@ -106,12 +109,15 @@ class UStaticMesh extends UPrimitive {
                 if (triggerDebuggerOnUnsupported) debugger;
                 return;
             } else {
-                this.collisionFaces.load(pkg);
-                this.collisionNodes.load(pkg);
+                this.collisionFaces = new FArrayLazy(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
+                this.collisionNodes = new FArrayLazy(FStaticMeshCollisionNode).load(pkg).map(x => x);
 
                 // debugger;
             }
         }
+
+        if (this.unkIndex0 > 0)
+            debugger;
 
         this.readHead = pkg.tell();
 

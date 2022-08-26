@@ -934,7 +934,7 @@ class Player extends BaseActor implements ICollidable {
                 return;
             }
 
-            console.log(gravityStep.toArray().join(", "));
+            // console.log(gravityStep.toArray().join(", "));
             this.velocity.add(gravityStep);
         })();
 
