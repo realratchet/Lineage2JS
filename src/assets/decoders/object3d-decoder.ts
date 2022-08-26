@@ -167,6 +167,21 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
         });
     }
 
+    if (info.mesh.collision) {
+        const mat = new MeshBasicMaterial({ wireframe: true, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: false });
+        const geo = new BufferGeometry();
+        const positions = new Float32BufferAttribute(info.mesh.collision, 3);
+
+        geo.setAttribute("position", positions);
+
+        const wire = new Mesh(geo, mat);
+
+
+        mesh.add(wire);
+    } else {
+        mesh.visible = false;
+    }
+
     return mesh;
 }
 
