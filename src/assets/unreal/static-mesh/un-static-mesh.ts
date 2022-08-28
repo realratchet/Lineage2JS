@@ -226,6 +226,7 @@ class UStaticMesh extends UPrimitive {
         // }
 
         if (this.uuid in library.geometries) return {
+            uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,

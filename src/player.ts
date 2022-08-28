@@ -1,4 +1,4 @@
-import { AxesHelper, Box3, Box3Helper, BoxBufferGeometry, BoxHelper, BufferGeometry, Color, Float32BufferAttribute, Line, LineBasicMaterial, MathUtils, Matrix4, Mesh, MeshBasicMaterial, Plane, PlaneHelper, Quaternion, Raycaster, SphereBufferGeometry, Vector3, Vector4 } from "three";
+import { AxesHelper, Box3, Box3Helper, BoxBufferGeometry, BoxHelper, BufferGeometry, Color, EdgesGeometry, Float32BufferAttribute, Line, LineBasicMaterial, LineSegments, MathUtils, Matrix4, Mesh, MeshBasicMaterial, Plane, PlaneHelper, Quaternion, Raycaster, SphereBufferGeometry, Vector3, Vector4 } from "three";
 import { RAD2DEG } from "three/src/math/MathUtils";
 import BaseActor from "./base-actor";
 import RenderManager from "./rendering/render-manager";
@@ -47,6 +47,12 @@ class Player extends BaseActor implements ICollidable {
         axes.position.set(0, this.collisionSize.y, 0);
 
         this.add(mesh, this.gravityHelper, axes);
+
+        const edgeGeo = new EdgesGeometry(geometry);
+        const edgeMat = new LineBasicMaterial({ color: 0xffff00, transparent: true, depthWrite: false, depthTest: false });
+        const edges = new LineSegments(edgeGeo, edgeMat);
+
+        this.add(edges);
     }
 
     public readonly isCollidable = true;
@@ -66,6 +72,14 @@ class Player extends BaseActor implements ICollidable {
             .enabledTranslations(false, true, false)
             .lockRotations()
             .setTranslation(this.position.x, this.position.y, this.position.z);
+
+        // this.rigidbodyDesc = RAPIER.RigidBodyDesc.dynamic();
+        // this.rigidbodyDesc
+        //     .lockTranslations()
+        //     .setGravityScale(2)
+        //     .enabledTranslations(false, true, false)
+        //     .lockRotations()
+        //     .setTranslation(this.position.x, this.position.y, this.position.z);
 
         this.rigidbodyDesc.mass = 70;
 
@@ -120,10 +134,20 @@ class Player extends BaseActor implements ICollidable {
             return true;
         });
 
-        return collection;
+        collection.sort((a, b) => a.toi - b.toi);
+
+        return collection
+
+
     }
 
-    public getGravityIntersections() { return this.getRayIntersection(this.rigidbody.translation() as THREE.Vector3, new Vector3(0, -1, 0), Infinity); }
+    public getGravityIntersections() {
+        return this.getRayIntersection(
+            new Vector3(0, 5, 0).add(this.rigidbody.translation() as THREE.Vector3),
+            new Vector3(0, -1, 0),
+            Infinity
+        );
+    }
 
     public tryToGo(groundObjects: IntersectionResult[], deltaTime: number) {
         if (!this.goToPosition.needsToGo) {
@@ -133,7 +157,7 @@ class Player extends BaseActor implements ICollidable {
             return;
         }
 
-        this.addPointHelper(this.goToPosition.position);
+        // this.addPointHelper(this.goToPosition.position);
 
         const lookPosition = new Vector3()
             .copy(this.goToPosition.position)
@@ -908,6 +932,10 @@ class Player extends BaseActor implements ICollidable {
 
         // if (!global.physicsEnabled) return;
 
+        // this.getGravityIntersections();
+
+        // return;
+
         const dt = deltaTime / 1000;
         const groundObjects = this.getGravityIntersections();
 
@@ -919,7 +947,7 @@ class Player extends BaseActor implements ICollidable {
 
         this.lastGoodIntersection = gravityIntersection;
 
-        const isOnFloor = gravityIntersection && gravityIntersection.toi <= this.collisionSize.y * 0.5;
+        const isOnFloor = gravityIntersection && gravityIntersection.toi <= 1;
         const friction = 0.9;
         const playerSpeed = 125 * 4;
 
@@ -984,10 +1012,8 @@ class Player extends BaseActor implements ICollidable {
 
         desiredPosition.add(this.velocity).add(runVelocity);
 
-
-        desiredPosition.y = Math.max(desiredPosition.y, gravityIntersection.position.y);
-
-
+        if (gravityIntersection)
+            desiredPosition.y = Math.max(desiredPosition.y, gravityIntersection.position.y);
 
         this.rigidbody.setTranslation(desiredPosition as THREE.Vector3, true);
 

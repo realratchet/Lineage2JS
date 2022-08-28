@@ -1,4 +1,4 @@
-import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import RAPIER, { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { Mesh } from "three";
 import type { ICollidable } from "./objects";
 
@@ -25,8 +25,9 @@ class CollidingMesh extends Mesh implements ICollidable {
     public createCollider(physicsWorld: World): Collider {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
-
+        
         this.rigidbody.setTranslation(this.position, false);
+        this.rigidbody.setRotation(this.quaternion, false);
 
         return this.collider;
     }

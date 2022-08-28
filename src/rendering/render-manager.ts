@@ -241,10 +241,14 @@ class RenderManager {
 
             const intersection = intersections[0];
 
-            const sector = intersections.find(i => i.object.name.includes("TerrainSector"));
+            const collidable = intersections.find(i => (i.object as any).isCollidable);
 
-            if (sector)
-                this.player.goTo(sector.point);
+            if (collidable)
+                // this.player.getRigidbody().setTranslation(
+                //     new Vector3().addVectors(intersection.point, new Vector3(0, 100, 0)),
+                //     true
+                // );
+                this.player.goTo(collidable.point);
 
             console.log(intersection);
         } catch (e) { }

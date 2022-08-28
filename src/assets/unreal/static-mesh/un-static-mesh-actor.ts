@@ -416,7 +416,13 @@ class UStaticMeshActor extends UAActor {
             position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
-            mesh: { mesh, type: "StaticMeshInstance", attributes: { colors: instanceColors } } as IStaticMeshInstanceDecodeInfo
+            instance: {
+                mesh,
+                type: "StaticMeshInstance",
+                uuid: this.instance ? this.instance.uuid : null,
+                name: this.instance ? this.instance.objectName : null,
+                attributes: { colors: instanceColors }
+            } as IStaticMeshInstanceDecodeInfo
         } as IStaticMeshActorDecodeInfo;
 
         zoneInfo.children.push(actorInfo);

@@ -139,10 +139,33 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh
 }
 
 function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDecodeInfo): CollidingMesh {
-    const meshInfo = info.mesh;
-    const { geometry, materials, collider } = decodeStaticMeshInstance(library, meshInfo);
+    const instanceInfo = info.instance;
+    const { geometry, materials, collider } = decodeStaticMeshInstance(library, instanceInfo);
 
     const object = new CollidingMesh(geometry, materials, collider);
+
+    object.userData.meshInstance = {
+        uuid: instanceInfo.uuid,
+        name: instanceInfo.name
+    };
+
+    object.userData.mesh = {
+        uuid: instanceInfo.mesh.uuid,
+        name: instanceInfo.mesh.name
+    };
+
+    if (collider) {
+        const mat = new MeshBasicMaterial({ opacity: 0.5, wireframe: false, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
+        const geo = new BufferGeometry();
+        const indices = new Uint32BufferAttribute(collider, 1);
+
+        geo.setIndex(indices)
+        geo.setAttribute("position", geometry.getAttribute("position"));
+
+        const wire = new Mesh(geo, mat);
+
+        object.add(wire);
+    }
 
     applySimpleProperties(library, object, info);
 
@@ -166,9 +189,6 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
     const infoMats = library.materials[meshInfo.materials];
 
     const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
-    // const mesh = new Mesh(geometry, materials);
-
-    // applySimpleProperties(library, mesh, meshInfo);
 
     (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setInstanced?.());
 
@@ -181,40 +201,6 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
     }
 
     const collider = infoGeo.colliderIndices || null;
-
-    // if (infoGeo.colliderIndices) {
-    //     {
-    //         const mat = new MeshBasicMaterial({ wireframe: true, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
-    //         const geo = new BufferGeometry();
-    //         const positions = new Float32BufferAttribute(infoGeo.collision, 3);
-
-    //         geo.setAttribute("position", positions);
-
-    //         const wire = new Mesh(geo, mat);
-
-
-    //         mesh.add(wire);
-
-    //         // debugger;
-    //     }
-    // }
-
-    // if (infoGeo.collisionBounds) {
-    //     infoGeo.collisionBounds.filter(x => x.isValid).forEach(bounds => { 
-    //         const box = new Box3();
-
-    //         // debugger;
-
-    //         box.min.fromArray(bounds.min);
-    //         box.max.fromArray(bounds.max);
-
-    //         const helper = new Box3Helper(box, new Color(Math.floor(Math.random()*0x00ffff)));
-
-    //         mesh.add(helper);
-    //     });
-    // }
-
-    // debugger;
 
     return { geometry, materials, collider };
 }

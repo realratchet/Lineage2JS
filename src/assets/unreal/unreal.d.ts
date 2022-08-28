@@ -238,7 +238,7 @@ interface IBaseObjectOrInstanceDecodeInfo {
 interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
     actorName: string;
     type : "StaticMeshActor",
-    mesh: IStaticMeshInstanceDecodeInfo
+    instance: IStaticMeshInstanceDecodeInfo
 
 }
 
@@ -258,6 +258,8 @@ interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
 interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
 
 interface IStaticMeshInstanceDecodeInfo {
+    uuid?: string,
+    name?: string,
     type: "StaticMeshInstance",
     mesh: IStaticMeshObjectDecodeInfo,
     attributes?: {
