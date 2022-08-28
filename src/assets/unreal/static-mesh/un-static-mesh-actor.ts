@@ -270,6 +270,9 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;
 
+        // if (this.objectName === "Exp_StaticMeshActor810")
+        //     debugger;
+
         const mesh = await this.mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[mesh.geometry].attributes;
         const instance = (this.instance ? await this.instance.getDecodeInfo(library) : {
@@ -405,22 +408,18 @@ class UStaticMeshActor extends UAActor {
         // }
 
         const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-        const _position = this.colLocation.getVectorElements();
-
-        zoneInfo.children.push({
+        const _position = this.location.getVectorElements();
+        const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
             position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
-            children: [
-                { mesh, type: "StaticMeshInstance", attributes: { colors: instanceColors } } as IStaticMeshInstanceDecodeInfo
-                // mesh,
-                /*, this.getRegionLineHelper(library)*/
-            ],
-            siblings,
-        } as IBaseObjectDecodeInfo);
+            mesh: { mesh, type: "StaticMeshInstance", attributes: { colors: instanceColors } } as IStaticMeshInstanceDecodeInfo
+        } as IStaticMeshActorDecodeInfo;
+
+        zoneInfo.children.push(actorInfo);
 
         library.geometryInstances[mesh.geometry]++;
 
@@ -452,7 +451,7 @@ class UStaticMeshActor extends UAActor {
 
         this.readHead = pkg.tell();
 
-        // if (this.objectName === "Exp_StaticMeshActor1814")
+        // if (this.objectName === "Exp_StaticMeshActor3008")
         //     debugger;
 
         return this;

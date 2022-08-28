@@ -64,7 +64,7 @@ async function startCore() {
             // 555,// elven ruins colon
             // 47, // rock with ambient light
             // 2369,
-            2011, // ceiling fixture that's too red
+            // 2011, // ceiling fixture that's too red
             // 2774, // necropolis entrance
             // 4718, // cruma base
             // 4609, // transparency issue
@@ -73,6 +73,8 @@ async function startCore() {
             // 610, // light fixture with 2 lights near elven ruins
             // 1755, // light fixture with 3 lights near elven ruins
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+
+            ...[/*2092,*/ /*3052*/, 2517], // talking island collision
         ]
     } as LoadSettings_T;
 

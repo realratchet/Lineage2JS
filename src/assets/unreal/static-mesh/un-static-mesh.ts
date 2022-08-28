@@ -109,12 +109,16 @@ class UStaticMesh extends UPrimitive {
                 if (triggerDebuggerOnUnsupported) debugger;
                 return;
             } else {
+                // debugger;
+
                 this.collisionFaces = new FArrayLazy(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
                 this.collisionNodes = new FArrayLazy(FStaticMeshCollisionNode).load(pkg).map(x => x);
 
                 // debugger;
             }
         }
+
+        // debugger;
 
         if (this.unkIndex0 > 0)
             debugger;
@@ -177,8 +181,6 @@ class UStaticMesh extends UPrimitive {
         if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value as number;
 
         this.readHead = pkg.tell();
-
-        // debugger;
 
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
@@ -321,6 +323,31 @@ class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
+        const collisionFaces = this.collisionFaces.length;
+        const collision = new Uint32Array(this.collisionFaces.length * 3);
+
+        for (let i = 0; i < collisionFaces; i++) {
+            const face = this.collisionFaces[i];
+            const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
+            const offset = i * 3;
+
+            collision[offset + 0] = verts[0];
+            collision[offset + 1] = verts[1];
+            collision[offset + 2] = verts[2];
+
+            // collision[offset + 0] = verts[0][0];
+            // collision[offset + 1] = verts[0][1];
+            // collision[offset + 2] = verts[0][2];
+
+            // collision[offset + 3] = verts[1][0];
+            // collision[offset + 4] = verts[1][1];
+            // collision[offset + 5] = verts[1][2];
+
+            // collision[offset + 6] = verts[2][0];
+            // collision[offset + 7] = verts[2][1];
+            // collision[offset + 8] = verts[2][2];
+        }
+
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
@@ -329,6 +356,7 @@ class UStaticMesh extends UPrimitive {
                 uvs
             },
             indices,
+            colliderIndices: collision,
             groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
             bounds: this.decodeBoundsInfo()
         };
@@ -343,46 +371,12 @@ class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
-        const collisionFaces = this.collisionFaces.length;
-        const collision = new Array(this.collisionFaces.length * 3 * 3 * 1);
-
-        for (let i = 0; i < collisionFaces; i++) {
-            const face = this.collisionFaces[i];
-            const verts = face.vertices.map(vi => positions.slice(vi * 3, vi * 3 + 3));
-            const offset = i * 3 * 3// * 2;
-
-            collision[offset + 0] = verts[0][0];
-            collision[offset + 1] = verts[0][1];
-            collision[offset + 2] = verts[0][2];
-
-            collision[offset + 3] = verts[1][0];
-            collision[offset + 4] = verts[1][1];
-            collision[offset + 5] = verts[1][2];
-
-            collision[offset + 6] = verts[2][0];
-            collision[offset + 7] = verts[2][1];
-            collision[offset + 8] = verts[2][2];
-
-            // collision[offset + 9] =  verts[3][0];
-            // collision[offset + 10] = verts[3][1];
-            // collision[offset + 11] = verts[3][2];
-
-            // collision[offset + 12] = verts[1][0];
-            // collision[offset + 13] = verts[1][1];
-            // collision[offset + 14] = verts[1][2];
-
-            // collision[offset + 15] = verts[2][0];
-            // collision[offset + 16] = verts[2][1];
-            // collision[offset + 17] = verts[2][2];
-        }
-
         return {
             uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
             materials: materialUuid,
-            collision,
             children: [
                 // this.getDecodeTrisInfo(library),
             ]

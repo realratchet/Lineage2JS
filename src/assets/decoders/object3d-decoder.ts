@@ -1,8 +1,9 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2 } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
+import CollidingMesh from "@client/objects/colliding-mesh";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -94,12 +95,12 @@ function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THRE
     return mesh;
 }
 
-function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
+function decodeStaticMeshData(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff })
-    const mesh = new Mesh(fetchGeometry(infoGeo as IGeometryDecodeInfo), materials);
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo)
 
     if (infoGeo.attributes.colors) {
         (materials instanceof Array ? materials : [materials]).forEach(mat => {
@@ -109,14 +110,15 @@ function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeI
         });
     }
 
-    applySimpleProperties(library, mesh, info);
-
-    return mesh;
+    return { geometry, materials };
 }
 
 function decodeStaticMeshWrapped(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Object3D {
     const obj = new Object3D();
-    const mesh = decodeStaticMesh(library, info);
+    const { geometry, materials } = decodeStaticMeshData(library, info);
+    const mesh = new Mesh(geometry, materials);
+
+    applySimpleProperties(library, mesh, info);
 
     // obj.add(new Mesh(mesh.geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
     obj.add(mesh);
@@ -136,6 +138,17 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh
     return msh;
 }
 
+function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDecodeInfo): CollidingMesh {
+    const meshInfo = info.mesh;
+    const { geometry, materials, collider } = decodeStaticMeshInstance(library, meshInfo);
+
+    const object = new CollidingMesh(geometry, materials, collider);
+
+    applySimpleProperties(library, object, info);
+
+    return object;
+}
+
 function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInstanceDecodeInfo) {
 
     const geometryUuid = info.mesh.geometry;
@@ -152,10 +165,10 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
 
     const infoMats = library.materials[meshInfo.materials];
 
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
-    const mesh = new Mesh(geometry, materials);
+    const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
+    // const mesh = new Mesh(geometry, materials);
 
-    applySimpleProperties(library, mesh, meshInfo);
+    // applySimpleProperties(library, mesh, meshInfo);
 
     (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setInstanced?.());
 
@@ -167,22 +180,43 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
         });
     }
 
-    if (info.mesh.collision) {
-        const mat = new MeshBasicMaterial({ wireframe: true, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: false });
-        const geo = new BufferGeometry();
-        const positions = new Float32BufferAttribute(info.mesh.collision, 3);
+    const collider = infoGeo.colliderIndices || null;
 
-        geo.setAttribute("position", positions);
+    // if (infoGeo.colliderIndices) {
+    //     {
+    //         const mat = new MeshBasicMaterial({ wireframe: true, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
+    //         const geo = new BufferGeometry();
+    //         const positions = new Float32BufferAttribute(infoGeo.collision, 3);
 
-        const wire = new Mesh(geo, mat);
+    //         geo.setAttribute("position", positions);
+
+    //         const wire = new Mesh(geo, mat);
 
 
-        mesh.add(wire);
-    } else {
-        mesh.visible = false;
-    }
+    //         mesh.add(wire);
 
-    return mesh;
+    //         // debugger;
+    //     }
+    // }
+
+    // if (infoGeo.collisionBounds) {
+    //     infoGeo.collisionBounds.filter(x => x.isValid).forEach(bounds => { 
+    //         const box = new Box3();
+
+    //         // debugger;
+
+    //         box.min.fromArray(bounds.min);
+    //         box.max.fromArray(bounds.max);
+
+    //         const helper = new Box3Helper(box, new Color(Math.floor(Math.random()*0x00ffff)));
+
+    //         mesh.add(helper);
+    //     });
+    // }
+
+    // debugger;
+
+    return { geometry, materials, collider };
 }
 
 function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
@@ -301,12 +335,12 @@ function decodePackage(library: DecodeLibrary) {
 }
 
 function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
-    const terrain = new Terrain();
-    const geometry = library.geometries[info.geometry];
+    const infoGeo = library.geometries[info.geometry];
+    const { geometry, materials } = decodeStaticMeshData(library, info);
 
-    const positions = geometry.attributes.positions;
+    const positions = infoGeo.attributes.positions;
     const heightfield = new Float32Array(17 * 17);
-    const { min, max } = geometry.bounds.box;
+    const { min, max } = infoGeo.bounds.box;
 
     const bounds = new Box3();
 
@@ -321,24 +355,20 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
         }
     }
 
-    const visibleMesh = decodeStaticMesh(library, info);
+    const terrain = new Terrain(geometry, materials, { segments: [16, 16], heightfield, bounds });
 
-    terrain.position.copy(visibleMesh.position);
-    visibleMesh.position.set(0, 0, 0);
-
-    terrain.setTerrainField(16, 16, heightfield, bounds);
-    terrain.add(visibleMesh);
+    applySimpleProperties(library, terrain, info);
 
     return terrain;
 }
+
 
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":
-        case "TerrainInfo":
-        case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
-        case "StaticMeshInstance": return decodeStaticMeshInstance(library, info as IStaticMeshInstanceDecodeInfo);
+        case "TerrainInfo": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
+        case "StaticMeshActor": return decodeStaticMeshActor(library, info as IStaticMeshActorDecodeInfo);
         case "Light": return decodeLight(library, info as ILightDecodeInfo);
         case "TerrainSegment": return decodeTerrainSegment(library, info as IStaticMeshObjectDecodeInfo);
         case "Model":

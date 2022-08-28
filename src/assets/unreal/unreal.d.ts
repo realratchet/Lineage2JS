@@ -235,6 +235,13 @@ interface IBaseObjectOrInstanceDecodeInfo {
     type: DecodableObject_T | "StaticMeshInstance"
 }
 
+interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
+    actorName: string;
+    type : "StaticMeshActor",
+    mesh: IStaticMeshInstanceDecodeInfo
+
+}
+
 interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
 
 interface IBaseZoneDecodeInfo {
@@ -250,7 +257,7 @@ interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
 interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
 interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
 
-interface IStaticMeshInstanceDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
+interface IStaticMeshInstanceDecodeInfo {
     type: "StaticMeshInstance",
     mesh: IStaticMeshObjectDecodeInfo,
     attributes?: {
@@ -279,6 +286,8 @@ type IBoundsDecodeInfo = {
     };
 }
 
+type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
+
 interface IGeometryDecodeInfo {
     attributes: {
         positions?: Float32Array;
@@ -288,7 +297,8 @@ interface IGeometryDecodeInfo {
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
     };
-    indices?: number[] | Uint8Array | Uint16Array | Uint32Array;
+    indices?: IndexLikeArray;
+    colliderIndices?: Uint32Array;
     groups?: ArrGeometryGroup[],
     bounds?: IBoundsDecodeInfo
 }
