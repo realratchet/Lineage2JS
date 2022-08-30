@@ -245,10 +245,10 @@ class RenderManager {
 
             if (collidable)
                 // this.player.getRigidbody().setTranslation(
-                //     new Vector3().addVectors(intersection.point, new Vector3(0, 100, 0)),
+                //     new Vector3().addVectors(intersection.point, new Vector3(0, 100 * 1, 0)),
                 //     true
                 // );
-                this.player.goTo(collidable.point);
+            this.player.goTo(collidable.point);
 
             console.log(intersection);
         } catch (e) { }
@@ -415,14 +415,14 @@ class RenderManager {
         if (this.nextPhysicsTick <= currentTime) {
             this.physicsWorld.step();
 
-            this.player.position.copy(this.player.getRigidbody().translation() as THREE.Vector3);
-
+            this.player.update(this, currentTime, deltaTime);
+            
             // console.log(this.player.position);
-
-            this.nextPhysicsTick = currentTime + 1000 / 100;
+            
+            this.nextPhysicsTick = currentTime + 1000 / 30;
         }
-
-        this.player.update(this, currentTime, deltaTime);
+        
+        this.player.position.copy(this.player.getRigidbody().translation() as THREE.Vector3);
         this._updateObjects(currentTime, deltaTime);
         this._updateSun();
 
@@ -465,7 +465,8 @@ class RenderManager {
     protected _postRender(currentTime: number, deltaTime: number) { }
 
     public startRendering() {
-        this.nextPhysicsTick = 0;
+        this.physicsWorld.step();
+        this.nextPhysicsTick = 3000;
         this.scene.updateMatrixWorld(true);
 
         this.collectColliders();

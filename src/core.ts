@@ -31,6 +31,21 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
     return decodePackage(decodeLibrary);
 }
 
+async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>) {
+
+    if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Effects");
+
+    pkg = await assetLoader.load(pkg);
+
+    const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("antaras"));
+
+    const meshIndex = antaras.index + 1;
+
+    const mesh = await pkg.fetchObject(meshIndex);
+
+    debugger;
+}
+
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
@@ -41,6 +56,7 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
+    _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -101,7 +117,7 @@ async function startCore() {
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI

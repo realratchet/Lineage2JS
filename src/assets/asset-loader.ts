@@ -27,6 +27,7 @@ const impToType = Object.freeze(
         ].map(v => ([v, extToType.get("UTX")] as [SupportedImports_T, SupportedPackages_T])),
         ["Sound", extToType.get("UAX")],
         ["StaticMesh", extToType.get("USX")],
+        ["Effects", extToType.get("UKX")]
     ]) as Map<SupportedImports_T, SupportedPackages_T>
 );
 

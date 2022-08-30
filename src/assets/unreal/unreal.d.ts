@@ -47,6 +47,7 @@ type ULevelSummary = import("./un-level-summary").ULevelSummary;
 type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
 type UEncodedFile = import("./un-encoded-file").UEncodedFile;
 type UTextBuffer = import("./un-text-buffer").UTextBuffer;
+type USkeletalMesh = import("./skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
 
 type UMaterial = import("./un-material").UMaterial;
 type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
@@ -217,7 +218,7 @@ interface IDecodedSpriteParameter extends IDecodedParameter {
     framerate: number
 }
 
-type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound";
+type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effects";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
 type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
@@ -237,7 +238,7 @@ interface IBaseObjectOrInstanceDecodeInfo {
 
 interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
     actorName: string;
-    type : "StaticMeshActor",
+    type: "StaticMeshActor",
     instance: IStaticMeshInstanceDecodeInfo
 
 }
