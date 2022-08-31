@@ -1,10 +1,13 @@
 import BufferValue from "@client/assets/buffer-value";
-import FArray, { FPrimitiveArray } from "../un-array";
+import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
 import FConstructable from "../un-constructable";
 import FCoords from "../un-coords";
 import ULodMesh from "../un-lod-mesh";
 import FNumber from "../un-number";
+import UPackage from "../un-package";
+import { PropertyTag } from "../un-property";
 import FRawIndexBuffer from "../un-raw-index-buffer";
+import FVector from "../un-vector";
 
 class FUnknownStruct1 extends FConstructable {
     public unkInt32_0: number;
@@ -116,7 +119,7 @@ class FSkinVertexStreamSubtype extends FConstructable {
         this.unkArr = new Array(8).fill(1).map(() => pkg.read(float).value as number);
 
         debugger;
-        
+
         return this;
     }
 }
@@ -136,17 +139,104 @@ class FSkinVertexStream extends FConstructable {
         this.z = pkg.read(float).value as number;
         this.unkArr = new FArray(FSkinVertexStreamSubtype).load(pkg);
 
-        debugger;
+        return this;
+    }
+}
+
+class FUnknownSubmeshType3 extends FConstructable {
+    public unkVar0: number;
+
+    public load(pkg: UPackage): this {
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
+
+        const int32 = new BufferValue(BufferValue.int32);
+
+        if (verArchive > 61) {
+            this.unkVar0 = pkg.read(int32).value as number;
+
+            debugger;
+        } else {
+            debugger;
+        }
+
+        return this;
+    }
+}
+
+class FUnknownSubmeshType4 extends FConstructable {
+    public a: number;
+    public b: number;
+
+    public load(pkg: UPackage): this {
+        const float = new BufferValue(BufferValue.float);
+        const uint32 = new BufferValue(BufferValue.uint32);
+
+        this.a = pkg.read(float).value as number;
+        this.b = pkg.read(uint32).value as number;
+
+        return this;
+    }
+}
+
+class FUnknownSubmeshType5 extends FConstructable {
+    public a: number;
+    public b: number;
+    public c: number;
+    public d: number;
+
+    public load(pkg: UPackage): this {
+        const float = new BufferValue(BufferValue.float);
+        const uint8 = new BufferValue(BufferValue.uint8);
+
+        this.a = pkg.read(float).value as number;
+        this.c = pkg.read(uint8).value as number;
+
+        this.b = pkg.read(float).value as number;
+        this.d = pkg.read(uint8).value as number;
+
+        // this.buff = pkg.read(BufferValue.allocBytes(10)).value as DataView;
+
+        return this;
+    }
+}
+
+class FUnknownSubmeshType6 extends FConstructable {
+    public a: number;
+    public b: number;
+
+    public load(pkg: UPackage): this {
+        const float = new BufferValue(BufferValue.float);
+        const uint32 = new BufferValue(BufferValue.uint32);
+
+        this.a = pkg.read(float).value as number;
+        this.b = pkg.read(uint32).value as number;
 
         return this;
     }
 }
 
 class FLikelySubmesh extends FConstructable {
+    public unkArr0: FPrimitiveArray<"float">;
+    public unkArr1: FArray<FUnknownSubmeshType1>;
+    public unkVar0: number;
+    public unkArr2: FArray<FUnknownSubmeshType2>;
+    public unkArr3: FArray<FUnknownSubmeshType2>;
+    public indexBuffer1: FRawIndexBuffer;
+    public indexBuffer2: FRawIndexBuffer;
+    public skinVertexStream: FSkinVertexStream;
+    public unkStruct: FUnknownSubmeshType3;
+    public unkLazyArr0: FArrayLazy<FUnknownSubmeshType4>;
+    public unkLazyArr1: FArrayLazy<FUnknownSubmeshType5>;
+    public unkLazyArr2: FArrayLazy<FUnknownSubmeshType6>;
+    public unkLazyArr3: FArrayLazy<FVector>;
+    public unkArr4: number[];
 
     public load(pkg: UPackage): this {
 
         const int32 = new BufferValue(BufferValue.int32);
+        const uint32 = new BufferValue(BufferValue.uint32);
+        const compat = new BufferValue(BufferValue.compat32);
 
         this.unkArr0 = new FPrimitiveArray(BufferValue.float).load(pkg);
         this.unkArr1 = new FArray(FUnknownSubmeshType1).load(pkg);
@@ -158,8 +248,34 @@ class FLikelySubmesh extends FConstructable {
         this.indexBuffer2 = new FRawIndexBuffer().load(pkg);
         this.skinVertexStream = new FSkinVertexStream().load(pkg);
 
-        debugger;
+        this.unkLazyArr0 = new FArrayLazy(FUnknownSubmeshType4).load(pkg);
+        this.unkLazyArr1 = new FArrayLazy(FUnknownSubmeshType5).load(pkg);
+        this.unkLazyArr2 = new FArrayLazy(FUnknownSubmeshType6).load(pkg);
+        this.unkLazyArr3 = new FArrayLazy(FVector).load(pkg);
 
+        this.unkArr4 = new Array(6).fill(1).map(() => pkg.read(uint32).value as number);
+
+        return this;
+    }
+}
+
+class USkeletalMeshSubtype1 extends FConstructable {
+    public a: number;
+    public b: number;
+    public c: number;
+    public d: number;
+
+    public load(pkg: UPackage): this {
+        const float = new BufferValue(BufferValue.float);
+        const uint8 = new BufferValue(BufferValue.uint8);
+
+        this.a = pkg.read(float).value as number;
+        this.c = pkg.read(uint8).value as number;
+
+        this.b = pkg.read(float).value as number;
+        this.d = pkg.read(uint8).value as number;
+
+        // this.buff = pkg.read(BufferValue.allocBytes(10)).value as DataView;
 
         return this;
     }
@@ -176,6 +292,9 @@ class USkeletalMesh extends ULodMesh {
     sk_unkNames0: string[];
     sk_unkNames1: string[];
     sk_coordArr0: FArray<FCoords>;
+    sk_unkArr4: FArray<FLikelySubmesh>;
+    sk_unkIndex1: number;
+    sk_unkArr5: FArray<USkeletalMeshSubtype1>;
 
     public doLoad(pkg: UPackage, exp: UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
@@ -198,9 +317,35 @@ class USkeletalMesh extends ULodMesh {
         this.sk_unkNames0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
         this.sk_unkNames1 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
         this.sk_coordArr0 = new FArray(FCoords).load(pkg);
-        this.sk_unkArr4 = new FArray(FLikelySubmesh).load(pkg);
 
         if (this.maybeLodCount >= 2) {
+            this.sk_unkArr4 = new FArray(FLikelySubmesh).load(pkg);
+            this.sk_unkIndex1 = pkg.read(compat).value as number;
+            // this.sk_unkArr5 = new FArray(USkeletalMeshSubtype1).load(pkg);
+
+            const lazy = pkg.read(uint32).value as number;
+            const elemCount = pkg.read(compat).value as number;
+
+
+
+            const offset = pkg.tell();
+            do {
+
+                const otherLazy = pkg.read(uint32).value as number;
+
+                // if (otherLazy === 0x8CFF436) {
+                if (otherLazy === 0x8D1F549) {
+                    
+                    const delta = (pkg.tell() - 4) - offset;
+                    debugger;
+                }
+
+            } while (true);
+
+            
+            
+
+            debugger;
         } else {
             debugger;
         }
