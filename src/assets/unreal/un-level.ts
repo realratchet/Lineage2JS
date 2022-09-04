@@ -124,7 +124,7 @@ class ULevel extends UObject {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
+    public async getDecodeInfo(library: DecodeLibrary): Promise<IBaseObjectDecodeInfo> {
         await this.onLoaded();
 
         const groupedObjectList = this.objectList.reduce((accum, obj) => {

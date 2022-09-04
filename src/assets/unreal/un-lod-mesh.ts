@@ -1,9 +1,11 @@
 import BufferValue from "../buffer-value";
 import FArray, { FPrimitiveArray } from "./un-array";
+import FColor from "./un-color";
 import FConstructable from "./un-constructable";
 import UMesh from "./un-mesh";
 import FNumber from "./un-number";
-import UPackage from "./un-package";
+import FRotator from "./un-rotator";
+import FVector from "./un-vector";
 
 class FUnknownStruct1 extends FConstructable {
     public a: number;
@@ -56,8 +58,8 @@ class FUnknownStruct3 extends FConstructable {
 }
 
 class ULodMesh extends UMesh {
-    protected maybeLodCount: number;
-    protected maybeVertexCount: number;
+    protected version: number;
+    protected vertexCount: number;
     protected unkArr0 = new FPrimitiveArray(BufferValue.uint32);
 
     protected unkArr1: number[];
@@ -67,14 +69,11 @@ class ULodMesh extends UMesh {
     protected unkArr5: FArray<FUnknownStruct2> = new FArray(FUnknownStruct2);
     protected unkArr6: FArray<FUnknownStruct3> = new FArray(FUnknownStruct3);
     protected unkArr7: number[];
-    protected unkVar0: number;
-    protected unkArr9: number[];
-    protected unkIndex0: number;
-    protected unkArr10: number[];
-    protected unkArr11: number[];
-    protected unkVar1: number;
+    protected hasImpostor: boolean;
+    protected skinTesselationFactor: number;
     protected unkVar2: number;
-    protected materialsIds = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    protected impostor = new MeshImpostor();
+    public lodMeshMaterials: UMaterial[];
 
     public doLoad(pkg: UPackage, exp: UExport) {
         super.doLoad(pkg, exp);
@@ -85,20 +84,20 @@ class ULodMesh extends UMesh {
         const uint8 = new BufferValue(BufferValue.uint8);
         const float = new BufferValue(BufferValue.float);
 
-        this.maybeLodCount = pkg.read(uint32).value as number;
-        this.maybeVertexCount = pkg.read(uint32).value as number;
+        this.version = pkg.read(uint32).value as number;
+        this.vertexCount = pkg.read(uint32).value as number;
 
         this.unkArr0.load(pkg);
 
-        if (this.maybeLodCount < 2) {
+        if (this.version < 2) {
             debugger;
         }
 
-        this.materialsIds.load(pkg);
+        const lodMeshMaterialsIds = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg);
 
         this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(float).value as number);
 
-        if (this.maybeLodCount < 2) {
+        if (this.version < 2) {
             debugger;
         }
 
@@ -110,24 +109,73 @@ class ULodMesh extends UMesh {
 
         this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(float).value as number);
 
-        if (this.maybeLodCount >= 3) {
-            this.unkVar0 = pkg.read(uint32).value as number;
+        if (this.version >= 3) {
+            const maybeHasImpostor = pkg.read(uint32).value as number;
 
-            this.unkIndex0 = pkg.read(compat).value as number;
-            this.unkArr9 = new Array(9).fill(1).map(() => pkg.read(int32).value as number);
-            this.unkArr10 = new Array(4).fill(1).map(() => pkg.read(uint8).value as number);
-            this.unkArr11 = new Array(3).fill(1).map(() => pkg.read(int32).value as number);
+            if (maybeHasImpostor !== 0 && maybeHasImpostor !== 1) {
+                debugger;
+            }
+
+            this.hasImpostor = maybeHasImpostor !== 0;
+            this.impostor.load(pkg);
         }
 
-        if (this.maybeLodCount >= 4) {
-            this.unkVar1 = pkg.read(uint32).value as number;
+        if (this.version >= 4) {
+            this.skinTesselationFactor = pkg.read(uint32).value as number;
         }
 
-        if (this.maybeLodCount >= 5) {
+        if (this.version >= 5) {
             this.unkVar2 = pkg.read(uint32).value as number;
         }
+
+        this.promisesLoading.push(new Promise<void>(async resolve => {
+            this.lodMeshMaterials = await Promise.all(
+                lodMeshMaterialsIds.map(async (index: FNumber) => {
+                    return await pkg.fetchObject<UMaterial>(index.value);
+                })
+            );
+
+            resolve();
+        }));
     }
 }
 
 export default ULodMesh;
 export { ULodMesh };
+
+class MeshImpostor extends FConstructable {
+    public location: FVector;
+    public rotation: FRotator;
+    public scale: FVector;
+    public color: FColor;
+    public spaceMode: number;
+    public drawMode: number;
+    public lightMode: number;
+    public materialId: number;
+    public material: UMaterial;
+
+    public load(pkg: UPackage): this {
+        const uint32 = new BufferValue(BufferValue.uint32);
+        const compat = new BufferValue(BufferValue.compat32);
+
+        this.materialId = pkg.read(compat).value as number;
+
+        this.location = new FVector().load(pkg);
+        this.rotation = new FRotator().load(pkg);
+        this.scale = new FVector().load(pkg);
+        this.color = new FColor().load(pkg);
+        this.spaceMode = pkg.read(uint32).value as number;
+        this.drawMode = pkg.read(uint32).value as number;
+        this.lightMode = pkg.read(uint32).value as number;
+
+        if (this.materialId !== 0) {
+            this.promisesLoading.push(new Promise<void>(async resolve => {
+                this.material = await pkg.fetchObject<UMaterial>(this.materialId);
+
+                resolve();
+            }));
+        }
+
+        return this;
+    }
+}

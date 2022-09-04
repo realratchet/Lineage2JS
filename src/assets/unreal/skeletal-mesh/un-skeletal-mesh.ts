@@ -4,24 +4,10 @@ import FConstructable from "../un-constructable";
 import FCoords from "../un-coords";
 import ULodMesh from "../un-lod-mesh";
 import FNumber from "../un-number";
+import UPackage from "../un-package";
+import FQuaternion from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
-
-class FUnknownStruct1 extends FConstructable {
-    public unkInt32_0: number;
-    public unkInt32_1: number;
-    public unkInt32_2: number;
-
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.unkInt32_0 = pkg.read(uint32).value as number;
-        this.unkInt32_1 = pkg.read(uint32).value as number;
-        this.unkInt32_2 = pkg.read(uint32).value as number;
-
-        return this;
-    }
-}
 
 class FUnknownStruct2 extends FConstructable {
     public unkArr: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
@@ -51,27 +37,45 @@ class FUnknownStruct3 extends FConstructable {
     }
 }
 
-class FLikelyBone extends FConstructable {
-    public boneName: string;
-    public unkNum0: number;
-    public unkArr: number[];
-    public unkNum1: number;
-    public unkNum2: number;
+class FJointPos extends FConstructable {
+    rotation = new FQuaternion();
+    position = new FVector();
+    scale = new FVector();
+    length: number;
 
     public load(pkg: UPackage): this {
         const float = new BufferValue(BufferValue.float);
+
+        this.rotation.load(pkg);
+        this.position.load(pkg);
+        this.length = pkg.read(float).value as number;
+        this.scale.load(pkg);
+
+        return this;
+    }
+
+}
+
+class FMeshBone extends FConstructable {
+    public boneName: string;
+    public flags: number;
+    public bonePos = new FJointPos();
+    public numChildren: number;
+    public parentIndex: number;
+
+    public load(pkg: UPackage): this {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
 
         const nameIndex = pkg.read(compat).value as number;
         this.boneName = pkg.nameTable[nameIndex].name.value as string;
 
-        this.unkNum0 = pkg.read(uint32).value as number;
+        this.flags = pkg.read(uint32).value as number;
 
-        this.unkArr = new Array(11).fill(1).map(() => pkg.read(float).value as number);
+        this.bonePos.load(pkg);
 
-        this.unkNum1 = pkg.read(uint32).value as number;
-        this.unkNum2 = pkg.read(uint32).value as number;
+        this.numChildren = pkg.read(uint32).value as number;
+        this.parentIndex = pkg.read(uint32).value as number;
 
         return this;
     }
@@ -233,51 +237,59 @@ class FLikelySubmesh extends FConstructable {
     }
 }
 
-class USkeletalMeshSubtype1 extends FConstructable {
-    public a: number;
-    public b: number;
-    public c: number;
-    public d: number;
+class FMeshWedge extends FConstructable {
+    public iVertex: number;
+    public texU: number;
+    public texV: number;
 
     public load(pkg: UPackage): this {
         const float = new BufferValue(BufferValue.float);
+        const uint16 = new BufferValue(BufferValue.uint16);
+
+        this.iVertex = pkg.read(uint16).value as number;
+        this.texU = pkg.read(float).value as number;
+        this.texV = pkg.read(float).value as number;
+
+        return this;
+    }
+}
+
+class FTriangle extends FConstructable {
+    public indices: [number, number, number] = new Array(3) as [number, number, number];
+    public materialIndex: number;
+    public materialIndex2: number;
+    public smoothingGroups: number;
+
+    public load(pkg: UPackage): this {
+        const uint32 = new BufferValue(BufferValue.uint32);
+        const uint16 = new BufferValue(BufferValue.uint16);
         const uint8 = new BufferValue(BufferValue.uint8);
 
-        this.a = pkg.read(float).value as number;
-        this.b = pkg.read(float).value as number;
-        this.c = pkg.read(uint8).value as number;
-        this.d = pkg.read(uint8).value as number;
+        this.indices[0] = pkg.read(uint16).value as number;
+        this.indices[1] = pkg.read(uint16).value as number;
+        this.indices[2] = pkg.read(uint16).value as number;
 
-        return this;
-    }
-}
-
-class USkeletalMeshSubtype2 extends FConstructable {
-    public a: number;
-    public b: number;
-    public c: number;
-
-    public load(pkg: UPackage): this {
-        const int32 = new BufferValue(BufferValue.int32);
-
-        this.a = pkg.read(int32).value as number;
-        this.b = pkg.read(int32).value as number;
-        this.c = pkg.read(int32).value as number;
+        this.materialIndex = pkg.read(uint8).value as number;
+        this.materialIndex2 = pkg.read(uint8).value as number;
+        this.smoothingGroups = pkg.read(uint32).value as number;
 
         return this;
     }
 }
 
 
-class USkeletalMeshSubtype3 extends FConstructable {
-    public a: number;
-    public b: number;
+class FVertexInfluence extends FConstructable {
+    public weight: number;
+    public iPoint: number;
+    public iBone: number;
 
     public load(pkg: UPackage): this {
-        const int32 = new BufferValue(BufferValue.int32);
+        const float = new BufferValue(BufferValue.float);
+        const uint16 = new BufferValue(BufferValue.uint16);
 
-        this.a = pkg.read(int32).value as number;
-        this.b = pkg.read(int32).value as number;
+        this.weight = pkg.read(float).value as number;
+        this.iPoint = pkg.read(uint16).value as number;
+        this.iBone = pkg.read(uint16).value as number;
 
         return this;
     }
@@ -285,22 +297,22 @@ class USkeletalMeshSubtype3 extends FConstructable {
 
 class USkeletalMesh extends ULodMesh {
 
-    protected sk_unkArr0 = new FArray(FUnknownStruct1);
-    protected likelyBoneArray = new FArray(FLikelyBone);
-    protected likelyIdleAnimId: number;
-    protected sk_unkVar0: number;
-    protected sk_unkArr2 = new FArray(FUnknownStruct2);
-    protected sk_unkArr3 = new FArray(FUnknownStruct3);
-    protected sk_unkNames0: string[];
-    protected sk_unkNames1: string[];
-    protected sk_coordArr0 = new FArray(FCoords);
-    protected likelySubmeshes = new FArray(FLikelySubmesh);
+    protected points2 = new FArray(FVector);
+    protected refSkeleton = new FArray(FMeshBone);
+    protected animationId: number;
+    protected skeletalDepth: number;
+    protected weightIndices = new FArray(FUnknownStruct2);
+    protected boneInluences = new FArray(FUnknownStruct3);
+    protected attachAliases: string[];
+    protected attachBoneNames: string[];
+    protected attachCoords = new FArray(FCoords);
+    protected lodModels = new FArray(FLikelySubmesh);
     protected sk_unkIndex1: number;
-    protected sk_unkArr5 = new FArrayLazy(FVector);
-    protected sk_unkArr6 = new FArrayLazy(USkeletalMeshSubtype1);
-    protected sk_unkArr7 = new FArrayLazy(USkeletalMeshSubtype2);
-    protected sk_unkArr8 = new FArrayLazy(USkeletalMeshSubtype3);
-    protected sk_unkArr9 = new FPrimitiveArrayLazy(BufferValue.uint16);
+    protected points = new FArrayLazy(FVector);
+    protected wedges = new FArrayLazy(FMeshWedge);
+    protected faces = new FArrayLazy(FTriangle);
+    protected vertexInfluences = new FArrayLazy(FVertexInfluence);
+    protected collapseWedge = new FPrimitiveArrayLazy(BufferValue.uint16);
     protected sk_unkArr10 = new FPrimitiveArrayLazy(BufferValue.uint16);
     protected sk_unkVar1: number;
     protected sk_unkArr11 = new FPrimitiveArray(BufferValue.uint32);
@@ -315,26 +327,30 @@ class USkeletalMesh extends ULodMesh {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.sk_unkArr0.load(pkg);
-        this.likelyBoneArray.load(pkg);
-        
-        this.likelyIdleAnimId = pkg.read(compat).value as number;
+        this.points2.load(pkg);
+        this.refSkeleton.load(pkg);
 
-        this.sk_unkVar0 = pkg.read(uint32).value as number;
-        this.sk_unkArr2.load(pkg);
-        this.sk_unkArr3.load(pkg);
-        this.sk_unkNames0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
-        this.sk_unkNames1 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
-        this.sk_coordArr0.load(pkg);
+        this.animationId = pkg.read(compat).value as number;
 
-        if (this.maybeLodCount >= 2) {
-            this.likelySubmeshes.load(pkg);
+        this.skeletalDepth = pkg.read(uint32).value as number;
+        this.weightIndices.load(pkg);
+        this.boneInluences.load(pkg);
+        this.attachAliases = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
+        this.attachBoneNames = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
+        this.attachCoords.load(pkg);
+
+        if (this.version >= 2) {
+            this.lodModels.load(pkg);
             this.sk_unkIndex1 = pkg.read(compat).value as number;
-            this.sk_unkArr5.load(pkg);
-            this.sk_unkArr6.load(pkg);
-            this.sk_unkArr7.load(pkg);
-            this.sk_unkArr8.load(pkg);
-            this.sk_unkArr9.load(pkg);
+
+            if (this.sk_unkIndex1 !== 0)
+                debugger;
+
+            this.points.load(pkg);
+            this.wedges.load(pkg);
+            this.faces.load(pkg);
+            this.vertexInfluences.load(pkg);
+            this.collapseWedge.load(pkg);
             this.sk_unkArr10.load(pkg);
 
             if (verArchive >= 118 && verLicense >= 3)
@@ -353,6 +369,8 @@ class USkeletalMesh extends ULodMesh {
         } else {
             debugger;
         }
+
+        console.assert(this.readHead === this.readTail, "Should be zero");
 
         debugger;
     }

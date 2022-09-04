@@ -72,6 +72,7 @@ type UMatrix = import("./un-matrix").UMatrix;
 type FMatrix = import("./un-matrix").FMatrix;
 type UPointRegion = import("./un-point-region").UPointRegion;
 type FVector = import("./un-vector").FVector;
+type FQuaternion = import("./un-quaternion").FQuaternion;
 type FRotator = import("./un-rotator").FRotator;
 type FCoords = import("./un-coords").FCoords;
 
