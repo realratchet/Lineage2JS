@@ -56,61 +56,59 @@ class FUnknownStruct3 extends FConstructable {
 }
 
 class ULodMesh extends UMesh {
-    maybeLodCount: number;
-    maybeVertexCount: number;
-    unkArr0: FPrimitiveArray<"uint32">;
-    materialsIds: FArray<FConstructable | import("/home/ratchet/Documents/lineage-js/src/assets/unreal/un-object").default>;
-    unkArr1: number[];
-    unkArr2: FPrimitiveArray<"uint16">;
-    unkArr3: FArray<FUnknownStruct1>;
-    unkArr4: FPrimitiveArray<"uint16">;
-    unkArr5: FArray<FUnknownStruct2>;
-    unkArr6: FArray<FUnknownStruct3>;
-    unkArr7: number[];
-    unkVar0: number;
-    unkArr9: number[];
-    unkIndex0: number;
-    unkArr10: number[];
-    unkArr11: number[];
-    unkVar1: number;
-    unkVar2: number;
-    public doLoad(pkg: UPackage, exp: UExport) {
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
+    protected maybeLodCount: number;
+    protected maybeVertexCount: number;
+    protected unkArr0 = new FPrimitiveArray(BufferValue.uint32);
 
+    protected unkArr1: number[];
+    protected unkArr2 = new FPrimitiveArray(BufferValue.uint16);
+    protected unkArr3 = new FArray(FUnknownStruct1);
+    protected unkArr4 = new FPrimitiveArray(BufferValue.uint16);
+    protected unkArr5: FArray<FUnknownStruct2> = new FArray(FUnknownStruct2);
+    protected unkArr6: FArray<FUnknownStruct3> = new FArray(FUnknownStruct3);
+    protected unkArr7: number[];
+    protected unkVar0: number;
+    protected unkArr9: number[];
+    protected unkIndex0: number;
+    protected unkArr10: number[];
+    protected unkArr11: number[];
+    protected unkVar1: number;
+    protected unkVar2: number;
+    protected materialsIds = new FArray(FNumber.forType(BufferValue.compat32) as any);
+
+    public doLoad(pkg: UPackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         const int32 = new BufferValue(BufferValue.int32);
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
-        const float = new BufferValue(BufferValue.float);
         const uint8 = new BufferValue(BufferValue.uint8);
+        const float = new BufferValue(BufferValue.float);
 
         this.maybeLodCount = pkg.read(uint32).value as number;
         this.maybeVertexCount = pkg.read(uint32).value as number;
 
-        this.unkArr0 = new FPrimitiveArray(BufferValue.uint32).load(pkg);
+        this.unkArr0.load(pkg);
 
         if (this.maybeLodCount < 2) {
             debugger;
         }
 
-        this.materialsIds = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg);
+        this.materialsIds.load(pkg);
 
-        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(int32).value as number);
+        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(float).value as number);
 
         if (this.maybeLodCount < 2) {
             debugger;
         }
 
-        // debugger;
+        this.unkArr2.load(pkg);
+        this.unkArr3.load(pkg);
+        this.unkArr4.load(pkg);
+        this.unkArr5.load(pkg);
+        this.unkArr6.load(pkg);
 
-        this.unkArr2 = new FPrimitiveArray(BufferValue.uint16).load(pkg);
-        this.unkArr3 = new FArray(FUnknownStruct1).load(pkg);
-        this.unkArr4 = new FPrimitiveArray(BufferValue.uint16).load(pkg);
-        this.unkArr5 = new FArray(FUnknownStruct2).load(pkg);
-        this.unkArr6 = new FArray(FUnknownStruct3).load(pkg);
-        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(int32).value as number);
+        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(float).value as number);
 
         if (this.maybeLodCount >= 3) {
             this.unkVar0 = pkg.read(uint32).value as number;
