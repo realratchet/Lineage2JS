@@ -9,29 +9,29 @@ import FQuaternion from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
 
-class FUnknownStruct2 extends FConstructable {
-    public unkArr: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
-    public unkInt32: number;
+class FWeightIndex extends FConstructable {
+    public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
+    public startBoneInf: number;
 
     public load(pkg: UPackage): this {
         const uint32 = new BufferValue(BufferValue.uint32);
 
-        this.unkArr.load(pkg);
-        this.unkInt32 = pkg.read(uint32).value as number;
+        this.boneInfIndices.load(pkg);
+        this.startBoneInf = pkg.read(uint32).value as number;
 
         return this;
     }
 }
 
-class FUnknownStruct3 extends FConstructable {
-    public unkInt16_0: number;
-    public unkInt16_1: number;
+class FBoneInfluence extends FConstructable {
+    public boneWeight: number;
+    public boneIndex: number;
 
     public load(pkg: UPackage): this {
         const uint16 = new BufferValue(BufferValue.uint16);
 
-        this.unkInt16_0 = pkg.read(uint16).value as number;
-        this.unkInt16_1 = pkg.read(uint16).value as number;
+        this.boneWeight = pkg.read(uint16).value as number;
+        this.boneIndex = pkg.read(uint16).value as number;
 
         return this;
     }
@@ -301,8 +301,8 @@ class USkeletalMesh extends ULodMesh {
     protected refSkeleton = new FArray(FMeshBone);
     protected animationId: number;
     protected skeletalDepth: number;
-    protected weightIndices = new FArray(FUnknownStruct2);
-    protected boneInluences = new FArray(FUnknownStruct3);
+    protected weightIndices = new FArray(FWeightIndex);
+    protected boneInluences = new FArray(FBoneInfluence);
     protected attachAliases: string[];
     protected attachBoneNames: string[];
     protected attachCoords = new FArray(FCoords);
