@@ -1,10 +1,10 @@
 import BufferValue from "@client/assets/buffer-value";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
 import FConstructable from "../un-constructable";
 import FCoords from "../un-coords";
 import ULodMesh from "../un-lod-mesh";
 import FNumber from "../un-number";
-import UPackage from "../un-package";
 import FQuaternion from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
@@ -38,10 +38,10 @@ class FBoneInfluence extends FConstructable {
 }
 
 class FJointPos extends FConstructable {
-    rotation = new FQuaternion();
-    position = new FVector();
-    scale = new FVector();
-    length: number;
+    public rotation = new FQuaternion();
+    public position = new FVector();
+    public scale = new FVector();
+    public length: number;
 
     public load(pkg: UPackage): this {
         const float = new BufferValue(BufferValue.float);
@@ -81,134 +81,137 @@ class FMeshBone extends FConstructable {
     }
 }
 
-class FUnknownSubmeshType1 extends FConstructable {
-    public a: number;
-    public b: number;
-    public c: number;
-    public d: number;
+class FMeshNorm extends FConstructable {
+    public x = 10;
+    public y = 10;
+    public z = 10;
+
+    public v: number;
 
     public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-
-        this.a = pkg.read(float).value as number;
-        this.b = pkg.read(float).value as number;
-        this.c = pkg.read(float).value as number;
-        this.d = pkg.read(float).value as number;
+        this.v = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
 
         return this;
     }
 }
 
-class FUnknownSubmeshType2 extends FConstructable {
-    public unkArr: number[];
+class FSkinPoint extends FConstructable {
+    public point = new FVector();
+    public normal = new FMeshNorm();
+
+    public load(pkg: UPackage): this {
+
+        this.point.load(pkg);
+        this.normal.load(pkg);
+
+        return this;
+    }
+}
+
+class FSkelMeshSection extends FConstructable {
+    public materialIndex: number;
+    public minStreamIndex: number;
+    public minWedgeIndex: number;
+    public maxWedgeIndex: number;
+    public numStreamIndices: number;
+    public boneIndex: number;
+    public fE: number;
+    public firstFace: number;
+    public numFaces: number;
 
     public load(pkg: UPackage): this {
         const int16 = new BufferValue(BufferValue.int16);
 
-        this.unkArr = new Array(9).fill(1).map(() => pkg.read(int16).value as number);
+        this.materialIndex = pkg.read(int16).value as number;
+
+        this.minStreamIndex = pkg.read(int16).value as number;
+
+        this.minWedgeIndex = pkg.read(int16).value as number;
+        this.maxWedgeIndex = pkg.read(int16).value as number;
+
+        this.numStreamIndices = pkg.read(int16).value as number;
+
+        this.boneIndex = pkg.read(int16).value as number;
+        this.fE = pkg.read(int16).value as number;
+        this.firstFace = pkg.read(int16).value as number;
+        this.numFaces = pkg.read(int16).value as number;
 
         return this;
     }
 }
 
-class FSkinVertexStreamSubtype extends FConstructable {
-    public unkArr: number[];
+class FAnimMeshVertex extends FConstructable {
+    public position = new FVector();
+    public normal = new FVector();
+    public texU: number;
+    public texV: number;
 
     public load(pkg: UPackage): this {
 
         const float = new BufferValue(BufferValue.float);
 
-        this.unkArr = new Array(8).fill(1).map(() => pkg.read(float).value as number);
-
-        debugger;
+        this.position.load(pkg);
+        this.normal.load(pkg);
+        this.texU = pkg.read(float).value as number;
+        this.texV = pkg.read(float).value as number;
 
         return this;
     }
 }
 
 class FSkinVertexStream extends FConstructable {
-    public x: number;
-    public y: number;
-    public z: number;
-    public unkArr = new FArray(FSkinVertexStreamSubtype);
-
-    public load(pkg: UPackage): this {
-
-        const float = new BufferValue(BufferValue.float);
-
-        this.x = pkg.read(float).value as number;
-        this.y = pkg.read(float).value as number;
-        this.z = pkg.read(float).value as number;
-        this.unkArr.load(pkg);
-
-        return this;
-    }
-}
-
-class FUnknownSubmeshType4 extends FConstructable {
-    public a: number;
-    public b: number;
-
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.a = pkg.read(float).value as number;
-        this.b = pkg.read(uint32).value as number;
-
-        return this;
-    }
-}
-
-class FUnknownSubmeshType5 extends FConstructable {
-    public a: number;
-    public b: number;
-    public c: number;
-    public d: number;
-
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-        const uint8 = new BufferValue(BufferValue.uint8);
-
-        this.a = pkg.read(float).value as number;
-        this.c = pkg.read(uint8).value as number;
-
-        this.b = pkg.read(float).value as number;
-        this.d = pkg.read(uint8).value as number;
-
-        return this;
-    }
-}
-
-class FUnknownSubmeshType6 extends FConstructable {
-    public a: number;
-    public b: number;
-
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.a = pkg.read(float).value as number;
-        this.b = pkg.read(uint32).value as number;
-
-        return this;
-    }
-}
-
-class FLikelySubmesh extends FConstructable {
-    public unkArr0 = new FPrimitiveArray(BufferValue.float);
-    public unkArr1 = new FArray(FUnknownSubmeshType1);
+    public revision: number;
     public unkVar0: number;
-    public unkArr2 = new FArray(FUnknownSubmeshType2);
-    public unkArr3 = new FArray(FUnknownSubmeshType2);
-    public indexBuffer1 = new FRawIndexBuffer();
-    public indexBuffer2 = new FRawIndexBuffer();
+    public unkVar1: number;
+    public vertices = new FArray(FAnimMeshVertex);
+
+    public load(pkg: UPackage): this {
+
+        const uint32 = new BufferValue(BufferValue.uint32);
+
+        this.revision = pkg.read(uint32).value as number;
+        this.unkVar0 = pkg.read(uint32).value as number;
+        this.unkVar1 = pkg.read(uint32).value as number;
+        this.vertices.load(pkg);
+
+        return this;
+    }
+}
+
+class FTriangleLOD extends FConstructable {
+    public indices: [number, number, number] = new Array(3) as [number, number, number];
+    public materialIndex: number;
+
+    public load(pkg: UPackage): this {
+        const uint16 = new BufferValue(BufferValue.uint16);
+
+        this.indices[0] = pkg.read(uint16).value as number;
+        this.indices[1] = pkg.read(uint16).value as number;
+        this.indices[2] = pkg.read(uint16).value as number;
+
+        this.materialIndex = pkg.read(uint16).value as number;
+
+        return this;
+    }
+}
+class FStaticModelLOD extends FConstructable {
+    public skinningData = new FPrimitiveArray(BufferValue.uint32);
+    public skinPoints = new FArray(FSkinPoint);
+    public numSoftWedges: number;
+    public softSections = new FArray(FSkelMeshSection);
+    public rigidSections = new FArray(FSkelMeshSection);
+    public softIndices = new FRawIndexBuffer();
+    public rigidIndices = new FRawIndexBuffer();
     public skinVertexStream = new FSkinVertexStream();
-    public unkLazyArr0 = new FArrayLazy(FUnknownSubmeshType4);
-    public unkLazyArr1 = new FArrayLazy(FUnknownSubmeshType5);
-    public unkLazyArr2 = new FArrayLazy(FUnknownSubmeshType6);
-    public unkLazyArr3 = new FArrayLazy(FVector);
-    public unkArr4: number[];
+    public vertexInfluence = new FArrayLazy(FVertexInfluence);
+    public wedges = new FArrayLazy(FMeshWedge);
+    public faces = new FArrayLazy(FTriangleLOD);
+    public points = new FArrayLazy(FVector);
+    public lodHysteresis: number;
+    public numSharedVertices: number;
+    public lodMaxInfluences: number;
+    public unkVar0: number;
+    public unkVar1: number;
 
     public load(pkg: UPackage): this {
 
@@ -216,22 +219,32 @@ class FLikelySubmesh extends FConstructable {
         const uint32 = new BufferValue(BufferValue.uint32);
         const float = new BufferValue(BufferValue.float);
 
-        this.unkArr0.load(pkg);
-        this.unkArr1.load(pkg);
-        this.unkVar0 = pkg.read(int32).value as number;
-        this.unkArr2.load(pkg);
-        this.unkArr3.load(pkg);
+        this.skinningData.load(pkg);
+        this.skinPoints.load(pkg);
+        this.numSoftWedges = pkg.read(int32).value as number;
+        this.softSections.load(pkg);
+        this.rigidSections.load(pkg);
 
-        this.indexBuffer1.load(pkg);
-        this.indexBuffer2.load(pkg);
+        this.softIndices.load(pkg);
+        this.rigidIndices.load(pkg);
         this.skinVertexStream.load(pkg);
 
-        this.unkLazyArr0.load(pkg);
-        this.unkLazyArr1.load(pkg);
-        this.unkLazyArr2.load(pkg);
-        this.unkLazyArr3.load(pkg);
+        this.vertexInfluence.load(pkg);
+        this.wedges.load(pkg);
+        this.faces.load(pkg);
+        this.points.load(pkg);
 
-        this.unkArr4 = new Array(6).fill(1).map(() => pkg.read(float).value as number);
+        this.lodHysteresis = pkg.read(float).value as number;
+        this.numSharedVertices = pkg.read(uint32).value as number
+        this.lodMaxInfluences = pkg.read(uint32).value as number
+        this.unkVar0 = pkg.read(uint32).value as number
+        this.unkVar1 = pkg.read(uint32).value as number
+
+
+        const useNewWedges = pkg.read(uint32).value as number
+
+        if (useNewWedges !== 0)
+            debugger;
 
         return this;
     }
@@ -277,7 +290,6 @@ class FTriangle extends FConstructable {
     }
 }
 
-
 class FVertexInfluence extends FConstructable {
     public weight: number;
     public iPoint: number;
@@ -306,7 +318,7 @@ class USkeletalMesh extends ULodMesh {
     protected attachAliases: string[];
     protected attachBoneNames: string[];
     protected attachCoords = new FArray(FCoords);
-    protected lodModels = new FArray(FLikelySubmesh);
+    protected lodModels = new FArray(FStaticModelLOD);
     protected sk_unkIndex1: number;
     protected points = new FArrayLazy(FVector);
     protected wedges = new FArrayLazy(FMeshWedge);
@@ -371,10 +383,146 @@ class USkeletalMesh extends ULodMesh {
         }
 
         console.assert(this.readHead === this.readTail, "Should be zero");
+    }
 
-        debugger;
+    public async getDecodeInfo(library: DecodeLibrary): Promise<ISkinnedMeshObjectDecodeInfo> {
+        await this.onLoaded();
+        
+        const { positions, uvs, bones, weights } = convertWedges(this.points, this.wedges, this.vertexInfluences);
+        const indices = buildIndices(this.faces);
+
+        if (this.uuid in library.geometries) return {
+            uuid: this.uuid,
+            type: "SkinnedMesh",
+            name: this.objectName,
+            geometry: this.uuid
+        } as ISkinnedMeshObjectDecodeInfo;
+
+        library.geometries[this.uuid] = null;
+
+        library.geometries[this.uuid] = {
+            attributes: {
+                positions,
+                bones,
+                weights,
+                uvs
+            },
+            indices,
+            bounds: this.decodeBoundsInfo()
+        };
+
+        return {
+            uuid: this.uuid,
+            type: "SkinnedMesh",
+            name: this.objectName,
+            geometry: this.uuid
+        } as ISkinnedMeshObjectDecodeInfo;
     }
 }
 
 export default USkeletalMesh;
 export { USkeletalMesh };
+
+const MAX_BONES = 4;
+
+function buildIndices(faces: FTriangle[]) {
+    const countFaces = faces.length;
+    const TypedIndicesArray = getTypedArrayConstructor(countFaces);
+    const indices = new TypedIndicesArray(countFaces);
+
+    for (let i = 0; i < countFaces; i++) {
+        const tri = faces[i];
+        const offsetIndex = i * 3;
+
+        indices[offsetIndex + 0] = tri.indices[0];
+        indices[offsetIndex + 1] = tri.indices[1];
+        indices[offsetIndex + 2] = tri.indices[2];
+    }
+
+    return indices;
+}
+
+function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVertexInfluence[]) {
+    const vertexInfos: VertexInfo_T[] = new Array(points.length);
+
+    for (let i = 0, len = points.length; i < len; i++) {
+        vertexInfos[i] = {
+            numInfs: 0,
+            bones: new Array(MAX_BONES).fill(0),
+            weights: new Array(MAX_BONES).fill(0)
+        }
+    }
+
+    // collect influences per vertex
+    for (const infl of influences) {
+        const vinfo = vertexInfos[infl.iPoint];
+        const numInfs = vinfo.numInfs++;
+        const idx = numInfs;
+
+        if (numInfs >= MAX_BONES) {
+            debugger;
+        }
+
+        // add the influence
+        vinfo.bones[idx] = infl.iBone;
+        vinfo.weights[idx] = infl.weight;
+    }
+
+    // normalize influences
+    for (const V of vertexInfos) {
+        if (!V || V.numInfs === 0) {
+            debugger;
+        }
+
+        if (V.numInfs <= MAX_BONES) continue;	// no normalization is required
+
+        let s = 0;
+
+        for (let j = 0; j < MAX_BONES; j++)		// count sum
+            s += V.weights[j];
+
+        s = 1.0 / s;
+
+        for (let j = 0; j < MAX_BONES; j++)		// adjust weights
+            V.weights[j] *= s;
+    }
+
+    const wedgeCount = wedges.length
+    const positions = new Float32Array(3 * wedgeCount);
+    const uvs = new Float32Array(2 * wedgeCount);
+    const bones = new Uint8Array(MAX_BONES * wedgeCount);
+    const weights = new Float32Array(MAX_BONES * wedgeCount);
+
+    // create vertices
+    for (let i = 0; i < wedgeCount; i++) {
+        const wedge = wedges[i];
+        const vinfo = vertexInfos[wedge.iVertex];
+
+        const point = points[wedge.iVertex];
+        const texU = wedge.texU, texV = wedge.texV;
+
+        const offsetUv = 2 * i, offsetVertex = 3 * i, offsetBone = MAX_BONES * i;
+
+        positions[offsetVertex + 0] = point.x;
+        positions[offsetVertex + 1] = point.z;
+        positions[offsetVertex + 2] = point.y;
+
+        uvs[offsetUv + 0] = texU;
+        uvs[offsetUv + 1] = texV;
+
+        for (let j = 0, len = vinfo.numInfs; j < len; j++) {
+            const off = offsetBone + i;
+
+            bones[off] = vinfo.bones[j];
+            weights[off] = vinfo.weights[j];
+        }
+    }
+
+    return { positions, uvs, bones, weights };
+}
+
+type VertexInfo_T = {
+    numInfs: number;
+    bones: number[]
+    weights: number[]
+}

@@ -222,7 +222,7 @@ interface IDecodedSpriteParameter extends IDecodedParameter {
 type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effects";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges";
+type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh";
 
 type Vector2Arr = [number, number];
 type Vector4Arr = [number, number, number, number];
@@ -241,7 +241,12 @@ interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
     actorName: string;
     type: "StaticMeshActor",
     instance: IStaticMeshInstanceDecodeInfo
+}
 
+interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+    type: "SkinnedMesh";
+    geometry: string;
+    materials?: string;
 }
 
 interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
@@ -300,6 +305,8 @@ interface IGeometryDecodeInfo {
         colorsInstance?: Float32Array,
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
+        bones?: Uint8Array;
+        weights?: Float32Array;
     };
     indices?: IndexLikeArray;
     colliderIndices?: Uint32Array;
@@ -308,8 +315,9 @@ interface IGeometryDecodeInfo {
 }
 
 interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+    type: "StaticMesh",
     geometry: string,
-    materials: string
+    materials?: string
 }
 
 interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {

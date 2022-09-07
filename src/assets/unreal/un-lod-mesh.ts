@@ -73,7 +73,7 @@ class ULodMesh extends UMesh {
     protected skinTesselationFactor: number;
     protected unkVar2: number;
     protected impostor = new MeshImpostor();
-    public lodMeshMaterials: UMaterial[];
+    protected lodMeshMaterials: UMaterial[];
 
     public doLoad(pkg: UPackage, exp: UExport) {
         super.doLoad(pkg, exp);

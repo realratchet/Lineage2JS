@@ -41,9 +41,17 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     const meshIndex = antaras.index + 1;
 
-    const mesh = await pkg.fetchObject(meshIndex);
+    const mesh = await pkg.fetchObject<USkeletalMesh>(meshIndex);
 
-    debugger;
+    const library = new DecodeLibrary();
+
+    const info = await mesh.getDecodeInfo(library);
+
+    const char = decodeObject3D(library, info) as THREE.SkinnedMesh;
+
+    char.position.copy(renderManager.player.position);
+
+    renderManager.scene.add(char);
 }
 
 async function startCore() {
@@ -56,7 +64,7 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
-    _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
+    await _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
 
     const loadSettings = {
         helpersZoneBounds: false,

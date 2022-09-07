@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -349,6 +349,14 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
 }
 
 
+function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo) {
+    const geometry = fetchGeometry(library.geometries[info.geometry]);
+    // const material = new MeshBasicMaterial({ color: 0xff00ff });
+    const material = new PointsMaterial({ color: 0xff00ff });
+
+    return new Points(geometry, material);
+}
+
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
@@ -360,6 +368,7 @@ function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecod
         case "Model":
         case "StaticMesh": return decodeStaticMeshWrapped(library, info as IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
+        case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }
