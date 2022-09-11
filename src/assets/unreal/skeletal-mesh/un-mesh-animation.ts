@@ -157,7 +157,7 @@ class FAnimSequence extends FConstructable {
     public frameStart: number;
     public frameCount: number;
     public notifications = new FArray(FMeshAnimNotify);
-    public rate: number;
+    public framerate: number;
     public unkVar1: number;
     public unkIndex0: number;
     public unkVar2: number;
@@ -186,7 +186,7 @@ class FAnimSequence extends FConstructable {
         this.frameStart = pkg.read(uint32).value as number;
         this.frameCount = pkg.read(uint32).value as number;
         this.notifications.load(pkg);
-        this.rate = pkg.read(float).value as number;
+        this.framerate = pkg.read(float).value as number;
 
         if (verLicense >= 1) {
             this.unkVar0 = pkg.read(uint32).value as number;
@@ -248,34 +248,6 @@ class UMeshAnimation extends UObject {
 
             this.sequences = new FArray(FAnimSequence).load(pkg);
 
-
-            // const a = pkg.read(uint32).value as number;
-            // pkg.seek(1);
-            // const startOffset = pkg.tell();
-
-            // let offset = 0;
-
-            // while(true) {
-            //     const b = pkg.read(uint32).value as number;
-
-            //     if (b === 10214956) {
-            //         debugger;
-            //     }
-
-            //     pkg.seek(startOffset + offset, "set");
-
-            //     offset++;
-            // }
-
-            // pkg.seek(2);
-
-            // while (true) {
-            //     const b = pkg.read(uint32).value as number;
-
-            //     if (b === 10214956)
-            //         debugger;
-            // }
-
         } else {
             debugger;
         }
@@ -283,8 +255,6 @@ class UMeshAnimation extends UObject {
         this.readHead = pkg.tell();
 
         console.assert(this.readHead === this.readTail, "Should be zero");
-
-        debugger;
     }
 }
 

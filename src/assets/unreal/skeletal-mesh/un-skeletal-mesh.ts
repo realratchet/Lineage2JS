@@ -431,6 +431,31 @@ class USkeletalMesh extends ULodMesh {
             bounds: this.decodeBoundsInfo()
         };
 
+        const sequence = this.animation.sequences.getElem(13);
+        const move = this.animation.moves[13];
+
+        for (let i = 0, len = move.boneIndices.getElemCount(); i < len; i++) {
+            const boneIndex = move.boneIndices.getElem(i);
+            const bonename = this.refSkeleton.getElem(boneIndex).boneName;
+            const track = move.animTracks.getElem(i);
+            const animName = sequence.name;
+            const framerate = sequence.framerate;
+            const trackFrameCount = track.keyTime.getElemCount();
+
+            const times = new Array(trackFrameCount);
+            const positions = new Array(trackFrameCount * 3);
+            const rotations = new Array(trackFrameCount * 4);
+
+            for (let j = 0; i < trackFrameCount; i++) {
+                const time = track.keyTime.getElem(j);
+                const pos = track.keyPos.getElem(j)
+                const rot = track.keyQuat.getElem(j);
+
+                times[j] = time / framerate;
+
+            }
+        }
+
         return {
             uuid: this.uuid,
             type: "SkinnedMesh",
