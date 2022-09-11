@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -348,14 +348,72 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     return terrain;
 }
 
+function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
+    const bone = new Bone();
+
+    bone.name = info.name;
+
+    if (info.position) bone.position.fromArray(info.position);
+    if (info.scale) bone.scale.fromArray(info.scale);
+    if (info.quaternion) bone.quaternion.fromArray(info.quaternion);
+
+    // if (info.name.includes("R")) {
+    //     const geo = new SphereBufferGeometry(5);
+    //     const mat = new MeshBasicMaterial({ color: 0xff0000, transparent: true, depthWrite: false, depthTest: false });
+
+    //     const m = new Mesh(geo, mat);
+
+    //     bone.add(m);
+    // } /*else if (info.name.includes("L")) {
+    //     const geo = new SphereBufferGeometry(5);
+    //     const mat = new MeshBasicMaterial({ color: 0x0000ff, transparent: true, depthWrite: false, depthTest: false });
+
+    //     const m = new Mesh(geo, mat);
+
+    //     bone.add(m);
+    // } */ else {
+    //     const geo = new SphereBufferGeometry(5);
+    //     const mat = new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthWrite: false, depthTest: false });
+
+    //     const m = new Mesh(geo, mat);
+
+    //     bone.add(m);
+    // }
+
+    return bone;
+}
+
+function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
+    const boneCount = infos.length;
+    const bones = new Array(boneCount) as Bone[];
+
+    for (let i = 0; i < boneCount; i++) {
+        const info = infos[i];
+        const bone = bones[i] = decodeBone(library, info);
+
+        if (i === 0) continue;
+
+        bones[info.parent].add(bone);
+    }
+
+    return bones;
+}
 
 function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
     const infoMats = library.materials[info.materials];
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
-    
-    return new Mesh(geometry, materials);
+
+    const bones = decodeBones(library, info.skeleton);
+    const skeleton = new Skeleton(bones);
+
+    const mesh = new SkinnedMesh(geometry, materials);
+
+    mesh.add(bones[0]);
+    mesh.bind(skeleton);
+
+    return mesh;
 }
 
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {

@@ -44,6 +44,7 @@ import UEncodedFile from "./un-encoded-file";
 import UTextBuffer from "./un-text-buffer";
 import UCubemap from "./un-cubemap";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
+import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -260,6 +261,7 @@ class UPackage extends UEncodedFile {
             case "TexEnvMap": Constructor = UTexEnvMap; break;
             case "Cubemap": Constructor = UCubemap; break;
             case "SkeletalMesh": Constructor = USkeletalMesh; break;
+            case "MeshAnimation": Constructor = UMeshAnimation; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

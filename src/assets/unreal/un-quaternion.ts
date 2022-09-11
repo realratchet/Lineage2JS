@@ -1,3 +1,5 @@
+import { Euler, Quaternion } from "three";
+import { DEG2RAD } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
 
@@ -25,6 +27,10 @@ class FQuaternion extends FConstructable {
         this.w = pkg.read(float).value as number;
 
         return this;
+    }
+
+    public toQuatElements(): QuaternionArr {
+        return [-this.x, -this.z, this.y, this.w];
     }
 }
 

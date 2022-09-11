@@ -48,6 +48,7 @@ type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
 type UEncodedFile = import("./un-encoded-file").UEncodedFile;
 type UTextBuffer = import("./un-text-buffer").UTextBuffer;
 type USkeletalMesh = import("./skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
+type UMeshAnimation = import("./skeletal-mesh/un-mesh-animation").UMeshAnimation;
 
 type UMaterial = import("./un-material").UMaterial;
 type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
@@ -222,10 +223,11 @@ interface IDecodedSpriteParameter extends IDecodedParameter {
 type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effects";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh";
+type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone";
 
 type Vector2Arr = [number, number];
 type Vector4Arr = [number, number, number, number];
+type QuaternionArr = Vector4Arr;
 type ColorArr = Vector4Arr;
 type Vector3Arr = [number, number, number];
 type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
@@ -247,6 +249,7 @@ interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     type: "SkinnedMesh";
     geometry: string;
     materials?: string;
+    skeleton: IBoneDecodeInfo[];
 }
 
 interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
@@ -355,6 +358,15 @@ interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifie
 
 interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
     lightType: "Ambient"
+}
+
+interface IBoneDecodeInfo extends IBaseObjectDecodeInfo {
+    type: "Bone",
+    name: string,
+    position: Vector3Arr,
+    quaternion: QuaternionArr,
+    scale: Vector3Arr,
+    parent: number
 }
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };

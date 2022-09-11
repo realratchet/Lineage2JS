@@ -4,7 +4,7 @@ import AssetLoader from "./assets/asset-loader";
 // import UTerrainSector from "./assets/unreal/un-terrain-sector";
 // import UTexture from "./assets/unreal/un-texture";
 // import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight } from "three";
+import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 import BufferValue from "./assets/buffer-value";
 // import UStaticMeshInstance from "./assets/unreal/static-mesh/un-static-mesh-instance";
 // import UModel from "./assets/unreal/model/un-model";
@@ -43,15 +43,23 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     const mesh = await pkg.fetchObject<USkeletalMesh>(meshIndex);
 
-    const library = new DecodeLibrary();
+    const decodeLibrary = new DecodeLibrary();
 
-    const info = await mesh.getDecodeInfo(library);
+    decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
 
-    const char = decodeObject3D(library, info) as THREE.SkinnedMesh;
+    const info = await mesh.getDecodeInfo(decodeLibrary);
+
+    const char = decodeObject3D(decodeLibrary, info) as THREE.SkinnedMesh;
 
     char.position.copy(renderManager.player.position);
 
     renderManager.scene.add(char);
+
+    renderManager.scene.updateMatrixWorld(true);
+
+    const helper = new SkeletonHelper(char);
+
+    renderManager.scene.add(helper);
 }
 
 async function startCore() {

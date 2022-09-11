@@ -1,5 +1,6 @@
 import BufferValue from "@client/assets/buffer-value";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import { generateUUID } from "three/src/math/MathUtils";
 import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
 import FConstructable from "../un-constructable";
 import FCoords from "../un-coords";
@@ -50,6 +51,8 @@ class FJointPos extends FConstructable {
         this.position.load(pkg);
         this.length = pkg.read(float).value as number;
         this.scale.load(pkg);
+
+        this.scale.set(1, 1, 1);
 
         return this;
     }
@@ -312,6 +315,7 @@ class USkeletalMesh extends ULodMesh {
     protected points2 = new FArray(FVector);
     protected refSkeleton = new FArray(FMeshBone);
     protected animationId: number;
+    protected animation: UMeshAnimation;
     protected skeletalDepth: number;
     protected weightIndices = new FArray(FWeightIndex);
     protected boneInluences = new FArray(FBoneInfluence);
@@ -343,6 +347,14 @@ class USkeletalMesh extends ULodMesh {
         this.refSkeleton.load(pkg);
 
         this.animationId = pkg.read(compat).value as number;
+
+        if (this.animationId !== 0) {
+            this.promisesLoading.push(new Promise<void>(async resolve => {
+                this.animation = await pkg.fetchObject<UMeshAnimation>(this.animationId);
+
+                resolve();
+            }));
+        }
 
         this.skeletalDepth = pkg.read(uint32).value as number;
         this.weightIndices.load(pkg);
@@ -396,18 +408,17 @@ class USkeletalMesh extends ULodMesh {
             materials: this.uuid
         } as ISkinnedMeshObjectDecodeInfo;
 
+        library.geometries[this.uuid] = null;
+        library.materials[this.uuid] = null;
+
         const section = this;
         const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
         const { indices, groups } = buildIndices(section.faces, section.lodMeshMaterials.length);
-
-
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
+        const skeleton = collectSkeleton(this.refSkeleton);
 
         const materials = await Promise.all(this.lodMeshMaterials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
@@ -426,6 +437,7 @@ class USkeletalMesh extends ULodMesh {
             name: this.objectName,
             geometry: this.uuid,
             materials: this.uuid,
+            skeleton
         } as ISkinnedMeshObjectDecodeInfo;
     }
 }
@@ -438,8 +450,6 @@ const MAX_BONES = 4;
 function buildIndices(faces: FTriangle[], materialCount: number) {
     const countFaces = faces.length;
     const TypedIndicesArray = getTypedArrayConstructor(countFaces * 3);
-    // const indices = new TypedIndicesArray(countFaces * 3);
-
     const indicesByMaterial: number[][] = new Array(materialCount);
 
     for (let i = 0; i < materialCount; i++)
@@ -451,10 +461,6 @@ function buildIndices(faces: FTriangle[], materialCount: number) {
         const constainer = indicesByMaterial[matIndex]
 
         constainer.push(...tri.indices);
-
-        // indices[offsetIndex + 0] = tri.indices[0];
-        // indices[offsetIndex + 1] = tri.indices[1];
-        // indices[offsetIndex + 2] = tri.indices[2];
     }
 
     const indices = new TypedIndicesArray(indicesByMaterial.flat());
@@ -560,6 +566,28 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
     }
 
     return { positions, uvs, bones, weights };
+}
+
+function collectSkeleton(bones: FMeshBone[]): IBoneDecodeInfo[] {
+    const decodedBones: IBoneDecodeInfo[] = new Array(bones.length);
+
+    for (let i = 0, len = bones.length; i < len; i++) {
+        const bone = bones[i];
+        const pos = bone.bonePos;
+        const decoded = {
+            type: "Bone",
+            uuid: generateUUID(),
+            name: bone.boneName,
+            parent: bone.parentIndex,
+            position: pos.position.getVectorElements(),
+            scale: pos.scale.getVectorElements(),
+            quaternion: pos.rotation.toQuatElements()
+        } as IBoneDecodeInfo;
+
+        decodedBones[i] = decoded;
+    }
+
+    return decodedBones;
 }
 
 type VertexInfo_T = {
