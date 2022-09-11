@@ -351,10 +351,11 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
 
 function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
-    // const material = new MeshBasicMaterial({ color: 0xff00ff });
-    const material = new PointsMaterial({ color: 0xff00ff });
+    const infoMats = library.materials[info.materials];
 
-    return new Points(geometry, material);
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    
+    return new Mesh(geometry, materials);
 }
 
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {

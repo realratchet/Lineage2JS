@@ -465,8 +465,9 @@ class RenderManager {
     protected _postRender(currentTime: number, deltaTime: number) { }
 
     public startRendering() {
-        this.physicsWorld.step();
-        this.nextPhysicsTick = 3000;
+        // this.physicsWorld.step();
+        // this.nextPhysicsTick = 3000;
+        this.nextPhysicsTick = Infinity;
         this.scene.updateMatrixWorld(true);
 
         this.collectColliders();

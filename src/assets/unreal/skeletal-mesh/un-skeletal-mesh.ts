@@ -203,7 +203,7 @@ class FStaticModelLOD extends FConstructable {
     public softIndices = new FRawIndexBuffer();
     public rigidIndices = new FRawIndexBuffer();
     public skinVertexStream = new FSkinVertexStream();
-    public vertexInfluence = new FArrayLazy(FVertexInfluence);
+    public vertexInfluences = new FArrayLazy(FVertexInfluence);
     public wedges = new FArrayLazy(FMeshWedge);
     public faces = new FArrayLazy(FTriangleLOD);
     public points = new FArrayLazy(FVector);
@@ -229,7 +229,7 @@ class FStaticModelLOD extends FConstructable {
         this.rigidIndices.load(pkg);
         this.skinVertexStream.load(pkg);
 
-        this.vertexInfluence.load(pkg);
+        this.vertexInfluences.load(pkg);
         this.wedges.load(pkg);
         this.faces.load(pkg);
         this.points.load(pkg);
@@ -387,18 +387,26 @@ class USkeletalMesh extends ULodMesh {
 
     public async getDecodeInfo(library: DecodeLibrary): Promise<ISkinnedMeshObjectDecodeInfo> {
         await this.onLoaded();
-        
-        const { positions, uvs, bones, weights } = convertWedges(this.points, this.wedges, this.vertexInfluences);
-        const indices = buildIndices(this.faces);
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
             type: "SkinnedMesh",
             name: this.objectName,
-            geometry: this.uuid
+            geometry: this.uuid,
+            materials: this.uuid
         } as ISkinnedMeshObjectDecodeInfo;
 
+        const section = this;
+        const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
+        const { indices, groups } = buildIndices(section.faces, section.lodMeshMaterials.length);
+
+
         library.geometries[this.uuid] = null;
+        library.materials[this.uuid] = null;
+
+        const materials = await Promise.all(this.lodMeshMaterials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+
+        library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
 
         library.geometries[this.uuid] = {
             attributes: {
@@ -407,6 +415,7 @@ class USkeletalMesh extends ULodMesh {
                 weights,
                 uvs
             },
+            groups,
             indices,
             bounds: this.decodeBoundsInfo()
         };
@@ -415,7 +424,8 @@ class USkeletalMesh extends ULodMesh {
             uuid: this.uuid,
             type: "SkinnedMesh",
             name: this.objectName,
-            geometry: this.uuid
+            geometry: this.uuid,
+            materials: this.uuid,
         } as ISkinnedMeshObjectDecodeInfo;
     }
 }
@@ -425,21 +435,42 @@ export { USkeletalMesh };
 
 const MAX_BONES = 4;
 
-function buildIndices(faces: FTriangle[]) {
+function buildIndices(faces: FTriangle[], materialCount: number) {
     const countFaces = faces.length;
-    const TypedIndicesArray = getTypedArrayConstructor(countFaces);
-    const indices = new TypedIndicesArray(countFaces);
+    const TypedIndicesArray = getTypedArrayConstructor(countFaces * 3);
+    // const indices = new TypedIndicesArray(countFaces * 3);
+
+    const indicesByMaterial: number[][] = new Array(materialCount);
+
+    for (let i = 0; i < materialCount; i++)
+        indicesByMaterial[i] = [];
 
     for (let i = 0; i < countFaces; i++) {
         const tri = faces[i];
-        const offsetIndex = i * 3;
+        const matIndex = tri.materialIndex;
+        const constainer = indicesByMaterial[matIndex]
 
-        indices[offsetIndex + 0] = tri.indices[0];
-        indices[offsetIndex + 1] = tri.indices[1];
-        indices[offsetIndex + 2] = tri.indices[2];
+        constainer.push(...tri.indices);
+
+        // indices[offsetIndex + 0] = tri.indices[0];
+        // indices[offsetIndex + 1] = tri.indices[1];
+        // indices[offsetIndex + 2] = tri.indices[2];
     }
 
-    return indices;
+    const indices = new TypedIndicesArray(indicesByMaterial.flat());
+    const groups: ArrGeometryGroup[] = new Array(materialCount);
+
+    let firstIndex = 0;
+
+    for (let i = 0; i < materialCount; i++) {
+        const indexCount = indicesByMaterial[i].length;
+
+        groups[i] = [firstIndex, indexCount, i];
+
+        firstIndex = firstIndex + indexCount;
+    }
+
+    return { indices, groups };
 }
 
 function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVertexInfluence[]) {
@@ -492,6 +523,16 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
     const uvs = new Float32Array(2 * wedgeCount);
     const bones = new Uint8Array(MAX_BONES * wedgeCount);
     const weights = new Float32Array(MAX_BONES * wedgeCount);
+
+    // const vegies = wedges.map(w => w.iVertex).sort((a, b) => a - b);
+    // const pointy = new Array(points.length).fill(false);
+
+    // vegies.forEach(v => pointy[v] = true);
+
+    // const filthy = pointy.filter(f => f === false);
+
+
+    // debugger;
 
     // create vertices
     for (let i = 0; i < wedgeCount; i++) {
