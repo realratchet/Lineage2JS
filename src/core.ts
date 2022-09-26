@@ -53,24 +53,24 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     const char = decodeObject3D(decodeLibrary, info) as THREE.SkinnedMesh;
 
-    char.position.copy(renderManager.player.position);
+    char.position.set(-87063.33997244012, -3700, 239964.66910649382);
 
     renderManager.scene.add(char);
 
     renderManager.scene.updateMatrixWorld(true);
 
-    const helper = new SkeletonHelper(char);
+    // const helper = new SkeletonHelper(char);
 
-    renderManager.scene.add(helper);
+    // renderManager.scene.add(helper);
 
     // debugger;
 
-    // const clip = char.userData.animations["Wait"];
-    // const action = renderManager.mixer.clipAction(clip);
+    const clip = char.userData.animations["Wait"];
+    const action = renderManager.mixer.clipAction(clip);
 
-    // // debugger;
+    // debugger;
 
-    // action.play();
+    action.play();
 }
 
 async function startCore() {
@@ -144,7 +144,7 @@ async function startCore() {
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI

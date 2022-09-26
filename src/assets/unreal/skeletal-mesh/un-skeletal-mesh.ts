@@ -613,7 +613,7 @@ class USkeletalMesh extends ULodMesh {
             }
         }
 
-        debugger;
+        // debugger;
 
         return {
             uuid: this.uuid,
@@ -715,7 +715,7 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
     const positions = new Float32Array(3 * wedgeCount);
     const uvs = new Float32Array(2 * wedgeCount);
     const bones = new Uint8Array(MAX_BONES * wedgeCount);
-    const weights = new Uint8Array(MAX_BONES * wedgeCount);
+    const weights = new Float32Array(MAX_BONES * wedgeCount);
 
     // create vertices
     for (let i = 0; i < wedgeCount; i++) {
