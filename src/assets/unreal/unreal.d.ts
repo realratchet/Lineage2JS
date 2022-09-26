@@ -250,6 +250,7 @@ interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     geometry: string;
     materials?: string;
     skeleton: IBoneDecodeInfo[];
+    animations: GenericObjectContainer_T<IKeyframeDecodeInfo_T[]>
 }
 
 interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
@@ -308,8 +309,8 @@ interface IGeometryDecodeInfo {
         colorsInstance?: Float32Array,
         uvs?: Float32Array | Float32Array[];
         uvs2?: Float32Array | Float32Array[];
-        bones?: Uint8Array;
-        weights?: Float32Array;
+        skinIndex?: Uint8Array;
+        skinWeight?: Float32Array;
     };
     indices?: IndexLikeArray;
     colliderIndices?: Uint32Array;
@@ -421,4 +422,11 @@ type LoadSettings_T = {
 type ISunDecodeInfo_T = {
     type: "Sun",
     sprites: string[]
+}
+
+type IKeyframeDecodeInfo_T = {
+    name: string,
+    times: Float32Array,
+    values: Float32Array,
+    type: "Vector" | "Quaternion"
 }

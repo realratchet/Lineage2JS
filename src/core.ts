@@ -37,6 +37,8 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     pkg = await assetLoader.load(pkg);
 
+    // debugger;
+
     const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("antaras"));
 
     const meshIndex = antaras.index + 1;
@@ -60,6 +62,15 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     const helper = new SkeletonHelper(char);
 
     renderManager.scene.add(helper);
+
+    // debugger;
+
+    // const clip = char.userData.animations["Wait"];
+    // const action = renderManager.mixer.clipAction(clip);
+
+    // // debugger;
+
+    // action.play();
 }
 
 async function startCore() {

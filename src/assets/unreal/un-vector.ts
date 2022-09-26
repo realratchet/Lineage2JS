@@ -122,7 +122,11 @@ class FVector extends FConstructable {
         );
     }
 
-    getVectorElements(): Vector3Arr { return [this.x, this.z, this.y]; }
+    public negate() { return this.multiplyScalar(-1); }
+
+    getVectorElements(): Vector3Arr {
+        return [this.x, this.z, this.y];
+    }
 
     applyRotator(rotator: FRotator, negate: boolean): FVector {
 
@@ -257,6 +261,8 @@ class FVector extends FConstructable {
 
         return outVector;
     }
+
+    public clone() { return new FVector(this.x, this.y, this.z); }
 }
 
 export default FVector;

@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereBufferGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneBufferGeometry } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereBufferGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneBufferGeometry, AnimationMixer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -29,6 +29,7 @@ class RenderManager {
     public isPersistentRendering: boolean = true;
     public readonly raycaster = new Raycaster();
     public speedCameraFPS = 50;
+    public readonly mixer = new AnimationMixer(this.scene);
 
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
@@ -121,6 +122,9 @@ class RenderManager {
         // this.camera.position.set(20, 20, 20);
         // this.controls.orbit.target.set(0, 0, 0);
 
+        // look player
+        this.camera.position.set(-87018.77219061163, -3229.4697159905663, 239965.36913660355);
+        this.controls.orbit.target.set(-87095.10586708593, -3290.0841351741838, 239987.7088327284);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -140,6 +144,7 @@ class RenderManager {
 
         this.scene.add(this.player);
         this.player.name = "Player";
+        this.player.visible = false;
         this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
         // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
@@ -248,7 +253,7 @@ class RenderManager {
                 //     new Vector3().addVectors(intersection.point, new Vector3(0, 100 * 1, 0)),
                 //     true
                 // );
-            this.player.goTo(collidable.point);
+                this.player.goTo(collidable.point);
 
             console.log(intersection);
         } catch (e) { }
@@ -373,6 +378,8 @@ class RenderManager {
     protected nextPhysicsTick: number;
 
     protected _preRender(currentTime: number, deltaTime: number) {
+        this.mixer.update(deltaTime / 1000);
+
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
 
@@ -416,12 +423,12 @@ class RenderManager {
             this.physicsWorld.step();
 
             this.player.update(this, currentTime, deltaTime);
-            
+
             // console.log(this.player.position);
-            
+
             this.nextPhysicsTick = currentTime + 1000 / 30;
         }
-        
+
         this.player.position.copy(this.player.getRigidbody().translation() as THREE.Vector3);
         this._updateObjects(currentTime, deltaTime);
         this._updateSun();

@@ -6,8 +6,8 @@ import UObject from "../un-object";
 import FQuaternion from "../un-quaternion";
 import FVector from "../un-vector";
 
-class FMeshAnimationSub1 extends FConstructable {
-    public likelySoundIndex: number;
+class FNamedBone extends FConstructable {
+    public boneName: string;
     public unkVar0: number;
     public unkVar1: number;
 
@@ -15,7 +15,7 @@ class FMeshAnimationSub1 extends FConstructable {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.likelySoundIndex = pkg.read(compat).value as number;
+        this.boneName = pkg.nameTable[pkg.read(compat).value as number].name.value as string;
         this.unkVar0 = pkg.read(uint32).value as number;
         this.unkVar1 = pkg.read(uint32).value as number;
 
@@ -206,8 +206,8 @@ class FAnimSequence extends FConstructable {
 }
 
 class UMeshAnimation extends UObject {
-    public unkVar0: number;
-    public unkArr0: FArray<FMeshAnimationSub1>;
+    public version: number;
+    public refBones: FArray<FNamedBone>;
     public moves: FMotionChunk[];
     public sequences: FArray<FAnimSequence>;
 
@@ -220,8 +220,8 @@ class UMeshAnimation extends UObject {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.unkVar0 = pkg.read(uint32).value as number;
-        this.unkArr0 = new FArray(FMeshAnimationSub1).load(pkg); // maybe sounds for each of the animation
+        this.version = pkg.read(uint32).value as number;
+        this.refBones = new FArray(FNamedBone).load(pkg); // maybe sounds for each of the animation
 
         if (verArchive >= 123 && verLicense >= 25) {
             const endPos = pkg.read(uint32).value as number;

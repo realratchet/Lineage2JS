@@ -6,9 +6,12 @@ import FConstructable from "../un-constructable";
 import FCoords from "../un-coords";
 import ULodMesh from "../un-lod-mesh";
 import FNumber from "../un-number";
-import FQuaternion from "../un-quaternion";
+import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+
+const gltfLoader = new GLTFLoader();
 
 class FWeightIndex extends FConstructable {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
@@ -400,6 +403,10 @@ class USkeletalMesh extends ULodMesh {
     public async getDecodeInfo(library: DecodeLibrary): Promise<ISkinnedMeshObjectDecodeInfo> {
         await this.onLoaded();
 
+        gltfLoader.setPath("/assets/UmodelExport/LineageMonsters/SkeletalMesh/")
+        const antaras = await gltfLoader.loadAsync("antaras_m00.gltf");
+
+
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
             type: "SkinnedMesh",
@@ -411,10 +418,15 @@ class USkeletalMesh extends ULodMesh {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        const section = this;
+        const antarasWeight = antaras.scene.children[0].children[0].geometry.attributes.skinWeight.array;
+        const antarasIndex = antaras.scene.children[0].children[0].geometry.attributes.skinIndex.array;
+
+        const section = this//.lodModels[0];
         const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
-        const { indices, groups } = buildIndices(section.faces, section.lodMeshMaterials.length);
+        const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
+
+        // debugger;
 
         const materials = await Promise.all(this.lodMeshMaterials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
 
@@ -422,8 +434,8 @@ class USkeletalMesh extends ULodMesh {
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
-                bones,
-                weights,
+                skinIndex: bones,
+                skinWeight: weights,
                 uvs
             },
             groups,
@@ -431,30 +443,177 @@ class USkeletalMesh extends ULodMesh {
             bounds: this.decodeBoundsInfo()
         };
 
-        const sequence = this.animation.sequences.getElem(13);
-        const move = this.animation.moves[13];
+        function fixVector(v: FVector) { return new FVector(v.x, v.z, v.y); }
+        function fixRotation(v: FQuaternion) { return new FQuaternion(v.x, v.z, v.y, v.w); }
 
-        for (let i = 0, len = move.boneIndices.getElemCount(); i < len; i++) {
-            const boneIndex = move.boneIndices.getElem(i);
-            const bonename = this.refSkeleton.getElem(boneIndex).boneName;
-            const track = move.animTracks.getElem(i);
-            const animName = sequence.name;
-            const framerate = sequence.framerate;
-            const trackFrameCount = track.keyTime.getElemCount();
+        const animations: GenericObjectContainer_T<IKeyframeDecodeInfo_T[]> = {};
 
-            const times = new Array(trackFrameCount);
-            const positions = new Array(trackFrameCount * 3);
-            const rotations = new Array(trackFrameCount * 4);
+        const boneCount = this.refSkeleton.length;
+        const boneMap = new Array(boneCount);
+        const refBones = this.animation.refBones;
 
-            for (let j = 0; i < trackFrameCount; i++) {
-                const time = track.keyTime.getElem(j);
-                const pos = track.keyPos.getElem(j)
-                const rot = track.keyQuat.getElem(j);
+        for (let i = 0; i < boneCount; i++) {
+            const boneSkeleton = this.refSkeleton.getElem(i);
 
-                times[j] = time / framerate;
+            for (let j = 0, len = refBones.length; j < len; j++) {
+                const boneAnim = refBones.getElem(j);
 
+                if (boneSkeleton.boneName !== boneAnim.boneName)
+                    continue;
+
+                boneMap[i] = [boneAnim.boneName.replaceAll(" ", "_"), j];
             }
         }
+
+        for (let k = 0, animCount = this.animation.sequences.getElemCount(); k < animCount; k++) {
+            const sequence = this.animation.sequences.getElem(k);
+            const move = this.animation.moves[k];
+
+            const animName = sequence.name;
+            const framerate = sequence.framerate;
+            const keyframes: IKeyframeDecodeInfo_T[] = [];
+
+            for (let i = 0, len = move.boneIndices.getElemCount(); i < len; i++) {
+                const boneIndexMesh = move.boneIndices.getElem(i);
+                const [boneName, boneIndexAnim] = boneMap[boneIndexMesh];
+                const track = move.animTracks.getElem(boneIndexAnim);
+                const trackFrameCount = track.keyTime.getElemCount();
+
+                const lenPos = track.keyPos.getElemCount();
+                const lenRot = track.keyQuat.getElemCount();
+
+                const timesPos = new Float32Array(lenPos);
+                const timesRot = new Float32Array(lenRot);
+
+                const positions = new Float32Array(lenPos * 3);
+                const rotations = new Float32Array(lenRot * 4);
+
+                for (let j = 0; j < trackFrameCount; j++) {
+                    const time = track.keyTime.getElem(j);
+
+                    if (j < lenPos) {
+                        const idxPos = j * 3;
+                        let pos = track.keyPos.getElem(j < lenPos ? j : lenPos - 1);
+
+                        pos = fixVector(pos);
+
+                        timesPos[j] = time / framerate;
+
+                        positions[idxPos + 0] = pos.x;
+                        positions[idxPos + 1] = pos.y;
+                        positions[idxPos + 2] = pos.z;
+
+                    }
+
+                    if (j < lenRot) {
+                        let rot = track.keyQuat.getElem(j < lenRot ? j : lenRot - 1);
+                        const idxRot = j * 4;
+
+
+                        rot = fixRotation(rot);
+
+                        if (boneIndexAnim === 0)
+                            rot = rot.conjugate();
+
+                        timesRot[j] = time / framerate;
+
+                        rotations[idxRot + 0] = rot.x;
+                        rotations[idxRot + 1] = rot.y;
+                        rotations[idxRot + 2] = rot.z;
+                        rotations[idxRot + 3] = rot.w;
+                    }
+                }
+
+                // keyframes[boneIndexAnim * 2 + 0] = { name: `${boneName}.position`, times: timesPos, values: positions, type: "Vector" };
+                // keyframes[boneIndexAnim * 2 + 1] = { name: `${boneName}.quaternion`, times: timesRot, values: rotations, type: "Quaternion" };
+
+                keyframes.push({ name: `${boneName}.position`, times: timesPos, values: positions, type: "Vector" });
+                keyframes.push({ name: `${boneName}.quaternion`, times: timesRot, values: rotations, type: "Quaternion" });
+            }
+
+            animations[animName] = keyframes;
+        }
+
+
+        const boneCoords = new Array<FBoneCoord>(boneCount);
+        const matrices = [];
+
+        const _positions = new Array<number[]>(boneCount);
+        const _rotations = new Array<number[]>(boneCount);
+
+        for (let boneIndex = 0; boneIndex < boneCount; boneIndex++) {
+            const bone = this.refSkeleton.getElem(boneIndex);
+
+            let bonePos = bone.bonePos.position.clone()//.multiplyScalar(0.01);
+            let boneRot = bone.bonePos.rotation.clone();
+
+            if (boneIndex === 0)
+                boneRot = boneRot.conjugate();
+
+            bonePos = fixVector(bonePos);
+            boneRot = fixRotation(boneRot);
+
+            _positions[boneIndex] = [bonePos.x, bonePos.y, bonePos.z];
+            _rotations[boneIndex] = [boneRot.x, boneRot.y, boneRot.z, boneRot.w];
+
+            boneRot.w = -boneRot.w;
+
+            let bc = boneCoords[boneIndex] = new FBoneCoord();
+            bc.origin = bonePos;
+            bc.axis = boneRot.toAxis();
+
+            if (boneIndex > 0) {
+                bc = boneCoords[boneIndex] = boneCoords[bone.parentIndex].untransformCoords(bc);
+            }
+
+            const invCoords = bc.invert();
+
+            matrices.push(invCoords.toElements());
+
+            // debugger;
+        }
+
+        // debugger;
+
+        // debugger;
+
+        // for(let i = 0, len = skeleton.length; i < len; i++) {
+        //     const bone = skeleton[i];
+        // }
+
+        antaras;
+
+        for (let j = 0; j < antaras.animations.length; j++) {
+            const antarasTracks = antaras.animations[j].tracks;
+            const decodedTracks = Object.values(animations)[j];
+
+            for (let i = 0; i < antarasTracks.length; i++) {
+                const trackA = antarasTracks[i];
+                const trackB = decodedTracks[i];
+
+                if (trackA.name !== trackB.name)
+                    debugger;
+
+                let valA = trackA.values;
+                const valB = trackB.values;
+
+                if (antarasTracks[i].name.endsWith(".position"))
+                    valA = valA.map(v => v * 100);
+
+                if (valA.length !== valB.length)
+                    debugger;
+
+                for (let j = 0; j < valA.length; j++) {
+                    const a = valA[j];
+                    const b = valB[j];
+
+                    if (Math.abs(a - b) >= 1e-4)
+                        debugger;
+                }
+            }
+        }
+
+        debugger;
 
         return {
             uuid: this.uuid,
@@ -462,7 +621,10 @@ class USkeletalMesh extends ULodMesh {
             name: this.objectName,
             geometry: this.uuid,
             materials: this.uuid,
-            skeleton
+            skeleton,
+            animations,
+            matrices,
+            boneData: { positions: _positions, rotations: _rotations }
         } as ISkinnedMeshObjectDecodeInfo;
     }
 }
@@ -553,40 +715,30 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
     const positions = new Float32Array(3 * wedgeCount);
     const uvs = new Float32Array(2 * wedgeCount);
     const bones = new Uint8Array(MAX_BONES * wedgeCount);
-    const weights = new Float32Array(MAX_BONES * wedgeCount);
-
-    // const vegies = wedges.map(w => w.iVertex).sort((a, b) => a - b);
-    // const pointy = new Array(points.length).fill(false);
-
-    // vegies.forEach(v => pointy[v] = true);
-
-    // const filthy = pointy.filter(f => f === false);
-
-
-    // debugger;
+    const weights = new Uint8Array(MAX_BONES * wedgeCount);
 
     // create vertices
     for (let i = 0; i < wedgeCount; i++) {
         const wedge = wedges[i];
         const vinfo = vertexInfos[wedge.iVertex];
 
-        const point = points[wedge.iVertex];
+        const point = points[wedge.iVertex].getVectorElements();
         const texU = wedge.texU, texV = wedge.texV;
 
         const offsetUv = 2 * i, offsetVertex = 3 * i, offsetBone = MAX_BONES * i;
 
-        positions[offsetVertex + 0] = point.x;
-        positions[offsetVertex + 1] = point.z;
-        positions[offsetVertex + 2] = point.y;
+        positions[offsetVertex + 0] = point[0];
+        positions[offsetVertex + 1] = point[1];
+        positions[offsetVertex + 2] = point[2];
 
         uvs[offsetUv + 0] = texU;
         uvs[offsetUv + 1] = texV;
 
         for (let j = 0, len = vinfo.numInfs; j < len; j++) {
-            const off = offsetBone + i;
+            const off = offsetBone + j;
 
             bones[off] = vinfo.bones[j];
-            weights[off] = vinfo.weights[j];
+            weights[off] = vinfo.weights[j]; // Math.round(vinfo.weights[j] * 255) << (j * 8);
         }
     }
 
@@ -602,7 +754,7 @@ function collectSkeleton(bones: FMeshBone[]): IBoneDecodeInfo[] {
         const decoded = {
             type: "Bone",
             uuid: generateUUID(),
-            name: bone.boneName,
+            name: bone.boneName.replaceAll(" ", "_"),
             parent: bone.parentIndex,
             position: pos.position.getVectorElements(),
             scale: pos.scale.getVectorElements(),
@@ -619,4 +771,72 @@ type VertexInfo_T = {
     numInfs: number;
     bones: number[]
     weights: number[]
+}
+
+class FBoneCoord {
+    public origin: FVector = new FVector();
+    public axis: FAxis = new FAxis();
+
+    public invert() {
+        const out = new FBoneCoord();
+
+        // negate inverse rotated origin
+        out.origin = this.axis.transformVector(this.origin).negate();
+
+        // transpose axis
+        out.axis.x.x = this.axis.x.x;
+        out.axis.x.y = this.axis.y.x;
+        out.axis.x.z = this.axis.z.x;
+        out.axis.y.x = this.axis.x.y;
+        out.axis.y.y = this.axis.y.y;
+        out.axis.y.z = this.axis.z.y;
+        out.axis.z.x = this.axis.x.z;
+        out.axis.z.y = this.axis.y.z;
+        out.axis.z.z = this.axis.z.z;
+
+        return out;
+    }
+
+
+    public untransformPoint(src: FVector) {
+        let tmp = this.origin;
+
+        function vectorMA(a: FVector, scale: number, b: FVector) {
+            const d = new FVector();
+
+            d.x = a.x + scale * b.x;
+            d.y = a.y + scale * b.y;
+            d.z = a.z + scale * b.z;
+
+            return d;
+        }
+
+        // tmp = vectorMA(tmp, src.x, this.axis.x);
+        // tmp = vectorMA(tmp, src.y, this.axis.y);
+        // tmp = vectorMA(tmp, src.z, this.axis.z);
+
+        tmp = this.axis.x.multiplyScalar(src.x).add(tmp);
+        tmp = this.axis.y.multiplyScalar(src.y).add(tmp);
+        tmp = this.axis.z.multiplyScalar(src.z).add(tmp);
+
+        return tmp;
+    }
+
+    public untransformCoords(src: FBoneCoord) {
+        const out = new FBoneCoord();
+
+        out.origin = this.untransformPoint(src.origin);
+        out.axis = this.axis.untransformAxis(src.axis);
+
+        return out;
+    }
+
+    toElements() {
+        return [
+            this.axis.x.x, this.axis.x.y, this.axis.x.z, 0,
+            this.axis.y.x, this.axis.y.y, this.axis.y.z, 0,
+            this.axis.z.x, this.axis.z.y, this.axis.z.z, 0,
+            this.origin.x, this.origin.y, this.origin.z, 1
+        ]
+    }
 }
