@@ -19,6 +19,7 @@ import decodeObject3D, { decodePackage } from "./assets/decoders/object3d-decode
 import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
+import UEncodedFile from "@unreal/un-encoded-file";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
 
@@ -39,7 +40,8 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     // debugger;
 
-    const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("antaras"));
+    const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("baium"));
+    // const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("antaras"));
 
     const meshIndex = antaras.index + 1;
 
@@ -73,6 +75,14 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     action.play();
 }
 
+async function _decodeDatFile(path: string) {
+    // const ini = await (new UEncodedFile("assets/system/l2.ini").asReadable()).decode();
+
+    const file = await (new UEncodedFile(path).asReadable()).decode();
+
+    debugger;
+}
+
 async function startCore() {
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
@@ -83,7 +93,8 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
-    await _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
+    // await _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
+    // await _decodeDatFile("assets/system/Npcgrp.dat");
 
     const loadSettings = {
         helpersZoneBounds: false,

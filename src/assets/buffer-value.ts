@@ -47,14 +47,14 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         return child;
     }
 
-    public readValue(buffer: ArrayBuffer, offset: number, isEncrypted: boolean, cryptKey: number) {
+    public readValue(buffer: ArrayBuffer, offset: number) {
         if (buffer.byteLength <= offset + this.type.bytes)
             throw new Error("Out of bounds");
 
         let byteOffset = 0;
         if (this.type.name === "char") {
             const length = new BufferValue(uint8);
-            length.readValue(buffer, offset, isEncrypted, cryptKey);
+            length.readValue(buffer, offset);
             byteOffset = length.value as number > 0 ? length.type.bytes + 1 : 1;
             offset = offset + byteOffset - 1;
             this.type.bytes = length.value as number - 1;
@@ -64,7 +64,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             const byte = new BufferValue(uint8);
             let startOffset = offset;
 
-            byte.readValue(buffer, offset, isEncrypted, cryptKey);
+            byte.readValue(buffer, offset);
             offset += byte.bytes.byteLength;
 
             let b = byte.bytes.getUint8(0);
@@ -75,7 +75,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             if (b & 0x40)   // has 2nd byte
             {
                 do {
-                    byte.readValue(buffer, offset, isEncrypted, cryptKey);
+                    byte.readValue(buffer, offset);
                     b = byte.bytes.getUint8(0);
                     offset += byte.bytes.byteLength;
                     r |= (b & 0x7F) << shift;
@@ -91,12 +91,6 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         }
 
         this.bytes = new DataView(buffer.slice(offset, offset + this.type.bytes));
-
-        if (isEncrypted) {
-            for (let i = 0; i < this.bytes.byteLength; i++) {
-                this.bytes.setUint8(i + this.bytes.byteOffset, this.bytes.getUint8(i + this.bytes.byteOffset) ^ cryptKey);
-            }
-        }
 
         return this.bytes.byteLength + byteOffset;
     }

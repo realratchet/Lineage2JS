@@ -9,9 +9,6 @@ import FNumber from "../un-number";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
-
-const gltfLoader = new GLTFLoader();
 
 class FWeightIndex extends FConstructable {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
@@ -403,10 +400,6 @@ class USkeletalMesh extends ULodMesh {
     public async getDecodeInfo(library: DecodeLibrary): Promise<ISkinnedMeshObjectDecodeInfo> {
         await this.onLoaded();
 
-        gltfLoader.setPath("/assets/UmodelExport/LineageMonsters/SkeletalMesh/")
-        const antaras = await gltfLoader.loadAsync("antaras_m00.gltf");
-
-
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
             type: "SkinnedMesh",
@@ -418,15 +411,10 @@ class USkeletalMesh extends ULodMesh {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        const antarasWeight = antaras.scene.children[0].children[0].geometry.attributes.skinWeight.array;
-        const antarasIndex = antaras.scene.children[0].children[0].geometry.attributes.skinIndex.array;
-
-        const section = this//.lodModels[0];
+        const section = this;
         const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
         const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
-
-        // debugger;
 
         const materials = await Promise.all(this.lodMeshMaterials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
 
@@ -524,9 +512,6 @@ class USkeletalMesh extends ULodMesh {
                     }
                 }
 
-                // keyframes[boneIndexAnim * 2 + 0] = { name: `${boneName}.position`, times: timesPos, values: positions, type: "Vector" };
-                // keyframes[boneIndexAnim * 2 + 1] = { name: `${boneName}.quaternion`, times: timesRot, values: rotations, type: "Quaternion" };
-
                 keyframes.push({ name: `${boneName}.position`, times: timesPos, values: positions, type: "Vector" });
                 keyframes.push({ name: `${boneName}.quaternion`, times: timesRot, values: rotations, type: "Quaternion" });
             }
@@ -544,7 +529,7 @@ class USkeletalMesh extends ULodMesh {
         for (let boneIndex = 0; boneIndex < boneCount; boneIndex++) {
             const bone = this.refSkeleton.getElem(boneIndex);
 
-            let bonePos = bone.bonePos.position.clone()//.multiplyScalar(0.01);
+            let bonePos = bone.bonePos.position.clone();
             let boneRot = bone.bonePos.rotation.clone();
 
             if (boneIndex === 0)
@@ -569,51 +554,7 @@ class USkeletalMesh extends ULodMesh {
             const invCoords = bc.invert();
 
             matrices.push(invCoords.toElements());
-
-            // debugger;
         }
-
-        // debugger;
-
-        // debugger;
-
-        // for(let i = 0, len = skeleton.length; i < len; i++) {
-        //     const bone = skeleton[i];
-        // }
-
-        antaras;
-
-        for (let j = 0; j < antaras.animations.length; j++) {
-            const antarasTracks = antaras.animations[j].tracks;
-            const decodedTracks = Object.values(animations)[j];
-
-            for (let i = 0; i < antarasTracks.length; i++) {
-                const trackA = antarasTracks[i];
-                const trackB = decodedTracks[i];
-
-                if (trackA.name !== trackB.name)
-                    debugger;
-
-                let valA = trackA.values;
-                const valB = trackB.values;
-
-                if (antarasTracks[i].name.endsWith(".position"))
-                    valA = valA.map(v => v * 100);
-
-                if (valA.length !== valB.length)
-                    debugger;
-
-                for (let j = 0; j < valA.length; j++) {
-                    const a = valA[j];
-                    const b = valB[j];
-
-                    if (Math.abs(a - b) >= 1e-4)
-                        debugger;
-                }
-            }
-        }
-
-        // debugger;
 
         return {
             uuid: this.uuid,
@@ -698,16 +639,16 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
             debugger;
         }
 
-        if (V.numInfs <= MAX_BONES) continue;	// no normalization is required
+        if (V.numInfs <= MAX_BONES) continue;   // no normalization is required
 
         let s = 0;
 
-        for (let j = 0; j < MAX_BONES; j++)		// count sum
+        for (let j = 0; j < MAX_BONES; j++)     // count sum
             s += V.weights[j];
 
         s = 1.0 / s;
 
-        for (let j = 0; j < MAX_BONES; j++)		// adjust weights
+        for (let j = 0; j < MAX_BONES; j++)     // adjust weights
             V.weights[j] *= s;
     }
 
@@ -801,20 +742,6 @@ class FBoneCoord {
     public untransformPoint(src: FVector) {
         let tmp = this.origin;
 
-        function vectorMA(a: FVector, scale: number, b: FVector) {
-            const d = new FVector();
-
-            d.x = a.x + scale * b.x;
-            d.y = a.y + scale * b.y;
-            d.z = a.z + scale * b.z;
-
-            return d;
-        }
-
-        // tmp = vectorMA(tmp, src.x, this.axis.x);
-        // tmp = vectorMA(tmp, src.y, this.axis.y);
-        // tmp = vectorMA(tmp, src.z, this.axis.z);
-
         tmp = this.axis.x.multiplyScalar(src.x).add(tmp);
         tmp = this.axis.y.multiplyScalar(src.y).add(tmp);
         tmp = this.axis.z.multiplyScalar(src.z).add(tmp);
@@ -837,6 +764,6 @@ class FBoneCoord {
             this.axis.y.x, this.axis.y.y, this.axis.y.z, 0,
             this.axis.z.x, this.axis.z.y, this.axis.z.z, 0,
             this.origin.x, this.origin.y, this.origin.z, 1
-        ]
+        ];
     }
 }
