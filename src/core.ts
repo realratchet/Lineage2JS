@@ -20,6 +20,7 @@ import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
 import UEncodedFile from "@unreal/un-encoded-file";
+import UDataFile from "./assets/unreal/un-datafile";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
 
@@ -78,7 +79,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 async function _decodeDatFile(path: string) {
     // const ini = await (new UEncodedFile("assets/system/l2.ini").asReadable()).decode();
 
-    const file = await (new UEncodedFile(path).asReadable()).decode();
+    const file = await (new UDataFile(path).asReadable()).decode();
 
     debugger;
 }

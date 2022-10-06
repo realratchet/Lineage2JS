@@ -129,10 +129,6 @@ class UEncodedFile {
     }
 
     public async decode(): Promise<this> {
-        if (gmp === null) {
-            gmp = await _gmp.init();
-        }
-
 
         if (this.buffer) return this;
         if (!this.promiseDecoding) await this._doDecode();
@@ -182,8 +178,13 @@ class UEncodedFile {
                     this.read(signature);
                 } else if (version.startsWith("4")) {
 
+                    if (gmp === null) {
+                        gmp = await _gmp.init();
+                    }
+
                     this.buffer = decoders.rsa.decryptEncdec(gmp, new Uint8Array(this.buffer, HEADER_SIZE));
                     this.contentOffset = 0;
+                    this.seek(0, "set");
 
                 } else {
                     throw new Error(`Unsupported file version: ${version}`)
