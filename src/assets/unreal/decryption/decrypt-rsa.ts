@@ -17,7 +17,7 @@ class RSADecoder {
     protected mod: mpz_ptr;
     protected base: mpz_ptr;
     protected exp: number;
-    protected archiveSize: number;
+    protected archiveSize = 0;
 
     constructor(gmp: GMPLib, modulus: string, exponent: number, buffer: Uint8Array) {
         this.gmp = gmp;
@@ -96,8 +96,6 @@ class RSADecoder {
         return true;
     }
 
-
-
     public decode() {
         const inflator = new Inflate({ raw: false });
 
@@ -108,11 +106,7 @@ class RSADecoder {
 
         console.assert(result.byteLength === this.archiveSize, "Archive is damaged.");
 
-        const textDecoder = new TextDecoder("utf-8").decode(result);
-        const firstBytes = result.slice(0, 128);
-        const firstChars = textDecoder.slice(0, 128);
-
-        debugger;
+        return result.buffer;
     }
 }
 
@@ -120,12 +114,11 @@ class RSADecoder {
 function decryptRSA(modulus: string, exponent: number, gmp: import("gmp-wasm").GMPLib, buffer: Uint8Array) {
     const rsa = new RSADecoder(gmp, modulus, exponent, buffer);
 
-    const decoded = rsa.decode()
-    debugger;
+    const decoded = rsa.decode();
 
     rsa.cleanup();
 
-    debugger;
+    return decoded;
 }
 
 export default decryptRSA;
