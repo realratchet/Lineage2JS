@@ -181,6 +181,12 @@ class UEncodedFile {
 
                     this.read(signature);
                 } else if (version.startsWith("4")) {
+
+                    // const num1Ptr = gmp.binding.mpz_t();
+                    // gmp.binding.mpz_init_set_si(num1Ptr, 30);
+
+                    // debugger;
+
                     const modulus = 0x97df398472ddf737ef0a0cd17e8d172f0fef1661a38a8ae1d6e829bc1c6e4c3cfc19292dda9ef90175e46e7394a18850b6417d03be6eea274d3ed1dde5b5d7bde72cc0a0b71d03608655633881793a02c9a67d9ef2b45eb7c08d4be329083ce450e68f7867b6749314d40511d09bc5744551baa86a89dc38123dc1668fd72d83n;
                     const exponent = 0x35n;
 
@@ -242,39 +248,42 @@ class UEncodedFile {
                     const startPosition = 128 - size - ((124 - size) % 4);
                     const position = 0;
 
-                    debugger;
-
-                    // const gmpResult = gmp.binding.malloc(128);
-
-
-                    // strPtr = gmp.binding.malloc_cstr(new Array(byteString.length).fill(" ").join(""))
-
-                    const _slice = gmp.binding.mem.slice(5330816, 5330816 + 128);
-
-                    console.log(gmp.binding.mpz_get_si(gmpValue));
-
-                    // gmp.binding.free(strPtr);
+                    this.seek(0, "set");
+                    decoders.rsa.decryptEncdec(gmp, new Uint8Array(this.buffer, HEADER_SIZE));
 
                     debugger;
 
-                    // const pkey = _forge.pki.rsa.setPrivateKey(_modulus, _exponent, _zero, _zero, _zero, _zero, _zero, _zero);
-                    const pkey = _forge.pki.privateKeyFromPem(`-----BEGIN RSA PRIVATE KEY-----
-                    MIGzAgEAMA0GCSqGSIb3DQEBAQUABIGeMIGbAgEAAoGAdbTW3lwBZUQGihrPElhp
-                    9D0uCfxVuLHiiVVtr5uHV2NVk0RiiLNlPaHOkch7saXBjxYyNJXFXX1ywIkKg/ab
-                    /R/ZQ06xwC8+Rnnt+kMwkxkHASnCZ8hWBNh7tluuIF3jcHrx0hCIgau1Z8Oz0Gmu
-                    Z8OkxqOqk9JkE9TGYJSuIDkCAQACAR0CAQACAQACAQACAQACAQA=
-                    -----END RSA PRIVATE KEY-----`)
+                    // // const gmpResult = gmp.binding.malloc(128);
 
-                    const decyphered = pkey.decrypt(slice, "RAW");
-                    765875200
 
-                    const eb = new forge.util.ByteStringBuffer(decyphered);
+                    // // strPtr = gmp.binding.malloc_cstr(new Array(byteString.length).fill(" ").join(""))
 
-                    const a = new Int8Array(128);
+                    // const _slice = gmp.binding.mem.slice(5330816, 5330816 + 128);
 
-                    for (let i = 0; i < 128; i++) {
-                        a[i] = new Int8Array(new Uint8Array([eb.getByte()]).buffer)[0];
-                    }
+                    // console.log(gmp.binding.mpz_get_si(gmpValue));
+
+                    // // gmp.binding.free(strPtr);
+
+                    // debugger;
+
+                    // // const pkey = _forge.pki.rsa.setPrivateKey(_modulus, _exponent, _zero, _zero, _zero, _zero, _zero, _zero);
+                    // const pkey = _forge.pki.privateKeyFromPem(`-----BEGIN RSA PRIVATE KEY-----
+                    // MIGzAgEAMA0GCSqGSIb3DQEBAQUABIGeMIGbAgEAAoGAdbTW3lwBZUQGihrPElhp
+                    // 9D0uCfxVuLHiiVVtr5uHV2NVk0RiiLNlPaHOkch7saXBjxYyNJXFXX1ywIkKg/ab
+                    // /R/ZQ06xwC8+Rnnt+kMwkxkHASnCZ8hWBNh7tluuIF3jcHrx0hCIgau1Z8Oz0Gmu
+                    // Z8OkxqOqk9JkE9TGYJSuIDkCAQACAR0CAQACAQACAQACAQACAQA=
+                    // -----END RSA PRIVATE KEY-----`)
+
+                    // const decyphered = pkey.decrypt(slice, "RAW");
+                    // 765875200
+
+                    // const eb = new forge.util.ByteStringBuffer(decyphered);
+
+                    // const a = new Int8Array(128);
+
+                    // for (let i = 0; i < 128; i++) {
+                    //     a[i] = new Int8Array(new Uint8Array([eb.getByte()]).buffer)[0];
+                    // }
 
 
                     debugger;

@@ -94,7 +94,7 @@ async function startCore() {
     const objectGroup = renderManager.objectGroup;
 
     // await _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
-    // await _decodeDatFile("assets/system/Npcgrp.dat");
+    await _decodeDatFile("assets/system/Npcgrp.dat");
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -155,7 +155,7 @@ async function startCore() {
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
