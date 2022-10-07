@@ -1,3 +1,4 @@
+import * as dat from "dat.gui";
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
 // import UTerrainInfo from "./assets/unreal/un-terrain-info";
@@ -20,7 +21,8 @@ import ULight from "./assets/unreal/un-light";
 import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
 import UEncodedFile from "@unreal/un-encoded-file";
-import UDataFile from "./assets/unreal/un-datafile";
+import UDataFile from "./assets/unreal/datafile/un-datafile";
+import { generateUUID } from "three/src/math/MathUtils";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
 
@@ -33,7 +35,118 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
     return decodePackage(decodeLibrary);
 }
 
-async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>) {
+async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, pkgTex: string | UPackage | Promise<UPackage>) {
+
+    if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Effects");
+
+    pkg = await assetLoader.load(pkg);
+
+
+    async function getTextures(pkg: string | UPackage | Promise<UPackage>, decodeLibrary: DecodeLibrary, texNames: string[]) {
+        if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Texture");
+
+        pkg = await assetLoader.load(pkg);
+
+        // debugger;
+
+        const texExps = texNames.map(v => (pkg as UPackage).exports.find(x => x.objectName === v));
+
+        const textures = await Promise.all(texExps.map(exp => (pkg as UPackage).fetchObject<UShader>(exp.index + 1)));
+
+        const infos = await Promise.all(textures.map(mesh => mesh.getDecodeInfo(decodeLibrary)));
+
+        return infos;
+    }
+
+    const hairMesh = "FFighter_m000_m00_bh", hairTex = "FFighter_m000_t00_m00_bh";
+    const faceMesh = "FFighter_m000_f", faceTex = "FFighter_m000_t00_f";
+    const torsoMesh = "FFighter_m001_u", torsoTex = "FFighter_m001_t02_u";
+    const legMesh = "FFighter_m001_l", legTex = "FFighter_m001_t02_l";
+    const gloveMesh = "FFighter_m001_g", gloveTex = "FFighter_m001_t02_g";
+    const bootMesh = "FFighter_m001_b", bootTex = "FFighter_m001_t02_b";
+
+    const bodypartMeshNames = [
+        faceMesh,
+        hairMesh,
+        torsoMesh,
+        legMesh,
+        gloveMesh,
+        bootMesh
+    ];
+
+    const bodypartTexNames = [
+        faceTex,
+        hairTex,
+        torsoTex,
+        legTex,
+        gloveTex,
+        bootTex
+    ];
+
+
+    const bodyPartExps = bodypartMeshNames.map(v => (pkg as UPackage).exportGroups.SkeletalMesh.find(x => x.export.objectName === v));
+
+    const bodypartMeshes = await Promise.all(bodyPartExps.map(exp => (pkg as UPackage).fetchObject<USkeletalMesh>(exp.index + 1)));
+
+    const decodeLibrary = new DecodeLibrary();
+
+    decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
+
+    const textures = await getTextures(pkgTex, decodeLibrary, bodypartTexNames);
+
+    const bodypartInfos = await Promise.all(bodypartMeshes.map(mesh => mesh.getDecodeInfo(decodeLibrary)));
+
+    bodypartMeshes.forEach(({ uuid }, index) => {
+        const material = decodeLibrary.materials[uuid] as IMaterialGroupDecodeInfo;
+
+        material.materials = [textures[index]];
+    });
+
+    const bodypartObjects = bodypartInfos.map(info => decodeObject3D(decodeLibrary, info) as THREE.SkinnedMesh);
+
+    const animations = bodypartObjects[0].userData.animations;
+    const idleAnimName = "Wait_Hand_FFighter";
+    const clip = animations[idleAnimName];
+
+    const gui = new dat.GUI();
+
+    const state = { activeAnimation: idleAnimName };
+    const actions = [] as THREE.AnimationAction[];
+
+    gui.add(state, "activeAnimation", Object.keys(animations))
+        .name("Animation")
+        .onFinishChange(animName => {
+            actions.forEach(act => act.stop());
+
+            while (actions.pop()) { }
+
+            const clip = animations[animName];
+
+            bodypartObjects.forEach(char => {
+                const action = renderManager.mixer.clipAction(clip, char);
+
+                actions.push(action);
+
+                action.play();
+            });
+        });
+
+    bodypartObjects.forEach(char => {
+        char.position.set(-87063.33997244012, -3694, 239964.66910649382);
+
+        renderManager.scene.add(char);
+        renderManager.scene.updateMatrixWorld(true);
+
+        const action = renderManager.mixer.clipAction(clip, char);
+
+        actions.push(action);
+
+        action.play();
+    });
+
+}
+
+async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>) {
 
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Effects");
 
@@ -41,8 +154,9 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     // debugger;
 
-    const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("baium"));
-    // const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("antaras"));
+    // const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("stone_golem"));
+    // const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("baium"));
+    const antaras = pkg.exportGroups.SkeletalMesh.find(x => x.export.objectName.toLowerCase().includes("antaras"));
 
     const meshIndex = antaras.index + 1;
 
@@ -62,9 +176,9 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     renderManager.scene.updateMatrixWorld(true);
 
-    // const helper = new SkeletonHelper(char);
+    const helper = new SkeletonHelper(char);
 
-    // renderManager.scene.add(helper);
+    renderManager.scene.add(helper);
 
     // debugger;
 
@@ -94,8 +208,10 @@ async function startCore() {
     const assetLoader = new AssetLoader(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
-    // await _decodeCharacter(renderManager, assetLoader, "LineageMonsters");
-    await _decodeDatFile("assets/system/Npcgrp.dat");
+    // await _decodeDatFile("assets/system/Npcgrp.dat");
+
+    await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
+    // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -156,7 +272,7 @@ async function startCore() {
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI

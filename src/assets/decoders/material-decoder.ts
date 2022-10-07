@@ -1,7 +1,8 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, DoubleSide, FrontSide, Matrix3, Vector3 } from "three";
+import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector3 } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
+import DecodeLibrary from "../unreal/decode-library";
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
 
@@ -204,6 +205,12 @@ function decodeInstancedMaterial(library: DecodeLibrary, info: IMaterialInstance
     return materials;
 }
 
+function decodeSolidColor(library: DecodeLibrary, info: ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
+    return new MeshBasicMaterial({
+        color: info["solidColor"]
+    });
+}
+
 function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return null;
     switch (info.materialType) {
@@ -215,9 +222,11 @@ function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): 
         case "lightmapped": return decodeLightmapped(library, info as ILightmappedDecodeInfo);
         case "instance": return decodeInstancedMaterial(library, info as IMaterialInstancedDecodeInfo);
         case "terrainSegment": return decodeTerrainSegment(library, info as IMaterialTerrainSegmentDecodeInfo);
+        case "solid": return decodeSolidColor(library, info as ISolidMaterialDecodeInfo);
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
 }
 
 export default decodeMaterial;
 export { decodeMaterial };
+

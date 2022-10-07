@@ -28,11 +28,7 @@ class FQuaternion extends FConstructable {
         return this;
     }
 
-    public toQuatElements(): QuaternionArr {
-        return [-this.x, -this.z, this.y, this.w];
-        // return [this.x, this.y, this.z, this.w];
-        // return [this.x, this.z, this.y, this.w];
-    }
+    public toQuatElements(): QuaternionArr { return [this.x, this.y, this.z, this.w]; }
 
     public conjugate() { return new FQuaternion(-this.x, -this.y, -this.z, this.w); }
 

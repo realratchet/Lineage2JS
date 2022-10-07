@@ -56,25 +56,18 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             throw new Error("Out of bounds");
 
         let byteOffset = 0;
-        if (this.type.name === "char" || this.type.name === "utf16") {
-            const length = new BufferValue(
-                this.type.name === "char" ? uint8 : uint32
-            );
+
+        if (this.type.name === "char") {
+            const length = new BufferValue(uint8);
+
             length.readValue(buffer, offset);
+
             byteOffset = length.value as number > 0 ? length.type.bytes + 1 : 1;
             offset = offset + byteOffset - 1;
 
-            this.type.bytes = length.value as number;
+            this.type.bytes = length.value as number - 1;
 
-            if (this.type.name === "char")
-                this.type.bytes = this.type.bytes - 1;
-            else {
-                this.type.bytes = this.type.bytes;
-                byteOffset = byteOffset - 1;
-            }
-        }
-
-        if (this.type.name === "compat32") {
+        } else if (this.type.name === "compat32") {
             const byte = new BufferValue(uint8);
             let startOffset = offset;
 
@@ -102,6 +95,17 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             this.bytes.setInt32(0, r, this.endianess === "little");
 
             return offset - startOffset;
+        } else if (this.type.name === "utf16") {
+            const length = new BufferValue(uint32);
+
+            length.readValue(buffer, offset);
+            byteOffset = length.type.bytes + 1;
+            offset = offset + byteOffset - 1;
+
+            this.type.bytes = length.value as number;
+
+            this.type.bytes = this.type.bytes;
+            byteOffset = byteOffset - 1;
         }
 
         this.bytes = new DataView(buffer.slice(offset, offset + this.type.bytes));

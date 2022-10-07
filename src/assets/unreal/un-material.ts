@@ -83,12 +83,16 @@ class UFinalBlend extends UBaseModifier {
     protected material: UMaterial;
     protected frameBufferBlending: number;
     protected doubleSide: boolean;
+    protected alphaTest: boolean;
+    protected alphaRef: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Material": "material",
             "FrameBufferBlending": "frameBufferBlending",
-            "TwoSided": "doubleSide"
+            "TwoSided": "doubleSide",
+            "AlphaTest": "alphaTest",
+            "AlphaRef": "alphaRef"
         });
     }
 

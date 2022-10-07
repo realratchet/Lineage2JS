@@ -28,7 +28,7 @@ class RenderManager {
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public readonly raycaster = new Raycaster();
-    public speedCameraFPS = 50;
+    public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
 
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
@@ -123,8 +123,8 @@ class RenderManager {
         // this.controls.orbit.target.set(0, 0, 0);
 
         // look player
-        this.camera.position.set(-87018.77219061163, -3229.4697159905663, 239965.36913660355);
-        this.controls.orbit.target.set(-87095.10586708593, -3290.0841351741838, 239987.7088327284);
+        this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
+        this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

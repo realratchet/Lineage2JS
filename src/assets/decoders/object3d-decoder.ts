@@ -385,51 +385,13 @@ function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
     return bone;
 }
 
-function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[], matrices: number[][], boneData: any): Bone[] {
+function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
     const boneCount = infos.length;
     const bones = new Array(boneCount) as Bone[];
 
     for (let i = 0; i < boneCount; i++) {
         const info = infos[i];
         const bone = bones[i] = decodeBone(library, info);
-
-        const matrix = new Matrix4().fromArray(matrices[i]);
-        const pos = new Vector3(), rot = new Quaternion(), scl = new Vector3();
-
-        // matrix.decompose(pos, rot, scl);
-
-        // bone.position.copy(pos);
-        // bone.quaternion.copy(rot);
-        // bone.scale.copy(scl);
-
-        // antaras;
-
-        // debugger;
-
-        bone.position.fromArray(boneData.positions[i]);
-        bone.quaternion.fromArray(boneData.rotations[i]);
-        // bone.position.fromArray(antaras.nodes[i+1].translation).multiplyScalar(100);
-        // bone.quaternion.fromArray(antaras.nodes[i+1].rotation);
-        bone.scale.set(1, 1, 1);
-
-        // const v3a = new Vector3().fromArray(boneData.positions[i]);
-        // const v4a = new Vector4().fromArray(boneData.rotations[i]);
-
-        // const v3b = new Vector3().fromArray(antaras.nodes[i + 1].translation).multiplyScalar(100);
-        // const v4b = new Vector4().fromArray(antaras.nodes[i + 1].rotation);
-
-        // const d3 = new Vector3().subVectors(v3a, v3b);
-        // const d4 = new Vector4().subVectors(v4a, v4b);
-
-        // const s3 = d3.length();
-        // const s4 = d4.length();
-
-        // if(s3 > 1) debugger;
-        // if(s4 > 1) debugger;
-
-        // debugger;
-
-        // debugger;
 
         if (i === 0) continue;
 
@@ -462,12 +424,10 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
 
-    const bones = decodeBones(library, info.skeleton, info.matrices, info.boneData);
+    const bones = decodeBones(library, info.skeleton);
     const skeleton = new Skeleton(bones);
 
     const mesh = new SkinnedMesh(geometry, materials);
-
-    const inverseBindMatrix = new Matrix4().fromArray(info.matrices[0]);
 
     mesh.add(bones[0]);
     mesh.bind(skeleton);
