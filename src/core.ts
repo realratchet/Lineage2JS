@@ -60,10 +60,10 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     const hairMesh = "FFighter_m000_m00_bh", hairTex = "FFighter_m000_t00_m00_bh";
     const faceMesh = "FFighter_m000_f", faceTex = "FFighter_m000_t00_f";
-    const torsoMesh = "FFighter_m001_u", torsoTex = "FFighter_m001_t02_u";
-    const legMesh = "FFighter_m001_l", legTex = "FFighter_m001_t02_l";
-    const gloveMesh = "FFighter_m001_g", gloveTex = "FFighter_m001_t02_g";
-    const bootMesh = "FFighter_m001_b", bootTex = "FFighter_m001_t02_b";
+    const torsoMesh = "FFighter_m001_u", torsoTex = "FFighter_m001_t01_u";
+    const legMesh = "FFighter_m001_l", legTex = "FFighter_m001_t01_l";
+    const gloveMesh = "FFighter_m001_g", gloveTex = "FFighter_m001_t01_g";
+    const bootMesh = "FFighter_m001_b", bootTex = "FFighter_m001_t01_b";
 
     const bodypartMeshNames = [
         faceMesh,

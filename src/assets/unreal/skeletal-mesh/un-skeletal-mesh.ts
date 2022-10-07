@@ -641,7 +641,7 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
             const off = offsetBone + j;
 
             bones[off] = vinfo.bones[j];
-            weights[off] = vinfo.weights[j]; // Math.round(vinfo.weights[j] * 255) << (j * 8);
+            weights[off] = vinfo.weights[j];
         }
     }
 
@@ -649,33 +649,10 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
 }
 
 function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
-    // const decodedBones: IBoneDecodeInfo[] = new Array(bones.length);
-
-    // for (let i = 0, len = bones.length; i < len; i++) {
-    //     const bone = bones[i];
-    //     const pos = bone.bonePos;
-    //     const decoded = {
-    //         type: "Bone",
-    //         uuid: generateUUID(),
-    //         name: bone.boneName.replaceAll(" ", "_"),
-    //         parent: bone.parentIndex,
-    //         position: pos.position.getVectorElements(),
-    //         scale: pos.scale.getVectorElements(),
-    //         quaternion: pos.rotation.toQuatElements()
-    //     } as IBoneDecodeInfo;
-
-    //     decodedBones[i] = decoded;
-    // }
-
-    // return decodedBones;
-
     const boneCount = refSkeleton.length;
     const boneInfos = new Array<IBoneDecodeInfo>(boneCount)
     const boneCoords = new Array<FBoneCoord>(boneCount);
     // const matrices = [];
-
-    // const _positions = new Array<number[]>(boneCount);
-    // const _rotations = new Array<number[]>(boneCount);
 
     for (let boneIndex = 0; boneIndex < boneCount; boneIndex++) {
         const bone = refSkeleton[boneIndex];
@@ -688,9 +665,6 @@ function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
 
         bonePos = fixVector(bonePos);
         boneRot = fixRotation(boneRot);
-
-        // _positions[boneIndex] = [bonePos.x, bonePos.y, bonePos.z];
-        // _rotations[boneIndex] = [boneRot.x, boneRot.y, boneRot.z, boneRot.w];
 
         boneInfos[boneIndex] = {
             type: "Bone",
