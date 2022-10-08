@@ -9,6 +9,8 @@ class BaseActor extends Object3D implements ICollidable {
     public readonly isCollidable = true;
     public readonly type: string = "Actor";
 
+    protected characterSpeed = 125;
+
     protected colliderDesc: RAPIER.ColliderDesc;
     protected rigidbodyDesc: RAPIER.RigidBodyDesc;
 
@@ -19,7 +21,8 @@ class BaseActor extends Object3D implements ICollidable {
     protected renderManager: RenderManager;
     protected lastUpdate: number;
     protected meshes: THREE.Object3D[] = [];
-    protected activeAnimationClips: THREE.AnimationAction[] = [];
+    protected currAnimations = new WeakMap<THREE.Object3D, THREE.AnimationAction>();
+    protected prevAnimations = new WeakMap<THREE.Object3D, THREE.AnimationAction>();
     protected actorAnimations: GenericObjectContainer_T<THREE.AnimationClip> = {};
 
     protected readonly collisionBounds = new Box3();
@@ -29,7 +32,7 @@ class BaseActor extends Object3D implements ICollidable {
         idle: null,
         walking: null,
         running: null,
-        death: null,
+        dying: null,
         falling: null
     };
 
@@ -45,6 +48,60 @@ class BaseActor extends Object3D implements ICollidable {
 
     public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {
         this.lastUpdate = currentTime;
+
+        const groundObjects = this.getGravityIntersections();
+        const appliedVelocity = new Vector3();
+        const itsct = groundObjects[0];
+        const dt = deltaTime / 1000;
+        const charSpeed = this.characterSpeed;
+        const origin = new Vector3().copy(this.rigidbody.translation() as THREE.Vector3);
+
+        const playerHeight = this.collisionSize.y;
+        const playerHeightHalf = playerHeight * 0.5;
+
+        const gravity = renderManager.physicsWorld.gravity;
+        const gravityStep = new Vector3().copy(gravity as THREE.Vector3).multiplyScalar(dt);
+
+        const itsctGround = groundObjects.length ? groundObjects[0] : null;
+        const isOnFloor = itsctGround ? (itsct.toi <= this.collisionSize.y) : false;
+
+        const state = this.actorState;
+        const desired = state.desired;
+
+        if (!isOnFloor) {
+            desired.state = "falling";
+            state.velocity.add(gravityStep).multiplyScalar(0.9);
+        } else {
+            desired.state = "idle";
+            state.velocity.set(0, 0, 0);
+        }
+
+        const inputVelocity = new Vector3();
+        const desiredPosition = new Vector3().copy(origin as THREE.Vector3);
+
+        desiredPosition.add(state.velocity).add(inputVelocity);
+
+        // if (itsctGround)
+        //     desiredPosition.y = Math.max(itsctGround.position.y, desiredPosition.y - playerHeightHalf);
+
+        this.rigidbody.setTranslation(desiredPosition, false);
+
+        this.checkAnimationState();
+    }
+
+    protected checkAnimationState() {
+        if (this.actorState.desired.state === this.actorState.state) return;
+
+        this.actorState.state = this.actorState.desired.state;
+
+        switch (this.actorState.state) {
+            case "falling": this.playAnimation(this.basicActorAnimations.falling); break;
+            case "idle": this.playAnimation(this.basicActorAnimations.idle); break;
+            case "dying": this.playAnimation(this.basicActorAnimations.dying); break;
+            case "walking": this.playAnimation(this.basicActorAnimations.walking); break;
+            case "running": this.playAnimation(this.basicActorAnimations.running); break;
+            default: new Error(`Unknown actor state: '${this.actorState.state}'`);
+        }
     }
 
     public getRayIntersections(position: THREE.Vector3, direction: THREE.Vector3, maxToi: number) {
@@ -80,7 +137,7 @@ class BaseActor extends Object3D implements ICollidable {
 
     public getGravityIntersections() {
         return this.getRayIntersections(
-            new Vector3(0, this.collisionSize.y * 0.5, 0).add(this.rigidbody.translation() as THREE.Vector3),
+            new Vector3(0, this.collisionSize.y, 0).add(this.rigidbody.translation() as THREE.Vector3),
             new Vector3(0, -1, 0),
             Infinity
         );
@@ -111,11 +168,16 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public stopAnimations() {
-        for (const clip of this.activeAnimationClips)
-            clip.stop();
+        for (const mesh of this.meshes) {
+            if (this.prevAnimations.has(mesh))
+                this.prevAnimations.get(mesh).stop();
+
+            if (this.currAnimations.has(mesh))
+                this.currAnimations.get(mesh).stop();
+        }
     }
 
-    protected setBasicActorAnimation(key: string, animationName: string) {
+    protected setBasicActorAnimation(key: ValidStateNames_T, animationName: string) {
         if (!(animationName in this.actorAnimations))
             throw new Error(`'${animationName}' is not available.`);
 
@@ -128,7 +190,7 @@ class BaseActor extends Object3D implements ICollidable {
     public setIdleAnimation(animationName: string) { this.setBasicActorAnimation("idle", animationName); }
     public setWalkingAnimation(animationName: string) { this.setBasicActorAnimation("walking", animationName); }
     public setRunningAnimation(animationName: string) { this.setBasicActorAnimation("running", animationName); }
-    public setDeathAnimation(animationName: string) { this.setBasicActorAnimation("death", animationName); }
+    public setDeathAnimation(animationName: string) { this.setBasicActorAnimation("dying", animationName); }
     public setFallingAnimation(animationName: string) { this.setBasicActorAnimation("falling", animationName); }
 
     public initAnimations() { this.playAnimation(this.basicActorAnimations.idle); }
@@ -139,12 +201,20 @@ class BaseActor extends Object3D implements ICollidable {
         const clip = this.actorAnimations[animationName];
         const mixer = this.renderManager.mixer;
 
-        for (let mesh of this.meshes) {
-            const action = mixer.clipAction(clip, mesh);
+        for (const mesh of this.meshes) {
+            const prevAct = this.prevAnimations.get(mesh) || null;
+            const currAct = this.currAnimations.get(mesh) || null;
+            const nextAct = mixer.clipAction(clip, mesh);
 
-            this.activeAnimationClips.push(action);
+            this.currAnimations.set(mesh, nextAct);
 
-            action.play();
+            if (prevAct) prevAct.stop();
+            if (currAct) {
+                this.prevAnimations.set(mesh, currAct);
+                currAct.crossFadeTo(nextAct, 0.25, false);
+            }
+
+            nextAct.play();
         }
     }
 
@@ -172,7 +242,7 @@ type BasicActorAnimations = {
     idle: string;
     walking: string;
     running: string;
-    death: string;
+    dying: string;
     falling: string;
 }
 

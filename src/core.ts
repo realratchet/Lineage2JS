@@ -113,12 +113,13 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     player.setWalkingAnimation("Walk_Hand_FFighter");
     player.setRunningAnimation("Run_Hand_FFighter");
     player.setDeathAnimation("Death_FFighter");
+    player.setFallingAnimation("Falling_FFighter");
     player.setMeshes(bodypartObjects);
     player.initAnimations();
 
     // const gui = new dat.GUI();
 
-    // const state = { activeAnimation: idleAnimName };
+    // const state = { activeAnimation: "Wait_Hand_FFighter" };
     // const actions = [] as THREE.AnimationAction[];
 
     // gui.add(state, "activeAnimation", Object.keys(animations))
@@ -138,21 +139,6 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     //             action.play();
     //         });
     //     });
-
-    // bodypartObjects.forEach(char => {
-    //     // char.position.set(-87063.33997244012, -3694, 239964.66910649382);
-
-    //     // renderManager.scene.add(char);
-    //     // renderManager.scene.updateMatrixWorld(true);
-    //     renderManager.player.add(char);
-
-    //     const action = renderManager.mixer.clipAction(clip, char);
-
-    //     actions.push(action);
-
-    //     action.play();
-    // });
-
 }
 
 async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>) {

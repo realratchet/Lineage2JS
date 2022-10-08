@@ -990,84 +990,84 @@ class Player extends BaseActor implements ICollidable {
     // }
 
 
-    protected isFalling = true;
-    protected playerSpeed = 125 * 3;
-    protected stepHeight = 10;
+    // protected isFalling = true;
+    // protected playerSpeed = 125 * 3;
+    // protected stepHeight = 10;
 
-    public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {
-        super.update(renderManager, currentTime, deltaTime);
+    // public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {
+    //     super.update(renderManager, currentTime, deltaTime);
 
-        let isExternalForceApplied = false;
+    //     let isExternalForceApplied = false;
 
-        const groundObjects = this.getGravityIntersections();
-        const appliedVelocity = new Vector3();
-        const itsct = groundObjects[0];
-        const dt = deltaTime / 1000;
-        const playerSpeed = this.playerSpeed;
-        const origin = new Vector3().copy(this.rigidbody.translation() as THREE.Vector3);
-        const playerHeight = this.collisionSize.y;
-        const playerHeightHalf = playerHeight * 0.5;
-        const gravity = renderManager.physicsWorld.gravity;
-        const gravityStep = new Vector3().copy(gravity as THREE.Vector3).multiplyScalar(dt);
+    //     const groundObjects = this.getGravityIntersections();
+    //     const appliedVelocity = new Vector3();
+    //     const itsct = groundObjects[0];
+    //     const dt = deltaTime / 1000;
+    //     const playerSpeed = this.playerSpeed;
+    //     const origin = new Vector3().copy(this.rigidbody.translation() as THREE.Vector3);
+    //     const playerHeight = this.collisionSize.y;
+    //     const playerHeightHalf = playerHeight * 0.5;
+    //     const gravity = renderManager.physicsWorld.gravity;
+    //     const gravityStep = new Vector3().copy(gravity as THREE.Vector3).multiplyScalar(dt);
 
-        const itsctGround = groundObjects.length ? groundObjects[0] : null;
-        const isOnFloor = itsctGround ? (itsct.toi <= this.collisionSize.y) : false;
+    //     const itsctGround = groundObjects.length ? groundObjects[0] : null;
+    //     const isOnFloor = itsctGround ? (itsct.toi <= this.collisionSize.y) : false;
 
-        this.isFalling = isOnFloor;
+    //     this.isFalling = isOnFloor;
 
-        if (isOnFloor) origin.copy(itsctGround.position);
+    //     if (isOnFloor) origin.copy(itsctGround.position);
 
-        (() => {
-            if (!isOnFloor) this.velocity.add(gravityStep);
-            else this.velocity.set(0, 0, 0);
-        })();
+    //     (() => {
+    //         if (!isOnFloor) this.velocity.add(gravityStep);
+    //         else this.velocity.set(0, 0, 0);
+    //     })();
 
 
-        const inputVelocity = new Vector3();
+    //     const inputVelocity = new Vector3();
 
-        (() => {
+    //     (() => {
 
-            if (!this.goToPosition.needsToGo || !isOnFloor) return new Vector3();
+    //         if (!this.goToPosition.needsToGo || !isOnFloor) return new Vector3();
 
-            this.addPointHelper(this.goToPosition.position);
+    //         this.addPointHelper(this.goToPosition.position);
 
-            const lookPosition = new Vector3()
-                .copy(this.goToPosition.position)
-                .setY(this.position.y);
+    //         const lookPosition = new Vector3()
+    //             .copy(this.goToPosition.position)
+    //             .setY(this.position.y);
 
-            this.lookAt(lookPosition);
+    //         this.lookAt(lookPosition);
 
-            const stepHeight = this.stepHeight;
-            const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize();
-            const distanceVector = new Vector3().copy(lookDirection).multiplyScalar(playerSpeed * dt);
+    //         const stepHeight = this.stepHeight;
+    //         const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize();
+    //         const distanceVector = new Vector3().copy(lookDirection).multiplyScalar(playerSpeed * dt);
 
-            const rayOrigin = new Vector3(lookDirection.x * 7.5, stepHeight, lookDirection.z * 7.5).add(origin as THREE.Vector3);
-            const stepCollider = this.getRayIntersections(rayOrigin, lookDirection, playerSpeed * dt)
+    //         const rayOrigin = new Vector3(lookDirection.x * 7.5, stepHeight, lookDirection.z * 7.5).add(origin as THREE.Vector3);
+    //         const stepCollider = this.getRayIntersections(rayOrigin, lookDirection, playerSpeed * dt)
 
-            if (stepCollider.length > 0) {
-                this.goToPosition.needsToGo = false;
-                // inputVelocity.subVectors(stepCollider[0].position, origin as THREE.Vector3);
-                // inputVelocity.y = inputVelocity.y - playerHeightHalf;
-                return new Vector3();
-            }
+    //         if (stepCollider.length > 0) {
+    //             this.goToPosition.needsToGo = false;
+    //             // inputVelocity.subVectors(stepCollider[0].position, origin as THREE.Vector3);
+    //             // inputVelocity.y = inputVelocity.y - playerHeightHalf;
+    //             return new Vector3();
+    //         }
 
-            inputVelocity.add(distanceVector);
-        })();
+    //         inputVelocity.add(distanceVector);
+    //     })();
 
-        const desiredPosition = new Vector3().copy(origin as THREE.Vector3);
+    //     const desiredPosition = new Vector3().copy(origin as THREE.Vector3);
 
-        desiredPosition.add(this.velocity).add(inputVelocity);
+    //     desiredPosition.add(this.velocity).add(inputVelocity);
 
-        if (itsctGround)
-            desiredPosition.y = Math.max(itsctGround.position.y, desiredPosition.y - playerHeightHalf);
+    //     if (itsctGround)
+    //         desiredPosition.y = Math.max(itsctGround.position.y, desiredPosition.y - playerHeightHalf);
 
-        if (this.goToPosition.needsToGo && desiredPosition.distanceToSquared(this.goToPosition.position) < (playerSpeed * dt) ** 2) {
-            desiredPosition.copy(this.goToPosition.position);
-            this.goToPosition.needsToGo = false;
-        }
+    //     if (this.goToPosition.needsToGo && desiredPosition.distanceToSquared(this.goToPosition.position) < (playerSpeed * dt) ** 2) {
+    //         desiredPosition.copy(this.goToPosition.position);
+    //         this.goToPosition.needsToGo = false;
+    //     }
 
-        this.rigidbody.setTranslation(desiredPosition, false);
-    }
+    //     this.rigidbody.setTranslation(desiredPosition, false);
+    // }
 }
 
 export default Player;
