@@ -104,45 +104,54 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
     const bodypartObjects = bodypartInfos.map(info => decodeObject3D(decodeLibrary, info) as THREE.SkinnedMesh);
 
+    const player = renderManager.player;
+
     const animations = bodypartObjects[0].userData.animations;
-    const idleAnimName = "Wait_Hand_FFighter";
-    const clip = animations[idleAnimName];
 
-    const gui = new dat.GUI();
+    player.setAnimations(animations);
+    player.setIdleAnimation("Wait_Hand_FFighter");
+    player.setWalkingAnimation("Walk_Hand_FFighter");
+    player.setRunningAnimation("Run_Hand_FFighter");
+    player.setDeathAnimation("Death_FFighter");
+    player.setMeshes(bodypartObjects);
+    player.initAnimations();
 
-    const state = { activeAnimation: idleAnimName };
-    const actions = [] as THREE.AnimationAction[];
+    // const gui = new dat.GUI();
 
-    gui.add(state, "activeAnimation", Object.keys(animations))
-        .name("Animation")
-        .onFinishChange(animName => {
-            actions.forEach(act => act.stop());
+    // const state = { activeAnimation: idleAnimName };
+    // const actions = [] as THREE.AnimationAction[];
 
-            while (actions.pop()) { }
+    // gui.add(state, "activeAnimation", Object.keys(animations))
+    //     .name("Animation")
+    //     .onFinishChange(animName => {
+    //         actions.forEach(act => act.stop());
 
-            const clip = animations[animName];
+    //         while (actions.pop()) { }
 
-            bodypartObjects.forEach(char => {
-                const action = renderManager.mixer.clipAction(clip, char);
+    //         const clip = animations[animName];
 
-                actions.push(action);
+    //         bodypartObjects.forEach(char => {
+    //             const action = renderManager.mixer.clipAction(clip, char);
 
-                action.play();
-            });
-        });
+    //             actions.push(action);
 
-    bodypartObjects.forEach(char => {
-        char.position.set(-87063.33997244012, -3694, 239964.66910649382);
+    //             action.play();
+    //         });
+    //     });
 
-        renderManager.scene.add(char);
-        renderManager.scene.updateMatrixWorld(true);
+    // bodypartObjects.forEach(char => {
+    //     // char.position.set(-87063.33997244012, -3694, 239964.66910649382);
 
-        const action = renderManager.mixer.clipAction(clip, char);
+    //     // renderManager.scene.add(char);
+    //     // renderManager.scene.updateMatrixWorld(true);
+    //     renderManager.player.add(char);
 
-        actions.push(action);
+    //     const action = renderManager.mixer.clipAction(clip, char);
 
-        action.play();
-    });
+    //     actions.push(action);
+
+    //     action.play();
+    // });
 
 }
 
@@ -217,7 +226,7 @@ async function startCore() {
         helpersZoneBounds: false,
         loadTerrain: true,
         loadBaseModel: true,
-        loadStaticModels: true,
+        loadStaticModels: false,
         _loadStaticModelList: [
             // 1441,
             // 1770,

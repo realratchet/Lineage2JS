@@ -15,8 +15,6 @@ class Player extends BaseActor implements ICollidable {
     protected readonly mesh: THREE.Mesh;
     protected readonly raycaster = new Raycaster();
 
-    // protected readonly collisionBounds: THREE.Box3;
-    protected readonly collisionSize: THREE.Vector3;
     protected readonly gravityHelper: THREE.Line;
 
     protected lastGoodGravityIntersection: THREE.Intersection = null;
@@ -26,42 +24,6 @@ class Player extends BaseActor implements ICollidable {
         needsToGo: false,
         position: new Vector3()
     };
-
-    constructor() {
-        super();
-
-        this.collisionSize = new Vector3(15, 50, 15);
-        // this.collisionBounds = new Box3().setFromCenterAndSize(new Vector3(), this.collisionSize);
-
-        const geometry = new BoxBufferGeometry(this.collisionSize.x, this.collisionSize.y, this.collisionSize.z);
-        const material = new MeshBasicMaterial({ color: 0xfcfcfc });
-
-        geometry.translate(0, this.collisionSize.y * 0.5, 0);
-
-        const mesh = new Mesh(geometry, material);
-
-        this.gravityHelper = new Line(this.createGravityGeometry(), new LineBasicMaterial({ color: 0xff00ff, depthWrite: false, transparent: true }));
-
-        const axes = new AxesHelper(20);
-
-        axes.position.set(0, this.collisionSize.y, 0);
-
-        this.add(mesh, this.gravityHelper, axes);
-
-        const edgeGeo = new EdgesGeometry(geometry);
-        const edgeMat = new LineBasicMaterial({ color: 0xffff00, transparent: true, depthWrite: false, depthTest: false });
-        const edges = new LineSegments(edgeGeo, edgeMat);
-
-        this.add(edges);
-    }
-
-    public readonly isCollidable = true;
-
-    protected colliderDesc: RAPIER.ColliderDesc;
-    protected rigidbodyDesc: RAPIER.RigidBodyDesc;
-
-    protected collider: RAPIER.Collider;
-    protected rigidbody: RAPIER.RigidBody;
 
     public createCollider(physicsWorld: RAPIER.World) {
         this.colliderDesc = RAPIER.ColliderDesc.cuboid(this.collisionSize.x * 0.5, this.collisionSize.y * 0.5, this.collisionSize.z * 0.5);
@@ -110,44 +72,9 @@ class Player extends BaseActor implements ICollidable {
         this.goToPosition.position.copy(position);
     }
 
-    public getRayIntersections(position: THREE.Vector3, direction: THREE.Vector3, maxToi: number) {
-        const rm = this.getRenderManager();
-        const ray = new RAPIER.Ray(position, direction);
-        const collection: IntersectionResult[] = [];
+    
 
-        rm.physicsWorld.intersectionsWithRay(ray, maxToi, false, i => {
-            const object = rm.colliderMap.get(i.collider);
-
-            if (object !== this) {
-                const position = new Vector3()
-                    .copy(ray.dir as THREE.Vector3)
-                    .multiplyScalar(i.toi)
-                    .add(ray.origin as THREE.Vector3);
-
-                collection.push({
-                    ...i,
-                    position,
-                    object
-                });
-            }
-
-            return true;
-        });
-
-        collection.sort((a, b) => a.toi - b.toi);
-
-        return collection
-
-
-    }
-
-    public getGravityIntersections() {
-        return this.getRayIntersections(
-            new Vector3(0, this.collisionSize.y * 0.5, 0).add(this.rigidbody.translation() as THREE.Vector3),
-            new Vector3(0, -1, 0),
-            Infinity
-        );
-    }
+    
 
     public tryToGo(groundObjects: IntersectionResult[], deltaTime: number) {
         if (!this.goToPosition.needsToGo) {
@@ -1064,7 +991,7 @@ class Player extends BaseActor implements ICollidable {
 
 
     protected isFalling = true;
-    protected playerSpeed = 125 * 4;
+    protected playerSpeed = 125 * 3;
     protected stepHeight = 10;
 
     public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {

@@ -39,7 +39,7 @@ class RenderManager {
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
 
-    public readonly player = new Player();
+    public readonly player = new Player(this);
 
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
@@ -144,7 +144,7 @@ class RenderManager {
 
         this.scene.add(this.player);
         this.player.name = "Player";
-        this.player.visible = false;
+        // this.player.visible = false;
         this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
         // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
@@ -472,9 +472,8 @@ class RenderManager {
     protected _postRender(currentTime: number, deltaTime: number) { }
 
     public startRendering() {
-        // this.physicsWorld.step();
-        // this.nextPhysicsTick = 3000;
-        this.nextPhysicsTick = Infinity;
+        this.physicsWorld.step();
+        this.nextPhysicsTick = 3000;
         this.scene.updateMatrixWorld(true);
 
         this.collectColliders();
