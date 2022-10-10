@@ -71,7 +71,7 @@ class RenderManager {
         this.sun = new Mesh(new PlaneBufferGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
         this.sunCam = new Camera();
 
-        this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8, 0));
+        this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8 * 100, 0));
 
         // this.scene.add(this.sun);
 
@@ -145,7 +145,8 @@ class RenderManager {
         this.scene.add(this.player);
         this.player.name = "Player";
         // this.player.visible = false;
-        this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
+        // this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
+        this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
         // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
@@ -429,7 +430,10 @@ class RenderManager {
             this.nextPhysicsTick = currentTime + 1000 / 30;
         }
 
-        this.player.position.copy(this.player.getRigidbody().translation() as THREE.Vector3);
+        const desiredPosition = new Vector3().copy(this.player.getRigidbody().translation() as THREE.Vector3).add(new Vector3(0, -this.player.getColliderSize().y * 0.5 - this.player.getStepHeight(), 0));
+
+        this.player.position.lerp(desiredPosition, 0.1);
+
         this._updateObjects(currentTime, deltaTime);
         this._updateSun();
 

@@ -1,5 +1,5 @@
 import { World, Collider, RigidBody } from "@dimforge/rapier3d";
-import { Box3, Object3D, Vector3 } from "three";
+import { Box3, Box3Helper, BoxHelper, Color, LoopPingPong, Object3D, Vector3 } from "three";
 import { ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import RAPIER from "@dimforge/rapier3d";
@@ -10,6 +10,7 @@ class BaseActor extends Object3D implements ICollidable {
     public readonly type: string = "Actor";
 
     protected characterSpeed = 125;
+    protected stepHeight = 10;
 
     protected colliderDesc: RAPIER.ColliderDesc;
     protected rigidbodyDesc: RAPIER.RigidBodyDesc;
@@ -42,49 +43,77 @@ class BaseActor extends Object3D implements ICollidable {
         this.renderManager = renderManager;
     }
 
-    public createCollider(physicsWorld: World): Collider { throw new Error("Method not implemented."); }
-    public getCollider(): Collider { throw new Error("Method not implemented."); }
-    public getRigidbody(): RigidBody { throw new Error("Method not implemented."); }
+    public getCollider(): RAPIER.Collider { return this.collider; }
+    public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
+    public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {
+        this.colliderDesc = RAPIER.ColliderDesc.cuboid(this.collisionSize.x * 0.5, this.collisionSize.y * 0.5, this.collisionSize.z * 0.5);
+        this.rigidbodyDesc = RAPIER.RigidBodyDesc.dynamic();
+        this.rigidbodyDesc
+            // .setGravityScale(0)
+            // .lockTranslations()
+            // .enabledTranslations(false, true, false)
+            .lockRotations()
+            .setTranslation(this.position.x, this.position.y, this.position.z);
+
+        this.rigidbodyDesc.mass = 70;
+
+        this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
+        this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
+
+        const helper = new Box3Helper(this.collisionBounds);
+
+        this.add(helper);
+
+        return this.collider;
+    }
+
+    public getColliderSize() { return this.collisionSize; }
+    public getStepHeight() { return this.stepHeight; }
 
     public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {
         this.lastUpdate = currentTime;
 
-        const groundObjects = this.getGravityIntersections();
-        const appliedVelocity = new Vector3();
-        const itsct = groundObjects[0];
-        const dt = deltaTime / 1000;
-        const charSpeed = this.characterSpeed;
-        const origin = new Vector3().copy(this.rigidbody.translation() as THREE.Vector3);
-
-        const playerHeight = this.collisionSize.y;
-        const playerHeightHalf = playerHeight * 0.5;
-
-        const gravity = renderManager.physicsWorld.gravity;
-        const gravityStep = new Vector3().copy(gravity as THREE.Vector3).multiplyScalar(dt);
-
-        const itsctGround = groundObjects.length ? groundObjects[0] : null;
-        const isOnFloor = itsctGround ? (itsct.toi <= this.collisionSize.y) : false;
-
+        const groundObjects = this.getGravityIntersections(this.stepHeight);
         const state = this.actorState;
         const desired = state.desired;
 
-        if (!isOnFloor) {
-            desired.state = "falling";
-            state.velocity.add(gravityStep).multiplyScalar(0.9);
-        } else {
+        const charSpeed = this.characterSpeed * 2;
+        const charHeight = this.collisionSize.y, halfCharHeight = charHeight * 0.5;
+
+        if (groundObjects.length > 0) {
+            const groundIntersection = groundObjects[0];
+            const startVec = this.rigidbody.translation();
+            const desiredVec = new Vector3(0, halfCharHeight + 10, 0).add(groundIntersection.position);
+
+            const lerpedVector = new Vector3().lerpVectors(startVec as THREE.Vector3, desiredVec, 0.9);
+
+            this.rigidbody.setTranslation(lerpedVector, true);
+            this.rigidbody.setLinvel(new Vector3(), false); // reset velocity since we're on ground
+
             desired.state = "idle";
-            state.velocity.set(0, 0, 0);
-        }
 
-        const inputVelocity = new Vector3();
-        const desiredPosition = new Vector3().copy(origin as THREE.Vector3);
+            if (state.locomotion) {
+                desired.state = "running";
 
-        desiredPosition.add(state.velocity).add(inputVelocity);
+                const lookPosition = new Vector3()
+                    .copy(desired.position)
+                    .setY(this.position.y);
 
-        // if (itsctGround)
-        //     desiredPosition.y = Math.max(itsctGround.position.y, desiredPosition.y - playerHeightHalf);
+                this.lookAt(lookPosition);
 
-        this.rigidbody.setTranslation(desiredPosition, false);
+                const dt = desired.position.distanceTo(this.rigidbody.translation() as THREE.Vector3) * 10;
+                const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize();
+                const distanceVector = new Vector3().copy(lookDirection).multiplyScalar(Math.min(dt, charSpeed));
+
+                if (dt < charHeight) {
+                    this.rigidbody.setTranslation(desired.position, true);
+                    this.rigidbody.setLinvel(new Vector3(), true);
+                    state.locomotion = false;
+                    desired.state = "idle";
+                } else this.rigidbody.setLinvel(distanceVector, true);
+
+            }
+        } else desired.state = "falling";
 
         this.checkAnimationState();
     }
@@ -131,15 +160,13 @@ class BaseActor extends Object3D implements ICollidable {
         collection.sort((a, b) => a.toi - b.toi);
 
         return collection
-
-
     }
 
-    public getGravityIntersections() {
+    public getGravityIntersections(maxToi = Infinity) {
         return this.getRayIntersections(
-            new Vector3(0, this.collisionSize.y, 0).add(this.rigidbody.translation() as THREE.Vector3),
+            new Vector3(0, -this.collisionSize.y * 0.5, 0).add(this.rigidbody.translation() as THREE.Vector3),
             new Vector3(0, -1, 0),
-            Infinity
+            maxToi
         );
     }
 
@@ -151,13 +178,13 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.meshes = meshes;
 
-        for (const mesh of meshes) {
+        for (const mesh of meshes)
             this.add(mesh);
 
-            this.collisionBounds.expandByPoint(mesh.geometry.boundingBox.min);
-            this.collisionBounds.expandByPoint(mesh.geometry.boundingBox.max);
-        }
 
+        this.collisionBounds.min.set(-5, +10, -5);
+        this.collisionBounds.max.set(+5, +45, +5);
+        // this.collisionSize.set(20, 40, 20);
         this.collisionBounds.getSize(this.collisionSize);
     }
 
@@ -218,6 +245,12 @@ class BaseActor extends Object3D implements ICollidable {
         }
     }
 
+    public goTo(position: Vector3) {
+        this.actorState.locomotion = true;
+        this.actorState.desired.position.copy(position);
+        this.actorState.desired.position.y += this.getStepHeight() + this.getColliderSize().y * 0.5;
+    }
+
 }
 
 export default BaseActor;
@@ -225,6 +258,7 @@ export { BaseActor };
 
 class ActorState {
     public state: ValidStateNames_T = "idle";
+    public locomotion: boolean = false;
     public readonly velocity = new Vector3();
     public readonly desired: DesiredState_T = {
         state: "idle",

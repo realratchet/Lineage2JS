@@ -157,16 +157,16 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     };
 
     if (collider) {
-        // const mat = new MeshBasicMaterial({ opacity: 0.5, wireframe: false, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
-        // const geo = new BufferGeometry();
-        // const indices = new Uint32BufferAttribute(collider, 1);
+        const mat = new MeshBasicMaterial({ opacity: 0.5, wireframe: false, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
+        const geo = new BufferGeometry();
+        const indices = new Uint32BufferAttribute(collider, 1);
 
-        // geo.setIndex(indices)
-        // geo.setAttribute("position", geometry.getAttribute("position"));
+        geo.setIndex(indices)
+        geo.setAttribute("position", geometry.getAttribute("position"));
 
-        // const wire = new Mesh(geo, mat);
+        const wire = new Mesh(geo, mat);
 
-        // object.add(wire);
+        object.add(wire);
     }
 
     applySimpleProperties(library, object, info);
