@@ -37,7 +37,7 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 
 async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, pkgTex: string | UPackage | Promise<UPackage>) {
 
-    if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Effects");
+    if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
     pkg = await assetLoader.load(pkg);
 
@@ -64,6 +64,8 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     const legMesh = "FFighter_m001_l", legTex = "FFighter_m001_t01_l";
     const gloveMesh = "FFighter_m001_g", gloveTex = "FFighter_m001_t01_g";
     const bootMesh = "FFighter_m001_b", bootTex = "FFighter_m001_t01_b";
+
+    debugger;
 
     const bodypartMeshNames = [
         faceMesh,
@@ -143,7 +145,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
 
 async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>) {
 
-    if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Effects");
+    if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
     pkg = await assetLoader.load(pkg);
 
@@ -205,8 +207,13 @@ async function startCore() {
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
-    await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
+    // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
+
+    const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
+    const mortalBlow = await pkg.fetchObject<UClass>(21);
+
+    debugger;
 
     const loadSettings = {
         helpersZoneBounds: false,

@@ -70,10 +70,7 @@ abstract class UObject {
 
         const flags = exp.flags.value as number;
 
-
-
         pkg.seek(exp.offset.value as number, "set");
-
 
         if (flags & ObjectFlags_T.HasStack) {
             const offset = pkg.tell();

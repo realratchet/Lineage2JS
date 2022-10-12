@@ -57,6 +57,7 @@ class UTerrainSector extends UObject {
 
     public async getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
         if (this.uuid in library.geometries) return {
+            uuid: this.uuid,
             type: "TerrainSegment",
             name: this.objectName,
             geometry: this.uuid,

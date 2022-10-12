@@ -14,7 +14,7 @@ function* walkSync(dir) {
     }
 }
 
-const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX"];
+const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U"];
 
 function createModuleConfig({ name, resolve, entry: _entry, library }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {

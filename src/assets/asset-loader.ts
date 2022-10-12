@@ -1,16 +1,17 @@
 import * as _path from "path";
 
-type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX";
-type SupportedPackages_T = "LEVEL" | "TEXTURE" | "STATIC_MESHES" | "SOUNDS" | "SCRIPTS" | "EFFECTS";
+type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK";
+type SupportedPackages_T = "LEVEL" | "TEXTURE" | "STATIC_MESH" | "SOUND" | "SCRIPT" | "ANIMATION" | "EFFECT";
 
 const extToType = Object.freeze(
     new Map([
         ["UNR", "LEVEL"],
         ["UTX", "TEXTURE"],
-        ["USX", "STATIC_MESHES"],
-        ["UAX", "SOUNDS"],
-        ["U", "SCRIPTS"],
-        ["UKX", "EFFECTS"]
+        ["USX", "STATIC_MESH"],
+        ["UAX", "SOUND"],
+        ["U", "SCRIPT"],
+        ["UKX", "ANIMATION"],
+        ["USK", "EFFECT"]
     ]) as Map<SupportedExtensions_T, SupportedPackages_T>
 );
 
@@ -27,7 +28,9 @@ const impToType = Object.freeze(
         ].map(v => ([v, extToType.get("UTX")] as [SupportedImports_T, SupportedPackages_T])),
         ["Sound", extToType.get("UAX")],
         ["StaticMesh", extToType.get("USX")],
-        ["Effects", extToType.get("UKX")]
+        ["Animation", extToType.get("UKX")],
+        ["Effect", extToType.get("USK")],
+        ["Script", extToType.get("U")]
     ]) as Map<SupportedImports_T, SupportedPackages_T>
 );
 
