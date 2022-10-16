@@ -4,6 +4,26 @@ import UObject from "./un-object";
 import UPackage from "./un-package";
 import UStruct from "./un-struct";
 
+const probeNames = [
+    "Spawned", "Destroyed", "GainedChild", "LostChild",
+    "Probe4", "Probe5", "Trigger", "UnTrigger",
+    "Timer", "HitWall", "Falling", "Landed",
+    "ZoneChange", "Touch", "UnTouch", "Bump",
+    "BeginState", "EndState", "BaseChange", "Attach",
+    "Detach", "ActorEntered", "ActorLeaving", "KillCredit",
+    "AnimEnd", "EndedRotation", "InterpolateEnd", "EncroachingOn",
+    "EncroachedBy", "FootZoneChange", "HeadZoneChange", "PainTimer",
+    "SpeechTimer", "MayFall", "Probe34", "Die",
+    "Tick", "PlayerTick", "Expired", "Probe39",
+    "SeePlayer", "EnemyNotVisible", "HearNoise", "UpdateEyeHeight",
+    "SeeMonster", "SeeFriend", "SpecialHandling", "BotDesireability",
+    "Probe48", "Probe49", "Probe50", "Probe51",
+    "Probe52", "Probe53", "Probe54", "Probe55",
+    "Probe56", "Probe57", "Probe58", "Probe59",
+    "Probe60", "Probe61", "Probe62", "All"
+];
+
+
 class UState extends UStruct {
     protected probeMask: bigint;
     protected ignoreMask: bigint;
@@ -24,10 +44,24 @@ class UState extends UStruct {
         this.stateFlags = pkg.read(uint32).value as number;
         this.labelTableOffset = pkg.read(uint16).value as number;
 
+        this.readHead = pkg.tell();
+
+        const probes = [] as string[];
+
+        for (let i = 0; i < 64; i++) {
+            if (this.probeMask & (1n << BigInt(i))) {
+                const pname = probeNames[i];
+
+                probes.push(pname);
+            }
+        }
+
+        if (this.childrenId !== 0)
+            debugger;
 
         // debugger;
     }
- }
+}
 
 export default UState;
 export { UState };

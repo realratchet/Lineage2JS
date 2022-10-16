@@ -17,6 +17,8 @@ class UTextBuffer extends UObject {
 
         this.string.load(pkg);
 
+        this.readHead = pkg.tell();
+
         return this;
     }
 

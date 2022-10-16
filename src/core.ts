@@ -211,7 +211,8 @@ async function startCore() {
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
     const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
-    const mortalBlow = await pkg.fetchObject<UClass>(21);
+
+    const mortalBlow = await pkg.fetchObject<UClass>(657);
 
     debugger;
 
