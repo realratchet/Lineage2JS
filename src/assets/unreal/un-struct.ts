@@ -15,7 +15,8 @@ class UStruct extends UField {
     protected friendlyName: string;
     protected line: number;
     protected textPos: number;
-    unkObjectId: number;
+    protected unkObjectId: number = 0;
+    protected unkObject: UObject;
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
@@ -32,16 +33,15 @@ class UStruct extends UField {
         // debugger;
 
         this.textBufferId = pkg.read(compat32).value as number;
-
-        // this.textBuffer.load(pkg, exp);
         this.childrenId = pkg.read(compat32).value as number;
-
-        const nameId = pkg.read(compat32).value as number;
-        this.friendlyName = pkg.nameTable[nameId].name.value as string;
+        this.friendlyName = pkg.nameTable[pkg.read(compat32).value as number].name.value as string;
 
         console.assert(typeof this.friendlyName === "string" && this.friendlyName !== "None", "Must have a friendly name");
 
-        this.unkObjectId = pkg.read(compat32).value as number;
+        if (0x77 < verArchive) {
+            this.unkObjectId = pkg.read(compat32).value as number;
+        }
+
 
         // if (verLicense >= 0x19)
         //     this.unkNum0 = pkg.read(int32).value as number;
@@ -61,6 +61,12 @@ class UStruct extends UField {
         // debugger;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
+
+            if (this.unkObjectId !== 0) {
+                this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
+
+                debugger;
+            }
 
             if (this.textBufferId !== 0)
                 this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);

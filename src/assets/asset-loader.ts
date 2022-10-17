@@ -30,7 +30,10 @@ const impToType = Object.freeze(
         ["StaticMesh", extToType.get("USX")],
         ["Animation", extToType.get("UKX")],
         ["Effect", extToType.get("USK")],
-        ["Script", extToType.get("U")]
+        ...[ // engine
+            "Script",
+            "Class"
+        ].map(v => ([v, extToType.get("U")] as [SupportedImports_T, SupportedPackages_T])),
     ]) as Map<SupportedImports_T, SupportedPackages_T>
 );
 

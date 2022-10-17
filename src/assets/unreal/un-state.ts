@@ -1,5 +1,6 @@
 import BufferValue from "../buffer-value";
 import UExport from "./un-export";
+import UField from "./un-field";
 import UObject from "./un-object";
 import UPackage from "./un-package";
 import UStruct from "./un-struct";
@@ -56,8 +57,15 @@ class UState extends UStruct {
             }
         }
 
-        if (this.childrenId !== 0)
-            debugger;
+        if (this.childrenId !== 0) {
+            this.promisesLoading.push(new Promise<void>(async resolve => {
+                const child = await pkg.fetchObject<UField>(this.childrenId);
+
+                debugger;
+
+            }));
+        }
+        debugger;
 
         // debugger;
     }
