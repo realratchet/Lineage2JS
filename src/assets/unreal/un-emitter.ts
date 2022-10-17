@@ -1,7 +1,6 @@
-import UObject from "./un-object";
+import UAActor from "./un-aactor";
 
-class UEmitter extends UObject {
-    public readonly careUnread = false;
+class UEmitter extends UAActor {
 }
 
 export default UEmitter;

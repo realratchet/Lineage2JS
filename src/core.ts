@@ -212,7 +212,8 @@ async function startCore() {
 
     const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 
-    const mortalBlow = await pkg.fetchObject<UClass>(657);
+    const rapidShot = await pkg.fetchObject<UClass>(657);
+    const mortalBlow = await pkg.fetchObject<UClass>(21);
 
     debugger;
 

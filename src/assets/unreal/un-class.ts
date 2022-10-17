@@ -45,11 +45,19 @@ class UClass extends UState {
     protected pkgImports2: UObject[];
     protected classWithinId: number;
     protected classConfigName: string;
-    protected emitters = new FArray(UEmitter);
+    protected emitterIds: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    protected destroyAudio: boolean;
+    protected isNoDelete: boolean;
+    protected drawScale: number;
+    protected isDirectional: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "Emitters": "emitters"
+            "Emitters": "emitterIds",
+            "AutoDestroy": "destroyAudio",
+            "bNoDelete": "isNoDelete",
+            "DrawScale": "drawScale",
+            "bDirectional": "isDirectional"
         })
     }
 
@@ -82,52 +90,30 @@ class UClass extends UState {
             resolve();
         }));
 
-        if(verArchive >= 0x3e) {
+        if (verArchive >= 0x3e) {
             this.classWithinId = pkg.read(compat32).value as number;
-            
+
             const nameId = pkg.read(compat32).value as number;
-            
+
             this.classConfigName = pkg.nameTable[nameId].name.value as string;
         }
 
-        if(verArchive >= 0x63) {
+        if (verArchive >= 0x63) {
             this.pkgImportIds2.load(pkg);
 
             this.promisesLoading.push(new Promise<void>(async resolve => {
                 this.pkgImports2 = await Promise.all((this.pkgImportIds2 as FNumber[]).map(async id => {
                     return await pkg.fetchObject(id.value);
                 }));
-    
+
                 resolve();
             }));
         }
 
-        // debugger;
-
         this.readHead = pkg.tell();
 
-        // debugger;
-        
         this.readNamedProps(pkg);
-
-        debugger;
-
-        const impCount = pkg.read(compat32).value as number;
-        const impList = [];
-
-        for (let i = 0; i < impCount; i++) {
-            const impIndex = pkg.read(compat32).value as number;
-            const impNameId = pkg.read(compat32).value as number;
-            const impName = pkg.nameTable[impNameId];
-
-            impList.push([impIndex, impNameId, impName?.name.value as string]);
-        }
-
         this.readHead = pkg.tell();
-
-        debugger;
-
-
     }
 }
 
