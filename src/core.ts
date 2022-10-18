@@ -210,6 +210,26 @@ async function startCore() {
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
+    const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
+    const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
+
+    // debugger;
+
+    const fn = await pkgCore.fetchObject(721);
+
+    debugger;
+
+    // const objs = [];
+
+    // for(let {index} of pkgCore.exportGroups.Function) {
+    //     const a = await pkgCore.fetchObject(index+1);
+    //     objs.push(a);
+
+    //     // debugger;
+    // };
+
+    debugger;
+
     const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 
     const rapidShot = await pkg.fetchObject<UClass>(657);

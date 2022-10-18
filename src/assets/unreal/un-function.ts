@@ -42,6 +42,10 @@ class UFunction extends UStruct {
 
         if (this.allFlags(this.funcFlags, FunctionFlags_T.Net))
             this.replicationOffset = pkg.read(uint16).value as number;
+
+        this.readHead = pkg.tell();
+
+        // debugger;
     }
 
     public allFlags(value: FunctionFlags_T, flags: FunctionFlags_T): boolean { return (value & flags) === flags; }
