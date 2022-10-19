@@ -215,7 +215,8 @@ async function startCore() {
 
     // debugger;
 
-    const fn = await pkgCore.fetchObject(721);
+    // const fn1 = await pkgCore.fetchObject(721);
+    const fn3 = await pkgCore.fetchObject(716);
 
     debugger;
 

@@ -119,68 +119,81 @@ class UStruct extends UField {
         const float = new BufferValue(BufferValue.float);
         const char = new BufferValue(BufferValue.char);
 
+        depth++;
+
+        debugger;
+
         const tokenValue = pkg.read(uint8).value as ExprToken_T;
         let tokenValue2 = tokenValue;
+
+        this.bytecode.push(tokenValue);
+
+        let tokenDebug = new Array(depth - 1).fill("\t").join("");
+        tokenDebug += tokenNames[tokenValue];
+        tokenDebug += "\r\n";
+        this.bytecodePlainText += tokenDebug;
 
         debugger;
 
         if (tokenValue < 112) {
             if (tokenValue < 96) {
                 switch (tokenValue) {
-                    case 0:
-                    case 1:
-                    case 2:
-                    case 32:
-                    case 41:
-                        throw new Error("do something here");
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // *v4 += 4;
+                    case ExprToken_T.LocalVariable:
+                    case ExprToken_T.InstanceVariable:
+                    case ExprToken_T.DefaultVariable:
+                    case ExprToken_T.ObjectConst:
+                    case ExprToken_T.NativeParm: {
+                        const objectIndex = pkg.read(compat32).value as number;
+
+                        this.bytecode.push(objectIndex);
+                    } return tokenValue2;
+                    case ExprToken_T.Return:
+                    case ExprToken_T.GotoLabel:
+                    case ExprToken_T.EatString:
+                    case ExprToken_T.UnkMember:
+                        this.readToken(pkg, depth);
                         return tokenValue2;
-                    case 4:
-                    case 13:
-                    case 14:
-                    case 55:
                         /* goto LABEL_36; */
                         //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         //      return tokenValue2;
                         /* otog LABEL_36; */
                         throw new Error("do something here");
-                    case 5:
-                    case 57:
+                    case ExprToken_T.Switch:
+                    case ExprToken_T.MinConversion:
                         // sub_1010422D(v3, v11);
                         // ++*v4;
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 6:
+                    case ExprToken_T.Jump:
                         // sub_1010427D((int)v3, v11);
                         /* goto LABEL_53; */
                         //      *v4 += 2;
                         /* goto LABEL_53; */
                         throw new Error("do something here");
                         break;
-                    case 7:
-                    case 9:
-                    case 24:
+                    case ExprToken_T.JumpIfNot:
+                    case ExprToken_T.Assert:
+                    case ExprToken_T.Skip:
                         // sub_1010427D((int)v3, v11);
                         // *v4 += 2;
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 8:
-                    case 11:
-                    case 22:
-                    case 23:
-                    case 37:
-                    case 38:
-                    case 39:
-                    case 40:
-                    case 42:
-                    case 45:
-                    case 48:
-                    case 49:
+                    case ExprToken_T.Stop:
+                    case ExprToken_T.Nothing:
+                    case ExprToken_T.EndFunctionParms:
+                    case ExprToken_T.Self:
+                    case ExprToken_T.IntZero:
+                    case ExprToken_T.IntOne:
+                    case ExprToken_T.True:
+                    case ExprToken_T.False:
+                    case ExprToken_T.NoObject:
+                    case ExprToken_T.BoolVariable:
+                    case ExprToken_T.IteratorPop:
+                    case ExprToken_T.IteratorNext:
                         return tokenValue2;
-                    case 10:
+                    case ExprToken_T.Case:
                         // sub_1010427D((int)v3, v11);
                         // v53 = *v4 + 2;
                         // *v4 = v53;
@@ -193,7 +206,7 @@ class UStruct extends UField {
                         // }
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 12:
+                    case ExprToken_T.LabelTable:
                         // if ( (*(_BYTE *)v4 & 3) != 0 )
                         //     appFailAssert(aIcode30, aUnclassCpp_6, 1467);
                         // do
@@ -206,18 +219,18 @@ class UStruct extends UField {
                         // while ( *v54 );
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 15:
-                    case 16:
-                    case 20:
-                    case 26:
-                    case 69:
+                    case ExprToken_T.Let:
+                    case ExprToken_T.DynArrayElement:
+                    case ExprToken_T.LetBool:
+                    case ExprToken_T.ArrayElement:
+                    case ExprToken_T.FloatToBool:
                         /* goto LABEL_41; */
                         //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         //      break;
                         /* otog LABEL_41; */
                         throw new Error("do something here");
-                    case 17:
+                    case ExprToken_T.New:
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         /* goto LABEL_40; */
                         //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
@@ -226,8 +239,8 @@ class UStruct extends UField {
                         // break;
                         /* otog LABEL_40; */
                         throw new Error("do something here");
-                    case 18:
-                    case 25:
+                    case ExprToken_T.ClassContext:
+                    case ExprToken_T.Context:
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         // sub_1010427D((int)v3, this[21] + *v4);
                         // v46 = *v4 + 2;
@@ -237,17 +250,17 @@ class UStruct extends UField {
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 19:
-                    case 46:
-                    case 54:
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // *v4 += 4;
-                        /* goto LABEL_36; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //      return tokenValue2;
-                        /* otog LABEL_36; */
-                    case 27:
-                    case 56:
+                    case ExprToken_T.MetaCast:
+                    case ExprToken_T.DynamicCast:
+                    case ExprToken_T.StructMember:
+                    // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
+                    // *v4 += 4;
+                    /* goto LABEL_36; */
+                    //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                    //      return tokenValue2;
+                    /* otog LABEL_36; */
+                    case ExprToken_T.VirtualFunction:
+                    case ExprToken_T.GlobalFunction:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v11);
                         // *v4 += 4;
                         // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3) != 22 )
@@ -283,7 +296,7 @@ class UStruct extends UField {
                         // }
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 28:
+                    case ExprToken_T.FinalFunction:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
                         // *v4 += 4;
                         // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3) != 22 )
@@ -319,19 +332,19 @@ class UStruct extends UField {
                         // }
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 29:
+                    case ExprToken_T.IntConst:
                         // sub_10104296(v3, v11);
                         // *v4 += 4;
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 30:
+                    case ExprToken_T.FloatConst:
                         // sub_10104291(v3, v11);
                         /* goto LABEL_50; */
                         //      *v4 += 4;
                         //      break;
                         /* otog LABEL_50; */
                         throw new Error("do something here");
-                    case 31:
+                    case ExprToken_T.StringConst:
                         // do
                         // {
                         //     sub_1010422D(v3, v11);
@@ -342,13 +355,13 @@ class UStruct extends UField {
                         // while ( *(_BYTE *)(v11 - 1) );
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 33:
-                    case 68:
+                    case ExprToken_T.NameConst:
+                    case ExprToken_T.FloatToInt:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v11);
                         // *v4 += 4;
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 34:
+                    case ExprToken_T.RotationConst:
                         // sub_10104296(v3, v11);
                         // v49 = *v4 + 4;
                         // *v4 = v49;
@@ -359,7 +372,7 @@ class UStruct extends UField {
                         // *v4 += 4;
                         throw new Error("do something here");
                         return tokenValue2;
-                    case 35:
+                    case ExprToken_T.VectorConst:
                         // sub_10104291(v3, v11);
                         // v51 = *v4 + 4;
                         // *v4 = v51;
@@ -371,28 +384,28 @@ class UStruct extends UField {
                         // *v4 += 4;
                         throw new Error("do something here");
                         break;
-                    case 36:
-                    case 44:
+                    case ExprToken_T.ByteConst:
+                    case ExprToken_T.IntConstByte:
                         // sub_1010422D(v3, v11);
                         // ++*v4;
                         throw new Error("do something here");
                         break;
-                    case 47:
+                    case ExprToken_T.Iterator:
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         // sub_1010427D((int)v3, this[21] + *v4);
                         LABEL_53:
                         // *v4 += 2;
                         throw new Error("do something here");
                         break;
-                    case 50:
-                    case 51:
+                    case ExprToken_T.StructCmpEq:
+                    case ExprToken_T.StructCmpNe:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
                         // *v4 += 4;
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         throw new Error("do something here");
                         break;
-                    case 52:
+                    case ExprToken_T.UnicodeStringConst:
                         // do
                         // {
                         //     sub_1010427D((int)v3, v9 + *v4);
@@ -403,8 +416,8 @@ class UStruct extends UField {
                         // while ( *(_BYTE *)(v48 + v9 - 1) );
                         throw new Error("do something here");
                         break;
-                    case 64:
-                    case 65:
+                    case ExprToken_T.BoolToByte:
+                    case ExprToken_T.BoolToInt:
                         LABEL_40:
                         //   (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         LABEL_41:
@@ -412,7 +425,7 @@ class UStruct extends UField {
                         //   (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
                         throw new Error("do something here");
                         break;
-                    case 66:
+                    case ExprToken_T.BoolToFloat:
                         // sub_10104296(v3, v11);
                         // v28 = *v4 + 4;
                         // *v4 = v28;
@@ -430,7 +443,7 @@ class UStruct extends UField {
                         // while ( *(_BYTE *)(v30 + this[21] - 1) );
                         throw new Error("do something here");
                         break;
-                    case 67:
+                    case ExprToken_T.FloatToByte:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
                         // v45 = *v4 + 4;
                         // *v4 = v45;
@@ -445,6 +458,8 @@ class UStruct extends UField {
                 debugger;
             }
         } else {
+            while (this.readToken(pkg, depth) !== 0x16);
+
             debugger;
         }
 
@@ -742,59 +757,59 @@ const tokenNames = [
 
 enum ExprToken_T {
     // Variable references
-    LocalVariable = 0x00,	// A local variable
-    InstanceVariable = 0x01,	// An object variable
-    DefaultVariable = 0x02,	// Default variable for a concrete object
+    LocalVariable = 0x00,    // A local variable
+    InstanceVariable = 0x01,    // An object variable
+    DefaultVariable = 0x02,    // Default variable for a concrete object
 
     // Tokens
-    Return = 0x04,	// Return from function
-    Switch = 0x05,	// Switch
-    Jump = 0x06,	// Goto a local address in code
-    JumpIfNot = 0x07,	// Goto if not expression
-    Stop = 0x08,	// Stop executing state code
-    Assert = 0x09,	// Assertion
-    Case = 0x0A,	// Case
-    Nothing = 0x0B,	// No operation
-    LabelTable = 0x0C,	// Table of labels
-    GotoLabel = 0x0D,	// Goto a label
+    Return = 0x04,    // Return from function
+    Switch = 0x05,    // Switch
+    Jump = 0x06,    // Goto a local address in code
+    JumpIfNot = 0x07,    // Goto if not expression
+    Stop = 0x08,    // Stop executing state code
+    Assert = 0x09,    // Assertion
+    Case = 0x0A,    // Case
+    Nothing = 0x0B,    // No operation
+    LabelTable = 0x0C,    // Table of labels
+    GotoLabel = 0x0D,    // Goto a label
     EatString = 0x0E, // Ignore a dynamic string
-    Let = 0x0F,	// Assign an arbitrary size value to a variable
+    Let = 0x0F,    // Assign an arbitrary size value to a variable
     DynArrayElement = 0x10, // Dynamic array element
     New = 0x11, // New object allocation
     ClassContext = 0x12, // Class default metaobject context
     MetaCast = 0x13, // Metaclass cast
     LetBool = 0x14, // Let boolean variable
     Unknown0x15 = 0x15,
-    EndFunctionParms = 0x16,	// End of function call parameters
-    Self = 0x17,	// Self object
-    Skip = 0x18,	// Skippable expression
-    Context = 0x19,	// Call a function through an object context
-    ArrayElement = 0x1A,	// Array element
-    VirtualFunction = 0x1B,	// A function call with parameters
-    FinalFunction = 0x1C,	// A prebound function call with parameters
-    IntConst = 0x1D,	// Int constant
-    FloatConst = 0x1E,	// Floating point constant
-    StringConst = 0x1F,	// String constant
-    ObjectConst = 0x20,	// An object constant
-    NameConst = 0x21,	// A name constant
-    RotationConst = 0x22,	// A rotation constant
-    VectorConst = 0x23,	// A vector constant
-    ByteConst = 0x24,	// A byte constant
-    IntZero = 0x25,	// Zero
-    IntOne = 0x26,	// One
-    True = 0x27,	// Bool True
-    False = 0x28,	// Bool False
+    EndFunctionParms = 0x16,    // End of function call parameters
+    Self = 0x17,    // Self object
+    Skip = 0x18,    // Skippable expression
+    Context = 0x19,    // Call a function through an object context
+    ArrayElement = 0x1A,    // Array element
+    VirtualFunction = 0x1B,    // A function call with parameters
+    FinalFunction = 0x1C,    // A prebound function call with parameters
+    IntConst = 0x1D,    // Int constant
+    FloatConst = 0x1E,    // Floating point constant
+    StringConst = 0x1F,    // String constant
+    ObjectConst = 0x20,    // An object constant
+    NameConst = 0x21,    // A name constant
+    RotationConst = 0x22,    // A rotation constant
+    VectorConst = 0x23,    // A vector constant
+    ByteConst = 0x24,    // A byte constant
+    IntZero = 0x25,    // Zero
+    IntOne = 0x26,    // One
+    True = 0x27,    // Bool True
+    False = 0x28,    // Bool False
     NativeParm = 0x29, // Native function parameter offset
-    NoObject = 0x2A,	// NoObject
+    NoObject = 0x2A,    // NoObject
     Unknown0x2b = 0x2B,
-    IntConstByte = 0x2C,	// Int constant that requires 1 byte
-    BoolVariable = 0x2D,	// A bool variable which requires a bitmask
-    DynamicCast = 0x2E,	// Safe dynamic class casting
+    IntConstByte = 0x2C,    // Int constant that requires 1 byte
+    BoolVariable = 0x2D,    // A bool variable which requires a bitmask
+    DynamicCast = 0x2E,    // Safe dynamic class casting
     Iterator = 0x2F, // Begin an iterator operation
     IteratorPop = 0x30, // Pop an iterator level
     IteratorNext = 0x31, // Go to next iteration
-    StructCmpEq = 0x32,	// Struct binary compare-for-equal
-    StructCmpNe = 0x33,	// Struct binary compare-for-unequal
+    StructCmpEq = 0x32,    // Struct binary compare-for-equal
+    StructCmpNe = 0x33,    // Struct binary compare-for-unequal
     UnicodeStringConst = 0x34, // Unicode string constant
     //
     StructMember = 0x36, // Struct member
@@ -803,7 +818,7 @@ enum ExprToken_T {
     GlobalFunction = 0x38, // Call non-state version of a function
 
     // Native conversions.
-    MinConversion = 0x39,	// Minimum conversion token
+    MinConversion = 0x39,    // Minimum conversion token
     RotatorToVector = 0x39,
     ByteToInt = 0x3A,
     ByteToBool = 0x3B,
@@ -837,7 +852,7 @@ enum ExprToken_T {
     NameToString = 0x57,
     VectorToString = 0x58,
     RotatorToString = 0x59,
-    MaxConversion = 0x60,	// Maximum conversion token
+    MaxConversion = 0x60,    // Maximum conversion token
     ExtendedNative = 0x60,
     FirstNative = 0x70
 };
