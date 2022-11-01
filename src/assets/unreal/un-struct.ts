@@ -31,7 +31,6 @@ class UStruct extends UField {
 
         // debugger;
 
-
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -74,12 +73,17 @@ class UStruct extends UField {
 
         this.scriptSize = pkg.read(uint32).value as number;
 
+        // if (this.scriptSize === 0x9f)
+        //     debugger;
+
         // debugger;
 
-        while (this.bytecode.length < this.scriptSize)
+        while (this.bytecodeLength < this.scriptSize)
             this.readToken(pkg, 0);
 
-        debugger;
+        console.assert(this.bytecodeLength === this.scriptSize, "Invalid bytecode length");
+
+        // debugger;
 
         // this.promisesLoading.push(new Promise<void>(async resolve => {
 
@@ -108,6 +112,7 @@ class UStruct extends UField {
 
     protected bytecodePlainText = "";
     protected bytecode: any[] = [];
+    protected bytecodeLength = 0;
 
     protected readToken(pkg: UPackage, depth: number) {
         if (depth === 64) throw new Error("Too deep");
@@ -121,11 +126,12 @@ class UStruct extends UField {
 
         depth++;
 
-        debugger;
+        // debugger;
 
         const tokenValue = pkg.read(uint8).value as ExprToken_T;
         let tokenValue2 = tokenValue;
 
+        this.bytecodeLength = this.bytecodeLength + 1;
         this.bytecode.push(tokenValue);
 
         let tokenDebug = new Array(depth - 1).fill("\t").join("");
@@ -133,10 +139,12 @@ class UStruct extends UField {
         tokenDebug += "\r\n";
         this.bytecodePlainText += tokenDebug;
 
-        debugger;
+        const tokenHex = `0x${tokenValue.toString(16)}`;
 
-        if (tokenValue < 112) {
-            if (tokenValue < 96) {
+        // debugger;
+
+        if (tokenValue < 0x70) {
+            if (tokenValue < 0x60) {
                 switch (tokenValue) {
                     case ExprToken_T.LocalVariable:
                     case ExprToken_T.InstanceVariable:
@@ -146,6 +154,7 @@ class UStruct extends UField {
                         const objectIndex = pkg.read(compat32).value as number;
 
                         this.bytecode.push(objectIndex);
+                        this.bytecodeLength = this.bytecodeLength + 4;
                     } return tokenValue2;
                     case ExprToken_T.Return:
                     case ExprToken_T.GotoLabel:
@@ -153,32 +162,24 @@ class UStruct extends UField {
                     case ExprToken_T.UnkMember:
                         this.readToken(pkg, depth);
                         return tokenValue2;
-                        /* goto LABEL_36; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //      return tokenValue2;
-                        /* otog LABEL_36; */
-                        throw new Error("do something here");
                     case ExprToken_T.Switch:
                     case ExprToken_T.MinConversion:
-                        // sub_1010422D(v3, v11);
-                        // ++*v4;
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        throw new Error("do something here");
+                        this.bytecode.push(pkg.read(uint8).value as number);
+                        this.bytecodeLength = this.bytecodeLength + 1;
+                        this.readToken(pkg, depth);
                         return tokenValue2;
                     case ExprToken_T.Jump:
                         // sub_1010427D((int)v3, v11);
                         /* goto LABEL_53; */
-                        //      *v4 += 2;
+                        //      *likelyBytecodeLength += 2;
                         /* goto LABEL_53; */
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.JumpIfNot:
                     case ExprToken_T.Assert:
                     case ExprToken_T.Skip:
-                        // sub_1010427D((int)v3, v11);
-                        // *v4 += 2;
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        throw new Error("do something here");
+                        this.bytecode.push(pkg.read(uint16).value as number);
+                        this.readToken(pkg, depth);
                         return tokenValue2;
                     case ExprToken_T.Stop:
                     case ExprToken_T.Nothing:
@@ -195,26 +196,26 @@ class UStruct extends UField {
                         return tokenValue2;
                     case ExprToken_T.Case:
                         // sub_1010427D((int)v3, v11);
-                        // v53 = *v4 + 2;
-                        // *v4 = v53;
+                        // v53 = *likelyBytecodeLength + 2;
+                        // *likelyBytecodeLength = v53;
                         // sub_10103EDB((__m64 *)((char *)&a2 + 2), (__m64 *)(v53 + this[21] - 2), 2u);
                         // if ( HIWORD(a2) != 0xFFFF ) {
                         /* goto LABEL_36; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        //      ReadToken(this, likelyBytecodeLength, v3);
                         //      return tokenValue2;
                         /* otog LABEL_36; */
                         // }
                         throw new Error("do something here");
                         return tokenValue2;
                     case ExprToken_T.LabelTable:
-                        // if ( (*(_BYTE *)v4 & 3) != 0 )
+                        // if ( (*(_BYTE *)likelyBytecodeLength & 3) != 0 )
                         //     appFailAssert(aIcode30, aUnclassCpp_6, 1467);
                         // do
                         // {
-                        //     a2 = (int *)(this[21] + *v4);
+                        //     a2 = (int *)(this[21] + *likelyBytecodeLength);
                         //     operator<<(v3, a2);
                         //     v54 = a2;
-                        //     *v4 += 8;
+                        //     *likelyBytecodeLength += 8;
                         // }
                         // while ( *v54 );
                         throw new Error("do something here");
@@ -224,73 +225,70 @@ class UStruct extends UField {
                     case ExprToken_T.LetBool:
                     case ExprToken_T.ArrayElement:
                     case ExprToken_T.FloatToBool:
-                        /* goto LABEL_41; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //      break;
-                        /* otog LABEL_41; */
-                        throw new Error("do something here");
+                        this.readToken(pkg, depth);
+                        this.readToken(pkg, depth);
+                        break;
                     case ExprToken_T.New:
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        // ReadToken(this, likelyBytecodeLength, v3);
                         /* goto LABEL_40; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        //      ReadToken(this, likelyBytecodeLength, v3);
+                        //      ReadToken(this, likelyBytecodeLength, v3);
+                        //      ReadToken(this, likelyBytecodeLength, v3);
                         // break;
                         /* otog LABEL_40; */
                         throw new Error("do something here");
                     case ExprToken_T.ClassContext:
                     case ExprToken_T.Context:
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        // sub_1010427D((int)v3, this[21] + *v4);
-                        // v46 = *v4 + 2;
-                        // *v4 = v46;
-                        // sub_1010422D(v3, v46 + this[21]);
-                        // ++*v4;
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        // ReadToken(this, likelyBytecodeLength, v3);
+                        // sub_1010427D((int)v3, this[21] + *likelyBytecodeLength);
+                        // likelyBytecodeLength6 = *likelyBytecodeLength + 2;
+                        // *likelyBytecodeLength = likelyBytecodeLength6;
+                        // likelyReadByte(v3, likelyBytecodeLength6 + this[21]);
+                        // ++*likelyBytecodeLength;
+                        // ReadToken(this, likelyBytecodeLength, v3);
                         throw new Error("do something here");
                         return tokenValue2;
                     case ExprToken_T.MetaCast:
                     case ExprToken_T.DynamicCast:
                     case ExprToken_T.StructMember:
                     // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                    // *v4 += 4;
+                    // *likelyBytecodeLength += 4;
                     /* goto LABEL_36; */
-                    //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                    //      ReadToken(this, likelyBytecodeLength, v3);
                     //      return tokenValue2;
                     /* otog LABEL_36; */
                     case ExprToken_T.VirtualFunction:
                     case ExprToken_T.GlobalFunction:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v11);
-                        // *v4 += 4;
-                        // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3) != 22 )
+                        // *likelyBytecodeLength += 4;
+                        // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, likelyBytecodeLength, v3) != 22 )
                         // ;
-                        // if ( *v4 < this[22] )
+                        // if ( *likelyBytecodeLength < this[22] )
                         // {
                         // v38 = (*(int (__thiscall **)(_DWORD *))(*v3 + 40))(v3);
                         // v39 = this[21];
                         // v59 = v38;
-                        // v57 = *v4 + v39;
-                        // a2 = (int *)*v4;
-                        // sub_1010422D(v3, v57);
-                        // v40 = *v4 + 1;
-                        // *v4 = v40;
-                        // v41 = this[21];
-                        // v42 = *(unsigned __int8 *)(v40 + v41 - 1);
-                        // v43 = v41 + v40;
+                        // v57 = *likelyBytecodeLength + v39;
+                        // a2 = (int *)*likelyBytecodeLength;
+                        // likelyReadByte(v3, v57);
+                        // likelyBytecodeLength0 = *likelyBytecodeLength + 1;
+                        // *likelyBytecodeLength = likelyBytecodeLength0;
+                        // likelyBytecodeLength1 = this[21];
+                        // likelyBytecodeLength2 = *(unsigned __int8 *)(likelyBytecodeLength0 + likelyBytecodeLength1 - 1);
+                        // likelyBytecodeLength3 = likelyBytecodeLength1 + likelyBytecodeLength0;
                         // a3 = -1;
-                        // if ( v42 == 66 )
+                        // if ( likelyBytecodeLength2 == 66 )
                         // {
-                        //     sub_10104296(v3, v43);
-                        //     v44 = *v4 + 4;
-                        //     *v4 = v44;
-                        //     a3 = *(_DWORD *)(v44 + this[21] - 4);
+                        //     sub_10104296(v3, likelyBytecodeLength3);
+                        //     likelyBytecodeLength4 = *likelyBytecodeLength + 4;
+                        //     *likelyBytecodeLength = likelyBytecodeLength4;
+                        //     a3 = *(_DWORD *)(likelyBytecodeLength4 + this[21] - 4);
                         // }
-                        // *v4 = (int)a2;
+                        // *likelyBytecodeLength = (int)a2;
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 60))(v3, v59);
                         // if ( a3 == 100 )
                         /* goto LABEL_36; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        //      ReadToken(this, likelyBytecodeLength, v3);
                         //      return tokenValue2;
                         /* otog LABEL_36; */
                         // }
@@ -298,19 +296,19 @@ class UStruct extends UField {
                         return tokenValue2;
                     case ExprToken_T.FinalFunction:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // *v4 += 4;
-                        // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3) != 22 )
+                        // *likelyBytecodeLength += 4;
+                        // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, likelyBytecodeLength, v3) != 22 )
                         //     ;
-                        // if ( *v4 < this[22] )
+                        // if ( *likelyBytecodeLength < this[22] )
                         // {
                         //     v31 = (*(int (__thiscall **)(_DWORD *))(*v3 + 40))(v3);
                         //     v32 = this[21];
                         //     v59 = v31;
-                        //     v56 = *v4 + v32;
-                        //     a2 = (int *)*v4;
-                        //     sub_1010422D(v3, v56);
-                        //     v33 = *v4 + 1;
-                        //     *v4 = v33;
+                        //     v56 = *likelyBytecodeLength + v32;
+                        //     a2 = (int *)*likelyBytecodeLength;
+                        //     likelyReadByte(v3, v56);
+                        //     v33 = *likelyBytecodeLength + 1;
+                        //     *likelyBytecodeLength = v33;
                         //     v34 = this[21];
                         //     v35 = *(unsigned __int8 *)(v33 + v34 - 1);
                         //     v36 = v34 + v33;
@@ -318,15 +316,15 @@ class UStruct extends UField {
                         //     if ( v35 == 66 )
                         //     {
                         //     sub_10104296(v3, v36);
-                        //     v37 = *v4 + 4;
-                        //     *v4 = v37;
+                        //     v37 = *likelyBytecodeLength + 4;
+                        //     *likelyBytecodeLength = v37;
                         //     a3 = *(_DWORD *)(v37 + this[21] - 4);
                         //     }
-                        //     *v4 = (int)a2;
+                        //     *likelyBytecodeLength = (int)a2;
                         //     (*(void (__thiscall **)(_DWORD *, int))(*v3 + 60))(v3, v59);
                         //     if ( a3 == 100 )
                         /* goto LABEL_36; */
-                        //      (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        //      ReadToken(this, likelyBytecodeLength, v3);
                         //      return tokenValue2;
                         /* otog LABEL_36; */
                         // }
@@ -334,133 +332,150 @@ class UStruct extends UField {
                         return tokenValue2;
                     case ExprToken_T.IntConst:
                         // sub_10104296(v3, v11);
-                        // *v4 += 4;
+                        // *likelyBytecodeLength += 4;
                         throw new Error("do something here");
                         return tokenValue2;
                     case ExprToken_T.FloatConst:
                         // sub_10104291(v3, v11);
                         /* goto LABEL_50; */
-                        //      *v4 += 4;
+                        //      *likelyBytecodeLength += 4;
                         //      break;
                         /* otog LABEL_50; */
                         throw new Error("do something here");
-                    case ExprToken_T.StringConst:
-                        // do
-                        // {
-                        //     sub_1010422D(v3, v11);
-                        //     v47 = *v4 + 1;
-                        //     *v4 = v47;
-                        //     v11 = this[21] + v47;
-                        // }
-                        // while ( *(_BYTE *)(v11 - 1) );
-                        throw new Error("do something here");
-                        return tokenValue2;
+                    case ExprToken_T.StringConst: {
+                        let constant = "";
+
+                        do {
+                            const charCode = pkg.read(uint8).value as number;
+
+                            if (charCode === 0) break;
+
+                            constant = constant + String.fromCharCode(charCode);
+
+                        } while (true);
+
+                        this.bytecodeLength = this.bytecodeLength + constant.length + 1;
+                        this.bytecode.push(constant);
+
+                    } return tokenValue2;
                     case ExprToken_T.NameConst:
                     case ExprToken_T.FloatToInt:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v11);
-                        // *v4 += 4;
+                        // *likelyBytecodeLength += 4;
                         throw new Error("do something here");
                         return tokenValue2;
                     case ExprToken_T.RotationConst:
                         // sub_10104296(v3, v11);
-                        // v49 = *v4 + 4;
-                        // *v4 = v49;
-                        // sub_10104296(v3, v49 + this[21]);
-                        // v50 = *v4 + 4;
-                        // *v4 = v50;
+                        // likelyBytecodeLength9 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = likelyBytecodeLength9;
+                        // sub_10104296(v3, likelyBytecodeLength9 + this[21]);
+                        // v50 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = v50;
                         // sub_10104296(v3, v50 + this[21]);
-                        // *v4 += 4;
+                        // *likelyBytecodeLength += 4;
                         throw new Error("do something here");
                         return tokenValue2;
                     case ExprToken_T.VectorConst:
                         // sub_10104291(v3, v11);
-                        // v51 = *v4 + 4;
-                        // *v4 = v51;
+                        // v51 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = v51;
                         // sub_10104291(v3, v51 + this[21]);
-                        // v52 = *v4 + 4;
-                        // *v4 = v52;
+                        // v52 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = v52;
                         // sub_10104291(v3, v52 + this[21]);
                         LABEL_50:
-                        // *v4 += 4;
+                        // *likelyBytecodeLength += 4;
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.ByteConst:
                     case ExprToken_T.IntConstByte:
-                        // sub_1010422D(v3, v11);
-                        // ++*v4;
+                        // likelyReadByte(v3, v11);
+                        // ++*likelyBytecodeLength;
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.Iterator:
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        // sub_1010427D((int)v3, this[21] + *v4);
+                        // ReadToken(this, likelyBytecodeLength, v3);
+                        // sub_1010427D((int)v3, this[21] + *likelyBytecodeLength);
                         LABEL_53:
-                        // *v4 += 2;
+                        // *likelyBytecodeLength += 2;
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.StructCmpEq:
                     case ExprToken_T.StructCmpNe:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // *v4 += 4;
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        // (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        // *likelyBytecodeLength += 4;
+                        // ReadToken(this, likelyBytecodeLength, v3);
+                        // ReadToken(this, likelyBytecodeLength, v3);
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.UnicodeStringConst:
                         // do
                         // {
-                        //     sub_1010427D((int)v3, v9 + *v4);
-                        //     v48 = *v4 + 2;
-                        //     *v4 = v48;
+                        //     sub_1010427D((int)v3, v9 + *likelyBytecodeLength);
+                        //     likelyBytecodeLength8 = *likelyBytecodeLength + 2;
+                        //     *likelyBytecodeLength = likelyBytecodeLength8;
                         //     v9 = this[21];
                         // }
-                        // while ( *(_BYTE *)(v48 + v9 - 1) );
+                        // while ( *(_BYTE *)(likelyBytecodeLength8 + v9 - 1) );
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.BoolToByte:
                     case ExprToken_T.BoolToInt:
                         LABEL_40:
-                        //   (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        //   ReadToken(this, likelyBytecodeLength, v3);
                         LABEL_41:
-                        //   (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
-                        //   (*(void (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, v4, v3);
+                        //   ReadToken(this, likelyBytecodeLength, v3);
+                        //   ReadToken(this, likelyBytecodeLength, v3);
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.BoolToFloat:
                         // sub_10104296(v3, v11);
-                        // v28 = *v4 + 4;
-                        // *v4 = v28;
+                        // v28 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = v28;
                         // sub_10104296(v3, v28 + this[21]);
-                        // v29 = *v4 + 4;
-                        // *v4 = v29;
+                        // v29 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = v29;
                         // sub_10104296(v3, v29 + this[21]);
-                        // *v4 += 4;
+                        // *likelyBytecodeLength += 4;
                         // do
                         // {
-                        //     sub_1010422D(v3, this[21] + *v4);
-                        //     v30 = *v4 + 1;
-                        //     *v4 = v30;
+                        //     likelyReadByte(v3, this[21] + *likelyBytecodeLength);
+                        //     v30 = *likelyBytecodeLength + 1;
+                        //     *likelyBytecodeLength = v30;
                         // }
                         // while ( *(_BYTE *)(v30 + this[21] - 1) );
                         throw new Error("do something here");
                         break;
                     case ExprToken_T.FloatToByte:
                         // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // v45 = *v4 + 4;
-                        // *v4 = v45;
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v45 + this[21]);
-                        // *v4 += 4;
+                        // likelyBytecodeLength5 = *likelyBytecodeLength + 4;
+                        // *likelyBytecodeLength = likelyBytecodeLength5;
+                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, likelyBytecodeLength5 + this[21]);
+                        // *likelyBytecodeLength += 4;
                         throw new Error("do something here");
                         break;
                     default:
                         throw new Error(`Bad token '${tokenValue}'`);
                 }
             } else {
-                debugger;
+                throw new Error("do something here");
             }
         } else {
-            while (this.readToken(pkg, depth) !== 0x16);
+            while (this.readToken(pkg, depth) !== ExprToken_T.EndFunctionParms);
 
-            debugger;
+            if (this.bytecodeLength < this.scriptSize) {
+                const pos = pkg.tell();
+                const token2 = pkg.read(uint8).value as ExprToken_T;
+
+                // this.bytecode.push(token2);
+                // this.bytecodeLength++;
+
+                if (token2 === ExprToken_T.BoolToFloat) {
+                    throw new Error("do something here");
+                }
+
+                pkg.seek(pos, "set");
+            }
         }
 
         depth++;
@@ -854,5 +869,5 @@ enum ExprToken_T {
     RotatorToString = 0x59,
     MaxConversion = 0x60,    // Maximum conversion token
     ExtendedNative = 0x60,
-    FirstNative = 0x70
+    FirstNative = 0x70,
 };

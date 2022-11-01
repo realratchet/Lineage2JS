@@ -54,7 +54,6 @@ class UEncodedFile {
     public read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
         this.ensureReadable();
 
-
         const _target = typeof (target) === "number" ? BufferValue.allocBytes(target) : target as BufferValue<T>;
 
         this.offset += _target.readValue(this.buffer, this.offset);

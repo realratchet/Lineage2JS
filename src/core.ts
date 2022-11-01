@@ -216,18 +216,19 @@ async function startCore() {
     // debugger;
 
     // const fn1 = await pkgCore.fetchObject(721);
-    const fn3 = await pkgCore.fetchObject(716);
+    // const fn3 = await pkgCore.fetchObject(716);
 
-    debugger;
+    // debugger;
 
-    // const objs = [];
+    const objs = [];
+    const _pkg = pkgEngine;
 
-    // for(let {index} of pkgCore.exportGroups.Function) {
-    //     const a = await pkgCore.fetchObject(index+1);
-    //     objs.push(a);
+    for(let {index} of _pkg.exportGroups.Function) {
+        const a = await _pkg.fetchObject(index+1);
+        objs.push(a);
 
-    //     // debugger;
-    // };
+        // debugger;
+    };
 
     debugger;
 
