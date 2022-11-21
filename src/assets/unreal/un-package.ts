@@ -50,6 +50,7 @@ import UEnum from "./un-enum";
 import UConst from "./un-const";
 import * as UnProperties from "./un-properties";
 import UState from "./un-state";
+import UField from "./un-field";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -175,6 +176,17 @@ class UPackage extends UEncodedFile {
         const pkg = await this.loader.getPackage(imp.objectName, mainImp.className as SupportedImports_T);
 
         if (!pkg.buffer) await this.loader.load(pkg);
+
+        if (mainImp.idPackage.value as number === -1) {
+            let Constructor: typeof UField = null;
+
+            switch (mainImp.className) {
+                case "Class": Constructor = UClass; break;
+                default: throw new Error(`Unsupported native type: ${mainImp.className}`);
+            }
+
+            return new Constructor();
+        }
 
         const exp = pkg.exports.find(exp =>
             exp.objectName === mainImp.objectName &&

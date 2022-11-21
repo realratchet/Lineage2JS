@@ -2,10 +2,10 @@ import BufferValue from "../buffer-value";
 import UObject from "./un-object";
 
 class UField extends UObject {
-    protected superFieldId: number;
-    protected nextFieldId: number;
-    protected superField: UField;
-    protected nextField: UField;
+    public superFieldId: number = 0;
+    public nextFieldId: number = 0;
+    public superField: UField;
+    public nextField: UField;
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         // debugger;

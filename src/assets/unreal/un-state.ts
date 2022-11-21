@@ -57,15 +57,17 @@ class UState extends UStruct {
             }
         }
 
-        if (this.childrenId !== 0) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                const child = await pkg.fetchObject<UField>(this.childrenId);
-
-                debugger;
-
-            }));
-        }
         // debugger;
+
+        // if (this.childrenId !== 0) {
+        //     // debugger;
+        //     this.promisesLoading.push(new Promise<void>(async resolve => {
+        //         const child = await pkg.fetchObject<UField>(this.childrenId);
+
+        //         debugger;
+
+        //     }));
+        // }
 
         // debugger;
     }

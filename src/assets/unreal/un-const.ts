@@ -10,9 +10,8 @@ class UConst extends UField {
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 
-        this.readHead = pkg.tell();
-
         this.value = new FString().load(pkg).value as string;
+        this.readHead = pkg.tell();
     }
 }
 

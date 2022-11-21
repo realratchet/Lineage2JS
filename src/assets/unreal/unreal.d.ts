@@ -12,6 +12,7 @@ type UCubemap = import("./un-cubemap").UCubemap;
 type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 type UObject = import("./un-object").UObject;
 type UClass = import("./un-class").UClass;
+type UField = import("./un-field").UField;
 type UEnum = import("./un-enum").UEnum;
 type UProperty = import("./un-properties").UProperty;
 type UStruct = import("./un-struct").UStruct;

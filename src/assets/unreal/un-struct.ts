@@ -11,10 +11,10 @@ class UStruct extends UField {
     protected textBufferId: number;
     protected textBuffer: UTextBuffer;
 
-    protected childrenId: number;
-    protected children: UField;
+    protected firstChildPropId: number;
+    public readonly childPropFields: UProperty[] = [];
 
-    protected friendlyName: string;
+    public friendlyName: string;
     protected line: number;
     protected textPos: number;
     protected unkObjectId: number = 0;
@@ -43,7 +43,7 @@ class UStruct extends UField {
         // debugger;
 
         this.textBufferId = pkg.read(compat32).value as number;
-        this.childrenId = pkg.read(compat32).value as number;
+        this.firstChildPropId = pkg.read(compat32).value as number;
 
         const nameId = pkg.read(compat32).value as number;
 
@@ -75,7 +75,7 @@ class UStruct extends UField {
 
         this.scriptSize = pkg.read(uint32).value as number;
 
-        console.log(`${this.objectName} (${this.exportIndex}) -> Dword(ebx+0x64)==${this.line}&& Dword(ebx+0x60)==${this.textPos}&&Dword(ebp+scriptSize)==${this.scriptSize}`)
+        // console.log(`${this.objectName} (${this.exportIndex}) -> Dword(ebx+0x64)==${this.line}&& Dword(ebx+0x60)==${this.textPos}&&Dword(ebp+scriptSize)==${this.scriptSize}`)
 
         // if (this.scriptSize === 0x9f)
         //     debugger;
@@ -89,9 +89,13 @@ class UStruct extends UField {
 
         this.readHead = pkg.tell();
 
+        // if (this.constructor.name === "UStruct")
+        //     debugger;
+
         // debugger;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
+            // debugger;
 
             if (this.unkObjectId !== 0) {
                 this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
@@ -102,15 +106,18 @@ class UStruct extends UField {
             if (this.textBufferId !== 0)
                 this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
 
-            if (this.childrenId !== 0) {
-                let children = await pkg.fetchObject<UField>(this.childrenId);
+            let childPropId = this.firstChildPropId;
 
-                debugger;
+            while (childPropId > 0) {
+                const field = await pkg.fetchObject<UProperty>(childPropId);
 
-                // while (children) {
-                //     debugger;
-                // }
+                await field.onLoaded();
+
+                this.childPropFields.push(field);
+
+                childPropId = field.nextFieldId;
             }
+
 
             resolve();
         }));

@@ -24,6 +24,7 @@ import UEncodedFile from "@unreal/un-encoded-file";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import { generateUUID } from "three/src/math/MathUtils";
 import UFunction from "./assets/unreal/un-function";
+import UClassRegistry from "./assets/unreal/un-class-registry";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
 
@@ -211,8 +212,34 @@ async function startCore() {
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
-    const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
     const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
+    const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
+
+    for (const { index } of pkgCore.exportGroups.Struct) {
+        const object = await pkgCore.fetchObject<UStruct>(index + 1);
+
+        await object.onLoaded();
+
+        UClassRegistry.register(object);
+    }
+
+    for (const { index } of pkgEngine.exportGroups.Struct) {
+        debugger;
+
+        const object = await pkgEngine.fetchObject<UStruct>(index + 1);
+
+        await object.onLoaded();
+
+        UClassRegistry.register(object);
+    }
+
+    const structs = UClassRegistry.structs;
+
+    debugger;
+
+
+
+    debugger;
 
     const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index;
     const UWeapon = pkgEngine.fetchObject(UWeaponId);
