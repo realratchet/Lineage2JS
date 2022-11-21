@@ -53,13 +53,27 @@ type UObjectTypes_T = "Texture" |
     "TexEnvMap" |
     "Cubemap" |
     "SkeletalMesh" |
-    "MeshAnimation";
+    "MeshAnimation" |
+    "Function" |
+    "Enum" |
+    "Const" |
+    "ByteProperty" |
+    "ObjectProperty" |
+    "StructProperty" |
+    "IntProperty" |
+    "BoolProperty" |
+    "NameProperty" |
+    "FloatProperty" |
+    "ArrayProperty" |
+    "ClassProperty" |
+    "StrProperty" |
+    "State";
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;
 
 interface IConstructable {
-    load(pkg: import("../assets/unreal/un-package").UPackage, tag?: import("../assets/unreal/un-property").PropertyTag): this;
+    load(pkg: import("../assets/unreal/un-package").UPackage, tag?: import("./unreal/un-property-tag").PropertyTag): this;
 }
 
 type ValidConstructables_T<T> = typeof import("./unreal/un-constructable").FConstructable

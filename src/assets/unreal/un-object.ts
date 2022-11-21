@@ -1,5 +1,5 @@
 import BufferValue from "../buffer-value";
-import { UNP_PropertyTypes, PropertyTag } from "./un-property";
+import { UNP_PropertyTypes, PropertyTag } from "./un-property-tag";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 import { ObjectFlags_T } from "./un-export";

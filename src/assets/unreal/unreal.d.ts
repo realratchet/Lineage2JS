@@ -12,6 +12,8 @@ type UCubemap = import("./un-cubemap").UCubemap;
 type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 type UObject = import("./un-object").UObject;
 type UClass = import("./un-class").UClass;
+type UEnum = import("./un-enum").UEnum;
+type UProperty = import("./un-properties").UProperty;
 type UStruct = import("./un-struct").UStruct;
 type UPlatte = import("./un-palette").UPlatte;
 type UStaticMesh = import("./static-mesh/un-static-mesh").UStaticMesh;
@@ -67,7 +69,7 @@ type FPlane = import("./un-plane").FPlane;
 type FScale = import("./un-scale").FScale;
 type UPlane = import("./un-plane").UPlane;
 
-type PropertyTag = import("./un-property").PropertyTag;
+type PropertyTag = import("./un-property-tag").PropertyTag;
 type FColor = import("./un-color").FColor;
 type UMatrix = import("./un-matrix").UMatrix;
 type FMatrix = import("./un-matrix").FMatrix;

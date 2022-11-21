@@ -46,6 +46,10 @@ import UCubemap from "./un-cubemap";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
 import UFunction from "./un-function";
+import UEnum from "./un-enum";
+import UConst from "./un-const";
+import * as UnProperties from "./un-properties";
+import UState from "./un-state";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -264,6 +268,19 @@ class UPackage extends UEncodedFile {
             case "SkeletalMesh": Constructor = USkeletalMesh; break;
             case "MeshAnimation": Constructor = UMeshAnimation; break;
             case "Function": Constructor = UFunction; break;
+            case "Enum": Constructor = UEnum; break;
+            case "Const": Constructor = UConst; break;
+            case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
+            case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
+            case "StructProperty": Constructor = UnProperties.UStructProperty; break;
+            case "IntProperty": Constructor = UnProperties.UIntProperty; break;
+            case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
+            case "NameProperty": Constructor = UnProperties.UNameProperty; break;
+            case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
+            case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
+            case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
+            case "StrProperty": Constructor = UnProperties.UStrProperty; break;
+            case "State": Constructor = UState; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

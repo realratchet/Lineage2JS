@@ -23,6 +23,7 @@ import DecodeLibrary from "./assets/unreal/decode-library";
 import UEncodedFile from "@unreal/un-encoded-file";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import { generateUUID } from "three/src/math/MathUtils";
+import UFunction from "./assets/unreal/un-function";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
 
@@ -213,24 +214,37 @@ async function startCore() {
     const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
     const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
 
-    // debugger;
-
-    // const fn1 = await pkgCore.fetchObject(721);
-    // const fn3 = await pkgCore.fetchObject(716);
-
-    // debugger;
-
-    const objs = [];
-    const _pkg = pkgEngine;
-
-    for(let {index} of _pkg.exportGroups.Function) {
-        const a = await _pkg.fetchObject(index+1);
-        objs.push(a);
-
-        // debugger;
-    };
+    const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index;
+    const UWeapon = pkgEngine.fetchObject(UWeaponId);
 
     debugger;
+
+    // const fn1 = await pkgCore.fetchObject<UFunction>(721); // first function read when starting the game
+    // const fn3 = await pkgCore.fetchObject<UFunction>(716); // third function read when starting the game
+
+    // debugger;
+
+    // const objs = [] as UFunction[];
+    // const _pkg = pkgEngine;
+
+    // const groups = [
+    //     ..._pkg.exportGroups.Function,
+    //     ..._pkg.exportGroups.Class,
+    //     ..._pkg.exportGroups.Struct
+    // ]
+
+    // debugger;
+
+    // for(let {index} of groups.filter(x=>![/*674, 739, 991, 994, 1305, 1308, 1376, 1407, 1417, 1857, 1859, 1905*/].includes(x.index))) {
+    //     const a = await _pkg.fetchObject<UFunction>(index+1);
+    //     objs.push(a);
+
+    //     // debugger;
+    // };
+
+    // console.log(objs)
+
+    // debugger;
 
     const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 

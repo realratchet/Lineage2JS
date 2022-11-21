@@ -11,7 +11,7 @@ import FNumber from "../un-number";
 import timeOfDay from "../un-time-of-day-helper";
 import FConstructable from "../un-constructable";
 import UPackage from "../un-package";
-import { PropertyTag } from "../un-property";
+import { PropertyTag } from "../un-property-tag";
 
 class FAccessory extends FConstructable {
     public unkBytes: Uint8Array;

@@ -6,7 +6,7 @@ import UExport from "./un-export";
 import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
-import { PropertyTag } from "./un-property";
+import { PropertyTag } from "./un-property-tag";
 import UState from "./un-state";
 
 class FDependencies extends FConstructable {
@@ -45,11 +45,25 @@ class UClass extends UState {
     protected pkgImports2: UObject[];
     protected classWithinId: number;
     protected classConfigName: string;
+
+    // these should be instantiated somehow differently
     protected emitterIds: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
     protected destroyAudio: boolean;
     protected isNoDelete: boolean;
     protected drawScale: number;
     protected isDirectional: number;
+    protected rightHandBone: string;
+    protected leftHandBone: string;
+    protected rightArmBone: string;
+    protected leftArmBone: string;
+    protected spineBone: string;
+    protected lowbodyBone: string;
+    protected capeBone: string;
+    protected headBone: string;
+    protected rightFootBone: string;
+    protected leftFootBone: string;
+    protected isFaceRotation: boolean;
+    protected isNPC: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -57,7 +71,19 @@ class UClass extends UState {
             "AutoDestroy": "destroyAudio",
             "bNoDelete": "isNoDelete",
             "DrawScale": "drawScale",
-            "bDirectional": "isDirectional"
+            "bDirectional": "isDirectional",
+            "RightHandBone": "rightHandBone",
+            "LeftHandBone": "leftHandBone",
+            "RightArmBone": "rightArmBone",
+            "LeftArmBone": "leftArmBone",
+            "SpineBone": "spineBone",
+            "LowbodyBone": "lowbodyBone",
+            "CapeBone": "capeBone",
+            "HeadBone": "headBone",
+            "RightFootBone": "rightFootBone",
+            "LeftFootBone": "leftFootBone",
+            "bEnableFaceRotation": "isFaceRotation",
+            "bNpc": "isNPC"
         })
     }
 

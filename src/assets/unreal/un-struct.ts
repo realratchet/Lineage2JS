@@ -4,6 +4,8 @@ import UField from "./un-field";
 import UObject from "./un-object";
 import UPackage from "./un-package";
 import UTextBuffer from "./un-text-buffer";
+import FRotator from "./un-rotator";
+import FVector from "./un-vector";
 
 class UStruct extends UField {
     protected textBufferId: number;
@@ -17,11 +19,11 @@ class UStruct extends UField {
     protected textPos: number;
     protected unkObjectId: number = 0;
     protected unkObject: UObject;
-    scriptSize: number;
+    protected scriptSize: number;
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
-        if (this.constructor.name !== "UFunction")
-            debugger;
+        // if (this.constructor.name !== "UFunction")
+        //     debugger;
 
         super.doLoad(pkg, exp);
         this.readHead = pkg.tell();
@@ -73,6 +75,8 @@ class UStruct extends UField {
 
         this.scriptSize = pkg.read(uint32).value as number;
 
+        console.log(`${this.objectName} (${this.exportIndex}) -> Dword(ebx+0x64)==${this.line}&& Dword(ebx+0x60)==${this.textPos}&&Dword(ebp+scriptSize)==${this.scriptSize}`)
+
         // if (this.scriptSize === 0x9f)
         //     debugger;
 
@@ -83,38 +87,40 @@ class UStruct extends UField {
 
         console.assert(this.bytecodeLength === this.scriptSize, "Invalid bytecode length");
 
+        this.readHead = pkg.tell();
+
         // debugger;
 
-        // this.promisesLoading.push(new Promise<void>(async resolve => {
+        this.promisesLoading.push(new Promise<void>(async resolve => {
 
-        //     if (this.unkObjectId !== 0) {
-        //         this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
+            if (this.unkObjectId !== 0) {
+                this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
 
-        //         debugger;
-        //     }
+                debugger;
+            }
 
-        //     if (this.textBufferId !== 0)
-        //         this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
+            if (this.textBufferId !== 0)
+                this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
 
-        //     if (this.childrenId !== 0) {
-        //         let children = await pkg.fetchObject<UField>(this.childrenId);
+            if (this.childrenId !== 0) {
+                let children = await pkg.fetchObject<UField>(this.childrenId);
 
-        //         debugger;
+                debugger;
 
-        //         // while (children) {
-        //         //     debugger;
-        //         // }
-        //     }
+                // while (children) {
+                //     debugger;
+                // }
+            }
 
-        //     resolve();
-        // }));
+            resolve();
+        }));
     }
 
     protected bytecodePlainText = "";
-    protected bytecode: any[] = [];
+    protected bytecode: { type: string, value: any, tokenName?: string }[] = [];
     protected bytecodeLength = 0;
 
-    protected readToken(pkg: UPackage, depth: number) {
+    protected readToken(pkg: UPackage, depth: number): ExprToken_T {
         if (depth === 64) throw new Error("Too deep");
 
         const uint8 = new BufferValue(BufferValue.uint8);
@@ -132,335 +138,284 @@ class UStruct extends UField {
         let tokenValue2 = tokenValue;
 
         this.bytecodeLength = this.bytecodeLength + 1;
-        this.bytecode.push(tokenValue);
+        this.bytecode.push({ type: "token", value: tokenValue, tokenName: ExprToken_T[tokenValue] });
 
         let tokenDebug = new Array(depth - 1).fill("\t").join("");
-        tokenDebug += tokenNames[tokenValue];
+        tokenDebug += tokenValue in tokenNames ? tokenNames[tokenValue] : "UnknownToken";
         tokenDebug += "\r\n";
         this.bytecodePlainText += tokenDebug;
 
         const tokenHex = `0x${tokenValue.toString(16)}`;
 
-        // debugger;
+        if (tokenValue < ExprToken_T.MaxConversion) {
+            switch (tokenValue) {
+                case ExprToken_T.LocalVariable:
+                case ExprToken_T.InstanceVariable:
+                case ExprToken_T.DefaultVariable:
+                case ExprToken_T.ObjectConst:
+                case ExprToken_T.NativeParm: {
+                    const objectIndex = pkg.read(compat32).value as number;
 
-        if (tokenValue < 0x70) {
-            if (tokenValue < 0x60) {
-                switch (tokenValue) {
-                    case ExprToken_T.LocalVariable:
-                    case ExprToken_T.InstanceVariable:
-                    case ExprToken_T.DefaultVariable:
-                    case ExprToken_T.ObjectConst:
-                    case ExprToken_T.NativeParm: {
+                    this.bytecode.push({ type: "compat", value: objectIndex });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+                } return tokenValue2;
+                case ExprToken_T.Return:
+                case ExprToken_T.GotoLabel:
+                case ExprToken_T.EatString:
+                case ExprToken_T.UnkMember:
+                    this.readToken(pkg, depth);
+                    return tokenValue2;
+                case ExprToken_T.Switch:
+                case ExprToken_T.MinConversion:
+                    this.bytecode.push({ type: "byte", value: pkg.read(uint8).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 1;
+                    this.readToken(pkg, depth);
+                    return tokenValue2;
+                case ExprToken_T.Jump:
+                    this.bytecode.push({ type: "uint16", value: pkg.read(uint16).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 2;
+                    break;
+                case ExprToken_T.JumpIfNot:
+                case ExprToken_T.Assert:
+                case ExprToken_T.Skip:
+                    this.bytecode.push({ type: "uint16", value: pkg.read(uint16).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 2;
+                    this.readToken(pkg, depth);
+                    return tokenValue2;
+                case ExprToken_T.Stop:
+                case ExprToken_T.Nothing:
+                case ExprToken_T.EndFunctionParms:
+                case ExprToken_T.Self:
+                case ExprToken_T.IntZero:
+                case ExprToken_T.IntOne:
+                case ExprToken_T.True:
+                case ExprToken_T.False:
+                case ExprToken_T.NoObject:
+                case ExprToken_T.BoolVariable:
+                case ExprToken_T.IteratorPop:
+                case ExprToken_T.IteratorNext:
+                    return tokenValue2;
+                case ExprToken_T.Case: {
+                    const value = pkg.read(uint16).value as number;
+
+                    this.bytecode.push({ type: "uint16", value });
+                    this.bytecodeLength = this.bytecodeLength + 2;
+
+                    if (value !== 0xffff)
+                        this.readToken(pkg, depth);
+
+                } return tokenValue2;
+                case ExprToken_T.LabelTable:
+                    // if ( (*(_BYTE *)likelyBytecodeLength & 3) != 0 )
+                    //     appFailAssert(aIcode30, aUnclassCpp_6, 1467);
+                    // do
+                    // {
+                    //     a2 = (int *)(this[21] + *likelyBytecodeLength);
+                    //     operator<<(v3, a2);
+                    //     v54 = a2;
+                    //     *likelyBytecodeLength += 8;
+                    // }
+                    // while ( *v54 );
+                    throw new Error("do something here");
+                    return tokenValue2;
+                case ExprToken_T.Let:
+                case ExprToken_T.DynArrayElement:
+                case ExprToken_T.LetBool:
+                case ExprToken_T.ArrayElement:
+                case ExprToken_T.FloatToBool:
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                    break;
+                case ExprToken_T.New:
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                    break;
+                case ExprToken_T.ClassContext:
+                case ExprToken_T.Context:
+                    this.readToken(pkg, depth);
+
+                    this.bytecode.push({ type: "uint16", value: pkg.read(uint16).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 2;
+
+                    this.bytecode.push({ type: "uint8", value: pkg.read(uint8).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 1;
+
+                    this.readToken(pkg, depth);
+                    return tokenValue2;
+                case ExprToken_T.MetaCast:
+                case ExprToken_T.DynamicCast:
+                case ExprToken_T.StructMember: {
+                    const objectIndex = pkg.read(compat32).value as number;
+
+                    this.bytecode.push({ type: "compat", value: objectIndex });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+
+                    this.readToken(pkg, depth);
+
+                } return tokenValue2;
+                case ExprToken_T.VirtualFunction:
+                case ExprToken_T.GlobalFunction: {
+                    const objectIndex = pkg.read(compat32).value as number;
+
+                    this.bytecode.push({ type: "compat", value: objectIndex });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+
+                    while (this.readToken(pkg, depth) !== ExprToken_T.EndFunctionParms);
+
+                    if (this.bytecodeLength < this.scriptSize) {
+                        const pos = pkg.tell();
+                        const token2 = pkg.read(uint8).value as ExprToken_T;
+
+                        // this.bytecodeLength = this.bytecodeLength + 1;
+
+                        if (token2 === ExprToken_T.BoolToFloat) {
+                            debugger;
+                        }
+
+                        pkg.seek(pos, "set");
+                    }
+                } return tokenValue2;
+                case ExprToken_T.FinalFunction: {
+                    const objectIndex = pkg.read(compat32).value as number;
+
+                    this.bytecode.push({ type: "compat", value: objectIndex });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+
+                    while (this.readToken(pkg, depth) !== ExprToken_T.EndFunctionParms);
+
+                    if (this.bytecodeLength < this.scriptSize) {
+                        const pos = pkg.tell();
+                        const token2 = pkg.read(uint8).value as ExprToken_T;
+
+                        if (token2 === ExprToken_T.BoolToFloat) {
+                            debugger;
+                        }
+
+                        pkg.seek(pos, "set");
+                    }
+
+                } return tokenValue2;
+                case ExprToken_T.IntConst:
+                    this.bytecode.push({ type: "uint32", value: pkg.read(uint32).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+                    return tokenValue2;
+                case ExprToken_T.FloatConst:
+                    this.bytecode.push({ type: "float", value: pkg.read(float).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+                    break;
+                case ExprToken_T.StringConst: {
+                    let constant = "";
+
+                    do {
+                        const charCode = pkg.read(uint8).value as number;
+
+                        if (charCode === 0) break;
+
+                        constant = constant + String.fromCharCode(charCode);
+
+                    } while (true);
+
+                    this.bytecodeLength = this.bytecodeLength + constant.length + 1;
+                    this.bytecode.push({ type: "string", value: constant });
+
+                } return tokenValue2;
+                case ExprToken_T.NameConst:
+                case ExprToken_T.FloatToInt:
+                    {
                         const objectIndex = pkg.read(compat32).value as number;
 
-                        this.bytecode.push(objectIndex);
+                        // debugger;
+
+                        this.bytecode.push({ type: "compat", value: objectIndex });
                         this.bytecodeLength = this.bytecodeLength + 4;
-                    } return tokenValue2;
-                    case ExprToken_T.Return:
-                    case ExprToken_T.GotoLabel:
-                    case ExprToken_T.EatString:
-                    case ExprToken_T.UnkMember:
-                        this.readToken(pkg, depth);
-                        return tokenValue2;
-                    case ExprToken_T.Switch:
-                    case ExprToken_T.MinConversion:
-                        this.bytecode.push(pkg.read(uint8).value as number);
-                        this.bytecodeLength = this.bytecodeLength + 1;
-                        this.readToken(pkg, depth);
-                        return tokenValue2;
-                    case ExprToken_T.Jump:
-                        // sub_1010427D((int)v3, v11);
-                        /* goto LABEL_53; */
-                        //      *likelyBytecodeLength += 2;
-                        /* goto LABEL_53; */
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.JumpIfNot:
-                    case ExprToken_T.Assert:
-                    case ExprToken_T.Skip:
-                        this.bytecode.push(pkg.read(uint16).value as number);
-                        this.readToken(pkg, depth);
-                        return tokenValue2;
-                    case ExprToken_T.Stop:
-                    case ExprToken_T.Nothing:
-                    case ExprToken_T.EndFunctionParms:
-                    case ExprToken_T.Self:
-                    case ExprToken_T.IntZero:
-                    case ExprToken_T.IntOne:
-                    case ExprToken_T.True:
-                    case ExprToken_T.False:
-                    case ExprToken_T.NoObject:
-                    case ExprToken_T.BoolVariable:
-                    case ExprToken_T.IteratorPop:
-                    case ExprToken_T.IteratorNext:
-                        return tokenValue2;
-                    case ExprToken_T.Case:
-                        // sub_1010427D((int)v3, v11);
-                        // v53 = *likelyBytecodeLength + 2;
-                        // *likelyBytecodeLength = v53;
-                        // sub_10103EDB((__m64 *)((char *)&a2 + 2), (__m64 *)(v53 + this[21] - 2), 2u);
-                        // if ( HIWORD(a2) != 0xFFFF ) {
-                        /* goto LABEL_36; */
-                        //      ReadToken(this, likelyBytecodeLength, v3);
-                        //      return tokenValue2;
-                        /* otog LABEL_36; */
-                        // }
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.LabelTable:
-                        // if ( (*(_BYTE *)likelyBytecodeLength & 3) != 0 )
-                        //     appFailAssert(aIcode30, aUnclassCpp_6, 1467);
-                        // do
-                        // {
-                        //     a2 = (int *)(this[21] + *likelyBytecodeLength);
-                        //     operator<<(v3, a2);
-                        //     v54 = a2;
-                        //     *likelyBytecodeLength += 8;
-                        // }
-                        // while ( *v54 );
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.Let:
-                    case ExprToken_T.DynArrayElement:
-                    case ExprToken_T.LetBool:
-                    case ExprToken_T.ArrayElement:
-                    case ExprToken_T.FloatToBool:
-                        this.readToken(pkg, depth);
-                        this.readToken(pkg, depth);
-                        break;
-                    case ExprToken_T.New:
-                        // ReadToken(this, likelyBytecodeLength, v3);
-                        /* goto LABEL_40; */
-                        //      ReadToken(this, likelyBytecodeLength, v3);
-                        //      ReadToken(this, likelyBytecodeLength, v3);
-                        //      ReadToken(this, likelyBytecodeLength, v3);
-                        // break;
-                        /* otog LABEL_40; */
-                        throw new Error("do something here");
-                    case ExprToken_T.ClassContext:
-                    case ExprToken_T.Context:
-                        // ReadToken(this, likelyBytecodeLength, v3);
-                        // sub_1010427D((int)v3, this[21] + *likelyBytecodeLength);
-                        // likelyBytecodeLength6 = *likelyBytecodeLength + 2;
-                        // *likelyBytecodeLength = likelyBytecodeLength6;
-                        // likelyReadByte(v3, likelyBytecodeLength6 + this[21]);
-                        // ++*likelyBytecodeLength;
-                        // ReadToken(this, likelyBytecodeLength, v3);
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.MetaCast:
-                    case ExprToken_T.DynamicCast:
-                    case ExprToken_T.StructMember:
-                    // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
+                    }
+                    return tokenValue2;
+                case ExprToken_T.RotationConst:
+                    this.bytecode.push({ type: "rotator", value: new FRotator().load(pkg) });
+                    this.bytecodeLength = this.bytecodeLength + 4 * 3;
+                    return tokenValue2;
+                case ExprToken_T.VectorConst:
+                    this.bytecode.push({ type: "vector", value: new FVector().load(pkg) });
+                    this.bytecodeLength = this.bytecodeLength + 4 * 3;
+                    break;
+                case ExprToken_T.ByteConst:
+                case ExprToken_T.IntConstByte:
+                    this.bytecode.push({ type: "byte", value: pkg.read(uint8).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 1;
+                    break;
+                case ExprToken_T.Iterator:
+                    this.readToken(pkg, depth);
+                    this.bytecode.push({ type: "uint16", value: pkg.read(uint16).value as number });
+                    this.bytecodeLength = this.bytecodeLength + 2;
+                    break;
+                case ExprToken_T.StructCmpEq:
+                case ExprToken_T.StructCmpNe: {
+                    // 1981
+
+                    debugger;
+
+                    const objectIndex = pkg.read(compat32).value as number;
+
+                    this.bytecode.push({ type: "compat", value: objectIndex });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                } break;
+                case ExprToken_T.UnicodeStringConst:
+                    // do
+                    // {
+                    //     likelyReadUint16((int)v3, v9 + *likelyBytecodeLength);
+                    //     likelyBytecodeLength8 = *likelyBytecodeLength + 2;
+                    //     *likelyBytecodeLength = likelyBytecodeLength8;
+                    //     v9 = this[21];
+                    // }
+                    // while ( *(_BYTE *)(likelyBytecodeLength8 + v9 - 1) );
+                    throw new Error("do something here");
+                    break;
+                case ExprToken_T.BoolToByte:
+                case ExprToken_T.BoolToInt:
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                    this.readToken(pkg, depth);
+                    break;
+                case ExprToken_T.BoolToFloat:
+                    // sub_10104296(v3, v11);
+                    // v28 = *likelyBytecodeLength + 4;
+                    // *likelyBytecodeLength = v28;
+                    // sub_10104296(v3, v28 + this[21]);
+                    // v29 = *likelyBytecodeLength + 4;
+                    // *likelyBytecodeLength = v29;
+                    // sub_10104296(v3, v29 + this[21]);
                     // *likelyBytecodeLength += 4;
-                    /* goto LABEL_36; */
-                    //      ReadToken(this, likelyBytecodeLength, v3);
-                    //      return tokenValue2;
-                    /* otog LABEL_36; */
-                    case ExprToken_T.VirtualFunction:
-                    case ExprToken_T.GlobalFunction:
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v11);
-                        // *likelyBytecodeLength += 4;
-                        // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, likelyBytecodeLength, v3) != 22 )
-                        // ;
-                        // if ( *likelyBytecodeLength < this[22] )
-                        // {
-                        // v38 = (*(int (__thiscall **)(_DWORD *))(*v3 + 40))(v3);
-                        // v39 = this[21];
-                        // v59 = v38;
-                        // v57 = *likelyBytecodeLength + v39;
-                        // a2 = (int *)*likelyBytecodeLength;
-                        // likelyReadByte(v3, v57);
-                        // likelyBytecodeLength0 = *likelyBytecodeLength + 1;
-                        // *likelyBytecodeLength = likelyBytecodeLength0;
-                        // likelyBytecodeLength1 = this[21];
-                        // likelyBytecodeLength2 = *(unsigned __int8 *)(likelyBytecodeLength0 + likelyBytecodeLength1 - 1);
-                        // likelyBytecodeLength3 = likelyBytecodeLength1 + likelyBytecodeLength0;
-                        // a3 = -1;
-                        // if ( likelyBytecodeLength2 == 66 )
-                        // {
-                        //     sub_10104296(v3, likelyBytecodeLength3);
-                        //     likelyBytecodeLength4 = *likelyBytecodeLength + 4;
-                        //     *likelyBytecodeLength = likelyBytecodeLength4;
-                        //     a3 = *(_DWORD *)(likelyBytecodeLength4 + this[21] - 4);
-                        // }
-                        // *likelyBytecodeLength = (int)a2;
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 60))(v3, v59);
-                        // if ( a3 == 100 )
-                        /* goto LABEL_36; */
-                        //      ReadToken(this, likelyBytecodeLength, v3);
-                        //      return tokenValue2;
-                        /* otog LABEL_36; */
-                        // }
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.FinalFunction:
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // *likelyBytecodeLength += 4;
-                        // while ( (*(int (__thiscall **)(_DWORD *, int *, _DWORD *))(*this + 140))(this, likelyBytecodeLength, v3) != 22 )
-                        //     ;
-                        // if ( *likelyBytecodeLength < this[22] )
-                        // {
-                        //     v31 = (*(int (__thiscall **)(_DWORD *))(*v3 + 40))(v3);
-                        //     v32 = this[21];
-                        //     v59 = v31;
-                        //     v56 = *likelyBytecodeLength + v32;
-                        //     a2 = (int *)*likelyBytecodeLength;
-                        //     likelyReadByte(v3, v56);
-                        //     v33 = *likelyBytecodeLength + 1;
-                        //     *likelyBytecodeLength = v33;
-                        //     v34 = this[21];
-                        //     v35 = *(unsigned __int8 *)(v33 + v34 - 1);
-                        //     v36 = v34 + v33;
-                        //     a3 = -1;
-                        //     if ( v35 == 66 )
-                        //     {
-                        //     sub_10104296(v3, v36);
-                        //     v37 = *likelyBytecodeLength + 4;
-                        //     *likelyBytecodeLength = v37;
-                        //     a3 = *(_DWORD *)(v37 + this[21] - 4);
-                        //     }
-                        //     *likelyBytecodeLength = (int)a2;
-                        //     (*(void (__thiscall **)(_DWORD *, int))(*v3 + 60))(v3, v59);
-                        //     if ( a3 == 100 )
-                        /* goto LABEL_36; */
-                        //      ReadToken(this, likelyBytecodeLength, v3);
-                        //      return tokenValue2;
-                        /* otog LABEL_36; */
-                        // }
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.IntConst:
-                        // sub_10104296(v3, v11);
-                        // *likelyBytecodeLength += 4;
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.FloatConst:
-                        // sub_10104291(v3, v11);
-                        /* goto LABEL_50; */
-                        //      *likelyBytecodeLength += 4;
-                        //      break;
-                        /* otog LABEL_50; */
-                        throw new Error("do something here");
-                    case ExprToken_T.StringConst: {
-                        let constant = "";
-
-                        do {
-                            const charCode = pkg.read(uint8).value as number;
-
-                            if (charCode === 0) break;
-
-                            constant = constant + String.fromCharCode(charCode);
-
-                        } while (true);
-
-                        this.bytecodeLength = this.bytecodeLength + constant.length + 1;
-                        this.bytecode.push(constant);
-
-                    } return tokenValue2;
-                    case ExprToken_T.NameConst:
-                    case ExprToken_T.FloatToInt:
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, v11);
-                        // *likelyBytecodeLength += 4;
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.RotationConst:
-                        // sub_10104296(v3, v11);
-                        // likelyBytecodeLength9 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = likelyBytecodeLength9;
-                        // sub_10104296(v3, likelyBytecodeLength9 + this[21]);
-                        // v50 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = v50;
-                        // sub_10104296(v3, v50 + this[21]);
-                        // *likelyBytecodeLength += 4;
-                        throw new Error("do something here");
-                        return tokenValue2;
-                    case ExprToken_T.VectorConst:
-                        // sub_10104291(v3, v11);
-                        // v51 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = v51;
-                        // sub_10104291(v3, v51 + this[21]);
-                        // v52 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = v52;
-                        // sub_10104291(v3, v52 + this[21]);
-                        LABEL_50:
-                        // *likelyBytecodeLength += 4;
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.ByteConst:
-                    case ExprToken_T.IntConstByte:
-                        // likelyReadByte(v3, v11);
-                        // ++*likelyBytecodeLength;
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.Iterator:
-                        // ReadToken(this, likelyBytecodeLength, v3);
-                        // sub_1010427D((int)v3, this[21] + *likelyBytecodeLength);
-                        LABEL_53:
-                        // *likelyBytecodeLength += 2;
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.StructCmpEq:
-                    case ExprToken_T.StructCmpNe:
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // *likelyBytecodeLength += 4;
-                        // ReadToken(this, likelyBytecodeLength, v3);
-                        // ReadToken(this, likelyBytecodeLength, v3);
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.UnicodeStringConst:
-                        // do
-                        // {
-                        //     sub_1010427D((int)v3, v9 + *likelyBytecodeLength);
-                        //     likelyBytecodeLength8 = *likelyBytecodeLength + 2;
-                        //     *likelyBytecodeLength = likelyBytecodeLength8;
-                        //     v9 = this[21];
-                        // }
-                        // while ( *(_BYTE *)(likelyBytecodeLength8 + v9 - 1) );
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.BoolToByte:
-                    case ExprToken_T.BoolToInt:
-                        LABEL_40:
-                        //   ReadToken(this, likelyBytecodeLength, v3);
-                        LABEL_41:
-                        //   ReadToken(this, likelyBytecodeLength, v3);
-                        //   ReadToken(this, likelyBytecodeLength, v3);
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.BoolToFloat:
-                        // sub_10104296(v3, v11);
-                        // v28 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = v28;
-                        // sub_10104296(v3, v28 + this[21]);
-                        // v29 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = v29;
-                        // sub_10104296(v3, v29 + this[21]);
-                        // *likelyBytecodeLength += 4;
-                        // do
-                        // {
-                        //     likelyReadByte(v3, this[21] + *likelyBytecodeLength);
-                        //     v30 = *likelyBytecodeLength + 1;
-                        //     *likelyBytecodeLength = v30;
-                        // }
-                        // while ( *(_BYTE *)(v30 + this[21] - 1) );
-                        throw new Error("do something here");
-                        break;
-                    case ExprToken_T.FloatToByte:
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
-                        // likelyBytecodeLength5 = *likelyBytecodeLength + 4;
-                        // *likelyBytecodeLength = likelyBytecodeLength5;
-                        // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, likelyBytecodeLength5 + this[21]);
-                        // *likelyBytecodeLength += 4;
-                        throw new Error("do something here");
-                        break;
-                    default:
-                        throw new Error(`Bad token '${tokenValue}'`);
-                }
-            } else {
-                throw new Error("do something here");
+                    // do
+                    // {
+                    //     likelyReadByte(v3, this[21] + *likelyBytecodeLength);
+                    //     v30 = *likelyBytecodeLength + 1;
+                    //     *likelyBytecodeLength = v30;
+                    // }
+                    // while ( *(_BYTE *)(v30 + this[21] - 1) );
+                    throw new Error("do something here");
+                    break;
+                case ExprToken_T.FloatToByte:
+                    // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 24))(v3, v11);
+                    // likelyBytecodeLength5 = *likelyBytecodeLength + 4;
+                    // *likelyBytecodeLength = likelyBytecodeLength5;
+                    // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, likelyBytecodeLength5 + this[21]);
+                    // *likelyBytecodeLength += 4;
+                    throw new Error("do something here");
+                    break;
+                default:
+                    throw new Error(`Bad token '${tokenValue}'`);
             }
         } else {
+            if (tokenValue >= ExprToken_T.MaxConversion && tokenValue < ExprToken_T.FirstNative) {
+                this.bytecode.push({ type: "uint8", value: pkg.read(uint8).value as number });
+                this.bytecodeLength = this.bytecodeLength + 1;
+            }
+
             while (this.readToken(pkg, depth) !== ExprToken_T.EndFunctionParms);
 
             if (this.bytecodeLength < this.scriptSize) {
@@ -480,256 +435,6 @@ class UStruct extends UField {
 
         depth++;
     }
-
-    // protected readToken(pkg: UPackage, depth: number) {
-    //     if (depth === 64) throw new Error("Too deep");
-
-    //     depth++;
-
-    //     const uint8 = new BufferValue(BufferValue.uint8);
-    //     const uint16 = new BufferValue(BufferValue.uint16);
-    //     const uint32 = new BufferValue(BufferValue.uint32);
-    //     const compat32 = new BufferValue(BufferValue.compat32);
-    //     const float = new BufferValue(BufferValue.float);
-    //     const char = new BufferValue(BufferValue.char);
-
-    //     const token = pkg.read(uint8).value as ExprToken_T;
-
-    //     debugger;
-
-    //     const verArchive = pkg.header.getArchiveFileVersion();
-    //     const verLicense = pkg.header.getLicenseeVersion();
-
-    //     this.bytecode.push(token);
-
-    //     let tokenDebug = new Array(depth - 1).fill("\t").join("");
-    //     tokenDebug += tokenNames[token];
-    //     tokenDebug += "\r\n";
-    //     this.bytecodePlainText += tokenDebug;
-
-    //     if (token >= ExprToken_T.MinConversion && token <= ExprToken_T.MaxConversion)
-    //         this.readToken(pkg, depth);
-    //     else if (token >= ExprToken_T.FirstNative)
-    //         while (this.readToken(pkg, depth) != ExprToken_T.EndFunctionParms);
-    //     else if (token >= ExprToken_T.ExtendedNative) {
-    //         const token2 = pkg.read(uint8).value as ExprToken_T;
-
-    //         this.bytecode.push(token2);
-
-    //         while (this.readToken(pkg, depth) != ExprToken_T.EndFunctionParms);
-    //     } else if (token === ExprToken_T.VirtualFunction) {
-    //         const nameIdx = pkg.read(compat32).value as number;
-
-    //         this.bytecode.push(nameIdx);
-
-    //         while (this.readToken(pkg, depth) != ExprToken_T.EndFunctionParms);
-    //     } else if (token === ExprToken_T.FinalFunction) {
-    //         const objectIdx = pkg.read(compat32).value as number;
-
-    //         this.bytecode.push(objectIdx);
-
-    //         while (this.readToken(pkg, depth) != ExprToken_T.EndFunctionParms);
-    //     } else if (token === ExprToken_T.GlobalFunction) {
-    //         const nameIdx = pkg.read(compat32).value as number;
-
-    //         this.bytecode.push(nameIdx);
-
-    //         while (this.readToken(pkg, depth) != ExprToken_T.EndFunctionParms);
-    //     } else if (token === ExprToken_T.LetBool && verArchive <= 61) {
-    //         while (true) {
-    //             while (true) {
-    //                 const size = pkg.read(uint8).value as number;
-
-    //                 this.bytecode.push(size);
-
-    //                 if (size === 0) break;
-
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //             }
-    //         }
-    //     } else {
-    //         switch (token) {
-    //             case ExprToken_T.LocalVariable:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 break;
-    //             case ExprToken_T.InstanceVariable:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 break;
-    //             case ExprToken_T.DefaultVariable:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 break;
-    //             case ExprToken_T.Return:
-    //                 if (verArchive > 61)
-    //                     this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Switch:
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Jump:
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 break;
-    //             case ExprToken_T.JumpIfNot:
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Stop: break;
-    //             case ExprToken_T.Assert:
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Case: {
-    //                 const nextoffset = pkg.read(uint16).value as number;
-
-    //                 this.bytecode.push(nextoffset);
-
-    //                 if (nextoffset != 0xffff)
-    //                     this.readToken(pkg, depth);
-    //             } break;
-    //             case ExprToken_T.Nothing: break;
-    //             case ExprToken_T.LabelTable:
-    //                 while (true) {
-    //                     const nameIndex = pkg.read(compat32).value as number;
-
-    //                     this.bytecode.push(nameIndex);
-    //                     this.bytecode.push(pkg.read(uint32).value as number);
-
-    //                     if (pkg.nameTable[nameIndex].name.value as string === "None")
-    //                         break;
-    //                 }
-    //                 break;
-    //             case ExprToken_T.GotoLabel:
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.EatString:
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Let:
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.DynArrayElement:
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.New:
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.ClassContext:
-    //                 this.readToken(pkg, depth);
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.MetaCast:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.LetBool:
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Unknown0x15:
-    //                 /*this.readToken(pkg, depth);*/
-    //                 break;
-    //             case ExprToken_T.EndFunctionParms: break;
-    //             case ExprToken_T.Self: break;
-    //             case ExprToken_T.Skip:
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.Context:
-    //                 this.readToken(pkg, depth);
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.ArrayElement:
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.IntConst:
-    //                 this.bytecode.push(pkg.read(uint32).value as number);
-    //                 break;
-    //             case ExprToken_T.FloatConst:
-    //                 this.bytecode.push(pkg.read(float).value as number);
-    //                 break;
-    //             case ExprToken_T.StringConst:
-    //                 this.bytecode.push(pkg.read(char).value as string);
-    //                 break;
-    //             case ExprToken_T.ObjectConst:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 break;
-    //             case ExprToken_T.NameConst:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 break;
-    //             case ExprToken_T.RotationConst:
-    //                 this.bytecode.push(pkg.read(uint32).value as number);
-    //                 this.bytecode.push(pkg.read(uint32).value as number);
-    //                 this.bytecode.push(pkg.read(uint32).value as number);
-    //                 break;
-    //             case ExprToken_T.VectorConst:
-    //                 this.bytecode.push(pkg.read(float).value as number);
-    //                 this.bytecode.push(pkg.read(float).value as number);
-    //                 this.bytecode.push(pkg.read(float).value as number);
-    //                 break;
-    //             case ExprToken_T.ByteConst:
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //                 break;
-    //             case ExprToken_T.IntZero: break;
-    //             case ExprToken_T.IntOne: break;
-    //             case ExprToken_T.True: break;
-    //             case ExprToken_T.False: break;
-    //             case ExprToken_T.NativeParm:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 break;
-    //             case ExprToken_T.NoObject: break;
-    //             case ExprToken_T.Unknown0x2b:
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.IntConstByte:
-    //                 this.bytecode.push(pkg.read(uint8).value as number);
-    //                 break;
-    //             case ExprToken_T.BoolVariable:
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.DynamicCast:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 this.readToken(pkg, depth); break;
-    //             case ExprToken_T.Iterator:
-    //                 this.readToken(pkg, depth);
-    //                 this.bytecode.push(pkg.read(uint16).value as number);
-    //                 break;
-    //             case ExprToken_T.IteratorPop: break;
-    //             case ExprToken_T.IteratorNext: break;
-    //             case ExprToken_T.StructCmpEq:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.StructCmpNe:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             case ExprToken_T.UnicodeStringConst:
-    //                 debugger;
-    //                 /*PushUnicodeZ(stream -> ReadUnicodeZ());*/
-    //                 break;
-    //             case ExprToken_T.StructMember:
-    //                 this.bytecode.push(pkg.read(compat32).value as number);
-    //                 this.readToken(pkg, depth);
-    //                 break;
-    //             default: throw Error("Unknown script bytecode token encountered");
-    //         }
-    //     }
-
-    //     return token;
-    // }
 }
 
 export default UStruct;
