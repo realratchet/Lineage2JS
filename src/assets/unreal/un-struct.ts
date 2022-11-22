@@ -6,6 +6,7 @@ import UPackage from "./un-package";
 import UTextBuffer from "./un-text-buffer";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
+import UClassRegistry from "./un-class-registry";
 
 class UStruct extends UField {
     protected textBufferId: number;
@@ -47,7 +48,6 @@ class UStruct extends UField {
 
         const nameId = pkg.read(compat32).value as number;
 
-
         // if (this.superFieldId === 0 && this.nextFieldId === 720 && this.textBufferId === 0 && this.childrenId === 0 && nameId === 78)
         //     debugger;
 
@@ -67,11 +67,10 @@ class UStruct extends UField {
             this.unkObjectId = pkg.read(compat32).value as number;
         }
 
-
         // debugger;
 
-        this.line = pkg.read(uint32).value as number;
-        this.textPos = pkg.read(uint32).value as number;
+        this.line = pkg.read(int32).value as number;
+        this.textPos = pkg.read(int32).value as number;
 
         this.scriptSize = pkg.read(uint32).value as number;
 
@@ -99,12 +98,18 @@ class UStruct extends UField {
 
             if (this.unkObjectId !== 0) {
                 this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
+                await this.unkObject.onLoaded();
 
                 debugger;
             }
 
-            if (this.textBufferId !== 0)
+            if (this.textBufferId !== 0) {
                 this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
+
+                await this.textBuffer.onLoaded();
+
+                UClassRegistry.parse(this.textBuffer.string.value);
+            }
 
             let childPropId = this.firstChildPropId;
 
@@ -117,7 +122,6 @@ class UStruct extends UField {
 
                 childPropId = field.nextFieldId;
             }
-
 
             resolve();
         }));
@@ -329,16 +333,14 @@ class UStruct extends UField {
 
                 } return tokenValue2;
                 case ExprToken_T.NameConst:
-                case ExprToken_T.FloatToInt:
-                    {
-                        const objectIndex = pkg.read(compat32).value as number;
+                case ExprToken_T.FloatToInt: {
+                    const objectIndex = pkg.read(compat32).value as number;
 
-                        // debugger;
+                    // debugger;
 
-                        this.bytecode.push({ type: "compat", value: objectIndex });
-                        this.bytecodeLength = this.bytecodeLength + 4;
-                    }
-                    return tokenValue2;
+                    this.bytecode.push({ type: "compat", value: objectIndex });
+                    this.bytecodeLength = this.bytecodeLength + 4;
+                } return tokenValue2;
                 case ExprToken_T.RotationConst:
                     this.bytecode.push({ type: "rotator", value: new FRotator().load(pkg) });
                     this.bytecodeLength = this.bytecodeLength + 4 * 3;
@@ -414,8 +416,7 @@ class UStruct extends UField {
                     // *likelyBytecodeLength += 4;
                     throw new Error("do something here");
                     break;
-                default:
-                    throw new Error(`Bad token '${tokenValue}'`);
+                default: throw new Error(`Bad token '${tokenValue}'`);
             }
         } else {
             if (tokenValue >= ExprToken_T.MaxConversion && tokenValue < ExprToken_T.FirstNative) {
@@ -441,6 +442,8 @@ class UStruct extends UField {
         }
 
         depth++;
+
+        return tokenValue2;
     }
 }
 

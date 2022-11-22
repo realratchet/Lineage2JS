@@ -1,35 +1,37 @@
 import BufferValue from "../buffer-value";
 import FArray from "./un-array";
 import FConstructable from "./un-constructable";
-import UEmitter from "./un-emitter";
 import UExport from "./un-export";
 import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
-import { PropertyTag } from "./un-property-tag";
 import UState from "./un-state";
 
 class FDependencies extends FConstructable {
+    protected classId: number;
+
     public scriptTextCRC: number;
     public depth: number;
-    public classId: number;
     public class: UClass;
 
     public load(pkg: UPackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint32 = new BufferValue(BufferValue.uint32);
+        const int32 = new BufferValue(BufferValue.int32);
 
         this.classId = pkg.read(compat32).value as number;
         this.depth = pkg.read(uint32).value as number;
-        this.scriptTextCRC = pkg.read(uint32).value as number;
+        this.scriptTextCRC = pkg.read(int32).value as number;
 
-        // this.promisesLoading.push(new Promise<void>(async resolve => {
-        //     if (this.classId !== 0)
-        //         this.class = await pkg.fetchObject<UClass>(this.classId);
+        this.promisesLoading.push(new Promise<void>(async resolve => {
+            if (this.classId !== 0) {
+                this.class = await pkg.fetchObject<UClass>(this.classId);
 
+                await this.class.onLoaded();
+            }
 
-        //     resolve();
-        // }));
+            resolve();
+        }));
 
         return this;
     }
@@ -110,7 +112,11 @@ class UClass extends UState {
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
             this.pkgImports = await Promise.all((this.pkgImportIds as FNumber[]).map(async id => {
-                return await pkg.fetchObject(id.value);
+                const object = await pkg.fetchObject(id.value);
+
+                await object.onLoaded();
+
+                return object;
             }));
 
             resolve();
@@ -129,7 +135,11 @@ class UClass extends UState {
 
             this.promisesLoading.push(new Promise<void>(async resolve => {
                 this.pkgImports2 = await Promise.all((this.pkgImportIds2 as FNumber[]).map(async id => {
-                    return await pkg.fetchObject(id.value);
+                    const object = await pkg.fetchObject(id.value);
+
+                    await object.onLoaded();
+
+                    return object;
                 }));
 
                 resolve();

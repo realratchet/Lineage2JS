@@ -26,11 +26,15 @@ class UField extends UObject {
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
 
-            if (this.superFieldId !== 0)
+            if (this.superFieldId !== 0) {
                 this.superField = await pkg.fetchObject<UField>(this.superFieldId);
+                // await this.superField.onLoaded();
+            }
 
-            if (this.nextFieldId !== 0)
+            if (this.nextFieldId !== 0) {
                 this.nextField = await pkg.fetchObject<UField>(this.nextFieldId);
+                // await this.nextField.onLoaded();
+            }
 
             resolve();
         }));

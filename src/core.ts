@@ -215,13 +215,55 @@ async function startCore() {
     const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
     const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
 
-    for (const { index } of pkgCore.exportGroups.Struct) {
-        const object = await pkgCore.fetchObject<UStruct>(index + 1);
+    // debugger;
+
+    // const func = pkgCore.exportGroups.Function.find(x => x.export.objectName === "RandRange");
+
+    // // const fnObject = await pkgCore.fetchObject(func.index + 1);
+    // const fnObject = await pkgCore.fetchObject(741);
+    // await fnObject.onLoaded();
+
+    // debugger;
+
+    // const textBuffers = [];
+
+    // for (const { index } of pkgCore.exportGroups.TextBuffer) {
+    //     const object = await pkgCore.fetchObject<UTextBuffer>(index + 1);
+
+    //     await object.onLoaded();
+
+    //     textBuffers.push(object);
+    // }
+
+    // debugger;
+
+    for (const { index } of pkgCore.exportGroups.Class) {
+        const object = await pkgCore.fetchObject<UClass>(index + 1);
+
+        // debugger;
 
         await object.onLoaded();
 
+        debugger;
+    }
+
+    debugger;
+
+    for (const { index } of pkgCore.exportGroups.Struct) {
+        const object = await pkgCore.fetchObject<UStruct>(index + 1);
+
+        // debugger;
+
+        await object.onLoaded();
+
+        // debugger;
+
         UClassRegistry.register(object);
     }
+
+    const registered = UClassRegistry.structs;
+
+    debugger;
 
     for (const { index } of pkgEngine.exportGroups.Struct) {
         debugger;

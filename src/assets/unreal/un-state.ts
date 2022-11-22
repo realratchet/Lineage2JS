@@ -1,6 +1,7 @@
 import BufferValue from "../buffer-value";
 import UExport from "./un-export";
 import UField from "./un-field";
+import UFunction from "./un-function";
 import UObject from "./un-object";
 import UPackage from "./un-package";
 import UStruct from "./un-struct";
@@ -31,6 +32,8 @@ class UState extends UStruct {
     protected stateFlags: number;
     protected labelTableOffset: number;
 
+    public readonly functions: GenericObjectContainer_T<UFunction> = {};
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 
@@ -57,19 +60,27 @@ class UState extends UStruct {
             }
         }
 
-        // debugger;
+        this.promisesLoading.push(new Promise<void>(async resolve => {
+            let childPropId = this.firstChildPropId;
 
-        // if (this.childrenId !== 0) {
-        //     // debugger;
-        //     this.promisesLoading.push(new Promise<void>(async resolve => {
-        //         const child = await pkg.fetchObject<UField>(this.childrenId);
+            while (childPropId > 0) {
+                const field = await pkg.fetchObject<UFunction>(childPropId);
 
-        //         debugger;
+                if (field instanceof UFunction) {
+                    await field.onLoaded();
 
-        //     }));
-        // }
+                    this.functions[field.friendlyName] = field;
+                    // debugger;
+                }
 
-        // debugger;
+                childPropId = field.nextFieldId;
+            }
+
+            if (Object.keys(this.functions).length > 0)
+                debugger;
+
+            resolve();
+        }));
     }
 }
 
