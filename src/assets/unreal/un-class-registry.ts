@@ -47,6 +47,8 @@ abstract class BaseConstruct {
     public readonly modifiers: string[] = [];
     public readonly parent: BaseConstruct;
     public readonly root: BaseConstruct;
+    public name: string;
+    public nativeIndex: number;
 
     constructor(parent: BaseConstruct) {
         this.parent = parent;
@@ -54,16 +56,20 @@ abstract class BaseConstruct {
     }
 }
 
-abstract class BaseNamedConstruct extends BaseConstruct {
-    public name: string;
+class FunctionStruct extends BaseConstruct {
+    public readonly constuctType: string = "Function";
+    public functionType: string;
+    public returnType: string;
+    public arguments: [string, string, string[]][] = [];
+    public precedence: number;
 }
 
-class EnumConstruct extends BaseNamedConstruct {
+class EnumConstruct extends BaseConstruct {
     public readonly constuctType: string = "Enum";
     public readonly members: string[] = [];
 }
 
-class StructConstruct extends BaseNamedConstruct {
+class StructConstruct extends BaseConstruct {
     public readonly constuctType: string = "Struct";
     public readonly members: BaseConstruct[] = [];
     public readonly enumerators: GenericObjectContainer_T<EnumConstruct> = {};
@@ -76,7 +82,7 @@ class ClassConstruct extends StructConstruct {
     public readonly structures: GenericObjectContainer_T<StructConstruct> = {};
 }
 
-class VarConstruct extends BaseNamedConstruct {
+class VarConstruct extends BaseConstruct {
     public readonly constuctType: string = "Variable";
 
     public isArray: boolean = false;
@@ -87,7 +93,7 @@ class VarConstruct extends BaseNamedConstruct {
     public siblings: string[] = [];
 }
 
-class ConstConstruct extends BaseNamedConstruct {
+class ConstConstruct extends BaseConstruct {
     public readonly constuctType = "Constant";
 
     public value: any;
@@ -122,12 +128,17 @@ class ExpressionConstructor {
 
                 return [expr, false, {}];
             }
+            else if ('.' === token) {
+                if (/^\d+$/.test(expr)) expr = expr + token;
+                else return [expr, true, { period: true }];
+            }
             else if (';' === token) return [expr, true, { semicolon: true }];
             else if (',' === token) return [expr, true, { comma: true }];
             else if (['[', ']'].includes(token)) return [expr, true, { brackets: token }];
+            else if (['<', '>'].includes(token)) return [expr, true, { comparator: token }];
             else if (['{', '}'].includes(token)) return [expr, true, { braces: token }];
             else if (['(', ')'].includes(token)) return [expr, true, { parenthesis: token }];
-            else if (['='].includes(token)) return [expr, true, { operator: token }];
+            else if (['=', '!', '&', '|', '*', '/', '+', '-', '~', '^', '%'].includes(token)) return [expr, true, { operator: token }];
             else {
                 debugger;
             }
@@ -137,14 +148,15 @@ class ExpressionConstructor {
     }
 
     protected exprConstruct(parent: BaseConstruct): BaseConstruct {
-        const statement = this.readNextStatement();
-        const [expr, hasFlags, flags] = statement;
+        let statement = this.readNextStatement();
+        let [expr, hasFlags, flags] = statement;
 
         switch (expr) {
             case "var": return this.exprConstructVar(parent, statement);
             case "const": return this.exprConstructConst(parent, statement);
             case "struct": return this.exprConstructStruct(parent, statement);
             case "enum": return this.exprConstructEnum(parent, statement, false);
+            case "native": return this.exprConstructFunction(parent, statement, expr);
             default:
                 debugger;
                 throw new Error(`Unknown construct type: ${expr}`);
@@ -152,6 +164,144 @@ class ExpressionConstructor {
         }
 
         return null;
+    }
+
+    protected exprConstructFunction(parent: BaseConstruct, statement: Statement_T, preModifier: string): FunctionStruct {
+        const funcDirective = ["preoperator", "operator", "postoperator", "function"]
+        const varTypes = this.getVarTypes(parent);
+        const cFunc = new FunctionStruct(parent);
+        let [expr, hasFlags, flags] = statement;
+
+        while (!funcDirective.includes(expr.toLowerCase())) {
+            cFunc.modifiers.push(expr);
+
+            if (expr === "native") {
+                if (hasFlags) {
+                    if (!("parenthesis" in flags))
+                        debugger;
+
+                    if (flags.parenthesis !== "(")
+                        debugger;
+
+                    [expr, hasFlags, flags] = this.readNextStatement();
+
+                    cFunc.nativeIndex = parseInt(expr);
+                }
+            }
+
+            [expr, hasFlags, flags] = this.readNextStatement();
+        }
+
+        if (cFunc.functionType !== "function" && hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
+            [expr, hasFlags, flags] = this.readNextStatement();
+            cFunc.precedence = parseInt(expr);
+        }
+
+        cFunc.functionType = expr.toLowerCase();
+
+        [expr, hasFlags, flags] = this.readNextStatement();
+
+        if (!varTypes.includes(expr.toLowerCase()))
+            debugger;
+
+        cFunc.returnType = expr;
+
+        [expr, hasFlags, flags] = this.readNextStatement();
+
+        let operatorExpr;
+
+        if (cFunc.functionType !== "function") {
+            operatorExpr = '';
+
+            while (!("parenthesis" in flags)) {
+                if (!("operator" in flags) && !("comparator" in flags)) {
+                    debugger;
+                }
+
+                if (("operator" in flags)) operatorExpr = operatorExpr + flags.operator;
+                else if (("comparator" in flags)) operatorExpr = operatorExpr + flags.comparator;
+
+                [expr, hasFlags, flags] = this.readNextStatement();
+            }
+        } else cFunc.name = expr;
+
+        while (!("parenthesis" in flags) || (flags.parenthesis !== ')')) {
+            const argFlags: string[] = [];
+
+            [expr, hasFlags, flags] = this.readNextStatement();
+
+            while (!varTypes.includes(expr.toLowerCase())) {
+                argFlags.push(expr);
+
+                [expr, hasFlags, flags] = this.readNextStatement();
+            }
+
+            const varType = expr;
+
+            [expr, hasFlags, flags] = this.readNextStatement();
+
+            cFunc.arguments.push([varType, expr, argFlags]);
+
+            if (!hasFlags) [expr, hasFlags, flags] = this.readNextStatement();
+        }
+
+        if (cFunc.functionType !== "function") {
+            const operatorTokens = [];
+
+            switch (operatorExpr) {
+                case "!": operatorTokens.push("not"); break;
+                case "==": operatorTokens.push("eq"); break;
+                case "!=": operatorTokens.push("not", "eq"); break;
+                case "&&": operatorTokens.push("and"); break;
+                case "||": operatorTokens.push("or"); break;
+                case "^^": operatorTokens.push("xor"); break;
+                case "*=": operatorTokens.push("add", "assign"); break;
+                case "/=": operatorTokens.push("div", "assign"); break;
+                case "+=": operatorTokens.push("add", "assign"); break;
+                case "-=": operatorTokens.push("sub", "assign"); break;
+                case "++": operatorTokens.push("inc"); break;
+                case "--": operatorTokens.push("dec"); break;
+                case "~": operatorTokens.push("inv"); break;
+                case "+": operatorTokens.push("add"); break;
+                case "-": operatorTokens.push("sub"); break;
+                case "*": operatorTokens.push("mul"); break;
+                case "/": operatorTokens.push("div"); break;
+                case "<<": operatorTokens.push("shl"); break;
+                case ">>": operatorTokens.push("shr", "arithmetic"); break;
+                case ">>>": operatorTokens.push("shr"); break;
+                case "<": operatorTokens.push("le"); break;
+                case ">": operatorTokens.push("gt"); break;
+                case ">=": operatorTokens.push("geq"); break;
+                case "<=": operatorTokens.push("leq"); break;
+                case "&": operatorTokens.push("and", "bit"); break;
+                case "|": operatorTokens.push("or", "bit"); break;
+                case "^": operatorTokens.push("xor", "bit"); break;
+                case "**": operatorTokens.push("pow"); break;
+                case "%": operatorTokens.push("mod"); break;
+                default:
+                    debugger;
+                    throw new Error(`Unknown operator expression: ${operatorExpr}`);
+            }
+
+            cFunc.arguments.forEach(([dtype,]) => operatorTokens.push(dtype));
+            cFunc.name = operatorTokens.join("_");
+        }
+
+        if (cFunc.modifiers.includes("native")) {
+            [expr, hasFlags, flags] = this.readNextStatement();
+
+            if (!hasFlags)
+                debugger;
+
+            if (!("semicolon" in flags))
+                debugger;
+
+            return cFunc;
+        }
+
+        debugger;
+
+        return cFunc;
     }
 
     protected exprConstructStruct(parent: BaseConstruct, statement: Statement_T): StructConstruct {
@@ -269,16 +419,20 @@ class ExpressionConstructor {
             debugger;
 
         if (expr.startsWith("0x")) cConst.value = parseInt(expr, 16);
-        else cConst.value = parseInt(expr);
+        else cConst.value = parseFloat(expr);
 
         return cConst;
     }
 
+    protected getVarTypes(parent: BaseConstruct): string[] {
+        const registeredStructs = Object.keys((parent.root as ClassConstruct).structures).map(x => x.toLowerCase());
+        const varTypes = ["array", "bool", "int", "byte", "float", "string", "name", "enum", "object", "class", ...registeredStructs, "pointer"];
+
+        return varTypes;
+    }
+
     protected exprConstructVar(parent: BaseConstruct, statement: Statement_T): VarConstruct {
         const cVar = new VarConstruct(parent);
-        const builtinStructs = ["vector", "range", "plane"];
-        const registeredStructs = Object.keys((parent.root as ClassConstruct).structures);
-        const varTypes = ["bool", "int", "byte", "float", "string", "name", "enum", "object", "class", ...builtinStructs, ...registeredStructs, "pointer"];
 
         let [expr, hasFlags, flags] = statement;
 
@@ -301,13 +455,27 @@ class ExpressionConstructor {
         do {
             statement = [expr, hasFlags, flags] = this.readNextStatement();
 
-            if (varTypes.includes(expr)) {
+            if (this.getVarTypes(parent).includes(expr.toLowerCase())) {
 
                 if (expr === "enum") {
                     const construct = this.exprConstructEnum(parent, statement, true);
 
                     cVar.dataType = construct.name;
                     (parent as StructConstruct).enumerators[construct.name] = construct;
+                } else if (expr === "array") {
+                    [expr, hasFlags, flags] = this.readNextStatement();
+
+                    if (!hasFlags)
+                        debugger;
+
+                    if (!("comparator" in flags))
+                        debugger;
+
+                    if (flags.comparator !== ">")
+                        debugger;
+
+                    cVar.arraySize = Infinity;
+                    cVar.dataType = expr;
                 } else cVar.dataType = expr;
                 break;
             } else {
@@ -327,7 +495,7 @@ class ExpressionConstructor {
             }
         } while (!hasFlags)
 
-        if (hasFlags)
+        if (hasFlags && cVar.arraySize !== Infinity)
             debugger;
 
         [expr, hasFlags, flags] = this.readNextStatement();
@@ -470,6 +638,7 @@ class ExpressionConstructor {
             switch (construct.constuctType) {
                 case "Variable":
                 case "Constant":
+                case "Function":
                     cClass.members.push(construct);
                     break;
                 case "Struct":
