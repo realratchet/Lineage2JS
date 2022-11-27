@@ -56,12 +56,17 @@ abstract class BaseConstruct {
     }
 }
 
+class EventStruct extends BaseConstruct {
+    public readonly constuctType: string = "Event";
+}
+
 class FunctionStruct extends BaseConstruct {
     public readonly constuctType: string = "Function";
     public functionType: string;
     public returnType: string;
     public arguments: [string, string, string[]][] = [];
     public precedence: number;
+    public implementation: string;
 }
 
 class EnumConstruct extends BaseConstruct {
@@ -73,6 +78,7 @@ class StructConstruct extends BaseConstruct {
     public readonly constuctType: string = "Struct";
     public readonly members: BaseConstruct[] = [];
     public readonly enumerators: GenericObjectContainer_T<EnumConstruct> = {};
+    public readonly events: GenericObjectContainer_T<EventStruct> = {};
     public extends: string;
 }
 
@@ -138,7 +144,7 @@ class ExpressionConstructor {
             else if (['<', '>'].includes(token)) return [expr, true, { comparator: token }];
             else if (['{', '}'].includes(token)) return [expr, true, { braces: token }];
             else if (['(', ')'].includes(token)) return [expr, true, { parenthesis: token }];
-            else if (['=', '!', '&', '|', '*', '/', '+', '-', '~', '^', '%'].includes(token)) return [expr, true, { operator: token }];
+            else if (['=', '!', '&', '|', '*', '/', '+', '-', '~', '^', '%', '$', '@'].includes(token)) return [expr, true, { operator: token }];
             else {
                 debugger;
             }
@@ -156,7 +162,10 @@ class ExpressionConstructor {
             case "const": return this.exprConstructConst(parent, statement);
             case "struct": return this.exprConstructStruct(parent, statement);
             case "enum": return this.exprConstructEnum(parent, statement, false);
-            case "native": return this.exprConstructFunction(parent, statement, expr);
+            case "event": return this.exprConstructEvent(parent, statement);
+            case "final":
+            case "native":
+                return this.exprConstructFunction(parent, statement);
             default:
                 debugger;
                 throw new Error(`Unknown construct type: ${expr}`);
@@ -166,7 +175,34 @@ class ExpressionConstructor {
         return null;
     }
 
-    protected exprConstructFunction(parent: BaseConstruct, statement: Statement_T, preModifier: string): FunctionStruct {
+    protected exprConstructEvent(parent: BaseConstruct, statement: Statement_T): EventStruct {
+        const cEvent = new EventStruct(parent);
+
+        let [expr, hasFlags, flags] = this.readNextStatement();
+
+        cEvent.name = expr;
+
+        do {
+            [expr, hasFlags, flags] = this.readNextStatement();
+
+            if (expr.length > 0) debugger;
+            if (!hasFlags) debugger;
+            if (!("parenthesis" in flags)) debugger;
+            if (flags.parenthesis !== ')') debugger;
+        } while ("parenthesis" in flags && flags.parenthesis !== ')')
+
+        [expr, hasFlags, flags] = this.readNextStatement();
+
+        if (!hasFlags)
+            debugger;
+
+        if (!("semicolon" in flags))
+            debugger;
+
+        return cEvent;
+    }
+
+    protected exprConstructFunction(parent: BaseConstruct, statement: Statement_T): FunctionStruct {
         const funcDirective = ["preoperator", "operator", "postoperator", "function"]
         const varTypes = this.getVarTypes(parent);
         const cFunc = new FunctionStruct(parent);
@@ -192,19 +228,29 @@ class ExpressionConstructor {
             [expr, hasFlags, flags] = this.readNextStatement();
         }
 
-        if (cFunc.functionType !== "function" && hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
+        cFunc.functionType = expr.toLowerCase();
+
+        if (expr !== "function" && hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
             [expr, hasFlags, flags] = this.readNextStatement();
             cFunc.precedence = parseInt(expr);
         }
 
-        cFunc.functionType = expr.toLowerCase();
-
         [expr, hasFlags, flags] = this.readNextStatement();
 
-        if (!varTypes.includes(expr.toLowerCase()))
-            debugger;
+        if (!varTypes.includes(expr.toLowerCase())) {
+            if (hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
+                cFunc.returnType = "void";
+            } else {
+                [expr, hasFlags, flags] = this.readNextStatement();
 
-        cFunc.returnType = expr;
+                if (hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
+                    cFunc.returnType = "void";
+                } else {
+                    debugger;
+                    throw new Error("Invalid function header");
+                }
+            }
+        } else cFunc.returnType = expr;
 
         [expr, hasFlags, flags] = this.readNextStatement();
 
@@ -213,16 +259,18 @@ class ExpressionConstructor {
         if (cFunc.functionType !== "function") {
             operatorExpr = '';
 
-            while (!("parenthesis" in flags)) {
-                if (!("operator" in flags) && !("comparator" in flags)) {
+            do {
+                if (!("operator" in flags) && !("comparator" in flags) && expr.length === 0) {
                     debugger;
                 }
 
                 if (("operator" in flags)) operatorExpr = operatorExpr + flags.operator;
                 else if (("comparator" in flags)) operatorExpr = operatorExpr + flags.comparator;
+                else operatorExpr = expr;
 
-                [expr, hasFlags, flags] = this.readNextStatement();
-            }
+                if (!("parenthesis" in flags))
+                    [expr, hasFlags, flags] = this.readNextStatement();
+            } while (!("parenthesis" in flags));
         } else cFunc.name = expr;
 
         while (!("parenthesis" in flags) || (flags.parenthesis !== ')')) {
@@ -248,39 +296,48 @@ class ExpressionConstructor {
         if (cFunc.functionType !== "function") {
             const operatorTokens = [];
 
-            switch (operatorExpr) {
-                case "!": operatorTokens.push("not"); break;
-                case "==": operatorTokens.push("eq"); break;
-                case "!=": operatorTokens.push("not", "eq"); break;
-                case "&&": operatorTokens.push("and"); break;
-                case "||": operatorTokens.push("or"); break;
-                case "^^": operatorTokens.push("xor"); break;
-                case "*=": operatorTokens.push("add", "assign"); break;
-                case "/=": operatorTokens.push("div", "assign"); break;
-                case "+=": operatorTokens.push("add", "assign"); break;
-                case "-=": operatorTokens.push("sub", "assign"); break;
-                case "++": operatorTokens.push("inc"); break;
-                case "--": operatorTokens.push("dec"); break;
-                case "~": operatorTokens.push("inv"); break;
-                case "+": operatorTokens.push("add"); break;
-                case "-": operatorTokens.push("sub"); break;
-                case "*": operatorTokens.push("mul"); break;
-                case "/": operatorTokens.push("div"); break;
-                case "<<": operatorTokens.push("shl"); break;
-                case ">>": operatorTokens.push("shr", "arithmetic"); break;
-                case ">>>": operatorTokens.push("shr"); break;
-                case "<": operatorTokens.push("le"); break;
-                case ">": operatorTokens.push("gt"); break;
-                case ">=": operatorTokens.push("geq"); break;
-                case "<=": operatorTokens.push("leq"); break;
-                case "&": operatorTokens.push("and", "bit"); break;
-                case "|": operatorTokens.push("or", "bit"); break;
-                case "^": operatorTokens.push("xor", "bit"); break;
-                case "**": operatorTokens.push("pow"); break;
-                case "%": operatorTokens.push("mod"); break;
-                default:
-                    debugger;
-                    throw new Error(`Unknown operator expression: ${operatorExpr}`);
+            if (/^\w[\w\d]*/.test(operatorExpr)) operatorTokens.push(operatorExpr.toLowerCase());
+            else {
+
+                switch (operatorExpr.toLowerCase()) {
+                    case "!": operatorTokens.push("not"); break;
+                    case "==": operatorTokens.push("eq"); break;
+                    case "!=": operatorTokens.push("not", "eq"); break;
+                    case "&&": operatorTokens.push("and"); break;
+                    case "||": operatorTokens.push("or"); break;
+                    case "^^": operatorTokens.push("xor"); break;
+                    case "*=": operatorTokens.push("add", "assign"); break;
+                    case "/=": operatorTokens.push("div", "assign"); break;
+                    case "+=": operatorTokens.push("add", "assign"); break;
+                    case "-=": operatorTokens.push("sub", "assign"); break;
+                    case "++": operatorTokens.push("inc"); break;
+                    case "--": operatorTokens.push("dec"); break;
+                    case "~": operatorTokens.push("inv"); break;
+                    case "+": operatorTokens.push("add"); break;
+                    case "-": operatorTokens.push("sub"); break;
+                    case "*": operatorTokens.push("mul"); break;
+                    case "/": operatorTokens.push("div"); break;
+                    case "<<": operatorTokens.push("shl"); break;
+                    case ">>": operatorTokens.push("shr", "arithmetic"); break;
+                    case ">>>": operatorTokens.push("shr"); break;
+                    case "<": operatorTokens.push("le"); break;
+                    case ">": operatorTokens.push("gt"); break;
+                    case ">=": operatorTokens.push("geq"); break;
+                    case "<=": operatorTokens.push("leq"); break;
+                    case "&": operatorTokens.push("and", "bit"); break;
+                    case "|": operatorTokens.push("or", "bit"); break;
+                    case "^": operatorTokens.push("xor", "bit"); break;
+                    case "**": operatorTokens.push("pow"); break;
+                    case "%": operatorTokens.push("mod"); break;
+                    case "~=": operatorTokens.push("eq", "approx"); break;
+                    case "$": operatorTokens.push("cat"); break;
+                    case "$=": operatorTokens.push("cat", "assign"); break;
+                    case "@": operatorTokens.push("scat"); break;
+                    case "@=": operatorTokens.push("scat", "assign"); break;
+                    default:
+                        debugger;
+                        throw new Error(`Unknown operator expression: ${operatorExpr}`);
+                }
             }
 
             cFunc.arguments.forEach(([dtype,]) => operatorTokens.push(dtype));
@@ -299,7 +356,28 @@ class ExpressionConstructor {
             return cFunc;
         }
 
-        debugger;
+        [expr, hasFlags, flags] = this.readNextStatement();
+
+        if (expr.length > 0) debugger;
+        if (!hasFlags) debugger;
+        if (!("braces" in flags)) debugger;
+        if (flags.braces !== '{') debugger;
+
+        let impl = '', token = '{', openBraces = 1;
+
+        // eat the remaining implementation code for now
+        do {
+            token = this.readToken();
+
+            if (token === '{') openBraces++;
+            if (token === '}') openBraces--;
+            if (openBraces === 0) { break; }
+
+            impl = impl + token;
+
+        } while (this.offset < this.srcLen);
+
+        cFunc.implementation = impl.trim();
 
         return cFunc;
     }
@@ -646,6 +724,9 @@ class ExpressionConstructor {
                     break;
                 case "Enum":
                     cClass.enumerators[(construct as EnumConstruct).name] = (construct as EnumConstruct);
+                    break;
+                case "Event":
+                    cClass.events[(construct as EventStruct).name] = (construct as EventStruct);
                     break;
                 default:
                     debugger;
