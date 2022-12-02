@@ -54,6 +54,12 @@ abstract class BaseConstruct {
         this.parent = parent;
         this.root = parent === null ? this : parent.root;
     }
+
+    public getWS(depth: number) { return new Array(depth * 4).fill(' ').join(""); }
+
+    public build(depth: number, code: string[]): string[] {
+        throw new Error("Not yet implemented");
+    }
 }
 
 class EventStruct extends BaseConstruct {
@@ -67,6 +73,70 @@ class FunctionStruct extends BaseConstruct {
     public arguments: [string, string, string[]][] = [];
     public precedence: number;
     public implementation: string;
+
+    public build(depth: number, code: string[]): string[] {
+        let codeString = ``;
+
+        const ws = this.getWS(depth);
+        const modifiers = this.modifiers.reduce((acc, val) => {
+
+            acc[val] = true;
+
+            return acc;
+        }, {} as GenericObjectContainer_T<boolean>);
+
+        // if (this.parent instanceof ClassConstruct) {
+        //     let access;
+
+        //     if ("public" in modifiers) access = "public";
+        //     else if ("private" in modifiers) access = "private";
+        //     else access = "public";
+
+        //     codeString += access;
+
+        //     delete modifiers[access];
+
+        // } else {
+        //     debugger;
+        // }
+
+        // if("static" in modifiers) {
+        //     delete modifiers["static"];
+        //     codeString += " static";
+        // }
+
+        let opType;
+
+        if (this.functionType === "function") opType = "";
+        else {
+            opType = ` /* ${this.functionType}`;
+
+            if (Number.isFinite(this.precedence))
+                opType += `[${this.precedence}]`
+
+            opType += ` */ `;
+        };
+
+        codeString = `${ws}/* ${Object.keys(modifiers).join(", ")} */ ${codeString}${this.name}${opType}(`;
+
+        const fnArgs = this.arguments.map(([type, name, flags]) => {
+            return `${name} /* type[${type}] [${flags.join(", ")}] */`;
+        });
+
+        codeString += fnArgs.join(", ") + `) /* type[${this.returnType}] */ {`;
+
+        code.push(codeString);
+
+        const fnWS = this.getWS(depth + 1);
+
+        if (this.implementation)
+            code.push(...this.implementation.split("\n").map(v => `${fnWS} /* ${v} */`));
+
+        code.push(`${fnWS}throw new Error("Not yet implemented!");`);
+        code.push(`${ws}}`);
+
+        return code;
+    }
 }
 
 class EnumConstruct extends BaseConstruct {
@@ -86,6 +156,23 @@ class ClassConstruct extends StructConstruct {
     public readonly constuctType: string = "Class";
     public readonly members: BaseConstruct[] = [];
     public readonly structures: GenericObjectContainer_T<StructConstruct> = {};
+
+    public build(depth: number, code: string[]): string[] {
+        const ws = this.getWS(depth);
+        const metaclass = this.parent ? this.parent.name : "UClass";
+
+        code.push(`${ws}class ${this.name} extends ${metaclass} {`);
+
+        for (const construct of this.members) {
+            construct.build(depth + 1, code);
+        }
+
+        code.push(`${ws}}`);
+
+        debugger;
+
+        return code;
+    }
 }
 
 class VarConstruct extends BaseConstruct {
@@ -97,12 +184,74 @@ class VarConstruct extends BaseConstruct {
     public group: string;
 
     public siblings: string[] = [];
+
+    public build(depth: number, code: string[]): string[] {
+        let codeString = ``;
+
+        const ws = this.getWS(depth);
+        const modifiers = this.modifiers.reduce((acc, val) => {
+
+            acc[val] = true;
+
+            return acc;
+        }, {} as GenericObjectContainer_T<boolean>);
+
+        // if (this.parent instanceof ClassConstruct) {
+        //     let access;
+
+        //     if ("public" in modifiers) access = "public";
+        //     else if ("private" in modifiers) access = "private";
+        //     else access = "public";
+
+        //     codeString += access;
+
+        //     delete modifiers[access];
+
+        // } else {
+        //     debugger;
+        // }
+
+        codeString = `${ws}/* ${Object.keys(modifiers).join(", ")} */${codeString} ${this.name}`;
+
+        let defaultValue;
+
+        codeString += ` /* type[${this.dataType}] */`;
+
+        switch (this.dataType) {
+            case "int":
+            case "float": defaultValue = 0; break;
+            case "bool": defaultValue = false; break;
+            case "name": defaultValue = "\"\""; break;
+            case "class":
+            case "object": defaultValue = null; break;
+            default: throw new Error(`Unsupported dtype: ${this.dataType}`);
+        }
+
+        if (this.isArray) {
+            if (Number.isFinite(this.arraySize)) codeString += ` = new Array(${this.arraySize}).fill(${defaultValue});`;
+            else codeString += ` = [];`;
+
+        } else codeString += ` = ${defaultValue};`;
+
+        code.push(codeString);
+
+        return code;
+    }
 }
 
 class ConstConstruct extends BaseConstruct {
     public readonly constuctType = "Constant";
 
     public value: any;
+
+    public build(depth: number, code: string[]): string[] {
+        const ws = this.getWS(depth);
+        const codeString = `${ws}/* public readonly */ ${this.name} = ${typeof this.value === "string" ? `"${this.value}"` : this.value};`
+
+        code.push(codeString);
+
+        return code;
+    }
 }
 
 class ExpressionConstructor {
@@ -208,6 +357,10 @@ class ExpressionConstructor {
         const cFunc = new FunctionStruct(parent);
         let [expr, hasFlags, flags] = statement;
 
+        if(parent.members.slice(-1)[0].name === "FindObject") {
+            debugger;
+        }
+
         while (!funcDirective.includes(expr.toLowerCase())) {
             cFunc.modifiers.push(expr);
 
@@ -240,6 +393,8 @@ class ExpressionConstructor {
         if (!varTypes.includes(expr.toLowerCase())) {
             if (hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
                 cFunc.returnType = "void";
+
+                debugger;
             } else {
                 [expr, hasFlags, flags] = this.readNextStatement();
 
@@ -750,6 +905,8 @@ class ExpressionConstructor {
             throw new Error(`Construct must not contain flags, got: ${flags}`);
 
         const klass = constructor.exprConstructClass(null, statement);
+
+        klass.build(0, []);
 
         debugger;
 
