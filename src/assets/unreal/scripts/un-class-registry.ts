@@ -57,7 +57,7 @@ abstract class BaseConstruct {
 
     public getWS(depth: number) { return new Array(depth * 4).fill(' ').join(""); }
 
-    public build(depth: number, code: string[]): string[] {
+    public build(invokeName: string, depth: number, code: string[]): string[] {
         throw new Error("Not yet implemented");
     }
 }
@@ -81,66 +81,70 @@ class FunctionStruct extends BaseConstruct {
     public precedence: number;
     public implementation: string;
 
-    public build(depth: number, code: string[]): string[] {
-        let codeString = ``;
+    public build(invokeName: string, depth: number, code: string[]): string[] {
+        debugger;
 
-        const ws = this.getWS(depth);
-        const modifiers = this.modifiers.reduce((acc, val) => {
+        // let codeString = ``;
 
-            acc[val] = true;
+        // const ws = this.getWS(depth);
+        // const modifiers = this.modifiers.reduce((acc, val) => {
 
-            return acc;
-        }, {} as GenericObjectContainer_T<boolean>);
+        //     acc[val] = true;
 
-        // if (this.parent instanceof ClassConstruct) {
-        //     let access;
+        //     return acc;
+        // }, {} as GenericObjectContainer_T<boolean>);
 
-        //     if ("public" in modifiers) access = "public";
-        //     else if ("private" in modifiers) access = "private";
-        //     else access = "public";
+        // // if (this.parent instanceof ClassConstruct) {
+        // //     let access;
 
-        //     codeString += access;
+        // //     if ("public" in modifiers) access = "public";
+        // //     else if ("private" in modifiers) access = "private";
+        // //     else access = "public";
 
-        //     delete modifiers[access];
+        // //     codeString += access;
 
-        // } else {
-        //     debugger;
-        // }
+        // //     delete modifiers[access];
 
-        // if("static" in modifiers) {
+        // // } else {
+        // //     debugger;
+        // // }
+
+        // if ("static" in modifiers) {
         //     delete modifiers["static"];
-        //     codeString += " static";
+        //     codeString += "static";
         // }
 
-        let opType;
+        // debugger;
 
-        if (this.functionType === "function") opType = "";
-        else {
-            opType = ` /* ${this.functionType}`;
+        // let opType;
 
-            if (Number.isFinite(this.precedence))
-                opType += `[${this.precedence}]`
+        // if (this.functionType === "function") opType = "";
+        // else {
+        //     opType = ` /* ${this.functionType}`;
 
-            opType += ` */ `;
-        };
+        //     if (Number.isFinite(this.precedence))
+        //         opType += `[${this.precedence}]`
 
-        codeString = `${ws}/* ${Object.keys(modifiers).join(", ")} */ ${codeString}${this.name}${opType}(`;
+        //     opType += ` */ `;
+        // };
 
-        const fnArgs = this.arguments.map(([type, name, flags]) => {
-            return `${name} /* type[${type}] [${flags.join(", ")}] */`;
-        });
+        // codeString = `${ws}/* ${Object.keys(modifiers).join(", ")} */ ${codeString}${this.name}${opType}(`;
 
-        codeString += fnArgs.join(", ") + `) /* type[${this.returnType}] */ {`;
+        // const fnArgs = this.arguments.map(([type, name, flags]) => {
+        //     return `${name} /* type[${type}] [${flags.join(", ")}] */`;
+        // });
 
-        code.push(codeString);
+        // codeString += fnArgs.join(", ") + `) /* type[${this.returnType}] */ {`;
 
-        const fnWS = this.getWS(depth + 1);
+        // code.push(codeString);
 
-        if (this.implementation)
-            code.push(...this.implementation.split("\n").map(v => `${fnWS} /* ${v} */`));
+        // const fnWS = this.getWS(depth + 1);
 
-        code.push(`${fnWS}throw new Error("Not yet implemented!");`);
-        code.push(`${ws}}`);
+        // if (this.implementation)
+        //     code.push(...this.implementation.split("\n").map(v => `${fnWS} /* ${v} */`));
+
+        // code.push(`${fnWS}throw new Error("Not yet implemented!");`);
+        // code.push(`${ws}}`);
 
         return code;
     }
@@ -159,17 +163,38 @@ class StructConstruct extends BaseObjectConstruct {
 class ClassConstruct extends BaseObjectConstruct {
     public readonly constuctType: string = "Class";
 
-    public build(depth: number, code: string[]): string[] {
-        const ws = this.getWS(depth);
-        const metaclass = this.parent ? this.parent.name : "UClass";
+    public build(invokeName: string, depth: number, code: string[]): string[] {
+        if (!this.modifiers.includes("native"))
+            throw new Error(`Must be native`);
 
-        code.push(`${ws}class ${this.name} extends ${metaclass} {`);
+        const wsOuter = this.getWS(depth);
+        const wsInner = this.getWS(depth + 1);
+        const clsName = `cls_${this.name}`;
 
-        for (const construct of this.members) {
-            construct.build(depth + 1, code);
+        code.push(`${wsOuter}function ${invokeName}(nativeRegistry) {`);
+
+        code.push(`${wsInner}const ${clsName} = nativeRegistry.getClass("${this.name}");`);
+        code.push("");
+
+        for (const member of this.members) {
+            if (!member.modifiers.includes("native"))
+                throw new Error("Don't yet know how to deal with this");
+
+            member.build(clsName, depth + 1, code);
         }
 
-        code.push(`${ws}}`);
+        // const ws = this.getWS(depth);
+        // const metaclass = this.parent ? this.parent.name : "UClass";
+
+        // code.push(`${ws}class ${this.name} extends ${metaclass} {`);
+
+        // for (const construct of this.members) {
+        //     construct.build(depth + 1, code);
+        // }
+
+        code.push(`${wsOuter}}`);
+
+        debugger;
 
         return code;
     }
@@ -185,53 +210,19 @@ class VarConstruct extends BaseConstruct {
 
     public siblings: string[] = [];
 
-    public build(depth: number, code: string[]): string[] {
-        let codeString = ``;
-
+    public build(invokeName: string, depth: number, code: string[]): string[] {
         const ws = this.getWS(depth);
-        const modifiers = this.modifiers.reduce((acc, val) => {
-
-            acc[val] = true;
-
-            return acc;
-        }, {} as GenericObjectContainer_T<boolean>);
-
-        // if (this.parent instanceof ClassConstruct) {
-        //     let access;
-
-        //     if ("public" in modifiers) access = "public";
-        //     else if ("private" in modifiers) access = "private";
-        //     else access = "public";
-
-        //     codeString += access;
-
-        //     delete modifiers[access];
-
-        // } else {
-        //     debugger;
-        // }
-
-        codeString = `${ws}/* ${Object.keys(modifiers).join(", ")} */${codeString} ${this.name}`;
-
-        let defaultValue;
-
-        codeString += ` /* type[${this.dataType}] */`;
-
-        switch (this.dataType) {
-            case "int":
-            case "float": defaultValue = 0; break;
-            case "bool": defaultValue = false; break;
-            case "name": defaultValue = "\"\""; break;
-            case "class":
-            case "object": defaultValue = null; break;
-            default: throw new Error(`Unsupported dtype: ${this.dataType}`);
-        }
+        const parameters: GenericObjectContainer_T<any> = {};
 
         if (this.isArray) {
-            if (Number.isFinite(this.arraySize)) codeString += ` = new Array(${this.arraySize}).fill(${defaultValue});`;
-            else codeString += ` = [];`;
+            if (Number.isFinite(this.arraySize)) {
+                parameters["isArray"] = true;
+                parameters["arraySize"] = this.arraySize;
+            } else parameters["isList"] = true;
+        }
 
-        } else codeString += ` = ${defaultValue};`;
+        const memberFunction = this.modifiers.includes("static") ? "getStaticMember" : "getMember";
+        const codeString = `${ws}${invokeName}.${memberFunction}("${this.name}", ${JSON.stringify(parameters, undefined, 1).replaceAll("\n", "")});`;
 
         code.push(codeString);
 
@@ -244,7 +235,9 @@ class ConstConstruct extends BaseConstruct {
 
     public value: any;
 
-    public build(depth: number, code: string[]): string[] {
+    public build(invokeName: string, depth: number, code: string[]): string[] {
+        debugger;
+        
         const ws = this.getWS(depth);
         const codeString = `${ws}/* public readonly */ ${this.name} = ${typeof this.value === "string" ? `"${this.value}"` : this.value};`
 
@@ -735,7 +728,7 @@ class ExpressionConstructor {
             throw new Error(`Construct must begin with a 'class', got '${statement}'`);
 
         const klass = constructor.exprConstructClass(null, []);
-        const codeArr = klass.build(0, []);
+        const codeArr = klass.build("invoke", 0, []);
         const code = codeArr.join("\n");
 
         debugger;
@@ -773,4 +766,3 @@ function createStruct(name: string, cls: typeof FConstructable, props: UProperty
 
     return Klass;
 }
-
