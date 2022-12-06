@@ -1,5 +1,5 @@
-import UPackage from "./un-package";
-import FConstructable from "./un-constructable";
+import UPackage from "../un-package";
+import FConstructable from "../un-constructable";
 
 const REGISTER: GenericObjectContainer_T<typeof FConstructable> = {
 

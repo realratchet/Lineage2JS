@@ -6,7 +6,7 @@ import UPackage from "./un-package";
 import UTextBuffer from "./un-text-buffer";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
-import UClassRegistry from "./un-class-registry";
+import UClassRegistry from "./scripts/un-class-registry";
 
 class UStruct extends UField {
     protected textBufferId: number;

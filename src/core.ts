@@ -24,7 +24,7 @@ import UEncodedFile from "@unreal/un-encoded-file";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import { generateUUID } from "three/src/math/MathUtils";
 import UFunction from "./assets/unreal/un-function";
-import UClassRegistry from "./assets/unreal/un-class-registry";
+import UClassRegistry from "./assets/unreal/scripts/un-class-registry";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
 
