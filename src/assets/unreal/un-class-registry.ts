@@ -32,7 +32,7 @@ const UClassRegistry = new class UClassRegistry {
             .replaceAll(/(\s+(?=[^\w\s\d]))|((?<=[^\w\s\d])\s+)|(\n+)/g, " ")
             .trim();
 
-        const classCode = ExpressionConstructor.fromExpression(expressions);
+        const classCode = ExpressionConstructor.fromSource(expressions);
 
         debugger;
     }
@@ -60,6 +60,13 @@ abstract class BaseConstruct {
     public build(depth: number, code: string[]): string[] {
         throw new Error("Not yet implemented");
     }
+}
+
+abstract class BaseObjectConstruct extends BaseConstruct {
+    public readonly members: BaseConstruct[] = [];
+    public readonly enumerators: GenericObjectContainer_T<EnumConstruct> = {};
+    public readonly events: GenericObjectContainer_T<EventStruct> = {};
+    public readonly structures: GenericObjectContainer_T<StructConstruct> = {};
 }
 
 class EventStruct extends BaseConstruct {
@@ -144,18 +151,13 @@ class EnumConstruct extends BaseConstruct {
     public readonly members: string[] = [];
 }
 
-class StructConstruct extends BaseConstruct {
+class StructConstruct extends BaseObjectConstruct {
     public readonly constuctType: string = "Struct";
-    public readonly members: BaseConstruct[] = [];
-    public readonly enumerators: GenericObjectContainer_T<EnumConstruct> = {};
-    public readonly events: GenericObjectContainer_T<EventStruct> = {};
     public extends: string;
 }
 
-class ClassConstruct extends StructConstruct {
+class ClassConstruct extends BaseObjectConstruct {
     public readonly constuctType: string = "Class";
-    public readonly members: BaseConstruct[] = [];
-    public readonly structures: GenericObjectContainer_T<StructConstruct> = {};
 
     public build(depth: number, code: string[]): string[] {
         const ws = this.getWS(depth);
@@ -168,8 +170,6 @@ class ClassConstruct extends StructConstruct {
         }
 
         code.push(`${ws}}`);
-
-        debugger;
 
         return code;
     }
@@ -269,192 +269,302 @@ class ExpressionConstructor {
 
     protected readToken() { return this.src[this.offset++]; }
     protected peekToken() { return this.src[this.offset + 1]; }
+    protected getToken() { return this.src[this.offset]; }
 
-    protected readNextStatement(): Statement_T {
-        let expr = "";
+    protected readNextStatement(): string {
+        let offBegin = this.offset;
+        let offFinish = offBegin;
 
-        while (this.offset < this.srcLen) {
-            const token = this.readToken();
+        while (offFinish < this.srcLen) {
+            const token = this.src[offFinish];
 
-            if (/[\w\d]/.test(token)) expr = expr + token;
-            else if (/[\s\n]/.test(token)) {
-                if (expr.length === 0)
-                    continue;
-
-                return [expr, false, {}];
-            }
+            if (/[\w\d]/.test(token)) { offFinish++; continue; }
             else if ('.' === token) {
-                if (/^\d+$/.test(expr)) expr = expr + token;
-                else return [expr, true, { period: true }];
+                if (offFinish > offBegin && /^\d+$/.test(this.src.slice(offBegin, offFinish))) {
+                    offFinish++;
+                    continue;
+                }
+            } else if (/[\s\n]/.test(token)) {
+                if (offFinish === offBegin) {
+                    offBegin = ++offFinish;
+                    continue;
+                }
+
+                break;
             }
-            else if (';' === token) return [expr, true, { semicolon: true }];
-            else if (',' === token) return [expr, true, { comma: true }];
-            else if (['[', ']'].includes(token)) return [expr, true, { brackets: token }];
-            else if (['<', '>'].includes(token)) return [expr, true, { comparator: token }];
-            else if (['{', '}'].includes(token)) return [expr, true, { braces: token }];
-            else if (['(', ')'].includes(token)) return [expr, true, { parenthesis: token }];
-            else if (['=', '!', '&', '|', '*', '/', '+', '-', '~', '^', '%', '$', '@'].includes(token)) return [expr, true, { operator: token }];
-            else {
-                debugger;
+
+            if (offFinish === offBegin)
+                offFinish++;
+
+            break;
+        }
+
+        if (offFinish <= offBegin) throw new Error("No offset");
+
+        this.offset = offFinish;
+
+        return this.src.slice(offBegin, offFinish);
+    }
+
+    protected getVarTypes(parent: BaseConstruct): string[] {
+        const registeredStructs = Object.keys((parent.root as ClassConstruct).structures).map(x => x.toLowerCase());
+        const varTypes = ["array", "bool", "int", "byte", "float", "string", "name", "enum", ...registeredStructs, parent.name.toLowerCase(), "pointer", "class"];
+
+        return varTypes;
+    }
+
+
+    protected exprConstructVar(parent: BaseObjectConstruct, prevStatements: string[]): VarConstruct {
+        if (prevStatements.length > 0) debugger;
+
+        const cVar = new VarConstruct(parent);
+        const dtypes = this.getVarTypes(parent);
+
+        let statement;
+
+        while (!dtypes.includes((statement = this.readNextStatement().toLowerCase()))) {
+            if (/[\w\d]/.test(statement)) {
+                cVar.modifiers.push(statement);
+                continue;
+            }
+
+            switch (statement) {
+                case "(":
+                    cVar.group = this.readNextStatement();
+                    if (this.readNextStatement() !== ')')
+                        throw new Error("Must end with ')");
+                    break;
+                default: throw new Error(`Unknown token: ${statement}`);
             }
         }
 
-        debugger;
+        cVar.dataType = statement;
+        cVar.name = statement = this.readNextStatement()
+
+        statement = this.readNextStatement();
+
+        parent.members.push(cVar);
+
+        if (statement === ';') return cVar;
+        if (statement !== '[') throw new Error(`Uknown statement: ${statement}`);
+
+        cVar.isArray = true;
+        statement = this.readNextStatement();
+
+        if (statement.startsWith("0x")) cVar.arraySize = parseInt(statement, 16);
+        else cVar.arraySize = parseInt(statement);
+
+        if (this.readNextStatement() !== ']')
+            throw new Error("Must end with ']");
+
+        if (this.readNextStatement() !== ';')
+            throw new Error("Must end with '];");
+
+        return cVar;
     }
 
-    protected exprConstruct(parent: BaseConstruct): BaseConstruct {
+    protected exprConstructConst(parent: BaseObjectConstruct, prevStatements: string[]): ConstConstruct {
+        if (prevStatements.length > 0) debugger;
+
+        const cConst = new ConstConstruct(parent);
+
+        cConst.name = this.readNextStatement();
+
+        if (this.readNextStatement() !== '=') throw new Error("Must have assignment '=");
+
         let statement = this.readNextStatement();
-        let [expr, hasFlags, flags] = statement;
 
-        switch (expr) {
-            case "var": return this.exprConstructVar(parent, statement);
-            case "const": return this.exprConstructConst(parent, statement);
-            case "struct": return this.exprConstructStruct(parent, statement);
-            case "enum": return this.exprConstructEnum(parent, statement, false);
-            case "event": return this.exprConstructEvent(parent, statement);
-            case "final":
-            case "native":
-                return this.exprConstructFunction(parent, statement);
-            default:
-                debugger;
-                throw new Error(`Unknown construct type: ${expr}`);
+        if (statement.startsWith("0x")) cConst.value = parseInt(statement, 16);
+        else cConst.value = parseFloat(statement);
 
+        if (this.readNextStatement() !== ';') throw new Error("Must have assignment ';");
+
+        parent.members.push(cConst);
+
+        return cConst;
+    }
+
+    protected exprConstructEnum(parent: BaseObjectConstruct, prevStatements: string[]): EnumConstruct {
+        if (prevStatements.length > 0 && !(prevStatements.length === 1 && prevStatements[0] === "var")) debugger;
+
+        const cEnum = new EnumConstruct(parent);
+
+        cEnum.name = this.readNextStatement();
+        parent.enumerators[cEnum.name] = cEnum;
+
+        let statement = this.readNextStatement();
+
+        if (statement !== '{') throw new Error(`Unknown statement: ${statement}`);
+
+        while (this.offset < this.srcLen && (statement = this.readNextStatement()) !== '}') {
+            if (statement === ',') continue;
+
+            cEnum.members.push(statement);
         }
 
-        return null;
+        if (statement !== '}') throw new Error(`Unknown statement: ${statement}`);
+
+        if (!prevStatements.includes("var"))
+            if ((statement = this.readNextStatement()) !== ';')
+                throw new Error(`Unknown statement: ${statement}`);
+
+        return cEnum;
     }
 
-    protected exprConstructEvent(parent: BaseConstruct, statement: Statement_T): EventStruct {
-        const cEvent = new EventStruct(parent);
+    protected exprConstructStruct(parent: BaseObjectConstruct, prevStatements: string[]): StructConstruct {
+        if (prevStatements.length > 0) debugger;
 
-        let [expr, hasFlags, flags] = this.readNextStatement();
+        const cStruct = new StructConstruct(parent);
 
-        cEvent.name = expr;
+        cStruct.name = this.readNextStatement();
 
-        do {
-            [expr, hasFlags, flags] = this.readNextStatement();
+        parent.structures[cStruct.name] = cStruct;
 
-            if (expr.length > 0) debugger;
-            if (!hasFlags) debugger;
-            if (!("parenthesis" in flags)) debugger;
-            if (flags.parenthesis !== ')') debugger;
-        } while ("parenthesis" in flags && flags.parenthesis !== ')')
+        let statement = this.readNextStatement();
 
-        [expr, hasFlags, flags] = this.readNextStatement();
+        if (statement === "extends") {
+            cStruct.extends = this.readNextStatement();
+            statement = this.readNextStatement();
+        }
 
-        if (!hasFlags)
-            debugger;
+        if (statement !== '{') throw new Error(`Unknown statement: ${statement}`);
 
-        if (!("semicolon" in flags))
-            debugger;
+        const dtypes = this.getVarTypes(parent);
 
-        return cEvent;
+        while (this.offset < this.srcLen && (statement = this.readNextStatement()) !== '}') {
+            if (statement !== "var") throw new Error(`Unknown statement: ${statement}`);
+
+            const cVar = new VarConstruct(cStruct);
+
+            statement = this.readNextStatement();
+
+            if (statement === '(') {
+                statement = this.readNextStatement();
+
+                if (statement !== ')') {
+                    cVar.group = statement;
+
+                    if ((statement = this.readNextStatement()) !== ')')
+                        throw new Error(`Unknown statement: ${statement}`);
+                }
+
+                statement = this.readNextStatement();
+            }
+
+            while (this.offset < this.srcLen && !dtypes.includes(statement.toLowerCase())) {
+                cVar.modifiers.push(statement);
+                statement = this.readNextStatement();
+            }
+
+            let dtype = statement;
+
+            if (statement === "enum")
+                dtype = this.exprConstructEnum(cStruct, ["var"]).name;
+            else if (statement === "array") {
+                if ((statement = this.readNextStatement()) !== '<') throw new Error(`Unknown statement: ${statement}`);
+
+                dtype = this.readNextStatement();
+                cVar.arraySize = Infinity;
+
+                if ((statement = this.readNextStatement()) !== '>') throw new Error(`Unknown statement: ${statement}`);
+            }
+
+            cVar.dataType = dtype;
+            cVar.name = this.readNextStatement();
+            statement = this.readNextStatement();
+
+            if (statement === ',') {
+                statement = this.readNextStatement();
+
+                while (this.offset < this.srcLen && statement !== ';') {
+                    if (statement === ',') {
+                        statement = this.readNextStatement();
+                        continue;
+                    }
+
+                    cVar.siblings.push(statement);
+
+                    statement = this.readNextStatement();
+                }
+            } else if (statement !== ';') throw new Error(`Unknown statement: ${statement}`);
+
+            cStruct.members.push(cVar);
+        }
+
+        if ((statement = this.readNextStatement()) !== ';') throw new Error(`Unknown statement: ${statement}`);
+
+        return cStruct;
     }
 
-    protected exprConstructFunction(parent: BaseConstruct, statement: Statement_T): FunctionStruct {
-        const funcDirective = ["preoperator", "operator", "postoperator", "function"]
-        const varTypes = this.getVarTypes(parent);
+    protected exprConstructFunction(parent: BaseObjectConstruct, prevStatements: string[], funcType: string): FunctionStruct {
+        const isOperator = ["preoperator", "operator", "postoperator"].includes(funcType);
         const cFunc = new FunctionStruct(parent);
-        let [expr, hasFlags, flags] = statement;
 
-        if(parent.members.slice(-1)[0].name === "FindObject") {
-            debugger;
+        parent.members.push(cFunc);
+        cFunc.functionType = funcType;
+
+        let statement;
+
+        for (let i = 0, len = prevStatements.length; i < len; i++) {
+            statement = prevStatements[i];
+
+            switch (statement) {
+                case '(': {
+                    const prevStatement = prevStatements[i - 1];
+
+                    if (prevStatement !== "native") throw new Error(`Unknown statement: ${prevStatement}`);
+
+                    const nextStatement = prevStatements[++i];
+
+                    if (nextStatement !== ')') {
+                        if (prevStatements[++i] !== ')')
+                            throw new Error(`Unknown statement: ${prevStatements[i]}`);
+
+                        cFunc.nativeIndex = parseInt(nextStatement);
+                    }
+                } break;
+                default: cFunc.modifiers.push(statement); break;
+            }
         }
 
-        while (!funcDirective.includes(expr.toLowerCase())) {
-            cFunc.modifiers.push(expr);
+        const dtypes = this.getVarTypes(parent);
+        let funcReturn = this.readNextStatement();
 
-            if (expr === "native") {
-                if (hasFlags) {
-                    if (!("parenthesis" in flags))
-                        debugger;
+        if (funcReturn === '(') {
+            if (!isOperator) throw new Error(`Unexpected statement: ${funcType}`);
 
-                    if (flags.parenthesis !== "(")
-                        debugger;
+            statement = this.readNextStatement();
 
-                    [expr, hasFlags, flags] = this.readNextStatement();
+            cFunc.precedence = parseInt(statement);
 
-                    cFunc.nativeIndex = parseInt(expr);
-                }
+            if ((statement = this.readNextStatement()) !== ')') throw new Error(`Unknown statement: ${statement}`);
+
+            funcReturn = this.readNextStatement();
+        }
+
+        let funcName = "";
+
+        while (this.offset < this.srcLen && (statement = this.readNextStatement()) !== '(')
+            funcName = funcName + statement;
+
+        if (funcName.length === 0) {
+            funcName = funcReturn;
+            funcReturn = "void";
+        } else if (!dtypes.includes(funcReturn.toLowerCase())) throw new Error(`Unknown return type: ${funcReturn}`);
+
+        const operatorTokens = [];
+
+        if (isOperator) {
+            switch (funcType) {
+                case "preoperator": operatorTokens.push("pre", "op"); break;
+                case "operator": operatorTokens.push("op"); break;
+                case "postoperator": operatorTokens.push("post", "op"); break;
+                default: throw new Error(`Invalid operator type: ${funcType}`);
             }
 
-            [expr, hasFlags, flags] = this.readNextStatement();
-        }
-
-        cFunc.functionType = expr.toLowerCase();
-
-        if (expr !== "function" && hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
-            [expr, hasFlags, flags] = this.readNextStatement();
-            cFunc.precedence = parseInt(expr);
-        }
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (!varTypes.includes(expr.toLowerCase())) {
-            if (hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
-                cFunc.returnType = "void";
-
-                debugger;
-            } else {
-                [expr, hasFlags, flags] = this.readNextStatement();
-
-                if (hasFlags && "parenthesis" in flags && flags.parenthesis === "(") {
-                    cFunc.returnType = "void";
-                } else {
-                    debugger;
-                    throw new Error("Invalid function header");
-                }
-            }
-        } else cFunc.returnType = expr;
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        let operatorExpr;
-
-        if (cFunc.functionType !== "function") {
-            operatorExpr = '';
-
-            do {
-                if (!("operator" in flags) && !("comparator" in flags) && expr.length === 0) {
-                    debugger;
-                }
-
-                if (("operator" in flags)) operatorExpr = operatorExpr + flags.operator;
-                else if (("comparator" in flags)) operatorExpr = operatorExpr + flags.comparator;
-                else operatorExpr = expr;
-
-                if (!("parenthesis" in flags))
-                    [expr, hasFlags, flags] = this.readNextStatement();
-            } while (!("parenthesis" in flags));
-        } else cFunc.name = expr;
-
-        while (!("parenthesis" in flags) || (flags.parenthesis !== ')')) {
-            const argFlags: string[] = [];
-
-            [expr, hasFlags, flags] = this.readNextStatement();
-
-            while (!varTypes.includes(expr.toLowerCase())) {
-                argFlags.push(expr);
-
-                [expr, hasFlags, flags] = this.readNextStatement();
-            }
-
-            const varType = expr;
-
-            [expr, hasFlags, flags] = this.readNextStatement();
-
-            cFunc.arguments.push([varType, expr, argFlags]);
-
-            if (!hasFlags) [expr, hasFlags, flags] = this.readNextStatement();
-        }
-
-        if (cFunc.functionType !== "function") {
-            const operatorTokens = [];
-
-            if (/^\w[\w\d]*/.test(operatorExpr)) operatorTokens.push(operatorExpr.toLowerCase());
+            if (/^\w[\w\d]*/.test(funcName)) operatorTokens.push(funcName);
             else {
-
-                switch (operatorExpr.toLowerCase()) {
+                switch (funcName) {
                     case "!": operatorTokens.push("not"); break;
                     case "==": operatorTokens.push("eq"); break;
                     case "!=": operatorTokens.push("not", "eq"); break;
@@ -489,424 +599,144 @@ class ExpressionConstructor {
                     case "$=": operatorTokens.push("cat", "assign"); break;
                     case "@": operatorTokens.push("scat"); break;
                     case "@=": operatorTokens.push("scat", "assign"); break;
-                    default:
-                        debugger;
-                        throw new Error(`Unknown operator expression: ${operatorExpr}`);
+                    default: throw new Error(`Unknown operator: ${funcName}`);
                 }
             }
+        } else operatorTokens.push(funcName);
 
-            cFunc.arguments.forEach(([dtype,]) => operatorTokens.push(dtype));
-            cFunc.name = operatorTokens.join("_");
+        cFunc.returnType = funcReturn.toLowerCase();
+
+        let lastStack: string[] = null;
+        const argStack = [];
+
+        while (this.offset < this.srcLen && (statement = this.readNextStatement()) !== ')') {
+            if (lastStack === null) {
+                lastStack = [];
+                argStack.push(lastStack);
+            }
+
+            if (statement === ',') {
+                lastStack = null
+                continue;
+            }
+
+            lastStack.push(statement);
         }
 
-        if (cFunc.modifiers.includes("native")) {
-            [expr, hasFlags, flags] = this.readNextStatement();
+        for (const arg of argStack) {
+            if (arg.length < 2) throw new Error(`Invalid stack length: ${arg.length} < 2`);
 
-            if (!hasFlags)
-                debugger;
+            const name = arg.pop();
+            const dtype = arg.pop().toLowerCase();
+            const flags = arg.reverse();
 
-            if (!("semicolon" in flags))
-                debugger;
+            if (!dtypes.includes(dtype)) throw new Error(`Invalid dtype: ${dtype}`);
+            if (isOperator) operatorTokens.push(dtype);
 
-            return cFunc;
+            cFunc.arguments.push([dtype, name, flags]);
         }
 
-        [expr, hasFlags, flags] = this.readNextStatement();
+        cFunc.name = operatorTokens.join("_");
 
-        if (expr.length > 0) debugger;
-        if (!hasFlags) debugger;
-        if (!("braces" in flags)) debugger;
-        if (flags.braces !== '{') debugger;
+        statement = this.readNextStatement();
 
-        let impl = '', token = '{', openBraces = 1;
+        if (statement === '{') {
+            let impl = '', token = '{', openBraces = 1;
 
-        // eat the remaining implementation code for now
-        do {
-            token = this.readToken();
+            // eat the remaining implementation code for now
+            do {
+                token = this.readToken();
 
-            if (token === '{') openBraces++;
-            if (token === '}') openBraces--;
-            if (openBraces === 0) { break; }
+                if (token === '{') openBraces++;
+                if (token === '}') openBraces--;
+                if (openBraces === 0) { break; }
 
-            impl = impl + token;
+                impl = impl + token;
 
-        } while (this.offset < this.srcLen);
+            } while (this.offset < this.srcLen);
 
-        cFunc.implementation = impl.trim();
+            cFunc.implementation = impl.trim();
+        } else if (statement !== ';') throw new Error(`Unknown statement: ${statement}`);
 
         return cFunc;
     }
 
-    protected exprConstructStruct(parent: BaseConstruct, statement: Statement_T): StructConstruct {
-        const cStruct = new StructConstruct(parent);
-        let [expr, hasFlags, flags] = statement;
+    protected exprConstructEvent(parent: BaseObjectConstruct, prevStatements: string[]): EventStruct {
+        if (prevStatements.length > 0) debugger;
 
-        if (hasFlags)
-            debugger;
+        const cEvent = new EventStruct(parent);
 
-        [expr, hasFlags, flags] = this.readNextStatement();
+        cEvent.name = this.readNextStatement();
 
-        if (hasFlags)
-            debugger;
+        let statement;
 
-        cStruct.name = expr;
+        if ((statement = this.readNextStatement()) !== '(') throw new Error(`Unknown statement: ${statement}`);
+        if ((statement = this.readNextStatement()) !== ')') throw new Error(`Unknown statement: ${statement}`);
+        if ((statement = this.readNextStatement()) !== ';') throw new Error(`Unknown statement: ${statement}`);
 
-        [expr, hasFlags, flags] = this.readNextStatement();
+        parent.events[cEvent.name] = cEvent;
 
-        if (expr === "extends") {
-            [expr, hasFlags, flags] = this.readNextStatement();
+        return cEvent;
+    }
 
-            if (!(expr in (parent as ClassConstruct).structures))
-                debugger;
 
-            cStruct.extends = expr;
-
-            if (hasFlags)
-                debugger;
-
-            [expr, hasFlags, flags] = this.readNextStatement();
-        }
-
-        if (!hasFlags)
-            debugger;
-
-        if (expr.length !== 0)
-            debugger;
-
-        if (!("braces" in flags))
-            debugger;
-
-        if (flags.braces !== "{")
-            debugger;
+    protected exprConstruct(parent: BaseObjectConstruct): BaseConstruct {
+        const prevStatements = [];
 
         while (this.offset < this.srcLen) {
-            const construct = this.exprConstruct(cStruct);
-            const prevOffset = this.offset;
+            const statement = this.readNextStatement();
 
-            switch (construct.constuctType) {
-                case "Variable":
-                    cStruct.members.push(construct);
-                    break;
+            switch (statement.toLowerCase()) {
+                case "class": throw new Error("Shouldn't have child classess.");
+                case "var": return this.exprConstructVar(parent, prevStatements);
+                case "const": return this.exprConstructConst(parent, prevStatements);
+                case "struct": return this.exprConstructStruct(parent, prevStatements);
+                case "enum": return this.exprConstructEnum(parent, prevStatements);
+                case "preoperator":
+                case "operator":
+                case "postoperator":
+                case "function": return this.exprConstructFunction(parent, prevStatements, statement.toLowerCase());
+                case "event": return this.exprConstructEvent(parent, prevStatements);
                 default:
-                    debugger;
-                    throw new Error(`Unknown construct type: ${construct.constuctType}`);
+                    prevStatements.push(statement);
+                    continue;
             }
 
-            [expr, hasFlags, flags] = this.readNextStatement();
-
-            if (expr.length > 0) {
-                this.offset = prevOffset;
-                continue;
-            }
-
-            if (!("braces" in flags))
-                debugger;
-
-            if (flags.braces !== "}")
-                debugger;
-
-            break;
+            debugger;
         }
 
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (expr.length > 0)
-            debugger;
-
-        if (!hasFlags)
-            debugger;
-
-        if (!("semicolon" in flags))
-            debugger;
-
-        return cStruct;
+        return null;
     }
 
-    protected exprConstructConst(parent: BaseConstruct, statement: Statement_T): ConstConstruct {
-        const cConst = new ConstConstruct(parent);
-
-        let [expr, hasFlags, flags] = statement;
-
-        if (hasFlags)
-            debugger;
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (hasFlags)
-            debugger;
-
-        cConst.name = expr;
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (!hasFlags) throw new Error("Needs flags.");
-        if (!("operator" in flags)) throw new Error("Must have operator.");
-        if (flags.operator !== "=") throw new Error("Must be an assignment '='");
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (!hasFlags)
-            debugger;
-
-        if (!flags.semicolon)
-            debugger;
-
-        if (expr.startsWith("0x")) cConst.value = parseInt(expr, 16);
-        else cConst.value = parseFloat(expr);
-
-        return cConst;
-    }
-
-    protected getVarTypes(parent: BaseConstruct): string[] {
-        const registeredStructs = Object.keys((parent.root as ClassConstruct).structures).map(x => x.toLowerCase());
-        const varTypes = ["array", "bool", "int", "byte", "float", "string", "name", "enum", "object", "class", ...registeredStructs, "pointer"];
-
-        return varTypes;
-    }
-
-    protected exprConstructVar(parent: BaseConstruct, statement: Statement_T): VarConstruct {
-        const cVar = new VarConstruct(parent);
-
-        let [expr, hasFlags, flags] = statement;
-
-        if (hasFlags) {
-            if ("parenthesis" in flags) {
-                if (flags.parenthesis === "(") {
-                    [expr, hasFlags, flags] = this.readNextStatement();
-
-                    if (!hasFlags) throw new Error("Should have a flag.");
-                    if (!("parenthesis" in flags)) throw new Error("Missing 'parenthesis' flags")
-                    if (flags.parenthesis !== ")") throw new Error("Expected '('");
-
-                    cVar.group = expr;
-                } else throw new Error("Expected ')'");
-            } else {
-                debugger;
-            }
-        }
-
-        do {
-            statement = [expr, hasFlags, flags] = this.readNextStatement();
-
-            if (this.getVarTypes(parent).includes(expr.toLowerCase())) {
-
-                if (expr === "enum") {
-                    const construct = this.exprConstructEnum(parent, statement, true);
-
-                    cVar.dataType = construct.name;
-                    (parent as StructConstruct).enumerators[construct.name] = construct;
-                } else if (expr === "array") {
-                    [expr, hasFlags, flags] = this.readNextStatement();
-
-                    if (!hasFlags)
-                        debugger;
-
-                    if (!("comparator" in flags))
-                        debugger;
-
-                    if (flags.comparator !== ">")
-                        debugger;
-
-                    cVar.arraySize = Infinity;
-                    cVar.dataType = expr;
-                } else cVar.dataType = expr;
-                break;
-            } else {
-
-                switch (expr) {
-                    case "private":
-                    case "native":
-                    case "const":
-                    case "editconst":
-                    case "config":
-                        cVar.modifiers.push(expr);
-                        break;
-                    default:
-                        debugger;
-                        throw new Error(`Unknown construct type: ${expr}`);
-                }
-            }
-        } while (!hasFlags)
-
-        if (hasFlags && cVar.arraySize !== Infinity)
-            debugger;
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        cVar.name = expr;
-
-        if (hasFlags) {
-            if ("brackets" in flags) {
-                const bracket = flags["brackets"];
-                switch (bracket) {
-                    case "[": {
-                        [expr, hasFlags, flags] = this.readNextStatement();
-
-                        cVar.isArray = true;
-                        cVar.arraySize = parseInt(expr);
-                    } break;
-                    default:
-                        debugger;
-                        throw new Error(`Unknown bracket type: ${bracket}`);
-                }
-            }
-            else if ("semicolon" in flags) return cVar;
-            else if ("comma" in flags) {
-                do {
-                    [expr, hasFlags, flags] = this.readNextStatement();
-
-                    if (!hasFlags)
-                        debugger;
-
-                    if (expr.length > 0) cVar.siblings.push(expr);
-
-                    if ("semicolon" in flags) return cVar;
-
-                    if (!("comma" in flags))
-                        debugger;
-                } while (this.offset < this.srcLen);
-            } else {
-                debugger;
-            }
-        }
-
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (expr !== "")
-            throw new Error("No token expected.");
-
-        if (!hasFlags)
-            throw new Error("Flags expected.");
-
-        if (!("semicolon" in flags))
-            throw new Error("Semicolon expected.");
-
-        return cVar;
-    }
-
-    protected exprConstructEnum(parent: BaseConstruct, statement: Statement_T, isVar: boolean): EnumConstruct {
-        const cEnum = new EnumConstruct(parent);
-
-        let [expr, hasFlags, flags] = this.readNextStatement();
-
-        cEnum.name = expr;
-
-        if (hasFlags)
-            debugger;
-
-        [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (expr.length !== 0)
-            debugger;
-
-        if (!hasFlags)
-            debugger;
-
-        if (!("braces" in flags))
-            debugger;
-
-        if (flags.braces !== "{")
-            debugger;
-
-        while (this.offset < this.srcLen) {
-            [expr, hasFlags, flags] = this.readNextStatement();
-
-            if (expr.length > 0) cEnum.members.push(expr);
-
-            if (!hasFlags) [expr, hasFlags, flags] = this.readNextStatement();
-
-            if ("comma" in flags)
-                continue;
-
-            if (!("braces" in flags))
-                debugger;
-
-            if (flags.braces !== "}")
-                debugger;
-
-            break;
-        }
-
-        if (!isVar) {
-            [expr, hasFlags, flags] = this.readNextStatement();
-
-            if (expr.length > 0)
-                debugger;
-
-            if (!hasFlags)
-                debugger;
-
-            if (!("semicolon" in flags))
-                debugger;
-        }
-
-        return cEnum;
-    }
-
-    protected exprConstructClass(parent: BaseConstruct, statement: Statement_T): ClassConstruct {
+    protected exprConstructClass(parent: BaseObjectConstruct, prevStatements: string[]): ClassConstruct {
         const cClass = new ClassConstruct(parent);
 
-        let [expr, hasFlags, flags] = this.readNextStatement();
-
-        if (hasFlags)
+        if (prevStatements.length > 0)
             debugger;
 
-        cClass.name = expr;
+        cClass.name = this.readNextStatement();
 
-        do {
-            [expr, hasFlags, flags] = this.readNextStatement();
+        let statement: string;
 
-            cClass.modifiers.push(expr);
-        } while (!hasFlags);
+        while ((statement = this.readNextStatement()) !== ';')
+            cClass.modifiers.push(statement);
 
-        if (!("semicolon" in flags))
-            debugger;
-
-        while (this.offset < this.srcLen) {
-            const construct = this.exprConstruct(cClass);
-
-            // debugger;
-
-            switch (construct.constuctType) {
-                case "Variable":
-                case "Constant":
-                case "Function":
-                    cClass.members.push(construct);
-                    break;
-                case "Struct":
-                    cClass.structures[(construct as StructConstruct).name] = (construct as StructConstruct);
-                    break;
-                case "Enum":
-                    cClass.enumerators[(construct as EnumConstruct).name] = (construct as EnumConstruct);
-                    break;
-                case "Event":
-                    cClass.events[(construct as EventStruct).name] = (construct as EventStruct);
-                    break;
-                default:
-                    debugger;
-                    throw new Error(`Unknown construct type: ${construct.constuctType}`);
-            }
-        }
+        while (this.offset < this.srcLen)
+            this.exprConstruct(cClass);
 
         return cClass;
     }
 
-    static fromExpression(expression: string): string {
+    static fromSource(expression: string): string {
         const constructor = new ExpressionConstructor(expression);
-
         const statement = constructor.readNextStatement();
-        const [expr, hasFlags, flags] = statement;
 
-        if (expr !== "class")
-            throw new Error(`Construct must begin with a 'class', got '${expr}'`);
+        if (statement.toLowerCase() !== "class")
+            throw new Error(`Construct must begin with a 'class', got '${statement}'`);
 
-        if (hasFlags)
-            throw new Error(`Construct must not contain flags, got: ${flags}`);
-
-        const klass = constructor.exprConstructClass(null, statement);
-
-        klass.build(0, []);
+        const klass = constructor.exprConstructClass(null, []);
+        const codeArr = klass.build(0, []);
+        const code = codeArr.join("\n");
 
         debugger;
 
@@ -914,38 +744,6 @@ class ExpressionConstructor {
     }
 }
 
-type Statement_T = [string, boolean, any];
-
-// function createClassConstruct(expression: string[], offset: number, jsArray: []) {
-//     const jsArray = [`class ${expression[offset]} extends UClass {`];
-
-//     let offset = [];
-
-//     for (let i = 2, len = expression.length; i < len; i++) {
-//         const token = expression[i];
-
-//         switch(token) {
-//             case "native":
-//         }
-
-//         debugger;
-//     }
-
-//     jsArray.push("}");
-
-//     const jsCode = jsArray.join("\n");
-
-//     debugger;
-
-//     return jsCode;
-// }
-
-// function constructExpression(expression: string[]) {
-//     switch (expression[0]) {
-//         case "class": return createClassConstruct(expression);
-//         default: throw new Error(`Unknown construct type: ${expression[0]}`);
-//     }
-// }
 
 function createStruct(name: string, cls: typeof FConstructable, props: UProperty[]) {
     const Klass = class extends cls {
