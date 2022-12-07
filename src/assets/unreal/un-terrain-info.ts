@@ -190,7 +190,7 @@ class UTerrainInfo extends UAActor {
     }
 
     public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         const itLayer = this.layers.values();
         const layerCount = this.layers.size;
@@ -199,7 +199,7 @@ class UTerrainInfo extends UAActor {
         for (let i = 0; i < layerCount; i++)
             terrainLayers[i] = itLayer.next().value as UTerrainLayer;
 
-        await Promise.all(terrainLayers.map(x => x.onLoaded()));
+        await Promise.all(terrainLayers.map(x => x.onDecodeReady()));
 
         const terrainUuid = await this.terrainMap.getDecodeInfo(library);
         const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;

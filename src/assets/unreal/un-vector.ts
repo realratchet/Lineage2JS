@@ -52,6 +52,14 @@ class FVector extends FConstructable {
         );
     }
 
+    public mul(other: FVector) {
+        return new FVector(
+            this.x * other.x,
+            this.y * other.y,
+            this.z * other.z
+        );
+    }
+
     public div(other: FVector) {
         return new FVector(
             this.x / other.x,
@@ -263,6 +271,9 @@ class FVector extends FConstructable {
     }
 
     public clone() { return new FVector(this.x, this.y, this.z); }
+
+    public nequals(other: FVector) { return this.x !== other.x || this.y !== other.y || this.z !== other.z; }
+    public equals(other: FVector) { return !this.nequals(other); }
 }
 
 export default FVector;

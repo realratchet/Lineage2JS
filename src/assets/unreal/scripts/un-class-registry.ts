@@ -1,11 +1,8 @@
 import UPackage from "../un-package";
 import FConstructable from "../un-constructable";
+import UNativeRegistry from "./un-native-registry";
 
 const REGISTER: GenericObjectContainer_T<typeof FConstructable> = {
-
-};
-
-const NATIVE = {
 
 };
 
@@ -20,6 +17,8 @@ const UClassRegistry = new class UClassRegistry {
         const klassName = object.friendlyName;
         const Klass = REGISTER[klassName] = createStruct(klassName, SuperKlass, object.childPropFields);
 
+        debugger;
+
         return Klass;
     }
 
@@ -32,9 +31,9 @@ const UClassRegistry = new class UClassRegistry {
             .replaceAll(/(\s+(?=[^\w\s\d]))|((?<=[^\w\s\d])\s+)|(\n+)/g, " ")
             .trim();
 
-        const classCode = ExpressionConstructor.fromSource(expressions);
+        const invoker = ExpressionConstructor.fromSource(expressions);
 
-        debugger;
+        invoker(UNativeRegistry)
     }
 };
 
@@ -82,69 +81,40 @@ class FunctionStruct extends BaseConstruct {
     public implementation: string;
 
     public build(invokeName: string, depth: number, code: string[]): string[] {
-        debugger;
+        const isNative = this.modifiers.includes("native");
+        const isStatic = this.modifiers.includes("static");
 
-        // let codeString = ``;
+        const fnName = `add${isStatic ? "Static" : ""}${isNative ? "Native" : ""}Func`;
+        const parameters: GenericObjectContainer_T<any> = {};
+        const ws = this.getWS(depth);
 
-        // const ws = this.getWS(depth);
-        // const modifiers = this.modifiers.reduce((acc, val) => {
+        if (isNative && Number.isFinite(this.nativeIndex)) {
+            parameters["nativeIndex"] = this.nativeIndex;
+        }
 
-        //     acc[val] = true;
+        let codeString = `${ws}${invokeName}.${fnName}("${this.name}", ${JSON.stringify(parameters)}`;
 
-        //     return acc;
-        // }, {} as GenericObjectContainer_T<boolean>);
+        if (!isNative) {
+            if (this.functionType !== "function") throw new Error("Don't know how to deal with this yet.");
+            if (typeof this.implementation !== "string") throw new Error("Don't know how to deal with this yet.");
 
-        // // if (this.parent instanceof ClassConstruct) {
-        // //     let access;
+            const fnArgs = this.arguments.map(([type, name, flags]) => {
+                return `${name} /* type[${type}] [${flags.join(", ")}] */`;
+            });
 
-        // //     if ("public" in modifiers) access = "public";
-        // //     else if ("private" in modifiers) access = "private";
-        // //     else access = "public";
+            codeString = codeString + `, function ${this.name} /* type[${this.returnType}] */ (${fnArgs.join(", ")}) {`;
+            code.push(codeString);
 
-        // //     codeString += access;
+            const wsInner = this.getWS(depth + 1);
 
-        // //     delete modifiers[access];
-
-        // // } else {
-        // //     debugger;
-        // // }
-
-        // if ("static" in modifiers) {
-        //     delete modifiers["static"];
-        //     codeString += "static";
-        // }
-
-        // debugger;
-
-        // let opType;
-
-        // if (this.functionType === "function") opType = "";
-        // else {
-        //     opType = ` /* ${this.functionType}`;
-
-        //     if (Number.isFinite(this.precedence))
-        //         opType += `[${this.precedence}]`
-
-        //     opType += ` */ `;
-        // };
-
-        // codeString = `${ws}/* ${Object.keys(modifiers).join(", ")} */ ${codeString}${this.name}${opType}(`;
-
-        // const fnArgs = this.arguments.map(([type, name, flags]) => {
-        //     return `${name} /* type[${type}] [${flags.join(", ")}] */`;
-        // });
-
-        // codeString += fnArgs.join(", ") + `) /* type[${this.returnType}] */ {`;
-
-        // code.push(codeString);
-
-        // const fnWS = this.getWS(depth + 1);
-
-        // if (this.implementation)
-        //     code.push(...this.implementation.split("\n").map(v => `${fnWS} /* ${v} */`));
-
-        // code.push(`${fnWS}throw new Error("Not yet implemented!");`);
-        // code.push(`${ws}}`);
+            for (const impl of this.implementation.split("\n"))
+                code.push(`${wsInner}/* ${impl} */`);
+            code.push(`${wsInner}throw new Error("Not yet implemented");`);
+            code.push(`${ws}});`);
+        } else {
+            codeString = codeString + ");";
+            code.push(codeString);
+        }
 
         return code;
     }
@@ -153,11 +123,54 @@ class FunctionStruct extends BaseConstruct {
 class EnumConstruct extends BaseConstruct {
     public readonly constuctType: string = "Enum";
     public readonly members: string[] = [];
+
+    public build(invokeName: string, depth: number, code: string[]): string[] {
+        if (this.modifiers.length > 0)
+            throw new Error("Don't know what to do with this");
+
+        const wsOuter = this.getWS(depth);
+        const wsInner = this.getWS(depth + 1);
+
+        code.push(`${wsOuter}${invokeName}.addEnum("${this.name}", {`);
+
+        for (let i = 0, len = this.members.length; i < len; i++)
+            code.push(`${wsInner}"${this.members[i]}": ${i},`);
+
+        code.push('');
+
+        for (let i = 0, len = this.members.length; i < len; i++)
+            code.push(`${wsInner}"${i}": "${this.members[i]}",`);
+
+        code.push(`${wsOuter}})${invokeName ? ';' : ''}`);
+
+        return code;
+    }
 }
 
 class StructConstruct extends BaseObjectConstruct {
     public readonly constuctType: string = "Struct";
     public extends: string;
+
+    public build(invokeName: string, depth: number, code: string[]): string[] {
+        if (this.modifiers.length > 0)
+            throw new Error("Don't know what to do with this");
+
+
+        const wsOuter = this.getWS(depth);
+        const wsInner = this.getWS(depth + 2);
+
+        code.push(`${wsOuter}${invokeName}.addStruct("${this.name}", "${this.extends ? this.extends : "Struct"}")`);
+
+        for (let enumerators of Object.values(this.enumerators))
+            enumerators.build("", depth + 2, code);
+
+        for (let member of this.members)
+            member.build("", depth + 2, code);
+
+        code.push(`${wsInner}.finalize();`);
+
+        return code;
+    }
 }
 
 class ClassConstruct extends BaseObjectConstruct {
@@ -167,34 +180,30 @@ class ClassConstruct extends BaseObjectConstruct {
         if (!this.modifiers.includes("native"))
             throw new Error(`Must be native`);
 
-        const wsOuter = this.getWS(depth);
-        const wsInner = this.getWS(depth + 1);
+        const wsOuter = this.getWS(depth + 1);
+        const wsInner = this.getWS(depth + 2);
         const clsName = `cls_${this.name}`;
 
-        code.push(`${wsOuter}function ${invokeName}(nativeRegistry) {`);
-
+        code.push("(function() {");
+        code.push(`${wsOuter}return function ${invokeName}(nativeRegistry) {`);
         code.push(`${wsInner}const ${clsName} = nativeRegistry.getClass("${this.name}");`);
         code.push("");
 
-        for (const member of this.members) {
-            if (!member.modifiers.includes("native"))
-                throw new Error("Don't yet know how to deal with this");
+        for (const member of this.members)
+            member.build(clsName, depth + 2, code);
 
-            member.build(clsName, depth + 1, code);
-        }
+        // code.push("");
 
-        // const ws = this.getWS(depth);
-        // const metaclass = this.parent ? this.parent.name : "UClass";
+        // for (const enumerator of Object.values(this.enumerators))
+        //     enumerator.build(clsName, depth + 2, code);
 
-        // code.push(`${ws}class ${this.name} extends ${metaclass} {`);
+        // code.push("");
 
-        // for (const construct of this.members) {
-        //     construct.build(depth + 1, code);
-        // }
+        // for (const struct of Object.values(this.structures))
+        //     struct.build(clsName, depth + 2, code);
 
         code.push(`${wsOuter}}`);
-
-        debugger;
+        code.push("}());");
 
         return code;
     }
@@ -211,6 +220,11 @@ class VarConstruct extends BaseConstruct {
     public siblings: string[] = [];
 
     public build(invokeName: string, depth: number, code: string[]): string[] {
+
+        const isNative = this.modifiers.includes("native");
+        const isStatic = this.modifiers.includes("static");
+        const memFunc = `add${isStatic ? "Static" : ""}${isNative ? "Native" : ""}Member`;
+
         const ws = this.getWS(depth);
         const parameters: GenericObjectContainer_T<any> = {};
 
@@ -221,10 +235,11 @@ class VarConstruct extends BaseConstruct {
             } else parameters["isList"] = true;
         }
 
-        const memberFunction = this.modifiers.includes("static") ? "getStaticMember" : "getMember";
-        const codeString = `${ws}${invokeName}.${memberFunction}("${this.name}", ${JSON.stringify(parameters, undefined, 1).replaceAll("\n", "")});`;
+        [this.name, ...this.siblings].forEach(name => {
+            const codeString = `${ws}${invokeName}.${memFunc}("${name}", ${JSON.stringify(parameters)})${invokeName ? ';' : ''}`;
 
-        code.push(codeString);
+            code.push(codeString);
+        });
 
         return code;
     }
@@ -236,10 +251,11 @@ class ConstConstruct extends BaseConstruct {
     public value: any;
 
     public build(invokeName: string, depth: number, code: string[]): string[] {
-        debugger;
-        
+        if (this.modifiers.length > 0)
+            throw new Error("Don't yet know how to deal with this");
+
         const ws = this.getWS(depth);
-        const codeString = `${ws}/* public readonly */ ${this.name} = ${typeof this.value === "string" ? `"${this.value}"` : this.value};`
+        const codeString = `${ws}${invokeName}.addConst("${this.name}", ${this.value});`;
 
         code.push(codeString);
 
@@ -560,11 +576,11 @@ class ExpressionConstructor {
                 switch (funcName) {
                     case "!": operatorTokens.push("not"); break;
                     case "==": operatorTokens.push("eq"); break;
-                    case "!=": operatorTokens.push("not", "eq"); break;
+                    case "!=": operatorTokens.push("neq"); break;
                     case "&&": operatorTokens.push("and"); break;
                     case "||": operatorTokens.push("or"); break;
                     case "^^": operatorTokens.push("xor"); break;
-                    case "*=": operatorTokens.push("add", "assign"); break;
+                    case "*=": operatorTokens.push("mul", "assign"); break;
                     case "/=": operatorTokens.push("div", "assign"); break;
                     case "+=": operatorTokens.push("add", "assign"); break;
                     case "-=": operatorTokens.push("sub", "assign"); break;
@@ -720,7 +736,7 @@ class ExpressionConstructor {
         return cClass;
     }
 
-    static fromSource(expression: string): string {
+    static fromSource(expression: string): Function {
         const constructor = new ExpressionConstructor(expression);
         const statement = constructor.readNextStatement();
 
@@ -731,9 +747,7 @@ class ExpressionConstructor {
         const codeArr = klass.build("invoke", 0, []);
         const code = codeArr.join("\n");
 
-        debugger;
-
-        return "";
+        return eval(code) as Function;
     }
 }
 

@@ -217,73 +217,82 @@ async function startCore() {
 
     // debugger;
 
-    // const func = pkgCore.exportGroups.Function.find(x => x.export.objectName === "RandRange");
 
-    // // const fnObject = await pkgCore.fetchObject(func.index + 1);
-    // const fnObject = await pkgCore.fetchObject(741);
-    // await fnObject.onLoaded();
+    // // const fnObjectMain = await pkgCore.fetchObject(741);
+    // // await fnObjectMain.onDecodeReady();
+
+    // // const fltObjectMin = await pkgCore.fetchObject(13);
+    // // await fltObjectMin.onDecodeReady();
+
+
+    // // const fnObjectRandRng = await pkgCore.fetchObject(716);
+
+
+    // // await fnObjectRandRng.onDecodeReady();
+
+    // // debugger;
+
+    // // const textBuffers = [];
+
+    // // for (const { index } of pkgCore.exportGroups.TextBuffer) {
+    // //     const object = await pkgCore.fetchObject<UTextBuffer>(index + 1);
+
+    // //     await object.onDecodeReady();
+
+    // //     textBuffers.push(object);
+    // // }
 
     // debugger;
 
-    // const textBuffers = [];
+    // for (const { index } of pkgCore.exportGroups.Class) {
+    //     const object = await pkgCore.fetchObject<UClass>(index + 1);
 
-    // for (const { index } of pkgCore.exportGroups.TextBuffer) {
-    //     const object = await pkgCore.fetchObject<UTextBuffer>(index + 1);
+    //     await object.onDecodeReady();
 
-    //     await object.onLoaded();
-
-    //     textBuffers.push(object);
+    //     debugger;
     // }
 
     // debugger;
 
-    for (const { index } of pkgCore.exportGroups.Class) {
-        const object = await pkgCore.fetchObject<UClass>(index + 1);
+    // for (const { index } of pkgCore.exportGroups.Struct) {
+    //     const object = await pkgCore.fetchObject<UStruct>(index + 1);
 
-        // debugger;
+    //     // debugger;
 
-        await object.onLoaded();
+    //     await object.onDecodeReady();
 
-        debugger;
-    }
+    //     // debugger;
 
-    debugger;
+    //     // UClassRegistry.register(object);
+    // }
 
-    for (const { index } of pkgCore.exportGroups.Struct) {
-        const object = await pkgCore.fetchObject<UStruct>(index + 1);
+    // const registered = UClassRegistry.structs;
 
-        // debugger;
+    // debugger;
 
-        await object.onLoaded();
+    // for (const { index } of pkgEngine.exportGroups.Struct) {
+    //     debugger;
 
-        // debugger;
+    //     const object = await pkgEngine.fetchObject<UStruct>(index + 1);
 
-        UClassRegistry.register(object);
-    }
+    //     await object.onDecodeReady();
 
-    const registered = UClassRegistry.structs;
+    //     debugger;
 
-    debugger;
+    //     UClassRegistry.register(object);
 
-    for (const { index } of pkgEngine.exportGroups.Struct) {
-        debugger;
+    //     debugger;
+    // }
 
-        const object = await pkgEngine.fetchObject<UStruct>(index + 1);
+    // const structs = UClassRegistry.structs;
 
-        await object.onLoaded();
-
-        UClassRegistry.register(object);
-    }
-
-    const structs = UClassRegistry.structs;
-
-    debugger;
+    // debugger;
 
 
 
-    debugger;
+    // debugger;
 
-    const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index;
+    const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index + 1;
     const UWeapon = pkgEngine.fetchObject(UWeaponId);
 
     debugger;
@@ -320,7 +329,7 @@ async function startCore() {
     const rapidShot = await pkg.fetchObject<UClass>(657);
     // const mortalBlow = await pkg.fetchObject<UClass>(21);
 
-    await rapidShot.onLoaded();
+    await rapidShot.onDecodeReady();
 
     debugger;
 

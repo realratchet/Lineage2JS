@@ -7,6 +7,7 @@ import UTextBuffer from "./un-text-buffer";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 import UClassRegistry from "./scripts/un-class-registry";
+import UNativeRegistry from "./scripts/un-native-registry";
 
 class UStruct extends UField {
     protected textBufferId: number;
@@ -21,6 +22,8 @@ class UStruct extends UField {
     protected unkObjectId: number = 0;
     protected unkObject: UObject;
     protected scriptSize: number;
+
+    public readonly isStruct = true;
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         // if (this.constructor.name !== "UFunction")
@@ -98,25 +101,20 @@ class UStruct extends UField {
 
             if (this.unkObjectId !== 0) {
                 this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
-                await this.unkObject.onLoaded();
-
                 debugger;
             }
 
             if (this.textBufferId !== 0) {
                 this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
 
-                await this.textBuffer.onLoaded();
-
-                UClassRegistry.parse(this.textBuffer.string.value);
+                // UClassRegistry.parse(this.textBuffer.string.value);
             }
 
             let childPropId = this.firstChildPropId;
 
-            while (childPropId > 0) {
-                const field = await pkg.fetchObject<UProperty>(childPropId);
+            while (Number.isFinite(childPropId) && childPropId !== 0) {
 
-                await field.onLoaded();
+                const field = await pkg.fetchObject<UProperty>(childPropId);
 
                 this.childPropFields.push(field);
 
@@ -148,12 +146,17 @@ class UStruct extends UField {
         const tokenValue = pkg.read(uint8).value as ExprToken_T;
         let tokenValue2 = tokenValue;
 
+        const isNativeFunc = UNativeRegistry.hasNativeFunc(tokenValue);
+        const tokenName = isNativeFunc ? UNativeRegistry.getNativeFuncName(tokenValue) : ExprToken_T[tokenValue];
+
+        if (!tokenName) throw new Error(`Unknown token name: ${tokenValue}`);
+
         this.bytecodeLength = this.bytecodeLength + 1;
-        this.bytecode.push({ type: "token", value: tokenValue, tokenName: ExprToken_T[tokenValue] });
+        this.bytecode.push({ type: isNativeFunc ? "call" : "token", value: tokenValue, tokenName });
 
         let tokenDebug = new Array(depth - 1).fill("\t").join("");
-        tokenDebug += tokenValue in tokenNames ? tokenNames[tokenValue] : "UnknownToken";
-        tokenDebug += "\r\n";
+
+        tokenDebug += tokenName + "\r\n";
         this.bytecodePlainText += tokenDebug;
 
         const tokenHex = `0x${tokenValue.toString(16)}`;

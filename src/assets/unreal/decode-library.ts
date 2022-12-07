@@ -77,7 +77,7 @@ class DecodeLibrary {
                     try {
                         const actor = await pkg.fetchObject<UStaticMeshActor>(exp.index + 1);
                         try {
-                            await actor.onLoaded();
+                            await actor.onDecodeReady();
 
                             try {
                                 await actor.getDecodeInfo(decodeLibrary)

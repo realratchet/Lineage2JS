@@ -35,7 +35,7 @@ class UNSun extends UAActor {
     }
 
     async getDecodeInfo(library: any): Promise<any> {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         const sprites = await Promise.all(this.skins.map(skin => skin.getDecodeInfo(library)));
 

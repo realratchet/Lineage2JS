@@ -48,10 +48,8 @@ abstract class UBaseExportProperty<T extends UField> extends UProperty {
         this.readHead = pkg.tell();
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (this.valueId !== 0) {
+            if (this.valueId !== 0)
                 this.value = await pkg.fetchObject<T>(this.valueId);
-                await this.value.onLoaded();
-            }
 
             resolve();
         }));

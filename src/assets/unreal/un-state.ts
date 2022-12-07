@@ -34,6 +34,8 @@ class UState extends UStruct {
 
     public readonly functions: GenericObjectContainer_T<UFunction> = {};
 
+    public readonly isState = true;
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 
@@ -60,27 +62,27 @@ class UState extends UStruct {
             }
         }
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            let childPropId = this.firstChildPropId;
+        // this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     let childPropId = this.firstChildPropId;
 
-            while (childPropId > 0) {
-                const field = await pkg.fetchObject<UFunction>(childPropId);
+        //     while (childPropId > 0) {
+        //         const field = await pkg.fetchObject<UFunction>(childPropId);
 
-                if (field instanceof UFunction) {
-                    await field.onLoaded();
+        //         if (field instanceof UFunction) {
+        //             await field.onDecodeReady();
 
-                    this.functions[field.friendlyName] = field;
-                    // debugger;
-                }
+        //             this.functions[field.friendlyName] = field;
+        //             // debugger;
+        //         }
 
-                childPropId = field.nextFieldId;
-            }
+        //         childPropId = field.nextFieldId;
+        //     }
 
-            if (Object.keys(this.functions).length > 0)
-                debugger;
+        //     if (Object.keys(this.functions).length > 0)
+        //         debugger;
 
-            resolve();
-        }));
+        //     resolve();
+        // }));
     }
 }
 

@@ -398,7 +398,7 @@ class USkeletalMesh extends ULodMesh {
     }
 
     public async getDecodeInfo(library: DecodeLibrary): Promise<ISkinnedMeshObjectDecodeInfo> {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,

@@ -51,6 +51,9 @@ import UConst from "./un-const";
 import * as UnProperties from "./un-properties";
 import UState from "./un-state";
 import UField from "./un-field";
+import UDependencyGraph from "./un-dependency-graph";
+import UFont from "./un-font";
+import UWeapon from "./un-weapon";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -166,7 +169,11 @@ class UPackage extends UEncodedFile {
         return this;
     }
 
+
+
     protected async getImport(index: number): Promise<UObject> {
+        debugger;
+
         let imp = this.imports[index], mainImp = imp;
         while (imp.idPackage.value as number !== 0)
             imp = this.imports[-imp.idPackage.value as number - 1];
@@ -177,22 +184,35 @@ class UPackage extends UEncodedFile {
 
         if (!pkg.buffer) await this.loader.load(pkg);
 
-        if (mainImp.idPackage.value as number === -1) {
-            let Constructor: typeof UField = null;
+        // if (mainImp.idPackage.value as number === -1) {
+        //     let Constructor: typeof UField = null;
 
-            switch (mainImp.className) {
-                case "Class": Constructor = UClass; break;
-                default: throw new Error(`Unsupported native type: ${mainImp.className}`);
-            }
+        //     debugger;
 
-            return new Constructor();
-        }
+        //     switch (mainImp.className) {
+        //         case "Class": Constructor = UClass; break;
+        //         default: throw new Error(`Unsupported native type: ${mainImp.className}`);
+        //     }
 
-        const exp = pkg.exports.find(exp =>
-            exp.objectName === mainImp.objectName &&
-            pkg.getPackageName(exp.idClass.value as number) === mainImp.className
-            // pkg.getPackageName(exp.idClass.value as number) === pkg.getPackageName(mainImp.idPackage.value as number)
-        );
+        //     return new Constructor();
+        // }
+
+        const plausibleImports = pkg.exports.filter(exp => exp.objectName === mainImp.objectName)
+
+        const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idSuper.value as number) === mainImp.className)
+
+        // const _exp = plausibleImports[0];
+
+        // if (mainImp.idPackage.value as number === -1) {
+        //     const a = pkg.getPackageName(_exp.idClass.value as number);
+        //     const b = mainImp.className;
+
+        //     debugger;
+        // }
+
+        // const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idClass.value as number) === mainImp.className
+        //     // pkg.getPackageName(exp.idClass.value as number) === pkg.getPackageName(mainImp.idPackage.value as number)
+        // );
 
         if (!exp) throw new Error("Missing export");
         if (exp.object) return exp.object;
@@ -204,11 +224,13 @@ class UPackage extends UEncodedFile {
 
     protected async getExport(index: number): Promise<UObject> {
         const exp = this.exports[index];
-
+        
         if (exp.object) return exp.object;
-
-        const className = this.getPackageName(exp.idClass.value as number) as UObjectTypes_T;
-
+        
+        const className = (this.getPackageName(exp.idClass.value as number) || exp.objectName) as UObjectTypes_T;
+        
+        debugger;
+        
         await this.createObject(this, exp, className);
 
         return exp.object;
@@ -233,8 +255,15 @@ class UPackage extends UEncodedFile {
 
         let Constructor: typeof UObject = null;
 
+        if (className === "Class")
+            debugger;
+
         switch (className) {
-            case "Class": Constructor = UClass; break
+            // case "Class": {
+            //     Constructor = UClass;
+            //     console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
+            //     debugger;
+            // } break
             case "Struct": Constructor = UStruct; break;
             case "Texture": Constructor = UTexture; break;
             case "Palette": Constructor = UPlatte; break;
@@ -293,6 +322,8 @@ class UPackage extends UEncodedFile {
             case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
             case "StrProperty": Constructor = UnProperties.UStrProperty; break;
             case "State": Constructor = UState; break;
+            case "Font": Constructor = UFont; break;
+            case "Weapon": Constructor = UWeapon; debugger; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 
@@ -308,7 +339,7 @@ class UPackage extends UEncodedFile {
             ? this.imports[-index - 1].objectName as string
             : index > 0
                 ? this.exports[index].objectName as string
-                : "Class";
+                : null;
     }
 
     protected loadImports(header: UHeader, nameTable: UName[]) {

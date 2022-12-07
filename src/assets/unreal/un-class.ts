@@ -24,11 +24,8 @@ class FDependencies extends FConstructable {
         this.scriptTextCRC = pkg.read(int32).value as number;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (this.classId !== 0) {
+            if (this.classId !== 0)
                 this.class = await pkg.fetchObject<UClass>(this.classId);
-
-                await this.class.onLoaded();
-            }
 
             resolve();
         }));
@@ -48,44 +45,46 @@ class UClass extends UState {
     protected classWithinId: number;
     protected classConfigName: string;
 
-    // these should be instantiated somehow differently
-    protected emitterIds: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
-    protected destroyAudio: boolean;
-    protected isNoDelete: boolean;
-    protected drawScale: number;
-    protected isDirectional: number;
-    protected rightHandBone: string;
-    protected leftHandBone: string;
-    protected rightArmBone: string;
-    protected leftArmBone: string;
-    protected spineBone: string;
-    protected lowbodyBone: string;
-    protected capeBone: string;
-    protected headBone: string;
-    protected rightFootBone: string;
-    protected leftFootBone: string;
-    protected isFaceRotation: boolean;
-    protected isNPC: boolean;
+    public readonly isClass = true;
+
+    // // these should be instantiated somehow differently
+    // protected emitterIds: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    // protected destroyAudio: boolean;
+    // protected isNoDelete: boolean;
+    // protected drawScale: number;
+    // protected isDirectional: number;
+    // protected rightHandBone: string;
+    // protected leftHandBone: string;
+    // protected rightArmBone: string;
+    // protected leftArmBone: string;
+    // protected spineBone: string;
+    // protected lowbodyBone: string;
+    // protected capeBone: string;
+    // protected headBone: string;
+    // protected rightFootBone: string;
+    // protected leftFootBone: string;
+    // protected isFaceRotation: boolean;
+    // protected isNPC: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "Emitters": "emitterIds",
-            "AutoDestroy": "destroyAudio",
-            "bNoDelete": "isNoDelete",
-            "DrawScale": "drawScale",
-            "bDirectional": "isDirectional",
-            "RightHandBone": "rightHandBone",
-            "LeftHandBone": "leftHandBone",
-            "RightArmBone": "rightArmBone",
-            "LeftArmBone": "leftArmBone",
-            "SpineBone": "spineBone",
-            "LowbodyBone": "lowbodyBone",
-            "CapeBone": "capeBone",
-            "HeadBone": "headBone",
-            "RightFootBone": "rightFootBone",
-            "LeftFootBone": "leftFootBone",
-            "bEnableFaceRotation": "isFaceRotation",
-            "bNpc": "isNPC"
+            // "Emitters": "emitterIds",
+            // "AutoDestroy": "destroyAudio",
+            // "bNoDelete": "isNoDelete",
+            // "DrawScale": "drawScale",
+            // "bDirectional": "isDirectional",
+            // "RightHandBone": "rightHandBone",
+            // "LeftHandBone": "leftHandBone",
+            // "RightArmBone": "rightArmBone",
+            // "LeftArmBone": "leftArmBone",
+            // "SpineBone": "spineBone",
+            // "LowbodyBone": "lowbodyBone",
+            // "CapeBone": "capeBone",
+            // "HeadBone": "headBone",
+            // "RightFootBone": "rightFootBone",
+            // "LeftFootBone": "leftFootBone",
+            // "bEnableFaceRotation": "isFaceRotation",
+            // "bNpc": "isNPC"
         })
     }
 
@@ -111,13 +110,10 @@ class UClass extends UState {
         this.pkgImportIds.load(pkg);
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.pkgImports = await Promise.all((this.pkgImportIds as FNumber[]).map(async id => {
-                const object = await pkg.fetchObject(id.value);
-
-                await object.onLoaded();
-
-                return object;
-            }));
+            this.pkgImports = await Promise.all(
+                (this.pkgImportIds as FNumber[])
+                    .map(id => pkg.fetchObject(id.value))
+            );
 
             resolve();
         }));
@@ -134,14 +130,10 @@ class UClass extends UState {
             this.pkgImportIds2.load(pkg);
 
             this.promisesLoading.push(new Promise<void>(async resolve => {
-                this.pkgImports2 = await Promise.all((this.pkgImportIds2 as FNumber[]).map(async id => {
-                    const object = await pkg.fetchObject(id.value);
-
-                    await object.onLoaded();
-
-                    return object;
-                }));
-
+                this.pkgImports2 = await Promise.all(
+                    (this.pkgImportIds2 as FNumber[])
+                        .map(id => pkg.fetchObject(id.value))
+                );
                 resolve();
             }));
         }

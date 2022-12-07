@@ -61,7 +61,7 @@ class UStaticMeshInstance extends UObject {
     public setActor(actor: UStaticMeshActor) { this.actor = actor; }
 
     public async getDecodeInfo(library: DecodeLibrary): Promise<any> {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         const color = new Float32Array(this.colorStream.color.length * 3);
 

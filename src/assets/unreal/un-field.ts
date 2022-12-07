@@ -7,34 +7,27 @@ class UField extends UObject {
     public superField: UField;
     public nextField: UField;
 
+    public readonly isField = true;
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
-        // debugger;
         if (this.constructor.name !== "UClass")
             super.doLoad(pkg, exp);
-
-        // this.readHead = pkg.tell();
-
-        // debugger;
 
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.superFieldId = pkg.read(compat32).value as number;
         this.nextFieldId = pkg.read(compat32).value as number;
 
-        // if(this.superFieldId === 0 && this.nextFieldId === 720)
-        //     debugger;
+        // if (this.superFieldId === exp.index) this.superFieldId = 0;
+        // if (this.nextFieldId === exp.index) this.nextFieldId = 0;
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
 
-            if (this.superFieldId !== 0) {
+            if (this.superFieldId !== 0)
                 this.superField = await pkg.fetchObject<UField>(this.superFieldId);
-                // await this.superField.onLoaded();
-            }
 
-            if (this.nextFieldId !== 0) {
+            if (this.nextFieldId !== 0)
                 this.nextField = await pkg.fetchObject<UField>(this.nextFieldId);
-                // await this.nextField.onLoaded();
-            }
 
             resolve();
         }));

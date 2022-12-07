@@ -67,7 +67,8 @@ type UObjectTypes_T = "Texture" |
     "ArrayProperty" |
     "ClassProperty" |
     "StrProperty" |
-    "State";
+    "State" | 
+    "Font";
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;
 type FNumberExt<T> = new (...params: any) => FNumber<T>;

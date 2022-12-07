@@ -125,7 +125,7 @@ class UModel extends UPrimitive {
     }
 
     public async getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): Promise<string[][]> {
-        await this.onLoaded();
+        await this.onDecodeReady();
         await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
 
         this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));

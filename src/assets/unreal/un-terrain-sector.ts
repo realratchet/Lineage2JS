@@ -67,7 +67,7 @@ class UTerrainSector extends UObject {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
 
         const vertexCount = 17 * 17;

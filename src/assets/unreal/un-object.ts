@@ -3,8 +3,20 @@ import { UNP_PropertyTypes, PropertyTag } from "./un-property-tag";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 import { ObjectFlags_T } from "./un-export";
+import UNativeRegistry from "./scripts/un-native-registry";
+import UDependencyGraph from "./un-dependency-graph";
 
 const CLEANUP_NAMESPACE = true;
+
+
+type RegisterNativeMember_T = {
+    isArray: boolean,
+    arraySize: number
+}
+
+type RegisterNativeFunc_T = {
+    nativeIndex: number
+}
 
 abstract class UObject {
     public objectName = "Exp_None";
@@ -23,10 +35,21 @@ abstract class UObject {
     protected readStart: number = NaN;
     protected readTail: number = NaN;
 
-    public constructor(...params: any[]) { }
+    public readonly isObject = true;
 
     protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
-    protected getPropertyMap(): GenericObjectContainer_T<string> { return {}; }
+    protected getPropertyMap(): GenericObjectContainer_T<string> {
+        return {
+            "ObjectInternal": "objectInternal",
+            "Outer": "outer",
+            "ObjectFlags": "objectFlags",
+            "Name": "name",
+            "Class": "cls",
+            "CacheIndex": "cacheIndex",
+            "HashNextBuffer": "hashNextBuffer",
+            "IndexBuffer": "indexBuffer"
+        };
+    }
 
     protected setReadPointers(exp: UExport) {
         this.readStart = this.readHead = exp.offset.value as number + this.readHeadOffset;
@@ -36,6 +59,36 @@ abstract class UObject {
     public get byteCount() { return this.readTail - this.readStart; }
     public get bytesUnread() { return this.readTail - this.readHead; }
     public get byteOffset() { return this.readHead - this.readStart; }
+
+    public static addNativeMember(memberName: string, params = {} as RegisterNativeMember_T) {
+        const props = this.prototype.getPropertyMap();
+
+        if (!(memberName in props)) throw new Error(`'${this.name}' is missing '${memberName}'`)
+
+        // maybe test for dtypes here
+    }
+
+    public static addConst(constName: string, value: any) {
+        Object.defineProperty(this.prototype, constName, { get: () => value });
+    }
+
+    public static addStaticNativeFunc(funcName: string, { nativeIndex } = {} as RegisterNativeFunc_T) {
+        if (!UNativeRegistry.hasNativeFunc(Number.isFinite(nativeIndex) ? nativeIndex : funcName)) {
+            debugger;
+            throw new Error(`Missing static function ${funcName}`);
+        }
+    }
+
+    public static addNativeFunc(funcName: string, { nativeIndex } = {} as RegisterNativeFunc_T) {
+        if (!UNativeRegistry.hasNativeFunc(Number.isFinite(nativeIndex) ? nativeIndex : funcName)) {
+            debugger;
+            throw new Error(`Missing static function ${funcName}`);
+        }
+    }
+
+    public static addFunc(funcName: string, params: any, impl: Function) {
+        (this.prototype as any)[funcName] = impl;
+    }
 
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
@@ -104,6 +157,7 @@ abstract class UObject {
     }
 
     public load(pkg: UPackage, exp: UExport): this {
+        
         this.preLoad(pkg, exp);
         this.doLoad(pkg, exp);
         this.postLoad(pkg, exp);
@@ -263,7 +317,7 @@ abstract class UObject {
         return true;
     }
 
-    public async onLoaded(): Promise<void> {
+    public async onDecodeReady(): Promise<void> {
         try {
             await Promise.all(this.promisesLoading);
 

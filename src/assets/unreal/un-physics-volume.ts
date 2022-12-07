@@ -24,7 +24,7 @@ class UPhysicsVolume extends UBrush {
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 
-        this.onLoaded().then(() => {
+        this.onDecodeReady().then(() => {
             if (this.brush)
                 debugger;
         });

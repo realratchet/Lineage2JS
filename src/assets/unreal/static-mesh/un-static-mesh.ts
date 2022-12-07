@@ -186,7 +186,7 @@ class UStaticMesh extends UPrimitive {
     }
 
     public async getDecodeInfo(library: DecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         let materialUuid = this.uuid;
 

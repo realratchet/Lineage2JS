@@ -37,6 +37,7 @@ type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
 type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
 type UWaterVolume = import("./un-water-volume").UWaterVolume;
 type UEmitter = import("./un-emitter").UEmitter;
+type UFont = import("./un-font").UFont;
 type UNSun = import("./un-nsun").UNSun;
 type UNMoon = import("./un-nmoon").UNMoon;
 type UFogInfo = import("./un-fog-info").UFogInfo;

@@ -129,7 +129,7 @@ class UTexture extends UObject {
     }
 
     protected async decodeTexture(library: DecodeLibrary) {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         const totalMipCount = this.mipmaps.length;
 

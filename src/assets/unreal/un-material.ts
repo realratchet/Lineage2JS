@@ -101,7 +101,7 @@ class UFinalBlend extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         await this.material.getDecodeInfo(library);
 
@@ -156,7 +156,7 @@ class UShader extends UMaterial {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         const diffuse = await this.diffuse?.getDecodeInfo(library) || null;
         const opacity = await this.opacity?.getDecodeInfo(library) || null;
@@ -210,7 +210,7 @@ class UFadeColor extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
@@ -258,7 +258,7 @@ class UColorModifier extends UBaseMaterial {
 
         debugger;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         await this.material.getDecodeInfo(library);
 
@@ -311,7 +311,7 @@ class UTexRotator extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         await this.material.getDecodeInfo(library);
 
@@ -353,7 +353,7 @@ class UTexOscillator extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         await this.material.getDecodeInfo(library);
 
@@ -393,7 +393,7 @@ class UTexPanner extends UBaseModifier {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
@@ -451,7 +451,7 @@ class FStaticMeshMaterial extends UBaseMaterial {
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         if (this.material)
             await this.material.getDecodeInfo(library);

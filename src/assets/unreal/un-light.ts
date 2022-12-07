@@ -133,7 +133,7 @@ class ULight extends UAActor {
     }
 
     public async getDecodeInfo(library: DecodeLibrary): Promise<ILightDecodeInfo> {
-        await this.onLoaded();
+        await this.onDecodeReady();
 
         // debugger;
 
