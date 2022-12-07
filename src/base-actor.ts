@@ -220,8 +220,16 @@ class BaseActor extends Object3D implements ICollidable {
     public setDeathAnimation(animationName: string) { this.setBasicActorAnimation("dying", animationName); }
     public setFallingAnimation(animationName: string) { this.setBasicActorAnimation("falling", animationName); }
 
-    public initAnimations() { this.playAnimation(this.basicActorAnimations.idle); }
+    protected isAnimationsInit = false;
+
+    public initAnimations() {
+        this.isAnimationsInit = true;
+        this.playAnimation(this.basicActorAnimations.idle);
+    }
+
     public playAnimation(animationName: string) {
+        if (!this.isAnimationsInit) return;
+
         if (!(animationName in this.actorAnimations))
             throw new Error(`'${animationName}' is not available.`);
 

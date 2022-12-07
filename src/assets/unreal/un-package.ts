@@ -169,68 +169,147 @@ class UPackage extends UEncodedFile {
         return this;
     }
 
+    protected findObjectRef(className: string, objectName: string, groupName: string): UExport {
+        const isClass = className == "Class";
 
+        for (const exp of this.exports) {
+            if (exp.objectName !== objectName) continue;
+            if (groupName !== "None") {
+                debugger;
+            }
 
-    protected async getImport(index: number): Promise<UObject> {
+            if (isClass) {
+                if (exp.idClass.value === 0) return exp;
+
+                debugger;
+
+                if (exp.idClass.value < 0) {
+                    debugger;
+                }
+
+                const other = this.exports[exp.idClass.value as number + 1];
+
+                if (other && className === other.objectName)
+                    return exp;
+            } else if (exp.idClass.value !== 0) {
+                debugger;
+            }
+        }
+
         debugger;
 
-        let imp = this.imports[index], mainImp = imp;
+        return null;
+    }
+
+    protected async getImport(index: number): Promise<UObject> {
+        const mainImp = this.imports[index];
+        let imp = this.imports[-mainImp.idPackage - 1];
+
+        let groupName = "None";
+
+        if (imp.idPackage.value !== 0)
+            groupName = imp.objectName;
+
         while (imp.idPackage.value as number !== 0)
             imp = this.imports[-imp.idPackage.value as number - 1];
 
-        if (!this.loader.hasPackage(imp.objectName, mainImp.className as SupportedImports_T))
-            throw new Error(`Unable to locate package: ${imp.objectName}`);
-        const pkg = await this.loader.getPackage(imp.objectName, mainImp.className as SupportedImports_T);
+        const packageName = imp.objectName;
+        const objectName = mainImp.objectName;
+        const className = mainImp.className;
+
+        const pkg = await this.loader.getPackage(packageName, className as SupportedImports_T);
 
         if (!pkg.buffer) await this.loader.load(pkg);
 
-        // if (mainImp.idPackage.value as number === -1) {
-        //     let Constructor: typeof UField = null;
-
-        //     debugger;
-
-        //     switch (mainImp.className) {
-        //         case "Class": Constructor = UClass; break;
-        //         default: throw new Error(`Unsupported native type: ${mainImp.className}`);
-        //     }
-
-        //     return new Constructor();
-        // }
-
-        const plausibleImports = pkg.exports.filter(exp => exp.objectName === mainImp.objectName)
-
-        const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idSuper.value as number) === mainImp.className)
-
-        // const _exp = plausibleImports[0];
-
-        // if (mainImp.idPackage.value as number === -1) {
-        //     const a = pkg.getPackageName(_exp.idClass.value as number);
-        //     const b = mainImp.className;
-
-        //     debugger;
-        // }
-
-        // const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idClass.value as number) === mainImp.className
-        //     // pkg.getPackageName(exp.idClass.value as number) === pkg.getPackageName(mainImp.idPackage.value as number)
-        // );
+        const exp = pkg.findObjectRef(className, objectName, groupName);
 
         if (!exp) throw new Error("Missing export");
         if (exp.object) return exp.object;
 
-        await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
+        return pkg.getExport(exp.index);
 
-        return exp.object;
+        // await this.createObject(pkg, exp, className as UObjectTypes_T);
+
+        // return exp.object;
+
+
+        // let imp = this.imports[index], mainImp = imp;
+        // while (imp.idPackage.value as number !== 0)
+        //     imp = this.imports[-imp.idPackage.value as number - 1];
+
+        // if (!this.loader.hasPackage(imp.objectName, mainImp.className as SupportedImports_T))
+        //     throw new Error(`Unable to locate package: ${imp.objectName}`);
+        // const pkg = await this.loader.getPackage(imp.objectName, mainImp.className as SupportedImports_T);
+
+        // if (!pkg.buffer) await this.loader.load(pkg);
+
+        // // if (mainImp.idPackage.value as number === -1) {
+        // //     let Constructor: typeof UField = null;
+
+        // //     debugger;
+
+        // //     switch (mainImp.className) {
+        // //         case "Class": Constructor = UClass; break;
+        // //         default: throw new Error(`Unsupported native type: ${mainImp.className}`);
+        // //     }
+
+        // //     return new Constructor();
+        // // }
+
+        // const plausibleImports = pkg.exports.filter(exp => exp.objectName === mainImp.objectName)
+
+        // const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idSuper.value as number) === mainImp.className)
+
+        // // const _exp = plausibleImports[0];
+
+        // // if (mainImp.idPackage.value as number === -1) {
+        // //     const a = pkg.getPackageName(_exp.idClass.value as number);
+        // //     const b = mainImp.className;
+
+        // //     debugger;
+        // // }
+
+        // // const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idClass.value as number) === mainImp.className
+        // //     // pkg.getPackageName(exp.idClass.value as number) === pkg.getPackageName(mainImp.idPackage.value as number)
+        // // );
+
+        // if (!exp) throw new Error("Missing export");
+        // if (exp.object) return exp.object;
+
+        // await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
+
+        // return exp.object;
+    }
+
+    protected getUObject(index: number) {
+        debugger;
     }
 
     protected async getExport(index: number): Promise<UObject> {
         const exp = this.exports[index];
-        
+
         if (exp.object) return exp.object;
-        
+
+        const objectName = exp.objectName;
+
+        if (exp.idClass.value !== 0) {
+            let objectClass = await this.fetchObject(exp.idClass.value as number);
+
+            debugger;
+        } else {
+            let baseClass = await this.fetchObject(exp.idSuper.value as number);
+
+            if (!baseClass && objectName.toLowerCase() === "object") {
+                const baseExport = this.findObjectRef("Class", "Object", "None");
+
+                baseClass = await this.createObject(this, baseExport, "Class");
+            }
+
+            debugger;
+        }
+
         const className = (this.getPackageName(exp.idClass.value as number) || exp.objectName) as UObjectTypes_T;
-        
-        debugger;
-        
+
         await this.createObject(this, exp, className);
 
         return exp.object;
@@ -238,14 +317,11 @@ class UPackage extends UEncodedFile {
 
     public async fetchObject<T extends UObject = UObject>(index: number): Promise<T> {
         const readable = this.asReadable();
-        const object = index < 0
-            ? await readable.getImport(-index - 1)
-            : index > 0
-                ? await readable.getExport(index - 1)
+        const object = index > 0
+            ? await readable.getExport(index - 1)
+            : index < 0
+                ? await readable.getImport(-index - 1)
                 : null;
-
-        // if (object)
-        //     console.log(`Fetch object: ${index} -> ${object.objectName}`);
 
         return object as T;
     }
@@ -255,15 +331,15 @@ class UPackage extends UEncodedFile {
 
         let Constructor: typeof UObject = null;
 
-        if (className === "Class")
+        if (className === "Class" && exp.objectName !== "Object")
             debugger;
 
         switch (className) {
-            // case "Class": {
-            //     Constructor = UClass;
-            //     console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
-            //     debugger;
-            // } break
+            case "Class": {
+                Constructor = UClass;
+                console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
+                // debugger;
+            } break
             case "Struct": Constructor = UStruct; break;
             case "Texture": Constructor = UTexture; break;
             case "Palette": Constructor = UPlatte; break;
@@ -323,7 +399,7 @@ class UPackage extends UEncodedFile {
             case "StrProperty": Constructor = UnProperties.UStrProperty; break;
             case "State": Constructor = UState; break;
             case "Font": Constructor = UFont; break;
-            case "Weapon": Constructor = UWeapon; debugger; break;
+            case "Weapon": Constructor = UWeapon; break;
             default: throw new Error(`Unknown object type: ${className}`);
         }
 

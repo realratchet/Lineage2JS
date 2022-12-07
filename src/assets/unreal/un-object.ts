@@ -93,14 +93,14 @@ abstract class UObject {
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
 
-        const tags = [];
+        // const tags = [];
 
         do {
             const tag = PropertyTag.from(pkg, this.readHead);
 
             if (!tag.isValid()) break;
 
-            tags.push(tag.name + "/" + tag.type);
+            // tags.push(tag.name + "/" + tag.type);
 
             this.promisesLoading.push(this.loadProperty(pkg, tag));
             this.readHead = pkg.tell();
@@ -157,7 +157,10 @@ abstract class UObject {
     }
 
     public load(pkg: UPackage, exp: UExport): this {
-        
+
+        if ((exp?.idSuper || null) !== null && exp?.idSuper?.value !== 0)
+            debugger;
+
         this.preLoad(pkg, exp);
         this.doLoad(pkg, exp);
         this.postLoad(pkg, exp);

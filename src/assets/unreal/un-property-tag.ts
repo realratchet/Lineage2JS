@@ -68,6 +68,8 @@ class PropertyTag {
             this.structName = pkg.nameTable[index.value as number].name.string;
         }
 
+        // debugger;
+
         switch (info & UNP_PropertyMasks.PROPERTY_SIZE_MASK) {
             case 0x00: this.dataSize = 1; break;
             case 0x10: this.dataSize = 2; break;

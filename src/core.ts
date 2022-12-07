@@ -67,7 +67,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     const gloveMesh = "FFighter_m001_g", gloveTex = "FFighter_m001_t01_g";
     const bootMesh = "FFighter_m001_b", bootTex = "FFighter_m001_t01_b";
 
-    debugger;
+    // debugger;
 
     const bodypartMeshNames = [
         faceMesh,
@@ -293,7 +293,7 @@ async function startCore() {
     // debugger;
 
     const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index + 1;
-    const UWeapon = pkgEngine.fetchObject(UWeaponId);
+    const UWeapon = await pkgEngine.fetchObject(UWeaponId);
 
     debugger;
 
@@ -324,14 +324,14 @@ async function startCore() {
 
     // debugger;
 
-    const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
+    // const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 
-    const rapidShot = await pkg.fetchObject<UClass>(657);
-    // const mortalBlow = await pkg.fetchObject<UClass>(21);
+    // const rapidShot = await pkg.fetchObject<UClass>(657);
+    // // const mortalBlow = await pkg.fetchObject<UClass>(21);
 
-    await rapidShot.onDecodeReady();
+    // await rapidShot.onDecodeReady();
 
-    debugger;
+    // debugger;
 
     const loadSettings = {
         helpersZoneBounds: false,
