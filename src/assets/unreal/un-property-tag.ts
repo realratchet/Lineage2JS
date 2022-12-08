@@ -52,7 +52,7 @@ class PropertyTag {
         // if (!pkg.nameTable[index.value as number])
         //     debugger;
         const propName = index.value as number >= 0 && index.value < pkg.nameTable.length
-            ? pkg.nameTable[index.value as number].name.string
+            ? pkg.nameTable[index.value as number].name
             : "None";
 
         this.name = propName;
@@ -65,7 +65,7 @@ class PropertyTag {
 
         if (this.type === UNP_PropertyTypes.UNP_StructProperty) {
             pkg.read(index);
-            this.structName = pkg.nameTable[index.value as number].name.string;
+            this.structName = pkg.nameTable[index.value as number].name;
         }
 
         // debugger;

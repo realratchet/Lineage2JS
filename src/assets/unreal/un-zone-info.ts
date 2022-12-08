@@ -62,10 +62,10 @@ class UZoneInfo extends UAActor implements IInfo {
     // protected preLoad(pkg: UPackage, exp: UExport): void {
     //     super.preLoad(pkg, exp);
 
-    //     pkg.seek(exp.offset.value as number, "set");
+    //     pkg.seek(exp.offset as number, "set");
 
-    //     this.readStart = this.readHead = exp.offset.value as number;
-    //     this.readTail = this.readHead + (exp.size.value as number);
+    //     this.readStart = this.readHead = exp.offset as number;
+    //     this.readTail = this.readHead + (exp.size as number);
 
     //     // debugger;
 
@@ -73,7 +73,7 @@ class UZoneInfo extends UAActor implements IInfo {
 
     //     const a = new Array(17).fill(1).map(() => {
     //         const b = pkg.read(compat32).value;
-    //         const offset = pkg.tell() - (exp.offset.value as number);
+    //         const offset = pkg.tell() - (exp.offset as number);
 
     //         return [b, offset];
     //     });

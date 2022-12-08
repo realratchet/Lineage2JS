@@ -1,8 +1,6 @@
-import BufferValue from "../buffer-value";
-
 class UName {
-    public name = new BufferValue<"char">(BufferValue.char);
-    public flags = new BufferValue<"uint32">(BufferValue.uint32);
+    public name: string;
+    public flags: number;
 }
 
 export default UName;

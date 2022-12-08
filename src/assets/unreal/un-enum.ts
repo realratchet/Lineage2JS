@@ -11,7 +11,7 @@ class UEnum extends UField {
 
         this.readHead = pkg.tell();
 
-        this.names = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
+        this.names = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name as string);
 
         this.readHead = pkg.tell();
     }

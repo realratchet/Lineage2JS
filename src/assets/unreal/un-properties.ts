@@ -24,7 +24,7 @@ abstract class UProperty extends UField {
         this.propertyFlags = pkg.read(uint32).value as number;
 
         this.categoryNameId = pkg.read(compat32).value as number;
-        this.categoryName = pkg.nameTable[this.categoryNameId].name.value as string;
+        this.categoryName = pkg.nameTable[this.categoryNameId].name as string;
 
         if (this.propertyFlags & PropertyFlags_T.Net)
             this.replicationOffset = pkg.read(uint16).value as number;

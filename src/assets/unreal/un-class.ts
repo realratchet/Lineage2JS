@@ -123,7 +123,7 @@ class UClass extends UState {
 
             const nameId = pkg.read(compat32).value as number;
 
-            this.classConfigName = pkg.nameTable[nameId].name.value as string;
+            this.classConfigName = pkg.nameTable[nameId].name as string;
         }
 
         if (verArchive >= 0x63) {

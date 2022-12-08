@@ -71,7 +71,7 @@ class FMeshBone extends FConstructable {
         const compat = new BufferValue(BufferValue.compat32);
 
         const nameIndex = pkg.read(compat).value as number;
-        this.boneName = pkg.nameTable[nameIndex].name.value as string;
+        this.boneName = pkg.nameTable[nameIndex].name as string;
 
         this.flags = pkg.read(uint32).value as number;
 
@@ -359,8 +359,8 @@ class USkeletalMesh extends ULodMesh {
         this.skeletalDepth = pkg.read(uint32).value as number;
         this.weightIndices.load(pkg);
         this.boneInluences.load(pkg);
-        this.attachAliases = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
-        this.attachBoneNames = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
+        this.attachAliases = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name as string);
+        this.attachBoneNames = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name as string);
         this.attachCoords.load(pkg);
 
         if (this.version >= 2) {

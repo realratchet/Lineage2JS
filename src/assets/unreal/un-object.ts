@@ -52,8 +52,8 @@ abstract class UObject {
     }
 
     protected setReadPointers(exp: UExport) {
-        this.readStart = this.readHead = exp.offset.value as number + this.readHeadOffset;
-        this.readTail = this.readHead + (exp.size.value as number);
+        this.readStart = this.readHead = exp.offset as number + this.readHeadOffset;
+        this.readTail = this.readHead + (exp.size as number);
     }
 
     public get byteCount() { return this.readTail - this.readStart; }
@@ -121,9 +121,9 @@ abstract class UObject {
         this.exportIndex = exp.index;
         this.exp = exp;
 
-        const flags = exp.flags.value as number;
+        const flags = exp.flags as number;
 
-        pkg.seek(exp.offset.value as number, "set");
+        pkg.seek(exp.offset as number, "set");
 
         if (flags & ObjectFlags_T.HasStack) {
             const offset = pkg.tell();
@@ -157,9 +157,6 @@ abstract class UObject {
     }
 
     public load(pkg: UPackage, exp: UExport): this {
-
-        if ((exp?.idSuper || null) !== null && exp?.idSuper?.value !== 0)
-            debugger;
 
         this.preLoad(pkg, exp);
         this.doLoad(pkg, exp);
@@ -214,7 +211,7 @@ abstract class UObject {
                 // }
             } break;
             case UNP_PropertyTypes.UNP_NameProperty:
-                this.setProperty(tag, pkg.nameTable[pkg.read(new BufferValue(BufferValue.compat32)).value as number].name.value);
+                this.setProperty(tag, pkg.nameTable[pkg.read(new BufferValue(BufferValue.compat32)).value as number].name);
                 break;
             case UNP_PropertyTypes.UNP_StrProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.char)).value as string);

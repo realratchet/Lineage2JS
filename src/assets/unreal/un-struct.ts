@@ -56,7 +56,7 @@ class UStruct extends UField {
 
         // debugger;
 
-        this.friendlyName = pkg.nameTable[nameId].name.value as string;
+        this.friendlyName = pkg.nameTable[nameId].name as string;
         // debugger;
 
         // if (this.constructor.name === "UFunction")

@@ -83,7 +83,7 @@ class UModel extends UPrimitive {
         const polysId = pkg.read(compat32).value as number;
 
         const polyExp = pkg.exports[polysId - 1];
-        const className = pkg.getPackageName(polyExp.idClass.value as number)
+        const className = pkg.getPackageName(polyExp.idClass as number)
 
         console.assert(className === "Polys");
 

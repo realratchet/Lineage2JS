@@ -15,7 +15,7 @@ class FNamedBone extends FConstructable {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.boneName = pkg.nameTable[pkg.read(compat).value as number].name.value as string;
+        this.boneName = pkg.nameTable[pkg.read(compat).value as number].name as string;
         this.unkVar0 = pkg.read(uint32).value as number;
         this.unkVar1 = pkg.read(uint32).value as number;
 
@@ -78,7 +78,7 @@ class FMeshAnimNotify extends FConstructable {
         const compat = new BufferValue(BufferValue.compat32);
 
         this.time = pkg.read(float).value as number;
-        this.name = pkg.nameTable[pkg.read(compat).value as number].name.value as string;
+        this.name = pkg.nameTable[pkg.read(compat).value as number].name as string;
 
         if (verArchive >= 112) {
             this.notifyObjectId = pkg.read(compat).value as number;
@@ -180,8 +180,8 @@ class FAnimSequence extends FConstructable {
             debugger;
         }
 
-        this.name = pkg.nameTable[pkg.read(compat).value as number].name.value as string;
-        this.groupNames = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name.value as string);
+        this.name = pkg.nameTable[pkg.read(compat).value as number].name as string;
+        this.groupNames = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name as string);
 
         this.frameStart = pkg.read(uint32).value as number;
         this.frameCount = pkg.read(uint32).value as number;
