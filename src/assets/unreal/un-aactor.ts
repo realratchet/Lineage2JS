@@ -3,7 +3,7 @@ import FVector from "./un-vector";
 import FRotator from "./un-rotator";
 import { generateUUID } from "three/src/math/MathUtils";
 
-class UAActor extends UObject {
+abstract class UAActor extends UObject {
     protected texModifyInfo: UTextureModifyInfo;
     protected isDynamicActorFilterState: boolean;
     protected level: ULevel;

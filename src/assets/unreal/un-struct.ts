@@ -25,6 +25,14 @@ class UStruct extends UField {
 
     public readonly isStruct = true;
 
+    protected namedProperties: GenericObjectContainer_T<any> = {};
+
+    protected setProperty(tag: PropertyTag, value: any) {
+        this.namedProperties[tag.name] = value;
+
+        return true;
+    }
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         // if (this.constructor.name !== "UFunction")
         //     debugger;

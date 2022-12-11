@@ -37,19 +37,27 @@ abstract class UObject {
 
     public readonly isObject = true;
 
-    protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
-    protected getPropertyMap(): GenericObjectContainer_T<string> {
-        return {
-            "ObjectInternal": "objectInternal",
-            "Outer": "outer",
-            "ObjectFlags": "objectFlags",
-            "Name": "name",
-            "Class": "cls",
-            "CacheIndex": "cacheIndex",
-            "HashNextBuffer": "hashNextBuffer",
-            "IndexBuffer": "indexBuffer"
-        };
+    // public name = "None";
+    // public klass: UClass = null;
+    // public flags: number = 0;
+
+    public constructor() {
     }
+
+    protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
+    protected getPropertyMap(): GenericObjectContainer_T<string> { return {}; }
+    // protected getPropertyMap(): GenericObjectContainer_T<string> {
+    //     return {
+    //         "ObjectInternal": "objectInternal",
+    //         "Outer": "outer",
+    //         "ObjectFlags": "objectFlags",
+    //         "Name": "name",
+    //         "Class": "cls",
+    //         "CacheIndex": "cacheIndex",
+    //         "HashNextBuffer": "hashNextBuffer",
+    //         "IndexBuffer": "indexBuffer"
+    //     };
+    // }
 
     protected setReadPointers(exp: UExport) {
         this.readStart = this.readHead = exp.offset as number + this.readHeadOffset;
@@ -95,17 +103,19 @@ abstract class UObject {
 
         // const tags = [];
 
-        do {
-            const tag = PropertyTag.from(pkg, this.readHead);
+        if (this.readHead < this.readTail) {
+            do {
+                const tag = PropertyTag.from(pkg, this.readHead);
 
-            if (!tag.isValid()) break;
+                if (!tag.isValid()) break;
 
-            // tags.push(tag.name + "/" + tag.type);
+                // tags.push(tag.name + "/" + tag.type);
 
-            this.promisesLoading.push(this.loadProperty(pkg, tag));
-            this.readHead = pkg.tell();
+                this.promisesLoading.push(this.loadProperty(pkg, tag));
+                this.readHead = pkg.tell();
 
-        } while (this.readHead < this.readTail);
+            } while (this.readHead < this.readTail);
+        }
 
         // if (this.objectName === "Exp_TerrainInfo0") {
         //     console.log(this.objectName, "\n\t->" + tags.join("\n\t->"));
@@ -125,7 +135,7 @@ abstract class UObject {
 
         pkg.seek(exp.offset as number, "set");
 
-        if (flags & ObjectFlags_T.HasStack) {
+        if (flags & ObjectFlags_T.HasStack && exp.size > 0) {
             const offset = pkg.tell();
             const compat32 = new BufferValue(BufferValue.compat32);
             const int64 = new BufferValue(BufferValue.int64);
@@ -159,8 +169,11 @@ abstract class UObject {
     public load(pkg: UPackage, exp: UExport): this {
 
         this.preLoad(pkg, exp);
-        this.doLoad(pkg, exp);
-        this.postLoad(pkg, exp);
+
+        if (exp.size > 0) {
+            this.doLoad(pkg, exp);
+            this.postLoad(pkg, exp);
+        }
 
         return this;
     }

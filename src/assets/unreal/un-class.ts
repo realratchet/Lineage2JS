@@ -45,6 +45,9 @@ class UClass extends UState {
     protected classWithinId: number;
     protected classConfigName: string;
 
+    public baseStruct: UClass;
+    public second: UObject
+
     public readonly isClass = true;
 
     // // these should be instantiated somehow differently
@@ -145,5 +148,26 @@ class UClass extends UState {
     }
 }
 
+enum EClassFlags_T {
+    // Base flags.
+    CLASS_Abstract = 0x00001,  // Class is abstract and can't be instantiated directly.
+    CLASS_Compiled = 0x00002,  // Script has been compiled successfully.
+    CLASS_Config = 0x00004,  // Load object configuration at construction time.
+    CLASS_Transient = 0x00008,	// This object type can't be saved; null it out at save time.
+    CLASS_Parsed = 0x00010,	// Successfully parsed.
+    CLASS_Localized = 0x00020,  // Class contains localized text.
+    CLASS_SafeReplace = 0x00040,  // Objects of this class can be safely replaced with default or NULL.
+    CLASS_RuntimeStatic = 0x00080,	// Objects of this class are static during gameplay.
+    CLASS_NoExport = 0x00100,  // Don't export to C++ header.
+    CLASS_NoUserCreate = 0x00200,  // Don't allow users to create in the editor.
+    CLASS_PerObjectConfig = 0x00400,  // Handle object configuration on a per-object basis, rather than per-class.
+    CLASS_NativeReplication = 0x00800,  // Replication handled in C++.
+
+    // Flags to inherit from base class.
+    CLASS_Inherit = CLASS_Transient | CLASS_Config | CLASS_Localized | CLASS_SafeReplace | CLASS_RuntimeStatic | CLASS_PerObjectConfig,
+    CLASS_RecompilerClear = CLASS_Inherit | CLASS_Abstract | CLASS_NoExport | CLASS_NativeReplication,
+};
+
 export default UClass;
-export { UClass };
+export { UClass, EClassFlags_T };
+
