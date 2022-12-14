@@ -10,12 +10,12 @@ class DecodeLibrary {
     public readonly bspColliders: IBoxDecodeInfo[] = [];
     public readonly bspLeaves: IBSPLeafDecodeInfo_T[] = [];
     public readonly bspZones: IBSPZoneDecodeInfo_T[] = [];
-    public readonly bspZoneIndexMap: GenericObjectContainer_T<number> = {};
-    // public readonly zones: GenericObjectContainer_T<IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
-    public readonly geometries: GenericObjectContainer_T<IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
-    public readonly geometryInstances: GenericObjectContainer_T<number> = {};               // a dictionary containing all geometray instance decode info
-    public readonly materials: GenericObjectContainer_T<IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
-    public readonly materialModifiers: GenericObjectContainer_T<IMaterialModifier> = {};    // a dictionary containing all material modifiers
+    public readonly bspZoneIndexMap: Record<string, number> = {};
+    // public readonly zones: Record<string, IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
+    public readonly geometries: Record<string, IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
+    public readonly geometryInstances: Record<string, number> = {};               // a dictionary containing all geometray instance decode info
+    public readonly materials: Record<string, IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
+    public readonly materialModifiers: Record<string, IMaterialModifier> = {};    // a dictionary containing all material modifiers
 
     public failed: any[] = [];
     public failedLoad: any[] = [];

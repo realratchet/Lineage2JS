@@ -1,4 +1,3 @@
-type GenericObjectContainer_T<T> = { [key: string]: T };
 type DecodeLibrary = import("./decode-library").DecodeLibrary;
 type UPackage = import("./un-package").UPackage;
 type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
@@ -217,8 +216,8 @@ interface IBaseTimedConstructable {
 }
 
 interface IDecodedParameter {
-    uniforms: GenericObjectContainer_T<any>,
-    defines: GenericObjectContainer_T<any>,
+    uniforms: Record<string, any>,
+    defines: Record<string, any>,
     isUsingMap: boolean,
     transformType: "none" | "pan" | "rotate",
 }
@@ -259,7 +258,7 @@ interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
     geometry: string;
     materials?: string;
     skeleton: IBoneDecodeInfo[];
-    animations: GenericObjectContainer_T<IKeyframeDecodeInfo_T[]>
+    animations: Record<string, IKeyframeDecodeInfo_T[]>
 }
 
 interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }

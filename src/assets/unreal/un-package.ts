@@ -75,8 +75,8 @@ class UPackage extends UEncodedFile {
     public imports: UImport[];
     public nameTable: UName[];
     public header: UHeader;
-    public exportGroups: GenericObjectContainer_T<{ index: number; export: UExport; }[]>;
-    public importGroups: GenericObjectContainer_T<{ import: UImport; index: number; }[]>;
+    public exportGroups: Record<string, { index: number; export: UExport; }[]>;
+    public importGroups: Record<string, { import: UImport; index: number; }[]>;
     public readonly isCore: boolean;
     public readonly isEngine: boolean;
 
@@ -177,7 +177,7 @@ class UPackage extends UEncodedFile {
             list.push({ import: imp, index: -index - 1 });
 
             return accum;
-        }, {} as GenericObjectContainer_T<{ import: UImport, index: number }[]>);
+        }, {} as Record<string, { import: UImport, index: number }[]>);
 
         readable.exportGroups = readable.exports.reduce((accum, exp, index) => {
 
@@ -187,7 +187,7 @@ class UPackage extends UEncodedFile {
             list.push({ index, export: exp });
 
             return accum;
-        }, {} as GenericObjectContainer_T<{ index: number, export: UExport }[]>)
+        }, {} as Record<string, { index: number, export: UExport }[]>)
 
         Object.assign(this, readable, { isReadable: false });
 
@@ -465,22 +465,32 @@ class UPackage extends UEncodedFile {
             // if (index === 771)
             //     debugger;
 
-            const objflags = this.exports[index].flags;
-            const obj = new (UClass as any)(objname, objbase, objflags) as UClass;
+            if (!this.exports[index].object) {
+                const obj = new UClass();
 
-            obj.friendlyName = objname;
-            this.exports[index].object = obj;
+                if (entry.size === 0) {
+                    if (entry.flags !== ObjectFlags_T.Native)
+                        throw new Error("0xdeadbeef")
 
-            obj.load(pkg.asReadable(), entry);
+                    obj.friendlyName = objname;
+                }
 
-            const Constructor = this.nativeClassess.get(obj.friendlyName as NativeTypes_T);
+                obj.load(pkg.asReadable(), entry);
 
-            if (!Constructor)
-                throw new Error(`Missing: ${obj.friendlyName}`);
+                if (!obj.friendlyName)
+                    throw new Error("0xdecafbad");
 
-            // Constructor.extend(obj);
+                this.exports[index].object = obj;
 
-            // debugger;
+                const Constructor = this.nativeClassess.get(obj.friendlyName as NativeTypes_T);
+
+                if (!Constructor)
+                    throw new Error(`Missing: ${obj.friendlyName}`);
+
+                // Constructor.extend(obj);
+
+                debugger;
+            }
         }
     }
 
@@ -498,8 +508,8 @@ class UPackage extends UEncodedFile {
     }
 
     async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
-        if (objref > 0) // Export table object
-        {
+        if (objref > 0) {// Export table object
+
             const index = objref - 1;
 
             if (index > this.exports.length)
@@ -509,9 +519,7 @@ class UPackage extends UEncodedFile {
                 await this.loadExportObject(index);
 
             return this.exports[index].object as T;
-        }
-        else if (objref < 0) // Import table object
-        {
+        } else if (objref < 0) {// Import table object
             const entry = this.getImportEntry(objref);
             let entrypackage = this.getImportEntry(entry.idPackage);
 
@@ -542,9 +550,8 @@ class UPackage extends UEncodedFile {
 
             return obj as T;
         }
-        else {
-            return null;
-        }
+
+        return null;
     }
 
     fetchObjectByType(className: string, objectName: string, groupName: string = "None") {

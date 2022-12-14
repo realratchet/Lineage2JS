@@ -24,7 +24,7 @@ class BaseActor extends Object3D implements ICollidable {
     protected meshes: THREE.Object3D[] = [];
     protected currAnimations = new WeakMap<THREE.Object3D, THREE.AnimationAction>();
     protected prevAnimations = new WeakMap<THREE.Object3D, THREE.AnimationAction>();
-    protected actorAnimations: GenericObjectContainer_T<THREE.AnimationClip> = {};
+    protected actorAnimations: Record<string, THREE.AnimationClip> = {};
 
     protected readonly collisionBounds = new Box3();
     protected readonly collisionSize = new Vector3();
@@ -188,7 +188,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.collisionBounds.getSize(this.collisionSize);
     }
 
-    public setAnimations(animations: GenericObjectContainer_T<THREE.AnimationClip>) {
+    public setAnimations(animations: Record<string, THREE.AnimationClip>) {
         this.stopAnimations();
         this.actorState.reset();
         this.actorAnimations = animations;

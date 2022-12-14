@@ -436,7 +436,7 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
         acc[k] = decodeAnimation(library, k, info.animations[k]);
 
         return acc;
-    }, {} as GenericObjectContainer_T<AnimationClip>);
+    }, {} as Record<string, AnimationClip>);
 
     mesh.userData.animations = animations;
 

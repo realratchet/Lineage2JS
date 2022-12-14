@@ -25,7 +25,7 @@ class UStruct extends UField {
 
     public readonly isStruct = true;
 
-    protected namedProperties: GenericObjectContainer_T<any> = {};
+    protected namedProperties: Record<string, any> = {};
 
     protected setProperty(tag: PropertyTag, value: any) {
         this.namedProperties[tag.name] = value;

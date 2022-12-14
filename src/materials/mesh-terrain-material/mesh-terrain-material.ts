@@ -7,14 +7,14 @@ import { appendGlobalUniforms } from "../global-uniforms";
 class MeshTerrainMaterial extends ShaderMaterial {
     // @ts-ignore
     constructor(info: MeshTerrainMaterialParameters) {
-        const defines: GenericObjectContainer_T<any> = {
+        const defines: Record<string, any> = {
             USE_FOG: "",
             USE_UV_TEXTURE: "",
             UV_COUNT: info.uvs.size.height,
             MASK_UV_INDEX: info.uvs.size.height - 1
         };
 
-        const uniforms: GenericObjectContainer_T<Uniform> = appendGlobalUniforms({
+        const uniforms: Record<string, Uniform> = appendGlobalUniforms({
             alphaTest: new Uniform(1e-3),
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),

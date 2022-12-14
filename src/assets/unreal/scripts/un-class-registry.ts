@@ -2,7 +2,7 @@ import UPackage from "../un-package";
 import FConstructable from "../un-constructable";
 import UNativeRegistry from "./un-native-registry";
 
-const REGISTER: GenericObjectContainer_T<typeof FConstructable> = {
+const REGISTER: Record<string, typeof FConstructable> = {
 
 };
 
@@ -63,9 +63,9 @@ abstract class BaseConstruct {
 
 abstract class BaseObjectConstruct extends BaseConstruct {
     public readonly members: BaseConstruct[] = [];
-    public readonly enumerators: GenericObjectContainer_T<EnumConstruct> = {};
-    public readonly events: GenericObjectContainer_T<EventStruct> = {};
-    public readonly structures: GenericObjectContainer_T<StructConstruct> = {};
+    public readonly enumerators: Record<string, EnumConstruct> = {};
+    public readonly events: Record<string, EventStruct> = {};
+    public readonly structures: Record<string, StructConstruct> = {};
 }
 
 class EventStruct extends BaseConstruct {
@@ -85,7 +85,7 @@ class FunctionStruct extends BaseConstruct {
         const isStatic = this.modifiers.includes("static");
 
         const fnName = `add${isStatic ? "Static" : ""}${isNative ? "Native" : ""}Func`;
-        const parameters: GenericObjectContainer_T<any> = {};
+        const parameters: Record<string, any> = {};
         const ws = this.getWS(depth);
 
         if (isNative && Number.isFinite(this.nativeIndex)) {
@@ -226,7 +226,7 @@ class VarConstruct extends BaseConstruct {
         const memFunc = `add${isStatic ? "Static" : ""}${isNative ? "Native" : ""}Member`;
 
         const ws = this.getWS(depth);
-        const parameters: GenericObjectContainer_T<any> = {};
+        const parameters: Record<string, any> = {};
 
         if (this.isArray) {
             if (Number.isFinite(this.arraySize)) {

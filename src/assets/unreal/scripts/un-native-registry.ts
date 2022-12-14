@@ -1,9 +1,9 @@
 import registerNativeFuncs from "./un-operators";
 
-const NATIVE: GenericObjectContainer_T<any> = {
+const NATIVE: Record<string, any> = {
 };
 
-const NATIVE_FUNCS: GenericObjectContainer_T<Function> = {};
+const NATIVE_FUNCS: Record<string, Function> = {};
 
 const UNativeRegistry = new class UNativeRegistry {
     public getClass(className: string) {

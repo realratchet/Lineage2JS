@@ -32,7 +32,7 @@ class UState extends UStruct {
     protected stateFlags: number;
     protected labelTableOffset: number;
 
-    public readonly functions: GenericObjectContainer_T<UFunction> = {};
+    public readonly functions: Record<string, UFunction> = {};
 
     public readonly isState = true;
 

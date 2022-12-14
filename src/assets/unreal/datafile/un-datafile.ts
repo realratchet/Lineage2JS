@@ -3,7 +3,7 @@ import UEncodedFile from "../un-encoded-file";
 import * as schemas from "./schema/schema-types";
 
 class UDataFile extends UEncodedFile {
-    public datarows: GenericObjectContainer_T<any>[];
+    public datarows: Record<string, any>[];
 
     public async decode(): Promise<this> {
         if (this.buffer) return this;
@@ -21,10 +21,10 @@ class UDataFile extends UEncodedFile {
         const uint16 = new BufferValue(BufferValue.uint32);
         const rowCount = readable.read(uint16).value as number;
         const schema = schemas.SCHEMA_NPCGRP_DAT;
-        const rows = [] as GenericObjectContainer_T<any>[];
+        const rows = [] as Record<string, any>[];
 
         for (let i = 0; i < rowCount; i++) {
-            const values = {} as GenericObjectContainer_T<any>;
+            const values = {} as Record<string, any>;
 
             for (let { type, name } of schema) {
                 if (!(type as IDatContainerType).isContainerType) {

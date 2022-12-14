@@ -44,9 +44,9 @@ abstract class UObject {
     public constructor() {
     }
 
-    protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
-    protected getPropertyMap(): GenericObjectContainer_T<string> { return {}; }
-    // protected getPropertyMap(): GenericObjectContainer_T<string> {
+    protected getSignedMap(): Record<string, boolean> { return {}; }
+    protected getPropertyMap(): Record<string, string> { return {}; }
+    // protected getPropertyMap(): Record<string, string> {
     //     return {
     //         "ObjectInternal": "objectInternal",
     //         "Outer": "outer",

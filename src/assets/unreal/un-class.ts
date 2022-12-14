@@ -50,6 +50,12 @@ class UClass extends UState {
 
     public readonly isClass = true;
 
+    // constructor(...args: any[]) {
+    //     // debugger;
+        
+    //     super(...args);
+    // }
+
     // // these should be instantiated somehow differently
     // protected emitterIds: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
     // protected destroyAudio: boolean;

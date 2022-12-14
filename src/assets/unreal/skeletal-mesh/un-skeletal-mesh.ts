@@ -431,7 +431,7 @@ class USkeletalMesh extends ULodMesh {
             bounds: this.decodeBoundsInfo()
         };
 
-        const animations: GenericObjectContainer_T<IKeyframeDecodeInfo_T[]> = {};
+        const animations: Record<string, IKeyframeDecodeInfo_T[]> = {};
 
         const boneCount = this.refSkeleton.length;
         const boneMap = new Array(boneCount);
