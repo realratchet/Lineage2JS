@@ -10,6 +10,7 @@ class UField extends UObject {
     public readonly isField = true;
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
+        debugger;
         if (this.constructor.name !== "UClass")
             super.doLoad(pkg, exp);
 
@@ -21,16 +22,16 @@ class UField extends UObject {
         // if (this.superFieldId === exp.index) this.superFieldId = 0;
         // if (this.nextFieldId === exp.index) this.nextFieldId = 0;
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
+        // this.promisesLoading.push(new Promise<void>(async resolve => {
 
-            if (this.superFieldId !== 0)
-                this.superField = await pkg.fetchObject<UField>(this.superFieldId);
+        //     if (this.superFieldId !== 0)
+        //         this.superField = await pkg.fetchObject<UField>(this.superFieldId);
 
-            if (this.nextFieldId !== 0)
-                this.nextField = await pkg.fetchObject<UField>(this.nextFieldId);
+        //     if (this.nextFieldId !== 0)
+        //         this.nextField = await pkg.fetchObject<UField>(this.nextFieldId);
 
-            resolve();
-        }));
+        //     resolve();
+        // }));
     }
 
 }

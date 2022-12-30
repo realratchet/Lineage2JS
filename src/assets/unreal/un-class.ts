@@ -23,12 +23,12 @@ class FDependencies extends FConstructable {
         this.depth = pkg.read(uint32).value as number;
         this.scriptTextCRC = pkg.read(int32).value as number;
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (this.classId !== 0)
-                this.class = await pkg.fetchObject<UClass>(this.classId);
+        // this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     if (this.classId !== 0)
+        //         this.class = await pkg.fetchObject<UClass>(this.classId);
 
-            resolve();
-        }));
+        //     resolve();
+        // }));
 
         return this;
     }
@@ -118,14 +118,14 @@ class UClass extends UState {
         this.dependencies.load(pkg);
         this.pkgImportIds.load(pkg);
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.pkgImports = await Promise.all(
-                (this.pkgImportIds as FNumber[])
-                    .map(id => pkg.fetchObject(id.value))
-            );
+        // this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     this.pkgImports = await Promise.all(
+        //         (this.pkgImportIds as FNumber[])
+        //             .map(id => pkg.fetchObject(id.value))
+        //     );
 
-            resolve();
-        }));
+        //     resolve();
+        // }));
 
         if (verArchive >= 0x3e) {
             this.classWithinId = pkg.read(compat32).value as number;
@@ -138,19 +138,21 @@ class UClass extends UState {
         if (verArchive >= 0x63) {
             this.pkgImportIds2.load(pkg);
 
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                this.pkgImports2 = await Promise.all(
-                    (this.pkgImportIds2 as FNumber[])
-                        .map(id => pkg.fetchObject(id.value))
-                );
-                resolve();
-            }));
+            // this.promisesLoading.push(new Promise<void>(async resolve => {
+            //     this.pkgImports2 = await Promise.all(
+            //         (this.pkgImportIds2 as FNumber[])
+            //             .map(id => pkg.fetchObject(id.value))
+            //     );
+            //     resolve();
+            // }));
         }
 
         this.readHead = pkg.tell();
 
         this.readNamedProps(pkg);
         this.readHead = pkg.tell();
+
+        // debugger;
     }
 }
 

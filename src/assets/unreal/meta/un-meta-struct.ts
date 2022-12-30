@@ -1,152 +1,52 @@
-import BufferValue from "../buffer-value";
-import UExport from "./un-export";
-import UField from "./un-field";
-import UObject from "./un-object";
-import UPackage from "./un-package";
-import UTextBuffer from "./un-text-buffer";
-import FRotator from "./un-rotator";
-import FVector from "./un-vector";
-import UClassRegistry from "./scripts/un-class-registry";
-import UNativeRegistry from "./scripts/un-native-registry";
+import UMetaField from "./un-meta-field";
+import BufferValue from "../../buffer-value";
+import UNativeRegistry from "../scripts/un-native-registry";
 
-class UStruct extends UField {
-    protected textBufferId: number;
-    protected textBuffer: UTextBuffer;
-
-    protected firstChildPropId: number;
-    public readonly childPropFields: UProperty[] = [];
-
+class UMetaStruct extends UMetaField {
     public friendlyName: string;
+
+    protected textBufferId: number;
+    protected firstChildPropId: number;
+    protected unkObjectId: number;
     protected line: number;
     protected textPos: number;
-    protected unkObjectId: number = 0;
-    protected unkObject: UObject;
+
     protected scriptSize: number;
-
-    public readonly isStruct = true;
-
-    protected namedProperties: Record<string, any> = {};
-
-    protected setProperty(tag: PropertyTag, value: any) {
-        if (tag.arrayIndex < 0)
-            throw new Error("That's illegal");
-
-        if (tag.arrayIndex > 0) {
-            if (!(tag.name in this.namedProperties))
-                throw new Error("How does this happen?");
-
-            if (!(this.namedProperties[tag.name] instanceof Array))
-                this.namedProperties[tag.name] = [this.namedProperties[tag.name]];
-
-            this.namedProperties[tag.name][tag.arrayIndex] = value;
-        } else this.namedProperties[tag.name] = value;
-
-        return true;
-    }
+    protected bytecodePlainText = "";
+    protected bytecode: { type: string, value: any, tokenName?: string }[] = [];
+    protected bytecodeLength = 0;
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
-        // if (this.constructor.name !== "UFunction")
-        //     debugger;
-
         super.doLoad(pkg, exp);
-        this.readHead = pkg.tell();
-
-        // if(this.superFieldId === 0 && this.nextFieldId === 720)
-        //     debugger;
-
-        // debugger;
 
         const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
-
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint32 = new BufferValue(BufferValue.uint32);
         const int32 = new BufferValue(BufferValue.int32);
-
-        // debugger;
 
         this.textBufferId = pkg.read(compat32).value as number;
         this.firstChildPropId = pkg.read(compat32).value as number;
 
         const nameId = pkg.read(compat32).value as number;
 
-        // if (this.superFieldId === 0 && this.nextFieldId === 720 && this.textBufferId === 0 && this.childrenId === 0 && nameId === 78)
-        //     debugger;
-
-        // debugger;
-
         this.friendlyName = pkg.nameTable[nameId].name as string;
-        // debugger;
-
-        // if (this.constructor.name === "UFunction")
-        //     debugger;
 
         console.assert(typeof this.friendlyName === "string" && this.friendlyName !== "None", "Must have a friendly name");
 
-        // debugger;
-
-        if (0x77 < verArchive) {
+        if (0x77 < verArchive)
             this.unkObjectId = pkg.read(compat32).value as number;
-        }
-
-        // debugger;
 
         this.line = pkg.read(int32).value as number;
         this.textPos = pkg.read(int32).value as number;
-
         this.scriptSize = pkg.read(uint32).value as number;
-
-        // console.log(`${this.objectName} (${this.exportIndex}) -> Dword(ebx+0x64)==${this.line}&& Dword(ebx+0x60)==${this.textPos}&&Dword(ebp+scriptSize)==${this.scriptSize}`)
-
-        // if (this.scriptSize === 0x9f)
-        //     debugger;
-
-        // debugger;
 
         while (this.bytecodeLength < this.scriptSize)
             this.readToken(pkg, 0);
 
         console.assert(this.bytecodeLength === this.scriptSize, "Invalid bytecode length");
 
-        this.readHead = pkg.tell();
-
-        // if (this.constructor.name === "UStruct")
-        //     debugger;
-
-        // debugger;
-
-        // this.promisesLoading.push(new Promise<void>(async resolve => {
-        //     // debugger;
-
-        //     if (this.unkObjectId !== 0) {
-        //         this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
-        //         debugger;
-        //     }
-
-        //     if (this.textBufferId !== 0) {
-        //         this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
-
-        //         // UClassRegistry.parse(this.textBuffer.string.value);
-        //     }
-
-        //     let childPropId = this.firstChildPropId;
-
-        //     while (Number.isFinite(childPropId) && childPropId !== 0) {
-
-        //         const field = await pkg.fetchObject<UProperty>(childPropId);
-
-        //         this.childPropFields.push(field);
-
-        //         childPropId = field.nextFieldId;
-        //     }
-
-        //     resolve();
-        // }));
+        // this.readHead = pkg.tell();
     }
-
-    protected bytecodePlainText = "";
-    protected bytecode: { type: string, value: any, tokenName?: string }[] = [];
-    protected bytecodeLength = 0;
 
     protected readToken(pkg: UPackage, depth: number): ExprToken_T {
         if (depth === 64) throw new Error("Too deep");
@@ -364,11 +264,11 @@ class UStruct extends UField {
                     this.bytecodeLength = this.bytecodeLength + 4;
                 } return tokenValue2;
                 case ExprToken_T.RotationConst:
-                    this.bytecode.push({ type: "rotator", value: new FRotator().load(pkg) });
+                    this.bytecode.push({ type: "rotator", value: /*new FRotator().load(pkg)*/ BufferValue.allocBytes(3 * 4) });
                     this.bytecodeLength = this.bytecodeLength + 4 * 3;
                     return tokenValue2;
                 case ExprToken_T.VectorConst:
-                    this.bytecode.push({ type: "vector", value: new FVector().load(pkg) });
+                    this.bytecode.push({ type: "vector", value: /*new FVector().load(pkg)*/ BufferValue.allocBytes(3 * 4) });
                     this.bytecodeLength = this.bytecodeLength + 4 * 3;
                     break;
                 case ExprToken_T.ByteConst:
@@ -469,8 +369,8 @@ class UStruct extends UField {
     }
 }
 
-export default UStruct;
-export { UStruct };
+export default UMetaStruct;
+export { UMetaStruct };
 
 const tokenNames = [
     "LocalVariable", "InstanceVariable", "DefaultVariable", "0x03", "Return", "Switch", "Jump", "JumpIfNot",

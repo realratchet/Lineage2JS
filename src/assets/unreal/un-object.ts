@@ -193,10 +193,6 @@ abstract class UObject {
     protected async loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();
         const offEnd = offStart + tag.dataSize;
-
-        if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
-            throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
-
         const isSigned = this.getPropertyIsSigned(tag);
 
         switch (tag.type) {
@@ -320,6 +316,9 @@ abstract class UObject {
 
         if (!this.hasOwnProperty(varName))
             throw new Error(`Cannot map property '${propName}' -> ${varName}`);;
+
+        if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
+            throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
         if ((this as any)[varName] instanceof Array) ((this as any)[varName] as Array<any>)[arrayIndex] = value;
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);

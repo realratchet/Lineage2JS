@@ -213,9 +213,42 @@ async function startCore() {
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
     const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
-    const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
+
 
     // debugger;
+    const classess = [];
+
+    for (const { index } of pkgCore.exportGroups["Class"]) {
+
+        const _UClass = await pkgCore.fetchObject<UClass>(index + 1);
+
+        debugger;
+
+        await _UClass.onDecodeReady();
+
+        classess.push(_UClass);
+
+        debugger;
+    }
+
+    // const structs = [];
+
+    // for (const { index } of pkgCore.exportGroups["Struct"]) {
+
+    //     const _UStruct = await pkgCore.fetchObject<UStruct>(index + 1);
+
+    //     await _UStruct.onDecodeReady();
+
+    //     structs.push(_UStruct);
+    // }
+
+
+    debugger;
+
+
+    const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
+
+    debugger;
 
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);

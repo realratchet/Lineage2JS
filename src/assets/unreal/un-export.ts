@@ -16,6 +16,9 @@ class UExport<T extends UObject = UObject> {
     public offset: number;
 
     public object: T = null;
+
+    public allFlags(flags: ObjectFlags_T): boolean { return (this.flags & flags) === flags; }
+    public anyFlags(flags: ObjectFlags_T): boolean { return (this.flags & flags) !== 0; }
 }
 
 enum ObjectFlags_T {

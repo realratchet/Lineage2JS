@@ -66,7 +66,31 @@ import UAActor from "./un-aactor";
 import UInfo from "./un-info";
 import UPawn from "./un-pawn";
 import UController from "./un-controller";
+import UMetaClass from "./meta/un-meta-class";
 
+class UCommandlet extends UObject {
+
+}
+
+class USubsystem extends UObject {
+
+}
+
+class USimpleCommandlet extends UCommandlet {
+
+}
+
+class UHelloWorldCommandlet extends UCommandlet {
+
+}
+
+class UTime extends UObject {
+
+}
+
+class ULocale extends UObject {
+
+}
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -191,7 +215,7 @@ class UPackage extends UEncodedFile {
 
         Object.assign(this, readable, { isReadable: false });
 
-        this.registerNativeClassess();
+        // this.registerNativeClassess();
 
         return this;
     }
@@ -234,6 +258,14 @@ class UPackage extends UEncodedFile {
 
     protected registerNativeClassess() {
         this.registerNativeClass(UObject, this.isCore, "Object");
+
+        // this.registerNativeClass(UCommandlet, this.isCore, "Commandlet", "Object");
+        // this.registerNativeClass(UTime, this.isCore, "Time", "Object");
+        // this.registerNativeClass(USimpleCommandlet, this.isCore, "SimpleCommandlet", "Commandlet");
+        // this.registerNativeClass(UHelloWorldCommandlet, this.isCore, "HelloWorldCommandlet", "Commandlet");
+        // this.registerNativeClass(ULocale, this.isCore, "Locale", "Object");
+        // this.registerNativeClass(USubsystem, this.isCore, "Subsystem", "Object");
+
         this.registerNativeClass(UField, this.isCore, "Field", "Object");
         this.registerNativeClass(UConst, this.isCore, "Const", "Field");
         this.registerNativeClass(UEnum, this.isCore, "Enum", "Field");
@@ -276,7 +308,7 @@ class UPackage extends UEncodedFile {
         this.registerNativeClass(UPolys, this.isEngine, "Polys", "Object");
         this.registerNativeClass(FBSPNode, this.isEngine, "BspNodes", "Object");
         this.registerNativeClass(FBSPSurf, this.isEngine, "BspSurfs", "Object");
-        this.registerNativeClass(FVector, this.isEngine, "Vectors", "Object");
+        // this.registerNativeClass(FVector, this.isEngine, "Vectors", "Object");
         this.registerNativeClass(FVert, this.isEngine, "Verts", "Object");
 
         // this.registerNativeClass(this.isEngine, "Texture", "Object");
@@ -406,13 +438,15 @@ class UPackage extends UEncodedFile {
     }
 
     newObject(objname: string, objclass: UClass, flags: number, initProperties: boolean) {
-        debugger;
+        // debugger;
         for (let cur = objclass; cur; cur = cur.baseStruct) {
 
             if (!this.nativeClassess.has(cur.objectName as NativeTypes_T)) continue;
 
             const buildNative = this.nativeClassess.get(cur.objectName as NativeTypes_T);
             const obj = buildNative<UClass>(objname, objclass, flags);
+
+            debugger;
 
             if (initProperties) {
                 debugger;
@@ -441,7 +475,7 @@ class UPackage extends UEncodedFile {
                 throw Error("Could not find the object class for " + objname);
             }
 
-            debugger;
+            // debugger;
 
             const object = this.exports[index].object = this.newObject(objname, objclass, this.exports[index].flags, false);
 
@@ -466,7 +500,7 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
             if (!this.exports[index].object) {
-                const obj = new UClass();
+                const obj = new UMetaClass();
 
                 if (entry.size === 0) {
                     if (entry.flags !== ObjectFlags_T.Native)
@@ -477,19 +511,28 @@ class UPackage extends UEncodedFile {
 
                 obj.load(pkg.asReadable(), entry);
 
-                if (!obj.friendlyName)
-                    throw new Error("0xdecafbad");
+                const cls = { [obj.friendlyName]: class { } }[obj.friendlyName] as typeof Object;
 
-                this.exports[index].object = obj;
-
-                const Constructor = this.nativeClassess.get(obj.friendlyName as NativeTypes_T);
-
-                if (!Constructor)
-                    throw new Error(`Missing: ${obj.friendlyName}`);
-
-                // Constructor.extend(obj);
+                await obj.constructClass(cls);
 
                 debugger;
+
+                // if (!obj.friendlyName)
+                //     throw new Error("0xdecafbad");
+
+                // this.exports[index].object = obj;
+
+                // const Constructor = this.nativeClassess.get(obj.friendlyName as NativeTypes_T);
+
+                // // if (!Constructor && !entry.anyFlags(ObjectFlags_T.Native))
+                // //     debugger;
+
+                // if (!Constructor)
+                //     throw new Error(`Missing: ${obj.friendlyName}`);
+
+                // // Constructor.extend(obj);
+
+                // // debugger;
             }
         }
     }
