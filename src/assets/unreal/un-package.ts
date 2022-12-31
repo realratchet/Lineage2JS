@@ -67,6 +67,7 @@ import UInfo from "./un-info";
 import UPawn from "./un-pawn";
 import UController from "./un-controller";
 import UMetaClass from "./meta/un-meta-class";
+import UMetaObject from "./meta/un-meta-object";
 
 class UCommandlet extends UObject {
 
@@ -105,6 +106,7 @@ class UPackage extends UEncodedFile {
     public readonly isEngine: boolean;
 
     public readonly nativeClassess = new Map<NativeTypes_T, typeof UObject>();
+    public readonly metaClassess = new Map<string, UMetaObject>();
     public nameHash = new Map<string, number>();
 
     constructor(loader: AssetLoader, path: string) {
@@ -216,8 +218,13 @@ class UPackage extends UEncodedFile {
         Object.assign(this, readable, { isReadable: false });
 
         // this.registerNativeClassess();
+        this.registerMetaClassess();
 
         return this;
+    }
+
+    protected registerMetaClassess() {
+        
     }
 
     protected registerNativeClass(Constructor: typeof UObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
@@ -484,7 +491,7 @@ class UPackage extends UEncodedFile {
             object.load(this.asReadable(), entry);
 
         } else {
-            let objbase = await this.fetchObject(entry.idSuper) as UClass;
+            let objbase = entry.idSuper === 0 ? null : await this.fetchObject(entry.idSuper) as UClass;
             let pkg: UPackage = this;
 
             if (!objbase && objname !== "Object") {
@@ -500,7 +507,9 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
             if (!this.exports[index].object) {
+                debugger;
                 const obj = new UMetaClass();
+                this.exports[index].object = obj as unknown as UObject;
 
                 if (entry.size === 0) {
                     if (entry.flags !== ObjectFlags_T.Native)
@@ -511,9 +520,6 @@ class UPackage extends UEncodedFile {
 
                 obj.load(pkg.asReadable(), entry);
 
-                const cls = { [obj.friendlyName]: class { } }[obj.friendlyName] as typeof Object;
-
-                await obj.constructClass(cls);
 
                 debugger;
 

@@ -16,6 +16,8 @@ class UMetaStruct extends UMetaField {
     protected bytecode: { type: string, value: any, tokenName?: string }[] = [];
     protected bytecodeLength = 0;
 
+    protected klass: ObjectConstructor;
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 
@@ -45,7 +47,37 @@ class UMetaStruct extends UMetaField {
 
         console.assert(this.bytecodeLength === this.scriptSize, "Invalid bytecode length");
 
-        // this.readHead = pkg.tell();
+        if (this.firstChildPropId !== 0) {
+            this.promisesLoading.push(new Promise(async resolve => {
+                const childPropFields = [];
+                // debugger;
+
+                let childPropId = this.firstChildPropId;
+
+                while (Number.isFinite(childPropId) && childPropId !== 0) {
+
+                    const field = await pkg.fetchObject<UProperty>(childPropId);
+
+                    childPropFields.push(field);
+
+                    childPropId = field.nextFieldId;
+                }
+
+                debugger;
+
+                resolve(childPropFields);
+            }));
+        }
+    }
+
+    public async constructClass(): Promise<void> {
+        const friendlyName = this.friendlyName;
+        
+        this.klass = { [friendlyName]: class { } }[friendlyName] as typeof Object
+
+        await super.constructClass();
+
+        debugger;
     }
 
     protected readToken(pkg: UPackage, depth: number): ExprToken_T {
@@ -56,11 +88,8 @@ class UMetaStruct extends UMetaField {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
-        const char = new BufferValue(BufferValue.char);
 
         depth++;
-
-        // debugger;
 
         const tokenValue = pkg.read(uint8).value as ExprToken_T;
         let tokenValue2 = tokenValue;
@@ -78,7 +107,7 @@ class UMetaStruct extends UMetaField {
         tokenDebug += tokenName + "\r\n";
         this.bytecodePlainText += tokenDebug;
 
-        const tokenHex = `0x${tokenValue.toString(16)}`;
+        // const tokenHex = `0x${tokenValue.toString(16)}`;
 
         if (tokenValue < ExprToken_T.MaxConversion) {
             switch (tokenValue) {

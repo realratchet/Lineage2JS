@@ -220,11 +220,11 @@ async function startCore() {
 
     for (const { index } of pkgCore.exportGroups["Class"]) {
 
-        const _UClass = await pkgCore.fetchObject<UClass>(index + 1);
+        const _UClass = await pkgCore.fetchObject<UClass>(index + 1) as any;
 
         debugger;
 
-        await _UClass.onDecodeReady();
+        await _UClass.constructClass();
 
         classess.push(_UClass);
 
