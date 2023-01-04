@@ -572,7 +572,7 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
             if (!this.exports[index].object) {
-                // debugger;
+                debugger;
                 const obj = new UClass();
                 this.exports[index].object = obj as unknown as UObject;
 
@@ -653,6 +653,12 @@ class UPackage extends UEncodedFile {
             if (!pkg.buffer) await this.loader.load(pkg);
 
             let obj = await pkg.fetchObjectByType(className, objectName, groupName);
+
+            if (packageName === "Native")
+                debugger;
+            // obj.load(pkg.asReadable(), entry);
+
+            debugger;
 
             // What a garbage engine!
             if (!obj && packageName == "UnrealI")
@@ -1078,9 +1084,27 @@ class UNativePackage extends UPackage {
         this.registerNativeClass("Class", "State");
         this.registerNativeClass("Function", "Struct");
 
-        debugger;
-
         return this;
+    }
+
+    async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
+        if (objref <= 0) throw new Error("Native package only supports exports.");
+
+        const entry = this.exports[objref - 1];
+
+        let Constructor: any;
+
+        switch (entry.objectName) {
+            case "Function": Constructor = UFunction; break;
+            default: throw new Error(`Not implemented native class: ${entry.objectName}`);
+        }
+
+        const object = Constructor as T;
+        const pkg = await this.loader.getPackage("Core", "Script");
+
+        if (!(pkg as any).buffer) await this.loader.load(pkg);
+
+        return object;
     }
 }
 

@@ -46,7 +46,7 @@ class AssetLoader {
             const { UNativePackage } = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
             const pkg = new UNativePackage(this);
 
-            resolve(pkg);
+            resolve(pkg as any);
         }));
 
         for (let [path, downloadPath] of Object.entries(assetList)) {
