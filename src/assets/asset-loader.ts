@@ -42,6 +42,13 @@ class AssetLoader {
     private packages = new Map<string, Promise<UPackage>>();
 
     constructor(assetList: IAssetListInfo) {
+        this.packages.set("native/script", new Promise(async resolve => {
+            const { UNativePackage } = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
+            const pkg = new UNativePackage(this);
+
+            resolve(pkg);
+        }));
+
         for (let [path, downloadPath] of Object.entries(assetList)) {
             const pkgName = pathToPkgName(path);
 
@@ -54,7 +61,7 @@ class AssetLoader {
 
                 resolve(pkg);
             }));
-        };
+        }
     }
 
     public getPackage(pkgName: string, impType: SupportedImports_T): Promise<UPackage> { return this.packages.get(importToPkgName(pkgName, impType)); }

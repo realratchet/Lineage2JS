@@ -68,6 +68,7 @@ import UPawn from "./un-pawn";
 import UController from "./un-controller";
 import UMetaClass from "./meta/un-meta-class";
 import UMetaObject from "./meta/un-meta-object";
+import * as UMeta from "./meta/un-meta";
 
 class UCommandlet extends UObject {
 
@@ -93,6 +94,8 @@ class ULocale extends UObject {
 
 }
 
+
+
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
 
@@ -104,9 +107,10 @@ class UPackage extends UEncodedFile {
     public importGroups: Record<string, { import: UImport; index: number; }[]>;
     public readonly isCore: boolean;
     public readonly isEngine: boolean;
+    public readonly isNative: boolean;
 
     public readonly nativeClassess = new Map<NativeTypes_T, typeof UObject>();
-    public readonly metaClassess = new Map<string, UMetaObject>();
+    public readonly metaClassess = new Map<string, typeof UMeta.UMetaObject>();
     public nameHash = new Map<string, number>();
 
     constructor(loader: AssetLoader, path: string) {
@@ -218,13 +222,63 @@ class UPackage extends UEncodedFile {
         Object.assign(this, readable, { isReadable: false });
 
         // this.registerNativeClassess();
-        this.registerMetaClassess();
+        // this.registerMetaClassess();
+
+        if (this.isCore) {
+            this.imports = this.imports.map(imp => {
+                imp.classPackage = imp.classPackage === "Core" ? "Native" : imp.classPackage;
+                imp.objectName = imp.objectName === "Core" ? "Native" : imp.objectName;
+
+                return imp;
+            });
+        }
 
         return this;
     }
 
     protected registerMetaClassess() {
-        
+        this.registerMetaClass(UMeta.UMetaObject, this.isCore, "Object");
+        this.registerMetaClass(UMeta.UMetaField, this.isCore, "Field", "Object");
+        this.registerMetaClass(UMeta.UMetaStruct, this.isCore, "Struct", "Field");
+        this.registerMetaClass(UMeta.UMetaFunction, this.isCore, "Function", "Struct");
+        this.registerMetaClass(UMeta.UMetaState, this.isCore, "State", "Struct");
+        this.registerMetaClass(UMeta.UMetaClass, this.isCore, "Class", "State");
+    }
+
+
+
+    protected registerMetaClass(Constructor: typeof UMeta.UMetaObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
+        this.metaClassess.set(className, Constructor);
+
+        if (inPackage) {
+            const ref = this.findObjectRef("Class", className);
+
+            if (ref === 0) { // register native class as a package with the export table
+                if (!this.nameHash.has(className)) {
+                    const name = new UName();
+
+                    name.name = className;
+                    name.flags = 0;
+
+                    this.nameTable.push(name);
+                    this.nameHash.set(className, this.nameTable.length - 1);
+                }
+
+                const exp = new UExport();
+
+                exp.index = this.exports.length
+                exp.idClass = 0;
+                exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
+                exp.idPackage = 0;
+                exp.idObjectName = this.nameHash.get(className);
+                exp.objectName = className;
+                exp.flags = ObjectFlags_T.Native;
+                exp.size = 0;
+                exp.offset = 0;
+
+                this.exports.push(exp);
+            }
+        }
     }
 
     protected registerNativeClass(Constructor: typeof UObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
@@ -444,27 +498,35 @@ class UPackage extends UEncodedFile {
         return 0;
     }
 
-    newObject(objname: string, objclass: UClass, flags: number, initProperties: boolean) {
-        // debugger;
-        for (let cur = objclass; cur; cur = cur.baseStruct) {
+    newObject(objname: string, objclass: typeof UClass, flags: number, initProperties: boolean) {
+        // // debugger;
+        // for (let cur = objclass; cur; cur = cur.baseStruct) {
 
-            if (!this.nativeClassess.has(cur.objectName as NativeTypes_T)) continue;
+        //     if (!this.nativeClassess.has(cur.objectName as NativeTypes_T)) continue;
 
-            const buildNative = this.nativeClassess.get(cur.objectName as NativeTypes_T);
-            const obj = buildNative<UClass>(objname, objclass, flags);
+        //     const buildNative = this.nativeClassess.get(cur.objectName as NativeTypes_T);
+        //     const obj = buildNative<UClass>(objname, objclass, flags);
 
+        //     debugger;
+
+        //     if (initProperties) {
+        //         debugger;
+        //         // obj.PropertyData.Init(objclass);
+        //         // obj.SetObject("Class", obj.Class);
+        //         // obj.SetName("Name", obj.objectName);
+        //         // obj.SetInt("ObjectFlags", obj.Flags);
+        //     }
+        //     return obj;
+
+        // }
+
+        const obj = new objclass();
+
+        if (initProperties) {
             debugger;
-
-            if (initProperties) {
-                debugger;
-                // obj.PropertyData.Init(objclass);
-                // obj.SetObject("Class", obj.Class);
-                // obj.SetName("Name", obj.objectName);
-                // obj.SetInt("ObjectFlags", obj.Flags);
-            }
-            return obj;
-
         }
+
+        return obj;
 
         throw Error("Could not find the native class for " + objname);
     }
@@ -474,11 +536,14 @@ class UPackage extends UEncodedFile {
         const objname = entry.objectName;
 
         if (entry.idClass !== 0) {
+            // if (entry.index === 12)
+            //     debugger;
+
             let objclass: UClass = await this.fetchObject(entry.idClass) as UClass;
 
             if (!objclass) {
                 debugger;
-                objclass = await this.fetchObject(entry.idClass) as UClass;
+                // objclass = await this.fetchObject(entry.idClass) as UClass;
                 throw Error("Could not find the object class for " + objname);
             }
 
@@ -486,7 +551,7 @@ class UPackage extends UEncodedFile {
 
             const object = this.exports[index].object = this.newObject(objname, objclass, this.exports[index].flags, false);
 
-            debugger;
+            // debugger;
 
             object.load(this.asReadable(), entry);
 
@@ -507,8 +572,8 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
             if (!this.exports[index].object) {
-                debugger;
-                const obj = new UMetaClass();
+                // debugger;
+                const obj = new UClass();
                 this.exports[index].object = obj as unknown as UObject;
 
                 if (entry.size === 0) {
@@ -521,7 +586,7 @@ class UPackage extends UEncodedFile {
                 obj.load(pkg.asReadable(), entry);
 
 
-                debugger;
+                // debugger;
 
                 // if (!obj.friendlyName)
                 //     throw new Error("0xdecafbad");
@@ -604,6 +669,19 @@ class UPackage extends UEncodedFile {
     }
 
     fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
+        // if (className !== "Class") {
+        //     debugger;
+        // }
+
+        // if (className === "Class") {
+        //     debugger;
+        //     if (groupName !== "None")
+        //         debugger;
+
+        //     // return this.metaClassess.get(objectName);
+        //     return this.nativeClassess.get(objectName as any);
+        // }
+
         return this.fetchObject(this.findObjectRef(className, objectName, groupName));
     }
 
@@ -949,8 +1027,65 @@ enum PackageFlags_T {
     Need = 0x8000 // Client needs to download this package
 }
 
+class UNativePackage extends UPackage {
+    public readonly isCore = false;
+    public readonly isEngine = false;
+    public readonly isNative = true;
+
+    constructor(loader: AssetLoader) {
+        super(loader, "__native__.u");
+    }
+
+    protected registerNativeClass(className: NativeTypes_T, baseClass?: NativeTypes_T | "None"): void {
+        if (!this.nameHash.has(className)) {
+            const name = new UName();
+
+            name.name = className;
+            name.flags = 0;
+
+            this.nameTable.push(name);
+            this.nameHash.set(className, this.nameTable.length - 1);
+        }
+
+        const exp = new UExport();
+
+        exp.index = this.exports.length
+        exp.idClass = 0;
+        exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
+        exp.idPackage = 0;
+        exp.idObjectName = this.nameHash.get(className);
+        exp.objectName = className;
+        exp.flags = ObjectFlags_T.Native;
+        exp.size = 0;
+        exp.offset = 0;
+
+        this.exports.push(exp);
+    }
+
+    public async decode(): Promise<this> {
+        if (this.buffer) return this;
+
+        this.buffer = new ArrayBuffer(0);
+
+        this.imports = [];
+        this.exports = [];
+        this.nameTable = [];
+        this.nameHash = new Map();
+
+        this.registerNativeClass("Field", "Object");
+        this.registerNativeClass("Struct", "Field");
+        this.registerNativeClass("State", "Struct");
+        this.registerNativeClass("Class", "State");
+        this.registerNativeClass("Function", "Struct");
+
+        debugger;
+
+        return this;
+    }
+}
+
 export default UPackage;
-export { UPackage, PackageFlags_T };
+export { UPackage, PackageFlags_T, UNativePackage };
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;

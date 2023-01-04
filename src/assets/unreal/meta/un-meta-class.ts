@@ -37,6 +37,8 @@ class UMetaClass extends UMetaState {
     protected classWithinId: number;
     protected classConfigName: string;
 
+    protected readonly hasProperties = false;
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 

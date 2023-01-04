@@ -17,6 +17,7 @@ class UMetaStruct extends UMetaField {
     protected bytecodeLength = 0;
 
     protected klass: ObjectConstructor;
+    protected childPropFields: UProperty[];
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
@@ -50,7 +51,7 @@ class UMetaStruct extends UMetaField {
         if (this.firstChildPropId !== 0) {
             this.promisesLoading.push(new Promise(async resolve => {
                 const childPropFields = [];
-                // debugger;
+                debugger;
 
                 let childPropId = this.firstChildPropId;
 
@@ -63,10 +64,13 @@ class UMetaStruct extends UMetaField {
                     childPropId = field.nextFieldId;
                 }
 
-                debugger;
+                // debugger;
+                this.childPropFields = childPropFields;
 
                 resolve(childPropFields);
             }));
+        } else {
+            this.childPropFields = [];
         }
     }
 

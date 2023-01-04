@@ -115,33 +115,41 @@ class UStruct extends UField {
 
         // debugger;
 
-        // this.promisesLoading.push(new Promise<void>(async resolve => {
-        //     // debugger;
-
-        //     if (this.unkObjectId !== 0) {
+        // if (this.unkObjectId !== 0) {
+        //     this.promisesLoading.push(new Promise(async resolve => {
         //         this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
         //         debugger;
-        //     }
 
-        //     if (this.textBufferId !== 0) {
+        //         resolve(this.unkObject);
+        //     }));
+        // }
+
+        // if (this.textBufferId !== 0) {
+        //     this.promisesLoading.push(new Promise(async resolve => {
         //         this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
 
         //         // UClassRegistry.parse(this.textBuffer.string.value);
-        //     }
 
-        //     let childPropId = this.firstChildPropId;
+        //         resolve(this.textBuffer);
+        //     }));
+        // }
 
-        //     while (Number.isFinite(childPropId) && childPropId !== 0) {
+        if (this.firstChildPropId !== 0) {
+            this.promisesLoading.push(new Promise(async resolve => {
+                let childPropId = this.firstChildPropId;
 
-        //         const field = await pkg.fetchObject<UProperty>(childPropId);
+                while (Number.isFinite(childPropId) && childPropId !== 0) {
 
-        //         this.childPropFields.push(field);
+                    const field = await pkg.fetchObject<UProperty>(childPropId);
 
-        //         childPropId = field.nextFieldId;
-        //     }
+                    this.childPropFields.push(field);
 
-        //     resolve();
-        // }));
+                    childPropId = field.nextFieldId;
+                }
+
+                resolve(this.childPropFields);
+            }));
+        }
     }
 
     protected bytecodePlainText = "";

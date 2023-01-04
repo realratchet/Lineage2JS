@@ -216,11 +216,13 @@ async function startCore() {
 
 
     // debugger;
-    const classess = [];
+    // const classess = [];
 
     for (const { index } of pkgCore.exportGroups["Class"]) {
 
-        const _UClass = await pkgCore.fetchObject<UClass>(index + 1) as any;
+        const _UClass = await pkgCore.fetchObject<UClass>(index + 1);
+
+        await _UClass.onDecodeReady();
 
         debugger;
 
@@ -243,12 +245,12 @@ async function startCore() {
     // }
 
 
-    debugger;
+    // debugger;
 
 
     const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
 
-    debugger;
+    // debugger;
 
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);
@@ -327,6 +329,8 @@ async function startCore() {
 
     const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index + 1;
     const UWeapon = await pkgEngine.fetchObject(UWeaponId);
+
+    await UWeapon.onDecodeReady();
 
     debugger;
 

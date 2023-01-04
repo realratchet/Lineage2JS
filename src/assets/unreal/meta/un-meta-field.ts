@@ -13,11 +13,13 @@ class UMetaField extends UMetaObject {
     protected nextField: UMetaField;
 
     protected doLoad(pkg: UPackage, exp: UExport): void {
+        super.doLoad(pkg, exp);
+
         this.superFieldId = pkg.read(compat32).value as number;
         this.nextFieldId = pkg.read(compat32).value as number;
 
-        if (this.superFieldId === exp.index) debugger;
-        if (this.nextFieldId === exp.index) debugger;
+        // if (this.superFieldId === exp.index) debugger;
+        // if (this.nextFieldId === exp.index) this.nextFieldId = 0;
 
         if (this.superFieldId !== 0) this.promisesLoading.push(new Promise(async resolve => {
             const object = await pkg.fetchObject(this.superFieldId) as unknown as UMetaField;

@@ -1,6 +1,7 @@
 import BufferValue from "../../buffer-value";
 import { ObjectFlags_T } from "../un-export";
 import { generateUUID } from "three/src/math/MathUtils";
+import { PropertyTag } from "../un-property-tag";
 
 abstract class UMetaObject {
     public readonly uuid = generateUUID();
@@ -15,6 +16,7 @@ abstract class UMetaObject {
 
     protected readonly skipRemaining = false;
     protected readonly careUnread = true;
+    protected readonly hasProperties: boolean = true;
 
     public get byteCount() { return this.readTail - this.readStart; }
     public get bytesUnread() { return this.readTail - this.readHead; }
@@ -40,7 +42,29 @@ abstract class UMetaObject {
         }
     }
 
+    protected readNamedProps(pkg: UPackage) {
+        if (this.readHead < this.readTail) {
+            do {
+                const tag = PropertyTag.from(pkg, this.readHead);
+
+                if (!tag.isValid()) break;
+
+                debugger;
+
+
+                this.promisesLoading.push(this.loadProperty(pkg, tag));
+                this.readHead = pkg.tell();
+
+            } while (this.readHead < this.readTail);
+        }
+
+        this.readHead = pkg.tell();
+    }
+
     protected doLoad(pkg: UPackage, exp: UExport): void {
+        if (this.hasProperties) {
+            this.readNamedProps(pkg);
+        }
 
     }
 
