@@ -108,9 +108,6 @@ class UPackage extends UEncodedFile {
     public readonly isCore: boolean;
     public readonly isEngine: boolean;
     public readonly isNative: boolean;
-
-    public readonly nativeClassess = new Map<NativeTypes_T, typeof UObject>();
-    public readonly metaClassess = new Map<string, typeof UMeta.UMetaObject>();
     public nameHash = new Map<string, number>();
 
     constructor(loader: AssetLoader, path: string) {
@@ -200,6 +197,116 @@ class UPackage extends UEncodedFile {
         readable.nameHash = nameHash;
         readable.header = header;
 
+        if (this.isCore) {
+            const nativeIndex = -(imports.length + 1);
+            for (const imp of imports) {
+                if (imp.className === "Package")
+                    continue;
+
+                if (imp.classPackage !== "Core")
+                    continue;
+
+                imp.classPackage = "Native";
+                imp.idPackage = nativeIndex;
+
+                {
+                    const className = imp.objectName;
+                    {
+                        const name = new UName();
+
+                        name.name = className;
+                        name.flags = 0;
+
+                        nameTable.push(name);
+                        nameHash.set(className, nameTable.length - 1);
+                    }
+                    {
+                        const exp = new UExport();
+
+                        exp.index = exports.length
+                        exp.idClass = -(imp.index + 1);
+                        exp.idSuper = 0;
+                        exp.idPackage = nativeIndex;
+                        exp.idObjectName = nameHash.get(className);
+                        exp.objectName = className;
+                        exp.flags = ObjectFlags_T.Native;
+                        exp.size = 0;
+                        exp.offset = 0;
+
+                        exports.push(exp);
+                    }
+                }
+
+
+            }
+
+            if (!nameHash.has("Native")) {
+                const name = new UName();
+                name.flags = 0;
+                name.name = "Native";
+
+                nameHash.set("Native", nameTable.length);
+                nameTable.push(name);
+            }
+
+            if (!nameHash.has("State")) {
+                const name = new UName();
+                name.flags = 0;
+                name.name = "State";
+
+                nameHash.set("State", nameTable.length);
+                nameTable.push(name);
+            }
+
+            {
+                const imp = new UImport();
+
+                imp.className = "Package";
+                imp.classPackage = "Native";
+                imp.idClassName = nameHash.get("Package");
+                imp.idClassPackage = nameHash.get("Native");
+                imp.idObjectName = nameHash.get("Native");
+                imp.idPackage = 0
+                imp.index = imports.length;
+                imp.objectName = "Native";
+
+                imports.push(imp);
+            }
+
+            {
+                const imp = new UImport();
+
+                imp.className = "Class";
+                imp.classPackage = "Native";
+                imp.idClassName = nameHash.get("Class");
+                imp.idClassPackage = nameHash.get("Native");
+                imp.idObjectName = nameHash.get("State");
+                imp.idPackage = nativeIndex;
+                imp.index = imports.length;
+                imp.objectName = "State";
+
+                imports.push(imp);
+
+                {
+                    const exp = new UExport();
+
+                    exp.index = exports.length
+                    exp.idClass = -(imp.index + 1);
+                    exp.idSuper = 0;
+                    exp.idPackage = nativeIndex;
+                    exp.idObjectName = nameHash.get("State");
+                    exp.objectName = "State";
+                    exp.flags = ObjectFlags_T.Native;
+                    exp.size = 0;
+                    exp.offset = 0;
+
+                    exports.push(exp);
+                }
+            }
+
+            // debugger;
+        }
+
         readable.importGroups = readable.imports.reduce((accum, imp, index) => {
             const impType = imp.className;
             const list = accum[impType] = accum[impType] || [];
@@ -224,236 +331,249 @@ class UPackage extends UEncodedFile {
         // this.registerNativeClassess();
         // this.registerMetaClassess();
 
-        if (this.isCore) {
-            this.imports = this.imports.map(imp => {
-                imp.classPackage = imp.classPackage === "Core" ? "Native" : imp.classPackage;
-                imp.objectName = imp.objectName === "Core" ? "Native" : imp.objectName;
-
-                return imp;
-            });
-        }
-
         return this;
     }
 
-    protected registerMetaClassess() {
-        this.registerMetaClass(UMeta.UMetaObject, this.isCore, "Object");
-        this.registerMetaClass(UMeta.UMetaField, this.isCore, "Field", "Object");
-        this.registerMetaClass(UMeta.UMetaStruct, this.isCore, "Struct", "Field");
-        this.registerMetaClass(UMeta.UMetaFunction, this.isCore, "Function", "Struct");
-        this.registerMetaClass(UMeta.UMetaState, this.isCore, "State", "Struct");
-        this.registerMetaClass(UMeta.UMetaClass, this.isCore, "Class", "State");
-    }
+    // protected registerMetaClassess() {
+    //     this.registerMetaClass(UMeta.UMetaObject, this.isCore, "Object");
+    //     this.registerMetaClass(UMeta.UMetaField, this.isCore, "Field", "Object");
+    //     this.registerMetaClass(UMeta.UMetaStruct, this.isCore, "Struct", "Field");
+    //     this.registerMetaClass(UMeta.UMetaFunction, this.isCore, "Function", "Struct");
+    //     this.registerMetaClass(UMeta.UMetaState, this.isCore, "State", "Struct");
+    //     this.registerMetaClass(UMeta.UMetaClass, this.isCore, "Class", "State");
+    // }
 
 
 
-    protected registerMetaClass(Constructor: typeof UMeta.UMetaObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
-        this.metaClassess.set(className, Constructor);
+    // protected registerMetaClass(Constructor: typeof UMeta.UMetaObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
+    //     this.metaClassess.set(className, Constructor);
 
-        if (inPackage) {
-            const ref = this.findObjectRef("Class", className);
+    //     if (inPackage) {
+    //         const ref = this.findObjectRef("Class", className);
 
-            if (ref === 0) { // register native class as a package with the export table
-                if (!this.nameHash.has(className)) {
-                    const name = new UName();
+    //         if (ref === 0) { // register native class as a package with the export table
+    //             if (!this.nameHash.has(className)) {
+    //                 const name = new UName();
 
-                    name.name = className;
-                    name.flags = 0;
+    //                 name.name = className;
+    //                 name.flags = 0;
 
-                    this.nameTable.push(name);
-                    this.nameHash.set(className, this.nameTable.length - 1);
-                }
+    //                 this.nameTable.push(name);
+    //                 this.nameHash.set(className, this.nameTable.length - 1);
+    //             }
 
-                const exp = new UExport();
+    //             const exp = new UExport();
 
-                exp.index = this.exports.length
-                exp.idClass = 0;
-                exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
-                exp.idPackage = 0;
-                exp.idObjectName = this.nameHash.get(className);
-                exp.objectName = className;
-                exp.flags = ObjectFlags_T.Native;
-                exp.size = 0;
-                exp.offset = 0;
+    //             exp.index = this.exports.length
+    //             exp.idClass = 0;
+    //             exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
+    //             exp.idPackage = 0;
+    //             exp.idObjectName = this.nameHash.get(className);
+    //             exp.objectName = className;
+    //             exp.flags = ObjectFlags_T.Native;
+    //             exp.size = 0;
+    //             exp.offset = 0;
 
-                this.exports.push(exp);
-            }
-        }
-    }
+    //             this.exports.push(exp);
+    //         }
+    //     }
+    // }
 
-    protected registerNativeClass(Constructor: typeof UObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
-        this.nativeClassess.set(className, Constructor);
+    // protected registerNativeClass(Constructor: typeof UObject, inPackage: boolean, className: NativeTypes_T, baseClass?: NativeTypes_T | "None") {
+    //     this.nativeClassess.set(className, Constructor);
 
-        if (inPackage) {
-            const ref = this.findObjectRef("Class", className);
+    //     if (inPackage) {
+    //         const ref = this.findObjectRef("Class", className);
 
-            if (ref === 0) { // register native class as a package with the export table
-                if (!this.nameHash.has(className)) {
-                    const name = new UName();
+    //         if (ref === 0) { // register native class as a package with the export table
+    //             if (!this.nameHash.has(className)) {
+    //                 const name = new UName();
 
-                    name.name = className;
-                    name.flags = 0;
+    //                 name.name = className;
+    //                 name.flags = 0;
 
-                    this.nameTable.push(name);
-                    this.nameHash.set(className, this.nameTable.length - 1);
-                }
+    //                 this.nameTable.push(name);
+    //                 this.nameHash.set(className, this.nameTable.length - 1);
+    //             }
 
-                const exp = new UExport();
+    //             const exp = new UExport();
 
-                exp.index = this.exports.length
-                exp.idClass = 0;
-                exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
-                exp.idPackage = 0;
-                exp.idObjectName = this.nameHash.get(className);
-                exp.objectName = className;
-                exp.flags = ObjectFlags_T.Native;
-                exp.size = 0;
-                exp.offset = 0;
+    //             exp.index = this.exports.length
+    //             exp.idClass = 0;
+    //             exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
+    //             exp.idPackage = 0;
+    //             exp.idObjectName = this.nameHash.get(className);
+    //             exp.objectName = className;
+    //             exp.flags = ObjectFlags_T.Native;
+    //             exp.size = 0;
+    //             exp.offset = 0;
 
-                this.exports.push(exp);
-            }
+    //             this.exports.push(exp);
+    //         }
 
-            // debugger;
-        }
-    }
+    //         // debugger;
+    //     }
+    // }
 
-    protected registerNativeClassess() {
-        this.registerNativeClass(UObject, this.isCore, "Object");
+    // protected registerNativeClassess() {
+    //     this.registerNativeClass(UObject, this.isCore, "Object");
 
-        // this.registerNativeClass(UCommandlet, this.isCore, "Commandlet", "Object");
-        // this.registerNativeClass(UTime, this.isCore, "Time", "Object");
-        // this.registerNativeClass(USimpleCommandlet, this.isCore, "SimpleCommandlet", "Commandlet");
-        // this.registerNativeClass(UHelloWorldCommandlet, this.isCore, "HelloWorldCommandlet", "Commandlet");
-        // this.registerNativeClass(ULocale, this.isCore, "Locale", "Object");
-        // this.registerNativeClass(USubsystem, this.isCore, "Subsystem", "Object");
+    //     // this.registerNativeClass(UCommandlet, this.isCore, "Commandlet", "Object");
+    //     // this.registerNativeClass(UTime, this.isCore, "Time", "Object");
+    //     // this.registerNativeClass(USimpleCommandlet, this.isCore, "SimpleCommandlet", "Commandlet");
+    //     // this.registerNativeClass(UHelloWorldCommandlet, this.isCore, "HelloWorldCommandlet", "Commandlet");
+    //     // this.registerNativeClass(ULocale, this.isCore, "Locale", "Object");
+    //     // this.registerNativeClass(USubsystem, this.isCore, "Subsystem", "Object");
 
-        this.registerNativeClass(UField, this.isCore, "Field", "Object");
-        this.registerNativeClass(UConst, this.isCore, "Const", "Field");
-        this.registerNativeClass(UEnum, this.isCore, "Enum", "Field");
-        this.registerNativeClass(UStruct, this.isCore, "Struct", "Field");
-        this.registerNativeClass(UFunction, this.isCore, "Function", "Struct");
-        this.registerNativeClass(UState, this.isCore, "State", "Struct");
-        this.registerNativeClass(UClass, this.isCore, "Class", "State");
-        this.registerNativeClass(UnProperties.UProperty, this.isCore, "Property", "Field");
-        // this.registerNativeClass(UnProperties.UPointerProperty, this.isCore, "PointerProperty", "Property");
-        this.registerNativeClass(UnProperties.UByteProperty, this.isCore, "ByteProperty", "Property");
-        this.registerNativeClass(UnProperties.UObjectProperty, this.isCore, "ObjectProperty", "Property");
-        this.registerNativeClass(UnProperties.UClassProperty, this.isCore, "ClassProperty", "ObjectProperty");
-        // this.registerNativeClass(UnProperties.UFixedArrayProperty, this.isCore, "FixedArrayProperty", "Property");
-        this.registerNativeClass(UnProperties.UArrayProperty, this.isCore, "ArrayProperty", "Property");
-        // this.registerNativeClass(UnProperties.UMapProperty, this.isCore, "MapProperty", "Property");
-        this.registerNativeClass(UnProperties.UStructProperty, this.isCore, "StructProperty", "Property");
-        this.registerNativeClass(UnProperties.UIntProperty, this.isCore, "IntProperty", "Property");
-        this.registerNativeClass(UnProperties.UBoolProperty, this.isCore, "BoolProperty", "Property");
-        this.registerNativeClass(UnProperties.UFloatProperty, this.isCore, "FloatProperty", "Property");
-        this.registerNativeClass(UnProperties.UNameProperty, this.isCore, "NameProperty", "Property");
-        this.registerNativeClass(UnProperties.UStrProperty, this.isCore, "StrProperty", "Property");
-        // this.registerNativeClass(UnProperties.UStringProperty, this.isCore, "StringProperty", "Property");
-        this.registerNativeClass(UTextBuffer, this.isCore, "TextBuffer", "Object");
+    //     this.registerNativeClass(UField, this.isCore, "Field", "Object");
+    //     this.registerNativeClass(UConst, this.isCore, "Const", "Field");
+    //     this.registerNativeClass(UEnum, this.isCore, "Enum", "Field");
+    //     this.registerNativeClass(UStruct, this.isCore, "Struct", "Field");
+    //     this.registerNativeClass(UFunction, this.isCore, "Function", "Struct");
+    //     this.registerNativeClass(UState, this.isCore, "State", "Struct");
+    //     this.registerNativeClass(UClass, this.isCore, "Class", "State");
+    //     this.registerNativeClass(UnProperties.UProperty, this.isCore, "Property", "Field");
+    //     // this.registerNativeClass(UnProperties.UPointerProperty, this.isCore, "PointerProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UByteProperty, this.isCore, "ByteProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UObjectProperty, this.isCore, "ObjectProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UClassProperty, this.isCore, "ClassProperty", "ObjectProperty");
+    //     // this.registerNativeClass(UnProperties.UFixedArrayProperty, this.isCore, "FixedArrayProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UArrayProperty, this.isCore, "ArrayProperty", "Property");
+    //     // this.registerNativeClass(UnProperties.UMapProperty, this.isCore, "MapProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UStructProperty, this.isCore, "StructProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UIntProperty, this.isCore, "IntProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UBoolProperty, this.isCore, "BoolProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UFloatProperty, this.isCore, "FloatProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UNameProperty, this.isCore, "NameProperty", "Property");
+    //     this.registerNativeClass(UnProperties.UStrProperty, this.isCore, "StrProperty", "Property");
+    //     // this.registerNativeClass(UnProperties.UStringProperty, this.isCore, "StringProperty", "Property");
+    //     this.registerNativeClass(UTextBuffer, this.isCore, "TextBuffer", "Object");
 
-        this.registerNativeClass(UFont, this.isEngine, "Font", "Object");
-        this.registerNativeClass(UPlatte, this.isEngine, "Palette", "Object");
-        this.registerNativeClass(USound, this.isEngine, "Sound", "Object");
-        // this.registerNativeClass(this.isEngine, "Music", "Object");
+    //     this.registerNativeClass(UFont, this.isEngine, "Font", "Object");
+    //     this.registerNativeClass(UPlatte, this.isEngine, "Palette", "Object");
+    //     this.registerNativeClass(USound, this.isEngine, "Sound", "Object");
+    //     // this.registerNativeClass(this.isEngine, "Music", "Object");
 
-        this.registerNativeClass(UPrimitive, this.isEngine, "Primitive", "Object");
-        this.registerNativeClass(UMesh, this.isEngine, "Mesh", "Primitive");
-        this.registerNativeClass(ULodMesh, this.isEngine, "LodMesh", "Mesh");
-        this.registerNativeClass(USkeletalMesh, this.isEngine, "SkeletalMesh", "LodMesh");
-        this.registerNativeClass(UMeshAnimation, this.isEngine, "Animation", "Object");
+    //     this.registerNativeClass(UPrimitive, this.isEngine, "Primitive", "Object");
+    //     this.registerNativeClass(UMesh, this.isEngine, "Mesh", "Primitive");
+    //     this.registerNativeClass(ULodMesh, this.isEngine, "LodMesh", "Mesh");
+    //     this.registerNativeClass(USkeletalMesh, this.isEngine, "SkeletalMesh", "LodMesh");
+    //     this.registerNativeClass(UMeshAnimation, this.isEngine, "Animation", "Object");
 
-        this.registerNativeClass(UModel, this.isEngine, "Model", "Primitive");
-        // this.registerNativeClass(this.isEngine, "LevelBase", "Object");
-        this.registerNativeClass(ULevel, this.isEngine, "Level", "LevelBase");
-        this.registerNativeClass(ULevelSummary, this.isEngine, "LevelSummary", "Object");
-        this.registerNativeClass(UPolys, this.isEngine, "Polys", "Object");
-        this.registerNativeClass(FBSPNode, this.isEngine, "BspNodes", "Object");
-        this.registerNativeClass(FBSPSurf, this.isEngine, "BspSurfs", "Object");
-        // this.registerNativeClass(FVector, this.isEngine, "Vectors", "Object");
-        this.registerNativeClass(FVert, this.isEngine, "Verts", "Object");
+    //     this.registerNativeClass(UModel, this.isEngine, "Model", "Primitive");
+    //     // this.registerNativeClass(this.isEngine, "LevelBase", "Object");
+    //     this.registerNativeClass(ULevel, this.isEngine, "Level", "LevelBase");
+    //     this.registerNativeClass(ULevelSummary, this.isEngine, "LevelSummary", "Object");
+    //     this.registerNativeClass(UPolys, this.isEngine, "Polys", "Object");
+    //     this.registerNativeClass(FBSPNode, this.isEngine, "BspNodes", "Object");
+    //     this.registerNativeClass(FBSPSurf, this.isEngine, "BspSurfs", "Object");
+    //     // this.registerNativeClass(FVector, this.isEngine, "Vectors", "Object");
+    //     this.registerNativeClass(FVert, this.isEngine, "Verts", "Object");
 
-        // this.registerNativeClass(this.isEngine, "Texture", "Object");
-        // this.registerNativeClass(this.isEngine, "Texture", "Bitmap");
-        // this.registerNativeClass(this.isEngine, "FractalTexture", "Texture");
-        // this.registerNativeClass(this.isEngine, "FireTexture", "FractalTexture");
-        // this.registerNativeClass(this.isEngine, "IceTexture", "FractalTexture");
-        // this.registerNativeClass(this.isEngine, "WaterTexture", "FractalTexture");
-        // this.registerNativeClass(this.isEngine, "WaveTexture", "WaterTexture");
-        // this.registerNativeClass(this.isEngine, "WetTexture", "WaterTexture");
-        // this.registerNativeClass(this.isEngine, "ScriptedTexture", "Texture");
+    //     // this.registerNativeClass(this.isEngine, "Texture", "Object");
+    //     // this.registerNativeClass(this.isEngine, "Texture", "Bitmap");
+    //     // this.registerNativeClass(this.isEngine, "FractalTexture", "Texture");
+    //     // this.registerNativeClass(this.isEngine, "FireTexture", "FractalTexture");
+    //     // this.registerNativeClass(this.isEngine, "IceTexture", "FractalTexture");
+    //     // this.registerNativeClass(this.isEngine, "WaterTexture", "FractalTexture");
+    //     // this.registerNativeClass(this.isEngine, "WaveTexture", "WaterTexture");
+    //     // this.registerNativeClass(this.isEngine, "WetTexture", "WaterTexture");
+    //     // this.registerNativeClass(this.isEngine, "ScriptedTexture", "Texture");
 
-        // this.registerNativeClass(this.isEngine, "Client", "Object");
-        // this.registerNativeClass(this.isEngine, "Viewport", "Player");
-        // this.registerNativeClass(this.isEngine, "Canvas", "Object");
-        // this.registerNativeClass(this.isEngine, "Console", "Object");
-        // this.registerNativeClass(this.isEngine, "Player", "Object");
-        // this.registerNativeClass(this.isEngine, "NetConnection", "Player");
-        // this.registerNativeClass(this.isEngine, "DemoRecConnection", "NetConnection");
-        // this.registerNativeClass(this.isEngine, "PendingLevel", "Object");
-        // this.registerNativeClass(this.isEngine, "NetPendingLevel", "PendingLevel");
-        // this.registerNativeClass(this.isEngine, "DemoPlayPendingLevel", "PendingLevel");
-        // this.registerNativeClass(this.isEngine, "Channel", "Object");
-        // this.registerNativeClass(this.isEngine, "ControlChannel", "Channel");
-        // this.registerNativeClass(this.isEngine, "ActorChannel", "Channel");
-        // this.registerNativeClass(this.isEngine, "FileChannel", "Channel");
+    //     // this.registerNativeClass(this.isEngine, "Client", "Object");
+    //     // this.registerNativeClass(this.isEngine, "Viewport", "Player");
+    //     // this.registerNativeClass(this.isEngine, "Canvas", "Object");
+    //     // this.registerNativeClass(this.isEngine, "Console", "Object");
+    //     // this.registerNativeClass(this.isEngine, "Player", "Object");
+    //     // this.registerNativeClass(this.isEngine, "NetConnection", "Player");
+    //     // this.registerNativeClass(this.isEngine, "DemoRecConnection", "NetConnection");
+    //     // this.registerNativeClass(this.isEngine, "PendingLevel", "Object");
+    //     // this.registerNativeClass(this.isEngine, "NetPendingLevel", "PendingLevel");
+    //     // this.registerNativeClass(this.isEngine, "DemoPlayPendingLevel", "PendingLevel");
+    //     // this.registerNativeClass(this.isEngine, "Channel", "Object");
+    //     // this.registerNativeClass(this.isEngine, "ControlChannel", "Channel");
+    //     // this.registerNativeClass(this.isEngine, "ActorChannel", "Channel");
+    //     // this.registerNativeClass(this.isEngine, "FileChannel", "Channel");
 
-        this.registerNativeClass(UAActor, this.isEngine, "Actor", "Object");
-        // this.registerNativeClass(this.isEngine, "Light", "Actor");
-        // this.registerNativeClass(this.isEngine, "Inventory", "Actor");
-        // this.registerNativeClass(this.isEngine, "Weapon", "Inventory");
-        // this.registerNativeClass(this.isEngine, "NavigationPoint", "Actor");
-        // this.registerNativeClass(this.isEngine, "LiftExit", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "LiftCenter", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "WarpZoneMarker", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "InventorySpot", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "TriggerMarker", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "ButtonMarker", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "PlayerStart", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "Teleporter", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "PathNode", "NavigationPoint");
-        // this.registerNativeClass(this.isEngine, "Decoration", "Actor");
-        // this.registerNativeClass(this.isEngine, "Carcass", "Decoration");
-        // this.registerNativeClass(this.isEngine, "Projectile", "Actor");
-        // this.registerNativeClass(this.isEngine, "Keypoint", "Actor");
-        // this.registerNativeClass(this.isEngine, "locationid", "Keypoint");
-        // this.registerNativeClass(this.isEngine, "InterpolationPoint", "Keypoint");
-        // this.registerNativeClass(this.isEngine, "Triggers", "Actor");
-        // this.registerNativeClass(this.isEngine, "Trigger", "Triggers");
-        // this.registerNativeClass(this.isEngine, "HUD", "Actor");
-        // this.registerNativeClass(this.isEngine, "Menu", "Actor");
-        this.registerNativeClass(UInfo, this.isEngine, "Info", "Actor");
-        // this.registerNativeClass(this.isEngine, "Mutator", "Info");
-        // this.registerNativeClass(this.isEngine, "GameInfo", "Info");
-        // this.registerNativeClass(this.isEngine, "ZoneInfo", "Info");
-        // this.registerNativeClass(this.isEngine, "LevelInfo", "ZoneInfo");
-        // this.registerNativeClass(this.isEngine, "WarpZoneInfo", "ZoneInfo");
-        // this.registerNativeClass(this.isEngine, "SkyZoneInfo", "ZoneInfo");
-        // this.registerNativeClass(this.isEngine, "SavedMove", "Info");
-        // this.registerNativeClass(this.isEngine, "ReplicationInfo", "Info");
-        // this.registerNativeClass(this.isEngine, "PlayerReplicationInfo", "ReplicationInfo");
-        // this.registerNativeClass(this.isEngine, "GameReplicationInfo", "ReplicationInfo");
-        // this.registerNativeClass(this.isEngine, "InternetInfo", "Info");
-        // this.registerNativeClass(this.isEngine, "StatLog", "Info");
-        // this.registerNativeClass(this.isEngine, "StatLogFile", "StatLog");
-        // this.registerNativeClass(this.isEngine, "Decal", "Actor");
-        // this.registerNativeClass(this.isEngine, "SpawnNotify", "Actor");
-        this.registerNativeClass(UBrush, this.isEngine, "Brush", "Actor");
-        // this.registerNativeClass(this.isEngine, "Mover", "Brush");
-        this.registerNativeClass(UPawn, this.isEngine, "Pawn", "Actor");
-        this.registerNativeClass(UController, this.isEngine, "Controller", "Actor");
-        // this.registerNativeClass(this.isEngine, "Scout", "Pawn");
-        // this.registerNativeClass(this.isEngine, "PlayerPawn", "Pawn");
-        // this.registerNativeClass(this.isEngine, "Camera", "PlayerPawn");
-    }
+    //     this.registerNativeClass(UAActor, this.isEngine, "Actor", "Object");
+    //     // this.registerNativeClass(this.isEngine, "Light", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Inventory", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Weapon", "Inventory");
+    //     // this.registerNativeClass(this.isEngine, "NavigationPoint", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "LiftExit", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "LiftCenter", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "WarpZoneMarker", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "InventorySpot", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "TriggerMarker", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "ButtonMarker", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "PlayerStart", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "Teleporter", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "PathNode", "NavigationPoint");
+    //     // this.registerNativeClass(this.isEngine, "Decoration", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Carcass", "Decoration");
+    //     // this.registerNativeClass(this.isEngine, "Projectile", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Keypoint", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "locationid", "Keypoint");
+    //     // this.registerNativeClass(this.isEngine, "InterpolationPoint", "Keypoint");
+    //     // this.registerNativeClass(this.isEngine, "Triggers", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Trigger", "Triggers");
+    //     // this.registerNativeClass(this.isEngine, "HUD", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Menu", "Actor");
+    //     this.registerNativeClass(UInfo, this.isEngine, "Info", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Mutator", "Info");
+    //     // this.registerNativeClass(this.isEngine, "GameInfo", "Info");
+    //     // this.registerNativeClass(this.isEngine, "ZoneInfo", "Info");
+    //     // this.registerNativeClass(this.isEngine, "LevelInfo", "ZoneInfo");
+    //     // this.registerNativeClass(this.isEngine, "WarpZoneInfo", "ZoneInfo");
+    //     // this.registerNativeClass(this.isEngine, "SkyZoneInfo", "ZoneInfo");
+    //     // this.registerNativeClass(this.isEngine, "SavedMove", "Info");
+    //     // this.registerNativeClass(this.isEngine, "ReplicationInfo", "Info");
+    //     // this.registerNativeClass(this.isEngine, "PlayerReplicationInfo", "ReplicationInfo");
+    //     // this.registerNativeClass(this.isEngine, "GameReplicationInfo", "ReplicationInfo");
+    //     // this.registerNativeClass(this.isEngine, "InternetInfo", "Info");
+    //     // this.registerNativeClass(this.isEngine, "StatLog", "Info");
+    //     // this.registerNativeClass(this.isEngine, "StatLogFile", "StatLog");
+    //     // this.registerNativeClass(this.isEngine, "Decal", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "SpawnNotify", "Actor");
+    //     this.registerNativeClass(UBrush, this.isEngine, "Brush", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Mover", "Brush");
+    //     this.registerNativeClass(UPawn, this.isEngine, "Pawn", "Actor");
+    //     this.registerNativeClass(UController, this.isEngine, "Controller", "Actor");
+    //     // this.registerNativeClass(this.isEngine, "Scout", "Pawn");
+    //     // this.registerNativeClass(this.isEngine, "PlayerPawn", "Pawn");
+    //     // this.registerNativeClass(this.isEngine, "Camera", "PlayerPawn");
+    // }
 
-    protected findObjectRef(className: string, objectName: string, groupName: string = "None"): number {
+    protected async findObjectRef(className: string, objectName: string, groupName: string = "None"): Promise<number> {
         const isClass = className == "Class";
+
+        // if (className === "Class" && objectName === "Function" && groupName === "None")
+        //     debugger;
+
+        // if (this.isCore && className === "Class" && objectName === "State" && groupName === "None")
+        //     debugger;
+
 
         for (const exp of this.exports) {
             if (exp.objectName !== objectName) continue;
             if (groupName !== "None") {
-                debugger;
+                if (exp.idPackage > 0) {
+                    const pkg = this.exports[exp.idPackage - 1];
+
+                    if (pkg && groupName !== pkg.objectName) {
+                        debugger;
+                        continue;
+                    }
+
+                    // debugger;
+                } else if (exp.idPackage < 0) {
+                    debugger;
+                } else {
+                    debugger;
+                }
             }
+
+            // debugger;
 
             if (isClass) {
                 if (exp.idClass > 0) {
@@ -466,13 +586,27 @@ class UPackage extends UEncodedFile {
                 } else if (exp.idClass < 0) {
                     const clsImport = this.imports[-exp.idClass - 1];
 
-                    if (clsImport && className === clsImport.objectName) {
-                        debugger;
+                    // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
+                    //     debugger;
+
+                    // if (this.isCore && className === "Class" && objectName === "State" && groupName === "None")
+                    //     debugger;
+
+                    if (clsImport && objectName === clsImport.objectName) {
+                        if (clsImport.classPackage === "Native")
+                            return -(clsImport.index + 1);
+
                         return exp.index + 1;
                     }
                 } else if (exp.idClass === 0) return exp.index + 1;
 
             } else if (exp.idClass !== 0) {
+
+                const obj = await this.fetchObject(exp.idClass);
+
+                if (obj)
+                    return exp.index + 1;
+
                 debugger;
             }
         }
@@ -495,10 +629,13 @@ class UPackage extends UEncodedFile {
 
         // debugger;
 
+        // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
+        //     debugger;
+
         return 0;
     }
 
-    newObject(objname: string, objclass: typeof UClass, flags: number, initProperties: boolean) {
+    async newObject<T extends UObject = UObject>(objname: string, objclass: UClass | ObjectConstructor): Promise<T> {
         // // debugger;
         // for (let cur = objclass; cur; cur = cur.baseStruct) {
 
@@ -520,13 +657,19 @@ class UPackage extends UEncodedFile {
 
         // }
 
-        const obj = new objclass();
+        if (objclass instanceof UClass) {
+            await objclass.onDecodeReady();
 
-        if (initProperties) {
             debugger;
+
+            const obj = this.createObject(objclass.friendlyName as UObjectTypes_T);
+
+            return obj as T;
         }
 
-        return obj;
+        const obj = new (objclass as ObjectConstructor)();
+
+        return obj as T;
 
         throw Error("Could not find the native class for " + objname);
     }
@@ -539,7 +682,20 @@ class UPackage extends UEncodedFile {
             // if (entry.index === 12)
             //     debugger;
 
+            // debugger;
+
+            // if (entry.index === 1821)
+            //     debugger;
+
+            // if (entry.idClass === -26)
+            //     debugger;
+
             let objclass: UClass = await this.fetchObject(entry.idClass) as UClass;
+
+            // if (entry.index === 1821)
+            //     debugger;
+
+            // debugger;
 
             if (!objclass) {
                 debugger;
@@ -549,7 +705,7 @@ class UPackage extends UEncodedFile {
 
             // debugger;
 
-            const object = this.exports[index].object = this.newObject(objname, objclass, this.exports[index].flags, false);
+            const object = entry.object = await this.newObject(objname, objclass) as UObject;
 
             // debugger;
 
@@ -634,6 +790,9 @@ class UPackage extends UEncodedFile {
 
             return this.exports[index].object as T;
         } else if (objref < 0) {// Import table object
+            // if (objref === -26)
+            //     debugger;
+
             const entry = this.getImportEntry(objref);
             let entrypackage = this.getImportEntry(entry.idPackage);
 
@@ -652,7 +811,21 @@ class UPackage extends UEncodedFile {
 
             if (!pkg.buffer) await this.loader.load(pkg);
 
+            // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
+            //     debugger;
+
+            if (pkg.isNative && className === "State" && objectName === "State" && groupName === "None") {
+                console.log(entry);
+                debugger;
+            }
+
             let obj = await pkg.fetchObjectByType(className, objectName, groupName);
+
+            if (obj === null) {
+                console.log(pkg);
+                debugger;
+                throw new Error(`(${packageName}) [${className}, ${objectName}, ${groupName}] should not be null`);
+            }
 
             // if (packageName === "Native")
             //     debugger;
@@ -674,7 +847,7 @@ class UPackage extends UEncodedFile {
         return null;
     }
 
-    fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
+    async fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
         // if (className !== "Class") {
         //     debugger;
         // }
@@ -688,7 +861,7 @@ class UPackage extends UEncodedFile {
         //     return this.nativeClassess.get(objectName as any);
         // }
 
-        return this.fetchObject(this.findObjectRef(className, objectName, groupName));
+        return await this.fetchObject(await this.findObjectRef(className, objectName, groupName));
     }
 
 
@@ -838,85 +1011,85 @@ class UPackage extends UEncodedFile {
     //     return object as T;
     // }
 
-    // protected createObject<T extends UObject = UObject>(className: UObjectTypes_T, ...params: any[]) {
-    //     let Constructor: typeof UObject = null;
+    protected createObject<T extends UObject = UObject>(className: UObjectTypes_T, ...params: any[]) {
+        let Constructor: typeof UObject = null;
 
-    //     // if (className === "Class" && exp.objectName !== "Object")
-    //     //     debugger;
+        // if (className === "Class" && exp.objectName !== "Object")
+        //     debugger;
 
-    //     switch (className) {
-    //         case "Class": {
-    //             Constructor = UClass;
-    //             // console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
-    //             debugger;
-    //         } break
-    //         case "Struct": Constructor = UStruct; break;
-    //         case "Texture": Constructor = UTexture; break;
-    //         case "Palette": Constructor = UPlatte; break;
-    //         case "StaticMesh": Constructor = UStaticMesh; break;
-    //         case "Shader": Constructor = UShader; break;
-    //         case "LevelInfo": Constructor = ULevelInfo; break;
-    //         case "TerrainSector": Constructor = UTerrainSector; break;
-    //         case "ZoneInfo": Constructor = UZoneInfo; break;
-    //         case "PhysicsVolume": Constructor = UPhysicsVolume; break;
-    //         case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
-    //         case "Model": Constructor = UModel; break;
-    //         case "Polys": Constructor = UPolys; break;
-    //         case "Brush": Constructor = UBrush; break;
-    //         case "Level": Constructor = ULevel; break;
-    //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
-    //         case "Sound": Constructor = USound; break;
-    //         case "Light": Constructor = ULight; break;
-    //         case "TerrainInfo": Constructor = UTerrainInfo; break;
-    //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
-    //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
-    //         case "WaterVolume": Constructor = UWaterVolume; break;
-    //         case "Emitter": Constructor = UEmitter; break;
-    //         case "NSun": Constructor = UNSun; break;
-    //         case "NMoon": Constructor = UNMoon; break;
-    //         case "L2FogInfo": Constructor = UFogInfo; break;
-    //         case "PlayerStart": Constructor = UPlayerStart; break;
-    //         case "MusicVolume": Constructor = UMusicVolume; break;
-    //         case "Mover": Constructor = UMover; break;
-    //         case "BlockingVolume": Constructor = UBlockingVolume; break;
-    //         case "Camera": Constructor = UCamera; break;
-    //         case "FadeColor": Constructor = UFadeColor; break;
-    //         case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
-    //         case "TexRotator": Constructor = UTexRotator; break;
-    //         case "TexPanner": Constructor = UTexPanner; break;
-    //         case "ColorModifier": Constructor = UColorModifier; break;
-    //         case "TexOscillator": Constructor = UTexOscillator; break;
-    //         case "LevelSummary": Constructor = ULevelSummary; break;
-    //         case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
-    //         case "TextBuffer": Constructor = UTextBuffer; break;
-    //         case "FinalBlend": Constructor = UFinalBlend; break;
-    //         case "TexEnvMap": Constructor = UTexEnvMap; break;
-    //         case "Cubemap": Constructor = UCubemap; break;
-    //         case "SkeletalMesh": Constructor = USkeletalMesh; break;
-    //         case "MeshAnimation": Constructor = UMeshAnimation; break;
-    //         case "Function": Constructor = UFunction; break;
-    //         case "Enum": Constructor = UEnum; break;
-    //         case "Const": Constructor = UConst; break;
-    //         case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
-    //         case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
-    //         case "StructProperty": Constructor = UnProperties.UStructProperty; break;
-    //         case "IntProperty": Constructor = UnProperties.UIntProperty; break;
-    //         case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
-    //         case "NameProperty": Constructor = UnProperties.UNameProperty; break;
-    //         case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
-    //         case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
-    //         case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
-    //         case "StrProperty": Constructor = UnProperties.UStrProperty; break;
-    //         case "State": Constructor = UState; break;
-    //         case "Font": Constructor = UFont; break;
-    //         case "Weapon": Constructor = UWeapon; break;
-    //         default: throw new Error(`Unknown object type: ${className}`);
-    //     }
+        switch (className) {
+            case "Class": {
+                Constructor = UClass;
+                // console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
+                debugger;
+            } break
+            case "Struct": Constructor = UStruct; break;
+            case "Texture": Constructor = UTexture; break;
+            case "Palette": Constructor = UPlatte; break;
+            case "StaticMesh": Constructor = UStaticMesh; break;
+            case "Shader": Constructor = UShader; break;
+            case "LevelInfo": Constructor = ULevelInfo; break;
+            case "TerrainSector": Constructor = UTerrainSector; break;
+            case "ZoneInfo": Constructor = UZoneInfo; break;
+            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
+            case "Model": Constructor = UModel; break;
+            case "Polys": Constructor = UPolys; break;
+            case "Brush": Constructor = UBrush; break;
+            case "Level": Constructor = ULevel; break;
+            case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
+            case "Sound": Constructor = USound; break;
+            case "Light": Constructor = ULight; break;
+            case "TerrainInfo": Constructor = UTerrainInfo; break;
+            case "NMovableSunLight": Constructor = UNMovableSunLight; break;
+            case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+            case "WaterVolume": Constructor = UWaterVolume; break;
+            case "Emitter": Constructor = UEmitter; break;
+            case "NSun": Constructor = UNSun; break;
+            case "NMoon": Constructor = UNMoon; break;
+            case "L2FogInfo": Constructor = UFogInfo; break;
+            case "PlayerStart": Constructor = UPlayerStart; break;
+            case "MusicVolume": Constructor = UMusicVolume; break;
+            case "Mover": Constructor = UMover; break;
+            case "BlockingVolume": Constructor = UBlockingVolume; break;
+            case "Camera": Constructor = UCamera; break;
+            case "FadeColor": Constructor = UFadeColor; break;
+            case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
+            case "TexRotator": Constructor = UTexRotator; break;
+            case "TexPanner": Constructor = UTexPanner; break;
+            case "ColorModifier": Constructor = UColorModifier; break;
+            case "TexOscillator": Constructor = UTexOscillator; break;
+            case "LevelSummary": Constructor = ULevelSummary; break;
+            case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
+            case "TextBuffer": Constructor = UTextBuffer; break;
+            case "FinalBlend": Constructor = UFinalBlend; break;
+            case "TexEnvMap": Constructor = UTexEnvMap; break;
+            case "Cubemap": Constructor = UCubemap; break;
+            case "SkeletalMesh": Constructor = USkeletalMesh; break;
+            case "MeshAnimation": Constructor = UMeshAnimation; break;
+            case "Function": Constructor = UFunction; break;
+            case "Enum": Constructor = UEnum; break;
+            case "Const": Constructor = UConst; break;
+            case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
+            case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
+            case "StructProperty": Constructor = UnProperties.UStructProperty; break;
+            case "IntProperty": Constructor = UnProperties.UIntProperty; break;
+            case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
+            case "NameProperty": Constructor = UnProperties.UNameProperty; break;
+            case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
+            case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
+            case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
+            case "StrProperty": Constructor = UnProperties.UStrProperty; break;
+            case "State": Constructor = UState; break;
+            case "Font": Constructor = UFont; break;
+            case "Weapon": Constructor = UWeapon; break;
+            default: throw new Error(`Unknown object type: ${className}`);
+        }
 
-    //     const object = (new (Constructor as any)(...params) as T);
+        const object = (new (Constructor as any)(...params) as T);
 
-    //     return object;
-    // }
+        return object;
+    }
 
     // public async createExportObject<T extends UObject = UObject>(pkg: UPackage, exp: UExport<T>, className: UObjectTypes_T, ...params: any[]): Promise<T> {
     //     if (exp.object) return exp.object;
@@ -1038,11 +1211,14 @@ class UNativePackage extends UPackage {
     public readonly isEngine = false;
     public readonly isNative = true;
 
+    public readonly nativeClassess = new Map<NativeTypes_T, typeof UObject>();
+
+
     constructor(loader: AssetLoader) {
         super(loader, "__native__.u");
     }
 
-    protected registerNativeClass(className: NativeTypes_T, baseClass?: NativeTypes_T | "None"): void {
+    protected async registerNativeClass(className: NativeTypes_T, baseClass: NativeTypes_T | "None" = "None"): Promise<void> {
         if (!this.nameHash.has(className)) {
             const name = new UName();
 
@@ -1057,7 +1233,7 @@ class UNativePackage extends UPackage {
 
         exp.index = this.exports.length
         exp.idClass = 0;
-        exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
+        exp.idSuper = baseClass === "None" ? 0 : await this.findObjectRef("Class", baseClass);
         exp.idPackage = 0;
         exp.idObjectName = this.nameHash.get(className);
         exp.objectName = className;
@@ -1068,46 +1244,56 @@ class UNativePackage extends UPackage {
         this.exports.push(exp);
     }
 
+    protected _promise: Promise<this> = null;
+
     public async decode(): Promise<this> {
+        if (this._promise) return this._promise;
         if (this.buffer) return this;
 
-        this.buffer = new ArrayBuffer(0);
+        return this._promise = new Promise(async resolve => {
+            this.imports = [];
+            this.exports = [];
+            this.nameTable = [];
+            this.nameHash = new Map();
 
-        this.imports = [];
-        this.exports = [];
-        this.nameTable = [];
-        this.nameHash = new Map();
+            await this.registerNativeClass("Object");
+            await this.registerNativeClass("Field", "Object");
+            await this.registerNativeClass("Struct", "Field");
+            await this.registerNativeClass("State", "Struct");
+            await this.registerNativeClass("Class", "State");
+            await this.registerNativeClass("Function", "Struct");
 
-        this.registerNativeClass("Field", "Object");
-        this.registerNativeClass("Struct", "Field");
-        this.registerNativeClass("State", "Struct");
-        this.registerNativeClass("Class", "State");
-        this.registerNativeClass("Function", "Struct");
+            await this.registerNativeClass("Const", "Field");
+            await this.registerNativeClass("Enum", "Field");
 
-        this.registerNativeClass("Const", "Field");
-        this.registerNativeClass("Enum", "Field");
+            await this.registerNativeClass("Property", "Field");
+            // this.registerNativeClass("PointerProperty", "Property");
+            await this.registerNativeClass("ByteProperty", "Property");
+            await this.registerNativeClass("ObjectProperty", "Property");
+            await this.registerNativeClass("ClassProperty", "ObjectProperty");
+            // this.registerNativeClass("FixedArrayProperty", "Property");
+            await this.registerNativeClass("ArrayProperty", "Property");
+            // this.registerNativeClass("MapProperty", "Property");
+            await this.registerNativeClass("StructProperty", "Property");
+            await this.registerNativeClass("IntProperty", "Property");
+            await this.registerNativeClass("BoolProperty", "Property");
+            await this.registerNativeClass("FloatProperty", "Property");
+            await this.registerNativeClass("NameProperty", "Property");
+            await this.registerNativeClass("StrProperty", "Property");
+            // this.registerNativeClass("StringProperty", "Property");
 
-        this.registerNativeClass("Property", "Field");
-        // this.registerNativeClass("PointerProperty", "Property");
-        this.registerNativeClass("ByteProperty", "Property");
-        this.registerNativeClass("ObjectProperty", "Property");
-        this.registerNativeClass("ClassProperty", "ObjectProperty");
-        // this.registerNativeClass("FixedArrayProperty", "Property");
-        this.registerNativeClass("ArrayProperty", "Property");
-        // this.registerNativeClass("MapProperty", "Property");
-        this.registerNativeClass("StructProperty", "Property");
-        this.registerNativeClass("IntProperty", "Property");
-        this.registerNativeClass("BoolProperty", "Property");
-        this.registerNativeClass("FloatProperty", "Property");
-        this.registerNativeClass("NameProperty", "Property");
-        this.registerNativeClass("StrProperty", "Property");
-        // this.registerNativeClass("StringProperty", "Property");
+            await this.registerNativeClass("Texture", "Object");
 
-        return this;
+            this.buffer = new ArrayBuffer(0);
+            this._promise = null;
+
+            resolve(this);
+        });
     }
 
     async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
-        if (objref <= 0) throw new Error("Native package only supports exports.");
+        if (objref <= 0) return null;
+        // if (objref <= 0) throw new Error("Native package only supports exports.");
 
         const entry = this.exports[objref - 1];
 
@@ -1129,6 +1315,7 @@ class UNativePackage extends UPackage {
             case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
             case "StructProperty": Constructor = UnProperties.UStructProperty; break;
             case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
+            case "State": Constructor = UState; break;
             default: throw new Error(`Not implemented native class: ${entry.objectName}`);
         }
 

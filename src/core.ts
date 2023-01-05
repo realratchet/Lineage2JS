@@ -215,23 +215,25 @@ async function startCore() {
     const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
 
 
-    // debugger;
+    // // debugger;
     // const classess = [];
 
-    for (const { index } of pkgCore.exportGroups["Class"]) {
+    // for (const { index } of pkgCore.exportGroups["Class"]) {
 
-        const _UClass = await pkgCore.fetchObject<UClass>(index + 1);
+    //     const _UClass = await pkgCore.fetchObject<UClass>(index + 1);
 
-        await _UClass.onDecodeReady();
+    //     await _UClass.onDecodeReady();
 
-        debugger;
+    //     // debugger;
 
-        await _UClass.constructClass();
+    //     // await _UClass.constructClass();
 
-        classess.push(_UClass);
+    //     classess.push(_UClass);
 
-        debugger;
-    }
+    //     // debugger;
+    // }
+
+    // debugger;
 
     // const structs = [];
 
@@ -239,7 +241,11 @@ async function startCore() {
 
     //     const _UStruct = await pkgCore.fetchObject<UStruct>(index + 1);
 
+    //     // debugger;
+
     //     await _UStruct.onDecodeReady();
+
+    //     console.log(_UStruct.friendlyName);
 
     //     structs.push(_UStruct);
     // }

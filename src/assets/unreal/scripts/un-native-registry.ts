@@ -27,8 +27,8 @@ const UNativeRegistry = new class UNativeRegistry {
         if (!this.hasNativeFunc(nativeIndex))
             throw new Error(`Native index '${nativeIndex}' not registered!`);
 
-        if (NATIVE_FUNCS[nativeIndex].name === "fn_not_implemented")
-            debugger;
+        // if (NATIVE_FUNCS[nativeIndex].name === "fn_not_implemented")
+        //     debugger;
 
         return NATIVE_FUNCS[nativeIndex].name;
     }

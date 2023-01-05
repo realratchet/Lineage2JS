@@ -25,21 +25,15 @@ class UStruct extends UField {
 
     public readonly isStruct = true;
 
-    protected namedProperties: Record<string, any> = {};
+    protected namedProperties: Record<string, any[]> = {};
 
     protected setProperty(tag: PropertyTag, value: any) {
         if (tag.arrayIndex < 0)
             throw new Error("That's illegal");
 
-        if (tag.arrayIndex > 0) {
-            if (!(tag.name in this.namedProperties))
-                throw new Error("How does this happen?");
+        const container = this.namedProperties[tag.name] = this.namedProperties[tag.name] || [];
 
-            if (!(this.namedProperties[tag.name] instanceof Array))
-                this.namedProperties[tag.name] = [this.namedProperties[tag.name]];
-
-            this.namedProperties[tag.name][tag.arrayIndex] = value;
-        } else this.namedProperties[tag.name] = value;
+        container[tag.arrayIndex] = value;
 
         return true;
     }
@@ -76,6 +70,10 @@ class UStruct extends UField {
         // debugger;
 
         this.friendlyName = pkg.nameTable[nameId].name as string;
+
+        if (this.friendlyName === "HelpParm")
+            debugger;
+
         // debugger;
 
         // if (this.constructor.name === "UFunction")
@@ -146,6 +144,9 @@ class UStruct extends UField {
 
                     childPropId = field.nextFieldId;
                 }
+
+                if (this.friendlyName === "Commandlet")
+                    debugger;
 
                 resolve(this.childPropFields);
             }));
@@ -614,5 +615,8 @@ enum ExprToken_T {
     RotatorToString = 0x59,
     MaxConversion = 0x60,    // Maximum conversion token
     ExtendedNative = 0x60,
+
+    UnkToken0x61 = 0x61,
+
     FirstNative = 0x70,
 };

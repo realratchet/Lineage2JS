@@ -32,6 +32,7 @@ const impToType = Object.freeze(
         ["Effect", extToType.get("USK")],
         ...[ // engine
             "Script",
+            "State",
             "Class",
             "Struct"
         ].map(v => ([v, extToType.get("U")] as [SupportedImports_T, SupportedPackages_T])),

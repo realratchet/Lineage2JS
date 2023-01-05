@@ -78,8 +78,8 @@ class UState extends UStruct {
                 childPropId = field.nextFieldId;
             }
 
-            if (Object.keys(this.functions).length > 0)
-                debugger;
+            // if (Object.keys(this.functions).length > 0)
+            //     debugger;
 
             resolve();
         }));

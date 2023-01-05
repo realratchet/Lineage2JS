@@ -151,8 +151,6 @@ class UClass extends UState {
 
         this.readNamedProps(pkg);
         this.readHead = pkg.tell();
-
-        // debugger;
     }
 }
 
