@@ -572,7 +572,7 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
             if (!this.exports[index].object) {
-                debugger;
+                // debugger;
                 const obj = new UClass();
                 this.exports[index].object = obj as unknown as UObject;
 
@@ -654,11 +654,11 @@ class UPackage extends UEncodedFile {
 
             let obj = await pkg.fetchObjectByType(className, objectName, groupName);
 
-            if (packageName === "Native")
-                debugger;
+            // if (packageName === "Native")
+            //     debugger;
             // obj.load(pkg.asReadable(), entry);
 
-            debugger;
+            // debugger;
 
             // What a garbage engine!
             if (!obj && packageName == "UnrealI")
@@ -1084,6 +1084,25 @@ class UNativePackage extends UPackage {
         this.registerNativeClass("Class", "State");
         this.registerNativeClass("Function", "Struct");
 
+        this.registerNativeClass("Const", "Field");
+        this.registerNativeClass("Enum", "Field");
+
+        this.registerNativeClass("Property", "Field");
+        // this.registerNativeClass("PointerProperty", "Property");
+        this.registerNativeClass("ByteProperty", "Property");
+        this.registerNativeClass("ObjectProperty", "Property");
+        this.registerNativeClass("ClassProperty", "ObjectProperty");
+        // this.registerNativeClass("FixedArrayProperty", "Property");
+        this.registerNativeClass("ArrayProperty", "Property");
+        // this.registerNativeClass("MapProperty", "Property");
+        this.registerNativeClass("StructProperty", "Property");
+        this.registerNativeClass("IntProperty", "Property");
+        this.registerNativeClass("BoolProperty", "Property");
+        this.registerNativeClass("FloatProperty", "Property");
+        this.registerNativeClass("NameProperty", "Property");
+        this.registerNativeClass("StrProperty", "Property");
+        // this.registerNativeClass("StringProperty", "Property");
+
         return this;
     }
 
@@ -1095,7 +1114,21 @@ class UNativePackage extends UPackage {
         let Constructor: any;
 
         switch (entry.objectName) {
+            case "Class": Constructor = UClass; break;
+            case "Struct": Constructor = UStruct; break;
+            case "Const": Constructor = UConst; break;
+            case "Enum": Constructor = UEnum; break;
             case "Function": Constructor = UFunction; break;
+            case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
+            case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
+            case "StrProperty": Constructor = UnProperties.UStrProperty; break;
+            case "IntProperty": Constructor = UnProperties.UIntProperty; break;
+            case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
+            case "NameProperty": Constructor = UnProperties.UNameProperty; break;
+            case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
+            case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
+            case "StructProperty": Constructor = UnProperties.UStructProperty; break;
+            case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
             default: throw new Error(`Not implemented native class: ${entry.objectName}`);
         }
 
