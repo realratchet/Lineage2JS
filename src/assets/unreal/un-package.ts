@@ -197,6 +197,8 @@ class UPackage extends UEncodedFile {
         readable.nameHash = nameHash;
         readable.header = header;
 
+
+
         if (this.isCore) {
             const nativeIndex = -(imports.length + 1);
             for (const imp of imports) {
@@ -211,15 +213,9 @@ class UPackage extends UEncodedFile {
 
                 {
                     const className = imp.objectName;
-                    {
-                        const name = new UName();
 
-                        name.name = className;
-                        name.flags = 0;
+                    registerNameTable(nameTable, nameHash, className);
 
-                        nameTable.push(name);
-                        nameHash.set(className, nameTable.length - 1);
-                    }
                     {
                         const exp = new UExport();
 
@@ -236,75 +232,15 @@ class UPackage extends UEncodedFile {
                         exports.push(exp);
                     }
                 }
-
-
             }
 
-            if (!nameHash.has("Native")) {
-                const name = new UName();
-                name.flags = 0;
-                name.name = "Native";
 
-                nameHash.set("Native", nameTable.length);
-                nameTable.push(name);
-            }
-
-            if (!nameHash.has("State")) {
-                const name = new UName();
-                name.flags = 0;
-                name.name = "State";
-
-                nameHash.set("State", nameTable.length);
-                nameTable.push(name);
-            }
-
-            {
-                const imp = new UImport();
-
-                imp.className = "Package";
-                imp.classPackage = "Native";
-                imp.idClassName = nameHash.get("Package");
-                imp.idClassPackage = nameHash.get("Native");
-                imp.idObjectName = nameHash.get("Native");
-                imp.idPackage = 0
-                imp.index = imports.length;
-                imp.objectName = "Native";
-
-                imports.push(imp);
-            }
-
-            {
-                const imp = new UImport();
-
-                imp.className = "Class";
-                imp.classPackage = "Native";
-                imp.idClassName = nameHash.get("Class");
-                imp.idClassPackage = nameHash.get("Native");
-                imp.idObjectName = nameHash.get("State");
-                imp.idPackage = nativeIndex;
-                imp.index = imports.length;
-                imp.objectName = "State";
-
-                imports.push(imp);
-
-                {
-                    const exp = new UExport();
-
-                    exp.index = exports.length
-                    exp.idClass = -(imp.index + 1);
-                    exp.idSuper = 0;
-                    exp.idPackage = nativeIndex;
-                    exp.idObjectName = nameHash.get("State");
-                    exp.objectName = "State";
-                    exp.flags = ObjectFlags_T.Native;
-                    exp.size = 0;
-                    exp.offset = 0;
-
-                    exports.push(exp);
-                }
-            }
-
-            // debugger;
+            addPackageDependendency(nameTable, nameHash, imports, "Native")
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "State");
+        } else if (this.isEngine) {
+            addPackageDependendency(nameTable, nameHash, imports, "Native")
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Sound"); 
         }
 
         readable.importGroups = readable.imports.reduce((accum, imp, index) => {
@@ -561,6 +497,7 @@ class UPackage extends UEncodedFile {
                     const pkg = this.exports[exp.idPackage - 1];
 
                     if (pkg && groupName !== pkg.objectName) {
+                        console.log(pkg, groupName, pkg.objectName)
                         debugger;
                         continue;
                     }
@@ -823,7 +760,6 @@ class UPackage extends UEncodedFile {
 
             if (obj === null) {
                 console.log(pkg);
-                debugger;
                 throw new Error(`(${packageName}) [${className}, ${objectName}, ${groupName}] should not be null`);
             }
 
@@ -1283,6 +1219,8 @@ class UNativePackage extends UPackage {
             // this.registerNativeClass("StringProperty", "Property");
 
             await this.registerNativeClass("Texture", "Object");
+            await this.registerNativeClass("Font", "Object");
+            await this.registerNativeClass("Sound", "Object");
 
             this.buffer = new ArrayBuffer(0);
             this._promise = null;
@@ -1340,3 +1278,73 @@ export { UPackage, PackageFlags_T, UNativePackage };
         throw new Error(text || "Assertion failed!");
     }
 };
+
+function registerNameTable(nameTable: UName[], nameHash: Map<string, number>, value: string) {
+    if (nameHash.has(value)) return nameHash.get(value);
+
+    const name = new UName();
+
+    name.name = value;
+    name.flags = 0;
+
+    nameTable.push(name);
+    nameHash.set(value, nameTable.length - 1);
+
+    return name;
+}
+
+function addPackageDependendency(nameTable: UName[], nameHash: Map<string, number>, imports: UImport[], classPackage: string) {
+    registerNameTable(nameTable, nameHash, "Native");
+
+    const imp = new UImport();
+
+    const className = "Package";
+    const idClassName = nameHash.get("Package");
+    const idClassPackage = nameHash.get(classPackage);
+
+    imp.className = className;
+    imp.classPackage = classPackage;
+    imp.idClassName = idClassName;
+    imp.idClassPackage = idClassPackage;
+    imp.idObjectName = idClassPackage;
+    imp.idPackage = 0
+    imp.index = imports.length;
+    imp.objectName = classPackage;
+
+    imports.push(imp);
+}
+function addClassDependency(nameTable: UName[], nameHash: Map<string, number>, imports: UImport[], exports: UExport<UObject>[], classPackage: string, objectName: string) {
+    registerNameTable(nameTable, nameHash, objectName);
+
+    const imp = new UImport();
+    const exp = new UExport();
+    const idObjectName = nameHash.get(objectName);
+
+    const nativePackage = imports.find(imp => imp.className === "Package" && imp.classPackage === classPackage);
+    const nativeIndex = -(nativePackage.index + 1);
+
+    imp.className = "Class";
+    imp.classPackage = classPackage;
+    imp.idClassName = nameHash.get("Class");
+    imp.idClassPackage = nameHash.get(classPackage);
+    imp.idObjectName = idObjectName;
+    imp.idPackage = nativeIndex;
+    imp.index = imports.length;
+    imp.objectName = objectName;
+
+    exp.index = exports.length
+    exp.idClass = -(imp.index + 1);
+    exp.idSuper = 0;
+    exp.idPackage = nativeIndex;
+    exp.idObjectName = idObjectName;
+    exp.objectName = objectName;
+    exp.flags = ObjectFlags_T.Native;
+    exp.size = 0;
+    exp.offset = 0;
+
+    imports.push(imp);
+    exports.push(exp);
+
+    return { imp, exp };
+}
+
