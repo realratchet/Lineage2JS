@@ -253,7 +253,7 @@ abstract class UObject {
                 this.setProperty(tag, this.readStruct(pkg, tag));
                 break;
             default:
-                debugger;
+                // debugger;
                 pkg.seek(tag.dataSize);
                 console.warn(`Unknown data type '${tag.type}' for '${tag.name}' skipping ${tag.dataSize} bytes.`);
                 break;

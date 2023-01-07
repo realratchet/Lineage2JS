@@ -34,7 +34,8 @@ const impToType = Object.freeze(
             "Script",
             "State",
             "Class",
-            "Struct"
+            "Struct",
+            "Function"
         ].map(v => ([v, extToType.get("U")] as [SupportedImports_T, SupportedPackages_T])),
     ]) as Map<SupportedImports_T, SupportedPackages_T>
 );
