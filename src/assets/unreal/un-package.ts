@@ -531,15 +531,19 @@ class UPackage extends UEncodedFile {
     _importPromises = new Map<number, Promise<void>>();
 
     async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
-        if (this._importPromises.has(objref))
+        let hasPromise = this._importPromises.has(objref);
+
+        if (hasPromise)
             await this._importPromises.get(objref);
 
         let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
 
-        this._importPromises.set(objref, new Promise((_resolve, _reject) => {
-            resolve = _resolve;
-            reject = _reject;
-        }));
+        if (!hasPromise) {
+            this._importPromises.set(objref, new Promise((_resolve, _reject) => {
+                resolve = _resolve;
+                reject = _reject;
+            }));
+        }
 
         if (objref > 0) {// Export table object
 
@@ -551,7 +555,7 @@ class UPackage extends UEncodedFile {
             if (!this.exports[index].object)
                 await this.loadExportObject(index);
 
-            resolve();
+            if (!hasPromise) resolve();
 
             return this.exports[index].object as T;
         } else if (objref < 0) {// Import table object
@@ -610,12 +614,12 @@ class UPackage extends UEncodedFile {
                 debugger
             // obj = Packages->GetPackage("UnrealI")->GetUObject(className, objectName, groupName);
 
-            resolve();
+            if (!hasPromise) resolve();
 
             return obj as T;
         }
 
-        resolve();
+        if (!hasPromise) resolve();
 
         return null;
     }
