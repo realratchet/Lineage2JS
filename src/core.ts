@@ -373,6 +373,7 @@ async function startCore() {
     // const mortalBlow = await pkgEffects.fetchObject<UClass>(21);
 
     await rapidShot.onDecodeReady();
+    // await rapidShot.superField.onDecodeReady();
 
     debugger;
 

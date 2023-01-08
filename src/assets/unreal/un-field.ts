@@ -18,24 +18,31 @@ class UField extends UObject {
         this.superFieldId = pkg.read(compat32).value as number;
         this.nextFieldId = pkg.read(compat32).value as number;
 
-        // if (this.superFieldId === exp.index) this.superFieldId = 0;
-        // if (this.nextFieldId === exp.index) this.nextFieldId = 0;
+        if (this.superFieldId === exp.index) this.superFieldId = 0;
+        if (this.nextFieldId === exp.index) this.nextFieldId = 0;
 
         if (this.superFieldId !== 0) this.promisesLoading.push(new Promise(async resolve => {
             const object = await pkg.fetchObject<UField>(this.superFieldId);
             this.superField = object;
 
-            resolve(object);
-        }));
-
-        if (this.nextFieldId !== 0) this.promisesLoading.push(new Promise(async resolve => {
-            const object = await pkg.fetchObject<UField>(this.nextFieldId);
-            this.nextField = object;
+            // debugger;
 
             resolve(object);
         }));
+
+        // if (this.nextFieldId !== 0) this.promisesLoading.push(new Promise(async resolve => {
+        //     const object = await pkg.fetchObject<UField>(this.nextFieldId);
+        //     this.nextField = object;
+
+        //     resolve(object);
+        // }));
     }
 
+    public async onDecodeReady(): Promise<void> {
+        await super.onDecodeReady();
+
+        if (this.superField) await this.superField.onDecodeReady();
+    }
 }
 
 export default UField;

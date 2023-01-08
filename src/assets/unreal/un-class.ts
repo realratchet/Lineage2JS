@@ -5,6 +5,7 @@ import UExport from "./un-export";
 import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
+import { PropertyTag } from "./un-property-tag";
 import UState from "./un-state";
 
 class FDependencies extends FConstructable {
@@ -52,7 +53,7 @@ class UClass extends UState {
 
     // constructor(...args: any[]) {
     //     // debugger;
-        
+
     //     super(...args);
     // }
 
@@ -150,7 +151,102 @@ class UClass extends UState {
         this.readHead = pkg.tell();
 
         this.readNamedProps(pkg);
+
+        // if (this.friendlyName === "Emitter")
+        //     debugger;
+    }
+
+    protected promiseReadNamedProps: Promise<void>;
+    protected resolveReadNamedProps: (value: void | PromiseLike<void>) => void;
+    protected rejectReadNamedProps: (reason?: any) => void;
+    protected tagsReadNamedProps: any[];
+
+    protected readNamedProps(pkg: UPackage) {
+        pkg.seek(this.readHead, "set");
+        this.promiseReadNamedProps = new Promise<void>((resolve, reject) => {
+            this.resolveReadNamedProps = resolve;
+            this.rejectReadNamedProps = reject;
+        });
+
+        const tags = [];
+
+        if (this.readHead < this.readTail) {
+            do {
+                const tag = PropertyTag.from(pkg, this.readHead);
+
+                if (!tag.isValid()) break;
+
+                const offset = pkg.tell();
+
+                tags.push([pkg, offset, tag, async (pkg: UPackage, offset: number, tag: PropertyTag) => {
+                    pkg.seek(offset, "set");
+                    await this.loadProperty(pkg, tag);
+                }]);
+
+                pkg.seek(offset + tag.dataSize, "set");
+                this.readHead = pkg.tell();
+
+            } while (this.readHead < this.readTail);
+        }
+
+        this.tagsReadNamedProps = tags;
         this.readHead = pkg.tell();
+    }
+
+    protected _decodePromiseCls: Promise<void>;
+
+    public async onDecodeReady(): Promise<void> {
+        let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
+
+        const hasPromise = !!this._decodePromiseCls;
+
+        if (!hasPromise) {
+            this._decodePromiseCls = new Promise((_resolve, _reject) => {
+                resolve = _resolve;
+                reject = _reject;
+            });
+        } else {
+            return await this._decodePromiseCls;
+        }
+
+        await super.onDecodeReady();
+
+        if (this.tagsReadNamedProps.length > 0) {
+            await new Promise<void>(async resolve => {
+                let i = 0;
+                for (const [pkg, offset, tag, fn] of this.tagsReadNamedProps) {
+                    console.log(`(${this.friendlyName})`, ++i, "of", this.tagsReadNamedProps.length, tag.name, this.exportIndex);
+
+                    await fn(pkg, offset, tag);
+                }
+
+                resolve();
+            });
+        }
+
+        if (!hasPromise) resolve();
+    }
+
+    protected kls: typeof UObject;
+
+    public buildClass(): typeof UObject {
+        const dependencyTree = new Array<UClass>();
+        let lastBase: UClass = this;
+
+        do {
+            dependencyTree.push(lastBase);
+            lastBase = lastBase.superField as UClass;
+        } while (lastBase);
+
+        for (const base of dependencyTree.reverse()) {
+            const { childPropFields, namedProperties, friendlyName } = base;
+
+            debugger;
+        }
+
+        debugger;
+
+        return null;
     }
 }
 

@@ -41,6 +41,10 @@ class UTexture extends UObject {
     protected clampModeU: number;
     protected clampModeV: number;
 
+    protected detailScale: number;
+    protected lodSet: number;
+    protected defaultMaterial: typeof this;
+
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
 
     protected getPropertyMap() {
@@ -73,7 +77,11 @@ class UTexture extends UObject {
 
             "bTwoSided": "isTwoSided",
             "bAlphaTexture": "isAlphaTexture",
-            "bMasked": "isMasked"
+            "bMasked": "isMasked",
+
+            "DetailScale": "detailScale",
+            "LODSet": "lodSet",
+            "DefaultMaterial": "defaultMaterial"
         });
     }
 

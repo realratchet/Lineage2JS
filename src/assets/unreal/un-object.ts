@@ -331,9 +331,25 @@ abstract class UObject {
         return true;
     }
 
+    protected _decodePromise: Promise<void>;
+
     public async onDecodeReady(): Promise<void> {
+        let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
+
+        const hasPromise = !!this._decodePromise;
+
+        if (!hasPromise) {
+            this._decodePromise = new Promise((_resolve, _reject) => {
+                resolve = _resolve;
+                reject = _reject;
+            });
+        } else {
+            return await this._decodePromise;
+        }
+
         try {
             await Promise.all(this.promisesLoading);
+            if (!hasPromise) resolve();
 
             if (CLEANUP_NAMESPACE) {
                 Object.values(this.getPropertyMap()).forEach(propName => {
@@ -343,6 +359,7 @@ abstract class UObject {
             }
         } catch (e) {
             // debugger;
+            if (!hasPromise) reject(e);
             throw e;
         }
     }

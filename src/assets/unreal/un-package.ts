@@ -420,7 +420,17 @@ class UPackage extends UEncodedFile {
         if (objclass instanceof UClass) {
             await objclass.onDecodeReady();
 
+            // debugger;
+
+            const kls = objclass.buildClass();
+
+            debugger;
+
             const obj = this.createObject(objclass.friendlyName as UObjectTypes_T);
+
+            obj.injectClass(objclass);
+            
+            debugger;
 
             return obj as T;
         }
@@ -540,6 +550,9 @@ class UPackage extends UEncodedFile {
     async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
         const hasPromise = this._importPromises.has(objref);
 
+        // if (objref === 25)
+        //     debugger;
+
         if (hasPromise)
             await this._importPromises.get(objref);
 
@@ -553,18 +566,19 @@ class UPackage extends UEncodedFile {
         }
 
         if (objref > 0) {// Export table object
-
             const index = objref - 1;
 
             if (index > this.exports.length)
                 throw new Error("Invalid object reference");
 
-            if (!this.exports[index].object)
+            const entry = this.exports[index];
+
+            if (!entry.object)
                 await this.loadExportObject(index);
 
             if (!hasPromise) resolve();
 
-            return this.exports[index].object as T;
+            return entry.object as T;
         } else if (objref < 0) {// Import table object
             // if (objref === -26)
             //     debugger;
@@ -1107,10 +1121,14 @@ class UNativePackage extends UPackage {
         if (objref <= 0) return null;
         // if (objref <= 0) throw new Error("Native package only supports exports.");
 
+
         const entry = this.exports[objref - 1];
 
         let Constructor: any;
         const objectName = entry.objectName as NativeTypes_T;
+
+        // if (objref === 25)
+        //     debugger;
 
         switch (entry.objectName) {
             case "Class": Constructor = UClass; break;

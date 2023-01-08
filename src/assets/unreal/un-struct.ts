@@ -49,7 +49,15 @@ class UStruct extends UField {
 
     protected namedProperties: Record<string, any[]> = {};
 
+    protected readArray(pkg: UPackage, tag: PropertyTag) {
+        debugger;
+
+        return false;
+    }
+
     protected setProperty(tag: PropertyTag, value: any) {
+        console.log(`(${this.friendlyName}) ${tag.name} -> ${value}`)
+
         if (tag.arrayIndex < 0)
             throw new Error("That's illegal");
 
@@ -170,6 +178,9 @@ class UStruct extends UField {
                 if (this.friendlyName === "Commandlet")
                     debugger;
 
+                // if (this.friendlyName === "Emitter")
+                //     debugger;
+
                 resolve(this.childPropFields);
             }));
         }
@@ -284,7 +295,7 @@ class UStruct extends UField {
                         if (label.isNone()) break;
 
                     }
-                    
+
                     return tokenValue2;
                 case ExprToken_T.Let:
                 case ExprToken_T.DynArrayElement:
