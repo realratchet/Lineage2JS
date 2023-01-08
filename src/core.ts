@@ -333,12 +333,12 @@ async function startCore() {
 
     // debugger;
 
-    const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index + 1;
-    const UWeapon = await pkgEngine.fetchObject(UWeaponId);
+    // const UWeaponId = pkgEngine.exports.find(e => e.objectName === "Weapon").index + 1;
+    // const UWeapon = await pkgEngine.fetchObject(UWeaponId);
 
-    await UWeapon.onDecodeReady();
+    // await UWeapon.onDecodeReady();
 
-    debugger;
+    // debugger;
 
     // const fn1 = await pkgCore.fetchObject<UFunction>(721); // first function read when starting the game
     // const fn3 = await pkgCore.fetchObject<UFunction>(716); // third function read when starting the game
@@ -367,14 +367,14 @@ async function startCore() {
 
     // debugger;
 
-    // const pkg = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
+    const pkgEffects = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 
-    // const rapidShot = await pkg.fetchObject<UClass>(657);
-    // // const mortalBlow = await pkg.fetchObject<UClass>(21);
+    const rapidShot = await pkgEffects.fetchObject<UClass>(657);
+    // const mortalBlow = await pkgEffects.fetchObject<UClass>(21);
 
-    // await rapidShot.onDecodeReady();
+    await rapidShot.onDecodeReady();
 
-    // debugger;
+    debugger;
 
     const loadSettings = {
         helpersZoneBounds: false,

@@ -531,7 +531,7 @@ class UPackage extends UEncodedFile {
     _importPromises = new Map<number, Promise<void>>();
 
     async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
-        let hasPromise = this._importPromises.has(objref);
+        const hasPromise = this._importPromises.has(objref);
 
         if (hasPromise)
             await this._importPromises.get(objref);
@@ -1103,6 +1103,7 @@ class UNativePackage extends UPackage {
         const entry = this.exports[objref - 1];
 
         let Constructor: any;
+        const objectName = entry.objectName;
 
         switch (entry.objectName) {
             case "Class": Constructor = UClass; break;
@@ -1120,10 +1121,20 @@ class UNativePackage extends UPackage {
             case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
             case "StructProperty": Constructor = UnProperties.UStructProperty; break;
             case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
+            case "DelegateProperty": Constructor = UnProperties.UDelegateProperty; break;
             case "State": Constructor = UState; break;
             case "Font": Constructor = UFont; break;
             case "Sound": Constructor = USound; break;
-            default: throw new Error(`Not implemented native class: ${entry.objectName}`);
+            case "StaticMesh": Constructor = UStaticMesh; break;
+            case "TerrainSector": Constructor = UTerrainSector; break;
+            case "Mesh": Constructor = UMesh; break;
+            case "MeshAnimation": Constructor = UMeshAnimation; break;
+            case "Level": Constructor = ULevel; break;
+            case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
+            case "Model": Constructor = UModel; break;
+            default:
+                debugger;
+                throw new Error(`Not implemented native class: ${objectName}`);
         }
 
         const object = Constructor as T;
