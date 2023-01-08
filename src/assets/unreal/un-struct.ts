@@ -8,6 +8,28 @@ import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 import UClassRegistry from "./scripts/un-class-registry";
 import UNativeRegistry from "./scripts/un-native-registry";
+import FConstructable from "./un-constructable";
+import { PropertyTag } from "./un-property-tag";
+
+class FLabelField extends FConstructable {
+    public name: string = "None";
+    public offset: number;
+
+    public load(pkg: UPackage): this {
+        const compat32 = new BufferValue(BufferValue.compat32);
+        const uint32 = new BufferValue(BufferValue.uint32);
+
+        const nameIndex = pkg.read(compat32).value as number;
+
+        this.name = pkg.nameTable[nameIndex].name;
+        this.offset = pkg.read(uint32).value as number;
+
+        return this;
+    }
+
+    public isNone() { return this.name === "None"; }
+
+}
 
 class UStruct extends UField {
     protected textBufferId: number;
@@ -248,18 +270,21 @@ class UStruct extends UField {
 
                 } return tokenValue2;
                 case ExprToken_T.LabelTable:
-                    // if ( (*(_BYTE *)likelyBytecodeLength & 3) != 0 )
-                    //     appFailAssert(aIcode30, aUnclassCpp_6, 1467);
-                    // do
-                    // {
-                    //     a2 = (int *)(this[21] + *likelyBytecodeLength);
-                    //     operator<<(v3, a2);
-                    //     v54 = a2;
-                    //     *likelyBytecodeLength += 8;
-                    // }
-                    // while ( *v54 );
-                    debugger;
-                    throw new Error("do something here");
+                    if ((this.bytecodeLength & 3) !== 0) {
+                        debugger;
+                        throw new Error("Invalid bytecode length");
+                    }
+
+                    while (true) {
+                        const label = new FLabelField().load(pkg);
+
+                        this.bytecode.push({ type: "label", value: label });
+                        this.bytecodeLength += 8;
+
+                        if (label.isNone()) break;
+
+                    }
+                    
                     return tokenValue2;
                 case ExprToken_T.Let:
                 case ExprToken_T.DynArrayElement:

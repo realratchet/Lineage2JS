@@ -24,7 +24,8 @@ type NativePropertyTypes_T =
     | "PointerProperty"
     | "FixedArrayProperty"
     | "MapProperty"
-    | "StringProperty";
+    | "StringProperty"
+    | "DelegateProperty";
 
 type NativeEngineTypes_T =
     | "Font"
@@ -40,6 +41,11 @@ type NativeEngineTypes_T =
     | "StaticMesh"
     | "SkeletalMesh"
     | "Animation"
+    | "ConvexVolume"
+    | "MeshInstance"
+    | "LodMeshInstance"
+    | "SkeletalMeshInstance"
+    | "StaticMeshInstance"
     | "Model"
     | "LevelBase"
     | "Level"
