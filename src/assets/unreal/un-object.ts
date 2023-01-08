@@ -269,8 +269,10 @@ abstract class UObject {
         const props = this.getPropertyMap();
         const { name: propName } = tag;
 
-        if (!(propName in props))
+        if (!(propName in props)) {
+            debugger;
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}'`);
+        }
 
         const varName = props[propName];
 

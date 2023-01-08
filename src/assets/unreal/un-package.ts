@@ -66,6 +66,13 @@ import UAActor from "./un-aactor";
 import UInfo from "./un-info";
 import UPawn from "./un-pawn";
 import UController from "./un-controller";
+import UViewport from "./un-viewport";
+import UClient from "./un-client";
+import UPlayer from "./un-player";
+import UTerrainPrimitive from "./un-terrain-primitive";
+import UMeshInstance from "./un-mesh-instance";
+import UConvexVolume from "./un-convex-volume";
+import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 
 class UCommandlet extends UObject {
 
@@ -1103,7 +1110,7 @@ class UNativePackage extends UPackage {
         const entry = this.exports[objref - 1];
 
         let Constructor: any;
-        const objectName = entry.objectName;
+        const objectName = entry.objectName as NativeTypes_T;
 
         switch (entry.objectName) {
             case "Class": Constructor = UClass; break;
@@ -1132,6 +1139,13 @@ class UNativePackage extends UPackage {
             case "Level": Constructor = ULevel; break;
             case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
             case "Model": Constructor = UModel; break;
+            case "Viewport": Constructor = UViewport; break;
+            case "Client": Constructor = UClient; break;
+            case "Player": Constructor = UPlayer; break;
+            case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
+            case "MeshInstance": Constructor = UMeshInstance; break;
+            case "ConvexVolume": Constructor = UConvexVolume; break;
+            case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
             default:
                 debugger;
                 throw new Error(`Not implemented native class: ${objectName}`);
