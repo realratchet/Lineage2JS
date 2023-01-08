@@ -66,9 +66,6 @@ import UAActor from "./un-aactor";
 import UInfo from "./un-info";
 import UPawn from "./un-pawn";
 import UController from "./un-controller";
-import UMetaClass from "./meta/un-meta-class";
-import UMetaObject from "./meta/un-meta-object";
-import * as UMeta from "./meta/un-meta";
 
 class UCommandlet extends UObject {
 
@@ -237,15 +234,24 @@ class UPackage extends UEncodedFile {
 
             addPackageDependendency(nameTable, nameHash, imports, "Native")
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "State");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "DelegateProperty");
+
         } else if (this.isEngine) {
             addPackageDependendency(nameTable, nameHash, imports, "Native")
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Sound");
 
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Primitive");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Model");
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMeshInstance");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMeshInstance");
+
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshAnimation");
+            addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMeshInstance");
 
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Viewport");
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Player");
@@ -522,7 +528,19 @@ class UPackage extends UEncodedFile {
         return this.imports[index];
     }
 
+    _importPromises = new Map<number, Promise<void>>();
+
     async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
+        if (this._importPromises.has(objref))
+            await this._importPromises.get(objref);
+
+        let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
+
+        this._importPromises.set(objref, new Promise((_resolve, _reject) => {
+            resolve = _resolve;
+            reject = _reject;
+        }));
+
         if (objref > 0) {// Export table object
 
             const index = objref - 1;
@@ -532,6 +550,8 @@ class UPackage extends UEncodedFile {
 
             if (!this.exports[index].object)
                 await this.loadExportObject(index);
+
+            resolve();
 
             return this.exports[index].object as T;
         } else if (objref < 0) {// Import table object
@@ -590,8 +610,12 @@ class UPackage extends UEncodedFile {
                 debugger
             // obj = Packages->GetPackage("UnrealI")->GetUObject(className, objectName, groupName);
 
+            resolve();
+
             return obj as T;
         }
+
+        resolve();
 
         return null;
     }
@@ -1019,6 +1043,7 @@ class UNativePackage extends UPackage {
 
             await this.registerNativeClass("Property", "Field");
             // this.registerNativeClass("PointerProperty", "Property");
+            await this.registerNativeClass("DelegateProperty", "Property");
             await this.registerNativeClass("ByteProperty", "Property");
             await this.registerNativeClass("ObjectProperty", "Property");
             await this.registerNativeClass("ClassProperty", "ObjectProperty");
@@ -1038,9 +1063,16 @@ class UNativePackage extends UPackage {
             await this.registerNativeClass("Sound", "Object");
 
             await this.registerNativeClass("Primitive", "Object");
+            await this.registerNativeClass("Model", "Primitive");
+            await this.registerNativeClass("ConvexVolume", "Primitive");
             await this.registerNativeClass("StaticMesh", "Primitive");
             await this.registerNativeClass("Mesh", "Primitive");
+            await this.registerNativeClass("MeshInstance", "Primitive");
+            await this.registerNativeClass("LodMeshInstance", "MeshInstance");
+            await this.registerNativeClass("SkeletalMeshInstance", "LodMeshInstance");
+
             await this.registerNativeClass("MeshAnimation", "Object");
+            await this.registerNativeClass("StaticMeshInstance", "Object");
 
             await this.registerNativeClass("Player", "Object");
             await this.registerNativeClass("Viewport", "Player");

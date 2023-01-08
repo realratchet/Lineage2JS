@@ -258,6 +258,7 @@ class UStruct extends UField {
                     //     *likelyBytecodeLength += 8;
                     // }
                     // while ( *v54 );
+                    debugger;
                     throw new Error("do something here");
                     return tokenValue2;
                 case ExprToken_T.Let:
@@ -413,6 +414,7 @@ class UStruct extends UField {
                     //     v9 = this[21];
                     // }
                     // while ( *(_BYTE *)(likelyBytecodeLength8 + v9 - 1) );
+                    debugger;
                     throw new Error("do something here");
                     break;
                 case ExprToken_T.BoolToByte:
@@ -437,6 +439,7 @@ class UStruct extends UField {
                     //     *likelyBytecodeLength = v30;
                     // }
                     // while ( *(_BYTE *)(v30 + this[21] - 1) );
+                    debugger;
                     throw new Error("do something here");
                     break;
                 case ExprToken_T.FloatToByte:
@@ -445,6 +448,7 @@ class UStruct extends UField {
                     // *likelyBytecodeLength = likelyBytecodeLength5;
                     // (*(void (__thiscall **)(_DWORD *, int))(*v3 + 28))(v3, likelyBytecodeLength5 + this[21]);
                     // *likelyBytecodeLength += 4;
+                    debugger;
                     throw new Error("do something here");
                     break;
                 default: throw new Error(`Bad token '${tokenValue}'`);
@@ -465,6 +469,7 @@ class UStruct extends UField {
                 // this.bytecodeLength++;
 
                 if (token2 === ExprToken_T.BoolToFloat) {
+                    debugger;
                     throw new Error("do something here");
                 }
 
@@ -617,6 +622,8 @@ enum ExprToken_T {
     ExtendedNative = 0x60,
 
     UnkToken0x61 = 0x61,
+    UnkToken0x62 = 0x62,
+    UnkToken0x6f = 0x6f,
 
     FirstNative = 0x70,
 };

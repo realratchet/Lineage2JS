@@ -143,9 +143,13 @@ class UStrProperty extends UProperty {
     // }
 }
 
+class UDelegateProperty extends UProperty {
+
+}
 
 
-export { UProperty, UByteProperty, UObjectProperty, UStructProperty, UIntProperty, UBoolProperty, UNameProperty, UFloatProperty, UArrayProperty, UClassProperty, UStrProperty };
+
+export { UProperty, UByteProperty, UObjectProperty, UStructProperty, UIntProperty, UBoolProperty, UNameProperty, UFloatProperty, UArrayProperty, UClassProperty, UStrProperty, UDelegateProperty };
 
 enum PropertyFlags_T {
     Edit = 0x00000001,          // Property is user - settable in the editor.
