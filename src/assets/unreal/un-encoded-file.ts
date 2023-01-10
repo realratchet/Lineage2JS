@@ -128,7 +128,6 @@ class UEncodedFile {
     }
 
     public async decode(): Promise<this> {
-
         if (this.buffer) return this;
         if (!this.promiseDecoding) await this._doDecode();
         else await this.promiseDecoding;

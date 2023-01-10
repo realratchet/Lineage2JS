@@ -98,8 +98,6 @@ class ULocale extends UObject {
 
 }
 
-
-
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
 
@@ -121,6 +119,8 @@ class UPackage extends UEncodedFile {
         this.isCore = this.path.toLocaleLowerCase().endsWith("core.u");
         this.isEngine = this.path.toLocaleLowerCase().endsWith("engine.u");
     }
+
+    public isDecoded() { return !!this.buffer; }
 
     public async decode(): Promise<this> {
         if (this.buffer) return this;
@@ -296,7 +296,7 @@ class UPackage extends UEncodedFile {
         return this;
     }
 
-    protected async findObjectRef(className: string, objectName: string, groupName: string = "None"): Promise<number> {
+    protected findObjectRef(className: string, objectName: string, groupName: string = "None"): number {
         const isClass = className == "Class";
 
         // if (className === "Class" && objectName === "Function" && groupName === "None")
@@ -358,7 +358,7 @@ class UPackage extends UEncodedFile {
 
             } else if (exp.idClass !== 0) {
 
-                const obj = await this.fetchObject(exp.idClass);
+                const obj = this.fetchObject(exp.idClass);
 
                 if (obj)
                     return exp.index + 1;
@@ -395,7 +395,7 @@ class UPackage extends UEncodedFile {
         return 0;
     }
 
-    async newObject<T extends UObject = UObject>(objname: string, objclass: UClass | ObjectConstructor): Promise<T> {
+    public newObject<T extends UObject = UObject>(objname: string, objclass: UClass | ObjectConstructor): T {
         // // debugger;
         // for (let cur = objclass; cur; cur = cur.baseStruct) {
 
@@ -418,19 +418,17 @@ class UPackage extends UEncodedFile {
         // }
 
         if (objclass instanceof UClass) {
-            await objclass.onDecodeReady();
-
-            // debugger;
-
             const kls = objclass.buildClass();
+
+            return new kls[0];
 
             debugger;
 
             const obj = this.createObject(objclass.friendlyName as UObjectTypes_T);
 
-            obj.injectClass(objclass);
-            
-            debugger;
+            // obj.injectClass(objclass);
+
+            // debugger;
 
             return obj as T;
         }
@@ -442,7 +440,7 @@ class UPackage extends UEncodedFile {
         throw Error("Could not find the native class for " + objname);
     }
 
-    async loadExportObject(index: number) {
+    public loadExportObject(index: number) {
         const entry = this.exports[index];
         const objname = entry.objectName;
 
@@ -458,7 +456,7 @@ class UPackage extends UEncodedFile {
             // if (entry.idClass === -26)
             //     debugger;
 
-            let objclass: UClass = await this.fetchObject(entry.idClass) as UClass;
+            let objclass: UClass = this.fetchObject(entry.idClass) as UClass;
 
             // if (entry.index === 1821)
             //     debugger;
@@ -473,23 +471,23 @@ class UPackage extends UEncodedFile {
 
             // debugger;
 
-            const object = entry.object = await this.newObject(objname, objclass) as UObject;
+            const object = entry.object = this.newObject(objname, objclass) as UObject;
 
             // debugger;
 
             object.load(this.asReadable(), entry);
 
         } else {
-            let objbase = entry.idSuper === 0 ? null : await this.fetchObject(entry.idSuper) as UClass;
+            let objbase = entry.idSuper === 0 ? null : this.fetchObject(entry.idSuper) as UClass;
             let pkg: UPackage = this;
 
             if (!objbase && objname !== "Object") {
                 debugger;
-                pkg = await this.loader.getPackage("Core", "Script");
+                pkg = this.loader.getPackage("Core", "Script");
 
-                if (!pkg.buffer) await this.loader.load(pkg);
+                if (!pkg.isDecoded()) throw new Error(`Package must be decoded: 'Core'`);
 
-                objbase = await pkg.fetchObjectByType("Class", "Object") as UClass;
+                objbase = pkg.fetchObjectByType("Class", "Object") as UClass;
             }
 
             // if (index === 771)
@@ -545,25 +543,12 @@ class UPackage extends UEncodedFile {
         return this.imports[index];
     }
 
-    _importPromises = new Map<number, Promise<void>>();
+    public fetchObject<T extends UObject = UObject>(objref: number): T {
 
-    async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
-        const hasPromise = this._importPromises.has(objref);
+        // console.log(this.path, objref);
 
         // if (objref === 25)
         //     debugger;
-
-        if (hasPromise)
-            await this._importPromises.get(objref);
-
-        let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
-
-        if (!hasPromise) {
-            this._importPromises.set(objref, new Promise((_resolve, _reject) => {
-                resolve = _resolve;
-                reject = _reject;
-            }));
-        }
 
         if (objref > 0) {// Export table object
             const index = objref - 1;
@@ -574,9 +559,7 @@ class UPackage extends UEncodedFile {
             const entry = this.exports[index];
 
             if (!entry.object)
-                await this.loadExportObject(index);
-
-            if (!hasPromise) resolve();
+                this.loadExportObject(index);
 
             return entry.object as T;
         } else if (objref < 0) {// Import table object
@@ -597,9 +580,9 @@ class UPackage extends UEncodedFile {
             const objectName = entry.objectName;
             const className = entry.className;
 
-            const pkg = await this.loader.getPackage(packageName, className as SupportedImports_T);
+            const pkg = this.loader.getPackage(packageName, className as SupportedImports_T);
 
-            if (!pkg.buffer) await this.loader.load(pkg);
+            if (!pkg.isDecoded()) throw new Error(`Package must be decoded: '${packageName}'`);
 
             // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
             //     debugger;
@@ -613,7 +596,7 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
 
-            let obj = await pkg.fetchObjectByType(className, objectName, groupName);
+            let obj = pkg.fetchObjectByType(className, objectName, groupName);
 
             if (obj === null) {
                 console.log(pkg);
@@ -635,17 +618,13 @@ class UPackage extends UEncodedFile {
                 debugger
             // obj = Packages->GetPackage("UnrealI")->GetUObject(className, objectName, groupName);
 
-            if (!hasPromise) resolve();
-
             return obj as T;
         }
-
-        if (!hasPromise) resolve();
 
         return null;
     }
 
-    async fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
+    public fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
         // if (className !== "Class") {
         //     debugger;
         // }
@@ -659,9 +638,9 @@ class UPackage extends UEncodedFile {
         //     return this.nativeClassess.get(objectName as any);
         // }
 
-        const index = await this.findObjectRef(className, objectName, groupName);
+        const index = this.findObjectRef(className, objectName, groupName);
 
-        return await this.fetchObject(index);
+        return this.fetchObject(index);
     }
 
 
@@ -1018,7 +997,7 @@ class UNativePackage extends UPackage {
         super(loader, "__native__.u");
     }
 
-    protected async registerNativeClass(className: NativeTypes_T, baseClass: NativeTypes_T | "None" = "None"): Promise<void> {
+    protected registerNativeClass(className: NativeTypes_T, baseClass: NativeTypes_T | "None" = "None"): void {
         if (!this.nameHash.has(className)) {
             const name = new UName();
 
@@ -1033,7 +1012,7 @@ class UNativePackage extends UPackage {
 
         exp.index = this.exports.length
         exp.idClass = 0;
-        exp.idSuper = baseClass === "None" ? 0 : await this.findObjectRef("Class", baseClass);
+        exp.idSuper = baseClass === "None" ? 0 : this.findObjectRef("Class", baseClass);
         exp.idPackage = 0;
         exp.idObjectName = this.nameHash.get(className);
         exp.objectName = className;
@@ -1044,80 +1023,79 @@ class UNativePackage extends UPackage {
         this.exports.push(exp);
     }
 
-    protected _promise: Promise<this> = null;
-
     public async decode(): Promise<this> {
-        if (this._promise) return this._promise;
         if (this.buffer) return this;
 
-        return this._promise = new Promise(async resolve => {
-            this.imports = [];
-            this.exports = [];
-            this.nameTable = [];
-            this.nameHash = new Map();
+        const tStart = performance.now();
 
-            await this.registerNativeClass("Object");
-            await this.registerNativeClass("Field", "Object");
-            await this.registerNativeClass("Struct", "Field");
-            await this.registerNativeClass("State", "Struct");
-            await this.registerNativeClass("Class", "State");
-            await this.registerNativeClass("Function", "Struct");
 
-            await this.registerNativeClass("Const", "Field");
-            await this.registerNativeClass("Enum", "Field");
+        this.imports = [];
+        this.exports = [];
+        this.nameTable = [];
+        this.nameHash = new Map();
 
-            await this.registerNativeClass("Property", "Field");
-            // this.registerNativeClass("PointerProperty", "Property");
-            await this.registerNativeClass("DelegateProperty", "Property");
-            await this.registerNativeClass("ByteProperty", "Property");
-            await this.registerNativeClass("ObjectProperty", "Property");
-            await this.registerNativeClass("ClassProperty", "ObjectProperty");
-            // this.registerNativeClass("FixedArrayProperty", "Property");
-            await this.registerNativeClass("ArrayProperty", "Property");
-            // this.registerNativeClass("MapProperty", "Property");
-            await this.registerNativeClass("StructProperty", "Property");
-            await this.registerNativeClass("IntProperty", "Property");
-            await this.registerNativeClass("BoolProperty", "Property");
-            await this.registerNativeClass("FloatProperty", "Property");
-            await this.registerNativeClass("NameProperty", "Property");
-            await this.registerNativeClass("StrProperty", "Property");
-            // this.registerNativeClass("StringProperty", "Property");
+        this.registerNativeClass("Object");
+        this.registerNativeClass("Field", "Object");
+        this.registerNativeClass("Struct", "Field");
+        this.registerNativeClass("State", "Struct");
+        this.registerNativeClass("Class", "State");
+        this.registerNativeClass("Function", "Struct");
 
-            await this.registerNativeClass("Texture", "Object");
-            await this.registerNativeClass("Font", "Object");
-            await this.registerNativeClass("Sound", "Object");
+        this.registerNativeClass("Const", "Field");
+        this.registerNativeClass("Enum", "Field");
 
-            await this.registerNativeClass("Primitive", "Object");
-            await this.registerNativeClass("Model", "Primitive");
-            await this.registerNativeClass("ConvexVolume", "Primitive");
-            await this.registerNativeClass("StaticMesh", "Primitive");
-            await this.registerNativeClass("Mesh", "Primitive");
-            await this.registerNativeClass("MeshInstance", "Primitive");
-            await this.registerNativeClass("LodMeshInstance", "MeshInstance");
-            await this.registerNativeClass("SkeletalMeshInstance", "LodMeshInstance");
+        this.registerNativeClass("Property", "Field");
+        // this.registerNativeClass("PointerProperty", "Property");
+        this.registerNativeClass("DelegateProperty", "Property");
+        this.registerNativeClass("ByteProperty", "Property");
+        this.registerNativeClass("ObjectProperty", "Property");
+        this.registerNativeClass("ClassProperty", "ObjectProperty");
+        // this.registerNativeClass("FixedArrayProperty", "Property");
+        this.registerNativeClass("ArrayProperty", "Property");
+        // this.registerNativeClass("MapProperty", "Property");
+        this.registerNativeClass("StructProperty", "Property");
+        this.registerNativeClass("IntProperty", "Property");
+        this.registerNativeClass("BoolProperty", "Property");
+        this.registerNativeClass("FloatProperty", "Property");
+        this.registerNativeClass("NameProperty", "Property");
+        this.registerNativeClass("StrProperty", "Property");
+        // this.registerNativeClass("StringProperty", "Property");
 
-            await this.registerNativeClass("MeshAnimation", "Object");
-            await this.registerNativeClass("StaticMeshInstance", "Object");
+        this.registerNativeClass("Texture", "Object");
+        this.registerNativeClass("Font", "Object");
+        this.registerNativeClass("Sound", "Object");
 
-            await this.registerNativeClass("Player", "Object");
-            await this.registerNativeClass("Viewport", "Player");
+        this.registerNativeClass("Primitive", "Object");
+        this.registerNativeClass("Model", "Primitive");
+        this.registerNativeClass("ConvexVolume", "Primitive");
+        this.registerNativeClass("StaticMesh", "Primitive");
+        this.registerNativeClass("Mesh", "Primitive");
+        this.registerNativeClass("MeshInstance", "Primitive");
+        this.registerNativeClass("LodMeshInstance", "MeshInstance");
+        this.registerNativeClass("SkeletalMeshInstance", "LodMeshInstance");
 
-            await this.registerNativeClass("TerrainSector", "Object");
-            await this.registerNativeClass("TerrainPrimitive", "Primitive");
+        this.registerNativeClass("MeshAnimation", "Object");
+        this.registerNativeClass("StaticMeshInstance", "Object");
 
-            await this.registerNativeClass("LevelBase", "Object");
-            await this.registerNativeClass("Level", "LevelBase");
+        this.registerNativeClass("Player", "Object");
+        this.registerNativeClass("Viewport", "Player");
 
-            await this.registerNativeClass("Client", "Object");
+        this.registerNativeClass("TerrainSector", "Object");
+        this.registerNativeClass("TerrainPrimitive", "Primitive");
 
-            this.buffer = new ArrayBuffer(0);
-            this._promise = null;
+        this.registerNativeClass("LevelBase", "Object");
+        this.registerNativeClass("Level", "LevelBase");
 
-            resolve(this);
-        });
+        this.registerNativeClass("Client", "Object");
+
+        this.buffer = new ArrayBuffer(0);
+
+        console.log(`'${this.path}' loaded in ${performance.now() - tStart} ms`);
+
+        return this;
     }
 
-    async fetchObject<T extends UObject = UObject>(objref: number): Promise<T> {
+    public fetchObject<T extends UObject = UObject>(objref: number): T {
         if (objref <= 0) return null;
         // if (objref <= 0) throw new Error("Native package only supports exports.");
 
@@ -1170,9 +1148,9 @@ class UNativePackage extends UPackage {
         }
 
         const object = Constructor as T;
-        const pkg = await this.loader.getPackage("Core", "Script");
+        const pkg = this.loader.getPackage("Core", "Script");
 
-        if (!(pkg as any).buffer) await this.loader.load(pkg);
+        if (!pkg.isDecoded()) throw new Error(`Package must be decoded: 'Core'`)
 
         return object;
     }

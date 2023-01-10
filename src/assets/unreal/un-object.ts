@@ -18,6 +18,8 @@ type RegisterNativeFunc_T = {
     nativeIndex: number
 }
 
+// const dependencyMap = new Array();
+
 abstract class UObject {
     public objectName = "Exp_None";
     public exportIndex?: number = null;
@@ -30,7 +32,6 @@ abstract class UObject {
 
     public skipRemaining: boolean = false;
 
-    protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
@@ -111,7 +112,7 @@ abstract class UObject {
 
                 // tags.push(tag.name + "/" + tag.type);
 
-                this.promisesLoading.push(this.loadProperty(pkg, tag));
+                this.loadProperty(pkg, tag);
                 this.readHead = pkg.tell();
 
             } while (this.readHead < this.readTail);
@@ -166,7 +167,13 @@ abstract class UObject {
         this.readHead = pkg.tell();
     }
 
+    protected isLoading = false;
+
     public load(pkg: UPackage, exp: UExport): this {
+        if (this.isLoading)
+            return this;
+
+        this.isLoading = true;
 
         this.preLoad(pkg, exp);
 
@@ -190,7 +197,9 @@ abstract class UObject {
                 : 1;
     }
 
-    protected async loadProperty(pkg: UPackage, tag: PropertyTag) {
+    protected loadDependencies = new Array<Function>();
+
+    protected loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();
         const offEnd = offStart + tag.dataSize;
         const isSigned = this.getPropertyIsSigned(tag);
@@ -213,9 +222,11 @@ abstract class UObject {
                 //     // pkg.read(index);
                 // } else {
                 const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-                const obj = await pkg.fetchObject(objIndex.value as number);
+                this.loadDependencies.push(() => {
+                    const obj = pkg.fetchObject(objIndex.value as number);
 
-                this.setProperty(tag, obj);
+                    this.setProperty(tag, obj);
+                });
                 // pkg.seek(offEnd, "set");
                 // }
             } break;
@@ -331,40 +342,7 @@ abstract class UObject {
         return true;
     }
 
-    protected _decodePromise: Promise<void>;
-
-    public async onDecodeReady(): Promise<void> {
-        let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
-
-        const hasPromise = !!this._decodePromise;
-
-        if (!hasPromise) {
-            this._decodePromise = new Promise((_resolve, _reject) => {
-                resolve = _resolve;
-                reject = _reject;
-            });
-        } else {
-            return await this._decodePromise;
-        }
-
-        try {
-            await Promise.all(this.promisesLoading);
-            if (!hasPromise) resolve();
-
-            if (CLEANUP_NAMESPACE) {
-                Object.values(this.getPropertyMap()).forEach(propName => {
-                    if ((this as any)[propName] === undefined)
-                        delete (this as any)[propName];
-                });
-            }
-        } catch (e) {
-            // debugger;
-            if (!hasPromise) reject(e);
-            throw e;
-        }
-    }
-
-    protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }
+    protected readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }
 }
 
 export default UObject;

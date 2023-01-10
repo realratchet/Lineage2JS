@@ -10,6 +10,7 @@ import UClassRegistry from "./scripts/un-class-registry";
 import UNativeRegistry from "./scripts/un-native-registry";
 import FConstructable from "./un-constructable";
 import { PropertyTag } from "./un-property-tag";
+import { UProperty, UArrayProperty } from "./un-properties";
 
 class FLabelField extends FConstructable {
     public name: string = "None";
@@ -50,9 +51,32 @@ class UStruct extends UField {
     protected namedProperties: Record<string, any[]> = {};
 
     protected readArray(pkg: UPackage, tag: PropertyTag) {
-        debugger;
+        let field: UStruct = this;
 
-        return false;
+        while (field) {
+
+            const index = field.childPropFields.findIndex(x => x.propertyName === tag.name);
+
+            if (index === -1) {
+                field = field.superField as any as UStruct;
+                continue;
+            }
+
+            const constr = field.childPropFields[index].createObject();
+
+            debugger;
+
+            const value = constr(pkg, tag);
+
+            debugger;
+
+            this.setProperty(tag, value);
+
+            return true;
+
+        }
+
+        throw new Error("Broken");
     }
 
     protected setProperty(tag: PropertyTag, value: any) {
@@ -60,6 +84,9 @@ class UStruct extends UField {
 
         if (tag.arrayIndex < 0)
             throw new Error("That's illegal");
+
+        // if (!(tag.name in this.namedProperties))
+        //     throw new Error("Undefined property");
 
         const container = this.namedProperties[tag.name] = this.namedProperties[tag.name] || [];
 
@@ -91,6 +118,34 @@ class UStruct extends UField {
 
         this.textBufferId = pkg.read(compat32).value as number;
         this.firstChildPropId = pkg.read(compat32).value as number;
+
+        if (this.firstChildPropId !== 0) {
+            let childPropId = this.firstChildPropId;
+
+            while (Number.isFinite(childPropId) && childPropId !== 0) {
+
+                const field = pkg.fetchObject<UProperty>(childPropId);
+
+                this.childPropFields.push(field);
+
+                // if (field instanceof UProperty) {
+                //     this.namedProperties[field.propertyName] = [];
+
+                //     if (field instanceof UArrayProperty) {
+                //         const property = field.createObject();
+                //         debugger;
+                //     }
+                // }
+
+                childPropId = field.nextFieldId;
+            }
+
+            // if (this.friendlyName === "Commandlet")
+            //     debugger;
+
+            // if (this.friendlyName === "Emitter")
+            //     debugger;
+        }
 
         const nameId = pkg.read(compat32).value as number;
 
@@ -161,29 +216,60 @@ class UStruct extends UField {
         //         resolve(this.textBuffer);
         //     }));
         // }
+    }
 
-        if (this.firstChildPropId !== 0) {
-            this.promisesLoading.push(new Promise(async resolve => {
-                let childPropId = this.firstChildPropId;
+    protected kls: typeof UObject[];
 
-                while (Number.isFinite(childPropId) && childPropId !== 0) {
+    public buildClass(): typeof UObject[] {
+        if (this.kls) return this.kls;
 
-                    const field = await pkg.fetchObject<UProperty>(childPropId);
+        this.kls = [];
 
-                    this.childPropFields.push(field);
+        const dependencyTree = new Array<UStruct>();
+        let lastBase: UStruct = this;
 
-                    childPropId = field.nextFieldId;
-                }
 
-                if (this.friendlyName === "Commandlet")
-                    debugger;
+        do {
+            dependencyTree.push(lastBase);
+            lastBase.loadSuper();
 
-                // if (this.friendlyName === "Emitter")
-                //     debugger;
+            lastBase = lastBase.superField as UStruct;
+        } while (lastBase);
 
-                resolve(this.childPropFields);
-            }));
+        // debugger;
+
+        const constructs: [string, Function][] = [];
+
+        for (const base of dependencyTree.reverse()) {
+            // debugger;
+
+            if (base.constructor !== UStruct)
+                debugger;
+
+            const { childPropFields, namedProperties, friendlyName } = base;
+
+            for (const field of childPropFields) {
+                if (!(field instanceof UProperty)) continue;
+
+                constructs.push([field.propertyName, field.createObject()]);
+            }
         }
+
+        const cls = {
+            [this.friendlyName]: class {
+                public load(pkg: UPackage) {
+                    debugger;
+                    for (const [name, fn] of constructs) {
+                        (this as any)[name] = fn(pkg);
+                    }
+                }
+            }
+        }[this.friendlyName];
+
+        // debugger;
+        this.kls.push(cls as any);
+
+        return this.kls;
     }
 
     protected bytecodePlainText = "";

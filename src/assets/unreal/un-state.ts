@@ -61,28 +61,26 @@ class UState extends UStruct {
                 probes.push(pname);
             }
         }
+    }
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            let childPropId = this.firstChildPropId;
+    protected postLoad(pkg: UPackage, exp: UExport<UObject>): void {
+        super.postLoad(pkg, exp);
 
-            while (childPropId > 0) {
-                const field = await pkg.fetchObject<UFunction>(childPropId);
+        let childPropId = this.firstChildPropId;
 
-                if (field instanceof UFunction) {
-                    await field.onDecodeReady();
+        while (childPropId > 0) {
+            const field = pkg.fetchObject<UFunction>(childPropId);
 
-                    this.functions[field.friendlyName] = field;
-                    // debugger;
-                }
-
-                childPropId = field.nextFieldId;
+            if (field instanceof UFunction) {
+                this.functions[field.friendlyName] = field;
+                // debugger;
             }
 
-            // if (Object.keys(this.functions).length > 0)
-            //     debugger;
+            childPropId = field.nextFieldId;
+        }
 
-            resolve();
-        }));
+        // if (Object.keys(this.functions).length > 0)
+        //     debugger;
     }
 }
 

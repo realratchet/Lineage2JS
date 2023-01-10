@@ -5,6 +5,7 @@ import UExport from "./un-export";
 import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
+import { UArrayProperty, UProperty } from "./un-properties";
 import { PropertyTag } from "./un-property-tag";
 import UState from "./un-state";
 
@@ -150,23 +151,22 @@ class UClass extends UState {
 
         this.readHead = pkg.tell();
 
+        // if (this.friendlyName === "Material")
+        //     debugger;
+
         this.readNamedProps(pkg);
+        // if (this.friendlyName === "Material")
+        //     debugger;
 
         // if (this.friendlyName === "Emitter")
         //     debugger;
     }
 
-    protected promiseReadNamedProps: Promise<void>;
-    protected resolveReadNamedProps: (value: void | PromiseLike<void>) => void;
-    protected rejectReadNamedProps: (reason?: any) => void;
+
     protected tagsReadNamedProps: any[];
 
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
-        this.promiseReadNamedProps = new Promise<void>((resolve, reject) => {
-            this.resolveReadNamedProps = resolve;
-            this.rejectReadNamedProps = reject;
-        });
 
         const tags = [];
 
@@ -178,10 +178,10 @@ class UClass extends UState {
 
                 const offset = pkg.tell();
 
-                tags.push([pkg, offset, tag, async (pkg: UPackage, offset: number, tag: PropertyTag) => {
+                tags.push(((pkg: UPackage, offset: number, tag: PropertyTag) => {
                     pkg.seek(offset, "set");
-                    await this.loadProperty(pkg, tag);
-                }]);
+                    this.loadProperty(pkg, tag);
+                }).bind(this, pkg, offset, tag));
 
                 pkg.seek(offset + tag.dataSize, "set");
                 this.readHead = pkg.tell();
@@ -193,60 +193,124 @@ class UClass extends UState {
         this.readHead = pkg.tell();
     }
 
-    protected _decodePromiseCls: Promise<void>;
+    // protected _decodePromiseCls: Promise<void>;
 
-    public async onDecodeReady(): Promise<void> {
-        let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
+    // public async onDecodeReady(): Promise<void> {
+    //     let resolve: (value: void | PromiseLike<void>) => void, reject: (reason?: any) => void;
 
-        const hasPromise = !!this._decodePromiseCls;
+    //     const hasPromise = !!this._decodePromiseCls;
 
-        if (!hasPromise) {
-            this._decodePromiseCls = new Promise((_resolve, _reject) => {
-                resolve = _resolve;
-                reject = _reject;
-            });
-        } else {
-            return await this._decodePromiseCls;
-        }
+    //     if (!hasPromise) {
+    //         this._decodePromiseCls = new Promise((_resolve, _reject) => {
+    //             resolve = _resolve;
+    //             reject = _reject;
+    //         });
+    //     } else {
+    //         return;
+    //     }
 
-        await super.onDecodeReady();
+    //     await super.onDecodeReady();
 
-        if (this.tagsReadNamedProps.length > 0) {
-            await new Promise<void>(async resolve => {
-                let i = 0;
-                for (const [pkg, offset, tag, fn] of this.tagsReadNamedProps) {
-                    console.log(`(${this.friendlyName})`, ++i, "of", this.tagsReadNamedProps.length, tag.name, this.exportIndex);
+    //     if (this.tagsReadNamedProps.length > 0) {
+    //         await new Promise<void>(async resolve => {
+    //             let i = 0;
+    //             for (const [pkg, offset, tag, fn] of this.tagsReadNamedProps) {
+    //                 console.log(`(${this.friendlyName})`, ++i, "of", this.tagsReadNamedProps.length, tag.name, this.exportIndex);
+    //                 await fn(pkg, offset, tag);
+    //                 console.log(`\t\t<----(${this.friendlyName})`);
+    //             }
 
-                    await fn(pkg, offset, tag);
-                }
+    //             resolve();
+    //         });
+    //     }
 
-                resolve();
-            });
-        }
+    //     if (!hasPromise) resolve();
+    // }
 
-        if (!hasPromise) resolve();
-    }
+    public buildClass(): typeof UObject[] {
+        if (this.kls) return this.kls;
 
-    protected kls: typeof UObject;
+        this.kls = [];
 
-    public buildClass(): typeof UObject {
         const dependencyTree = new Array<UClass>();
         let lastBase: UClass = this;
 
+
         do {
             dependencyTree.push(lastBase);
+            lastBase.loadSuper();
+
             lastBase = lastBase.superField as UClass;
         } while (lastBase);
 
+        // debugger;
+
+        const clsNamedProperties: Record<string, any> = {};
+
         for (const base of dependencyTree.reverse()) {
+            // debugger
+            while (base.tagsReadNamedProps.length > 0)
+                base.tagsReadNamedProps.shift()();
+
+            if (base.constructor !== UClass)
+                debugger;
+
             const { childPropFields, namedProperties, friendlyName } = base;
 
-            debugger;
+            for (const field of childPropFields) {
+                if (!(field instanceof UProperty)) continue;
+
+                const propertyName = field.propertyName;
+
+                if (field instanceof UArrayProperty) {
+                    if (propertyName in namedProperties)
+                        debugger;
+
+                    clsNamedProperties[propertyName] = field.createObject();
+                }
+
+                // debugger;
+
+
+                const value = propertyName in namedProperties ? namedProperties[propertyName] : [];
+
+                if (value.length > 1)
+                    debugger;
+
+                clsNamedProperties[propertyName] = value[0];
+
+                // debugger;
+            }
+
+            // debugger;
         }
 
-        debugger;
+        const cls = {
+            [this.friendlyName]: class extends UObject {
+                constructor() {
+                    super();
 
-        return null;
+                    for (const [name, value] of Object.entries(clsNamedProperties)) {
+                        (this as any)[name] = value;
+                    }
+                }
+
+                protected getPropertyMap(): Record<string, string> {
+                    return {
+                        ...super.getPropertyMap(),
+                        ...Object.keys(clsNamedProperties).reduce((acc, k) => {
+                            acc[k] = k; return acc;
+                        }, {} as Record<string, string>)
+                    }
+                }
+            }
+        }[this.friendlyName];
+
+
+        debugger;
+        this.kls = [cls as any];
+
+        return this.kls;
     }
 }
 

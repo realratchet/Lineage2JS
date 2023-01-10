@@ -1,5 +1,6 @@
 type DecodeLibrary = import("./decode-library").DecodeLibrary;
 type UPackage = import("./un-package").UPackage;
+type UNativePackage = import("./un-package").UNativePackage;
 type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
 type UHeader = import("./un-header").UHeader;
 type UGeneration = import("./un-generation").UGeneration;

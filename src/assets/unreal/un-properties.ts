@@ -1,6 +1,9 @@
 import BufferValue from "../buffer-value";
+import FArray, { FPrimitiveArray } from "./un-array";
+import FConstructable from "./un-constructable";
 import UExport from "./un-export";
 import UField from "./un-field";
+import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
 
@@ -10,6 +13,13 @@ abstract class UProperty extends UField {
     protected replicationOffset: number;
     protected categoryNameId: number;
     protected categoryName: string;
+    public propertyName: string;
+
+    protected preLoad(pkg: UPackage, exp: UExport<UObject>): void {
+        super.preLoad(pkg, exp);
+
+        this.propertyName = exp.objectName;
+    }
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
@@ -33,6 +43,7 @@ abstract class UProperty extends UField {
     }
 
     public abstract loadValue(pkg: UPackage): this;
+    public abstract createObject(): any;
 }
 
 abstract class UBaseExportProperty<T extends UField> extends UProperty {
@@ -47,17 +58,20 @@ abstract class UBaseExportProperty<T extends UField> extends UProperty {
         this.valueId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (this.valueId !== 0)
-                this.value = await pkg.fetchObject<T>(this.valueId);
 
-            resolve();
-        }));
+        if (this.valueId !== 0)
+            this.value = pkg.fetchObject<T>(this.valueId);
     }
 }
 
-class UByteProperty extends UBaseExportProperty<UEnum> { }
-class UObjectProperty extends UBaseExportProperty<UClass> { }
+class UByteProperty extends UBaseExportProperty<UEnum> {
+    public createObject() { return (pkg: UPackage) => { throw new Error("Not yet implemented"); } }
+}
+
+class UObjectProperty extends UBaseExportProperty<UClass> {
+    static dtype = BufferValue.compat32;
+    public createObject() { return (pkg: UPackage) => pkg.read(new BufferValue(UIntProperty.dtype)).value as number; }
+}
 
 class UClassProperty extends UObjectProperty {
     protected metaClassId: number;
@@ -71,19 +85,23 @@ class UClassProperty extends UObjectProperty {
         this.metaClassId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (this.metaClassId !== 0)
-                this.metaClass = await pkg.fetchObject<UClass>(this.metaClassId);
+        if (this.metaClassId !== 0)
+            this.metaClass = pkg.fetchObject<UClass>(this.metaClassId);
 
-            resolve();
-        }));
     }
 }
 
-class UStructProperty extends UBaseExportProperty<UClass> { }
+class UStructProperty extends UBaseExportProperty<UClass> {
+    public createObject(): typeof FConstructable {
+        return (this.value as UStruct).buildClass() as any;
+    }
+}
 
 
 class UIntProperty extends UProperty {
+    static dtype = BufferValue.int32;
+    public createObject() { return (pkg: UPackage) => pkg.read(new BufferValue(UIntProperty.dtype)).value as number; }
+
     // protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
     //     super.load(pkg, exp);
 
@@ -114,6 +132,9 @@ class UNameProperty extends UProperty {
 }
 
 class UFloatProperty extends UProperty {
+    static dtype = BufferValue.float;
+    public createObject() { return (pkg: UPackage) => pkg.read(new BufferValue(UFloatProperty.dtype)).value as number; }
+
     // protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
     //     super.load(pkg, exp);
 
@@ -121,6 +142,7 @@ class UFloatProperty extends UProperty {
 
     //     debugger;
     // }
+
 }
 
 class UArrayProperty extends UBaseExportProperty<UProperty> {
@@ -131,6 +153,21 @@ class UArrayProperty extends UBaseExportProperty<UProperty> {
 
     //     debugger;
     // }
+
+    public createObject() {
+        if (this.value instanceof UIntProperty || this.value instanceof UFloatProperty) {
+            return (pkg: UPackage) => (new FPrimitiveArray((this.value.constructor as (typeof UIntProperty | typeof UFloatProperty)).dtype).load(pkg));
+        } else if (this.value instanceof UObjectProperty) {
+            return (pkg: UPackage) => {
+                const arr: FNumber[] = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg);
+
+                return arr.map(v => pkg.fetchObject(v.value));
+            }
+        } else if (!(this.value instanceof UStructProperty))
+            throw new Error("Not yet implemented")
+
+        return new FArray(this.value.createObject() as any);
+    }
 }
 
 class UStrProperty extends UProperty {

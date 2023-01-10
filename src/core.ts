@@ -204,7 +204,7 @@ async function startCore() {
     (global as any).renderManager = renderManager;
 
     const assetList = await (await fetch("asset-list.json")).json();
-    const assetLoader = new AssetLoader(assetList.supported);
+    const assetLoader = await AssetLoader.Instantiate(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
@@ -212,10 +212,11 @@ async function startCore() {
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
-    const pkgCore = await assetLoader.load(await assetLoader.getPackage("core", "Script"));
 
+    const pkgCore = await assetLoader.load(assetLoader.getPackage("core", "Script"));
 
-    // // debugger;
+    // debugger;
+
     // const classess = [];
 
     // for (const { index } of pkgCore.exportGroups["Class"]) {
@@ -369,10 +370,17 @@ async function startCore() {
 
     const pkgEffects = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 
-    const rapidShot = await pkgEffects.fetchObject<UClass>(657);
+    // debugger;
+
+    const rapidShot = pkgEffects.fetchObject<UClass>(657);
     // const mortalBlow = await pkgEffects.fetchObject<UClass>(21);
 
-    await rapidShot.onDecodeReady();
+    // debugger;
+
+    // global.rapidShot = rapidShot;
+
+    // await rapidShot.onDecodeReady();
+    const kls = rapidShot.buildClass()
     // await rapidShot.superField.onDecodeReady();
 
     debugger;
