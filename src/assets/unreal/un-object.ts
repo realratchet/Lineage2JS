@@ -295,6 +295,12 @@ abstract class UObject {
         if (!(_var instanceof FArray) && !((_var as any) instanceof FPrimitiveArray))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
 
+        if (tag.name === "ColorScale")
+            debugger;
+
+        if (tag.name === "SizeScale")
+            debugger;
+
         _var.load(pkg, tag);
 
         return true;
@@ -328,7 +334,7 @@ abstract class UObject {
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of type '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
         if (!this.hasOwnProperty(varName))
-            throw new Error(`Cannot map property '${propName}' -> ${varName}`);;
+            throw new Error(`Cannot map property '${propName}' -> ${varName}`);
 
         if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
             throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);

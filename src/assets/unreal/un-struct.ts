@@ -1,5 +1,5 @@
 import BufferValue from "../buffer-value";
-import UExport from "./un-export";
+import UExport, { ObjectFlags_T } from "./un-export";
 import UField from "./un-field";
 import UObject from "./un-object";
 import UPackage from "./un-package";
@@ -10,7 +10,7 @@ import UClassRegistry from "./scripts/un-class-registry";
 import UNativeRegistry from "./scripts/un-native-registry";
 import FConstructable from "./un-constructable";
 import { PropertyTag } from "./un-property-tag";
-import { UProperty, UArrayProperty } from "./un-properties";
+import { UProperty, UArrayProperty, UStructProperty } from "./un-properties";
 
 class FLabelField extends FConstructable {
     public name: string = "None";
@@ -221,7 +221,11 @@ class UStruct extends UField {
     protected kls: typeof UObject[];
 
     public buildClass(): typeof UObject[] {
-        if (this.kls) return this.kls;
+        if (this.kls) {
+            if (this.kls.length === 0)
+                debugger;
+            return this.kls;
+        }
 
         this.kls = [];
 
@@ -238,6 +242,23 @@ class UStruct extends UField {
 
         // debugger;
 
+        const flagNames = Object.keys(ObjectFlags_T).filter(x => !x.match(/\d+/));
+        const flags = flagNames.reduce((acc, name) => {
+            if (this.exp.anyFlags(ObjectFlags_T[name as any] as any))
+                acc[name] = true;
+            // acc[name] = this.exp.anyFlags(name as any);
+
+            return acc;
+        }, {} as Record<string, boolean>);
+
+        console.log(this.friendlyName, flags);
+
+        // if (this.friendlyName === "Vector")
+        //     debugger;
+
+        if (this.friendlyName === "ParticleColorScale")
+            debugger;
+
         const constructs: [string, Function][] = [];
 
         for (const base of dependencyTree.reverse()) {
@@ -251,20 +272,126 @@ class UStruct extends UField {
             for (const field of childPropFields) {
                 if (!(field instanceof UProperty)) continue;
 
-                constructs.push([field.propertyName, field.createObject()]);
+                let construct = field.createObject();
+
+                if (field instanceof UStructProperty) {
+                    const klass = construct[0];
+
+                    construct = `(pkg) => new ${klass}().load(pkg)`;
+                }
+
+                // if (field.propertyName === "Color" || field.propertyName === "RelativeTime")
+                //     debugger;
+
+                constructs.push([field.propertyName, construct]);
             }
         }
 
+        // if (this.exp.anyFlags(ObjectFlags_T.ScriptMask)) {
+        //     constructs.unshift(["flags", (pkg: UPackage) => {
+        //         const startOffset = pkg.tell();
+        //         const flag = pkg.read(new BufferValue(BufferValue.uint8)).value as number
+        //         const finishOffset = pkg.tell();
+
+        //         console.log(`Read '${finishOffset - startOffset}' bytes`);
+
+        //         return flag;
+        //     }]);
+
+
+        //     // debugger;
+        // }
+
+        // function readHeader(pkg: UPackage, flags: number, size: number) {
+        //     debugger;
+        //     if (exp.flags & ObjectFlags_T.HasStack && exp.size > 0) {
+        //         const offset = pkg.tell();
+        //         const compat32 = new BufferValue(BufferValue.compat32);
+        //         const int64 = new BufferValue(BufferValue.int64);
+        //         const int32 = new BufferValue(BufferValue.int32);
+
+        //         const node = pkg.read(compat32).value as number;
+        //         /*const stateNode =*/ pkg.read(compat32).value as number;
+        //         /*const probeMask =*/ pkg.read(int64).value as number;
+        //         /*const latentAction =*/ pkg.read(int32).value as number;
+
+        //         if (node !== 0) {
+        //             /*const offset =*/ pkg.read(compat32).value as number;
+        //         }
+        //     }
+        //     debugger;
+        // }
+
+        // const structCode = [
+        //     `(function() { return class ${this.friendlyName} {`,
+        //     "    load(pkg) {",
+        //     "        const startOffset = pkg.tell();",
+        //     ...constructs.map(([name, fn]) => {
+
+        //         return `        this.tag${name} = (${(pkg: UPackage) => PropertyTag.from(pkg, pkg.tell())})(pkg);\n        debugger;`
+        //         // return `        this.fl${name} = (${(pkg: UPackage) => pkg.read(new BufferValue(BufferValue.uint8)).value as number})(pkg);`
+        //     }),
+        //     ...constructs.map(([name, fn]) => {
+
+        //         return `        this.${name} = (${fn})(pkg);`
+        //     }),
+        //     "        const finishOffset = pkg.tell();",
+        //     "        console.log(`Read '${finishOffset - startOffset}' bytes`);",
+        //     "        debugger;",
+        //     "        return this;",
+        //     "    }",
+        //     "}; })();"
+        // ];
+
+        // // debugger;
+
+        // const cls = {
+        //     [this.friendlyName]: eval(structCode.join("\n"))
+        // }[this.friendlyName];
+
+        let friendlyName = this.friendlyName;
+
         const cls = {
-            [this.friendlyName]: class {
-                public load(pkg: UPackage) {
-                    debugger;
-                    for (const [name, fn] of constructs) {
-                        (this as any)[name] = fn(pkg);
-                    }
+            [this.friendlyName]: class extends UObject {
+                public static readonly structName = friendlyName;
+
+                public constructor() {
+                    super();
+
+                    for (const [name,] of constructs)
+                        (this as any)[name] = undefined;
+                }
+
+                protected getPropertyMap(): Record<string, string> {
+                    return constructs.reduce((acc, [c,]) => {
+                        acc[c] = c;
+
+                        return acc;
+                    }, {} as Record<string, string>);
+                }
+
+                public load(pkg: UPackage, tag: PropertyTag): this {
+                    this.readHead = pkg.tell();
+                    this.readTail = this.readHead + tag.dataSize;
+
+                    do {
+                        const tag = PropertyTag.from(pkg, this.readHead);
+
+                        if (!tag.isValid()) break;
+
+                        this.loadProperty(pkg, tag);
+                        this.readHead = pkg.tell();
+
+                    } while (this.readHead < this.readTail);
+                    return this;
                 }
             }
         }[this.friendlyName];
+
+        if (this.friendlyName === "ParticleColorScale")
+            debugger;
+
+        // debugger;
 
         // debugger;
         this.kls.push(cls as any);

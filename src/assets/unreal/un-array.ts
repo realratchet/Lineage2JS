@@ -1,4 +1,5 @@
 import BufferValue from "../buffer-value";
+import FNumber from "./un-number";
 
 type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
 
@@ -33,6 +34,24 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
             this[i] = new (this.Constructor as any)(elementSize).load(pkg, tag);
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
+
+        return this;
+    }
+}
+
+class FObjectArray<T extends UObject = UObject> extends FArray<T> {
+    protected indexArray: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    protected objects: UObject[];
+
+    constructor() {
+        super(null);
+    }
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        this.indexArray.load(pkg, tag);
+        this.objects = this.indexArray.map(index => pkg.fetchObject(index.value));
+
+        debugger;
 
         return this;
     }
@@ -134,4 +153,4 @@ class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends
 
 
 export default FArray;
-export { FArray, FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy };
+export { FArray, FArrayLazy, FObjectArray, FPrimitiveArray, FPrimitiveArrayLazy };

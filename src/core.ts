@@ -380,7 +380,10 @@ async function startCore() {
     // global.rapidShot = rapidShot;
 
     // await rapidShot.onDecodeReady();
-    const kls = rapidShot.buildClass()
+    const kls = rapidShot.buildClass()[0];
+
+    const rshot = new kls();
+
     // await rapidShot.superField.onDecodeReady();
 
     debugger;

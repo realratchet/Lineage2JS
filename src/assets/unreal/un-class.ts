@@ -228,13 +228,19 @@ class UClass extends UState {
     // }
 
     public buildClass(): typeof UObject[] {
-        if (this.kls) return this.kls;
+        if (this.kls) {
+            if (this.kls.length === 0)
+                debugger;
+            return this.kls;
+        }
 
         this.kls = [];
 
         const dependencyTree = new Array<UClass>();
         let lastBase: UClass = this;
 
+        // if (this.friendlyName === "MeshEmitter")
+        //     debugger;
 
         do {
             dependencyTree.push(lastBase);
@@ -244,6 +250,9 @@ class UClass extends UState {
         } while (lastBase);
 
         // debugger;
+
+        // if (this.friendlyName === "MeshEmitter")
+        //     debugger;
 
         const clsNamedProperties: Record<string, any> = {};
 
@@ -266,7 +275,8 @@ class UClass extends UState {
                     if (propertyName in namedProperties)
                         debugger;
 
-                    clsNamedProperties[propertyName] = field.createObject();
+                    clsNamedProperties[propertyName] = field.dtype;
+                    continue;
                 }
 
                 // debugger;
