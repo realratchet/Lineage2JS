@@ -1,9 +1,10 @@
-import FArray from "./un-array";
+import FArray, { FPrimitiveArray } from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
 import UObject from "./un-object";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
+import BufferValue from "../buffer-value";
 
 /*
 
@@ -46,11 +47,12 @@ class UTexture extends UObject {
     protected defaultMaterial: typeof this;
 
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
+    public readonly _mips: FPrimitiveArray<"uint32">;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Palette": "palette",
-            "Mips": "mipmaps",
+            "Mips": "_mipmaps",
 
             "Format": "format",
             "InternalTime": "internalTime",
@@ -86,31 +88,34 @@ class UTexture extends UObject {
     }
 
     public doLoad(pkg: UPackage, exp: UExport) {
-
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
 
-        const offStart = pkg.tell();
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-        this.mipmaps.load(pkg, null);
+        let someFlag = 0;
 
-        this.readHead = pkg.tell();
+        if (verArchive >= 123 && verLicense >= 16) {
+            someFlag = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
 
-        if (this.readHead !== this.readTail) {
-            pkg.seek(offStart + 4, "set");
-            this.mipmaps.load(pkg, null); // what the fuck is this but it works
+            if (someFlag !== 0)
+                debugger;
         }
 
+        if (verArchive < 84) {
+            debugger;
+            throw new Error("Don't know what to do");
+        }
+
+        if ((someFlag & 0x100) !== 0)
+            debugger;
+
+        this.mipmaps.load(pkg);
         this.readHead = pkg.tell();
 
         console.assert(this.readTail === this.readHead);
-
-        // if (this.readHead !== this.readTail)
-        //     debugger;
-        // else console.error(`'${exp.objectName}' ready properly.`)
-
-        // debugger;
 
         return this;
     }

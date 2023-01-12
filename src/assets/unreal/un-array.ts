@@ -41,7 +41,6 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
 class FObjectArray<T extends UObject = UObject> extends FArray<T> {
     protected indexArray: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
-    protected objects: UObject[];
 
     constructor() {
         super(null);
@@ -49,9 +48,11 @@ class FObjectArray<T extends UObject = UObject> extends FArray<T> {
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         this.indexArray.load(pkg, tag);
-        this.objects = this.indexArray.map(index => pkg.fetchObject(index.value));
 
-        debugger;
+        let i = 0;
+
+        for (const index of this.indexArray)
+            this[i++] = pkg.fetchObject(index.value);
 
         return this;
     }

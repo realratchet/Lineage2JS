@@ -35,6 +35,7 @@ class UState extends UStruct {
     public readonly functions: Record<string, UFunction> = {};
 
     public readonly isState = true;
+    probes: string[];
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
@@ -61,6 +62,8 @@ class UState extends UStruct {
                 probes.push(pname);
             }
         }
+
+        this.probes = probes;
     }
 
     protected postLoad(pkg: UPackage, exp: UExport<UObject>): void {

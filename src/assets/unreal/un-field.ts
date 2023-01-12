@@ -30,18 +30,18 @@ class UField extends UObject {
 
         this.superFieldId = pkg.read(compat32).value as number;
 
-        this.doReadSuperFields = () => {
-            if (this.superFieldId !== 0)
-                this.superField = pkg.fetchObject<UField>(this.superFieldId);
-        }
-
-        // if (this.superFieldId !== 0) {
-        //     const object = pkg.fetchObject<UField>(this.superFieldId);
-
-        //     this.superField = object;
-
-        //     // debugger;
+        // this.doReadSuperFields = () => {
+        //     if (this.superFieldId !== 0 && !this.superField)
+        //         this.superField = pkg.fetchObject<UField>(this.superFieldId);
         // }
+
+        if (this.superFieldId !== 0) {
+            const object = pkg.fetchObject<UField>(this.superFieldId);
+
+            this.superField = object;
+
+            // debugger;
+        }
 
         this.nextFieldId = pkg.read(compat32).value as number;
 

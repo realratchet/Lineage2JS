@@ -418,9 +418,9 @@ class UPackage extends UEncodedFile {
         // }
 
         if (objclass instanceof UClass) {
-            const kls = objclass.buildClass();
+            const kls = objclass.buildClass(this.loader.getPackage("native", "Script") as UNativePackage);
 
-            return new kls[0];
+            return new kls();
 
             debugger;
 
@@ -793,6 +793,8 @@ class UPackage extends UEncodedFile {
     protected createObject<T extends UObject = UObject>(className: UObjectTypes_T, ...params: any[]) {
         let Constructor: typeof UObject = null;
 
+        debugger;
+
         // if (className === "Class" && exp.objectName !== "Object")
         //     debugger;
 
@@ -1095,20 +1097,10 @@ class UNativePackage extends UPackage {
         return this;
     }
 
-    public fetchObject<T extends UObject = UObject>(objref: number): T {
-        if (objref <= 0) return null;
-        // if (objref <= 0) throw new Error("Native package only supports exports.");
-
-
-        const entry = this.exports[objref - 1];
-
+    public getConstructor<T extends typeof UObject = typeof UObject>(constructorName: NativeTypes_T): new () => T {
         let Constructor: any;
-        const objectName = entry.objectName as NativeTypes_T;
 
-        // if (objref === 25)
-        //     debugger;
-
-        switch (entry.objectName) {
+        switch (constructorName) {
             case "Class": Constructor = UClass; break;
             case "Struct": Constructor = UStruct; break;
             case "Const": Constructor = UConst; break;
@@ -1142,10 +1134,26 @@ class UNativePackage extends UPackage {
             case "MeshInstance": Constructor = UMeshInstance; break;
             case "ConvexVolume": Constructor = UConvexVolume; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
+
+
+            case "Texture": Constructor = UTexture; break;
+
             default:
                 debugger;
-                throw new Error(`Not implemented native class: ${objectName}`);
+                throw new Error(`Not implemented native class: ${constructorName}`);
         }
+
+        return Constructor;
+    }
+
+    public fetchObject<T extends UObject = UObject>(objref: number): T {
+        if (objref <= 0) return null;
+        // if (objref <= 0) throw new Error("Native package only supports exports.");
+
+
+        const entry = this.exports[objref - 1];
+
+        const Constructor = this.getConstructor(entry.objectName as NativeTypes_T) as any as T;
 
         const object = Constructor as T;
         const pkg = this.loader.getPackage("Core", "Script");

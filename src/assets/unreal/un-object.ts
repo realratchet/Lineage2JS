@@ -110,12 +110,20 @@ abstract class UObject {
 
                 if (!tag.isValid()) break;
 
-                // tags.push(tag.name + "/" + tag.type);
+                const offset = pkg.tell();
 
-                this.loadProperty(pkg, tag);
+                this.loadDependencies.push([-1, tag.name, () => {
+                    pkg.seek(offset, "set");
+                    // tags.push(tag.name + "/" + tag.type);
+
+                    this.loadProperty(pkg, tag);
+                }]);
+
+                pkg.seek(tag.dataSize);
                 this.readHead = pkg.tell();
 
             } while (this.readHead < this.readTail);
+
         }
 
         // if (this.objectName === "Exp_TerrainInfo0") {
@@ -160,11 +168,11 @@ abstract class UObject {
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
+        this.readHead = pkg.tell();
+
         if (this.skipRemaining) this.readHead = this.readTail;
         if (this.bytesUnread > 0 && this.bytesUnread !== this.readHeadOffset && this.careUnread)
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
-
-        this.readHead = pkg.tell();
     }
 
     protected isLoading = false;
@@ -175,12 +183,17 @@ abstract class UObject {
 
         this.isLoading = true;
 
+        // if (exp.objectName === "DefaultTexture")
+        //     debugger;
+
         this.preLoad(pkg, exp);
 
         if (exp.size > 0) {
             this.doLoad(pkg, exp);
             this.postLoad(pkg, exp);
         }
+
+        this.isLoading = false;
 
         return this;
     }
@@ -197,7 +210,7 @@ abstract class UObject {
                 : 1;
     }
 
-    protected loadDependencies = new Array<Function>();
+    protected loadDependencies = new Array<[number, string, Function]>();
 
     protected loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();
@@ -222,11 +235,9 @@ abstract class UObject {
                 //     // pkg.read(index);
                 // } else {
                 const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-                this.loadDependencies.push(() => {
-                    const obj = pkg.fetchObject(objIndex.value as number);
+                const obj = pkg.fetchObject(objIndex.value as number);
 
-                    this.setProperty(tag, obj);
-                });
+                this.setProperty(tag, obj);
                 // pkg.seek(offEnd, "set");
                 // }
             } break;
@@ -295,11 +306,11 @@ abstract class UObject {
         if (!(_var instanceof FArray) && !((_var as any) instanceof FPrimitiveArray))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
 
-        if (tag.name === "ColorScale")
-            debugger;
+        // if (tag.name === "ColorScale")
+        //     debugger;
 
-        if (tag.name === "SizeScale")
-            debugger;
+        // if (tag.name === "SizeScale")
+        //     debugger;
 
         _var.load(pkg, tag);
 

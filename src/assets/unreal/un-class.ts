@@ -163,35 +163,35 @@ class UClass extends UState {
     }
 
 
-    protected tagsReadNamedProps: any[];
+    // protected tagsReadNamedProps: any[];
 
-    protected readNamedProps(pkg: UPackage) {
-        pkg.seek(this.readHead, "set");
+    // protected readNamedProps(pkg: UPackage) {
+    //     pkg.seek(this.readHead, "set");
 
-        const tags = [];
+    //     const tags = [];
 
-        if (this.readHead < this.readTail) {
-            do {
-                const tag = PropertyTag.from(pkg, this.readHead);
+    //     if (this.readHead < this.readTail) {
+    //         do {
+    //             const tag = PropertyTag.from(pkg, this.readHead);
 
-                if (!tag.isValid()) break;
+    //             if (!tag.isValid()) break;
 
-                const offset = pkg.tell();
+    //             const offset = pkg.tell();
 
-                tags.push(((pkg: UPackage, offset: number, tag: PropertyTag) => {
-                    pkg.seek(offset, "set");
-                    this.loadProperty(pkg, tag);
-                }).bind(this, pkg, offset, tag));
+    //             tags.push(((pkg: UPackage, offset: number, tag: PropertyTag) => {
+    //                 pkg.seek(offset, "set");
+    //                 this.loadProperty(pkg, tag);
+    //             }).bind(this, pkg, offset, tag));
 
-                pkg.seek(offset + tag.dataSize, "set");
-                this.readHead = pkg.tell();
+    //             pkg.seek(offset + tag.dataSize, "set");
+    //             this.readHead = pkg.tell();
 
-            } while (this.readHead < this.readTail);
-        }
+    //         } while (this.readHead < this.readTail);
+    //     }
 
-        this.tagsReadNamedProps = tags;
-        this.readHead = pkg.tell();
-    }
+    //     this.tagsReadNamedProps = tags;
+    //     this.readHead = pkg.tell();
+    // }
 
     // protected _decodePromiseCls: Promise<void>;
 
@@ -227,14 +227,9 @@ class UClass extends UState {
     //     if (!hasPromise) resolve();
     // }
 
-    public buildClass(): typeof UObject[] {
-        if (this.kls) {
-            if (this.kls.length === 0)
-                debugger;
+    public buildClass(pkg: UNativePackage): typeof UObject {
+        if (this.kls)
             return this.kls;
-        }
-
-        this.kls = [];
 
         const dependencyTree = new Array<UClass>();
         let lastBase: UClass = this;
@@ -255,11 +250,20 @@ class UClass extends UState {
         //     debugger;
 
         const clsNamedProperties: Record<string, any> = {};
+        const inheretenceChain = new Array<string>();
 
         for (const base of dependencyTree.reverse()) {
+            // if (base.loadDependencies.length > 0)
+            //     debugger;
+
+            inheretenceChain.push(base.friendlyName);
+
             // debugger
-            while (base.tagsReadNamedProps.length > 0)
-                base.tagsReadNamedProps.shift()();
+            while (base.loadDependencies.length > 0) {
+                const [, , fn] = base.loadDependencies.shift();
+
+                fn();
+            }
 
             if (base.constructor !== UClass)
                 debugger;
@@ -282,43 +286,75 @@ class UClass extends UState {
                 // debugger;
 
 
-                const value = propertyName in namedProperties ? namedProperties[propertyName] : [];
+                // const value = propertyName in namedProperties ? namedProperties[propertyName] : undefined;
 
-                if (value.length > 1)
-                    debugger;
+                // if (propertyName in namedProperties)
+                //     debugger;
 
-                clsNamedProperties[propertyName] = value[0];
+
+                clsNamedProperties[propertyName] = (this as any)[propertyName];
 
                 // debugger;
             }
 
+            for (const propertyName of Object.keys(namedProperties))
+                clsNamedProperties[propertyName] = (this as any)[propertyName];
+
             // debugger;
         }
 
+        const friendlyName = this.friendlyName;
+        const hostClass = this;
+        const Constructor = pkg.getConstructor(this.friendlyName as NativeTypes_T) as any as typeof UObject;
+
         const cls = {
-            [this.friendlyName]: class extends UObject {
+            [this.friendlyName]: class extends Constructor {
+                public static readonly friendlyName = friendlyName;
+                public static readonly hostClass = hostClass;
+                public static readonly inheretenceChain = Object.freeze(inheretenceChain);
+
+                protected newProps: Record<string, string> = {};
+
                 constructor() {
                     super();
 
+                    const oldProps = this.getPropertyMap();
+                    const newProps = this.newProps;
+                    const missingProps = [];
+
                     for (const [name, value] of Object.entries(clsNamedProperties)) {
-                        (this as any)[name] = value;
+                        const varname = name in oldProps ? oldProps[name] : name;
+
+                        if (!(name in oldProps)) {
+                            newProps[varname] = value;
+                            missingProps.push(varname);
+                        }
+
+                        (this as any)[varname] = value;
                     }
+
+                    console.warn(`Native type '${Constructor.name}' is missing property '${missingProps.join(", ")}'`);
                 }
 
                 protected getPropertyMap(): Record<string, string> {
                     return {
                         ...super.getPropertyMap(),
-                        ...Object.keys(clsNamedProperties).reduce((acc, k) => {
-                            acc[k] = k; return acc;
-                        }, {} as Record<string, string>)
-                    }
+                        ...this.newProps
+                    };
+
+                    // return {
+                    //     ...super.getPropertyMap(),
+                    //     ...Object.keys(clsNamedProperties).reduce((acc, k) => {
+                    //         acc[k] = k; return acc;
+                    //     }, {} as Record<string, string>)
+                    // }
                 }
             }
         }[this.friendlyName];
 
 
-        debugger;
-        this.kls = [cls as any];
+        // debugger;
+        this.kls = cls as any;
 
         return this.kls;
     }
@@ -346,4 +382,3 @@ enum EClassFlags_T {
 
 export default UClass;
 export { UClass, EClassFlags_T };
-

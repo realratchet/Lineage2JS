@@ -10,7 +10,7 @@ import UClassRegistry from "./scripts/un-class-registry";
 import UNativeRegistry from "./scripts/un-native-registry";
 import FConstructable from "./un-constructable";
 import { PropertyTag } from "./un-property-tag";
-import { UProperty, UArrayProperty, UStructProperty } from "./un-properties";
+import { UProperty, UArrayProperty, UStructProperty, UObjectProperty } from "./un-properties";
 
 class FLabelField extends FConstructable {
     public name: string = "None";
@@ -48,7 +48,7 @@ class UStruct extends UField {
 
     public readonly isStruct = true;
 
-    protected namedProperties: Record<string, any[]> = {};
+    protected namedProperties: Record<string, string> = {};
 
     protected readArray(pkg: UPackage, tag: PropertyTag) {
         let field: UStruct = this;
@@ -64,11 +64,11 @@ class UStruct extends UField {
 
             const constr = field.childPropFields[index].createObject();
 
-            debugger;
+            // debugger;
 
             const value = constr(pkg, tag);
 
-            debugger;
+            // debugger;
 
             this.setProperty(tag, value);
 
@@ -80,19 +80,57 @@ class UStruct extends UField {
     }
 
     protected setProperty(tag: PropertyTag, value: any) {
-        console.log(`(${this.friendlyName}) ${tag.name} -> ${value}`)
+        let field: UStruct = this;
 
-        if (tag.arrayIndex < 0)
-            throw new Error("That's illegal");
+        if (tag.name === "LightHue" || tag.name === "LightSaturation")
+            debugger;
 
-        // if (!(tag.name in this.namedProperties))
-        //     throw new Error("Undefined property");
+        if (tag.arrayIndex !== 0)
+            debugger;
 
-        const container = this.namedProperties[tag.name] = this.namedProperties[tag.name] || [];
+        while (field) {
 
-        container[tag.arrayIndex] = value;
+            const index = field.childPropFields.findIndex(x => x.propertyName === tag.name);
 
-        return true;
+            if (index === -1) {
+                field = field.superField as any as UStruct;
+                continue;
+            }
+
+            const property = field.childPropFields[index];
+
+
+            if (tag.name in this)
+                debugger;
+
+
+            this.namedProperties[tag.name] = tag.name;
+
+
+            (this as any)[tag.name] = value;
+
+            return true;
+
+
+            // debugger;
+        }
+
+        throw new Error("Broken");
+
+        // debugger;
+        // console.log(`(${this.friendlyName}) ${tag.name} -> ${value}`)
+
+        // if (tag.arrayIndex < 0)
+        //     throw new Error("That's illegal");
+
+        // // if (!(tag.name in this.namedProperties))
+        // //     throw new Error("Undefined property");
+
+        // const container = this.namedProperties[tag.name] = this.namedProperties[tag.name] || [];
+
+        // container[tag.arrayIndex] = value;
+
+        // return true;
     }
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
@@ -132,7 +170,7 @@ class UStruct extends UField {
                 //     this.namedProperties[field.propertyName] = [];
 
                 //     if (field instanceof UArrayProperty) {
-                //         const property = field.createObject();
+                //         // const property = field.createObject();
                 //         debugger;
                 //     }
                 // }
@@ -218,16 +256,12 @@ class UStruct extends UField {
         // }
     }
 
-    protected kls: typeof UObject[];
+    protected kls: typeof UObject;
 
-    public buildClass(): typeof UObject[] {
+    public buildClass(pkg: UNativePackage): typeof UObject {
         if (this.kls) {
-            if (this.kls.length === 0)
-                debugger;
             return this.kls;
         }
-
-        this.kls = [];
 
         const dependencyTree = new Array<UStruct>();
         let lastBase: UStruct = this;
@@ -256,10 +290,11 @@ class UStruct extends UField {
         // if (this.friendlyName === "Vector")
         //     debugger;
 
-        if (this.friendlyName === "ParticleColorScale")
-            debugger;
+        // if (this.friendlyName === "ParticleColorScale")
+        //     debugger;
 
         const constructs: [string, Function][] = [];
+        debugger;
 
         for (const base of dependencyTree.reverse()) {
             // debugger;
@@ -388,13 +423,13 @@ class UStruct extends UField {
             }
         }[this.friendlyName];
 
-        if (this.friendlyName === "ParticleColorScale")
-            debugger;
+        // if (this.friendlyName === "ParticleColorScale")
+        //     debugger;
 
         // debugger;
 
         // debugger;
-        this.kls.push(cls as any);
+        this.kls = cls as any;
 
         return this.kls;
     }

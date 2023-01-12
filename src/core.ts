@@ -380,7 +380,7 @@ async function startCore() {
     // global.rapidShot = rapidShot;
 
     // await rapidShot.onDecodeReady();
-    const kls = rapidShot.buildClass()[0];
+    const kls = rapidShot.buildClass(assetLoader.getPackage("native", "Script") as UNativePackage);
 
     const rshot = new kls();
 
