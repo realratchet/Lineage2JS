@@ -5,6 +5,7 @@ import UExport, { ObjectFlags_T } from "./un-export";
 import UName from "./un-name";
 import UImport from "./un-import";
 import UTexture from "./un-texture";
+import UMeshEmitter from "./emitters/un-mesh-emitter";
 import UObject from "./un-object";
 import "./un-object-mixin";
 import UClass from "./un-class";
@@ -73,6 +74,7 @@ import UTerrainPrimitive from "./un-terrain-primitive";
 import UMeshInstance from "./un-mesh-instance";
 import UConvexVolume from "./un-convex-volume";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
+import USpriteEmitter from "./emitters/un-sprite-emitter";
 
 class UCommandlet extends UObject {
 
@@ -1134,9 +1136,10 @@ class UNativePackage extends UPackage {
             case "MeshInstance": Constructor = UMeshInstance; break;
             case "ConvexVolume": Constructor = UConvexVolume; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
-
-
             case "Texture": Constructor = UTexture; break;
+
+            case "MeshEmitter": Constructor = UMeshEmitter; break;
+            case "SpriteEmitter": Constructor = USpriteEmitter; break;
 
             default:
                 debugger;

@@ -1,7 +1,8 @@
+import { flagBitsToDict } from "@client/utils/flags";
 import BufferValue from "../buffer-value";
 import FArray from "./un-array";
 import FConstructable from "./un-constructable";
-import UExport from "./un-export";
+import UExport, { ObjectFlags_T } from "./un-export";
 import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
@@ -119,6 +120,7 @@ class UClass extends UState {
 
         this.dependencies.load(pkg);
         this.pkgImportIds.load(pkg);
+
 
         // this.promisesLoading.push(new Promise<void>(async resolve => {
         //     this.pkgImports = await Promise.all(
@@ -303,9 +305,17 @@ class UClass extends UState {
             // debugger;
         }
 
+        const flagsObject = flagBitsToDict(this.exp.flags, ObjectFlags_T as any);
+        const flagsClass = flagBitsToDict(this.classFlags, EClassFlags_T as any);
+
+
         const friendlyName = this.friendlyName;
         const hostClass = this;
         const Constructor = pkg.getConstructor(this.friendlyName as NativeTypes_T) as any as typeof UObject;
+
+        console.log(this.friendlyName, flagsObject, flagsClass);
+
+        debugger;
 
         const cls = {
             [this.friendlyName]: class extends Constructor {
@@ -317,6 +327,8 @@ class UClass extends UState {
 
                 constructor() {
                     super();
+
+                    // debugger
 
                     const oldProps = this.getPropertyMap();
                     const newProps = this.newProps;
@@ -365,11 +377,11 @@ enum EClassFlags_T {
     CLASS_Abstract = 0x00001,  // Class is abstract and can't be instantiated directly.
     CLASS_Compiled = 0x00002,  // Script has been compiled successfully.
     CLASS_Config = 0x00004,  // Load object configuration at construction time.
-    CLASS_Transient = 0x00008,	// This object type can't be saved; null it out at save time.
-    CLASS_Parsed = 0x00010,	// Successfully parsed.
+    CLASS_Transient = 0x00008,    // This object type can't be saved; null it out at save time.
+    CLASS_Parsed = 0x00010,    // Successfully parsed.
     CLASS_Localized = 0x00020,  // Class contains localized text.
     CLASS_SafeReplace = 0x00040,  // Objects of this class can be safely replaced with default or NULL.
-    CLASS_RuntimeStatic = 0x00080,	// Objects of this class are static during gameplay.
+    CLASS_RuntimeStatic = 0x00080,    // Objects of this class are static during gameplay.
     CLASS_NoExport = 0x00100,  // Don't export to C++ header.
     CLASS_NoUserCreate = 0x00200,  // Don't allow users to create in the editor.
     CLASS_PerObjectConfig = 0x00400,  // Handle object configuration on a per-object basis, rather than per-class.

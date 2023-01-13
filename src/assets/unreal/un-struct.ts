@@ -11,6 +11,7 @@ import UNativeRegistry from "./scripts/un-native-registry";
 import FConstructable from "./un-constructable";
 import { PropertyTag } from "./un-property-tag";
 import { UProperty, UArrayProperty, UStructProperty, UObjectProperty } from "./un-properties";
+import { flagBitsToDict } from "@client/utils/flags";
 
 class FLabelField extends FConstructable {
     public name: string = "None";
@@ -276,14 +277,7 @@ class UStruct extends UField {
 
         // debugger;
 
-        const flagNames = Object.keys(ObjectFlags_T).filter(x => !x.match(/\d+/));
-        const flags = flagNames.reduce((acc, name) => {
-            if (this.exp.anyFlags(ObjectFlags_T[name as any] as any))
-                acc[name] = true;
-            // acc[name] = this.exp.anyFlags(name as any);
-
-            return acc;
-        }, {} as Record<string, boolean>);
+        const flags = flagBitsToDict(this.exp.flags, ObjectFlags_T as any);
 
         console.log(this.friendlyName, flags);
 
@@ -294,7 +288,7 @@ class UStruct extends UField {
         //     debugger;
 
         const constructs: [string, Function][] = [];
-        debugger;
+        // debugger;
 
         for (const base of dependencyTree.reverse()) {
             // debugger;
