@@ -210,7 +210,7 @@ abstract class UObject {
                 : 1;
     }
 
-    protected loadDependencies = new Array<[number, string, Function]>();
+    public loadDependencies = new Array<[number, string, Function]>();
 
     protected loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();

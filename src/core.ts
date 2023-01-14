@@ -384,6 +384,14 @@ async function startCore() {
 
     const rshot = new kls();
 
+    (rshot.Emitters as UEmitter[]).forEach(emitter => {
+        while (emitter.loadDependencies.length > 0) {
+            const [, , fn] = emitter.loadDependencies.shift();
+
+            fn();
+        }
+    });
+
     // await rapidShot.superField.onDecodeReady();
 
     debugger;

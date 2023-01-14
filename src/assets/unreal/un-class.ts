@@ -311,11 +311,11 @@ class UClass extends UState {
 
         const friendlyName = this.friendlyName;
         const hostClass = this;
-        const Constructor = pkg.getConstructor(this.friendlyName as NativeTypes_T) as any as typeof UObject;
+        const Constructor = this.exp.anyFlags(ObjectFlags_T.Native) ? pkg.getConstructor(this.friendlyName as NativeTypes_T) as any as typeof UObject : UObject;
 
         console.log(this.friendlyName, flagsObject, flagsClass);
 
-        debugger;
+        // debugger;
 
         const cls = {
             [this.friendlyName]: class extends Constructor {
@@ -338,7 +338,7 @@ class UClass extends UState {
                         const varname = name in oldProps ? oldProps[name] : name;
 
                         if (!(name in oldProps)) {
-                            newProps[varname] = value;
+                            newProps[varname] = varname;
                             missingProps.push(varname);
                         }
 
@@ -360,6 +360,18 @@ class UClass extends UState {
                     //         acc[k] = k; return acc;
                     //     }, {} as Record<string, string>)
                     // }
+                }
+
+                protected postLoad(pkg: UPackage, exp: UExport<UObject>): void {
+                    super.postLoad(pkg, exp);
+                    for(const base of dependencyTree) {
+                        while (base.loadDependencies.length > 0) {
+                            const [, , fn] = base.loadDependencies.shift();
+            
+                            fn();
+                        }
+                    }
+                    // debugger;
                 }
             }
         }[this.friendlyName];

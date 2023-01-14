@@ -304,7 +304,9 @@ class UStruct extends UField {
                 let construct = field.createObject();
 
                 if (field instanceof UStructProperty) {
-                    const klass = construct[0];
+                    const klass = construct;
+
+                    // debugger;
 
                     construct = `(pkg) => new ${klass}().load(pkg)`;
                 }
@@ -379,6 +381,11 @@ class UStruct extends UField {
         // }[this.friendlyName];
 
         let friendlyName = this.friendlyName;
+
+        if (this.exp.anyFlags(ObjectFlags_T.Native))
+            debugger;
+
+        // debugger;
 
         const cls = {
             [this.friendlyName]: class extends UObject {

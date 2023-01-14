@@ -183,7 +183,7 @@ class UArrayProperty extends UBaseExportProperty<UProperty> {
         } else if (!(this.value instanceof UStructProperty))
             throw new Error("Not yet implemented")
 
-        const constrClass = (this.value.createObject() as any)[0];
+        const constrClass = (this.value.createObject() as any);
 
         return new FArray(constrClass as any);
     }

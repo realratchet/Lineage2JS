@@ -87,10 +87,12 @@ class UTexture extends UObject {
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: UPackage, exp: UExport) {    // 2785
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
+
+        // debugger;
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
