@@ -1140,6 +1140,7 @@ class UNativePackage extends UPackage {
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
             case "Texture": Constructor = UTexture; break;
 
+            case "Emitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
 

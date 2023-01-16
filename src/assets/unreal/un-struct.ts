@@ -49,7 +49,7 @@ class UStruct extends UField {
 
     public readonly isStruct = true;
 
-    protected namedProperties: Record<string, string> = {};
+    protected defaultProperties = new Set<string>();
 
     protected readArray(pkg: UPackage, tag: PropertyTag) {
         let field: UStruct = this;
@@ -105,7 +105,7 @@ class UStruct extends UField {
                 debugger;
 
 
-            this.namedProperties[tag.name] = tag.name;
+            this.defaultProperties.add(tag.name);
 
 
             (this as any)[tag.name] = value;
@@ -276,7 +276,7 @@ class UStruct extends UField {
 
         do {
             dependencyTree.push(lastBase);
-            lastBase.loadSuper();
+            // lastBase.loadSuper();
 
             lastBase = lastBase.superField as UStruct;
         } while (lastBase);
@@ -302,7 +302,7 @@ class UStruct extends UField {
             if (base.constructor !== UStruct)
                 debugger;
 
-            const { childPropFields, namedProperties, friendlyName } = base;
+            const { childPropFields, defaultProperties: namedProperties, friendlyName } = base;
 
             for (const field of childPropFields) {
                 if (!(field instanceof UProperty)) continue;

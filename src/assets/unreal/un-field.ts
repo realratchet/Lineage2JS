@@ -58,6 +58,20 @@ class UField extends UObject {
         // }));
     }
 
+    protected collectDependencies<T extends UField = typeof this>() {
+        const dependencyTree = [];
+        let base = this as unknown as T;
+
+        do {
+            dependencyTree.push(base);
+
+            base = base.superField as T;
+
+        } while (base);
+
+        return dependencyTree;
+    }
+
     protected loadSuperfields() {
         let lastBase: UField = this.loadSelf();
 

@@ -171,15 +171,7 @@ class UClass extends UState {
 
     protected loadDefaults() {
 
-        const dependencyTree = [];
-        let base: UClass = this;
-
-        do {
-            dependencyTree.push(base);
-
-            base = base.superField as UClass;
-
-        } while (base);
+        const dependencyTree = this.collectDependencies();
 
         for (const base of dependencyTree.reverse()) {
             while (base.defaultsLoading.length > 0) {
@@ -289,16 +281,17 @@ class UClass extends UState {
         if (this.kls)
             return this.kls;
 
-        const dependencyTree = new Array<UClass>();
-        let lastBase: UClass = this;
+        let lastBase: UClass = this.loadSelf().loadDefaults();
+        const dependencyTree = this.collectDependencies<UClass>();
+
+        if (!this.isReady)
+            debugger;
 
         // if (this.friendlyName === "MeshEmitter")
         //     debugger;
 
 
         // debugger;
-
-        this.loadSelf().loadDefaults();
 
         // debugger;
 
@@ -308,17 +301,21 @@ class UClass extends UState {
         const clsNamedProperties: Record<string, any> = {};
         const inheretenceChain = new Array<string>();
 
+        let lastNative: UClass = null;
+
         for (const base of dependencyTree.reverse()) {
 
             inheretenceChain.push(base.friendlyName);
 
-            debugger
-
+            if (!base.exp || base.exp.anyFlags(ObjectFlags_T.Native))
+                lastNative = base;
 
             if (base.constructor !== UClass)
                 debugger;
 
-            const { childPropFields, namedProperties, friendlyName } = base;
+            const { childPropFields, defaultProperties } = base;
+
+            // debugger;
 
             for (const field of childPropFields) {
                 if (!(field instanceof UProperty)) continue;
@@ -326,7 +323,7 @@ class UClass extends UState {
                 const propertyName = field.propertyName;
 
                 if (field instanceof UArrayProperty) {
-                    if (propertyName in namedProperties)
+                    if (defaultProperties.has(propertyName))
                         debugger;
 
                     clsNamedProperties[propertyName] = field.dtype;
@@ -347,19 +344,24 @@ class UClass extends UState {
                 // debugger;
             }
 
-            for (const propertyName of Object.keys(namedProperties))
+            // debugger;
+
+            for (const propertyName of Object.keys(defaultProperties))
                 clsNamedProperties[propertyName] = (this as any)[propertyName];
 
-            // debugger;
+            // // debugger;
         }
+
+        // debugger;
 
         const flagsObject = flagBitsToDict(this.exp.flags, ObjectFlags_T as any);
         const flagsClass = flagBitsToDict(this.classFlags, EClassFlags_T as any);
 
-
         const friendlyName = this.friendlyName;
         const hostClass = this;
-        const Constructor = this.exp.anyFlags(ObjectFlags_T.Native) ? pkg.getConstructor(this.friendlyName as NativeTypes_T) as any as typeof UObject : UObject;
+        const Constructor = lastNative
+            ? pkg.getConstructor(lastNative.friendlyName as NativeTypes_T) as any as typeof UObject
+            : UObject;
 
         console.log(this.friendlyName, flagsObject, flagsClass);
 
@@ -369,65 +371,65 @@ class UClass extends UState {
             [this.friendlyName]: class extends Constructor {
                 public static readonly friendlyName = friendlyName;
                 public static readonly hostClass = hostClass;
+                public static readonly nativeClass = lastNative;
                 public static readonly inheretenceChain = Object.freeze(inheretenceChain);
 
                 protected newProps: Record<string, string> = {};
 
-                public constructor() {
-                    super();
-
-                    hostClass;
-                    friendlyName;
-                    inheretenceChain;
-
-                    debugger;
-                }
-
-                public load(pkg: UPackage, exp: UExport<UObject>): this {
-                    debugger;
-                    
-                    super.load(pkg, exp);
-
-                    return this;
-                }
-
-                // constructor() {
+                // public constructor() {
                 //     super();
 
-                //     debugger
+                //     hostClass;
+                //     friendlyName;
+                //     inheretenceChain;
+                //     clsNamedProperties;
 
-                //     const oldProps = this.getPropertyMap();
-                //     const newProps = this.newProps;
-                //     const missingProps = [];
-
-                //     for (const [name, value] of Object.entries(clsNamedProperties)) {
-                //         const varname = name in oldProps ? oldProps[name] : name;
-
-                //         if (!(name in oldProps)) {
-                //             newProps[varname] = varname;
-                //             missingProps.push(varname);
-                //         }
-
-                //         (this as any)[varname] = value;
-                //     }
-
-                //     if (missingProps.length > 0)
-                //         console.warn(`Native type '${Constructor.name}' is missing property '${missingProps.join(", ")}'`);
+                //     debugger;
                 // }
 
-                // protected getPropertyMap(): Record<string, string> {
-                //     return {
-                //         ...super.getPropertyMap(),
-                //         ...this.newProps
-                //     };
+                // public load(pkg: UPackage, exp: UExport<UObject>): this {
+                //     debugger;
 
-                //     // return {
-                //     //     ...super.getPropertyMap(),
-                //     //     ...Object.keys(clsNamedProperties).reduce((acc, k) => {
-                //     //         acc[k] = k; return acc;
-                //     //     }, {} as Record<string, string>)
-                //     // }
+                //     super.load(pkg, exp);
+
+                //     return this;
                 // }
+
+                constructor() {
+                    super();
+
+                    const oldProps = this.getPropertyMap();
+                    const newProps = this.newProps;
+                    const missingProps = [];
+
+                    for (const [name, value] of Object.entries(clsNamedProperties)) {
+                        const varname = name in oldProps ? oldProps[name] : name;
+
+                        if (!(name in oldProps)) {
+                            newProps[varname] = varname;
+                            missingProps.push(varname);
+                        }
+
+                        (this as any)[varname] = value;
+                    }
+
+                    if (missingProps.length > 0)
+                        console.warn(`Native type '${Constructor.name}' is missing property '${missingProps.join(", ")}'`);
+                }
+
+                protected getPropertyMap(): Record<string, string> {
+                    return {
+                        ...super.getPropertyMap(),
+                        ...this.newProps
+                    };
+
+                    // return {
+                    //     ...super.getPropertyMap(),
+                    //     ...Object.keys(clsNamedProperties).reduce((acc, k) => {
+                    //         acc[k] = k; return acc;
+                    //     }, {} as Record<string, string>)
+                    // }
+                }
 
                 // protected postLoad(pkg: UPackage, exp: UExport<UObject>): void {
                 //     super.postLoad(pkg, exp);

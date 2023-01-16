@@ -105,7 +105,11 @@ class UClassProperty extends UObjectProperty {
 
 class UStructProperty extends UBaseExportProperty<UClass> {
     public createObject(): typeof FConstructable {
+        this.loadSelf();
+        if (this.valueId !== 0 && !this.value)
+            this.value = this.pkg.fetchObject(this.valueId);
         // debugger;
+
         return (this.value as UStruct).buildClass() as any;
     }
 }
