@@ -59,8 +59,8 @@ abstract class UBaseExportProperty<T extends UField> extends UProperty {
         this.readHead = pkg.tell();
 
 
-        if (this.valueId !== 0)
-            this.value = pkg.fetchObject<T>(this.valueId);
+        // if (this.valueId !== 0)
+        //     this.value = pkg.fetchObject<T>(this.valueId);
     }
 }
 
@@ -97,8 +97,8 @@ class UClassProperty extends UObjectProperty {
         this.metaClassId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
 
-        if (this.metaClassId !== 0)
-            this.metaClass = pkg.fetchObject<UClass>(this.metaClassId);
+        // if (this.metaClassId !== 0)
+        //     this.metaClass = pkg.fetchObject<UClass>(this.metaClassId);
 
     }
 }
@@ -176,6 +176,9 @@ class UArrayProperty extends UBaseExportProperty<UProperty> {
     // }
 
     get dtype() {
+        if (this.valueId !== 0 && !this.value)
+            this.value = this.pkg.fetchObject(this.valueId);
+
         if (this.value instanceof UIntProperty || this.value instanceof UFloatProperty) {
             return new FPrimitiveArray((this.value.constructor as (typeof UIntProperty | typeof UFloatProperty)).dtype);
         } else if (this.value instanceof UObjectProperty) {

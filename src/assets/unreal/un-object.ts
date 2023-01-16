@@ -37,13 +37,14 @@ abstract class UObject {
     protected readTail: number = NaN;
 
     public readonly isObject = true;
+    protected pkg: UPackage;
+
+    protected isLoading = false;
+    protected isReady = false;
 
     // public name = "None";
     // public klass: UClass = null;
     // public flags: number = 0;
-
-    public constructor() {
-    }
 
     protected getSignedMap(): Record<string, boolean> { return {}; }
     protected getPropertyMap(): Record<string, string> { return {}; }
@@ -102,45 +103,34 @@ abstract class UObject {
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
 
-        // const tags = [];
-
         if (this.readHead < this.readTail) {
             do {
                 const tag = PropertyTag.from(pkg, this.readHead);
 
                 if (!tag.isValid()) break;
 
-                const offset = pkg.tell();
+                this.loadProperty(pkg, tag);
 
-                this.loadDependencies.push([-1, tag.name, () => {
-                    pkg.seek(offset, "set");
-                    // tags.push(tag.name + "/" + tag.type);
-
-                    this.loadProperty(pkg, tag);
-                }]);
-
-                pkg.seek(tag.dataSize);
                 this.readHead = pkg.tell();
 
             } while (this.readHead < this.readTail);
 
         }
 
-        // if (this.objectName === "Exp_TerrainInfo0") {
-        //     console.log(this.objectName, "\n\t->" + tags.join("\n\t->"));
-
-        //     debugger;
-        // }
-
         this.readHead = pkg.tell();
     }
 
-    protected preLoad(pkg: UPackage, exp: UExport): void {
+    public setExport(pkg: UPackage, exp: UExport) {
         this.objectName = `Exp_${exp.objectName}`;
         this.exportIndex = exp.index;
         this.exp = exp;
+        this.pkg = pkg.asReadable();
+    }
 
+    protected preLoad(pkg: UPackage, exp: UExport): void {
         const flags = exp.flags as number;
+
+        // this.setExport(exp);
 
         pkg.seek(exp.offset as number, "set");
 
@@ -175,10 +165,12 @@ abstract class UObject {
             console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
     }
 
-    protected isLoading = false;
+    public loadSelf() {
+        return this.load(this.pkg, this.exp);
+    }
 
     public load(pkg: UPackage, exp: UExport): this {
-        if (this.isLoading)
+        if (this.isLoading || this.isReady)
             return this;
 
         this.isLoading = true;
@@ -194,6 +186,7 @@ abstract class UObject {
         }
 
         this.isLoading = false;
+        this.isReady = true;
 
         return this;
     }
@@ -209,8 +202,6 @@ abstract class UObject {
                 ? Infinity
                 : 1;
     }
-
-    public loadDependencies = new Array<[number, string, Function]>();
 
     protected loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();

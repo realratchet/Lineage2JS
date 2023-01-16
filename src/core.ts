@@ -382,15 +382,9 @@ async function startCore() {
     // await rapidShot.onDecodeReady();
     const kls = rapidShot.buildClass(assetLoader.getPackage("native", "Script") as UNativePackage);
 
+    debugger;
+
     const rshot = new kls();
-
-    (rshot.Emitters as UEmitter[]).forEach(emitter => {
-        while (emitter.loadDependencies.length > 0) {
-            const [, , fn] = emitter.loadDependencies.shift();
-
-            fn();
-        }
-    });
 
     // await rapidShot.superField.onDecodeReady();
 

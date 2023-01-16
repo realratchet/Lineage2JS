@@ -11,16 +11,16 @@ class UField extends UObject {
 
     public readonly isField = true;
 
-    protected doReadSuperFields: Function;
+    // protected doReadSuperFields: Function;
 
-    protected loadSuper() {
-        if (!this.doReadSuperFields) return;
+    // protected loadSuper() {
+    //     if (!this.doReadSuperFields) return;
 
-        const fn = this.doReadSuperFields;
-        this.doReadSuperFields = null;
+    //     const fn = this.doReadSuperFields;
+    //     this.doReadSuperFields = null;
 
-        fn();
-    }
+    //     fn();
+    // }
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         if (this.constructor.name !== "UClass")
@@ -35,13 +35,7 @@ class UField extends UObject {
         //         this.superField = pkg.fetchObject<UField>(this.superFieldId);
         // }
 
-        if (this.superFieldId !== 0) {
-            const object = pkg.fetchObject<UField>(this.superFieldId);
-
-            this.superField = object;
-
-            // debugger;
-        }
+        this.loadSuperfields();
 
         this.nextFieldId = pkg.read(compat32).value as number;
 
@@ -62,6 +56,22 @@ class UField extends UObject {
 
         //     resolve(object);
         // }));
+    }
+
+    protected loadSuperfields() {
+        let lastBase: UField = this.loadSelf();
+
+        do {
+            if (this.superFieldId !== 0)
+                this.superField = this.pkg.fetchObject<UField>(this.superFieldId);
+
+            if (this.nextFieldId !== 0)
+                this.nextField = this.pkg.fetchObject<UField>(this.nextFieldId);
+
+            lastBase = lastBase?.loadSelf().superField as UClass;
+        } while (lastBase);
+
+        return this;
     }
 
     // public async onDecodeReady(): Promise<void> {

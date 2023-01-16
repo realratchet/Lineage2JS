@@ -477,7 +477,8 @@ class UPackage extends UEncodedFile {
 
             // debugger;
 
-            object.load(this.asReadable(), entry);
+            object.setExport(this, entry);
+            // object.load(this.asReadable(), entry);
 
         } else {
             let objbase = entry.idSuper === 0 ? null : this.fetchObject(entry.idSuper) as UClass;
@@ -507,7 +508,8 @@ class UPackage extends UEncodedFile {
                     obj.friendlyName = objname;
                 }
 
-                obj.load(pkg.asReadable(), entry);
+                // obj.load(pkg.asReadable(), entry);
+                obj.setExport(pkg, entry);
 
 
                 // debugger;

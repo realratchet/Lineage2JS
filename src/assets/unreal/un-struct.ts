@@ -158,33 +158,7 @@ class UStruct extends UField {
         this.textBufferId = pkg.read(compat32).value as number;
         this.firstChildPropId = pkg.read(compat32).value as number;
 
-        if (this.firstChildPropId !== 0) {
-            let childPropId = this.firstChildPropId;
-
-            while (Number.isFinite(childPropId) && childPropId !== 0) {
-
-                const field = pkg.fetchObject<UProperty>(childPropId);
-
-                this.childPropFields.push(field);
-
-                // if (field instanceof UProperty) {
-                //     this.namedProperties[field.propertyName] = [];
-
-                //     if (field instanceof UArrayProperty) {
-                //         // const property = field.createObject();
-                //         debugger;
-                //     }
-                // }
-
-                childPropId = field.nextFieldId;
-            }
-
-            // if (this.friendlyName === "Commandlet")
-            //     debugger;
-
-            // if (this.friendlyName === "Emitter")
-            //     debugger;
-        }
+        
 
         const nameId = pkg.read(compat32).value as number;
 
@@ -255,6 +229,38 @@ class UStruct extends UField {
         //         resolve(this.textBuffer);
         //     }));
         // }
+
+        if (this.firstChildPropId !== 0) {
+            // debugger;
+
+            let childPropId = this.firstChildPropId;
+
+            while (Number.isFinite(childPropId) && childPropId !== 0) {
+
+                const field = pkg.fetchObject<UProperty>(childPropId).loadSelf();
+
+                this.childPropFields.push(field);
+
+                // if (field instanceof UProperty) {
+                //     this.namedProperties[field.propertyName] = [];
+
+                //     if (field instanceof UArrayProperty) {
+                //         // const property = field.createObject();
+                //         debugger;
+                //     }
+                // }
+
+                childPropId = field.nextFieldId;
+            }
+
+            // debugger;
+
+            // if (this.friendlyName === "Commandlet")
+            //     debugger;
+
+            // if (this.friendlyName === "Emitter")
+            //     debugger;
+        }
     }
 
     protected kls: typeof UObject;
