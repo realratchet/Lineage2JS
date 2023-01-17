@@ -25,26 +25,28 @@ import UDataFile from "./assets/unreal/datafile/un-datafile";
 import { generateUUID } from "three/src/math/MathUtils";
 import UFunction from "./assets/unreal/un-function";
 import UClassRegistry from "./assets/unreal/scripts/un-class-registry";
+import UEmitter from "./assets/unreal/un-emitter";
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, settings: LoadSettings_T) {
-
+async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | UPackage, settings: LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
     const decodeLibrary = await DecodeLibrary.fromPackage(await assetLoader.load(pkg), settings);
+
+    // debugger;
 
     decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
 
     return decodePackage(decodeLibrary);
 }
 
-async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>, pkgTex: string | UPackage | Promise<UPackage>) {
+async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage, pkgTex: string | UPackage) {
 
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
     pkg = await assetLoader.load(pkg);
 
 
-    async function getTextures(pkg: string | UPackage | Promise<UPackage>, decodeLibrary: DecodeLibrary, texNames: string[]) {
+    async function getTextures(pkg: string | UPackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
         if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Texture");
 
         pkg = await assetLoader.load(pkg);
@@ -145,7 +147,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     //     });
 }
 
-async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | Promise<UPackage>) {
+async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage) {
 
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
@@ -255,7 +257,7 @@ async function startCore() {
     // debugger;
 
 
-    const pkgEngine = await assetLoader.load(await assetLoader.getPackage("engine", "Script"));
+    const pkgEngine = await assetLoader.load(assetLoader.getPackage("engine", "Script"));
 
     // debugger;
 
@@ -380,19 +382,20 @@ async function startCore() {
     // global.rapidShot = rapidShot;
 
     // await rapidShot.onDecodeReady();
-    const kls = rapidShot.buildClass(assetLoader.getPackage("native", "Script") as UNativePackage);
+    // const kls = rapidShot.buildClass<typeof UEmitter>(assetLoader.getPackage("native", "Script") as UNativePackage);
 
-    debugger;
+    // // debugger;
 
-    const rshot = new kls();
+    // const rshot = new (kls as any as ObjectConstructor)() as UEmitter;
+    // const decodeRshot = rshot.getDecodeInfo(new DecodeLibrary());
 
-    // await rapidShot.superField.onDecodeReady();
+    // // await rapidShot.superField.onDecodeReady();
 
-    debugger;
+    // debugger;
 
     const loadSettings = {
         helpersZoneBounds: false,
-        loadTerrain: true,
+        loadTerrain: false,
         loadBaseModel: true,
         loadStaticModels: true,
         _loadStaticModelList: [

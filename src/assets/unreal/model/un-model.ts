@@ -124,18 +124,18 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): Promise<string[][]> {
-        await this.onDecodeReady();
-        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
+    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
+
+        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
 
         this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
-        await Promise.all(this.zones.map(async (zone: FZoneProperties, index: number) => {
-            const bspZone = await zone.getDecodeInfo(library, uLevelInfo);
+        this.zones.forEach((zone: FZoneProperties, index: number) => {
+            const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 
             library.bspZones.push(bspZone);
 
             library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
-        }));
+        });
 
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
@@ -167,8 +167,6 @@ class UModel extends UPrimitive {
                     }
                 };
             }
-
-            await Promise.all(surf.promisesLoading);
 
             if (surf.flags & PolyFlags_T.PF_Invisible) continue;
 
@@ -207,7 +205,9 @@ class UModel extends UPrimitive {
 
             // continue;
 
-            const zone = surf.actor.getZone();
+            // debugger;
+
+            const zone = surf.actor.loadSelf().getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
             const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
@@ -244,7 +244,7 @@ class UModel extends UPrimitive {
             gData.nodes.push({ node, surf, light });
         }
 
-        const createZoneInfo = async (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): Promise<string> => {
+        const createZoneInfo = (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
             const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
@@ -262,7 +262,7 @@ class UModel extends UPrimitive {
                     const gSurf = objectMap.get(material);
 
                     for (let staticLightmap of gSurf.keys()) {
-                        const materialUuid = await material.getDecodeInfo(library);
+                        const materialUuid = material.loadSelf().getDecodeInfo(library);
 
                         if (staticLightmap) {
                             const lightmappedMaterialUuid = generateUUID();
@@ -386,6 +386,8 @@ class UModel extends UPrimitive {
                 }
             };
 
+            // debugger;
+
             zoneInfo.children.push({
                 uuid,
                 type: "Model",
@@ -397,11 +399,11 @@ class UModel extends UPrimitive {
             return uuid;
         };
 
-        const createPriorityGroup = async ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): Promise<string[]> => {
-            return await Promise.all([...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects)));
+        const createPriorityGroup = ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): string[] => {
+            return [...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects));
         };
 
-        return await Promise.all([...objectMap.entries()].map(createPriorityGroup));
+        return [...objectMap.entries()].map(createPriorityGroup);
     }
 }
 

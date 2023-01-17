@@ -5,7 +5,7 @@ import { FPrimitiveArray } from "./un-array";
 
 abstract class UBaseMaterial extends UObject {
     public readonly skipRemaining = true;
-    public abstract getDecodeInfo(library: DecodeLibrary): Promise<string>;
+    public abstract getDecodeInfo(library: DecodeLibrary): string;
 }
 
 abstract class UBaseModifier extends UBaseMaterial { }
@@ -74,7 +74,7 @@ class UTexEnvMap extends UBaseModifier {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         return null;
     }
 }
@@ -96,14 +96,13 @@ class UFinalBlend extends UBaseModifier {
         });
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onDecodeReady();
 
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -151,17 +150,17 @@ class UShader extends UMaterial {
         });
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onDecodeReady();
+        // await this.onDecodeReady();
 
-        const diffuse = await this.diffuse?.getDecodeInfo(library) || null;
-        const opacity = await this.opacity?.getDecodeInfo(library) || null;
-        const specular = await this.specular?.getDecodeInfo(library) || null;
-        const specularMask = await this.specularMask?.getDecodeInfo(library) || null;
+        const diffuse = this.diffuse?.loadSelf().getDecodeInfo(library) || null;
+        const opacity = this.opacity?.loadSelf().getDecodeInfo(library) || null;
+        const specular = this.specular?.loadSelf().getDecodeInfo(library) || null;
+        const specularMask = this.specularMask?.loadSelf().getDecodeInfo(library) || null;
         const depthWrite = this.depthWrite;
         const doubleSide = this.doubleSide
         const transparent = this.transparent;
@@ -205,12 +204,10 @@ class UFadeColor extends UBaseModifier {
     public color2: FColor = new FColor();
     public period: number = 0;
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
-
-        await this.onDecodeReady();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
@@ -251,16 +248,14 @@ class UColorModifier extends UBaseMaterial {
     //     return material;
     // }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
         debugger;
 
-        await this.onDecodeReady();
-
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -306,14 +301,12 @@ class UTexRotator extends UBaseModifier {
     //     };
     // }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onDecodeReady();
-
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -348,14 +341,12 @@ class UTexOscillator extends UBaseModifier {
     protected currentUJitter: number;
     protected currentVJitter: number;
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onDecodeReady();
-
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -388,19 +379,17 @@ class UTexPanner extends UBaseModifier {
     protected internalTime = new FPrimitiveArray(BufferValue.int32);
     protected direction: FRotator;
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
-
-        await this.onDecodeReady();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {
                 matrix: this.matrix.getElements3x3(),
-                map: await this.material?.getDecodeInfo(library) || null,
+                map: this.material?.loadSelf().getDecodeInfo(library) || null,
                 rate: this.rate
             }
         } as ITexPannerDecodeInfo;
@@ -435,9 +424,10 @@ class FStaticMeshMaterial extends UBaseMaterial {
         });
     }
 
-    protected preLoad(pkg: UPackage) {
+    protected preLoad(pkg: UPackage, tag: PropertyTag) {
+        // debugger;
         this.readHead = pkg.tell();
-        this.readTail = this.readHead + Infinity;
+        this.readTail = this.readHead + tag.dataSize;
     }
 
     protected doLoad(pkg: UPackage): void {
@@ -445,16 +435,38 @@ class FStaticMeshMaterial extends UBaseMaterial {
         this.readTail = pkg.tell();
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public load(pkg: UPackage, tag: PropertyTag): this {
+        if (this.isLoading || this.isReady)
+            return this;
+
+        this.isLoading = true;
+
+        // if (exp.objectName === "DefaultTexture")
+        //     debugger;
+
+        this.preLoad(pkg, tag);
+
+        if (tag.dataSize > 0) {
+            this.doLoad(pkg);
+            this.postLoad(pkg, null);
+        }
+
+        this.isLoading = false;
+        this.isReady = true;
+
+        return this;
+    }
+
+    public getDecodeInfo(library: DecodeLibrary): string {
 
         if (this.uuid in library.materials) return this.material?.uuid || null;
 
         library.materials[this.uuid] = null;
 
-        await this.onDecodeReady();
+        // await this.onDecodeReady();
 
         if (this.material)
-            await this.material.getDecodeInfo(library);
+            this.material.loadSelf().getDecodeInfo(library);
 
         // debugger;
 

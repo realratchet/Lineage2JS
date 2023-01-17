@@ -143,9 +143,7 @@ class UTexture extends UObject {
         }
     }
 
-    protected async decodeTexture(library: DecodeLibrary) {
-        await this.onDecodeReady();
-
+    protected decodeTexture(library: DecodeLibrary) {
         const totalMipCount = this.mipmaps.length;
 
         if (totalMipCount === 0) return null;
@@ -288,7 +286,7 @@ class UTexture extends UObject {
         } as ITextureDecodeInfo;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
@@ -299,7 +297,7 @@ class UTexture extends UObject {
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(await tex.decodeTexture(library));
+                sprites.push(tex.loadSelf().decodeTexture(library));
                 tex = tex.animNext;
             }
 
@@ -310,7 +308,7 @@ class UTexture extends UObject {
                 framerate: 1000 / this.maxFrameRate
             } as IAnimatedSpriteDecodeInfo;
         } else {
-            library.materials[this.uuid] = await this.decodeTexture(library);
+            library.materials[this.uuid] = this.decodeTexture(library);
         }
 
         return this.uuid;

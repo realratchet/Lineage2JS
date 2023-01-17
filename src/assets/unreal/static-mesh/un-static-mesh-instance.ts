@@ -22,28 +22,15 @@ class FAssignedLight extends FConstructable {
         this.vertexFlags.load(pkg);
         this.unkInt0 = pkg.read(int32).value as number;
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-
-            this.light = await pkg.fetchObject<ULight>(this.lightIndex);
-
-            // if (this.light instanceof ULight)
-            //     debugger;
-
-            resolve();
-        }));
-
-        // debugger;
+        this.light = pkg.fetchObject<ULight>(this.lightIndex);
 
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<any> {
-
-        await Promise.all(this.promisesLoading);
-
+    public getDecodeInfo(library: DecodeLibrary): any {
         return {
             vertexFlags: this.vertexFlags.getTypedArray(),
-            ...(await this.light.getDecodeInfo(library))
+            ...(this.light.loadSelf().getDecodeInfo(library))
         };
     }
 }
@@ -60,9 +47,7 @@ class UStaticMeshInstance extends UObject {
 
     public setActor(actor: UStaticMeshActor) { this.actor = actor; }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<any> {
-        await this.onDecodeReady();
-
+    public getDecodeInfo(library: DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
 
         for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
@@ -102,14 +87,15 @@ class UStaticMeshInstance extends UObject {
         // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "Exp_oren_curumadungeon19")
         //     console.warn("Mesh has lights:", this.sceneLights.length, "index:", this.actor.exportIndex+1);
 
+        // debugger;
 
         return {
             color,
             lights: {
-                scene: await Promise.all(this.sceneLights.map(l => l.getDecodeInfo(library))),
+                scene: this.sceneLights.map(l => l.getDecodeInfo(library)),
                 environment: validEnvironment ? {
                     color: lightingColor,
-                    ...await validEnvironment.getDecodeInfo(library)
+                    ...validEnvironment.getDecodeInfo(library)
                 } : null
             }
         };

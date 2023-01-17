@@ -83,8 +83,8 @@ class UStruct extends UField {
     protected setProperty(tag: PropertyTag, value: any) {
         let field: UStruct = this;
 
-        if (tag.name === "LightHue" || tag.name === "LightSaturation")
-            debugger;
+        // if (tag.name === "LightHue" || tag.name === "LightSaturation")
+        //     debugger;
 
         if (tag.arrayIndex !== 0)
             debugger;
@@ -158,7 +158,7 @@ class UStruct extends UField {
         this.textBufferId = pkg.read(compat32).value as number;
         this.firstChildPropId = pkg.read(compat32).value as number;
 
-        
+
 
         const nameId = pkg.read(compat32).value as number;
 
@@ -168,6 +168,9 @@ class UStruct extends UField {
         // debugger;
 
         this.friendlyName = pkg.nameTable[nameId].name as string;
+
+        if (this.exp.objectName === "Exp_LevelInfo")
+            debugger;
 
         if (this.friendlyName === "HelpParm")
             debugger;
@@ -253,7 +256,8 @@ class UStruct extends UField {
                 childPropId = field.nextFieldId;
             }
 
-            // debugger;
+            // if (this.friendlyName === "MeshEmitter" || this.friendlyName === "StaticMesh")
+            //     debugger;
 
             // if (this.friendlyName === "Commandlet")
             //     debugger;
@@ -283,9 +287,7 @@ class UStruct extends UField {
 
         // debugger;
 
-        const flags = flagBitsToDict(this.exp.flags, ObjectFlags_T as any);
-
-        console.log(this.friendlyName, flags);
+        console.log(this.friendlyName, this.exp.objectFlags);
 
         // if (this.friendlyName === "Vector")
         //     debugger;

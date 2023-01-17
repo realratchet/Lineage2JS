@@ -17,24 +17,17 @@ class FZoneProperties extends FConstructable {
         this.visibility = pkg.read(uint64).value as bigint;
         this.lastRenderTime = pkg.read(float).value as number;
 
-        if (this.zoneIndex > 0) { // Lineage2 breaks the rule that ULevelInfo must be first export
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                this.zone = await pkg.fetchObject(this.zoneIndex) as any as IInfo;
-
-                resolve();
-            }));
-        }
+        if (this.zoneIndex > 0)  // Lineage2 breaks the rule that ULevelInfo must be first export
+            this.zone = pkg.fetchObject(this.zoneIndex).loadSelf() as any as IInfo;
 
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): Promise<IBSPZoneDecodeInfo_T> {
-        await Promise.all(this.promisesLoading);
-
+    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): IBSPZoneDecodeInfo_T {
         return {
             connectivity: this.connectivity,
             visibility: this.visibility,
-            zoneInfo: await (this.zoneIndex === 0 ? uLevelInfo : this.zone).getDecodeInfo(library)
+            zoneInfo: (this.zoneIndex === 0 ? uLevelInfo : this.zone).getDecodeInfo(library)
         };
     }
 }

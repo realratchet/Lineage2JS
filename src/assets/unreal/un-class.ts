@@ -6,7 +6,7 @@ import UExport, { ObjectFlags_T } from "./un-export";
 import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
-import { UArrayProperty, UProperty } from "./un-properties";
+import { UArrayProperty, UObjectProperty, UProperty } from "./un-properties";
 import { PropertyTag } from "./un-property-tag";
 import UState from "./un-state";
 
@@ -38,7 +38,8 @@ class FDependencies extends FConstructable {
 }
 
 class UClass extends UState {
-    protected classFlags: number;
+    protected flags: EClassFlags_T;
+    public classFlags: Readonly<Record<string, boolean>>;
     protected classGuid: DataView;
     protected dependencies = new FArray(FDependencies);
     protected pkgImportIds: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
@@ -115,7 +116,8 @@ class UClass extends UState {
             debugger;
         }
 
-        this.classFlags = pkg.read(uint32).value as number;
+        this.flags = pkg.read(uint32).value as number;
+        this.classFlags = flagBitsToDict(this.flags, EClassFlags_T as any);
         this.classGuid = pkg.read(BufferValue.allocBytes(16)).value as DataView;
 
         this.dependencies.load(pkg);
@@ -277,9 +279,9 @@ class UClass extends UState {
 
 
 
-    public buildClass(pkg: UNativePackage): typeof UObject {
+    public buildClass<T extends typeof UObject = typeof UObject>(pkg: UNativePackage): T {
         if (this.kls)
-            return this.kls;
+            return this.kls as T;
 
         let lastBase: UClass = this.loadSelf().loadDefaults();
         const dependencyTree = this.collectDependencies<UClass>();
@@ -303,9 +305,11 @@ class UClass extends UState {
 
         let lastNative: UClass = null;
 
+        // debugger;
+
         for (const base of dependencyTree.reverse()) {
 
-            inheretenceChain.push(base.friendlyName);
+            inheretenceChain.push(base.loadDefaults().friendlyName);
 
             if (!base.exp || base.exp.anyFlags(ObjectFlags_T.Native))
                 lastNative = base;
@@ -318,17 +322,37 @@ class UClass extends UState {
             // debugger;
 
             for (const field of childPropFields) {
+                // if (field.propertyName === "Emitters")
+                //     debugger;
+
                 if (!(field instanceof UProperty)) continue;
 
                 const propertyName = field.propertyName;
 
                 if (field instanceof UArrayProperty) {
+                    if (field.arrayDimensions !== 1)
+                        debugger;
+
                     if (defaultProperties.has(propertyName))
                         debugger;
 
-                    clsNamedProperties[propertyName] = field.dtype;
+                    // debugger;
+
+                    clsNamedProperties[propertyName] = (field.dtype as FArray).clone((this as any)[propertyName]);
                     continue;
                 }
+
+
+                // if (field.propertyName === "LightHue" || field.propertyName === "LightSaturation")
+                //     debugger;
+
+                // if (field instanceof UObjectProperty) {
+                //     if (field.propertyName === "StaticMesh") {
+                //         debugger;
+                //         field.loadSelf();
+                //         debugger;
+                //     }
+                // }
 
                 // debugger;
 
@@ -339,7 +363,11 @@ class UClass extends UState {
                 //     debugger;
 
 
-                clsNamedProperties[propertyName] = (this as any)[propertyName];
+                clsNamedProperties[propertyName] = field.arrayDimensions > 1
+                    ? propertyName in this
+                        ? (this as any)[propertyName]
+                        : new Array(field.arrayDimensions)
+                    : (this as any)[propertyName];
 
                 // debugger;
             }
@@ -354,8 +382,8 @@ class UClass extends UState {
 
         // debugger;
 
-        const flagsObject = flagBitsToDict(this.exp.flags, ObjectFlags_T as any);
-        const flagsClass = flagBitsToDict(this.classFlags, EClassFlags_T as any);
+        const flagsObject = this.exp.objectFlags;
+        const flagsClass = this.classFlags;
 
         const friendlyName = this.friendlyName;
         const hostClass = this;
@@ -364,8 +392,6 @@ class UClass extends UState {
             : UObject;
 
         console.log(this.friendlyName, flagsObject, flagsClass);
-
-        // debugger;
 
         const cls = {
             [this.friendlyName]: class extends Constructor {
@@ -410,7 +436,8 @@ class UClass extends UState {
                             missingProps.push(varname);
                         }
 
-                        (this as any)[varname] = value;
+                        if (value !== undefined || !(varname in this))
+                            (this as any)[varname] = value;
                     }
 
                     if (missingProps.length > 0)
@@ -439,9 +466,9 @@ class UClass extends UState {
 
 
         // debugger;
-        this.kls = cls as any;
+        this.kls = cls;
 
-        return this.kls;
+        return this.kls as T;
     }
 }
 

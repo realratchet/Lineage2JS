@@ -76,29 +76,29 @@ import UConvexVolume from "./un-convex-volume";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import USpriteEmitter from "./emitters/un-sprite-emitter";
 
-class UCommandlet extends UObject {
+// class UCommandlet extends UObject {
 
-}
+// }
 
-class USubsystem extends UObject {
+// class USubsystem extends UObject {
 
-}
+// }
 
-class USimpleCommandlet extends UCommandlet {
+// class USimpleCommandlet extends UCommandlet {
 
-}
+// }
 
-class UHelloWorldCommandlet extends UCommandlet {
+// class UHelloWorldCommandlet extends UCommandlet {
 
-}
+// }
 
-class UTime extends UObject {
+// class UTime extends UObject {
 
-}
+// }
 
-class ULocale extends UObject {
+// class ULocale extends UObject {
 
-}
+// }
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -272,6 +272,9 @@ class UPackage extends UEncodedFile {
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
 
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Client");
+        } else {
+            // addPackageDependendency(nameTable, nameHash, imports, "Native");
+            // addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
         }
 
         readable.importGroups = readable.imports.reduce((accum, imp, index) => {
@@ -435,6 +438,9 @@ class UPackage extends UEncodedFile {
             return obj as T;
         }
 
+        // if (objclass === UStaticMesh)
+        //     debugger;
+
         const obj = new (objclass as ObjectConstructor)();
 
         return obj as T;
@@ -456,6 +462,9 @@ class UPackage extends UEncodedFile {
             //     debugger;
 
             // if (entry.idClass === -26)
+            //     debugger;
+
+            // if (entry.objectName === "wispray00")
             //     debugger;
 
             let objclass: UClass = this.fetchObject(entry.idClass) as UClass;
@@ -794,87 +803,7 @@ class UPackage extends UEncodedFile {
     //     return object as T;
     // }
 
-    protected createObject<T extends UObject = UObject>(className: UObjectTypes_T, ...params: any[]) {
-        let Constructor: typeof UObject = null;
 
-        debugger;
-
-        // if (className === "Class" && exp.objectName !== "Object")
-        //     debugger;
-
-        switch (className) {
-            case "Class": {
-                Constructor = UClass;
-                // console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
-                debugger;
-            } break
-            case "Struct": Constructor = UStruct; break;
-            case "Texture": Constructor = UTexture; break;
-            case "Palette": Constructor = UPlatte; break;
-            case "StaticMesh": Constructor = UStaticMesh; break;
-            case "Shader": Constructor = UShader; break;
-            case "LevelInfo": Constructor = ULevelInfo; break;
-            case "TerrainSector": Constructor = UTerrainSector; break;
-            case "ZoneInfo": Constructor = UZoneInfo; break;
-            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
-            case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
-            case "Model": Constructor = UModel; break;
-            case "Polys": Constructor = UPolys; break;
-            case "Brush": Constructor = UBrush; break;
-            case "Level": Constructor = ULevel; break;
-            case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
-            case "Sound": Constructor = USound; break;
-            case "Light": Constructor = ULight; break;
-            case "TerrainInfo": Constructor = UTerrainInfo; break;
-            case "NMovableSunLight": Constructor = UNMovableSunLight; break;
-            case "StaticMeshActor": Constructor = UStaticMeshActor; break;
-            case "WaterVolume": Constructor = UWaterVolume; break;
-            case "Emitter": Constructor = UEmitter; break;
-            case "NSun": Constructor = UNSun; break;
-            case "NMoon": Constructor = UNMoon; break;
-            case "L2FogInfo": Constructor = UFogInfo; break;
-            case "PlayerStart": Constructor = UPlayerStart; break;
-            case "MusicVolume": Constructor = UMusicVolume; break;
-            case "Mover": Constructor = UMover; break;
-            case "BlockingVolume": Constructor = UBlockingVolume; break;
-            case "Camera": Constructor = UCamera; break;
-            case "FadeColor": Constructor = UFadeColor; break;
-            case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
-            case "TexRotator": Constructor = UTexRotator; break;
-            case "TexPanner": Constructor = UTexPanner; break;
-            case "ColorModifier": Constructor = UColorModifier; break;
-            case "TexOscillator": Constructor = UTexOscillator; break;
-            case "LevelSummary": Constructor = ULevelSummary; break;
-            case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
-            case "TextBuffer": Constructor = UTextBuffer; break;
-            case "FinalBlend": Constructor = UFinalBlend; break;
-            case "TexEnvMap": Constructor = UTexEnvMap; break;
-            case "Cubemap": Constructor = UCubemap; break;
-            case "SkeletalMesh": Constructor = USkeletalMesh; break;
-            case "MeshAnimation": Constructor = UMeshAnimation; break;
-            case "Function": Constructor = UFunction; break;
-            case "Enum": Constructor = UEnum; break;
-            case "Const": Constructor = UConst; break;
-            case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
-            case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
-            case "StructProperty": Constructor = UnProperties.UStructProperty; break;
-            case "IntProperty": Constructor = UnProperties.UIntProperty; break;
-            case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
-            case "NameProperty": Constructor = UnProperties.UNameProperty; break;
-            case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
-            case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
-            case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
-            case "StrProperty": Constructor = UnProperties.UStrProperty; break;
-            case "State": Constructor = UState; break;
-            case "Font": Constructor = UFont; break;
-            case "Weapon": Constructor = UWeapon; break;
-            default: throw new Error(`Unknown object type: ${className}`);
-        }
-
-        const object = (new (Constructor as any)(...params) as T);
-
-        return object;
-    }
 
     // public async createExportObject<T extends UObject = UObject>(pkg: UPackage, exp: UExport<T>, className: UObjectTypes_T, ...params: any[]): Promise<T> {
     //     if (exp.object) return exp.object;
@@ -1130,6 +1059,7 @@ class UNativePackage extends UPackage {
             case "MeshAnimation": Constructor = UMeshAnimation; break;
             case "Level": Constructor = ULevel; break;
             case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
+            case "StaticMeshActor": Constructor = UStaticMeshActor; break;
             case "Model": Constructor = UModel; break;
             case "Viewport": Constructor = UViewport; break;
             case "Client": Constructor = UClient; break;
@@ -1144,6 +1074,35 @@ class UNativePackage extends UPackage {
             case "MeshEmitter": Constructor = UMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
 
+            case "ZoneInfo": Constructor = UZoneInfo; break;
+            case "LevelInfo": Constructor = ULevelInfo; break;
+            case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
+            case "TerrainInfo": Constructor = UTerrainInfo; break;
+
+            case "NSun": Constructor = UNSun; break;
+            case "NMoon": Constructor = UNMoon; break;
+            case "NMovableSunLight": Constructor = UNMovableSunLight; break;
+
+            case "LevelSummary": Constructor = ULevelSummary; break;
+            case "PlayerStart": Constructor = UPlayerStart; break;
+            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "Brush": Constructor = UBrush; break;
+
+            case "Shader": Constructor = UShader; break;
+
+            case "TexRotator": Constructor = UTexRotator; break;
+            case "TexPanner": Constructor = UTexPanner; break;
+            case "ColorModifier": Constructor = UColorModifier; break;
+            case "TexOscillator": Constructor = UTexOscillator; break;
+
+            case "MusicVolume": Constructor = UMusicVolume; break;
+
+            case "Light": Constructor = ULight; break;
+
+            case "FinalBlend": Constructor = UFinalBlend; break;
+            case "TexEnvMap": Constructor = UTexEnvMap; break;
+            case "Cubemap": Constructor = UCubemap; break;
+
             default:
                 debugger;
                 throw new Error(`Not implemented native class: ${constructorName}`);
@@ -1151,6 +1110,88 @@ class UNativePackage extends UPackage {
 
         return Constructor;
     }
+
+    // protected createObject<T extends UObject = UObject>(className: UObjectTypes_T, ...params: any[]) {
+    //     let Constructor: typeof UObject = null;
+
+    //     debugger;
+
+    //     // if (className === "Class" && exp.objectName !== "Object")
+    //     //     debugger;
+
+    //     switch (className) {
+    //         case "Class": {
+    //             Constructor = UClass;
+    //             // console.info(`Creating class: ${exp.objectName} [${exp.index}]`);
+    //             debugger;
+    //         } break
+    //         case "Struct": Constructor = UStruct; break;
+    //         case "Texture": Constructor = UTexture; break;
+    //         case "Palette": Constructor = UPlatte; break;
+    //         case "StaticMesh": Constructor = UStaticMesh; break;
+    //         case "Shader": Constructor = UShader; break;
+    //         case "LevelInfo": Constructor = ULevelInfo; break;
+    //         case "TerrainSector": Constructor = UTerrainSector; break;
+    //         case "ZoneInfo": Constructor = UZoneInfo; break;
+    //         case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+    //         case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
+    //         case "Model": Constructor = UModel; break;
+    //         case "Polys": Constructor = UPolys; break;
+    //         case "Brush": Constructor = UBrush; break;
+    //         case "Level": Constructor = ULevel; break;
+    //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
+    //         case "Sound": Constructor = USound; break;
+    //         case "Light": Constructor = ULight; break;
+    //         case "TerrainInfo": Constructor = UTerrainInfo; break;
+    //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
+    //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+    //         case "WaterVolume": Constructor = UWaterVolume; break;
+    //         case "Emitter": Constructor = UEmitter; break;
+    //         case "NSun": Constructor = UNSun; break;
+    //         case "NMoon": Constructor = UNMoon; break;
+    //         case "L2FogInfo": Constructor = UFogInfo; break;
+    //         case "PlayerStart": Constructor = UPlayerStart; break;
+    //         case "MusicVolume": Constructor = UMusicVolume; break;
+    //         case "Mover": Constructor = UMover; break;
+    //         case "BlockingVolume": Constructor = UBlockingVolume; break;
+    //         case "Camera": Constructor = UCamera; break;
+    //         case "FadeColor": Constructor = UFadeColor; break;
+    //         case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
+    //         case "TexRotator": Constructor = UTexRotator; break;
+    //         case "TexPanner": Constructor = UTexPanner; break;
+    //         case "ColorModifier": Constructor = UColorModifier; break;
+    //         case "TexOscillator": Constructor = UTexOscillator; break;
+    //         case "LevelSummary": Constructor = ULevelSummary; break;
+    //         case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
+    //         case "TextBuffer": Constructor = UTextBuffer; break;
+    //         case "FinalBlend": Constructor = UFinalBlend; break;
+    //         case "TexEnvMap": Constructor = UTexEnvMap; break;
+    //         case "Cubemap": Constructor = UCubemap; break;
+    //         case "SkeletalMesh": Constructor = USkeletalMesh; break;
+    //         case "MeshAnimation": Constructor = UMeshAnimation; break;
+    //         case "Function": Constructor = UFunction; break;
+    //         case "Enum": Constructor = UEnum; break;
+    //         case "Const": Constructor = UConst; break;
+    //         case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
+    //         case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
+    //         case "StructProperty": Constructor = UnProperties.UStructProperty; break;
+    //         case "IntProperty": Constructor = UnProperties.UIntProperty; break;
+    //         case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
+    //         case "NameProperty": Constructor = UnProperties.UNameProperty; break;
+    //         case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
+    //         case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
+    //         case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
+    //         case "StrProperty": Constructor = UnProperties.UStrProperty; break;
+    //         case "State": Constructor = UState; break;
+    //         case "Font": Constructor = UFont; break;
+    //         case "Weapon": Constructor = UWeapon; break;
+    //         default: throw new Error(`Unknown object type: ${className}`);
+    //     }
+
+    //     const object = (new (Constructor as any)(...params) as T);
+
+    //     return object;
+    // }
 
     public fetchObject<T extends UObject = UObject>(objref: number): T {
         if (objref <= 0) return null;

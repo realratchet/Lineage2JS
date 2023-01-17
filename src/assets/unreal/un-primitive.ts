@@ -3,6 +3,30 @@ import FArray from "./un-array";
 import { FStaticMeshMaterial } from "./un-material";
 import FBox from "./un-box";
 import USphere from "./un-sphere";
+import UExport from "./un-export";
+import UPackage from "./un-package";
+// import { PropertyTag } from "./un-property-tag";
+
+// class FStaticMeshMaterial extends UObject {
+//     public load(pkg: UPackage, tag: PropertyTag): this {
+//         debugger;
+
+//         this.readHead = pkg.tell();
+//         this.readTail = this.readHead + tag.dataSize;
+
+//         do {
+//             const tag = PropertyTag.from(pkg, this.readHead);
+
+//             if (!tag.isValid()) break;
+
+//             this.loadProperty(pkg, tag);
+//             this.readHead = pkg.tell();
+
+//         } while (this.readHead < this.readTail);
+//         return this;
+//     }
+// }
+
 
 class UPrimitive extends UObject {
     protected materials: FArray<FStaticMeshMaterial> = new FArray(FStaticMeshMaterial);

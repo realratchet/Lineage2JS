@@ -34,16 +34,16 @@ class DecodeLibrary {
         const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
-        const uLevel = await pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1);
+        const uLevel = pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1).loadSelf();
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
 
-        const uLevelInfo = await pkg.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1);
+        const uLevelInfo = pkg.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
 
-        const sun = await pkg.fetchObject<UNSun>(expGroups["NSun"][0].index + 1);
+        const sun = pkg.fetchObject<UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 
-        decodeLibrary.sun = await sun.getDecodeInfo(decodeLibrary);
+        decodeLibrary.sun = sun.getDecodeInfo(decodeLibrary);
 
         const sectorIndex = uLevel.url.map.split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
 
@@ -54,13 +54,13 @@ class DecodeLibrary {
         decodeLibrary.sector = sectorIndex;
 
         if (loadBaseModel) {
-            const uModel = await pkg.fetchObject<UModel>(uLevel.baseModelId); // base model
-            await uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
+            const uModel = pkg.fetchObject<UModel>(uLevel.baseModelId).loadSelf(); // base model
+            uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         }
 
         if (loadTerrain) {
-            const uTerrainInfo = await pkg.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1);
-            await uTerrainInfo.getDecodeInfo(decodeLibrary);
+            const uTerrainInfo = pkg.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
+            uTerrainInfo.getDecodeInfo(decodeLibrary);
         }
 
         if (loadStaticModels) {
@@ -75,12 +75,10 @@ class DecodeLibrary {
 
                 for (let exp of actorsToLoad) {
                     try {
-                        const actor = await pkg.fetchObject<UStaticMeshActor>(exp.index + 1);
+                        const actor = pkg.fetchObject<UStaticMeshActor>(exp.index + 1).loadSelf();
                         try {
-                            await actor.onDecodeReady();
-
                             try {
-                                await actor.getDecodeInfo(decodeLibrary)
+                                actor.getDecodeInfo(decodeLibrary)
                             } catch (e) { failedDecode.push([actor, e]); }
                         } catch (e) {
                             failedLoad.push([actor, e]);
@@ -95,10 +93,10 @@ class DecodeLibrary {
                     debugger;
                 }
             } else {
-                const uStaticMeshActorPromises = actorsToLoad.map(exp => pkg.fetchObject<UStaticMeshActor>(exp.index + 1));
-                const uStaticMeshActors = await Promise.all(uStaticMeshActorPromises);
+                const uStaticMeshActors = actorsToLoad.map(exp => pkg.fetchObject<UStaticMeshActor>(exp.index + 1).loadSelf());
 
-                await Promise.all(uStaticMeshActors.map(actor => actor.getDecodeInfo(decodeLibrary)));
+                for (const actor of uStaticMeshActors)
+                    actor.getDecodeInfo(decodeLibrary);
             }
         }
 

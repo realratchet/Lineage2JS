@@ -180,7 +180,13 @@ abstract class UObject {
 
         this.preLoad(pkg, exp);
 
-        if (exp.size > 0) {
+        if (!isFinite(this.readHead))
+            debugger;
+
+        if (!isFinite(this.readTail))
+            debugger;
+
+        if ((this.readTail - this.readHead) > 0) {
             this.doLoad(pkg, exp);
             this.postLoad(pkg, exp);
         }
@@ -210,7 +216,7 @@ abstract class UObject {
 
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int8 : BufferValue.uint8)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.uint8)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_IntProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int32 : BufferValue.uint32)).value as number);

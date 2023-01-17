@@ -20,6 +20,8 @@ class ULevelInfo extends UAActor implements IInfo {
 
     protected hasPathNodes: boolean;
 
+    public static readonly friendlyName = "LevelInfo";
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TimeSeconds": "time",
@@ -52,9 +54,7 @@ class ULevelInfo extends UAActor implements IInfo {
 
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<ISectorDecodeInfo> {
-        await this.onDecodeReady();
-
+    public getDecodeInfo(library: DecodeLibrary): ISectorDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Sector",

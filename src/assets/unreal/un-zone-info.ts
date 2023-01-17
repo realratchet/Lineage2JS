@@ -96,9 +96,7 @@ class UZoneInfo extends UAActor implements IInfo {
 
     }
 
-    async getDecodeInfo(library: DecodeLibrary): Promise<IZoneDecodeInfo> {
-        await this.onDecodeReady();
-
+    public getDecodeInfo(library: DecodeLibrary): IZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Zone",

@@ -2,7 +2,7 @@ import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
-import FArray from "./un-array";
+import FArray, { FObjectArray } from "./un-array";
 import FNumber from "./un-number";
 import FVector from "./un-vector";
 
@@ -21,7 +21,7 @@ class ULight extends UAActor {
     public isDynamic: boolean = false;
     public lightOnTime: number;
     public lightOffTime: number;
-    public skins: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    public skins = new FObjectArray();
 
     public style: number;
 
@@ -132,11 +132,7 @@ class ULight extends UAActor {
         return [x * brightness, y * brightness, z * brightness];
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<ILightDecodeInfo> {
-        await this.onDecodeReady();
-
-        // debugger;
-
+    public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Light",

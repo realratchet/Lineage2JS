@@ -185,8 +185,10 @@ class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public async getDecodeInfo(library: DecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
-        await this.onDecodeReady();
+    public getDecodeInfo(library: DecodeLibrary, matModifiers?: string[]): IStaticMeshObjectDecodeInfo {
+        // await this.onDecodeReady();
+
+        // debugger;
 
         let materialUuid = this.uuid;
 
@@ -362,7 +364,8 @@ class UStaticMesh extends UPrimitive {
             bounds: this.decodeBoundsInfo()
         };
 
-        const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        // const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        const materials = this.materials.map((mat: FStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
 
         materials.forEach(uuid => {
             if (!library.materials[uuid]) return;

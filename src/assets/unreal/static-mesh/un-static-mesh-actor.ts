@@ -221,10 +221,10 @@ class UStaticMeshActor extends UAActor {
         }
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
-        await this.onDecodeReady();
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.instance) this.instance?.loadSelf().setActor(this);
 
-        if (this.instance) this.instance.setActor(this);
+        // debugger;
 
         // if (this.colLocation.sub(this.location).length() > 1e-3)
         //     debugger;
@@ -273,9 +273,9 @@ class UStaticMeshActor extends UAActor {
         // if (this.objectName === "Exp_StaticMeshActor810")
         //     debugger;
 
-        const mesh = await this.mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
+        const mesh = this.mesh.loadSelf().getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[mesh.geometry].attributes;
-        const instance = (this.instance ? await this.instance.getDecodeInfo(library) : {
+        const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
             color: new Float32Array(attributes.positions.length).fill(0),
             lights: { scene: [], ambient: [] }
         });
@@ -318,7 +318,7 @@ class UStaticMeshActor extends UAActor {
         // debugger;
 
         if (instance.lights.environment) {
-            const lightInfo = instance.lights.environment
+            const lightInfo = instance.lights.environment;
             const lightArray = lightInfo.vertexFlags;
             let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 

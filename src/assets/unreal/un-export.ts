@@ -1,3 +1,5 @@
+import { allFlags, anyFlags, flagBitsToDict } from "@client/utils/flags";
+
 type UObject = import("./un-object").UObject;
 
 class UExport<T extends UObject = UObject> {
@@ -10,15 +12,22 @@ class UExport<T extends UObject = UObject> {
     public idObjectName: number;
     public objectName: string = "None";
 
-    public flags: number;
+    public _flags: ObjectFlags_T;
+    public objectFlags: Readonly<Record<ObjectFlags_T, boolean>>;
 
     public size: number;
     public offset: number;
 
     public object: T = null;
 
-    public allFlags(flags: ObjectFlags_T): boolean { return (this.flags & flags) === flags; }
-    public anyFlags(flags: ObjectFlags_T): boolean { return (this.flags & flags) !== 0; }
+    public allFlags(flags: ObjectFlags_T): boolean { return allFlags(this.flags, flags); }
+    public anyFlags(flags: ObjectFlags_T): boolean { return anyFlags(this.flags, flags); }
+
+    get flags() { return this._flags; }
+    set flags(flags: number) {
+        this._flags = flags;
+        this.objectFlags = Object.freeze(flagBitsToDict(flags, ObjectFlags_T as any));
+    }
 }
 
 enum ObjectFlags_T {

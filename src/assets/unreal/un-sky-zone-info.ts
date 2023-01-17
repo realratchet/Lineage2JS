@@ -19,9 +19,7 @@ class USkyZoneInfo extends UAActor implements IInfo {
         });
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<ISkyZoneDecodeInfo> {
-        await this.onDecodeReady();
-
+    public getDecodeInfo(library: DecodeLibrary): ISkyZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Sky",

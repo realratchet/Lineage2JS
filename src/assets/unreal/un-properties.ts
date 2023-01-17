@@ -1,3 +1,4 @@
+import { flagBitsToDict } from "@client/utils/flags";
 import BufferValue from "../buffer-value";
 import FArray, { FObjectArray, FPrimitiveArray } from "./un-array";
 import FConstructable from "./un-constructable";
@@ -8,12 +9,13 @@ import UObject from "./un-object";
 import UPackage from "./un-package";
 
 abstract class UProperty extends UField {
-    protected arrayDimensions: number;
-    protected propertyFlags: number;
+    public arrayDimensions: number;
+    protected flags: number;
     protected replicationOffset: number;
     protected categoryNameId: number;
     protected categoryName: string;
     public propertyName: string;
+    public propertyFlags: Readonly<Record<string, boolean>>;
 
     protected preLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.preLoad(pkg, exp);
@@ -31,12 +33,13 @@ abstract class UProperty extends UField {
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.arrayDimensions = pkg.read(uint32).value as number;
-        this.propertyFlags = pkg.read(uint32).value as number;
+        this.flags = pkg.read(uint32).value as number;
+        this.propertyFlags = Object.freeze(flagBitsToDict(this.flags, PropertyFlags_T as any));
 
         this.categoryNameId = pkg.read(compat32).value as number;
         this.categoryName = pkg.nameTable[this.categoryNameId].name as string;
 
-        if (this.propertyFlags & PropertyFlags_T.Net)
+        if (this.flags & PropertyFlags_T.Net)
             this.replicationOffset = pkg.read(uint16).value as number;
 
         this.readHead = pkg.tell();
@@ -78,8 +81,31 @@ class UByteProperty extends UBaseExportProperty<UEnum> {
 
 class UObjectProperty extends UBaseExportProperty<UClass> {
     static dtype = BufferValue.compat32;
+
+    // public loadSelf(): this {
+    //     super.loadSelf();
+
+    //     debugger;
+
+    //     return this;
+    // }
+
+    public loadSelf() {
+        super.loadSelf();
+
+        if (this.valueId !== 0 && !this.value)
+            this.value = this.pkg.fetchObject(this.valueId);
+
+        return this;
+    }
+
     public createObject() {
+        this.loadSelf();
+        if (this.valueId !== 0 && !this.value)
+            this.value = this.pkg.fetchObject(this.valueId);
+
         return (pkg: UPackage) => {
+            debugger;
             return pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         };
     }
@@ -183,7 +209,7 @@ class UArrayProperty extends UBaseExportProperty<UProperty> {
         if (this.valueId !== 0 && !this.value)
             this.value = this.pkg.fetchObject(this.valueId);
 
-        if (this.value instanceof UIntProperty || this.value instanceof UFloatProperty) {
+        if (this.value instanceof UIntProperty || this.value instanceof UFloatProperty || this.value instanceof UByteProperty) {
             return new FPrimitiveArray((this.value.constructor as (typeof UIntProperty | typeof UFloatProperty)).dtype);
         } else if (this.value instanceof UObjectProperty) {
             return new FObjectArray();

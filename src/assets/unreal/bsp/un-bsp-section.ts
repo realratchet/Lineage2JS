@@ -25,10 +25,8 @@ class FBSPSection extends FConstructable {
         this.unkInt2 = pkg.read(int32).value as number;
         this.unkInt3 = pkg.read(int32).value as number;
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.texture = await pkg.fetchObject<UObject>(this.textureId) as UTexture;
-            resolve();
-        }));
+
+        this.texture = pkg.fetchObject<UObject>(this.textureId) as UTexture;
 
         return this;
     }

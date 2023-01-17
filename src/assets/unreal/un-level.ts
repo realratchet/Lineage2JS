@@ -65,44 +65,26 @@ class ULevel extends UObject {
 
         // debugger;
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (!LOAD_SUB_OBJECTS) {
-                resolve();
-                return;
+
+        if (LOAD_SUB_OBJECTS) {
+            this.baseModel = pkg.fetchObject<UModel>(this.baseModelId);
+
+            for (let objectId of ambientSoundIds) {
+                const object = pkg.fetchObject(objectId);
+
+                if (object)
+                    this.objectList.push(object);
             }
-            this.baseModel = await pkg.fetchObject<UModel>(this.baseModelId);
-            resolve();
-        }));
 
-        for (let objectId of ambientSoundIds) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) {
-                    resolve();
-                    return;
-                }
-                const object = await pkg.fetchObject(objectId);
+            for (let objectId of objectIds) {
+                const object = pkg.fetchObject(objectId);
 
-                if (object) this.objectList.push(object);
-
-                resolve();
-            }));
+                if (object)
+                    this.objectList.push(object);
+            }
         }
 
-        for (let objectId of objectIds) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) {
-                    resolve();
-                    return;
-                }
 
-                // debugger;
-                const object = await pkg.fetchObject(objectId);
-
-                if (object) this.objectList.push(object);
-
-                resolve();
-            }));
-        }
 
         // debugger;
 
@@ -124,9 +106,7 @@ class ULevel extends UObject {
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<IBaseObjectDecodeInfo> {
-        await this.onDecodeReady();
-
+    public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
         const groupedObjectList = this.objectList.reduce((accum, obj) => {
 
             accum[obj.constructor.name] = accum[obj.constructor.name] || [];

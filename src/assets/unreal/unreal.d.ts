@@ -413,7 +413,7 @@ type LightEffect_T = number | {
     Unused: 0xF
 };
 
-interface IInfo { getDecodeInfo(library: DecodeLibrary): Promise<IBaseZoneDecodeInfo>; }
+interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
 
 interface IZoneFogInfo {
     start: number,

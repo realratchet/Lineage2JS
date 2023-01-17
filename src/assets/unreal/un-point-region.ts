@@ -16,6 +16,7 @@ class UPointRegion extends UObject {
     }
 
     public preLoad(pkg: UPackage, tag: any) {
+        // debugger;
         this.readHead = this.readStart = pkg.tell();
         this.readTail = this.readHead + tag.dataSize;
     }
