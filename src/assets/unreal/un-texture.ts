@@ -1,3 +1,4 @@
+import { v5 as seededUuid } from "uuid";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
@@ -5,6 +6,10 @@ import UObject from "./un-object";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import BufferValue from "../buffer-value";
+import StringSet from "@client/utils/string-set";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import FVector from "./un-vector";
+import { generateUUID } from "three/src/math/MathUtils";
 
 /*
 
@@ -48,6 +53,7 @@ class UTexture extends UObject {
 
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
     public readonly _mips: FPrimitiveArray<"uint32">;
+    uuidGeometry: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -286,6 +292,74 @@ class UTexture extends UObject {
         } as ITextureDecodeInfo;
     }
 
+    public getDecodeInfoAsSprite(library: DecodeLibrary, matModifiers?: string[]): IStaticMeshObjectDecodeInfo {
+        // throw new Error();
+        let geometryUuid = this.uuidGeometry = this.uuidGeometry || generateUUID();
+        let materialUuid = this.uuidGeometry;
+
+        if (matModifiers?.length > 0) {
+            const hash = new StringSet(matModifiers).hash();
+            const hashArr = new Uint8Array(new BigUint64Array([hash]).buffer);
+
+            materialUuid = seededUuid(hashArr, materialUuid);
+
+            if (!(materialUuid in library.materials)) {
+                library.materials[materialUuid] = {
+                    materialType: "instance",
+                    baseMaterial: materialUuid,
+                    modifiers: matModifiers
+                } as IMaterialInstancedDecodeInfo;
+
+                // debugger;
+            }
+        }
+
+        if (geometryUuid in library.geometries) return {
+            uuid: geometryUuid,
+            type: "StaticMesh",
+            name: this.objectName,
+            geometry: geometryUuid,
+            materials: materialUuid,
+        } as IStaticMeshObjectDecodeInfo;
+
+        library.geometryInstances[geometryUuid] = 0;
+        library.geometries[geometryUuid] = null;
+        library.materials[materialUuid] = null;
+
+        const { indices, positions, normals, uvs } = createPlane(1, 1, 1, 1);
+
+        library.geometries[geometryUuid] = {
+            attributes: {
+                positions,
+                normals,
+                uvs
+            },
+            indices,
+            groups: [[0, indices.length, 0]],
+            bounds: null
+        };
+
+        // const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        const materials = [this.getDecodeInfo(library)];
+
+        materials.forEach(uuid => {
+            if (!library.materials[uuid]) return;
+
+            library.materials[uuid].color = true;
+        });
+
+        library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+
+        return {
+            uuid: geometryUuid,
+            type: "StaticMesh",
+            name: this.objectName,
+            geometry: geometryUuid,
+            materials: materialUuid,
+            children: []
+        };
+    }
+
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
@@ -317,3 +391,67 @@ class UTexture extends UObject {
 
 export default UTexture;
 export { UTexture };
+
+function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
+    const width_half = width / 2;
+    const height_half = height / 2;
+
+    const gridX = Math.floor(widthSegments);
+    const gridY = Math.floor(heightSegments);
+
+    const gridX1 = gridX + 1;
+    const gridY1 = gridY + 1;
+
+    const segment_width = width / gridX;
+    const segment_height = height / gridY;
+
+    //
+
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+
+    for (let iy = 0; iy < gridY1; iy++) {
+
+        const y = iy * segment_height - height_half;
+
+        for (let ix = 0; ix < gridX1; ix++) {
+
+            const x = ix * segment_width - width_half;
+
+            vertices.push(x, - y, 0);
+
+            normals.push(0, 0, 1);
+
+            uvs.push(ix / gridX);
+            uvs.push(1 - (iy / gridY));
+
+        }
+
+    }
+
+    for (let iy = 0; iy < gridY; iy++) {
+
+        for (let ix = 0; ix < gridX; ix++) {
+
+            const a = ix + gridX1 * iy;
+            const b = ix + gridX1 * (iy + 1);
+            const c = (ix + 1) + gridX1 * (iy + 1);
+            const d = (ix + 1) + gridX1 * iy;
+
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+
+        }
+    }
+
+    const TypedIndicesArray = getTypedArrayConstructor(indices.length / 3);
+
+    return {
+        indices: new TypedIndicesArray(indices),
+        positions: new Float32Array(vertices),
+        uvs: new Float32Array(uvs),
+        normals: new Float32Array(normals)
+    };
+}

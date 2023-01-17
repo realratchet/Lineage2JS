@@ -5,13 +5,14 @@ import FVector from "../un-vector";
 import { clamp } from "three/src/math/MathUtils";
 import { FPlane } from "../un-plane";
 import { sampleLightIntensity } from "../un-sample-light";
-import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+import { Euler, Matrix4, Quaternion, Texture, Vector3 } from "three";
 import { selectByTime, staticMeshAmbient } from "../un-time-list";
 import FNumber from "../un-number";
 import timeOfDay from "../un-time-of-day-helper";
 import FConstructable from "../un-constructable";
 import UPackage from "../un-package";
 import { PropertyTag } from "../un-property-tag";
+import UTexture from "../un-texture";
 
 class FAccessory extends FConstructable {
     public unkBytes: Uint8Array;
@@ -25,7 +26,7 @@ class FAccessory extends FConstructable {
 }
 
 class UStaticMeshActor extends UAActor {
-    protected mesh: UStaticMesh;
+    protected mesh: UStaticMesh | UTexture;
     protected instance: UStaticMeshInstance;
     protected isRangeIgnored: boolean;
     protected colLocation: FVector;
@@ -222,7 +223,10 @@ class UStaticMeshActor extends UAActor {
     }
 
     public getDecodeInfo(library: DecodeLibrary): string {
-        if (this.instance) this.instance?.loadSelf().setActor(this);
+        // if (this.objectName === "Exp_StaticMeshActor140" || this.objectName === "Exp_StaticMeshActor141")
+        //     debugger;
+
+        this.instance?.loadSelf().setActor(this);
 
         // debugger;
 
@@ -273,8 +277,10 @@ class UStaticMeshActor extends UAActor {
         // if (this.objectName === "Exp_StaticMeshActor810")
         //     debugger;
 
-        const mesh = this.mesh.loadSelf().getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
-        const attributes = library.geometries[mesh.geometry].attributes;
+        const mesh = this.mesh.loadSelf();
+
+        const meshInfo = mesh instanceof UTexture ? mesh.getDecodeInfoAsSprite(library, hasModifier ? [modifierUuid] : null) : mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
+        const attributes = library.geometries[meshInfo.geometry].attributes;
         const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
             color: new Float32Array(attributes.positions.length).fill(0),
             lights: { scene: [], ambient: [] }
@@ -417,7 +423,7 @@ class UStaticMeshActor extends UAActor {
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
             instance: {
-                mesh,
+                mesh: meshInfo,
                 type: "StaticMeshInstance",
                 uuid: this.instance ? this.instance.uuid : null,
                 name: this.instance ? this.instance.objectName : null,
@@ -427,21 +433,22 @@ class UStaticMeshActor extends UAActor {
 
         zoneInfo.children.push(actorInfo);
 
-        library.geometryInstances[mesh.geometry]++;
+        library.geometryInstances[meshInfo.geometry]++;
 
-        zoneInfo.bounds.isValid = true;
+        if (library.geometries[meshInfo.geometry].bounds?.box) {
+            const { min, max } = library.geometries[meshInfo.geometry].bounds.box;
+            const _min = min.map((v, i) => v + _position[i]);
+            const _max = max.map((v, i) => v + _position[i]);
 
-        const { min, max } = library.geometries[mesh.geometry].bounds.box;
-        const _min = min.map((v, i) => v + _position[i]);
-        const _max = max.map((v, i) => v + _position[i]);
+            zoneInfo.bounds.isValid = true;
 
-        zoneInfo.bounds.isValid = true;
-        [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-            ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
-                for (let i = 0; i < 3; i++)
-                    arr[i] = fn(arr[i], _min[i], _max[i]);
-            }
-        );
+            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                    for (let i = 0; i < 3; i++)
+                        arr[i] = fn(arr[i], _min[i], _max[i]);
+                }
+            );
+        }
 
         // if(this.objectName === "Exp_StaticMeshActor1893") {
         //     debugger;

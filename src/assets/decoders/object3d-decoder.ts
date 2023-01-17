@@ -146,6 +146,11 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
 
     const object = new CollidingMesh(geometry, materials, collider);
 
+    // if (info.name === "Exp_StaticMeshActor140")
+    //     debugger;
+
+    // debugger;
+
     object.userData.meshInstance = {
         uuid: instanceInfo.uuid,
         name: instanceInfo.name

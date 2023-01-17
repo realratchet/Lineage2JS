@@ -3,7 +3,7 @@ import { Mesh } from "three";
 import type { ICollidable } from "./objects";
 
 class CollidingMesh extends Mesh implements ICollidable {
-    public readonly isCollidable = true;
+    public readonly isCollidable: boolean = true;
 
     protected colliderDesc: ColliderDesc;
     protected rigidbodyDesc: RigidBodyDesc;
@@ -15,6 +15,7 @@ class CollidingMesh extends Mesh implements ICollidable {
 
         if (colliderIndices && geometry.hasAttribute("position"))
             this.makeCollider(colliderIndices, geometry.getAttribute("position").array as Float32Array);
+        else this.isCollidable = false;
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
@@ -25,7 +26,7 @@ class CollidingMesh extends Mesh implements ICollidable {
     public createCollider(physicsWorld: World): Collider {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
-        
+
         this.rigidbody.setTranslation(this.position, false);
         this.rigidbody.setRotation(this.quaternion, false);
 
