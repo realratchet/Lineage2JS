@@ -113,7 +113,7 @@ class ULevel extends UObject {
         for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
             emitter.loadSelf().getDecodeInfo(library);
 
-        debugger;
+        // debugger;
 
         // return {
         //     type: "Level",

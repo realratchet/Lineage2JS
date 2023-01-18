@@ -27,7 +27,8 @@ class DecodeLibrary {
         loadStaticModels = true,
         loadStaticModelList = null,
         loadTerrain = true,
-        helpersZoneBounds = false
+        helpersZoneBounds = false,
+        loadEmitters = true
     }: LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
@@ -63,7 +64,13 @@ class DecodeLibrary {
             uTerrainInfo.getDecodeInfo(decodeLibrary);
         }
 
-        uLevel.getDecodeInfo(decodeLibrary);
+        if (loadEmitters) {
+            const actorsToLoad = expGroups["Emitter"] || [];
+            const uEmitters = actorsToLoad.map(exp => pkg.fetchObject<UEmitter>(exp.index + 1).loadSelf());
+
+            for (const actor of uEmitters)
+                actor.getDecodeInfo(decodeLibrary);
+        }
 
         if (loadStaticModels) {
             let actorsToLoad: { index: number; export: UExport; }[];

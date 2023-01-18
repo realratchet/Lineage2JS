@@ -1,13 +1,13 @@
 import UObject from "../un-object";
 
-class UParticleEmitter extends UObject {
+abstract class UParticleEmitter extends UObject {
     protected maxParticles: number;
-    protected drawStyle: EParticleDrawStyle_T;
+    protected drawStyle: EParticleDrawStyle_T = EParticleDrawStyle_T.PTDS_Regular;
     protected opacity: number;
     protected startSizeRange: URangeVector;
     protected startSpinRange: URangeVector;
     protected colorMultiplierRange: URangeVector;
-    
+
     protected isSpinning: boolean;
     protected isFadingOut: boolean;
     protected isUniformScale: boolean;
@@ -20,7 +20,6 @@ class UParticleEmitter extends UObject {
     protected clockwiseSpinChance: FVector;
     protected spinsPerSecondRange: URangeVector;
 
-    protected sprite: UTexture;
     protected actor: UEmitter;
 
     protected texSubdivU: number;
@@ -45,13 +44,13 @@ class UParticleEmitter extends UObject {
     protected _spawnedVelocityScaleRange: any;
     protected _useSpawnedVelocityScale: any;
     protected _useColorScale: any;
-    
+
     protected _colorScaleRepeats: any;
-    
- 
+
+
     protected _fadeOutFactor: any;
     protected _fadeOutStartTime: any;
-    
+
     protected _fadeInFactor: any;
     protected _fadeInEndTime: any;
     protected _fadeIn: any;
@@ -99,19 +98,19 @@ class UParticleEmitter extends UObject {
     protected _revolutionScale: any;
     protected _revolutionScaleRepeats: any;
     protected _useRotationFrom: any;
-    
+
     protected _rotationOffset: any;
-    
-    
+
+
     protected _dampRotation: any;
     protected _rotationDampingFactorRange: any;
     protected _rotationNormal: any;
     protected _useSizeScale: any;
-    
+
 
     protected _sizeScaleRepeats: any;
-    
-    
+
+
     protected _useSkeletalLocationAs: any;
     protected _skeletalMeshActor: any;
     protected _skeletalScale: any;
@@ -132,7 +131,6 @@ class UParticleEmitter extends UObject {
     protected _secondsBeforeInactive: any;
     protected _minSquaredVelocity: any;
     protected _initialTimeRange: any;
-    protected _lifetimeRange: any;
     protected _initialDelayRange: any;
     protected _triggerDisabled: any;
     protected _resetOnTrigger: any;
@@ -192,7 +190,6 @@ class UParticleEmitter extends UObject {
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
-            "Sprite": "sprite",
             "MaxParticles": "maxParticles",
             "DrawStyle": "drawStyle",
             "FadeOut": "isFadingOut",
@@ -230,13 +227,13 @@ class UParticleEmitter extends UObject {
             "SpawnedVelocityScaleRange": "_spawnedVelocityScaleRange",
             "UseSpawnedVelocityScale": "_useSpawnedVelocityScale",
             "UseColorScale": "_useColorScale",
-           
+
             "ColorScaleRepeats": "_colorScaleRepeats",
-            
-           
+
+
             "FadeOutFactor": "_fadeOutFactor",
             "FadeOutStartTime": "_fadeOutStartTime",
-            
+
             "FadeInFactor": "_fadeInFactor",
             "FadeInEndTime": "_fadeInEndTime",
             "FadeIn": "_fadeIn",
@@ -284,20 +281,20 @@ class UParticleEmitter extends UObject {
             "RevolutionScale": "_revolutionScale",
             "RevolutionScaleRepeats": "_revolutionScaleRepeats",
             "UseRotationFrom": "_useRotationFrom",
-            
+
             "RotationOffset": "_rotationOffset",
-            
-            
-           
+
+
+
             "DampRotation": "_dampRotation",
             "RotationDampingFactorRange": "_rotationDampingFactorRange",
             "RotationNormal": "_rotationNormal",
             "UseSizeScale": "_useSizeScale",
-            
-       
+
+
             "SizeScaleRepeats": "_sizeScaleRepeats",
 
-            
+
             "UseSkeletalLocationAs": "_useSkeletalLocationAs",
             "SkeletalMeshActor": "_skeletalMeshActor",
             "SkeletalScale": "_skeletalScale",
@@ -309,7 +306,7 @@ class UParticleEmitter extends UObject {
             "CollisionSound": "_collisionSound",
             "CollisionSoundIndex": "_collisionSoundIndex",
             "CollisionSoundProbability": "_collisionSoundProbability",
-           
+
 
 
             "BlendBetweenSubdivisions": "_blendBetweenSubdivisions",
@@ -319,7 +316,7 @@ class UParticleEmitter extends UObject {
             "SecondsBeforeInactive": "_secondsBeforeInactive",
             "MinSquaredVelocity": "_minSquaredVelocity",
             "InitialTimeRange": "_initialTimeRange",
-           
+
             "InitialDelayRange": "_initialDelayRange",
             "TriggerDisabled": "_triggerDisabled",
             "ResetOnTrigger": "_resetOnTrigger",
@@ -378,14 +375,22 @@ class UParticleEmitter extends UObject {
     }
 
     public getDecodeInfo(library: DecodeLibrary) {
-        const spriteUuid = this.sprite.loadSelf().getDecodeInfo(library);
-
-        
-        debugger;
-
         return {
             name: this.objectName,
-            type: "ParticleEmitter",
+            maxParticles: this.maxParticles,
+            opacity: this.opacity,
+            lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
+            fading: this.isFadingOut,
+            uniformScale: this.isUniformScale,
+            initial: {
+                particlesPerSecond: this.initialParticlesPerSecond,
+                scale: this.startSizeRange.loadSelf().getDecodeInfo(library),
+                angularVelocity: this.startSpinRange.loadSelf().getDecodeInfo(library)
+            },
+            colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
+            particlesPerSecond: this.particlesPerSecond,
+            angularVelocity: this.spinsPerSecondRange.loadSelf().getDecodeInfo(library),
+            blendingMode: blendingNames[this.drawStyle]
         };
     }
 }
@@ -394,11 +399,21 @@ export default UParticleEmitter;
 export { UParticleEmitter };
 
 enum EParticleDrawStyle_T {
-    PTDS_Regular,
-    PTDS_AlphaBlend,
-    PTDS_Modulated,
-    PTDS_Translucent,
-    PTDS_AlphaModulate_MightNotFogCorrectly,
-    PTDS_Darken,
-    PTDS_Brighten
+    PTDS_Regular,   // Just draws the particle textures without any color blending and transparency like the STY_Normal color blending mode for Actors.
+    PTDS_AlphaBlend, // Uses the texture's alpha channel to make parts of it transparent like the STY_Alpha color blending mode for Actors.
+    PTDS_Modulated, // Like the STY_Modulated color blending mode for Actors.
+    PTDS_Translucent, // Like the STY_Translucent color blending mode for Actors.
+    PTDS_AlphaModulate_MightNotFogCorrectly, // Uses the alpha channel to modulate the pixel colors. As you may have guessed, this might cause fogging problems.
+    PTDS_Darken, // Like the STY_Subtractive color blending mode for Actors.
+    PTDS_Brighten // Like the STY_Additive color blending mode for Actors.
+};
+
+const blendingNames = {
+    [EParticleDrawStyle_T.PTDS_Regular]: "normal",
+    [EParticleDrawStyle_T.PTDS_AlphaBlend]: "alpha",
+    [EParticleDrawStyle_T.PTDS_Modulated]: "modulate",
+    [EParticleDrawStyle_T.PTDS_Translucent]: "translucent",
+    [EParticleDrawStyle_T.PTDS_AlphaModulate_MightNotFogCorrectly]: "alphaModulate",
+    [EParticleDrawStyle_T.PTDS_Darken]: "darken",
+    [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
 };

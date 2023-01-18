@@ -10,11 +10,9 @@ class USpriteEmitter extends UParticleEmitter {
     }
 
     public getDecodeInfo(library: DecodeLibrary) {
-        const decodeInfo = super.getDecodeInfo(library);
-
-        return Object.assign(decodeInfo, {
+        return Object.assign(super.getDecodeInfo(library), {
             type: "SpriteEmitter",
-            sprite: this.sprite?.loadSelf().getDecodeInfo(library)
+            object: this.sprite?.loadSelf().getDecodeInfo(library)
         });
     }
 }

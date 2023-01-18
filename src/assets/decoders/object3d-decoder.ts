@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4 } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -449,6 +449,46 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
     return mesh;
 }
 
+function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
+    const geometry = new PlaneBufferGeometry(50, 50, 50);
+    const infoMats = library.materials[info.object];
+    // const material = (decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff })) as Material;
+    const material = new MeshBasicMaterial({ side: DoubleSide, map: decodeTexture(library, infoMats).texture });
+
+    // debugger;
+
+    switch (info.blendingMode) {
+        case "normal":
+            // case "masked":
+            material.blending = NormalBlending;
+            break;
+        case "alpha":
+            material.blending = CustomBlending
+            material.blendSrc = SrcAlphaFactor;
+            material.blendDst = OneMinusSrcAlphaFactor;
+            break;
+        case "brighten":
+            material.blending = AdditiveBlending;
+            break;
+        case "translucent":
+            material.blending = CustomBlending;
+            material.blendSrc = OneFactor;
+            material.blendDst = OneMinusSrcColorFactor;
+            break;
+        default: console.warn("Unknown blending mode:", info.blendingMode); break;
+    }
+
+    material.opacity = info.opacity;
+    material.transparent = true;
+    // material.depthWrite = false;
+
+    const mesh = new Mesh(geometry, material);
+
+    applySimpleProperties(library, mesh, info);
+
+    return mesh;
+}
+
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
@@ -461,6 +501,7 @@ function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecod
         case "StaticMesh": return decodeStaticMeshWrapped(library, info as IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
+        case "SpriteEmitter": return decodeSpriteEmitter(library, info as ISpriteEmitterDecodeInfo)
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

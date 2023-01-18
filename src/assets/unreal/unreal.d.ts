@@ -426,6 +426,7 @@ type LoadSettings_T = {
     loadBaseModel?: boolean,
     loadStaticModels?: boolean,
     loadStaticModelList?: number[],
+    loadEmitters?: boolean,
     helpersZoneBounds?: boolean
 };
 
