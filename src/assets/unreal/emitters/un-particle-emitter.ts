@@ -20,6 +20,9 @@ class UParticleEmitter extends UObject {
     protected clockwiseSpinChance: FVector;
     protected spinsPerSecondRange: URangeVector;
 
+    protected sprite: UTexture;
+    protected actor: UEmitter;
+
     protected texSubdivU: number;
     protected texSubdivV: number;
     protected subdivStart: number;
@@ -185,7 +188,7 @@ class UParticleEmitter extends UObject {
     protected _refrVScale: any;
     protected _realProjectionNormal: any;
 
-    protected sprite: UTexture;
+    public setActor(actor: UEmitter) { this.actor = actor; return this; }
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -377,10 +380,12 @@ class UParticleEmitter extends UObject {
     public getDecodeInfo(library: DecodeLibrary) {
         const spriteUuid = this.sprite.loadSelf().getDecodeInfo(library);
 
+        
         debugger;
 
         return {
-            name: this.name
+            name: this.objectName,
+            type: "ParticleEmitter",
         };
     }
 }

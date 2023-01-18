@@ -45,7 +45,7 @@ class UStaticMeshInstance extends UObject {
 
     protected actor: UStaticMeshActor;
 
-    public setActor(actor: UStaticMeshActor) { this.actor = actor; }
+    public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
 
     public getDecodeInfo(library: DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);

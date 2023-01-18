@@ -1,9 +1,6 @@
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
 import { FObjectArray } from "./un-array";
-import UExport from "./un-export";
-import UObject from "./un-object";
-import UPackage from "./un-package";
 
 abstract class UEmitter extends UAActor {
     protected emitters = new FObjectArray<UParticleEmitter>();
@@ -109,14 +106,23 @@ abstract class UEmitter extends UAActor {
     }
 
     public getDecodeInfo(library: DecodeLibrary) {
-        const emittersInfo = this.emitters.loadSelf().map(e => e.getDecodeInfo(library))
+        const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as IBaseObjectOrInstanceDecodeInfo[];
 
-        debugger;
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
+        const _position = this.location.getVectorElements();
+        const actorInfo = {
+            uuid: this.uuid,
+            type: "Group",
+            name: this.objectName,
+            position: _position,
+            scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
+            rotation: this.rotation.getEulerElements(),
+            children: emittersInfo
+        } as IBaseObjectDecodeInfo;
 
-        return {
-            type: "Emitter",
-            emitters: emittersInfo
-        };
+        zoneInfo.children.push(actorInfo);
+
+        return this.uuid;
     }
 }
 

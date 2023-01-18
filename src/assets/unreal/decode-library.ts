@@ -53,8 +53,6 @@ class DecodeLibrary {
 
         decodeLibrary.sector = sectorIndex;
 
-        uLevel.getDecodeInfo(decodeLibrary);
-
         if (loadBaseModel) {
             const uModel = pkg.fetchObject<UModel>(uLevel.baseModelId).loadSelf(); // base model
             uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
@@ -64,6 +62,8 @@ class DecodeLibrary {
             const uTerrainInfo = pkg.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
             uTerrainInfo.getDecodeInfo(decodeLibrary);
         }
+
+        uLevel.getDecodeInfo(decodeLibrary);
 
         if (loadStaticModels) {
             let actorsToLoad: { index: number; export: UExport; }[];

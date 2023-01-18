@@ -19,6 +19,8 @@ class URange extends UObject {
 
     //     return this;
     // }
+
+    public getDecodeInfo(library: DecodeLibrary): Range_T { return [this.min, this.max]; }
 }
 
 class URangeVector extends UObject {
@@ -34,15 +36,17 @@ class URangeVector extends UObject {
         });
     }
 
-    // public load(pkg: UPackage, tag: PropertyTag): this {
-    //     this.readHead = pkg.tell();
-    //     this.readTail = this.readHead + tag.dataSize;
-
-    //     this.readNamedProps(pkg);
-
-    //     return this;
-    // }
+    public getDecodeInfo(library: DecodeLibrary): RangeVector_T {
+        return {
+            x: this.x.getDecodeInfo(library),
+            y: this.x.getDecodeInfo(library),
+            z: this.x.getDecodeInfo(library)
+        };
+    }
 }
 
 export default URange;
 export { URange, URangeVector };
+
+type Range_T = [number, number];
+type RangeVector_T = { x: Range_T, y: Range_T, z: Range_T };

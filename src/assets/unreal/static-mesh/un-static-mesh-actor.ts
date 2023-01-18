@@ -287,7 +287,7 @@ class UStaticMeshActor extends UAActor {
 
         const mesh = this.mesh.loadSelf();
 
-        const meshInfo = mesh instanceof UTexture ? mesh.getDecodeInfoAsSprite(library, hasModifier ? [modifierUuid] : null) : mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
+        const meshInfo = mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[meshInfo.geometry].attributes;
         const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
             color: new Float32Array(attributes.positions.length).fill(0),
