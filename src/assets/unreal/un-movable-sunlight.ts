@@ -1,8 +1,8 @@
-import UAActor from "./un-aactor";
+import ULight from "./un-light";
 
-class UNMovableSunLight extends UAActor {
-    protected lightness: number = 128;
-    protected type = 0x13;
+class UNMovableSunLight extends ULight {
+    public lightness: number = 128;
+    public type = 0x13;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -29,20 +29,6 @@ class UNMovableSunLight extends UAActor {
             lightType: this.type
         };
     }
-
-    // protected doLoad(pkg: UPackage, exp: UExport): void {
-    //     pkg.seek(this.readHead, "set");
-
-    //     debugger;
-
-    //     super.doLoad(pkg, exp);
-
-    //     pkg.seek(this.readHead, "set");
-
-    //     const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-
-    //     debugger;
-    // }
 }
 
 export default UNMovableSunLight;

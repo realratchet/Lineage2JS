@@ -36,6 +36,8 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 
     decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
 
+    console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
+
     return decodePackage(decodeLibrary);
 }
 
@@ -370,26 +372,14 @@ async function startCore() {
 
     // debugger;
 
-    const pkgEffects = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
+    // const pkgEffects = await assetLoader.load(assetLoader.getPackage("lineageeffect", "Script"));
 
-    // debugger;
+    // const uRapidShot = pkgEffects.fetchObject<UClass>(657);
+    // // const mortalBlow = await pkgEffects.fetchObject<UClass>(21);
 
-    const rapidShot = pkgEffects.fetchObject<UClass>(657);
-    // const mortalBlow = await pkgEffects.fetchObject<UClass>(21);
-
-    // debugger;
-
-    // global.rapidShot = rapidShot;
-
-    // await rapidShot.onDecodeReady();
-    // const kls = rapidShot.buildClass<typeof UEmitter>(assetLoader.getPackage("native", "Script") as UNativePackage);
-
-    // // debugger;
-
-    // const rshot = new (kls as any as ObjectConstructor)() as UEmitter;
-    // const decodeRshot = rshot.getDecodeInfo(new DecodeLibrary());
-
-    // // await rapidShot.superField.onDecodeReady();
+    // const RapidShot = uRapidShot.buildClass<UEmitter>(assetLoader.getPackage("native", "Script") as UNativePackage);
+    // const rapidShot = new RapidShot();
+    // const decodedRapidshot = rapidShot.getDecodeInfo(new DecodeLibrary());
 
     // debugger;
 

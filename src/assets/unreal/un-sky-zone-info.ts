@@ -1,24 +1,7 @@
 import DecodeLibrary from "./decode-library";
-import UAActor from "./un-aactor";
+import UZoneInfo from "./un-zone-info";
 
-class USkyZoneInfo extends UAActor implements IInfo {
-    protected panSpeedU: number;
-    protected panSpeedV: number;
-
-    protected lensFlare = new Set();
-    protected lensFlareOffset = new Set();
-    protected lensFlareScale = new Set();
-
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "TexUPanSpeed": "panSpeedU",
-            "TexVPanSpeed": "panSpeedV",
-            "LensFlare": "lensFlare",
-            "LensFlareOffset": "lensFlareOffset",
-            "LensFlareScale": "lensFlareScale",
-        });
-    }
-
+class USkyZoneInfo extends UZoneInfo implements IInfo {
     public getDecodeInfo(library: DecodeLibrary): ISkyZoneDecodeInfo {
         return {
             uuid: this.uuid,

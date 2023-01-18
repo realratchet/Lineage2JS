@@ -3,7 +3,7 @@ import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 
-const LOAD_SUB_OBJECTS = false;
+const LOAD_SUB_OBJECTS = true;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
@@ -63,9 +63,6 @@ class ULevel extends UObject {
         this.baseModelId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
 
-        // debugger;
-
-
         if (LOAD_SUB_OBJECTS) {
             this.baseModel = pkg.fetchObject<UModel>(this.baseModelId);
 
@@ -83,10 +80,6 @@ class ULevel extends UObject {
                     this.objectList.push(object);
             }
         }
-
-
-
-        // debugger;
 
         pkg.seek(this.readHead, "set");
 
@@ -109,11 +102,16 @@ class ULevel extends UObject {
     public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
         const groupedObjectList = this.objectList.reduce((accum, obj) => {
 
-            accum[obj.constructor.name] = accum[obj.constructor.name] || [];
-            accum[obj.constructor.name].push(obj);
+            const constrName = (obj.constructor as any).isDynamicClass ? (obj.constructor as any).getConstructorName() : obj.constructor.name;
+
+            accum[constrName] = accum[constrName] || [];
+            accum[constrName].push(obj);
 
             return accum;
         }, {} as Record<string, UObject[]>);
+
+        for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
+            emitter.loadSelf().getDecodeInfo(library);
 
         debugger;
 

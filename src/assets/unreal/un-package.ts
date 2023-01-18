@@ -12,7 +12,7 @@ import UClass from "./un-class";
 import UStruct from "./un-struct";
 import UPlatte from "./un-palette";
 import UStaticMesh from "./static-mesh/un-static-mesh";
-import { UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, UTexEnvMap } from "./un-material";
+import * as UnMaterials from "./un-material";
 import ULevelInfo from "./un-level-info";
 import UTerrainSector from "./un-terrain-sector";
 import UZoneInfo from "./un-zone-info";
@@ -75,30 +75,6 @@ import UMeshInstance from "./un-mesh-instance";
 import UConvexVolume from "./un-convex-volume";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import USpriteEmitter from "./emitters/un-sprite-emitter";
-
-// class UCommandlet extends UObject {
-
-// }
-
-// class USubsystem extends UObject {
-
-// }
-
-// class USimpleCommandlet extends UCommandlet {
-
-// }
-
-// class UHelloWorldCommandlet extends UCommandlet {
-
-// }
-
-// class UTime extends UObject {
-
-// }
-
-// class ULocale extends UObject {
-
-// }
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -203,8 +179,6 @@ class UPackage extends UEncodedFile {
         readable.nameHash = nameHash;
         readable.header = header;
 
-
-
         if (this.isCore) {
             const nativeIndex = -(imports.length + 1);
             for (const imp of imports) {
@@ -272,9 +246,6 @@ class UPackage extends UEncodedFile {
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
 
             addClassDependency(nameTable, nameHash, imports, exports, "Native", "Client");
-        } else {
-            // addPackageDependendency(nameTable, nameHash, imports, "Native");
-            // addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
         }
 
         readable.importGroups = readable.imports.reduce((accum, imp, index) => {
@@ -304,16 +275,6 @@ class UPackage extends UEncodedFile {
     protected findObjectRef(className: string, objectName: string, groupName: string = "None"): number {
         const isClass = className == "Class";
 
-        // if (className === "Class" && objectName === "Function" && groupName === "None")
-        //     debugger;
-
-        // if (this.isCore && className === "Class" && objectName === "State" && groupName === "None")
-        //     debugger;
-
-        // if (this.isCore && className === "Struct" && objectName === "Scale" && groupName === "Object")
-        //     debugger;
-
-
         for (const exp of this.exports) {
             if (exp.objectName !== objectName) continue;
             if (groupName !== "None") {
@@ -321,20 +282,15 @@ class UPackage extends UEncodedFile {
                     const pkg = this.exports[exp.idPackage - 1];
 
                     if (pkg && groupName !== pkg.objectName) {
-                        // console.log(exp, pkg, groupName, pkg.objectName)
-                        // debugger;
                         continue;
                     }
 
-                    // debugger;
                 } else if (exp.idPackage < 0) {
                     debugger;
                 } else {
                     debugger;
                 }
             }
-
-            // debugger;
 
             if (isClass) {
                 if (exp.idClass > 0) {
@@ -347,12 +303,6 @@ class UPackage extends UEncodedFile {
                 } else if (exp.idClass < 0) {
                     const clsImport = this.imports[-exp.idClass - 1];
 
-                    // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
-                    //     debugger;
-
-                    // if (this.isCore && className === "Class" && objectName === "State" && groupName === "None")
-                    //     debugger;
-
                     if (clsImport && objectName === clsImport.objectName) {
                         if (clsImport.classPackage === "Native")
                             return -(clsImport.index + 1);
@@ -363,89 +313,33 @@ class UPackage extends UEncodedFile {
 
             } else if (exp.idClass !== 0) {
 
-                const obj = this.fetchObject(exp.idClass);
+                const obj = this.fetchObject(exp.idClass) as any as typeof UObject;
 
-                if (obj)
-                    return exp.index + 1;
+                if (obj) {
+                    const inheritenceChain = obj instanceof UClass ? [obj.loadSelf().friendlyName] : obj.inheritenceChain;
 
-                debugger;
+                    if (!inheritenceChain)
+                        debugger;
+
+                    if (inheritenceChain.includes(className))
+                        return exp.index + 1;
+                }
             }
         }
-
-        // if (!isClass)
-        //     debugger;
-
-        // for (const imp of this.imports) {
-        //     if (imp.objectName !== objectName) continue;
-
-        //     if (isClass) {
-        //         if (imp.className === className) {
-        //             // debugger;
-        //             return -(imp.index + 1);
-        //         }
-        //     }
-
-        //     debugger;
-        // }
-
-        // debugger;
-
-        // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
-        //     debugger;
-
-        if (this.isCore && className === "Struct" && objectName === "Scale" && groupName === "Object")
-            debugger;
-
 
         return 0;
     }
 
-    public newObject<T extends UObject = UObject>(objname: string, objclass: UClass | ObjectConstructor): T {
-        // // debugger;
-        // for (let cur = objclass; cur; cur = cur.baseStruct) {
-
-        //     if (!this.nativeClassess.has(cur.objectName as NativeTypes_T)) continue;
-
-        //     const buildNative = this.nativeClassess.get(cur.objectName as NativeTypes_T);
-        //     const obj = buildNative<UClass>(objname, objclass, flags);
-
-        //     debugger;
-
-        //     if (initProperties) {
-        //         debugger;
-        //         // obj.PropertyData.Init(objclass);
-        //         // obj.SetObject("Class", obj.Class);
-        //         // obj.SetName("Name", obj.objectName);
-        //         // obj.SetInt("ObjectFlags", obj.Flags);
-        //     }
-        //     return obj;
-
-        // }
-
+    public newObject<T extends UObject = UObject>(objclass: UClass | ObjectConstructor): T {
         if (objclass instanceof UClass) {
-            const kls = objclass.buildClass(this.loader.getPackage("native", "Script") as UNativePackage);
+            const Constructor = objclass.buildClass<T>(this.loader.getPackage("native", "Script") as UNativePackage);
 
-            return new kls();
-
-            debugger;
-
-            const obj = this.createObject(objclass.friendlyName as UObjectTypes_T);
-
-            // obj.injectClass(objclass);
-
-            // debugger;
-
-            return obj as T;
+            return new Constructor();
         }
-
-        // if (objclass === UStaticMesh)
-        //     debugger;
 
         const obj = new (objclass as ObjectConstructor)();
 
         return obj as T;
-
-        throw Error("Could not find the native class for " + objname);
     }
 
     public loadExportObject(index: number) {
@@ -453,41 +347,16 @@ class UPackage extends UEncodedFile {
         const objname = entry.objectName;
 
         if (entry.idClass !== 0) {
-            // if (entry.index === 12)
-            //     debugger;
-
-            // debugger;
-
-            // if (entry.index === 1821)
-            //     debugger;
-
-            // if (entry.idClass === -26)
-            //     debugger;
-
-            // if (entry.objectName === "wispray00")
-            //     debugger;
-
-            let objclass: UClass = this.fetchObject(entry.idClass) as UClass;
-
-            // if (entry.index === 1821)
-            //     debugger;
-
-            // debugger;
+            const objclass: UClass = this.fetchObject(entry.idClass) as UClass;
 
             if (!objclass) {
                 debugger;
-                // objclass = await this.fetchObject(entry.idClass) as UClass;
                 throw Error("Could not find the object class for " + objname);
             }
 
-            // debugger;
-
-            const object = entry.object = this.newObject(objname, objclass) as UObject;
-
-            // debugger;
+            const object = entry.object = this.newObject(objclass) as UObject;
 
             object.setExport(this, entry);
-            // object.load(this.asReadable(), entry);
 
         } else {
             let objbase = entry.idSuper === 0 ? null : this.fetchObject(entry.idSuper) as UClass;
@@ -502,12 +371,9 @@ class UPackage extends UEncodedFile {
                 objbase = pkg.fetchObjectByType("Class", "Object") as UClass;
             }
 
-            // if (index === 771)
-            //     debugger;
-
             if (!this.exports[index].object) {
-                // debugger;
                 const obj = new UClass();
+
                 this.exports[index].object = obj as unknown as UObject;
 
                 if (entry.size === 0) {
@@ -517,28 +383,7 @@ class UPackage extends UEncodedFile {
                     obj.friendlyName = objname;
                 }
 
-                // obj.load(pkg.asReadable(), entry);
                 obj.setExport(pkg, entry);
-
-
-                // debugger;
-
-                // if (!obj.friendlyName)
-                //     throw new Error("0xdecafbad");
-
-                // this.exports[index].object = obj;
-
-                // const Constructor = this.nativeClassess.get(obj.friendlyName as NativeTypes_T);
-
-                // // if (!Constructor && !entry.anyFlags(ObjectFlags_T.Native))
-                // //     debugger;
-
-                // if (!Constructor)
-                //     throw new Error(`Missing: ${obj.friendlyName}`);
-
-                // // Constructor.extend(obj);
-
-                // // debugger;
             }
         }
     }
@@ -557,13 +402,7 @@ class UPackage extends UEncodedFile {
     }
 
     public fetchObject<T extends UObject = UObject>(objref: number): T {
-
-        // console.log(this.path, objref);
-
-        // if (objref === 25)
-        //     debugger;
-
-        if (objref > 0) {// Export table object
+        if (objref > 0) {   // Export table object
             const index = objref - 1;
 
             if (index > this.exports.length)
@@ -575,9 +414,7 @@ class UPackage extends UEncodedFile {
                 this.loadExportObject(index);
 
             return entry.object as T;
-        } else if (objref < 0) {// Import table object
-            // if (objref === -26)
-            //     debugger;
+        } else if (objref < 0) {    // Import table object
 
             const entry = this.getImportEntry(objref);
             let entrypackage = this.getImportEntry(entry.idPackage);
@@ -597,17 +434,10 @@ class UPackage extends UEncodedFile {
 
             if (!pkg.isDecoded()) throw new Error(`Package must be decoded: '${packageName}'`);
 
-            // if (this.isCore && className === "Class" && objectName === "Function" && groupName === "None")
-            //     debugger;
-
             if (pkg.isNative && className === "State" && objectName === "State" && groupName === "None") {
                 console.log(entry);
                 debugger;
             }
-
-            // if (pkg.isCore && className === "Struct" && objectName === "Scale" && groupName === "Object")
-            //     debugger;
-
 
             let obj = pkg.fetchObjectByType(className, objectName, groupName);
 
@@ -616,12 +446,6 @@ class UPackage extends UEncodedFile {
                 debugger;
                 throw new Error(`(${packageName}) [${className}, ${objectName}, ${groupName}] should not be null`);
             }
-
-            // if (packageName === "Native")
-            //     debugger;
-            // obj.load(pkg.asReadable(), entry);
-
-            // debugger;
 
             // What a garbage engine!
             if (!obj && packageName == "UnrealI")
@@ -638,182 +462,10 @@ class UPackage extends UEncodedFile {
     }
 
     public fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
-        // if (className !== "Class") {
-        //     debugger;
-        // }
-
-        // if (className === "Class") {
-        //     debugger;
-        //     if (groupName !== "None")
-        //         debugger;
-
-        //     // return this.metaClassess.get(objectName);
-        //     return this.nativeClassess.get(objectName as any);
-        // }
-
         const index = this.findObjectRef(className, objectName, groupName);
 
         return this.fetchObject(index);
     }
-
-
-    // protected async getImport(index: number): Promise<UObject> {
-    //     debugger;
-    //     const mainImp = this.imports[index];
-    //     let imp = this.imports[-mainImp.idPackage - 1];
-
-    //     let groupName = "None";
-
-    //     if (imp.idPackage !== 0)
-    //         groupName = imp.objectName;
-
-    //     while (imp.idPackage as number !== 0)
-    //         imp = this.imports[-imp.idPackage as number - 1];
-
-    //     const packageName = imp.objectName;
-    //     const objectName = mainImp.objectName;
-    //     const className = mainImp.className;
-
-    //     const pkg = await this.loader.getPackage(packageName, className as SupportedImports_T);
-
-    //     if (!pkg.buffer) await this.loader.load(pkg);
-
-    //     const expIndex = pkg.findObjectRef(className, objectName, groupName);
-
-
-    //     if (expIndex > 0) {
-    //         const exp = this.exports[index];
-
-    //         if (exp.object) return exp.object;
-
-    //         return pkg.getExport(exp.index);
-    //     } else if (expIndex < 0) {
-    //         const obj = this.createObject(objectName as UObjectTypes_T);
-
-    //         return obj;
-    //     } if (expIndex === 0) throw new Error("Missing export");
-
-
-
-    //     // await this.createObject(pkg, exp, className as UObjectTypes_T);
-
-    //     // return exp.object;
-
-
-    //     // let imp = this.imports[index], mainImp = imp;
-    //     // while (imp.idPackage as number !== 0)
-    //     //     imp = this.imports[-imp.idPackage as number - 1];
-
-    //     // if (!this.loader.hasPackage(imp.objectName, mainImp.className as SupportedImports_T))
-    //     //     throw new Error(`Unable to locate package: ${imp.objectName}`);
-    //     // const pkg = await this.loader.getPackage(imp.objectName, mainImp.className as SupportedImports_T);
-
-    //     // if (!pkg.buffer) await this.loader.load(pkg);
-
-    //     // // if (mainImp.idPackage as number === -1) {
-    //     // //     let Constructor: typeof UField = null;
-
-    //     // //     debugger;
-
-    //     // //     switch (mainImp.className) {
-    //     // //         case "Class": Constructor = UClass; break;
-    //     // //         default: throw new Error(`Unsupported native type: ${mainImp.className}`);
-    //     // //     }
-
-    //     // //     return new Constructor();
-    //     // // }
-
-    //     // const plausibleImports = pkg.exports.filter(exp => exp.objectName === mainImp.objectName)
-
-    //     // const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idSuper as number) === mainImp.className)
-
-    //     // // const _exp = plausibleImports[0];
-
-    //     // // if (mainImp.idPackage as number === -1) {
-    //     // //     const a = pkg.getPackageName(_exp.idClass as number);
-    //     // //     const b = mainImp.className;
-
-    //     // //     debugger;
-    //     // // }
-
-    //     // // const exp = plausibleImports.find(exp => pkg.getPackageName(exp.idClass as number) === mainImp.className
-    //     // //     // pkg.getPackageName(exp.idClass as number) === pkg.getPackageName(mainImp.idPackage as number)
-    //     // // );
-
-    //     // if (!exp) throw new Error("Missing export");
-    //     // if (exp.object) return exp.object;
-
-    //     // await this.createObject(pkg, exp, mainImp.className as UObjectTypes_T);
-
-    //     // return exp.object;
-    // }
-
-    // protected getUObject(index: number) {
-    //     debugger;
-    // }
-
-    // protected newObject(className: UObjectTypes_T, superClass: UClass, flags: number) {
-    //     debugger;
-    // }
-
-    // protected async getExport(index: number): Promise<UObject> {
-    //     const exp = this.exports[index];
-
-    //     if (exp.object) return exp.object;
-
-    //     const objectName = exp.objectName;
-
-    //     if (exp.idClass !== 0) {
-    //         const objectClass = await this.fetchObject<UClass>(exp.idClass as number);
-
-    //         const object = this.newObject(objectName as UObjectTypes_T, objectClass, exp.flags as number);
-
-    //         debugger;
-    //     } else {
-    //         let baseClass = await this.fetchObject(exp.idSuper as number);
-
-    //         debugger;
-
-    //         if (!baseClass && objectName.toLowerCase() === "object") {
-    //             const baseExport = this.findObjectRef("Class", "Object", "None");
-
-    //             // baseClass = await this.createExportObject(this, baseExport, "Class");
-    //         }
-
-    //         debugger;
-    //     }
-
-    //     debugger;
-
-    //     const className = (this.getPackageName(exp.idClass as number) || exp.objectName) as UObjectTypes_T;
-
-    //     await this.createExportObject(this, exp, className);
-
-    //     return exp.object;
-    // }
-
-    // public async fetchObject<T extends UObject = UObject>(index: number): Promise<T> {
-    //     const readable = this.asReadable();
-    //     const object = index > 0
-    //         ? await readable.getExport(index - 1)
-    //         : index < 0
-    //             ? await readable.getImport(-index - 1)
-    //             : null;
-
-    //     return object as T;
-    // }
-
-
-
-    // public async createExportObject<T extends UObject = UObject>(pkg: UPackage, exp: UExport<T>, className: UObjectTypes_T, ...params: any[]): Promise<T> {
-    //     if (exp.object) return exp.object;
-
-    //     const object = exp.object = this.createObject(className, ...params);
-
-    //     object.load(pkg.asReadable(), exp);
-
-    //     return exp.object;
-    // }
 
     public getPackageName(index: number) {
         return index < 0
@@ -963,7 +615,6 @@ class UNativePackage extends UPackage {
 
         const tStart = performance.now();
 
-
         this.imports = [];
         this.exports = [];
         this.nameTable = [];
@@ -1030,7 +681,7 @@ class UNativePackage extends UPackage {
         return this;
     }
 
-    public getConstructor<T extends typeof UObject = typeof UObject>(constructorName: NativeTypes_T): new () => T {
+    public getConstructor<T extends typeof UObject = typeof UObject>(constructorName: UObjectTypes_T): new () => T {
         let Constructor: any;
 
         switch (constructorName) {
@@ -1039,6 +690,7 @@ class UNativePackage extends UPackage {
             case "Const": Constructor = UConst; break;
             case "Enum": Constructor = UEnum; break;
             case "Function": Constructor = UFunction; break;
+
             case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
             case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
             case "StrProperty": Constructor = UnProperties.UStrProperty; break;
@@ -1050,9 +702,9 @@ class UNativePackage extends UPackage {
             case "StructProperty": Constructor = UnProperties.UStructProperty; break;
             case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
             case "DelegateProperty": Constructor = UnProperties.UDelegateProperty; break;
+
             case "State": Constructor = UState; break;
             case "Font": Constructor = UFont; break;
-            case "Sound": Constructor = USound; break;
             case "StaticMesh": Constructor = UStaticMesh; break;
             case "TerrainSector": Constructor = UTerrainSector; break;
             case "Mesh": Constructor = UMesh; break;
@@ -1066,9 +718,10 @@ class UNativePackage extends UPackage {
             case "Player": Constructor = UPlayer; break;
             case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
             case "MeshInstance": Constructor = UMeshInstance; break;
-            case "ConvexVolume": Constructor = UConvexVolume; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
+
             case "Texture": Constructor = UTexture; break;
+            case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
@@ -1085,23 +738,29 @@ class UNativePackage extends UPackage {
 
             case "LevelSummary": Constructor = ULevelSummary; break;
             case "PlayerStart": Constructor = UPlayerStart; break;
-            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
             case "Brush": Constructor = UBrush; break;
 
-            case "Shader": Constructor = UShader; break;
+            case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
+            case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
+            case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
+            case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
+            case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
+            case "Shader": Constructor = UnMaterials.UShader; break;
+            case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
+            case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
+            case "Cubemap": Constructor = UCubemap; break;
 
-            case "TexRotator": Constructor = UTexRotator; break;
-            case "TexPanner": Constructor = UTexPanner; break;
-            case "ColorModifier": Constructor = UColorModifier; break;
-            case "TexOscillator": Constructor = UTexOscillator; break;
+            case "Camera": Constructor = UCamera; break;
 
+            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "BlockingVolume": Constructor = UBlockingVolume; break;
             case "MusicVolume": Constructor = UMusicVolume; break;
+            case "ConvexVolume": Constructor = UConvexVolume; break;
+
+            case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
+            case "Sound": Constructor = USound; break;
 
             case "Light": Constructor = ULight; break;
-
-            case "FinalBlend": Constructor = UFinalBlend; break;
-            case "TexEnvMap": Constructor = UTexEnvMap; break;
-            case "Cubemap": Constructor = UCubemap; break;
 
             default:
                 debugger;
@@ -1195,11 +854,8 @@ class UNativePackage extends UPackage {
 
     public fetchObject<T extends UObject = UObject>(objref: number): T {
         if (objref <= 0) return null;
-        // if (objref <= 0) throw new Error("Native package only supports exports.");
-
 
         const entry = this.exports[objref - 1];
-
         const Constructor = this.getConstructor(entry.objectName as NativeTypes_T) as any as T;
 
         const object = Constructor as T;

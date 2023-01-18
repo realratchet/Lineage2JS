@@ -53,6 +53,8 @@ class DecodeLibrary {
 
         decodeLibrary.sector = sectorIndex;
 
+        uLevel.getDecodeInfo(decodeLibrary);
+
         if (loadBaseModel) {
             const uModel = pkg.fetchObject<UModel>(uLevel.baseModelId).loadSelf(); // base model
             uModel.getDecodeInfo(decodeLibrary, uLevelInfo);

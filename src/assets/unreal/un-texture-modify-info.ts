@@ -39,11 +39,6 @@ class UTextureModifyInfo extends UObject {
             "ColorOp": "colorOp"
         });
     }
-
-    protected preLoad(pkg: UPackage, tag: any) {
-        this.readStart = this.readHead = pkg.tell();
-        this.readTail = this.readHead + tag.dataSize;
-    }
 }
 
 export default UTextureModifyInfo;

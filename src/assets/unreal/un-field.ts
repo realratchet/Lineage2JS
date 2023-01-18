@@ -10,17 +10,7 @@ class UField extends UObject {
     public nextField: UField;
 
     public readonly isField = true;
-
-    // protected doReadSuperFields: Function;
-
-    // protected loadSuper() {
-    //     if (!this.doReadSuperFields) return;
-
-    //     const fn = this.doReadSuperFields;
-    //     this.doReadSuperFields = null;
-
-    //     fn();
-    // }
+    protected static getConstructorName() { return "Field"; }
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         if (this.constructor.name !== "UClass")
@@ -30,32 +20,9 @@ class UField extends UObject {
 
         this.superFieldId = pkg.read(compat32).value as number;
 
-        // this.doReadSuperFields = () => {
-        //     if (this.superFieldId !== 0 && !this.superField)
-        //         this.superField = pkg.fetchObject<UField>(this.superFieldId);
-        // }
-
         this.loadSuperfields();
 
         this.nextFieldId = pkg.read(compat32).value as number;
-
-        // if (this.nextFieldId !== 0) {
-        //     const object = pkg.fetchObject<UField>(this.nextFieldId);
-
-        //     this.nextField = object;
-
-        //     // debugger;
-        // }
-
-        // if (this.superFieldId === exp.index) this.superFieldId = 0;
-        // if (this.nextFieldId === exp.index) this.nextFieldId = 0;
-
-        // if (this.nextFieldId !== 0) this.promisesLoading.push(new Promise(async resolve => {
-        //     const object = await pkg.fetchObject<UField>(this.nextFieldId);
-        //     this.nextField = object;
-
-        //     resolve(object);
-        // }));
     }
 
     protected collectDependencies<T extends UField = typeof this>() {
@@ -87,12 +54,6 @@ class UField extends UObject {
 
         return this;
     }
-
-    // public async onDecodeReady(): Promise<void> {
-    //     await super.onDecodeReady();
-
-    //     if (this.superField) await this.superField.onDecodeReady();
-    // }
 }
 
 export default UField;

@@ -60,9 +60,9 @@ class BaseActor extends Object3D implements ICollidable {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
-        const helper = new Box3Helper(this.collisionBounds);
+        // const helper = new Box3Helper(this.collisionBounds);
 
-        this.add(helper);
+        // this.add(helper);
 
         return this.collider;
     }

@@ -55,20 +55,21 @@ class UTerrainSector extends UObject {
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     protected unk64Bytes: Int32Array;
 
-    public async getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
+    public getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+        const center = this.boundingBox.getCenter();
+        const { x: ox, y: oz, z: oy } = center;
+
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
-            type: "TerrainSegment",
             name: this.objectName,
+            type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
-        } as IStaticMeshObjectDecodeInfo;
+            position: [ox, oy, oz]
+        };
 
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
-
-        await this.onDecodeReady();
-
 
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
@@ -92,8 +93,7 @@ class UTerrainSector extends UObject {
         }
 
         const v = new FVector();
-        const center = this.boundingBox.getCenter();
-        const { x: ox, y: oz, z: oy } = center;
+
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -188,14 +188,14 @@ class UTerrainSector extends UObject {
 
         const uvMultiplier = 2;
         const uvOffset = 17 * 17 * uvMultiplier;
-        const itLayer = info.layers.values();
-        const layerCount = info.layers.size;
+        const layers = info.layers.filter(x => x);
+        const layerCount = layers.length;
         const uvs = new Float32Array(uvOffset * (layerCount + 1));
 
         // debugger;
 
         for (let k = 0; k < layerCount; k++) {
-            const layer = itLayer.next().value as UTerrainLayer;
+            const layer = layers[k].loadSelf();
 
             if (!layer.alphaMap && !layer.map)
                 continue;

@@ -1,4 +1,5 @@
 import BufferValue from "../buffer-value";
+import UExport from "./un-export";
 import FNumber from "./un-number";
 
 type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
@@ -30,8 +31,19 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
         const elementSize = hasTag ? dataSize / this.length : null;
 
-        for (let i = 0, len = this.length; i < len; i++)
-            this[i] = new (this.Constructor as any)(elementSize).load(pkg, tag);
+        for (let i = 0, len = this.length; i < len; i++) {
+            const exp = hasTag ? (function () {
+                const exp = new UExport();
+
+                exp.size = elementSize;
+                exp.objectName = `${tag.name}[${i + 1}/${count}]`
+                exp.offset = pkg.tell();
+
+                return exp;
+            })() : null;
+
+            this[i] = new (this.Constructor as any)(elementSize).load(pkg, exp);
+        }
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
 

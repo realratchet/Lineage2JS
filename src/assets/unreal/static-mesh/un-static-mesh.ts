@@ -17,6 +17,8 @@ const triggerDebuggerOnUnsupported = true;
 
 
 class UStaticMesh extends UPrimitive {
+    protected static getConstructorName() { return "StaticMesh"; }
+
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
     protected vertexStream: FStaticMeshVertexStream = new FStaticMeshVertexStream();
     protected colorStream: FRawColorStream = new FRawColorStream();
@@ -58,7 +60,6 @@ class UStaticMesh extends UPrimitive {
     protected unkIndex1: number;
     protected unkInt1: number;
 
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMeshLod02": "staticMeshLod2",
@@ -69,7 +70,8 @@ class UStaticMesh extends UPrimitive {
             "bMakeTwoSideMesh": "isMadeTwoSideMesh",
             "bStaticMeshLodBlend": "isStaticMeshLodBlend",
             "bUseBillBoard": "isUsingBillboard",
-            "Frequency": "frequency"
+            "Frequency": "frequency",
+
         });
     }
 

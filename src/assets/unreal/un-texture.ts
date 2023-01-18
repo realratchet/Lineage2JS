@@ -10,6 +10,7 @@ import StringSet from "@client/utils/string-set";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FVector from "./un-vector";
 import { generateUUID } from "three/src/math/MathUtils";
+import UMaterial from "./un-material";
 
 /*
 
@@ -20,7 +21,7 @@ import { generateUUID } from "three/src/math/MathUtils";
     0000100000 ( 32)
 */
 
-class UTexture extends UObject {
+class UTexture extends UMaterial {
     protected palette: UPlatte;
     protected internalTime: number[] = new Array(2);
     protected format: ETextureFormat = ETextureFormat.TEXF_RGBA8;
@@ -47,13 +48,32 @@ class UTexture extends UObject {
     protected clampModeU: number;
     protected clampModeV: number;
 
-    protected detailScale: number;
+    
     protected lodSet: number;
-    protected defaultMaterial: typeof this;
 
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
     public readonly _mips: FPrimitiveArray<"uint32">;
-    uuidGeometry: any;
+
+    protected _lossDetail: any;
+    
+    protected _detailTexture: any;
+    protected _environmentMap: any;
+    protected _envMapTransformType: any;
+    protected _specular: any;
+    protected _bHighColorQuality: any;
+    protected _bHighTextureQuality: any;
+    protected _bRealtime: any;
+    protected _bParametric: any;
+    protected _bRealtimeChanged: any;
+    protected _bHasComp: any;
+    protected _normalLOD: any;
+    protected _minLOD: any;
+    protected _maxLOD: any;
+    protected _animCurrent: any;
+    protected _primeCount: any;
+    protected _primeCurrent: any;
+    protected _accumulator: any;
+    protected _compFormat: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -87,9 +107,30 @@ class UTexture extends UObject {
             "bAlphaTexture": "isAlphaTexture",
             "bMasked": "isMasked",
 
-            "DetailScale": "detailScale",
+            
             "LODSet": "lodSet",
-            "DefaultMaterial": "defaultMaterial"
+           
+
+            "LossDetail": "_lossDetail",
+            
+            "DetailTexture": "_detailTexture",
+            "EnvironmentMap": "_environmentMap",
+            "EnvMapTransformType": "_envMapTransformType",
+            "Specular": "_specular",
+            "bHighColorQuality": "_bHighColorQuality",
+            "bHighTextureQuality": "_bHighTextureQuality",
+            "bRealtime": "_bRealtime",
+            "bParametric": "_bParametric",
+            "bRealtimeChanged": "_bRealtimeChanged",
+            "bHasComp": "_bHasComp",
+            "NormalLOD": "_normalLOD",
+            "MinLOD": "_minLOD",
+            "MaxLOD": "_maxLOD",
+            "AnimCurrent": "_animCurrent",
+            "PrimeCount": "_primeCount",
+            "PrimeCurrent": "_primeCurrent",
+            "Accumulator": "_accumulator",
+            "CompFormat": "_compFormat"
         });
     }
 
@@ -264,7 +305,7 @@ class UTexture extends UObject {
                     const buff = new Uint8Array(imSize * 4);
 
                     for (let i = 0, len = imSize; i < len; i++) {
-                        const c = this.palette.colors.getElem(data[i]);
+                        const c = this.palette.loadSelf().colors.getElem(data[i]);
                         const ii = i * 4;
 
                         buff[ii + 0] = c.r;
@@ -290,74 +331,6 @@ class UTexture extends UObject {
             wrapT: this.wrapT,
             useMipmaps: mipCount > 0
         } as ITextureDecodeInfo;
-    }
-
-    public getDecodeInfoAsSprite(library: DecodeLibrary, matModifiers?: string[]): IStaticMeshObjectDecodeInfo {
-        // throw new Error();
-        let geometryUuid = this.uuidGeometry = this.uuidGeometry || generateUUID();
-        let materialUuid = this.uuidGeometry;
-
-        if (matModifiers?.length > 0) {
-            const hash = new StringSet(matModifiers).hash();
-            const hashArr = new Uint8Array(new BigUint64Array([hash]).buffer);
-
-            materialUuid = seededUuid(hashArr, materialUuid);
-
-            if (!(materialUuid in library.materials)) {
-                library.materials[materialUuid] = {
-                    materialType: "instance",
-                    baseMaterial: materialUuid,
-                    modifiers: matModifiers
-                } as IMaterialInstancedDecodeInfo;
-
-                // debugger;
-            }
-        }
-
-        if (geometryUuid in library.geometries) return {
-            uuid: geometryUuid,
-            type: "StaticMesh",
-            name: this.objectName,
-            geometry: geometryUuid,
-            materials: materialUuid,
-        } as IStaticMeshObjectDecodeInfo;
-
-        library.geometryInstances[geometryUuid] = 0;
-        library.geometries[geometryUuid] = null;
-        library.materials[materialUuid] = null;
-
-        const { indices, positions, normals, uvs } = createPlane(1, 1, 1, 1);
-
-        library.geometries[geometryUuid] = {
-            attributes: {
-                positions,
-                normals,
-                uvs
-            },
-            indices,
-            groups: [[0, indices.length, 0]],
-            bounds: null
-        };
-
-        // const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
-        const materials = [this.getDecodeInfo(library)];
-
-        materials.forEach(uuid => {
-            if (!library.materials[uuid]) return;
-
-            library.materials[uuid].color = true;
-        });
-
-        library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
-        return {
-            uuid: geometryUuid,
-            type: "StaticMesh",
-            name: this.objectName,
-            geometry: geometryUuid,
-            materials: materialUuid,
-            children: []
-        };
     }
 
     public getDecodeInfo(library: DecodeLibrary): string {

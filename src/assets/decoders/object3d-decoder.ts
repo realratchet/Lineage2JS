@@ -161,18 +161,18 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
         name: instanceInfo.mesh.name
     };
 
-    if (collider) {
-        const mat = new MeshBasicMaterial({ opacity: 0.5, wireframe: false, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
-        const geo = new BufferGeometry();
-        const indices = new Uint32BufferAttribute(collider, 1);
+    // if (collider) {
+    //     const mat = new MeshBasicMaterial({ opacity: 0.5, wireframe: false, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
+    //     const geo = new BufferGeometry();
+    //     const indices = new Uint32BufferAttribute(collider, 1);
 
-        geo.setIndex(indices)
-        geo.setAttribute("position", geometry.getAttribute("position"));
+    //     geo.setIndex(indices)
+    //     geo.setAttribute("position", geometry.getAttribute("position"));
 
-        const wire = new Mesh(geo, mat);
+    //     const wire = new Mesh(geo, mat);
 
-        object.add(wire);
-    }
+    //     object.add(wire);
+    // }
 
     applySimpleProperties(library, object, info);
 
@@ -241,18 +241,18 @@ function decodeSector(library: DecodeLibrary) {
 
     sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
 
-    library.bspColliders.forEach(collider => {
-        const box = new Box3();
+    // library.bspColliders.forEach(collider => {
+    //     const box = new Box3();
 
-        if (collider.isValid) {
-            box.min.fromArray(collider.min)
-            box.max.fromArray(collider.max)
-        }
+    //     if (collider.isValid) {
+    //         box.min.fromArray(collider.min)
+    //         box.max.fromArray(collider.max)
+    //     }
 
-        const helper = new Box3Helper(box);
+    //     const helper = new Box3Helper(box);
 
-        sector.helpers.add(helper);
-    });
+    //     sector.helpers.add(helper);
+    // });
 
     // sector.bspNodes.forEach(node => {
     //     if (node.zones[0] === 1 || node.zones[1] === 1) {

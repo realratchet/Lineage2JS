@@ -8,15 +8,17 @@ import FNumber from "./un-number";
 import FColor from "./un-color";
 import FBox from "./un-box";
 import FCoords from "./un-coords";
+import UExport from "./un-export";
+import UInfo from "./un-info";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
-class UTerrainInfo extends UAActor {
+class UTerrainInfo extends UInfo {
     public terrainMap: UTexture;
     public terrainScale: FVector;
 
-    public readonly layers: Set<UTerrainLayer> = new Set<UTerrainLayer>();
+    public readonly layers = new Array<UTerrainLayer>();
     protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     protected showOnTerrain: number;
     public readonly quadVisibilityBitmap: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
@@ -54,6 +56,42 @@ class UTerrainInfo extends UAActor {
     protected hasDynamicLight: boolean;
     protected forcedRegion: number;
 
+    protected _terrainSectorSize: any;
+    protected _decoLayerOffset: any;
+    protected _inverted: any;
+    protected _bKCollisionHalfRes: any;
+    protected _justLoaded: any;
+    protected _decoLayerData: any;
+    protected _sectors: any;
+    protected _vertices: any;
+    protected _heightmapX: any;
+    protected _heightmapY: any;
+    protected _sectorsX: any;
+    protected _sectorsY: any;
+    protected _primitive: any;
+    protected _faceNormals: any;
+    protected _toWorld: any;
+    protected _toHeightmap: any;
+    protected _selectedVertices: any;
+    protected _showGrid: any;
+    protected _quadDomMaterialBitmap: any;
+    protected _renderCombinations: any;
+    protected _vertexStreams: any;
+    protected _vertexColors: any;
+    protected _paintedColor: any;
+    protected _oldTerrainMap: any;
+    protected _oldHeightmap: any;
+    protected _baseHeight: any;
+    protected _vTGruop: any;
+    protected _vTGroupOrig: any;
+    protected _bUpdatedHEdge: any;
+    protected _bUpdatedVEdge: any;
+    protected _bUpdatedZ: any;
+    protected _sectorsOrig: any;
+    protected _toHeightmapOrig: any;
+    protected _nightMapStart: any;
+    protected _dayMapStart: any;
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TerrainMap": "terrainMap",
@@ -77,13 +115,55 @@ class UTerrainInfo extends UAActor {
             "RandomYaw": "randomYaw",
             "bForceRender": "bForceRender",
             "bDynamicLight": "hasDynamicLight",
-            "ForcedRegion": "forcedRegion"
+            "ForcedRegion": "forcedRegion",
+
+            "TerrainSectorSize": "_terrainSectorSize",
+            "DecoLayerOffset": "_decoLayerOffset",
+            "Inverted": "_inverted",
+            "bKCollisionHalfRes": "_bKCollisionHalfRes",
+            "JustLoaded": "_justLoaded",
+            "DecoLayerData": "_decoLayerData",
+            "Sectors": "_sectors",
+            "Vertices": "_vertices",
+            "HeightmapX": "_heightmapX",
+            "HeightmapY": "_heightmapY",
+            "SectorsX": "_sectorsX",
+            "SectorsY": "_sectorsY",
+            "Primitive": "_primitive",
+            "FaceNormals": "_faceNormals",
+            "ToWorld": "_toWorld",
+            "ToHeightmap": "_toHeightmap",
+            "SelectedVertices": "_selectedVertices",
+            "ShowGrid": "_showGrid",
+            "QuadDomMaterialBitmap": "_quadDomMaterialBitmap",
+            "RenderCombinations": "_renderCombinations",
+            "VertexStreams": "_vertexStreams",
+            "VertexColors": "_vertexColors",
+            "PaintedColor": "_paintedColor",
+            "OldTerrainMap": "_oldTerrainMap",
+            "OldHeightmap": "_oldHeightmap",
+            "BaseHeight": "_baseHeight",
+            "VTGruop": "_vTGruop",
+            "VTGroupOrig": "_vTGroupOrig",
+            "bUpdatedHEdge": "_bUpdatedHEdge",
+            "bUpdatedVEdge": "_bUpdatedVEdge",
+            "bUpdatedZ": "_bUpdatedZ",
+            "SectorsOrig": "_sectorsOrig",
+            "ToHeightmapOrig": "_toHeightmapOrig",
+            "NightMapStart": "_nightMapStart",
+            "DayMapStart": "_dayMapStart",
         });
     }
 
     protected readStruct(pkg: UPackage, tag: PropertyTag): any {
+        const exp = new UExport();
+
+        exp.objectName = `${tag.name}[Struct]`;
+        exp.offset = pkg.tell();
+        exp.size = tag.dataSize;
+        
         switch (tag.structName) {
-            case "TerrainLayer": return new UTerrainLayer(pkg.tell(), pkg.tell() + tag.dataSize).load(pkg, null);
+            case "TerrainLayer": return new UTerrainLayer().load(pkg, exp);
         }
 
         return super.readStruct(pkg, tag);
@@ -111,8 +191,8 @@ class UTerrainInfo extends UAActor {
 
             this.readHead = pkg.tell();
 
-            this.promisesLoading.push(Promise.all(sectorIds.map(async id => {
-                const object = await pkg.fetchObject<UTerrainSector>(id);
+            sectorIds.forEach(id => {
+                const object = pkg.fetchObject<UTerrainSector>(id);
 
                 object.info = this;
 
@@ -120,7 +200,7 @@ class UTerrainInfo extends UAActor {
                 this.boundingBox.expandByPoint(object.boundingBox.max);
 
                 this.sectors.push(object);
-            })));
+            });
 
             pkg.seek(this.readHead, "set");
 
@@ -189,19 +269,11 @@ class UTerrainInfo extends UAActor {
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
-        await this.onDecodeReady();
+    public getDecodeInfo(library: DecodeLibrary): string {
+        const terrainLayers = this.layers.filter(x => x);
+        const layerCount = terrainLayers.length;
 
-        const itLayer = this.layers.values();
-        const layerCount = this.layers.size;
-        const terrainLayers: UTerrainLayer[] = new Array(this.layers.size);
-
-        for (let i = 0; i < layerCount; i++)
-            terrainLayers[i] = itLayer.next().value as UTerrainLayer;
-
-        await Promise.all(terrainLayers.map(x => x.onDecodeReady()));
-
-        const terrainUuid = await this.terrainMap.getDecodeInfo(library);
+        const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
         const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
         const heightmapData = { info: iTerrainMap, data: terrainData };
@@ -209,22 +281,22 @@ class UTerrainInfo extends UAActor {
         const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
 
         for (let k = 0; k < layerCount; k++) {
-            const layer = terrainLayers[k];
+            const layer = terrainLayers[k].loadSelf();
 
             if (!layer.map && !layer.alphaMap) {
                 layers[k] = { map: null, alphaMap: null };
                 continue;
             }
 
-            if (layer.map?.mipmaps.getElemCount() === 0 && layer.alphaMap?.mipmaps.getElemCount() === 0) {
+            if (layer.map?.loadSelf().mipmaps.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps.getElemCount() === 0) {
                 layers[k] = { map: null, alphaMap: null };
                 debugger;
                 continue;
             }
 
             layers[k] = {
-                map: await layer.map?.getDecodeInfo(library) || null,
-                alphaMap: await layer.alphaMap?.getDecodeInfo(library) || null
+                map: layer.map?.loadSelf().getDecodeInfo(library) || null,
+                alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) || null
             };
 
             if (layers[k].alphaMap && !layers[k].map)
@@ -237,7 +309,7 @@ class UTerrainInfo extends UAActor {
         } as IMaterialTerrainDecodeInfo;
 
         const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-        const children = (await Promise.all(this.sectors.map(sector => sector.getDecodeInfo(library, this, heightmapData))));
+        const children = this.sectors.map(sector => sector.loadSelf().getDecodeInfo(library, this, heightmapData));
 
         const decodeInfo = {
             uuid: this.uuid,

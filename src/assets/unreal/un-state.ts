@@ -37,6 +37,8 @@ class UState extends UStruct {
     public readonly isState = true;
     probes: string[];
 
+    protected static getConstructorName() { return "State"; }
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 

@@ -6,6 +6,12 @@ class UPlatte extends UObject {
     public colors: FArray<FColor> = new FArray(FColor);
     public readonly skipRemaining = true;
 
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Colors": "_colors"
+        });
+    }
+
     public doLoad(pkg: UPackage, exp: UExport) {
         super.doLoad(pkg, exp);
 

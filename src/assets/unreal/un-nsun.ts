@@ -1,29 +1,13 @@
-import BufferValue from "../buffer-value";
-import UAActor from "./un-aactor";
-import FArray, { FObjectArray } from "./un-array";
-import FNumber from "./un-number";
+import UNCelestial from "./un-ncelestial";
 
-class UNSun extends UAActor {
-    protected radius: number;
-    protected limitMaxRadius: number;
-    protected isDirectional: boolean;
-    protected skins = new FObjectArray<UTexture>();
-
+class UNSun extends UNCelestial {
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "Radius": "radius",
-            "LimitMaxRadius": "limitMaxRadius",
-            "Skins": "skins",
-            "bDirectional": "isDirectional"
+            "SunScale": "celestialScale",
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
-        super.doLoad(pkg, exp);
-    }
-
     public getDecodeInfo(library: any): any {
-
         const sprites = this.skins.map(skin => skin.loadSelf().getDecodeInfo(library));
 
         return {

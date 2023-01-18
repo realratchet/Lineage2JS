@@ -6,12 +6,11 @@ import UPackage from "./un-package";
 import UTextBuffer from "./un-text-buffer";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
-import UClassRegistry from "./scripts/un-class-registry";
 import UNativeRegistry from "./scripts/un-native-registry";
 import FConstructable from "./un-constructable";
 import { PropertyTag } from "./un-property-tag";
-import { UProperty, UArrayProperty, UStructProperty, UObjectProperty } from "./un-properties";
-import { flagBitsToDict } from "@client/utils/flags";
+import { UProperty, UArrayProperty } from "./un-properties";
+import FArray from "./un-array";
 
 class FLabelField extends FConstructable {
     public name: string = "None";
@@ -46,9 +45,11 @@ class UStruct extends UField {
     protected unkObjectId: number = 0;
     protected unkObject: UObject;
     protected scriptSize: number;
+    protected kls: new () => UObject;
 
     public readonly isStruct = true;
 
+    protected static getConstructorName() { return "Struct"; }
     protected defaultProperties = new Set<string>();
 
     protected readArray(pkg: UPackage, tag: PropertyTag) {
@@ -63,13 +64,12 @@ class UStruct extends UField {
                 continue;
             }
 
-            const constr = field.childPropFields[index].createObject();
+            const property = field.childPropFields[index];
 
-            // debugger;
+            debugger;
 
+            const constr = property.createObject();
             const value = constr(pkg, tag);
-
-            // debugger;
 
             this.setProperty(tag, value);
 
@@ -83,9 +83,6 @@ class UStruct extends UField {
     protected setProperty(tag: PropertyTag, value: any) {
         let field: UStruct = this;
 
-        // if (tag.name === "LightHue" || tag.name === "LightSaturation")
-        //     debugger;
-
         if (tag.arrayIndex !== 0)
             debugger;
 
@@ -98,74 +95,34 @@ class UStruct extends UField {
                 continue;
             }
 
-            const property = field.childPropFields[index];
-
-
             if (tag.name in this)
                 debugger;
 
-
             this.defaultProperties.add(tag.name);
-
 
             (this as any)[tag.name] = value;
 
             return true;
-
-
-            // debugger;
         }
 
         throw new Error("Broken");
-
-        // debugger;
-        // console.log(`(${this.friendlyName}) ${tag.name} -> ${value}`)
-
-        // if (tag.arrayIndex < 0)
-        //     throw new Error("That's illegal");
-
-        // // if (!(tag.name in this.namedProperties))
-        // //     throw new Error("Undefined property");
-
-        // const container = this.namedProperties[tag.name] = this.namedProperties[tag.name] || [];
-
-        // container[tag.arrayIndex] = value;
-
-        // return true;
     }
 
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
-        // if (this.constructor.name !== "UFunction")
-        //     debugger;
-
         super.doLoad(pkg, exp);
+
         this.readHead = pkg.tell();
 
-        // if(this.superFieldId === 0 && this.nextFieldId === 720)
-        //     debugger;
-
-        // debugger;
-
         const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
 
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint32 = new BufferValue(BufferValue.uint32);
         const int32 = new BufferValue(BufferValue.int32);
 
-        // debugger;
-
         this.textBufferId = pkg.read(compat32).value as number;
         this.firstChildPropId = pkg.read(compat32).value as number;
 
-
-
         const nameId = pkg.read(compat32).value as number;
-
-        // if (this.superFieldId === 0 && this.nextFieldId === 720 && this.textBufferId === 0 && this.childrenId === 0 && nameId === 78)
-        //     debugger;
-
-        // debugger;
 
         this.friendlyName = pkg.nameTable[nameId].name as string;
 
@@ -175,32 +132,16 @@ class UStruct extends UField {
         if (this.friendlyName === "HelpParm")
             debugger;
 
-        // debugger;
-
-        // if (this.constructor.name === "UFunction")
-        //     debugger;
-
         console.assert(typeof this.friendlyName === "string" && this.friendlyName !== "None", "Must have a friendly name");
-
-        // debugger;
 
         if (0x77 < verArchive) {
             this.unkObjectId = pkg.read(compat32).value as number;
         }
 
-        // debugger;
-
         this.line = pkg.read(int32).value as number;
         this.textPos = pkg.read(int32).value as number;
 
         this.scriptSize = pkg.read(uint32).value as number;
-
-        // console.log(`${this.objectName} (${this.exportIndex}) -> Dword(ebx+0x64)==${this.line}&& Dword(ebx+0x60)==${this.textPos}&&Dword(ebp+scriptSize)==${this.scriptSize}`)
-
-        // if (this.scriptSize === 0x9f)
-        //     debugger;
-
-        // debugger;
 
         while (this.bytecodeLength < this.scriptSize)
             this.readToken(pkg, 0);
@@ -209,33 +150,7 @@ class UStruct extends UField {
 
         this.readHead = pkg.tell();
 
-        // if (this.constructor.name === "UStruct")
-        //     debugger;
-
-        // debugger;
-
-        // if (this.unkObjectId !== 0) {
-        //     this.promisesLoading.push(new Promise(async resolve => {
-        //         this.unkObject = await pkg.fetchObject<UObject>(this.textBufferId);
-        //         debugger;
-
-        //         resolve(this.unkObject);
-        //     }));
-        // }
-
-        // if (this.textBufferId !== 0) {
-        //     this.promisesLoading.push(new Promise(async resolve => {
-        //         this.textBuffer = await pkg.fetchObject<UTextBuffer>(this.textBufferId);
-
-        //         // UClassRegistry.parse(this.textBuffer.string.value);
-
-        //         resolve(this.textBuffer);
-        //     }));
-        // }
-
         if (this.firstChildPropId !== 0) {
-            // debugger;
-
             let childPropId = this.firstChildPropId;
 
             while (Number.isFinite(childPropId) && childPropId !== 0) {
@@ -244,203 +159,119 @@ class UStruct extends UField {
 
                 this.childPropFields.push(field);
 
-                // if (field instanceof UProperty) {
-                //     this.namedProperties[field.propertyName] = [];
-
-                //     if (field instanceof UArrayProperty) {
-                //         // const property = field.createObject();
-                //         debugger;
-                //     }
-                // }
-
                 childPropId = field.nextFieldId;
             }
-
-            // if (this.friendlyName === "MeshEmitter" || this.friendlyName === "StaticMesh")
-            //     debugger;
-
-            // if (this.friendlyName === "Commandlet")
-            //     debugger;
-
-            // if (this.friendlyName === "Emitter")
-            //     debugger;
         }
     }
 
-    protected kls: typeof UObject;
+    public buildClass<T extends UObject = UObject>(pkg: UNativePackage): new () => T {
+        if (this.kls)
+            return this.kls as any as new () => T;
 
-    public buildClass(pkg: UNativePackage): typeof UObject {
-        if (this.kls) {
-            return this.kls;
-        }
+        this.loadSelf();
+        const dependencyTree = this.collectDependencies<UStruct>();
 
-        const dependencyTree = new Array<UStruct>();
-        let lastBase: UStruct = this;
+        if (!this.isReady)
+            debugger;
 
+        const clsNamedProperties: Record<string, any> = {};
+        const inheretenceChain = new Array<string>();
 
-        do {
-            dependencyTree.push(lastBase);
-            // lastBase.loadSuper();
-
-            lastBase = lastBase.superField as UStruct;
-        } while (lastBase);
-
-        // debugger;
-
-        console.log(this.friendlyName, this.exp.objectFlags);
-
-        // if (this.friendlyName === "Vector")
-        //     debugger;
-
-        // if (this.friendlyName === "ParticleColorScale")
-        //     debugger;
-
-        const constructs: [string, Function][] = [];
-        // debugger;
+        let lastNative: UStruct = null;
 
         for (const base of dependencyTree.reverse()) {
-            // debugger;
+
+            inheretenceChain.push(base.friendlyName);
+
+            if (!base.exp || base.exp.anyFlags(ObjectFlags_T.Native))
+                lastNative = base;
 
             if (base.constructor !== UStruct)
                 debugger;
 
-            const { childPropFields, defaultProperties: namedProperties, friendlyName } = base;
+            const { childPropFields, defaultProperties } = base;
 
             for (const field of childPropFields) {
                 if (!(field instanceof UProperty)) continue;
 
-                let construct = field.createObject();
+                const propertyName = field.propertyName;
 
-                if (field instanceof UStructProperty) {
-                    const klass = construct;
+                if (field instanceof UArrayProperty) {
+                    if (field.arrayDimensions !== 1)
+                        debugger;
 
-                    // debugger;
+                    if (defaultProperties.has(propertyName))
+                        debugger;
 
-                    construct = `(pkg) => new ${klass}().load(pkg)`;
+                    clsNamedProperties[propertyName] = (field.dtype as FArray).clone((this as any)[propertyName]);
+                    continue;
                 }
 
-                // if (field.propertyName === "Color" || field.propertyName === "RelativeTime")
-                //     debugger;
-
-                constructs.push([field.propertyName, construct]);
+                clsNamedProperties[propertyName] = field.arrayDimensions > 1
+                    ? propertyName in this
+                        ? (this as any)[propertyName]
+                        : new Array(field.arrayDimensions)
+                    : (this as any)[propertyName];
             }
+
+            for (const propertyName of Object.keys(defaultProperties))
+                clsNamedProperties[propertyName] = (this as any)[propertyName];
         }
 
-        // if (this.exp.anyFlags(ObjectFlags_T.ScriptMask)) {
-        //     constructs.unshift(["flags", (pkg: UPackage) => {
-        //         const startOffset = pkg.tell();
-        //         const flag = pkg.read(new BufferValue(BufferValue.uint8)).value as number
-        //         const finishOffset = pkg.tell();
+        const friendlyName = this.friendlyName;
+        const hostClass = this;
+        const Constructor = lastNative
+            ? pkg.getConstructor(lastNative.friendlyName as NativeTypes_T) as any as typeof UObject
+            : UObject;
 
-        //         console.log(`Read '${finishOffset - startOffset}' bytes`);
-
-        //         return flag;
-        //     }]);
-
-
-        //     // debugger;
-        // }
-
-        // function readHeader(pkg: UPackage, flags: number, size: number) {
-        //     debugger;
-        //     if (exp.flags & ObjectFlags_T.HasStack && exp.size > 0) {
-        //         const offset = pkg.tell();
-        //         const compat32 = new BufferValue(BufferValue.compat32);
-        //         const int64 = new BufferValue(BufferValue.int64);
-        //         const int32 = new BufferValue(BufferValue.int32);
-
-        //         const node = pkg.read(compat32).value as number;
-        //         /*const stateNode =*/ pkg.read(compat32).value as number;
-        //         /*const probeMask =*/ pkg.read(int64).value as number;
-        //         /*const latentAction =*/ pkg.read(int32).value as number;
-
-        //         if (node !== 0) {
-        //             /*const offset =*/ pkg.read(compat32).value as number;
-        //         }
-        //     }
-        //     debugger;
-        // }
-
-        // const structCode = [
-        //     `(function() { return class ${this.friendlyName} {`,
-        //     "    load(pkg) {",
-        //     "        const startOffset = pkg.tell();",
-        //     ...constructs.map(([name, fn]) => {
-
-        //         return `        this.tag${name} = (${(pkg: UPackage) => PropertyTag.from(pkg, pkg.tell())})(pkg);\n        debugger;`
-        //         // return `        this.fl${name} = (${(pkg: UPackage) => pkg.read(new BufferValue(BufferValue.uint8)).value as number})(pkg);`
-        //     }),
-        //     ...constructs.map(([name, fn]) => {
-
-        //         return `        this.${name} = (${fn})(pkg);`
-        //     }),
-        //     "        const finishOffset = pkg.tell();",
-        //     "        console.log(`Read '${finishOffset - startOffset}' bytes`);",
-        //     "        debugger;",
-        //     "        return this;",
-        //     "    }",
-        //     "}; })();"
-        // ];
-
-        // // debugger;
-
-        // const cls = {
-        //     [this.friendlyName]: eval(structCode.join("\n"))
-        // }[this.friendlyName];
-
-        let friendlyName = this.friendlyName;
-
-        if (this.exp.anyFlags(ObjectFlags_T.Native))
+        if (lastNative)
             debugger;
 
-        // debugger;
-
         const cls = {
-            [this.friendlyName]: class extends UObject {
-                public static readonly structName = friendlyName;
+            [this.friendlyName]: class extends Constructor {
+                public static readonly isDynamicClass = true;
+                public static readonly friendlyName = friendlyName;
+                public static readonly hostClass = hostClass;
+                public static readonly nativeClass = lastNative;
+                public static readonly inheretenceChain = Object.freeze(inheretenceChain);
 
-                public constructor() {
+                protected newProps: Record<string, string> = {};
+
+                constructor() {
                     super();
 
-                    for (const [name,] of constructs)
-                        (this as any)[name] = undefined;
+                    const oldProps = this.getPropertyMap();
+                    const newProps = this.newProps;
+                    const missingProps = [];
+
+                    for (const [name, value] of Object.entries(clsNamedProperties)) {
+                        const varname = name in oldProps ? oldProps[name] : name;
+
+                        if (!(name in oldProps)) {
+                            newProps[varname] = varname;
+                            missingProps.push(varname);
+                        }
+
+                        if (value !== undefined || !(varname in this))
+                            (this as any)[varname] = value;
+                    }
+
+                    if (missingProps.length > 0 && lastNative)
+                        console.warn(`Native type '${friendlyName}' is missing property '${missingProps.join(", ")}'`);
                 }
 
                 protected getPropertyMap(): Record<string, string> {
-                    return constructs.reduce((acc, [c,]) => {
-                        acc[c] = c;
-
-                        return acc;
-                    }, {} as Record<string, string>);
-                }
-
-                public load(pkg: UPackage, tag: PropertyTag): this {
-                    this.readHead = pkg.tell();
-                    this.readTail = this.readHead + tag.dataSize;
-
-                    do {
-                        const tag = PropertyTag.from(pkg, this.readHead);
-
-                        if (!tag.isValid()) break;
-
-                        this.loadProperty(pkg, tag);
-                        this.readHead = pkg.tell();
-
-                    } while (this.readHead < this.readTail);
-                    return this;
+                    return {
+                        ...super.getPropertyMap(),
+                        ...this.newProps
+                    };
                 }
             }
         }[this.friendlyName];
 
-        // if (this.friendlyName === "ParticleColorScale")
-        //     debugger;
-
-        // debugger;
-
-        // debugger;
         this.kls = cls as any;
 
-        return this.kls;
+        return this.kls as any as new () => T;
     }
 
     protected bytecodePlainText = "";

@@ -1,7 +1,6 @@
-import UObject from "./un-object";
+import UAActor from "./un-aactor";
 
-class UInfo extends UObject {
-
+class UInfo extends UAActor {
 }
 
 export default UInfo;

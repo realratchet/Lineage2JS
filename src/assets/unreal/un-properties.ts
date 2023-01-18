@@ -4,7 +4,6 @@ import FArray, { FObjectArray, FPrimitiveArray } from "./un-array";
 import FConstructable from "./un-constructable";
 import UExport from "./un-export";
 import UField from "./un-field";
-import FNumber from "./un-number";
 import UObject from "./un-object";
 import UPackage from "./un-package";
 

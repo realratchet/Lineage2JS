@@ -11,14 +11,14 @@ class URange extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-        this.readHead = pkg.tell();
-        this.readTail = this.readHead + tag.dataSize;
+    // public load(pkg: UPackage, tag: PropertyTag): this {
+    //     this.readHead = pkg.tell();
+    //     this.readTail = this.readHead + tag.dataSize;
 
-        this.readNamedProps(pkg);
+    //     this.readNamedProps(pkg);
 
-        return this;
-    }
+    //     return this;
+    // }
 }
 
 class URangeVector extends UObject {
@@ -34,14 +34,14 @@ class URangeVector extends UObject {
         });
     }
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-        this.readHead = pkg.tell();
-        this.readTail = this.readHead + tag.dataSize;
+    // public load(pkg: UPackage, tag: PropertyTag): this {
+    //     this.readHead = pkg.tell();
+    //     this.readTail = this.readHead + tag.dataSize;
 
-        this.readNamedProps(pkg);
+    //     this.readNamedProps(pkg);
 
-        return this;
-    }
+    //     return this;
+    // }
 }
 
 export default URange;

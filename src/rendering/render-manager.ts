@@ -421,9 +421,8 @@ class RenderManager {
         // }
 
         if (this.nextPhysicsTick <= currentTime) {
-            this.physicsWorld.step();
-
-            this.player.update(this, currentTime, deltaTime);
+            // this.physicsWorld.step();
+            // this.player.update(this, currentTime, deltaTime);
 
             // console.log(this.player.position);
 

@@ -139,10 +139,7 @@ type NativeCoreTypes_T =
 
 type NativeTypes_T =
     | NativeCoreTypes_T
-    | NativeEngineTypes_T;
-
-type UObjectTypes_T =
-    | NativeTypes_T
+    | NativeEngineTypes_T
     | "FinalBlend"
     | "StaticMesh"
     | "Shader"
@@ -151,13 +148,9 @@ type UObjectTypes_T =
     | "Model"
     | "AmbientSoundObject"
     | "TerrainInfo"
-    | "NMovableSunLight"
     | "StaticMeshActor"
     | "WaterVolume"
     | "Emitter"
-    | "NSun"
-    | "NMoon"
-    | "L2FogInfo"
     | "MusicVolume"
     | "BlockingVolume"
     | "FadeColor"
@@ -169,7 +162,17 @@ type UObjectTypes_T =
     | "DefaultPhysicsVolume"
     | "TexEnvMap"
     | "Cubemap"
-    | "MeshAnimation";
+    | "MeshAnimation"
+    | "MeshEmitter"
+    | "SpriteEmitter";
+
+type UObjectTypes_T =
+    | NativeTypes_T
+    | "NMovableSunLight"
+    | "NSun"
+    | "NMoon"
+    | "L2FogInfo"
+    
 
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;

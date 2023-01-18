@@ -13,6 +13,8 @@ class UFunction extends UStruct {
     protected funcFlags: FunctionFlags_T;
     protected replicationOffset: number;
 
+    protected static getConstructorName() { return "Function"; }
+
     protected doLoad(pkg: UPackage, exp: UExport<UObject>): void {
         super.doLoad(pkg, exp);
 

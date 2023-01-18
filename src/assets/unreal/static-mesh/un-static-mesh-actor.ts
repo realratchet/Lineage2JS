@@ -28,7 +28,7 @@ class FAccessory extends FConstructable {
 class UStaticMeshActor extends UAActor {
     protected mesh: UStaticMesh | UTexture;
     protected instance: UStaticMeshInstance;
-    protected isRangeIgnored: boolean;
+
     protected colLocation: FVector;
     protected touching: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
     protected isUpdatingShadow: boolean;
@@ -36,13 +36,13 @@ class UStaticMeshActor extends UAActor {
     protected stepSound2: USound;
     protected stepSound3: USound;
     protected isCollidingActors: boolean;
-    protected isBlockingActors: boolean;
-    protected isBlockingPlayers: boolean;
+
+
     protected isBlockingZeroExtentTraces: boolean;
     protected isBlockingNonZeroExtentTraces: boolean;
-    protected isBlockingKarma: boolean;
+
     protected forcedRegion: number;
-    protected forcedRegionTag: string;
+
     protected lodViewDuration: number;
     protected currentLod: number;
     protected isUnlit: boolean;
@@ -64,13 +64,18 @@ class UStaticMeshActor extends UAActor {
     protected disableSorting: boolean;
     protected lodBias: number;
 
-    protected style: number;
+    protected _agitStatus: any;
+    protected _currAccessoryType: any;
+    protected _bTimeReactor: any;
+    protected _showTime: any;
+    protected _hideTime: any;
+    protected _bExactProjectileCollision: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMesh": "mesh",
             "StaticMeshInstance": "instance",
-            "bIgnoredRange": "isRangeIgnored",
+
             "ColLocation": "colLocation",
             "Touching": "touching",
             "bUpdateShadow": "isUpdatingShadow",
@@ -78,13 +83,11 @@ class UStaticMeshActor extends UAActor {
             "StepSound_2": "stepSound2",
             "StepSound_3": "stepSound3",
             "bCollideActors": "isCollidingActors",
-            "bBlockActors": "isBlockingActors",
-            "bBlockPlayers": "isBlockingPlayers",
             "bBlockZeroExtentTraces": "isBlockingZeroExtentTraces",
             "bBlockNonZeroExtentTraces": "isBlockingNonZeroExtentTraces",
-            "bBlockKarma": "isBlockingKarma",
+
             "ForcedRegion": "forcedRegion",
-            "ForcedRegionTag": "forcedRegionTag",
+
             "L2LodViewDuration": "lodViewDuration",
             "L2CurrentLod": "currentLod",
             "bUnlit": "isUnlit",
@@ -106,7 +109,12 @@ class UStaticMeshActor extends UAActor {
             "bDisableSorting": "disableSorting",
             "LODBias": "lodBias",
 
-            "Style": "style"
+            "AgitStatus": "_agitStatus",
+            "CurrAccessoryType": "_currAccessoryType",
+            "bTimeReactor": "_bTimeReactor",
+            "ShowTime": "_showTime",
+            "HideTime": "_hideTime",
+            "bExactProjectileCollision": "_bExactProjectileCollision",
         });
     }
 

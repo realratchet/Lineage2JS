@@ -23,12 +23,6 @@ class UDecoLayer extends UObject {
     protected randomYaw: number;
     protected isForcingRender: number;
 
-    public constructor(size: number) {
-        super();
-
-        this.size = size;
-    }
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "ShowOnTerrain": "showOnTerrain",
@@ -50,18 +44,6 @@ class UDecoLayer extends UObject {
             "RandomYaw": "randomYaw",
             "bForceRender": "isForcingRender"
         });
-    }
-
-    public preLoad(pkg: UPackage) {
-        
-        this.readStart = this.readHead = pkg.tell();
-        this.readTail = this.readHead + Infinity;
-    }
-
-    public doLoad(pkg: UPackage): this {
-        this.readNamedProps(pkg);
-
-        return this;
     }
 }
 

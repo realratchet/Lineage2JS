@@ -24,13 +24,6 @@ class UTerrainLayer extends UObject {
     protected unkNum0: number;
     protected z: number;
 
-    constructor(readHead: number, readTail: number) {
-        super();
-
-        this.readHead = readHead;
-        this.readTail = readTail;
-    }
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Texture": "map",
@@ -54,64 +47,6 @@ class UTerrainLayer extends UObject {
             "ToMaskmap": "toMaskmap",
             "bUseAlpha": "useAlpha"
         });
-    }
-
-    public preLoad(pkg: UPackage, exp: UExport) { }
-
-    public doLoad(pkg: UPackage, exp: UExport) {
-        // debugger;
-
-        // const startOffset = pkg.tell();
-
-        pkg.seek(this.readHead, "set");
-        this.readNamedProps(pkg);
-
-        // if (!this.map || !this.alphaMap)
-        //     debugger;
-
-        // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
-
-        console.assert((this.readTail - pkg.tell()) === 0);
-
-        // const uint16 = new BufferValue(BufferValue.uint16);
-
-        // this.unkNum0 = await pkg.read(uint16).value as number;
-
-        // this.readHead = pkg.tell();
-
-        // debugger;
-
-        // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
-
-        // do {
-        //     const tag = await PropertyTag.from(pkg, this.readHead);
-
-        //     if (!tag.isValid()) break;
-
-        //     const postState = pkg.tell() + tag.dataSize;
-
-        //     await this.loadProperty(pkg, tag);
-
-        //     this.readHead = postState;
-
-        //     console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
-
-        // } while (this.readHead < this.readTail);
-
-        // this.readHead = pkg.tell();
-
-        // await this.readNamedProps(pkg);
-
-        // this.readHead = this.readTail;
-        // pkg.seek(this.readTail, "set");
-
-        // console.log(`Bytes left: ${this.readTail - pkg.tell()}`);
-
-        // debugger;
-
-        // this.bytesUnread
-
-        return this;
     }
 }
 

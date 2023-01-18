@@ -4,10 +4,8 @@ import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 import { ObjectFlags_T } from "./un-export";
 import UNativeRegistry from "./scripts/un-native-registry";
-import UDependencyGraph from "./un-dependency-graph";
 
 const CLEANUP_NAMESPACE = true;
-
 
 type RegisterNativeMember_T = {
     isArray: boolean,
@@ -42,24 +40,49 @@ abstract class UObject {
     protected isLoading = false;
     protected isReady = false;
 
-    // public name = "None";
-    // public klass: UClass = null;
-    // public flags: number = 0;
+    protected static getConstructorName() {
+        debugger;
+        throw new Error("Must be implemented by inheriting class because JS does not support inheritence chain.");
+    }
 
-    protected getSignedMap(): Record<string, boolean> { return {}; }
-    protected getPropertyMap(): Record<string, string> { return {}; }
-    // protected getPropertyMap(): Record<string, string> {
-    //     return {
-    //         "ObjectInternal": "objectInternal",
-    //         "Outer": "outer",
-    //         "ObjectFlags": "objectFlags",
-    //         "Name": "name",
-    //         "Class": "cls",
-    //         "CacheIndex": "cacheIndex",
-    //         "HashNextBuffer": "hashNextBuffer",
-    //         "IndexBuffer": "indexBuffer"
-    //     };
-    // }
+    public static get inheritenceChain() {
+        if (this === UObject)
+            return ["Object"]
+
+        let base = this as any;
+        const dependencyChain = new Array<string>();
+
+        do {
+            dependencyChain.push(base.getConstructorName());
+            base = base.__proto__;
+
+        } while (base !== UObject);
+
+        dependencyChain.push("Object");
+
+        return dependencyChain.reverse();
+    }
+
+    protected _objectInternal: any;
+    protected _outer: any;
+    protected _objectFlags: any;
+    protected _class: any;
+    protected _cacheIndex: any;
+    protected _hashNextBuffer: any;
+    protected _indexBuffer: any;
+
+    protected getPropertyMap(): Record<string, string> {
+        return {
+            "ObjectInternal": "_objectInternal",
+            "Outer": "_outer",
+            "ObjectFlags": "_objectFlags",
+            "Name": "objectName",
+            "Class": "_class",
+            "CacheIndex": "_cacheIndex",
+            "HashNextBuffer": "_hashNextBuffer",
+            "IndexBuffer": "_indexBuffer"
+        };
+    }
 
     protected setReadPointers(exp: UExport) {
         this.readStart = this.readHead = exp.offset as number + this.readHeadOffset;
@@ -130,7 +153,8 @@ abstract class UObject {
     protected preLoad(pkg: UPackage, exp: UExport): void {
         const flags = exp.flags as number;
 
-        // this.setExport(exp);
+        if (!this.exp)
+            this.setExport(pkg, exp);
 
         pkg.seek(exp.offset as number, "set");
 
@@ -161,8 +185,17 @@ abstract class UObject {
         this.readHead = pkg.tell();
 
         if (this.skipRemaining) this.readHead = this.readTail;
-        if (this.bytesUnread > 0 && this.bytesUnread !== this.readHeadOffset && this.careUnread)
-            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
+        if (this.bytesUnread > 0 && this.bytesUnread !== this.readHeadOffset && this.careUnread) {
+            const constructorName = (this.constructor as any).isDynamicClass ? `${(this.constructor as any).friendlyName}[Dynamic]` : this.constructor.name;
+            console.warn(`Unread '${this.objectName}' (${constructorName}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
+        }
+
+        if (CLEANUP_NAMESPACE) {
+            Object.values(this.getPropertyMap()).forEach(propName => {
+                if ((this as any)[propName] === undefined)
+                    delete (this as any)[propName];
+            });
+        }
     }
 
     public loadSelf() {
@@ -212,14 +245,13 @@ abstract class UObject {
     protected loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();
         const offEnd = offStart + tag.dataSize;
-        const isSigned = this.getPropertyIsSigned(tag);
 
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.uint8)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_IntProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int32 : BufferValue.uint32)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int32)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_BoolProperty: this.setProperty(tag, tag.boolValue); break;
             case UNP_PropertyTypes.UNP_FloatProperty:
@@ -312,16 +344,6 @@ abstract class UObject {
         _var.load(pkg, tag);
 
         return true;
-    }
-
-    protected getPropertyIsSigned(tag: PropertyTag): boolean {
-        const props = this.getSignedMap();
-        const { name: propName } = tag;
-
-        if (!(propName in props))
-            return true;
-
-        return props[propName];
     }
 
     protected getPropertyVarName(tag: PropertyTag): string {
