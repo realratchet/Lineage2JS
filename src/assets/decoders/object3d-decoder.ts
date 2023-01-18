@@ -4,6 +4,7 @@ import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
+import SpriteEmitter from "@client/objects/emitters/sprite-emitters";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -451,38 +452,12 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
 
 function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
     const geometry = new PlaneBufferGeometry(50, 50, 50);
-    const infoMats = library.materials[info.object];
-    // const material = (decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff })) as Material;
-    const material = new MeshBasicMaterial({ side: DoubleSide, map: decodeTexture(library, infoMats).texture });
+    const infoMats = library.materials[info.object] as ITextureDecodeInfo;
+    const texture = decodeTexture(library, infoMats);
 
-    // debugger;
+    debugger;
 
-    switch (info.blendingMode) {
-        case "normal":
-            // case "masked":
-            material.blending = NormalBlending;
-            break;
-        case "alpha":
-            material.blending = CustomBlending
-            material.blendSrc = SrcAlphaFactor;
-            material.blendDst = OneMinusSrcAlphaFactor;
-            break;
-        case "brighten":
-            material.blending = AdditiveBlending;
-            break;
-        case "translucent":
-            material.blending = CustomBlending;
-            material.blendSrc = OneFactor;
-            material.blendDst = OneMinusSrcColorFactor;
-            break;
-        default: console.warn("Unknown blending mode:", info.blendingMode); break;
-    }
-
-    material.opacity = info.opacity;
-    material.transparent = true;
-    // material.depthWrite = false;
-
-    const mesh = new Mesh(geometry, material);
+    const mesh = new SpriteEmitter();
 
     applySimpleProperties(library, mesh, info);
 

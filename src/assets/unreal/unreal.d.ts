@@ -441,3 +441,5 @@ type IKeyframeDecodeInfo_T = {
     values: Float32Array,
     type: "Vector" | "Quaternion"
 }
+
+type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";

@@ -416,4 +416,4 @@ const blendingNames = {
     [EParticleDrawStyle_T.PTDS_AlphaModulate_MightNotFogCorrectly]: "alphaModulate",
     [EParticleDrawStyle_T.PTDS_Darken]: "darken",
     [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
-};
+} as Record<EParticleDrawStyle_T, ParticleBlendModes_T>;
