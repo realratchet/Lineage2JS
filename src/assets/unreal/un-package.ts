@@ -762,6 +762,9 @@ class UNativePackage extends UPackage {
 
             case "Light": Constructor = ULight; break;
 
+            case "L2FogInfo": Constructor = UObject; break;
+            case "Mover": Constructor = UMover; break;
+
             default:
                 debugger;
                 throw new Error(`Not implemented native class: ${constructorName}`);

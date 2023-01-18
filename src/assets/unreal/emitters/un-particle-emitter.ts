@@ -389,7 +389,7 @@ abstract class UParticleEmitter extends UObject {
             },
             colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
             particlesPerSecond: this.particlesPerSecond,
-            angularVelocity: this.spinsPerSecondRange.loadSelf().getDecodeInfo(library),
+            angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[this.drawStyle]
         };
     }

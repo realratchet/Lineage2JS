@@ -117,7 +117,7 @@ abstract class UEmitter extends UAActor {
             position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
-            children: emittersInfo
+            children: emittersInfo.filter(x => x)
         } as IBaseObjectDecodeInfo;
 
         zoneInfo.children.push(actorInfo);
