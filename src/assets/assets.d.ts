@@ -171,8 +171,28 @@ type UObjectTypes_T =
     | "NMovableSunLight"
     | "NSun"
     | "NMoon"
-    | "L2FogInfo"
-    
+    | "L2FogInfo";
+
+type StructTypes_T =
+    | "Color"
+    | "Plane"
+    | "Scale"
+    | "Vector"
+    | "Rotator"
+    | "Matrix"
+    | "PointRegion"
+    | "TextureModifyinfo"
+    | "RangeVector"
+    | "Range"
+    | "DecorationLayer"
+    | "TerrainIntensityMap"
+    | "ParticleRevolutionScale"
+    | "ParticleTimeScale"
+    | "ParticleSound"
+    | "ParticleVelocityScale"
+    | "Particle"
+    | "ParticleColorScale";
+
 
 type Seek_T = "current" | "set";
 type FNumber<T> = typeof import("./unreal/un-number").FNumber;

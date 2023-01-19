@@ -1,21 +1,49 @@
-import { PlaneBufferGeometry } from "three";
+import { AdditiveBlending, BufferGeometry, CustomBlending, DoubleSide, Mesh, MeshBasicMaterial, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, PlaneBufferGeometry, SrcAlphaFactor } from "three";
 import BaseEmitter from "./base-emitter";
 
-const geometry = new PlaneBufferGeometry(10, 10);
+const geometry = new PlaneBufferGeometry(1, 1);
 
 class SpriteEmitter extends BaseEmitter {
-    constructor(texture: MapData_T) {
-        super();
+    
+    protected material: MeshBasicMaterial;
+
+    constructor(config: SpriteEmitterConfig_T) {
+        super(config);
+
+       
+        // debugger;
+    }
+
+    protected initSettings(config: SpriteEmitterConfig_T): void {
+        this.material = createMaterial(config.texture, config.opacity, config.blendingMode);
+
+    }
+
+    protected initParticleMesh() {
+        const particle = new ParticleMesh(this.material);
+
+        return particle;
     }
 }
 
 export default SpriteEmitter;
 export { SpriteEmitter };
 
-/*
-switch (info.blendingMode) {
+class ParticleMesh extends Mesh {
+    constructor(material: THREE.Material) {
+        super(geometry, material);
+    }
+}
+
+type SpriteEmitterConfig_T = EmitterConfig_T & {
+    texture: MapData_T
+};
+
+function createMaterial(mapData: MapData_T, opacity: number, blendingMode: ParticleBlendModes_T) {
+    const material = new MeshBasicMaterial({ transparent: true, map: mapData.texture, opacity, side: DoubleSide });
+
+    switch (blendingMode) {
         case "normal":
-            // case "masked":
             material.blending = NormalBlending;
             break;
         case "alpha":
@@ -31,6 +59,11 @@ switch (info.blendingMode) {
             material.blendSrc = OneFactor;
             material.blendDst = OneMinusSrcColorFactor;
             break;
-        default: console.warn("Unknown blending mode:", info.blendingMode); break;
+        default: console.warn("Unknown blending mode:", blendingMode); break;
     }
-*/
+
+    // debugger;
+
+    return material;
+}
+

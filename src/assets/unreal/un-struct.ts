@@ -222,7 +222,7 @@ class UStruct extends UField {
         const hostClass = this;
         const Constructor = lastNative
             ? pkg.getConstructor(lastNative.friendlyName as NativeTypes_T) as any as typeof UObject
-            : UObject;
+            : pkg.getStructConstructor(this.friendlyName as StructTypes_T) as any as typeof UObject;
 
         if (lastNative)
             debugger;

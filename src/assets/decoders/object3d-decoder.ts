@@ -4,7 +4,7 @@ import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
-import SpriteEmitter from "@client/objects/emitters/sprite-emitters";
+import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -451,13 +451,29 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
 }
 
 function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
-    const geometry = new PlaneBufferGeometry(50, 50, 50);
     const infoMats = library.materials[info.object] as ITextureDecodeInfo;
     const texture = decodeTexture(library, infoMats);
 
-    debugger;
+    if (!isFinite(info.maxParticles))
+        debugger;
 
-    const mesh = new SpriteEmitter();
+    // debugger;
+
+    const mesh = new SpriteEmitter({
+        texture,
+        acceleration: info.acceleration,
+        lifetime: info.lifetime,
+        maxParticles: info.maxParticles,
+        initial: {
+            particlesPerSecond: info.initial.particlesPerSecond,
+            scale: info.initial.scale,
+            velocity: info.initial.velocity,
+            angularVelocity: info.initial.angularVelocity,
+        },
+        particlesPerSecond: info.particlesPerSecond,
+        blendingMode: info.blendingMode,
+        opacity: info.opacity
+    });
 
     applySimpleProperties(library, mesh, info);
 

@@ -2,7 +2,7 @@ import BufferValue from "../buffer-value";
 import UExport from "./un-export";
 import FNumber from "./un-number";
 
-type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
+
 
 class FArray<T extends FConstructable = FConstructable> extends Array implements IConstructable {
     protected Constructor: { new(...pars: any): T } & ValidConstructables_T<T>;

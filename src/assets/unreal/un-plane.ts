@@ -62,6 +62,8 @@ class UPlane extends UObject {
             "W": "w",
         });
     }
+
+    public getElements(): Vector4Arr { return [this.x, this.y, this.z, this.w]; }
 }
 
 export { FPlane, UPlane };

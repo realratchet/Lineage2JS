@@ -29,7 +29,7 @@ class FVector extends FConstructable {
         return this;
     }
 
-    public getElements(): [number, number, number] { return [this.x, this.y, this.z]; }
+    public getElements(): Vector3Arr { return [this.x, this.y, this.z]; }
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {

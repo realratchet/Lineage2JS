@@ -1,16 +1,23 @@
 type DecodeLibrary = import("./decode-library").DecodeLibrary;
 type UPackage = import("./un-package").UPackage;
 type UNativePackage = import("./un-package").UNativePackage;
-type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue;
+type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue<T>;
 type UHeader = import("./un-header").UHeader;
 type UGeneration = import("./un-generation").UGeneration;
-type UExport<T extends UObject = UObject> = import("./un-export").UExport;
+type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
+type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
+type FArray<T extends FConstructable = FConstructable> = import("./un-array").FArray<T>;
+type FObjectArray<T extends UObject = UObject> = import("./un-array").FObjectArray<T>;
+type FArrayLazy<T extends FConstructable = FConstructable> = import("./un-array").FArrayLazy<T>;
+type FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> = import("./un-array").FPrimitiveArray<T>;
+type FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> = import("./un-array").FPrimitiveArrayLazy<T>;
 type UName = import("./un-name").UName;
 type UImport = import("./un-import").UImport;
 type UTexture = import("./un-texture").UTexture;
 type UCubemap = import("./un-cubemap").UCubemap;
 type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
 type UObject = import("./un-object").UObject;
+type UAActor = import("./un-aactor").UAActor;
 type UClass = import("./un-class").UClass;
 type UFunction = import("./un-function").UFunction;
 type UField = import("./un-field").UField;
@@ -443,3 +450,4 @@ type IKeyframeDecodeInfo_T = {
 }
 
 type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
+type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";

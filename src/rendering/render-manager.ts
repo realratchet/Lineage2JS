@@ -329,6 +329,9 @@ class RenderManager {
                 // // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
 
                 (object as THREE.Object3D).traverseVisible(object => {
+                    if ((object as any).isUpdatable)
+                        (object as any).update(currentTime);
+
                     if ((object as THREE.Mesh).isMesh)
                         (((((object as THREE.Mesh).material as THREE.Material).isMaterial)
                             ? [(object as THREE.Mesh).material]

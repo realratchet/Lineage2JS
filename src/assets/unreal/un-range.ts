@@ -37,10 +37,13 @@ class URangeVector extends UObject {
     }
 
     public getDecodeInfo(library: DecodeLibrary): RangeVector_T {
+        const [minx, maxx] = this.x.getDecodeInfo(library)
+        const [miny, maxy] = this.y.getDecodeInfo(library)
+        const [minz, maxz] = this.z.getDecodeInfo(library)
+
         return {
-            x: this.x.getDecodeInfo(library),
-            y: this.x.getDecodeInfo(library),
-            z: this.x.getDecodeInfo(library)
+            min: [minx, miny, minz],
+            max: [maxx, maxy, maxz],
         };
     }
 }
@@ -49,4 +52,4 @@ export default URange;
 export { URange, URangeVector };
 
 type Range_T = [number, number];
-type RangeVector_T = { x: Range_T, y: Range_T, z: Range_T };
+type RangeVector_T = { min: Vector3Arr, max: Vector3Arr };

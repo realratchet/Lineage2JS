@@ -75,6 +75,10 @@ import UMeshInstance from "./un-mesh-instance";
 import UConvexVolume from "./un-convex-volume";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import USpriteEmitter from "./emitters/un-sprite-emitter";
+import UDecoLayer from "./un-deco-layer";
+import FTIntMap from "./un-tint-map";
+import { UPlane } from "./un-plane";
+import { UParticle, UParticleColorScale, UParticleRevolutionScale, UParticleSound, UParticleTimeScale, UParticleVelocityScale } from "./emitters/un-particle-emitter";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -679,6 +683,27 @@ class UNativePackage extends UPackage {
         console.log(`'${this.path}' loaded in ${performance.now() - tStart} ms`);
 
         return this;
+    }
+
+    public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: StructTypes_T): new () => T {
+        let Constructor: any;
+
+        switch (constructorName) {
+            case "DecorationLayer": Constructor = UDecoLayer; break;
+            case "TerrainIntensityMap": Constructor = FTIntMap; break;
+            case "Plane": Constructor = UPlane; break;
+            case "ParticleRevolutionScale": Constructor = UParticleRevolutionScale; break;
+            case "ParticleTimeScale": Constructor = UParticleTimeScale; break;
+            case "ParticleSound": Constructor = UParticleSound; break;
+            case "ParticleVelocityScale": Constructor = UParticleVelocityScale; break;
+            case "Particle": Constructor = UParticle; break;
+            case "ParticleColorScale": Constructor = UParticleColorScale; break;
+            default:
+                Constructor = UObject;
+                console.warn(`Native struct '${constructorName}' bindings defined`);
+        }
+
+        return Constructor;
     }
 
     public getConstructor<T extends typeof UObject = typeof UObject>(constructorName: UObjectTypes_T): new () => T {

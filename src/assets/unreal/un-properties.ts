@@ -135,7 +135,7 @@ class UStructProperty extends UBaseExportProperty<UClass> {
             this.value = this.pkg.fetchObject(this.valueId);
         // debugger;
 
-        return (this.value as UStruct).buildClass() as any;
+        return (this.value as UStruct).buildClass(this.pkg.loader.getPackage("native", "Script")) as any;
     }
 }
 

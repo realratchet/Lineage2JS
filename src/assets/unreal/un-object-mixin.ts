@@ -21,7 +21,7 @@ Object.assign(UObject.prototype, {
         exp.offset = pkg.tell();
         exp.size = tag.dataSize;
 
-        switch (tag.structName) {
+        switch (tag.structName as StructTypes_T) {
             case "Color": return new FColor().load(pkg);
             case "Plane": return new UPlane().load(pkg, exp);
             case "Scale": return new FScale().load(pkg);
