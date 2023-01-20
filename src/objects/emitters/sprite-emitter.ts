@@ -4,13 +4,13 @@ import BaseEmitter from "./base-emitter";
 const geometry = new PlaneBufferGeometry(1, 1);
 
 class SpriteEmitter extends BaseEmitter {
-    
+
     protected material: MeshBasicMaterial;
 
     constructor(config: SpriteEmitterConfig_T) {
         super(config);
 
-       
+
         // debugger;
     }
 
@@ -20,7 +20,7 @@ class SpriteEmitter extends BaseEmitter {
     }
 
     protected initParticleMesh() {
-        const particle = new ParticleMesh(this.material);
+        const particle = new ParticleMesh(this.material.clone());
 
         return particle;
     }
@@ -40,7 +40,13 @@ type SpriteEmitterConfig_T = EmitterConfig_T & {
 };
 
 function createMaterial(mapData: MapData_T, opacity: number, blendingMode: ParticleBlendModes_T) {
-    const material = new MeshBasicMaterial({ transparent: true, map: mapData.texture, opacity, side: DoubleSide });
+    const material = new MeshBasicMaterial({
+        transparent: true,
+        map: mapData.texture,
+        opacity,
+        side: DoubleSide,
+        depthWrite: false
+    });
 
     switch (blendingMode) {
         case "normal":

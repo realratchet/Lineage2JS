@@ -52,7 +52,6 @@ import UConst from "./un-const";
 import * as UnProperties from "./un-properties";
 import UState from "./un-state";
 import UField from "./un-field";
-import UDependencyGraph from "./un-dependency-graph";
 import UFont from "./un-font";
 import UWeapon from "./un-weapon";
 import decodeObject3D from "../decoders/object3d-decoder";
@@ -79,6 +78,7 @@ import UDecoLayer from "./un-deco-layer";
 import FTIntMap from "./un-tint-map";
 import { UPlane } from "./un-plane";
 import { UParticle, UParticleColorScale, UParticleRevolutionScale, UParticleSound, UParticleTimeScale, UParticleVelocityScale } from "./emitters/un-particle-emitter";
+import UMovableStaticMeshActor from "./static-mesh/un-movable-static-mesh-actor";
 
 class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
@@ -564,6 +564,8 @@ class UPackage extends UEncodedFile {
 
         return exports;
     }
+
+    public toString() { return `Package=(${this.path}, imports=${this.imports.length}, exports=${this.exports.length})` }
 }
 
 enum PackageFlags_T {
@@ -709,6 +711,9 @@ class UNativePackage extends UPackage {
     public getConstructor<T extends typeof UObject = typeof UObject>(constructorName: UObjectTypes_T): new () => T {
         let Constructor: any;
 
+        if (constructorName.toLocaleLowerCase().includes("fog"))
+            debugger;
+
         switch (constructorName) {
             case "Class": Constructor = UClass; break;
             case "Struct": Constructor = UStruct; break;
@@ -737,6 +742,7 @@ class UNativePackage extends UPackage {
             case "Level": Constructor = ULevel; break;
             case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
             case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+            case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
             case "Model": Constructor = UModel; break;
             case "Viewport": Constructor = UViewport; break;
             case "Client": Constructor = UClient; break;
@@ -787,9 +793,11 @@ class UNativePackage extends UPackage {
 
             case "Light": Constructor = ULight; break;
 
-            case "L2FogInfo": Constructor = UObject; break;
             case "Mover": Constructor = UMover; break;
 
+            // Classes we don't care about atm are marked as UObject for general puprose constructor
+            case "L2FogInfo": Constructor = UObject; break;
+            case "SceneManager": Constructor = UObject; break;
             default:
                 debugger;
                 throw new Error(`Not implemented native class: ${constructorName}`);

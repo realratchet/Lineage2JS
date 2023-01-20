@@ -48,14 +48,14 @@ class UTexture extends UMaterial {
     protected clampModeU: number;
     protected clampModeV: number;
 
-    
+
     protected lodSet: number;
 
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
     public readonly _mips: FPrimitiveArray<"uint32">;
 
     protected _lossDetail: any;
-    
+
     protected _detailTexture: any;
     protected _environmentMap: any;
     protected _envMapTransformType: any;
@@ -107,12 +107,12 @@ class UTexture extends UMaterial {
             "bAlphaTexture": "isAlphaTexture",
             "bMasked": "isMasked",
 
-            
+
             "LODSet": "lodSet",
-           
+
 
             "LossDetail": "_lossDetail",
-            
+
             "DetailTexture": "_detailTexture",
             "EnvironmentMap": "_environmentMap",
             "EnvMapTransformType": "_envMapTransformType",
@@ -360,6 +360,8 @@ class UTexture extends UMaterial {
 
         return this.uuid;
     }
+
+    public toString() { return `Texture=${this.objectName}`; }
 }
 
 export default UTexture;

@@ -54,6 +54,15 @@ class UPlane extends UObject {
     public z: number;
     public w: number;
 
+    constructor(x: number, y: number, z: number, w: number) {
+        super();
+
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "X": "x",
@@ -64,6 +73,7 @@ class UPlane extends UObject {
     }
 
     public getElements(): Vector4Arr { return [this.x, this.y, this.z, this.w]; }
+    public toString() {return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})`}
 }
 
 export { FPlane, UPlane };

@@ -241,6 +241,8 @@ class UClass extends UState {
                         ...this.newProps
                     };
                 }
+
+                public toString() { return `[D]${friendlyName}=(name=${this.objectName})` }
             }
         }[this.friendlyName];
 

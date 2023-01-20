@@ -1,15 +1,21 @@
+import FVector from "../un-vector";
 import UParticleEmitter from "./un-particle-emitter"
 
 class USpriteEmitter extends UParticleEmitter {
-    protected projectionNormal: FVector; // Normal vector of the projection plane used when UseDirectionAs is set to PTDU_Normal, PTDU_UpAndNormal or PTDU_RightAndNormal.
+    protected projectionNormal: FVector = new FVector(0, 0, 1); // Normal vector of the projection plane used when UseDirectionAs is set to PTDU_Normal, PTDU_UpAndNormal or PTDU_RightAndNormal.
     protected realProjectionNormal: FVector;
     protected spriteDirection: EParticleDirectionUsage_T = EParticleDirectionUsage_T.PTDU_None; // Here you can specify how the 2D image should be displayed. See EParticleDirectionUsage enum below for details.
+
+    protected refrUScale: number = 0.06;
+    protected refrVScale: number = 0.06;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
             "ProjectionNormal": "projectionNormal",
             "UseDirectionAs": "spriteDirection",
-            "RealProjectionNormal": "realProjectionNormal"
+            "RealProjectionNormal": "realProjectionNormal",
+            "RefrUScale": "refrUScale",
+            "RefrVScale": "refrVScale",
         });
     }
 

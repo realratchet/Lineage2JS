@@ -6,6 +6,12 @@ import Player from "@client/player";
 import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
 import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
+import Stats from "./stats";
+
+const stats = new (Stats as any)(0);
+
+stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -31,6 +37,7 @@ class RenderManager {
     public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
 
+    protected shiftTimeDown: number;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
@@ -214,7 +221,10 @@ class RenderManager {
             case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
             case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
             case "s": if (!this.isOrbitControls) this.dirKeys.down = true; break;
-            case "shift": if (!this.isOrbitControls) this.dirKeys.shift = true; break;
+            case "shift": if (!this.isOrbitControls) {
+                this.shiftTimeDown = Date.now();
+                this.dirKeys.shift = true;
+            } break;
         }
     }
 
@@ -286,9 +296,11 @@ class RenderManager {
         const isFrameDirty = this.isPersistentRendering || this.needsUpdate;
 
         if (isFrameDirty) {
+            stats.begin();
             this._preRender(currentTime, deltaTime);
             this._doRender(currentTime, deltaTime);
             this._postRender(currentTime, deltaTime);
+            stats.end();
             this.needsUpdate = false;
         }
 
@@ -389,7 +401,12 @@ class RenderManager {
 
         if (!this.isOrbitControls) {
             let forwardVelocity = 0, sidewaysVelocity = 0;
-            const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? 2 : 1);
+            const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? (
+                Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2))
+            ) : 1);
+
+            if (this.dirKeys.shift)
+                console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
 
             if (this.dirKeys.left) sidewaysVelocity -= 1;
             if (this.dirKeys.right) sidewaysVelocity += 1;

@@ -1,6 +1,6 @@
 import { flagBitsToDict } from "@client/utils/flags";
 import BufferValue from "../buffer-value";
-import FArray, { FObjectArray, FPrimitiveArray } from "./un-array";
+import FArray, { FNameArray, FObjectArray, FPrimitiveArray } from "./un-array";
 import FConstructable from "./un-constructable";
 import UExport from "./un-export";
 import UField from "./un-field";
@@ -212,6 +212,8 @@ class UArrayProperty extends UBaseExportProperty<UProperty> {
             return new FPrimitiveArray((this.value.constructor as (typeof UIntProperty | typeof UFloatProperty)).dtype);
         } else if (this.value instanceof UObjectProperty) {
             return new FObjectArray();
+        } else if (this.value instanceof UNameProperty) {
+            return new FNameArray();
         } else if (!(this.value instanceof UStructProperty))
             throw new Error("Not yet implemented")
 

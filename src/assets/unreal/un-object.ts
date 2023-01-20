@@ -199,6 +199,9 @@ abstract class UObject {
     }
 
     public loadSelf() {
+        if (!this.pkg || !this.pkg)
+            return this;
+
         return this.load(this.pkg, this.exp);
     }
 

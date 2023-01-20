@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -176,6 +176,8 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     // }
 
     applySimpleProperties(library, object, info);
+
+    object.add(new Mesh(geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
 
     return object;
 }
@@ -468,11 +470,18 @@ function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeI
             particlesPerSecond: info.initial.particlesPerSecond,
             scale: info.initial.scale,
             velocity: info.initial.velocity,
+            position: info.initial.location,
             angularVelocity: info.initial.angularVelocity,
         },
         particlesPerSecond: info.particlesPerSecond,
         blendingMode: info.blendingMode,
-        opacity: info.opacity
+        opacity: info.opacity,
+        changesOverLifetime: {
+            scale: info.changesOverLifetime.scale
+        },
+        fadeIn: info.fadeIn,
+        fadeOut: info.fadeOut,
+        colorMultiplierRange: info.colorMultiplierRange
     });
 
     applySimpleProperties(library, mesh, info);

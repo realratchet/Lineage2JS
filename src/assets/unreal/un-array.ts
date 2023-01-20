@@ -69,9 +69,8 @@ class FObjectArray<T extends UObject = UObject> extends FArray<T> {
     constructor() { super(null); }
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
-        // debugger;
-
         this.indexArray.load(pkg, tag);
+
 
         let i = 0;
 
@@ -95,6 +94,39 @@ class FObjectArray<T extends UObject = UObject> extends FArray<T> {
 
         super.clone(other);
         this.indexArray = other.indexArray;
+
+        return this;
+    }
+}
+
+class FNameArray extends Array<string> implements IConstructable {
+    protected indexArray: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        // debugger;
+
+        this.indexArray.load(pkg, tag);
+
+        debugger;
+
+        let i = 0;
+
+        for (const index of this.indexArray)
+            this[i++] = pkg.nameTable[index.value].name;
+
+        return this;
+    }
+
+    public loadSelf(): this { return this; }
+
+    public clone(other: FNameArray): this {
+        if (!other)
+            return this;
+
+        this.indexArray = other.indexArray;
+
+        for (const v of other)
+            this.push(v);
 
         return this;
     }
@@ -224,4 +256,4 @@ class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends
 
 
 export default FArray;
-export { FArray, FArrayLazy, FObjectArray, FPrimitiveArray, FPrimitiveArrayLazy };
+export { FArray, FArrayLazy, FNameArray, FObjectArray, FPrimitiveArray, FPrimitiveArrayLazy };

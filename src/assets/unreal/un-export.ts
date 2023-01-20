@@ -28,6 +28,8 @@ class UExport<T extends UObject = UObject> {
         this._flags = flags;
         this.objectFlags = Object.freeze(flagBitsToDict(flags, ObjectFlags_T as any));
     }
+
+    public toString() { return `Export(id=${this.index + 1}, name=${this.objectName}, flags=[${Object.entries(this.objectFlags).filter(([, v]) => v).map(([k,]) => k).join(",")}])`; }
 }
 
 enum ObjectFlags_T {

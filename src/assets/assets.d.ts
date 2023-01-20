@@ -171,7 +171,9 @@ type UObjectTypes_T =
     | "NMovableSunLight"
     | "NSun"
     | "NMoon"
-    | "L2FogInfo";
+    | "L2FogInfo"
+    | "SceneManager"
+    | "MovableStaticMeshActor";
 
 type StructTypes_T =
     | "Color"

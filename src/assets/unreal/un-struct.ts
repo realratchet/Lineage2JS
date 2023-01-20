@@ -83,8 +83,8 @@ class UStruct extends UField {
     protected setProperty(tag: PropertyTag, value: any) {
         let field: UStruct = this;
 
-        if (tag.arrayIndex !== 0)
-            debugger;
+        // if (tag.arrayIndex !== 0)
+        //     debugger;
 
         while (field) {
 
@@ -95,12 +95,24 @@ class UStruct extends UField {
                 continue;
             }
 
-            if (tag.name in this)
-                debugger;
+            const property = field.childPropFields[index];
+
+            if (property.arrayDimensions > 1) {
+                (this as any)[tag.name] = (this as any)[tag.name] || new Array(property.arrayDimensions);
+
+                if (tag.arrayIndex in (this as any)[tag.name])
+                    debugger;
+
+                (this as any)[tag.name][tag.arrayIndex] = value;
+            } else {
+                if (tag.name in (this as any))
+                    debugger;
+
+                (this as any)[tag.name] = value;
+            }
 
             this.defaultProperties.add(tag.name);
 
-            (this as any)[tag.name] = value;
 
             return true;
         }
@@ -129,8 +141,8 @@ class UStruct extends UField {
         if (this.exp.objectName === "Exp_LevelInfo")
             debugger;
 
-        if (this.friendlyName === "HelpParm")
-            debugger;
+        // if (this.friendlyName === "Mover")
+        //     debugger;
 
         console.assert(typeof this.friendlyName === "string" && this.friendlyName !== "None", "Must have a friendly name");
 
@@ -266,6 +278,8 @@ class UStruct extends UField {
                         ...this.newProps
                     };
                 }
+
+                public toString() { return Constructor === UObject ? `[D|S]${friendlyName}` : Constructor.prototype.toString.call(this); }
             }
         }[this.friendlyName];
 

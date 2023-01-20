@@ -1,8 +1,15 @@
 import UObject from "./un-object";
 
 class URange extends UObject {
-    protected min: number;
-    protected max: number;
+    protected min: number = 0;
+    protected max: number = 0;
+
+    constructor(min: number, max: number) {
+        super();
+
+        this.min = min;
+        this.max = max;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -21,12 +28,22 @@ class URange extends UObject {
     // }
 
     public getDecodeInfo(library: DecodeLibrary): Range_T { return [this.min, this.max]; }
+
+    public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
 }
 
 class URangeVector extends UObject {
     protected x: URange;
     protected y: URange;
     protected z: URange;
+
+    constructor(x: URange, y: URange, z: URange) {
+        super();
+
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -42,10 +59,12 @@ class URangeVector extends UObject {
         const [minz, maxz] = this.z.getDecodeInfo(library)
 
         return {
-            min: [minx, miny, minz],
-            max: [maxx, maxy, maxz],
+            min: [minx, minz, miny],
+            max: [maxx, maxz, maxy],
         };
     }
+
+    public toString() { return `RangeVector=(x=${this.x}, y=${this.y}, z=${this.z})`; }
 }
 
 export default URange;
