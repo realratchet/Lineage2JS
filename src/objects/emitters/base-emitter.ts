@@ -173,31 +173,33 @@ class Particle extends Object3D {
         const dtSeconds = (currentTime - this.lastUpdate) / 1000;
         const tmp = new Vector3();
 
-        tmp.copy(this.acceleration).multiplyScalar(dtSeconds);
-        this.velocity.add(tmp);
+        tmp.copy(this.acceleration).multiplyScalar(0.5).multiplyScalar(dtSeconds ** 2);
+        this.position.add(tmp);
 
         tmp.copy(this.velocity).multiplyScalar(dtSeconds);
-
         this.position.add(tmp);
 
         const timeAlive = currentTime - this.bornTime;
         const lifespan = this.deathTime - this.bornTime;
 
-        if (this.fadeIn && this.fadeIn.time > timeAlive) {
-            const fade = mapLinear(timeAlive, 0, this.fadeIn.time, 0, 1);
-            const [r, g, b, a] = this.fadeIn.color.toArray().map(v => v * fade);
 
-            (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
-            (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w * a;
-        } else if (this.fadeOut && this.fadeOut.time < timeAlive) {
-            const fade = mapLinear(timeAlive, this.fadeOut.time, lifespan, 0, 1);
-            const [r, g, b, a] = this.fadeOut.color.toArray().map(v => 1 - v * fade);
+        if (!(this.visualizer.material instanceof Array)) { // mesh emitter not yet supported
+            if (this.fadeIn && this.fadeIn.time > timeAlive) {
+                const fade = mapLinear(timeAlive, 0, this.fadeIn.time, 0, 1);
+                const [r, g, b, a] = this.fadeIn.color.toArray().map(v => v * fade);
 
-            (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
-            (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w * a;
-        } else {
-            (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x, this.initial.color.y, this.initial.color.z);
-            (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w;
+                (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
+                (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w * a;
+            } else if (this.fadeOut && this.fadeOut.time < timeAlive) {
+                const fade = mapLinear(timeAlive, this.fadeOut.time, lifespan, 0, 1);
+                const [r, g, b, a] = this.fadeOut.color.toArray().map(v => 1 - v * fade);
+
+                (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
+                (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w * a;
+            } else {
+                (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x, this.initial.color.y, this.initial.color.z);
+                (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w;
+            }
         }
 
         if (this.changesOverLifetime.scale) {

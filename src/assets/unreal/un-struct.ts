@@ -66,7 +66,7 @@ class UStruct extends UField {
 
             const property = field.childPropFields[index];
 
-            debugger;
+            // debugger;
 
             const constr = property.createObject();
             const value = constr(pkg, tag);

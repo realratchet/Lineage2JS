@@ -288,7 +288,7 @@ abstract class UAActor extends UObject {
     protected isCastingShadow: boolean;
 
     public getRegion() { return this.region; }
-    public getZone() { return this.region.loadSelf().getZone(); }
+    public getZone() { return this.region?.loadSelf().getZone(); }
 
     protected getRegionLineHelper(library: DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();

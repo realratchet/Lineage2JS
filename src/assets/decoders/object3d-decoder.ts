@@ -5,6 +5,7 @@ import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
 import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
+import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -103,7 +104,7 @@ function decodeStaticMeshData(library: DecodeLibrary, info: IStaticMeshObjectDec
     const infoMats = library.materials[info.materials];
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
-    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo)
+    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
 
     if (infoGeo.attributes.colors) {
         (materials instanceof Array ? materials : [materials]).forEach(mat => {
@@ -452,17 +453,8 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
     return mesh;
 }
 
-function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
-    const infoMats = library.materials[info.object] as ITextureDecodeInfo;
-    const texture = decodeTexture(library, infoMats);
-
-    if (!isFinite(info.maxParticles))
-        debugger;
-
-    // debugger;
-
-    const mesh = new SpriteEmitter({
-        texture,
+function decodeEmitterConfig(info: IEmitterDecodeInfo) {
+    return {
         acceleration: info.acceleration,
         lifetime: info.lifetime,
         maxParticles: info.maxParticles,
@@ -482,11 +474,37 @@ function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeI
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
         colorMultiplierRange: info.colorMultiplierRange
-    });
+    };
+}
 
-    applySimpleProperties(library, mesh, info);
+function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo) {
+    const infoGeo = library.geometries[info.mesh.geometry] as IGeometryDecodeInfo;
+    const infoMats = library.materials[info.mesh.materials] as ITextureDecodeInfo;
 
-    return mesh;
+    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+
+    const emitter = new MeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
+}
+
+function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
+    const infoMats = library.materials[info.object] as ITextureDecodeInfo;
+    const texture = decodeTexture(library, infoMats);
+
+    if (!isFinite(info.maxParticles))
+        debugger;
+
+    // debugger;
+
+    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { texture }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
 }
 
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
@@ -501,7 +519,8 @@ function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecod
         case "StaticMesh": return decodeStaticMeshWrapped(library, info as IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
-        case "SpriteEmitter": return decodeSpriteEmitter(library, info as ISpriteEmitterDecodeInfo)
+        case "SpriteEmitter": return decodeSpriteEmitter(library, info as ISpriteEmitterDecodeInfo);
+        case "MeshEmitter": return decodeMeshEmitter(library, info as IMeshEmitterDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

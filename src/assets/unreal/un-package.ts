@@ -711,8 +711,8 @@ class UNativePackage extends UPackage {
     public getConstructor<T extends typeof UObject = typeof UObject>(constructorName: UObjectTypes_T): new () => T {
         let Constructor: any;
 
-        if (constructorName.toLocaleLowerCase().includes("fog"))
-            debugger;
+        // if (constructorName.toLocaleLowerCase().includes("fog"))
+        //     debugger;
 
         switch (constructorName) {
             case "Class": Constructor = UClass; break;

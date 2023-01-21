@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferGeometry, CustomBlending, DoubleSide, Mesh, MeshBasicMaterial, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, PlaneBufferGeometry, SrcAlphaFactor } from "three";
+import { AdditiveBlending, CustomBlending, DoubleSide, Mesh, MeshBasicMaterial, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, PlaneBufferGeometry, SrcAlphaFactor } from "three";
 import BaseEmitter from "./base-emitter";
 
 const geometry = new PlaneBufferGeometry(1, 1);

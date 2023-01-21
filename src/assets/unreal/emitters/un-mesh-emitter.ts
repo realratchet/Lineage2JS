@@ -13,14 +13,10 @@ class UMeshEmitter extends UParticleEmitter {
         const decodeInfo = super.getDecodeInfo(library);
         const meshInfo = this.mesh.loadSelf().getDecodeInfo(library);
 
-        // debugger;
-
-        // return Object.assign(decodeInfo, {
-        //     type: "MeshEmitter",
-        //     mesh: meshInfo
-        // });
-
-        return null;
+        return Object.assign(decodeInfo, {
+            type: "MeshEmitter",
+            mesh: meshInfo
+        });
     }
 }
 
