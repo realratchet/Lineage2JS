@@ -13,9 +13,12 @@ import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import StringSet from "@client/utils/string-set";
 
-const triggerDebuggerOnUnsupported = false;
+const triggerDebuggerOnUnsupported = true;
+
 
 class UStaticMesh extends UPrimitive {
+    protected static getConstructorName() { return "StaticMesh"; }
+
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
     protected vertexStream: FStaticMeshVertexStream = new FStaticMeshVertexStream();
     protected colorStream: FRawColorStream = new FRawColorStream();
@@ -33,8 +36,8 @@ class UStaticMesh extends UPrimitive {
     protected isUsingBillboard: boolean;
     protected frequency: number;
 
-    protected collisionFaces: FArrayLazy<FStaticMeshCollisionTriangle> = new FArrayLazy(FStaticMeshCollisionTriangle);
-    protected collisionNodes: FArrayLazy<FStaticMeshCollisionNode> = new FArrayLazy(FStaticMeshCollisionNode);
+    protected collisionFaces: FStaticMeshCollisionTriangle[];
+    protected collisionNodes: FStaticMeshCollisionNode[];
     protected staticMeshTris: FArrayLazy<FStaticMeshTriangle> = new FArrayLazy(FStaticMeshTriangle);
 
     protected unkIndex0: number;
@@ -57,7 +60,6 @@ class UStaticMesh extends UPrimitive {
     protected unkIndex1: number;
     protected unkInt1: number;
 
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMeshLod02": "staticMeshLod2",
@@ -68,7 +70,8 @@ class UStaticMesh extends UPrimitive {
             "bMakeTwoSideMesh": "isMadeTwoSideMesh",
             "bStaticMeshLodBlend": "isStaticMeshLodBlend",
             "bUseBillBoard": "isUsingBillboard",
-            "Frequency": "frequency"
+            "Frequency": "frequency",
+
         });
     }
 
@@ -91,14 +94,16 @@ class UStaticMesh extends UPrimitive {
         this.edgesStream.load(pkg);
 
         this.unkIndex0 = pkg.read(compat32).value as number;
-        
+
         // debugger;
 
         if (verLicense < 0x11) {
-            console.warn("Not supported yet");
-            this.skipRemaining = true;
-            if (triggerDebuggerOnUnsupported) debugger;
-            return;
+            if (this.unkIndex0 > 0) {
+                debugger;
+            }
+
+            this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
+            this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg).map(x => x);
         } else {
             if (verArchive < 0x3E) {
                 console.warn("Not supported yet");
@@ -106,10 +111,19 @@ class UStaticMesh extends UPrimitive {
                 if (triggerDebuggerOnUnsupported) debugger;
                 return;
             } else {
-                this.collisionFaces.load(pkg);
-                this.collisionNodes.load(pkg);
+                // debugger;
+
+                this.collisionFaces = new FArrayLazy(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
+                this.collisionNodes = new FArrayLazy(FStaticMeshCollisionNode).load(pkg).map(x => x);
+
+                // debugger;
             }
         }
+
+        // debugger;
+
+        if (this.unkIndex0 > 0)
+            debugger;
 
         this.readHead = pkg.tell();
 
@@ -173,8 +187,10 @@ class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public async getDecodeInfo(library: DecodeLibrary, matModifiers: string[]): Promise<IStaticMeshObjectDecodeInfo> {
-        await this.onLoaded();
+    public getDecodeInfo(library: DecodeLibrary, matModifiers?: string[]): IStaticMeshObjectDecodeInfo {
+        // await this.onDecodeReady();
+
+        // debugger;
 
         let materialUuid = this.uuid;
 
@@ -214,6 +230,7 @@ class UStaticMesh extends UPrimitive {
         // }
 
         if (this.uuid in library.geometries) return {
+            uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
@@ -311,6 +328,31 @@ class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
+        const collisionFaces = this.collisionFaces.length;
+        const collision = new Uint32Array(this.collisionFaces.length * 3);
+
+        for (let i = 0; i < collisionFaces; i++) {
+            const face = this.collisionFaces[i];
+            const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
+            const offset = i * 3;
+
+            collision[offset + 0] = verts[0];
+            collision[offset + 1] = verts[1];
+            collision[offset + 2] = verts[2];
+
+            // collision[offset + 0] = verts[0][0];
+            // collision[offset + 1] = verts[0][1];
+            // collision[offset + 2] = verts[0][2];
+
+            // collision[offset + 3] = verts[1][0];
+            // collision[offset + 4] = verts[1][1];
+            // collision[offset + 5] = verts[1][2];
+
+            // collision[offset + 6] = verts[2][0];
+            // collision[offset + 7] = verts[2][1];
+            // collision[offset + 8] = verts[2][2];
+        }
+
         library.geometries[this.uuid] = {
             attributes: {
                 positions,
@@ -319,11 +361,13 @@ class UStaticMesh extends UPrimitive {
                 uvs
             },
             indices,
+            colliderIndices: collision,
             groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
             bounds: this.decodeBoundsInfo()
         };
 
-        const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        // const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        const materials = this.materials.map((mat: FStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
 
         materials.forEach(uuid => {
             if (!library.materials[uuid]) return;
@@ -332,8 +376,6 @@ class UStaticMesh extends UPrimitive {
         });
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
-        // debugger;
 
         return {
             uuid: this.uuid,

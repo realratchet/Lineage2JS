@@ -3,7 +3,7 @@ import BufferValue from "../buffer-value";
 import FURL from "./un-url";
 import { FPrimitiveArray } from "./un-array";
 
-const LOAD_SUB_OBJECTS = false;
+const LOAD_SUB_OBJECTS = true;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
@@ -63,48 +63,23 @@ class ULevel extends UObject {
         this.baseModelId = pkg.read(compat32).value as number;
         this.readHead = pkg.tell();
 
-        // debugger;
+        if (LOAD_SUB_OBJECTS) {
+            this.baseModel = pkg.fetchObject<UModel>(this.baseModelId);
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            if (!LOAD_SUB_OBJECTS) {
-                resolve();
-                return;
+            for (let objectId of ambientSoundIds) {
+                const object = pkg.fetchObject(objectId);
+
+                if (object)
+                    this.objectList.push(object);
             }
-            this.baseModel = await pkg.fetchObject<UModel>(this.baseModelId);
-            resolve();
-        }));
 
-        for (let objectId of ambientSoundIds) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) {
-                    resolve();
-                    return;
-                }
-                const object = await pkg.fetchObject(objectId);
+            for (let objectId of objectIds) {
+                const object = pkg.fetchObject(objectId);
 
-                if (object) this.objectList.push(object);
-
-                resolve();
-            }));
+                if (object)
+                    this.objectList.push(object);
+            }
         }
-
-        for (let objectId of objectIds) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                if (!LOAD_SUB_OBJECTS) {
-                    resolve();
-                    return;
-                }
-
-                // debugger;
-                const object = await pkg.fetchObject(objectId);
-
-                if (object) this.objectList.push(object);
-
-                resolve();
-            }));
-        }
-
-        // debugger;
 
         pkg.seek(this.readHead, "set");
 
@@ -124,18 +99,21 @@ class ULevel extends UObject {
         return this;
     }
 
-    public async getDecodeInfo(library: IDecodeLibrary): Promise<IBaseObjectDecodeInfo> {
-        await this.onLoaded();
-
+    public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
         const groupedObjectList = this.objectList.reduce((accum, obj) => {
 
-            accum[obj.constructor.name] = accum[obj.constructor.name] || [];
-            accum[obj.constructor.name].push(obj);
+            const constrName = (obj.constructor as any).isDynamicClass ? (obj.constructor as any).getConstructorName() : obj.constructor.name;
+
+            accum[constrName] = accum[constrName] || [];
+            accum[constrName].push(obj);
 
             return accum;
-        }, {} as GenericObjectContainer_T<UObject[]>);
+        }, {} as Record<string, UObject[]>);
 
-        debugger;
+        for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
+            emitter.loadSelf().getDecodeInfo(library);
+
+        // debugger;
 
         // return {
         //     type: "Level",

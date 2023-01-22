@@ -2,7 +2,6 @@ class UEncodedFile {
     public readonly path: string;
 
     protected buffer: ArrayBuffer = null;
-    protected isEncrypted = false;
     protected cryptKey: BufferValue<"uint8">;
     protected offset = 0;
     protected contentOffset = 0;

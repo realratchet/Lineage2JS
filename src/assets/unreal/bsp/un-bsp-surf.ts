@@ -47,15 +47,8 @@ class FBSPSurf extends FConstructable {
 
         const offset = pkg.tell();
 
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.material = await pkg.fetchObject<UShader>(materialId);
-            resolve();
-        }));
-
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.actor = await pkg.fetchObject<UBrush>(ownerId);
-            resolve();
-        }));
+        this.material = pkg.fetchObject<UShader>(materialId);
+        this.actor = pkg.fetchObject<UBrush>(ownerId);
 
         pkg.seek(offset, "set");
 

@@ -6,10 +6,10 @@ import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
-    sprites: GenericObjectContainer_T<SpriteParam_T>,
+    sprites: Record<string, SpriteParam_T>,
     parameters: IDecodedParameter,
-    uniforms: GenericObjectContainer_T<Uniform>,
-    defines: GenericObjectContainer_T<any>
+    uniforms: Record<string, Uniform>,
+    defines: Record<string, any>
 }
 
 type SpriteParam_T = {
@@ -53,7 +53,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 }
 
 class MeshStaticMaterial extends ShaderMaterial {
-    protected sprites: GenericObjectContainer_T<SpriteParam_T>;
+    protected sprites: Record<string, SpriteParam_T>;
 
     public readonly isStaticMeshMaterial = true;
     public readonly isUpdatable = true;
@@ -75,8 +75,8 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         const sprites = {};
 
-        const defines: GenericObjectContainer_T<any> = { USE_FOG: "" };
-        const uniforms: GenericObjectContainer_T<Uniform> = appendGlobalUniforms(UniformsUtils.merge([
+        const defines: Record<string, any> = { USE_FOG: "" };
+        const uniforms: Record<string, Uniform> = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.lights,
             {
                 alphaTest: new Uniform(1e-3),

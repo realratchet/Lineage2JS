@@ -1,4 +1,9 @@
 import BufferValue from "../buffer-value";
+import * as forge from "node-forge";
+import * as decoders from "./decryption/decoders";
+import * as _gmp from "gmp-wasm";
+
+let gmp: _gmp.GMPLib = null;
 
 class UEncodedFile {
     public readonly path: string;
@@ -7,8 +12,6 @@ class UEncodedFile {
     protected handle: this = null;
     protected promiseDecoding: Promise<BufferValue>;
     protected buffer: ArrayBuffer = null;
-    protected isEncrypted = false;
-    protected cryptKey = new BufferValue(BufferValue.uint8);
     protected offset = 0;
     protected contentOffset = 0;
 
@@ -51,10 +54,9 @@ class UEncodedFile {
     public read<T extends ValueTypeNames_T>(target: BufferValue<T> | number) {
         this.ensureReadable();
 
-        const cryptKey = this.cryptKey.value as number;
         const _target = typeof (target) === "number" ? BufferValue.allocBytes(target) : target as BufferValue<T>;
 
-        this.offset += _target.readValue(this.buffer, this.offset, this.isEncrypted, cryptKey);
+        this.offset += _target.readValue(this.buffer, this.offset);
 
         return _target;
     }
@@ -149,29 +151,44 @@ class UEncodedFile {
 
             const signature = this.read(new BufferValue(BufferValue.uint32));
             const HEADER_SIZE = 28;
+            const HEADER_VER_OFFSET = 22;
 
             if (signature.value == 0x0069004C) {
+                this.seek(HEADER_VER_OFFSET, "set");
+
+                const version = new TextDecoder("utf-16").decode(this.read(BufferValue.allocBytes(6)).value as DataView);
+
                 this.seek(HEADER_SIZE, "set");
-                this.read(this.cryptKey);
 
-                this.cryptKey.value = 0xC1 ^ (this.cryptKey.value as number);
+                let tStart;
 
-                this.isEncrypted = true;
-                this.contentOffset = HEADER_SIZE;
-                this.seek(0, "set");
-                this.read(signature);
+                if (version.startsWith("1")) {
 
-                const tStart = performance.now();
+                    const cryptKey = 0xC1 ^ this.read(new BufferValue(BufferValue.uint8)).value as number;
 
-                const buffer = new Uint8Array(this.buffer, HEADER_SIZE);
-                for (let i = 0, len = buffer.length; i < len; i++) {
-                    Atomics.xor(buffer, i, this.cryptKey.value as number);
+                    this.contentOffset = HEADER_SIZE;
+                    this.seek(0, "set");
+
+                    tStart = performance.now();
+
+                    this.buffer = decoders.decryptModulo(new Uint8Array(this.buffer, HEADER_SIZE), cryptKey);
+
+                    this.read(signature);
+                } else if (version.startsWith("4")) {
+
+                    if (gmp === null) {
+                        gmp = await _gmp.init();
+                    }
+
+                    this.buffer = decoders.rsa.decryptEncdec(gmp, new Uint8Array(this.buffer, HEADER_SIZE));
+                    this.contentOffset = 0;
+                    this.seek(0, "set");
+
+                } else {
+                    throw new Error(`Unsupported file version: ${version}`)
                 }
 
                 console.log(`'${this.path}' loaded in ${performance.now() - tStart} ms`);
-                this.isEncrypted = false;
-
-                // debugger;
             }
 
             resolve(signature);

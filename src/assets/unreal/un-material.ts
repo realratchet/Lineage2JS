@@ -5,11 +5,61 @@ import { FPrimitiveArray } from "./un-array";
 
 abstract class UBaseMaterial extends UObject {
     public readonly skipRemaining = true;
-    public abstract getDecodeInfo(library: DecodeLibrary): Promise<string>;
+    public abstract getDecodeInfo(library: DecodeLibrary): string;
+
+    protected _fallbackMaterial: any;
+    protected _useFallback: any;
+    protected _validated: any;
+    protected _reserved: any;
+    protected _lastUpdateTime: any;
+    protected _renderInterface: any;
+    protected _detail: any;
+
+    protected detailScale: number;
+    protected defaultMaterial: typeof this;
+
+    protected depthWrite: boolean = true;
+    protected depthTest: boolean = true;
+    protected isTreatingDoubleSided: boolean = false;
+
+    protected material: UBaseMaterial;
+
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "FallbackMaterial": "_fallbackMaterial",
+            "UseFallback": "_useFallback",
+            "Validated": "_validated",
+            "Reserved": "_reserved",
+            "__LastUpdateTime": "_lastUpdateTime",
+            "RenderInterface": "_renderInterface",
+            "DefaultMaterial": "defaultMaterial",
+            "DetailScale": "detailScale",
+            "Detail": "_detail",
+
+            "ZWrite": "depthWrite",
+            "ZTest": "depthTest",
+            "TreatAsTwoSided": "isTreatingDoubleSided",
+
+            "Material": "material"
+        });
+    }
 }
 
-abstract class UBaseModifier extends UBaseMaterial { }
-abstract class UMaterial extends UBaseMaterial { }
+abstract class UBaseModifier extends UBaseMaterial { 
+    protected texCoordSource: number;
+    protected texCoordCount: number;
+    protected texCoordProjected: number;
+    
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "TexCoordSource": "texCoordSource",
+            "TexCoordCount": "texCoordCount",
+            "TexCoordProjected": "texCoordProjected",
+        });
+    }
+}
+abstract class UMaterial extends UBaseMaterial {
+}
 
 enum OutputBlending_T {
     OB_Normal,
@@ -62,44 +112,41 @@ enum TexRotationType_T {
  */
 
 class UTexEnvMap extends UBaseModifier {
-    protected texCoordSource: number;
-    protected material: UCubemap;
     protected type: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "TexCoordSource": "texCoordSource",
-            "Material": "material",
             "EnvMapType": "type"
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         return null;
     }
 }
 
 class UFinalBlend extends UBaseModifier {
-    protected material: UMaterial;
     protected frameBufferBlending: number;
     protected doubleSide: boolean;
+    protected alphaTest: boolean;
+    protected alphaRef: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "Material": "material",
             "FrameBufferBlending": "frameBufferBlending",
-            "TwoSided": "doubleSide"
+            "TwoSided": "doubleSide",
+            "AlphaTest": "alphaTest",
+            "AlphaRef": "alphaRef",
         });
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
 
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -112,14 +159,16 @@ class UShader extends UMaterial {
     protected specular: UMaterial = null;
     protected specularMask: UMaterial = null;
     protected outputBlending: OutputBlending_T = OutputBlending_T.OB_Normal;
-    protected isTreatingDoubleSided: boolean = false;
-    protected depthWrite: boolean = true;
+
     protected transparent: boolean = false;
     protected alphaTest: number = 0;
     protected isPerformingLightingOnSpecularPass: boolean = false;
     protected selfIllumination: UMaterial = null;
     protected selfIlluminationMask: UMaterial = null;
     protected unkBytes: BufferValue<"buffer">;
+
+    protected _wireframe: any;
+    protected _modulateStaticLighting2X: any;
 
     protected postLoad(pkg: UPackage): void {
         this.readHead = pkg.tell();
@@ -137,27 +186,30 @@ class UShader extends UMaterial {
             "Specular": "specular",
             "SpecularityMask": "specularMask",
             "OutputBlending": "outputBlending",
-            "TreatAsTwoSided": "isTreatingDoubleSided",
-            "ZWrite": "depthWrite",
+
+
             "AlphaTest": "transparent",
             "SelfIllumination": "selfIllumination",
             "SelfIlluminationMask": "selfIlluminationMask",
             "AlphaRef": "alphaTest",
-            "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass"
+            "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
+
+            "Wireframe": "_wireframe",
+            "ModulateStaticLighting2X": "_modulateStaticLighting2X"
         });
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
+        // await this.onDecodeReady();
 
-        const diffuse = await this.diffuse?.getDecodeInfo(library) || null;
-        const opacity = await this.opacity?.getDecodeInfo(library) || null;
-        const specular = await this.specular?.getDecodeInfo(library) || null;
-        const specularMask = await this.specularMask?.getDecodeInfo(library) || null;
+        const diffuse = this.diffuse?.loadSelf().getDecodeInfo(library) || null;
+        const opacity = this.opacity?.loadSelf().getDecodeInfo(library) || null;
+        const specular = this.specular?.loadSelf().getDecodeInfo(library) || null;
+        const specularMask = this.specularMask?.loadSelf().getDecodeInfo(library) || null;
         const depthWrite = this.depthWrite;
         const doubleSide = this.doubleSide
         const transparent = this.transparent;
@@ -201,12 +253,10 @@ class UFadeColor extends UBaseModifier {
     public color2: FColor = new FColor();
     public period: number = 0;
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
-
-        await this.onLoaded();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
@@ -233,7 +283,6 @@ class UFadeColor extends UBaseModifier {
 class UColorModifier extends UBaseMaterial {
     protected color: FColor;
     protected doubleSide: boolean;
-    protected material: UShader;
     protected alphaBlend: boolean;
 
     // public async decodeMaterial(): Promise<THREE.Material> {
@@ -247,16 +296,14 @@ class UColorModifier extends UBaseMaterial {
     //     return material;
     // }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
         debugger;
 
-        await this.onLoaded();
-
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -265,7 +312,6 @@ class UColorModifier extends UBaseMaterial {
         return Object.assign({}, super.getPropertyMap(), {
             "Color": "color",
             "RenderTwoSided": "doubleSide",
-            "Material": "material",
             "AlphaBlend": "alphaBlend"
         });
     }
@@ -277,7 +323,6 @@ class UTexRotator extends UBaseModifier {
     protected rotation: FRotator;
     protected offsetU: number;
     protected offsetV: number;
-    protected material: UMaterial;
 
     // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
@@ -302,14 +347,12 @@ class UTexRotator extends UBaseModifier {
     //     };
     // }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
-
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -320,8 +363,7 @@ class UTexRotator extends UBaseModifier {
             "TexRotationType": "type",
             "Rotation": "rotation",
             "UOffset": "offsetU",
-            "VOffset": "offsetV",
-            "Material": "material"
+            "VOffset": "offsetV"
         });
     }
 }
@@ -336,7 +378,6 @@ class UTexOscillator extends UBaseModifier {
     protected phaseV: number;
     protected amplitudeU: number;
     protected amplitudeV: number;
-    protected material: UMaterial;
     protected typeU: number;
     protected typeV: number;
     protected offsetU: number;
@@ -344,14 +385,15 @@ class UTexOscillator extends UBaseModifier {
     protected currentUJitter: number;
     protected currentVJitter: number;
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    protected _lastSu: any;
+    protected _lastSV: any;
+
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
-
-        await this.material.getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
         return this.material.uuid;
     }
@@ -365,11 +407,12 @@ class UTexOscillator extends UBaseModifier {
             "VOscillationPhase": "phaseV",
             "UOscillationAmplitude": "amplitudeU",
             "VOscillationAmplitude": "amplitudeV",
-            "Material": "material",
             "UOscillationType": "typeU",
             "VOscillationType": "typeV",
             "UOffset": "offsetU",
             "VOffset": "offsetV",
+            "LastSu": "_lastSu",
+            "LastSv": "_lastSV",
             "CurrentUJitter": "currentUJitter",
             "CurrentVJitter": "currentVJitter"
         });
@@ -380,23 +423,20 @@ class UTexPanner extends UBaseModifier {
     protected rate: number;
     protected z: number;
     protected matrix: UMatrix;
-    protected material: UTexture;
     protected internalTime = new FPrimitiveArray(BufferValue.int32);
     protected direction: FRotator;
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
-
-        await this.onLoaded();
 
         library.materials[this.uuid] = {
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {
                 matrix: this.matrix.getElements3x3(),
-                map: await this.material?.getDecodeInfo(library) || null,
+                map: this.material?.loadSelf().getDecodeInfo(library) || null,
                 rate: this.rate
             }
         } as ITexPannerDecodeInfo;
@@ -410,7 +450,6 @@ class UTexPanner extends UBaseModifier {
             "M": "matrix",
             "InternalTime": "internalTime",
             "Z": "z",
-            "Material": "material",
             "PanDirection": "direction"
         });
     }
@@ -420,39 +459,23 @@ class FStaticMeshMaterial extends UBaseMaterial {
     protected noDynamicShadowCast: boolean;
     protected collisionForShadow: boolean;
     protected enableCollision: boolean;
-    protected material: UMaterial;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "bNoDynamicShadowCast": "noDynamicShadowCast",
             "EnableCollisionforShadow": "collisionForShadow",
             "EnableCollision": "enableCollision",
-            "Material": "material"
         });
     }
 
-    protected preLoad(pkg: UPackage) {
-        this.readHead = pkg.tell();
-        this.readTail = this.readHead + Infinity;
-    }
-
-    protected doLoad(pkg: UPackage): void {
-        super.doLoad(pkg, null);
-        this.readTail = pkg.tell();
-    }
-
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
 
         if (this.uuid in library.materials) return this.material?.uuid || null;
 
         library.materials[this.uuid] = null;
 
-        await this.onLoaded();
-
         if (this.material)
-            await this.material.getDecodeInfo(library);
-
-        // debugger;
+            this.material.loadSelf().getDecodeInfo(library);
 
         return this.material?.uuid || null;
     }

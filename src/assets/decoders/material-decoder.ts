@@ -1,7 +1,9 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, DoubleSide, FrontSide, Matrix3, Vector3 } from "three";
+import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector3 } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
+import DecodeLibrary from "../unreal/decode-library";
+import ParticleMaterial from "@client/materials/particle-material";
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
 
@@ -204,6 +206,42 @@ function decodeInstancedMaterial(library: DecodeLibrary, info: IMaterialInstance
     return materials;
 }
 
+function decodeSolidColor(library: DecodeLibrary, info: ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
+    return new MeshBasicMaterial({
+        color: info["solidColor"]
+    });
+}
+
+function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+    const baseMaterial = library.materials[info.material];
+    const { blendingMode, opacity } = info;
+
+    function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): any {
+        return {
+            map: decodeParameter(library, info),
+            blendingMode,
+            opacity
+        };
+    }
+
+    function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+        switch (info.materialType) {
+            case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
+            default: throw new Error(`Unknown decodable type: ${info.materialType}`);
+        }
+    }
+
+    function decodeGroup(library: DecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
+        return info.materials.map(info => decodeMaterial(library, library.materials[info]) as MeshStaticMaterial);
+    }
+
+    switch (baseMaterial.materialType) {
+        case "group": return decodeGroup(library, baseMaterial as IMaterialGroupDecodeInfo);
+        case "texture": return decodeMaterial(library, baseMaterial as ITextureDecodeInfo);
+        default: throw new Error(`Unknown decodable type: ${baseMaterial.materialType}`);
+    }
+}
+
 function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return null;
     switch (info.materialType) {
@@ -215,9 +253,12 @@ function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): 
         case "lightmapped": return decodeLightmapped(library, info as ILightmappedDecodeInfo);
         case "instance": return decodeInstancedMaterial(library, info as IMaterialInstancedDecodeInfo);
         case "terrainSegment": return decodeTerrainSegment(library, info as IMaterialTerrainSegmentDecodeInfo);
+        case "solid": return decodeSolidColor(library, info as ISolidMaterialDecodeInfo);
+        case "particle": return decodeParticleMaterial(library, info as IParticleMaterialDecodeInfo);
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
 }
 
 export default decodeMaterial;
 export { decodeMaterial };
+

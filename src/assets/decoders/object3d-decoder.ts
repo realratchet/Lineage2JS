@@ -1,6 +1,11 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
 import decodeMaterial from "./material-decoder";
-import ZoneObject, { SectorObject } from "../../zone-object";
+import ZoneObject, { SectorObject } from "../../objects/zone-object";
+import decodeTexture from "./texture-decoder";
+import Terrain from "@client/objects/terrain";
+import CollidingMesh from "@client/objects/colliding-mesh";
+import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
+import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -29,6 +34,8 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     if (info.attributes.positions) geometry.setAttribute("position", new BufferAttribute(info.attributes.positions, 3));
     if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3));
     if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3));
+    if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
+    if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
 
     if (info.indices) {
         const AttributeConstructor = getAttributeForTypedArray(info.indices.constructor as IndexTypedArray);
@@ -92,13 +99,12 @@ function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THRE
     return mesh;
 }
 
-function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Mesh {
-    const obj = new Object3D();
+function decodeStaticMeshData(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff })
-    const mesh = new Mesh(fetchGeometry(infoGeo as IGeometryDecodeInfo), materials);
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
 
     if (infoGeo.attributes.colors) {
         (materials instanceof Array ? materials : [materials]).forEach(mat => {
@@ -107,6 +113,14 @@ function decodeStaticMesh(library: DecodeLibrary, info: IStaticMeshObjectDecodeI
             mat.vertexColors = true;
         });
     }
+
+    return { geometry, materials };
+}
+
+function decodeStaticMeshWrapped(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Object3D {
+    const obj = new Object3D();
+    const { geometry, materials } = decodeStaticMeshData(library, info);
+    const mesh = new Mesh(geometry, materials);
 
     applySimpleProperties(library, mesh, info);
 
@@ -128,6 +142,47 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh
     return msh;
 }
 
+function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDecodeInfo): CollidingMesh {
+    const instanceInfo = info.instance;
+    const { geometry, materials, collider } = decodeStaticMeshInstance(library, instanceInfo);
+
+    const object = new CollidingMesh(geometry, materials, collider);
+
+    // if (info.name === "Exp_StaticMeshActor140")
+    //     debugger;
+
+    // debugger;
+
+    object.userData.meshInstance = {
+        uuid: instanceInfo.uuid,
+        name: instanceInfo.name
+    };
+
+    object.userData.mesh = {
+        uuid: instanceInfo.mesh.uuid,
+        name: instanceInfo.mesh.name
+    };
+
+    // if (collider) {
+    //     const mat = new MeshBasicMaterial({ opacity: 0.5, wireframe: false, color: 0xff00ff, transparent: true, depthWrite: false, depthTest: true });
+    //     const geo = new BufferGeometry();
+    //     const indices = new Uint32BufferAttribute(collider, 1);
+
+    //     geo.setIndex(indices)
+    //     geo.setAttribute("position", geometry.getAttribute("position"));
+
+    //     const wire = new Mesh(geo, mat);
+
+    //     object.add(wire);
+    // }
+
+    applySimpleProperties(library, object, info);
+
+    // object.add(new Mesh(geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
+
+    return object;
+}
+
 function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInstanceDecodeInfo) {
 
     const geometryUuid = info.mesh.geometry;
@@ -144,10 +199,7 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
 
     const infoMats = library.materials[meshInfo.materials];
 
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
-    const mesh = new Mesh(geometry, materials);
-
-    applySimpleProperties(library, mesh, meshInfo);
+    const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
 
     (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setInstanced?.());
 
@@ -159,66 +211,109 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
         });
     }
 
-    return mesh;
+    const collider = infoGeo.colliderIndices || null;
+
+    return { geometry, materials, collider };
 }
 
 function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
-    const Constructor = info.type === "Sector" ? SectorObject : ZoneObject;
-    const object = new Constructor();
+    const object = new ZoneObject();
 
     if (info.name) object.name = info.name;
     if (info.bounds?.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
+    // object.visible = false;
+
     return object;
 }
 
 function decodeSector(library: DecodeLibrary) {
-    const sectorUuid = library.sector;
-    const sectorInfo = library.zones[sectorUuid];
-    const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
-    const sector = decodeZoneObject(library, sectorInfo);
+    const sector = new SectorObject();
 
-    let boundsNeedUpdate = false;
+    sector.name = library.name;
 
-    zonesUuids.forEach(uuid => {
-        const zoneInfo = library.zones[uuid];
+    if (library.sector) sector.index = new Vector2().fromArray(library.sector);
 
-        sector.add(decodeZoneObject(library, zoneInfo));
+    library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
 
-        if (zoneInfo.bounds?.isValid) {
-            const { min, max } = zoneInfo.bounds;
+    sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
 
-            boundsNeedUpdate = true;
-            [[Math.min, sectorInfo.bounds.min], [Math.max, sectorInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
-                    for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], min[i], max[i]);
-                }
-            );
-        }
-    });
+    const spriteUuid = library.sun.sprites[0];
+    const spriteInfo = library.materials[spriteUuid] as ITextureDecodeInfo;
 
-    if (boundsNeedUpdate) {
-        sectorInfo.bounds.isValid = true;
-        sector.setRenderBounds(sectorInfo.bounds.min, sectorInfo.bounds.max);
-    }
+    sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
+
+    // library.bspColliders.forEach(collider => {
+    //     const box = new Box3();
+
+    //     if (collider.isValid) {
+    //         box.min.fromArray(collider.min)
+    //         box.max.fromArray(collider.max)
+    //     }
+
+    //     const helper = new Box3Helper(box);
+
+    //     sector.helpers.add(helper);
+    // });
+
+    // sector.bspNodes.forEach(node => {
+    //     if (node.zones[0] === 1 || node.zones[1] === 1) {
+    //         const normal = new Vector3(node.plane.x, node.plane.y, node.plane.z);
+    //         const constant = node.plane.w;
+    //         const plane = new Plane(normal, constant);
+
+    //         sector.add(new PlaneHelper(plane, 10000, Math.floor(0xffffff * Math.random())));
+    //     }
+    // });
+
+    // debugger;
+
+    // const sectorUuid = library.sector;
+    // const sectorInfo = library.bspZones[sectorUuid];
+    // const zonesUuids = Object.keys(library.zones).filter(uuid => sectorUuid !== uuid);
+    // const sector = decodeZoneObject(library, sectorInfo);
+
+    // let boundsNeedUpdate = false;
+
+    // zonesUuids.forEach(uuid => {
+    //     const zoneInfo = library.zones[uuid];
+
+    //     sector.add(decodeZoneObject(library, zoneInfo));
+
+    //     if (zoneInfo.bounds?.isValid) {
+    //         const { min, max } = zoneInfo.bounds;
+
+    //         boundsNeedUpdate = true;
+    //         [[Math.min, sectorInfo.bounds.min], [Math.max, sectorInfo.bounds.max]].forEach(
+    //             ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+    //                 for (let i = 0; i < 3; i++)
+    //                     arr[i] = fn(arr[i], min[i], max[i]);
+    //             }
+    //         );
+    //     }
+    // });
+
+    // if (boundsNeedUpdate) {
+    //     sectorInfo.bounds.isValid = true;
+    //     sector.setRenderBounds(sectorInfo.bounds.min, sectorInfo.bounds.max);
+    // }
+
+    // (sector as SectorObject).setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
 
     return sector;
 }
 
 function decodePackage(library: DecodeLibrary) {
-    const map = new Object3D();
-
-    map.name = library.name;
-    map.add(decodeSector(library));
+    const sector = decodeSector(library);
 
     if (library.helpersZoneBounds) {
         const boundsGroup = new Object3D();
-        map.add(boundsGroup);
-        map.name = "Bounds Helpers";
-        Object.values(library.zones).forEach(zone => {
+        sector.helpers.add(boundsGroup);
+        sector.helpers.name = "Bounds Helpers";
+        Object.values(library.bspZones).forEach(bspZone => {
+            const zone = bspZone.zoneInfo;
             const { min, max } = zone.bounds;
             const box = new Box3();
             const color = new Color(Math.floor(Math.random() * 0xffffff));
@@ -233,21 +328,207 @@ function decodePackage(library: DecodeLibrary) {
         });
     }
 
-    return map;
+    return sector;
+}
+
+function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
+    const infoGeo = library.geometries[info.geometry];
+    const { geometry, materials } = decodeStaticMeshData(library, info);
+
+    const positions = infoGeo.attributes.positions;
+    const heightfield = new Float32Array(17 * 17);
+    const { min, max } = infoGeo.bounds.box;
+
+    const bounds = new Box3();
+
+    bounds.min.fromArray(min);
+    bounds.max.fromArray(max);
+
+    for (let x = 0; x < 17; x++) {
+        for (let y = 0; y < 17; y++) {
+            const value = positions[(y * 17 + x) * 3 + 1];
+
+            heightfield[x * 17 + y] = value;
+        }
+    }
+
+    const terrain = new Terrain(geometry, materials, { segments: [16, 16], heightfield, bounds });
+
+    applySimpleProperties(library, terrain, info);
+
+    return terrain;
+}
+
+function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
+    const bone = new Bone();
+
+    bone.name = info.name;
+
+    if (info.position) bone.position.fromArray(info.position);
+    if (info.scale) bone.scale.fromArray(info.scale);
+    if (info.quaternion) bone.quaternion.fromArray(info.quaternion);
+
+    // if (info.name.includes("R")) {
+    //     const geo = new SphereBufferGeometry(5);
+    //     const mat = new MeshBasicMaterial({ color: 0xff0000, transparent: true, depthWrite: false, depthTest: false });
+
+    //     const m = new Mesh(geo, mat);
+
+    //     bone.add(m);
+    // } /*else if (info.name.includes("L")) {
+    //     const geo = new SphereBufferGeometry(5);
+    //     const mat = new MeshBasicMaterial({ color: 0x0000ff, transparent: true, depthWrite: false, depthTest: false });
+
+    //     const m = new Mesh(geo, mat);
+
+    //     bone.add(m);
+    // } */ else {
+    //     const geo = new SphereBufferGeometry(5);
+    //     const mat = new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthWrite: false, depthTest: false });
+
+    //     const m = new Mesh(geo, mat);
+
+    //     bone.add(m);
+    // }
+
+    return bone;
+}
+
+function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
+    const boneCount = infos.length;
+    const bones = new Array(boneCount) as Bone[];
+
+    for (let i = 0; i < boneCount; i++) {
+        const info = infos[i];
+        const bone = bones[i] = decodeBone(library, info);
+
+        if (i === 0) continue;
+
+        bones[info.parent].add(bone);
+    }
+
+    return bones;
+}
+
+function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[]) {
+    const tracks = info.map(info => {
+        let KeyframeTrackConstructor: typeof KeyframeTrack;
+
+        switch (info.type) {
+            case "Quaternion": KeyframeTrackConstructor = QuaternionKeyframeTrack; break;
+            case "Vector": KeyframeTrackConstructor = VectorKeyframeTrack; break;
+        }
+
+        return new KeyframeTrackConstructor(info.name, info.times, info.values)
+    });
+
+    const clip = new AnimationClip(name, -1, tracks);
+
+    return clip;
+}
+
+function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo) {
+    const geometry = fetchGeometry(library.geometries[info.geometry]);
+    const infoMats = library.materials[info.materials];
+
+    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+
+    const bones = decodeBones(library, info.skeleton);
+    const skeleton = new Skeleton(bones);
+
+    const mesh = new SkinnedMesh(geometry, materials);
+
+    mesh.add(bones[0]);
+    mesh.bind(skeleton);
+
+    const animations = Object.keys(info.animations).reduce((acc, k) => {
+        acc[k] = decodeAnimation(library, k, info.animations[k]);
+
+        return acc;
+    }, {} as Record<string, AnimationClip>);
+
+    mesh.userData.animations = animations;
+
+
+    return mesh;
+}
+
+function decodeEmitterConfig(info: IEmitterDecodeInfo) {
+    return {
+        acceleration: info.acceleration,
+        lifetime: info.lifetime,
+        maxParticles: info.maxParticles,
+        initial: {
+            particlesPerSecond: info.initial.particlesPerSecond,
+            scale: info.initial.scale,
+            velocity: info.initial.velocity,
+            position: info.initial.location,
+            angularVelocity: info.initial.angularVelocity,
+        },
+        particlesPerSecond: info.particlesPerSecond,
+        blendingMode: info.blendingMode,
+        opacity: info.opacity,
+        changesOverLifetime: {
+            scale: info.changesOverLifetime.scale
+        },
+        fadeIn: info.fadeIn,
+        fadeOut: info.fadeOut,
+        colorMultiplierRange: info.colorMultiplierRange
+    };
+}
+
+function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo) {
+    const infoGeo = library.geometries[info.mesh.geometry] as IGeometryDecodeInfo;
+
+    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
+    const materials = decodeMaterial(library, {
+        materialType: "particle",
+        material: info.mesh.materials,
+        opacity: info.opacity,
+        blendingMode: info.blendingMode
+    } as IParticleMaterialDecodeInfo) || new MeshBasicMaterial({ color: 0xff00ff });
+
+    const emitter = new MeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
+}
+
+function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
+    const material = decodeMaterial(library, {
+        materialType: "particle",
+        material: info.texture,
+        opacity: info.opacity,
+        blendingMode: info.blendingMode
+    } as IParticleMaterialDecodeInfo) as any as ParticleMaterialInitSettings_T;
+
+    if (!isFinite(info.maxParticles))
+        debugger;
+
+    // debugger;
+
+    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { material }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
 }
 
 function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":
-        case "TerrainInfo":
-        case "StaticMeshActor": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
-        case "StaticMeshInstance": return decodeStaticMeshInstance(library, info as IStaticMeshInstanceDecodeInfo);
+        case "TerrainInfo": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
+        case "StaticMeshActor": return decodeStaticMeshActor(library, info as IStaticMeshActorDecodeInfo);
         case "Light": return decodeLight(library, info as ILightDecodeInfo);
+        case "TerrainSegment": return decodeTerrainSegment(library, info as IStaticMeshObjectDecodeInfo);
         case "Model":
-        case "TerrainSegment":
-        case "StaticMesh": return decodeStaticMesh(library, info as IStaticMeshObjectDecodeInfo);
+        case "StaticMesh": return decodeStaticMeshWrapped(library, info as IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
+        case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
+        case "SpriteEmitter": return decodeSpriteEmitter(library, info as ISpriteEmitterDecodeInfo);
+        case "MeshEmitter": return decodeMeshEmitter(library, info as IMeshEmitterDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

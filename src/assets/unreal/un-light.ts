@@ -2,7 +2,7 @@ import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import BufferValue from "../buffer-value";
 import UAActor from "./un-aactor";
-import FArray from "./un-array";
+import FArray, { FObjectArray } from "./un-array";
 import FNumber from "./un-number";
 import FVector from "./un-vector";
 
@@ -12,7 +12,7 @@ class ULight extends UAActor {
     public radius: number;
     public hue: number = 0;
     public saturation: number = 127;
-    public isDirectional: boolean = false;
+  
     public type: LightType_T = 1;
     public hasCorona: boolean = false;
     public period: number = 0;
@@ -21,23 +21,20 @@ class ULight extends UAActor {
     public isDynamic: boolean = false;
     public lightOnTime: number;
     public lightOffTime: number;
-    public skins: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    
 
-    public style: number;
 
-    protected isIgnoredRange: boolean;
-    protected isCastingShadow: boolean;
-    protected isStaticLighting: boolean;
 
-    protected forcedRegionTag: string;
     protected maxCoronaSize: number;
 
-    protected getSignedMap() {
-        return Object.assign({}, super.getSignedMap(), {
-            "LightHue": false,
-            "LightSaturation": false
-        });
-    }
+    protected _bSunlightColor: any;
+    protected _bTimeLight: any;
+    protected _lightPrevTime: any;
+    protected _lightLifeTime: any;
+    protected _minCoronaSize: any;
+    protected _coronaRotation: any;
+    protected _coronaRotationOffset: any;
+    protected _useOwnFinalBlend: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -46,24 +43,31 @@ class ULight extends UAActor {
             "LightBrightness": "lightness",
             "LightHue": "hue",
             "LightSaturation": "saturation",
-            "bDirectional": "isDirectional",
+       
             "LightType": "type",
             "bCorona": "hasCorona",
-            "Skins": "skins",
+            
             "LightPeriod": "period",
             "LightPhase": "phase",
             "LightCone": "cone",
             "bDynamicLight": "isDynamic",
-            "bIgnoredRange": "isIgnoredRange",
+          
             "LightOnTime": "lightOnTime",
             "LightOffTime": "lightOffTime",
 
-            "Style": "style",
-            "bShadowCast": "isCastingShadow",
-            "bStaticLighting": "isStaticLighting",
-            "ForcedRegionTag": "forcedRegionTag",
+           
 
-            "MaxCoronaSize": "maxCoronaSize"
+
+            "MaxCoronaSize": "maxCoronaSize",
+
+            "bSunlightColor": "_bSunlightColor",
+            "bTimeLight": "_bTimeLight",
+            "LightPrevTime": "_lightPrevTime",
+            "LightLifeTime": "_lightLifeTime",
+            "MinCoronaSize": "_minCoronaSize",
+            "CoronaRotation": "_coronaRotation",
+            "CoronaRotationOffset": "_coronaRotationOffset",
+            "UseOwnFinalBlend": "_useOwnFinalBlend"
         });
     }
 
@@ -132,13 +136,8 @@ class ULight extends UAActor {
         return [x * brightness, y * brightness, z * brightness];
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<ILightDecodeInfo> {
-        await this.onLoaded();
-
-        // debugger;
-
+    public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
         return {
-            this: this,
             uuid: this.uuid,
             type: "Light",
             color: this.getColor(),

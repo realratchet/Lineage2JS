@@ -2,7 +2,7 @@ import BufferValue from "../buffer-value";
 import FConstructable from "./un-constructable";
 
 type UPackage = import("./un-package").UPackage;
-type PropertyTag = import("./un-property").PropertyTag;
+type PropertyTag = import("./un-property-tag").PropertyTag;
 
 class FNumber<T extends ValueTypeNames_T = ValueTypeNames_T> extends FConstructable {
     protected readonly type: ValidTypes_T<T>;

@@ -1,6 +1,8 @@
 import BufferValue from "../buffer-value";
+import UExport from "./un-export";
+import FNumber from "./un-number";
 
-type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
+
 
 class FArray<T extends FConstructable = FConstructable> extends Array implements IConstructable {
     protected Constructor: { new(...pars: any): T } & ValidConstructables_T<T>;
@@ -14,7 +16,7 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
         this.Constructor = constr;
     }
 
-    public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...this].map(fnMap); }
+    public map<T2>(fnMap: (value: T, index: number, array: T[]) => T2): T2[] { return [...this].map(fnMap); }
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         const hasTag = tag !== null && tag !== undefined;
@@ -29,10 +31,102 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 
         const elementSize = hasTag ? dataSize / this.length : null;
 
-        for (let i = 0, len = this.length; i < len; i++)
-            this[i] = new (this.Constructor as any)(elementSize).load(pkg, tag);
+        for (let i = 0, len = this.length; i < len; i++) {
+            const exp = hasTag ? (function () {
+                const exp = new UExport();
+
+                exp.size = elementSize;
+                exp.objectName = `${tag.name}[${i + 1}/${count}]`
+                exp.offset = pkg.tell();
+
+                return exp;
+            })() : null;
+
+            this[i] = new (this.Constructor as any)(elementSize).load(pkg, exp);
+        }
 
         if (hasTag) console.assert((pkg.tell() - beginIndex - tag.dataSize) === 0);
+
+        return this;
+    }
+
+    public clone(other: FArray<T>): this {
+        if (!other)
+            return this;
+
+        this.Constructor = other.Constructor;
+
+        for (const v of other)
+            this.push(v);
+
+        return this;
+    }
+}
+
+class FObjectArray<T extends UObject = UObject> extends FArray<T> {
+    protected indexArray: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+
+    constructor() { super(null); }
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        this.indexArray.load(pkg, tag);
+
+
+        let i = 0;
+
+        for (const index of this.indexArray)
+            this[i++] = pkg.fetchObject(index.value);
+
+        return this;
+    }
+
+    public loadSelf(): this {
+
+        for (const obj of (this as UObject[]))
+            obj.loadSelf();
+
+        return this;
+    }
+
+    public clone(other: FObjectArray<T>): this {
+        if (!other)
+            return this;
+
+        super.clone(other);
+        this.indexArray = other.indexArray;
+
+        return this;
+    }
+}
+
+class FNameArray extends Array<string> implements IConstructable {
+    protected indexArray: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+
+    public load(pkg: UPackage, tag?: PropertyTag): this {
+        // debugger;
+
+        this.indexArray.load(pkg, tag);
+
+        debugger;
+
+        let i = 0;
+
+        for (const index of this.indexArray)
+            this[i++] = pkg.nameTable[index.value].name;
+
+        return this;
+    }
+
+    public loadSelf(): this { return this; }
+
+    public clone(other: FNameArray): this {
+        if (!other)
+            return this;
+
+        this.indexArray = other.indexArray;
+
+        for (const v of other)
+            this.push(v);
 
         return this;
     }
@@ -41,7 +135,6 @@ class FArray<T extends FConstructable = FConstructable> extends Array implements
 class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
     public unkLazyInt: number;
 
-
     public load(pkg: UPackage, tag?: PropertyTag): this {
         this.unkLazyInt = pkg.read(new BufferValue(BufferValue.int32)).value as number;
 
@@ -49,9 +142,19 @@ class FArrayLazy<T extends FConstructable = FConstructable> extends FArray<T> {
 
         return this;
     }
+
+    public clone(other: FArrayLazy<T>): this {
+        if (!other)
+            return this;
+
+        this.unkLazyInt = other.unkLazyInt;
+
+        return this;
+    }
 }
 
 class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements IConstructable {
+    protected array: DataView;
     protected Constructor: ValidTypes_T<T>;
 
     public getElemCount() { return this.array ? this.array.byteLength / this.Constructor.bytes : 0; }
@@ -78,7 +181,6 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
 
     }
 
-    protected array: DataView;
     public constructor(constr: ValidTypes_T<T>) { this.Constructor = constr; }
 
     public map<T>(fnMap: (value: any, index: number, array: any[]) => T): T[] { return [...(this as any as Array<T>)].map(fnMap); }
@@ -106,7 +208,7 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
         return this;
     }
 
-    getTypedArray() {
+    public getTypedArray() {
         try {
             return new this.Constructor.dtype(this.array.buffer, this.array.byteOffset, this.getElemCount());
         } catch (e) {
@@ -116,7 +218,18 @@ class FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> implements 
             throw e;
         }
     }
-    getByteLength() { return this.array.byteLength; }
+
+    public getByteLength() { return this.array.byteLength; }
+
+    public clone(other: FPrimitiveArray<T>): this {
+        if (!other)
+            return this;
+
+        this.Constructor = other.Constructor;
+        this.array = other.array;
+
+        return this;
+    }
 }
 
 class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends FPrimitiveArray<T> {
@@ -129,9 +242,18 @@ class FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> extends
 
         return this;
     }
+
+    public clone(other: FPrimitiveArrayLazy<T>): this {
+        if (!other)
+            return this;
+
+        this.unkLazyInt = other.unkLazyInt;
+
+        return this;
+    }
 }
 
 
 
 export default FArray;
-export { FArray, FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy };
+export { FArray, FArrayLazy, FNameArray, FObjectArray, FPrimitiveArray, FPrimitiveArrayLazy };

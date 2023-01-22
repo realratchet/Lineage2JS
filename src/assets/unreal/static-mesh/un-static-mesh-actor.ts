@@ -5,13 +5,14 @@ import FVector from "../un-vector";
 import { clamp } from "three/src/math/MathUtils";
 import { FPlane } from "../un-plane";
 import { sampleLightIntensity } from "../un-sample-light";
-import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+import { Euler, Matrix4, Quaternion, Texture, Vector3 } from "three";
 import { selectByTime, staticMeshAmbient } from "../un-time-list";
 import FNumber from "../un-number";
 import timeOfDay from "../un-time-of-day-helper";
 import FConstructable from "../un-constructable";
 import UPackage from "../un-package";
-import { PropertyTag } from "../un-property";
+import { PropertyTag } from "../un-property-tag";
+import UTexture from "../un-texture";
 
 class FAccessory extends FConstructable {
     public unkBytes: Uint8Array;
@@ -25,9 +26,9 @@ class FAccessory extends FConstructable {
 }
 
 class UStaticMeshActor extends UAActor {
-    protected mesh: UStaticMesh;
+    protected mesh: UStaticMesh | UTexture;
     protected instance: UStaticMeshInstance;
-    protected isRangeIgnored: boolean;
+
     protected colLocation: FVector;
     protected touching: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
     protected isUpdatingShadow: boolean;
@@ -35,13 +36,13 @@ class UStaticMeshActor extends UAActor {
     protected stepSound2: USound;
     protected stepSound3: USound;
     protected isCollidingActors: boolean;
-    protected isBlockingActors: boolean;
-    protected isBlockingPlayers: boolean;
+
+
     protected isBlockingZeroExtentTraces: boolean;
     protected isBlockingNonZeroExtentTraces: boolean;
-    protected isBlockingKarma: boolean;
+
     protected forcedRegion: number;
-    protected forcedRegionTag: string;
+
     protected lodViewDuration: number;
     protected currentLod: number;
     protected isUnlit: boolean;
@@ -63,13 +64,18 @@ class UStaticMeshActor extends UAActor {
     protected disableSorting: boolean;
     protected lodBias: number;
 
-    protected style: number;
+    protected _agitStatus: any;
+    protected _currAccessoryType: any;
+    protected _bTimeReactor: any;
+    protected _showTime: any;
+    protected _hideTime: any;
+    protected _bExactProjectileCollision: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMesh": "mesh",
             "StaticMeshInstance": "instance",
-            "bIgnoredRange": "isRangeIgnored",
+
             "ColLocation": "colLocation",
             "Touching": "touching",
             "bUpdateShadow": "isUpdatingShadow",
@@ -77,13 +83,11 @@ class UStaticMeshActor extends UAActor {
             "StepSound_2": "stepSound2",
             "StepSound_3": "stepSound3",
             "bCollideActors": "isCollidingActors",
-            "bBlockActors": "isBlockingActors",
-            "bBlockPlayers": "isBlockingPlayers",
             "bBlockZeroExtentTraces": "isBlockingZeroExtentTraces",
             "bBlockNonZeroExtentTraces": "isBlockingNonZeroExtentTraces",
-            "bBlockKarma": "isBlockingKarma",
+
             "ForcedRegion": "forcedRegion",
-            "ForcedRegionTag": "forcedRegionTag",
+
             "L2LodViewDuration": "lodViewDuration",
             "L2CurrentLod": "currentLod",
             "bUnlit": "isUnlit",
@@ -105,7 +109,12 @@ class UStaticMeshActor extends UAActor {
             "bDisableSorting": "disableSorting",
             "LODBias": "lodBias",
 
-            "Style": "style"
+            "AgitStatus": "_agitStatus",
+            "CurrAccessoryType": "_currAccessoryType",
+            "bTimeReactor": "_bTimeReactor",
+            "ShowTime": "_showTime",
+            "HideTime": "_hideTime",
+            "bExactProjectileCollision": "_bExactProjectileCollision",
         });
     }
 
@@ -221,10 +230,13 @@ class UStaticMeshActor extends UAActor {
         }
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
-        await this.onLoaded();
+    public getDecodeInfo(library: DecodeLibrary): string {
+        // if (this.objectName === "Exp_StaticMeshActor140" || this.objectName === "Exp_StaticMeshActor141")
+        //     debugger;
 
-        if (this.instance) this.instance.setActor(this);
+        this.instance?.loadSelf().setActor(this);
+
+        // debugger;
 
         // if (this.colLocation.sub(this.location).length() > 1e-3)
         //     debugger;
@@ -270,9 +282,14 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        const mesh = await this.mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
-        const attributes = library.geometries[mesh.geometry].attributes;
-        const instance = (this.instance ? await this.instance.getDecodeInfo(library) : {
+        // if (this.objectName === "Exp_StaticMeshActor810")
+        //     debugger;
+
+        const mesh = this.mesh.loadSelf();
+
+        const meshInfo = mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
+        const attributes = library.geometries[meshInfo.geometry].attributes;
+        const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
             color: new Float32Array(attributes.positions.length).fill(0),
             lights: { scene: [], ambient: [] }
         });
@@ -315,7 +332,7 @@ class UStaticMeshActor extends UAActor {
         // debugger;
 
         if (instance.lights.environment) {
-            const lightInfo = instance.lights.environment
+            const lightInfo = instance.lights.environment;
             const lightArray = lightInfo.vertexFlags;
             let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
@@ -335,7 +352,7 @@ class UStaticMeshActor extends UAActor {
                         direction,
                         position: lightPosition.fromArray(lightInfo.position),
                         radius: (lightInfo.radius + 1) * 25
-                    }, position, normal);
+                    }, position as any, normal as any);
 
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity * lightInfo.lightness);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity * lightInfo.lightness);
@@ -351,7 +368,7 @@ class UStaticMeshActor extends UAActor {
 
         // debugger;    
 
-        instance.lights.scene.forEach((lightInfo, index) => {
+        instance.lights.scene.forEach((lightInfo: any, index: any) => {
             const lightArray = lightInfo.vertexFlags;
             const euler = new Euler().fromArray(lightInfo.rotation);
             const direction = new Vector3(1, 0, 0).applyEuler(euler);
@@ -377,7 +394,7 @@ class UStaticMeshActor extends UAActor {
                         position: lightPosition.fromArray(lightInfo.position),
                         direction,
                         radius: (lightInfo.radius + 1) * 25
-                    }, position, normal);
+                    }, position as any, normal as any);
 
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + clamp(r * intensity * 255, 0, 255) / 255);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
@@ -404,39 +421,42 @@ class UStaticMeshActor extends UAActor {
         //     colors[i + 2] = b / 255;
         // }
 
-        const zoneInfo = library.zones[this.getZone().uuid];
-        const _position = this.colLocation.getVectorElements();
-
-        zoneInfo.children.push({
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
+        const _position = this.location.getVectorElements();
+        const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
             position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
             rotation: this.rotation.getEulerElements(),
-            children: [
-                { mesh, type: "StaticMeshInstance", attributes: { colors: instanceColors } } as IStaticMeshInstanceDecodeInfo
-                // mesh,
-                /*, this.getRegionLineHelper(library)*/
-            ],
-            siblings,
-        } as IBaseObjectDecodeInfo);
+            instance: {
+                mesh: meshInfo,
+                type: "StaticMeshInstance",
+                uuid: this.instance ? this.instance.uuid : null,
+                name: this.instance ? this.instance.objectName : null,
+                attributes: { colors: instanceColors }
+            } as IStaticMeshInstanceDecodeInfo
+        } as IStaticMeshActorDecodeInfo;
 
-        library.geometryInstances[mesh.geometry]++;
+        zoneInfo.children.push(actorInfo);
 
-        zoneInfo.bounds.isValid = true;
+        library.geometryInstances[meshInfo.geometry]++;
 
-        const { min, max } = library.geometries[mesh.geometry].bounds.box;
-        const _min = min.map((v, i) => v + _position[i]);
-        const _max = max.map((v, i) => v + _position[i]);
+        if (library.geometries[meshInfo.geometry].bounds?.box) {
+            const { min, max } = library.geometries[meshInfo.geometry].bounds.box;
+            const _min = min.map((v, i) => v + _position[i]);
+            const _max = max.map((v, i) => v + _position[i]);
 
-        zoneInfo.bounds.isValid = true;
-        [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-            ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
-                for (let i = 0; i < 3; i++)
-                    arr[i] = fn(arr[i], _min[i], _max[i]);
-            }
-        );
+            zoneInfo.bounds.isValid = true;
+
+            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                    for (let i = 0; i < 3; i++)
+                        arr[i] = fn(arr[i], _min[i], _max[i]);
+                }
+            );
+        }
 
         // if(this.objectName === "Exp_StaticMeshActor1893") {
         //     debugger;
@@ -452,7 +472,7 @@ class UStaticMeshActor extends UAActor {
 
         this.readHead = pkg.tell();
 
-        // if (this.objectName === "Exp_StaticMeshActor1814")
+        // if (this.objectName === "Exp_StaticMeshActor3008")
         //     debugger;
 
         return this;

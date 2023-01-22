@@ -55,19 +55,21 @@ class UTerrainSector extends UObject {
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     protected unk64Bytes: Int32Array;
 
-    public async getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): Promise<IStaticMeshObjectDecodeInfo> {
+    public getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+        const center = this.boundingBox.getCenter();
+        const { x: ox, y: oz, z: oy } = center;
+
         if (this.uuid in library.geometries) return {
-            type: "TerrainSegment",
+            uuid: this.uuid,
             name: this.objectName,
+            type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
-        } as IStaticMeshObjectDecodeInfo;
+            position: [ox, oy, oz]
+        };
 
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
-
-        await this.onLoaded();
-
 
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
@@ -92,6 +94,7 @@ class UTerrainSector extends UObject {
 
         const v = new FVector();
 
+
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
@@ -102,10 +105,9 @@ class UTerrainSector extends UObject {
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
 
-
-                positions[idxVertOffset + 0] = px;
-                positions[idxVertOffset + 1] = py;
-                positions[idxVertOffset + 2] = pz;
+                positions[idxVertOffset + 0] = px - ox;
+                positions[idxVertOffset + 1] = py - oy;
+                positions[idxVertOffset + 2] = pz - oz;
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
@@ -186,12 +188,14 @@ class UTerrainSector extends UObject {
 
         const uvMultiplier = 2;
         const uvOffset = 17 * 17 * uvMultiplier;
-        const itLayer = info.layers.values();
-        const layerCount = info.layers.size;
+        const layers = info.layers.filter(x => x);
+        const layerCount = layers.length;
         const uvs = new Float32Array(uvOffset * (layerCount + 1));
 
+        // debugger;
+
         for (let k = 0; k < layerCount; k++) {
-            const layer = itLayer.next().value as UTerrainLayer;
+            const layer = layers[k].loadSelf();
 
             if (!layer.alphaMap && !layer.map)
                 continue;
@@ -232,13 +236,9 @@ class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: trueBoundingBox.min.toArray() as Vector3Arr,
-                    max: trueBoundingBox.max.toArray() as Vector3Arr
+                    min: this.boundingBox.min.sub(center).getVectorElements() as Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getVectorElements() as Vector3Arr
                 } : null
-                // box: this.boundingBox.isValid ? {
-                //     min: this.boundingBox.min.getVectorElements(),
-                //     max: this.boundingBox.min.getVectorElements()
-                // } : null
             }
         };
 
@@ -260,7 +260,8 @@ class UTerrainSector extends UObject {
             name: this.objectName,
             type: "TerrainSegment",
             geometry: this.uuid,
-            materials: this.uuid
+            materials: this.uuid,
+            position: [ox, oy, oz]
         };
     }
 
@@ -335,7 +336,6 @@ class UTerrainSector extends UObject {
 
         this.offsetX = pkg.read(uint32).value as number;
         this.offsetY = pkg.read(uint32).value as number;
-
 
         // console.log(this.offsetX, this.offsetY);
 

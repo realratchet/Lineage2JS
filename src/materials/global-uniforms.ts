@@ -16,4 +16,4 @@ function appendGlobalUniforms(uniforms: UniformMap_T): UniformMap_T {
 export default GLOBAL_UNIFORMS;
 export { appendGlobalUniforms, GLOBAL_UNIFORMS };
 
-type UniformMap_T = GenericObjectContainer_T<Uniform>;
+type UniformMap_T = Record<string, Uniform>;

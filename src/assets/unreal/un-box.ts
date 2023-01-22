@@ -5,7 +5,7 @@ import FVector from "./un-vector";
 class FBox extends FConstructable {
     public readonly min: FVector = new FVector();
     public readonly max: FVector = new FVector();
-    
+
     public isValid: boolean = false;
 
     public load(pkg: UPackage): this {
@@ -19,9 +19,10 @@ class FBox extends FConstructable {
         return this;
     }
 
-    getSize() { return !this.isValid ? new FVector() : this.max.sub(this.min); }
+    public getSize() { return !this.isValid ? new FVector() : this.max.sub(this.min); }
+    public getCenter() { return !this.isValid ? new FVector() : this.max.add(this.min).multiplyScalar(0.5); }
 
-    expandByPoint(point: FVector) {
+    public expandByPoint(point: FVector) {
         if (!this.isValid) {
             this.min.set(Infinity, Infinity, Infinity);
             this.max.set(-Infinity, -Infinity, -Infinity);
@@ -35,6 +36,14 @@ class FBox extends FConstructable {
         this.isValid = true;
 
         return this;
+    }
+
+    public getDecodeInfo(): IBoxDecodeInfo {
+        return {
+            isValid: this.isValid,
+            min: this.min.getVectorElements(),
+            max: this.max.getVectorElements()
+        };
     }
 }
 

@@ -4,7 +4,7 @@ import FNumber from "./un-number";
 import { FPrimitiveArrayLazy } from "./un-array";
 
 type UPackage = import("./un-package").UPackage;
-type PropertyTag = import("./un-property").PropertyTag;
+type PropertyTag = import("./un-property-tag").PropertyTag;
 
 class FMipmap extends FConstructable {
     protected dataArray: FPrimitiveArrayLazy<"uint8"> = new FPrimitiveArrayLazy(BufferValue.uint8);

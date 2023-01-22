@@ -1,10 +1,22 @@
 import BufferValue from "../buffer-value";
-import { UNP_PropertyTypes, PropertyTag } from "./un-property";
+import { UNP_PropertyTypes, PropertyTag } from "./un-property-tag";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { generateUUID } from "three/src/math/MathUtils";
 import { ObjectFlags_T } from "./un-export";
+import UNativeRegistry from "./scripts/un-native-registry";
 
 const CLEANUP_NAMESPACE = true;
+
+type RegisterNativeMember_T = {
+    isArray: boolean,
+    arraySize: number
+}
+
+type RegisterNativeFunc_T = {
+    nativeIndex: number
+}
+
+// const dependencyMap = new Array();
 
 abstract class UObject {
     public objectName = "Exp_None";
@@ -18,64 +30,135 @@ abstract class UObject {
 
     public skipRemaining: boolean = false;
 
-    protected promisesLoading: Promise<any>[] = [];
     protected readHead: number = NaN;
     protected readStart: number = NaN;
     protected readTail: number = NaN;
 
-    public constructor(...params: any[]) { }
+    public readonly isObject = true;
+    protected pkg: UPackage;
 
-    protected getSignedMap(): GenericObjectContainer_T<boolean> { return {}; }
-    protected getPropertyMap(): GenericObjectContainer_T<string> { return {}; }
+    protected isLoading = false;
+    protected isReady = false;
+
+    protected static getConstructorName() {
+        debugger;
+        throw new Error("Must be implemented by inheriting class because JS does not support inheritence chain.");
+    }
+
+    public static get inheritenceChain() {
+        if (this === UObject)
+            return ["Object"]
+
+        let base = this as any;
+        const dependencyChain = new Array<string>();
+
+        do {
+            dependencyChain.push(base.getConstructorName());
+            base = base.__proto__;
+
+        } while (base !== UObject);
+
+        dependencyChain.push("Object");
+
+        return dependencyChain.reverse();
+    }
+
+    protected _objectInternal: any;
+    protected _outer: any;
+    protected _objectFlags: any;
+    protected _class: any;
+    protected _cacheIndex: any;
+    protected _hashNextBuffer: any;
+    protected _indexBuffer: any;
+
+    protected getPropertyMap(): Record<string, string> {
+        return {
+            "ObjectInternal": "_objectInternal",
+            "Outer": "_outer",
+            "ObjectFlags": "_objectFlags",
+            "Name": "objectName",
+            "Class": "_class",
+            "CacheIndex": "_cacheIndex",
+            "HashNextBuffer": "_hashNextBuffer",
+            "IndexBuffer": "_indexBuffer"
+        };
+    }
 
     protected setReadPointers(exp: UExport) {
-        this.readStart = this.readHead = exp.offset.value as number + this.readHeadOffset;
-        this.readTail = this.readHead + (exp.size.value as number);
+        this.readStart = this.readHead = exp.offset as number + this.readHeadOffset;
+        this.readTail = this.readHead + (exp.size as number);
     }
 
     public get byteCount() { return this.readTail - this.readStart; }
     public get bytesUnread() { return this.readTail - this.readHead; }
     public get byteOffset() { return this.readHead - this.readStart; }
 
+    public static addNativeMember(memberName: string, params = {} as RegisterNativeMember_T) {
+        const props = this.prototype.getPropertyMap();
+
+        if (!(memberName in props)) throw new Error(`'${this.name}' is missing '${memberName}'`)
+
+        // maybe test for dtypes here
+    }
+
+    public static addConst(constName: string, value: any) {
+        Object.defineProperty(this.prototype, constName, { get: () => value });
+    }
+
+    public static addStaticNativeFunc(funcName: string, { nativeIndex } = {} as RegisterNativeFunc_T) {
+        if (!UNativeRegistry.hasNativeFunc(Number.isFinite(nativeIndex) ? nativeIndex : funcName)) {
+            debugger;
+            throw new Error(`Missing static function ${funcName}`);
+        }
+    }
+
+    public static addNativeFunc(funcName: string, { nativeIndex } = {} as RegisterNativeFunc_T) {
+        if (!UNativeRegistry.hasNativeFunc(Number.isFinite(nativeIndex) ? nativeIndex : funcName)) {
+            debugger;
+            throw new Error(`Missing static function ${funcName}`);
+        }
+    }
+
+    public static addFunc(funcName: string, params: any, impl: Function) {
+        (this.prototype as any)[funcName] = impl;
+    }
+
     protected readNamedProps(pkg: UPackage) {
         pkg.seek(this.readHead, "set");
 
-        const tags = [];
+        if (this.readHead < this.readTail) {
+            do {
+                const tag = PropertyTag.from(pkg, this.readHead);
 
-        do {
-            const tag = PropertyTag.from(pkg, this.readHead);
+                if (!tag.isValid()) break;
 
-            if (!tag.isValid()) break;
+                this.loadProperty(pkg, tag);
 
-            tags.push(tag.name + "/" + tag.type);
+                this.readHead = pkg.tell();
 
-            this.promisesLoading.push(this.loadProperty(pkg, tag));
-            this.readHead = pkg.tell();
+            } while (this.readHead < this.readTail);
 
-        } while (this.readHead < this.readTail);
-
-        // if (this.objectName === "Exp_TerrainInfo0") {
-        //     console.log(this.objectName, "\n\t->" + tags.join("\n\t->"));
-
-        //     debugger;
-        // }
+        }
 
         this.readHead = pkg.tell();
     }
 
-    protected preLoad(pkg: UPackage, exp: UExport): void {
+    public setExport(pkg: UPackage, exp: UExport) {
         this.objectName = `Exp_${exp.objectName}`;
         this.exportIndex = exp.index;
         this.exp = exp;
+        this.pkg = pkg.asReadable();
+    }
 
-        const flags = exp.flags.value as number;
+    protected preLoad(pkg: UPackage, exp: UExport): void {
+        const flags = exp.flags as number;
 
+        if (!this.exp)
+            this.setExport(pkg, exp);
 
+        pkg.seek(exp.offset as number, "set");
 
-        pkg.seek(exp.offset.value as number, "set");
-
-
-        if (flags & ObjectFlags_T.HasStack) {
+        if (flags & ObjectFlags_T.HasStack && exp.size > 0) {
             const offset = pkg.tell();
             const compat32 = new BufferValue(BufferValue.compat32);
             const int64 = new BufferValue(BufferValue.int64);
@@ -99,17 +182,53 @@ abstract class UObject {
     protected doLoad(pkg: UPackage, exp: UExport): void { this.readNamedProps(pkg); }
 
     protected postLoad(pkg: UPackage, exp: UExport): void {
-        if (this.skipRemaining) this.readHead = this.readTail;
-        if (this.bytesUnread > 0 && this.careUnread)
-            console.warn(`Unread '${this.objectName}' (${this.constructor.name}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
-
         this.readHead = pkg.tell();
+
+        if (this.skipRemaining) this.readHead = this.readTail;
+        if (this.bytesUnread > 0 && this.bytesUnread !== this.readHeadOffset && this.careUnread) {
+            const constructorName = (this.constructor as any).isDynamicClass ? `${(this.constructor as any).friendlyName}[Dynamic]` : this.constructor.name;
+            console.warn(`Unread '${this.objectName}' (${constructorName}) ${this.bytesUnread} bytes (${((this.bytesUnread) / 1024).toFixed(2)} kB) in package '${pkg.path}'`);
+        }
+
+        if (CLEANUP_NAMESPACE) {
+            Object.values(this.getPropertyMap()).forEach(propName => {
+                if ((this as any)[propName] === undefined)
+                    delete (this as any)[propName];
+            });
+        }
+    }
+
+    public loadSelf() {
+        if (!this.pkg || !this.pkg)
+            return this;
+
+        return this.load(this.pkg, this.exp);
     }
 
     public load(pkg: UPackage, exp: UExport): this {
+        if (this.isLoading || this.isReady)
+            return this;
+
+        this.isLoading = true;
+
+        // if (exp.objectName === "DefaultTexture")
+        //     debugger;
+
         this.preLoad(pkg, exp);
-        this.doLoad(pkg, exp);
-        this.postLoad(pkg, exp);
+
+        if (!isFinite(this.readHead))
+            debugger;
+
+        if (!isFinite(this.readTail))
+            debugger;
+
+        if ((this.readTail - this.readHead) > 0) {
+            this.doLoad(pkg, exp);
+            this.postLoad(pkg, exp);
+        }
+
+        this.isLoading = false;
+        this.isReady = true;
 
         return this;
     }
@@ -126,21 +245,16 @@ abstract class UObject {
                 : 1;
     }
 
-    protected async loadProperty(pkg: UPackage, tag: PropertyTag) {
+    protected loadProperty(pkg: UPackage, tag: PropertyTag) {
         const offStart = pkg.tell();
         const offEnd = offStart + tag.dataSize;
 
-        if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
-            throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
-
-        const isSigned = this.getPropertyIsSigned(tag);
-
         switch (tag.type) {
             case UNP_PropertyTypes.UNP_ByteProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int8 : BufferValue.uint8)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.uint8)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_IntProperty:
-                this.setProperty(tag, pkg.read(new BufferValue(isSigned ? BufferValue.int32 : BufferValue.uint32)).value as number);
+                this.setProperty(tag, pkg.read(new BufferValue(BufferValue.int32)).value as number);
                 break;
             case UNP_PropertyTypes.UNP_BoolProperty: this.setProperty(tag, tag.boolValue); break;
             case UNP_PropertyTypes.UNP_FloatProperty:
@@ -153,14 +267,14 @@ abstract class UObject {
                 //     // pkg.read(index);
                 // } else {
                 const objIndex = pkg.read(new BufferValue(BufferValue.compat32));
-                const obj = await pkg.fetchObject(objIndex.value as number);
+                const obj = pkg.fetchObject(objIndex.value as number);
 
                 this.setProperty(tag, obj);
                 // pkg.seek(offEnd, "set");
                 // }
             } break;
             case UNP_PropertyTypes.UNP_NameProperty:
-                this.setProperty(tag, pkg.nameTable[pkg.read(new BufferValue(BufferValue.compat32)).value as number].name.value);
+                this.setProperty(tag, pkg.nameTable[pkg.read(new BufferValue(BufferValue.compat32)).value as number].name);
                 break;
             case UNP_PropertyTypes.UNP_StrProperty:
                 this.setProperty(tag, pkg.read(new BufferValue(BufferValue.char)).value as string);
@@ -193,7 +307,7 @@ abstract class UObject {
                 this.setProperty(tag, this.readStruct(pkg, tag));
                 break;
             default:
-                debugger;
+                // debugger;
                 pkg.seek(tag.dataSize);
                 console.warn(`Unknown data type '${tag.type}' for '${tag.name}' skipping ${tag.dataSize} bytes.`);
                 break;
@@ -209,8 +323,10 @@ abstract class UObject {
         const props = this.getPropertyMap();
         const { name: propName } = tag;
 
-        if (!(propName in props))
+        if (!(propName in props)) {
+            debugger;
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}'`);
+        }
 
         const varName = props[propName];
 
@@ -222,19 +338,15 @@ abstract class UObject {
         if (!(_var instanceof FArray) && !((_var as any) instanceof FPrimitiveArray))
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' is not FArray`);
 
+        // if (tag.name === "ColorScale")
+        //     debugger;
+
+        // if (tag.name === "SizeScale")
+        //     debugger;
+
         _var.load(pkg, tag);
 
         return true;
-    }
-
-    protected getPropertyIsSigned(tag: PropertyTag): boolean {
-        const props = this.getSignedMap();
-        const { name: propName } = tag;
-
-        if (!(propName in props))
-            return true;
-
-        return props[propName];
     }
 
     protected getPropertyVarName(tag: PropertyTag): string {
@@ -255,7 +367,10 @@ abstract class UObject {
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of type '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
         if (!this.hasOwnProperty(varName))
-            throw new Error(`Cannot map property '${propName}' -> ${varName}`);;
+            throw new Error(`Cannot map property '${propName}' -> ${varName}`);
+
+        if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
+            throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
         if ((this as any)[varName] instanceof Array) ((this as any)[varName] as Array<any>)[arrayIndex] = value;
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
@@ -266,23 +381,7 @@ abstract class UObject {
         return true;
     }
 
-    public async onLoaded(): Promise<void> {
-        try {
-            await Promise.all(this.promisesLoading);
-
-            if (CLEANUP_NAMESPACE) {
-                Object.values(this.getPropertyMap()).forEach(propName => {
-                    if ((this as any)[propName] === undefined)
-                        delete (this as any)[propName];
-                });
-            }
-        } catch (e) {
-            // debugger;
-            throw e;
-        }
-    }
-
-    protected async readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }
+    protected readStruct(pkg: UPackage, tag: PropertyTag): Promise<any> { throw new Error("Mixin not loaded."); }
 }
 
 export default UObject;

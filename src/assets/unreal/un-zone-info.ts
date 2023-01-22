@@ -1,9 +1,9 @@
-import UAActor from "./un-aactor";
 import FArray from "./un-array";
 import FNumber from "./un-number";
 import BufferValue from "../buffer-value";
+import UInfo from "./un-info";
 
-class UZoneInfo extends UAActor implements IInfo {
+class UZoneInfo extends UInfo implements IInfo {
     protected isFogZone: boolean;
     protected hasTerrain: boolean;
 
@@ -13,6 +13,8 @@ class UZoneInfo extends UAActor implements IInfo {
     public ambientVector: FVector;
 
     protected killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
+    protected killZType: number;
+    protected isSoftKillZ: boolean;
 
     protected terrains: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
 
@@ -20,6 +22,21 @@ class UZoneInfo extends UAActor implements IInfo {
     protected ambientSaturation: number;
 
     protected zoneTag: string;
+
+    protected lensFlare = new Set();
+    protected lensFlareOffset = new Set();
+    protected lensFlareScale = new Set();
+
+    protected panSpeedU: number;
+    protected panSpeedV: number;
+
+    protected skyZone: any;
+    protected locationName: any;
+    protected distanceFogBlendTime: any;
+    protected environmentMap: any;
+    protected zoneEffect: any;
+    protected isLonelyZone: boolean;
+    protected manualExcludes: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -29,57 +46,31 @@ class UZoneInfo extends UAActor implements IInfo {
             "AmbientBrightness": "ambientBrightness",
             "AmbientVector": "ambientVector",
             "KillZ": "killZ",
+            "KillZType": "killZType",
+            "bSoftKillZ": "isSoftKillZ",
             "bClearToFogColor": "useFogColorClear",
 
             "AmbientHue": "ambientHue",
             "AmbientSaturation": "ambientSaturation",
 
-            "ZoneTag": "zoneTag"
+            "ZoneTag": "zoneTag",
+
+            "LensFlare": "lensFlare",
+            "LensFlareOffset": "lensFlareOffset",
+            "LensFlareScale": "lensFlareScale",
+
+            "TexUPanSpeed": "panSpeedU",
+            "TexVPanSpeed": "panSpeedV",
+
+            "SkyZone": "skyZone",
+            "LocationName": "locationName",
+            "DistanceFogBlendTime": "distanceFogBlendTime",
+            "EnvironmentMap": "environmentMap",
+            "ZoneEffect": "zoneEffect",
+            "bLonelyZone": "isLonelyZone",
+            "ManualExcludes": "manualExcludes",
         });
     }
-
-    // protected readNamedProps(pkg: UPackage) {
-    //     pkg.seek(this.readHead, "set");
-    //     do {
-    //         const tag = PropertyTag.from(pkg, this.readHead);
-
-    //         if (!tag.isValid()) break;
-
-    //         this.promisesLoading.push(this.loadProperty(pkg, tag));
-    //         this.readHead = pkg.tell();
-
-    //         console.log(tag.name, this.bytesUnread);
-
-    //     } while (this.readHead < this.readTail);
-
-    //     // debugger;
-
-    //     this.readHead = pkg.tell();
-
-    //     // debugger;
-    // }
-
-    // protected preLoad(pkg: UPackage, exp: UExport): void {
-    //     super.preLoad(pkg, exp);
-
-    //     pkg.seek(exp.offset.value as number, "set");
-
-    //     this.readStart = this.readHead = exp.offset.value as number;
-    //     this.readTail = this.readHead + (exp.size.value as number);
-
-    //     // debugger;
-
-    //     const compat32 = new BufferValue(BufferValue.compat32);
-
-    //     const a = new Array(17).fill(1).map(() => {
-    //         const b = pkg.read(compat32).value;
-    //         const offset = pkg.tell() - (exp.offset.value as number);
-
-    //         return [b, offset];
-    //     });
-
-    //     debugger;
-    // }
 
     public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
         pkg.seek(this.readHead, "set");
@@ -93,13 +84,10 @@ class UZoneInfo extends UAActor implements IInfo {
 
         const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
 
-        
     }
 
-    async getDecodeInfo(library: DecodeLibrary): Promise<string> {
-        await this.onLoaded();
-
-        library.zones[this.uuid] = {
+    public getDecodeInfo(library: DecodeLibrary): IZoneDecodeInfo {
+        return {
             uuid: this.uuid,
             type: "Zone",
             name: this.objectName,
@@ -111,8 +99,6 @@ class UZoneInfo extends UAActor implements IInfo {
                 color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
             }
         };
-
-        return this.uuid;
     }
 }
 

@@ -1,6 +1,6 @@
 import FConstructable from "./un-constructable";
 import UPackage from "./un-package";
-import { PropertyTag } from "./un-property";
+import { PropertyTag } from "./un-property-tag";
 import { FPrimitiveArray } from "./un-array";
 import BufferValue from "../buffer-value";
 

@@ -1,6 +1,6 @@
-import UObject from "./un-object";
+import UAActor from "./un-aactor";
 
-class UAmbientSoundObject extends UObject {
+class UAmbientSoundObject extends UAActor {
     protected sound: USound;
     protected radius: number;
     protected volume: number;
@@ -8,9 +8,6 @@ class UAmbientSoundObject extends UObject {
     protected randomAmbient: number;
     protected isHiddenEdGroup: boolean;
     protected isHiddenEd: boolean;
-    protected group: string;
-    protected location: FVector;
-    protected region: UPointRegion;
     protected startTime: number;
     protected soundType: number;
 
@@ -20,9 +17,6 @@ class UAmbientSoundObject extends UObject {
             "SoundRadius": "radius",
             "SoundVolume": "volume",
             "bHiddenEdGroup": "isHiddenEdGroup",
-            "Group": "group",
-            "Location": "location",
-            "Region": "region",
             "SoundPitch": "pitch",
             "AmbientRandom": "randomAmbient",
             "AmbientSoundStartTime": "startTime",

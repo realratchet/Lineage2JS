@@ -1,0 +1,1 @@
+export { SCHEMA_NPCGRP_DAT } from "./npcgrp.schema";

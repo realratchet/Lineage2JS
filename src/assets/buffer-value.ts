@@ -11,6 +11,9 @@ const int16: ValidTypes_T<"int16"> = { bytes: 2, signed: true, name: "int16", dt
 const uint16: ValidTypes_T<"uint16"> = { bytes: 2, signed: false, name: "uint16", dtype: Uint16Array };
 const guid: ValidTypes_T<"guid"> = { bytes: 4 * 4, signed: true, name: "guid" };
 const char: ValidTypes_T<"char"> = { bytes: NaN, signed: true, name: "char" };
+const utf16: ValidTypes_T<"utf16"> = { bytes: NaN, signed: true, name: "utf16" };
+
+const decoderUTF16 = new TextDecoder("utf-16");
 
 class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     public static readonly uint64 = uint64;
@@ -24,6 +27,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     public static readonly uint16 = uint16;
     public static readonly guid = guid;
     public static readonly char = char;
+    public static readonly utf16 = utf16;
     public static readonly float = float;
 
     public bytes: DataView;
@@ -47,24 +51,27 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
         return child;
     }
 
-    public readValue(buffer: ArrayBuffer, offset: number, isEncrypted: boolean, cryptKey: number) {
+    public readValue(buffer: ArrayBuffer, offset: number) {
         if (buffer.byteLength <= offset + this.type.bytes)
             throw new Error("Out of bounds");
 
         let byteOffset = 0;
+
         if (this.type.name === "char") {
             const length = new BufferValue(uint8);
-            length.readValue(buffer, offset, isEncrypted, cryptKey);
+
+            length.readValue(buffer, offset);
+
             byteOffset = length.value as number > 0 ? length.type.bytes + 1 : 1;
             offset = offset + byteOffset - 1;
-            this.type.bytes = length.value as number - 1;
-        }
 
-        if (this.type.name === "compat32") {
+            this.type.bytes = length.value as number - 1;
+
+        } else if (this.type.name === "compat32") {
             const byte = new BufferValue(uint8);
             let startOffset = offset;
 
-            byte.readValue(buffer, offset, isEncrypted, cryptKey);
+            byte.readValue(buffer, offset);
             offset += byte.bytes.byteLength;
 
             let b = byte.bytes.getUint8(0);
@@ -75,7 +82,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             if (b & 0x40)   // has 2nd byte
             {
                 do {
-                    byte.readValue(buffer, offset, isEncrypted, cryptKey);
+                    byte.readValue(buffer, offset);
                     b = byte.bytes.getUint8(0);
                     offset += byte.bytes.byteLength;
                     r |= (b & 0x7F) << shift;
@@ -88,20 +95,30 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             this.bytes.setInt32(0, r, this.endianess === "little");
 
             return offset - startOffset;
+        } else if (this.type.name === "utf16") {
+            const length = new BufferValue(uint32);
+
+            length.readValue(buffer, offset);
+            byteOffset = length.type.bytes + 1;
+            offset = offset + byteOffset - 1;
+
+            this.type.bytes = length.value as number;
+
+            this.type.bytes = this.type.bytes;
+            byteOffset = byteOffset - 1;
         }
 
         this.bytes = new DataView(buffer.slice(offset, offset + this.type.bytes));
-
-        if (isEncrypted) {
-            for (let i = 0; i < this.bytes.byteLength; i++) {
-                this.bytes.setUint8(i + this.bytes.byteOffset, this.bytes.getUint8(i + this.bytes.byteOffset) ^ cryptKey);
-            }
-        }
 
         return this.bytes.byteLength + byteOffset;
     }
 
     public get string(): string {
+
+        if (this.type.name === "utf16") {
+            return decoderUTF16.decode(this.bytes.buffer/*.slice(3)*/);
+        }
+
         let string = "";
 
         for (let i = 0, bc = this.bytes.byteLength; i < bc; i++) {
@@ -154,13 +171,14 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
             case "uint16": funName = "getUint16"; break;
             case "guid":
             case "char":
+            case "utf16":
             case "buffer": break;
             default: throw new Error(`Unknown type: ${this.type.name}`);
         }
 
         if (funName) return buffer[funName](buffer.byteOffset, this.endianess === "little");
         else if (this.type.name === "guid") return this.bytes;
-        else if (this.type.name === "char") return this.string;
+        else if (this.type.name === "char" || this.type.name === "utf16") return this.string;
 
         return this.bytes;
     }

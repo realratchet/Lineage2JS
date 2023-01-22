@@ -15,6 +15,7 @@ import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import { FPlane } from "../un-plane";
 
 type UPackage = import("../un-package").UPackage;
 type UExport = import("../un-export").UExport;
@@ -82,7 +83,7 @@ class UModel extends UPrimitive {
         const polysId = pkg.read(compat32).value as number;
 
         const polyExp = pkg.exports[polysId - 1];
-        const className = pkg.getPackageName(polyExp.idClass.value as number)
+        const className = pkg.getPackageName(polyExp.idClass as number)
 
         console.assert(className === "Polys");
 
@@ -123,19 +124,49 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string[][]> {
-        await this.onLoaded();
-        await Promise.all(this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library)));
- 
-        // debugger;
+    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
+
+        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
+
+        this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
+        this.zones.forEach((zone: FZoneProperties, index: number) => {
+            const bspZone = zone.getDecodeInfo(library, uLevelInfo);
+
+            library.bspZones.push(bspZone);
+
+            library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
+        });
 
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+            const nodeInfo = node.getBSPDecodeInfo();
 
-            await Promise.all(surf.promisesLoading);
+            library.bspNodes.push(nodeInfo);
+
+            if (node.iCollisionBound >= 0) {
+                const hulls = this.leafHulls.getTypedArray() as Int32Array;
+                const hullIndexList = hulls.slice(node.iCollisionBound);
+
+                let hullPlanesCount = 0;
+                while (hullIndexList[hullPlanesCount] >= 0)
+                    hullIndexList[hullPlanesCount++];
+
+                // reinterpret as floats
+                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
+                const hullFlags = hullIndexList.slice(0, hullPlanesCount);
+
+                nodeInfo.collision = {
+                    flags: [...hullFlags],
+                    bounds: {
+                        isValid: true,
+                        min: [initialVector[0], initialVector[2], initialVector[1]],
+                        max: [initialVector[3], initialVector[5], initialVector[4]]
+                    }
+                };
+            }
 
             if (surf.flags & PolyFlags_T.PF_Invisible) continue;
 
@@ -146,7 +177,37 @@ class UModel extends UPrimitive {
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
-            const zone = surf.actor.getZone();
+            if (node.iCollisionBound >= 0) {
+                library.bspColliders.push(nodeInfo.collision.bounds);
+            }
+
+            // if (node.iCollisionBound >= 0 && node.iLeaf[0] === -1 && node.iLeaf[1] === -1 && nodeIndex === 1211) {
+            //     const hulls = this.leafHulls.getTypedArray() as Int32Array;
+            //     const hullIndexList = hulls.slice(node.iCollisionBound);
+
+            //     let hullPlanesCount = 0;
+            //     while (hullIndexList[hullPlanesCount] >= 0)
+            //         hullIndexList[hullPlanesCount++];
+
+            //     // reinterpret as floats
+            //     const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
+            //     const hullFlags = hullIndexList.slice(0, hullPlanesCount);
+
+            //     nodeInfo.collision = {
+            //         flags: [...hullFlags],
+            //         bounds: {
+            //             isValid: true,
+            //             min: [initialVector[0], initialVector[2], initialVector[1]],
+            //             max: [initialVector[3], initialVector[5], initialVector[4]]
+            //         }
+            //     };
+            // }
+
+            // continue;
+
+            // debugger;
+
+            const zone = surf.actor.loadSelf().getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
             const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
@@ -183,8 +244,8 @@ class UModel extends UPrimitive {
             gData.nodes.push({ node, surf, light });
         }
 
-        const createZoneInfo = async (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): Promise<string> => {
-            const zoneInfo = library.zones[zone.uuid];
+        const createZoneInfo = (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
+            const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
@@ -201,7 +262,7 @@ class UModel extends UPrimitive {
                     const gSurf = objectMap.get(material);
 
                     for (let staticLightmap of gSurf.keys()) {
-                        const materialUuid = await material.getDecodeInfo(library);
+                        const materialUuid = material.loadSelf().getDecodeInfo(library);
 
                         if (staticLightmap) {
                             const lightmappedMaterialUuid = generateUUID();
@@ -248,6 +309,7 @@ class UModel extends UPrimitive {
                                 groupOffset = groupOffset + fcount;
                             }
 
+ 
                             for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
                                 const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
                                 const position: FVector = this.points.getElem(vert.pVertex);
@@ -301,6 +363,7 @@ class UModel extends UPrimitive {
                             }
                         }
 
+
                         vertexOffset = vertexOffset + numVertices;
 
                         groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
@@ -323,6 +386,8 @@ class UModel extends UPrimitive {
                 }
             };
 
+            // debugger;
+
             zoneInfo.children.push({
                 uuid,
                 type: "Model",
@@ -334,11 +399,11 @@ class UModel extends UPrimitive {
             return uuid;
         };
 
-        const createPriorityGroup = async ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): Promise<string[]> => {
-            return await Promise.all([...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects)));
+        const createPriorityGroup = ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): string[] => {
+            return [...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects));
         };
 
-        return await Promise.all([...objectMap.entries()].map(createPriorityGroup));
+        return [...objectMap.entries()].map(createPriorityGroup);
     }
 }
 

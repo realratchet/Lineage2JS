@@ -24,7 +24,10 @@ class FPlane extends FConstructable {
         return new FPlane(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
     }
 
-    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
+    public dot(other: FPlane) { return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w; }
+
+
+    public toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.x;
         (array as number[])[offset + 1] = this.y;
@@ -51,6 +54,15 @@ class UPlane extends UObject {
     public z: number;
     public w: number;
 
+    constructor(x: number, y: number, z: number, w: number) {
+        super();
+
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "X": "x",
@@ -60,16 +72,8 @@ class UPlane extends UObject {
         });
     }
 
-    protected preLoad(pkg: UPackage, tag: any): void {
-        this.readHead = pkg.tell();
-        this.readTail = this.readHead + tag.dataSize;
-    }
-
-    public doLoad(pkg: UPackage, tag: any): this {
-        this.readNamedProps(pkg);
-
-        return this;
-    }
+    public getElements(): Vector4Arr { return [this.x, this.y, this.z, this.w]; }
+    public toString() {return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})`}
 }
 
 export { FPlane, UPlane };

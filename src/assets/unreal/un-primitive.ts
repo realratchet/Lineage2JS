@@ -3,8 +3,12 @@ import FArray from "./un-array";
 import { FStaticMeshMaterial } from "./un-material";
 import FBox from "./un-box";
 import USphere from "./un-sphere";
+import UExport from "./un-export";
+import UPackage from "./un-package";
 
 class UPrimitive extends UObject {
+    protected static getConstructorName() { return "Primitive"; }
+
     protected materials: FArray<FStaticMeshMaterial> = new FArray(FStaticMeshMaterial);
     protected swayObject: boolean;
     protected boundingBox: FBox = new FBox();

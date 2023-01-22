@@ -1,9 +1,16 @@
-import FArray from "./un-array";
+import { v5 as seededUuid } from "uuid";
+import FArray, { FPrimitiveArray } from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
 import UObject from "./un-object";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
+import BufferValue from "../buffer-value";
+import StringSet from "@client/utils/string-set";
+import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import FVector from "./un-vector";
+import { generateUUID } from "three/src/math/MathUtils";
+import UMaterial from "./un-material";
 
 /*
 
@@ -14,7 +21,7 @@ import FColor from "./un-color";
     0000100000 ( 32)
 */
 
-class UTexture extends UObject {
+class UTexture extends UMaterial {
     protected palette: UPlatte;
     protected internalTime: number[] = new Array(2);
     protected format: ETextureFormat = ETextureFormat.TEXF_RGBA8;
@@ -41,12 +48,37 @@ class UTexture extends UObject {
     protected clampModeU: number;
     protected clampModeV: number;
 
+
+    protected lodSet: number;
+
     public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
+    public readonly _mips: FPrimitiveArray<"uint32">;
+
+    protected _lossDetail: any;
+
+    protected _detailTexture: any;
+    protected _environmentMap: any;
+    protected _envMapTransformType: any;
+    protected _specular: any;
+    protected _bHighColorQuality: any;
+    protected _bHighTextureQuality: any;
+    protected _bRealtime: any;
+    protected _bParametric: any;
+    protected _bRealtimeChanged: any;
+    protected _bHasComp: any;
+    protected _normalLOD: any;
+    protected _minLOD: any;
+    protected _maxLOD: any;
+    protected _animCurrent: any;
+    protected _primeCount: any;
+    protected _primeCurrent: any;
+    protected _accumulator: any;
+    protected _compFormat: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Palette": "palette",
-            "Mips": "mipmaps",
+            "Mips": "_mipmaps",
 
             "Format": "format",
             "InternalTime": "internalTime",
@@ -73,36 +105,66 @@ class UTexture extends UObject {
 
             "bTwoSided": "isTwoSided",
             "bAlphaTexture": "isAlphaTexture",
-            "bMasked": "isMasked"
+            "bMasked": "isMasked",
+
+
+            "LODSet": "lodSet",
+
+
+            "LossDetail": "_lossDetail",
+
+            "DetailTexture": "_detailTexture",
+            "EnvironmentMap": "_environmentMap",
+            "EnvMapTransformType": "_envMapTransformType",
+            "Specular": "_specular",
+            "bHighColorQuality": "_bHighColorQuality",
+            "bHighTextureQuality": "_bHighTextureQuality",
+            "bRealtime": "_bRealtime",
+            "bParametric": "_bParametric",
+            "bRealtimeChanged": "_bRealtimeChanged",
+            "bHasComp": "_bHasComp",
+            "NormalLOD": "_normalLOD",
+            "MinLOD": "_minLOD",
+            "MaxLOD": "_maxLOD",
+            "AnimCurrent": "_animCurrent",
+            "PrimeCount": "_primeCount",
+            "PrimeCurrent": "_primeCurrent",
+            "Accumulator": "_accumulator",
+            "CompFormat": "_compFormat"
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
-
+    public doLoad(pkg: UPackage, exp: UExport) {    // 2785
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
 
-        const offStart = pkg.tell();
+        // debugger;
 
-        this.mipmaps.load(pkg, null);
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-        this.readHead = pkg.tell();
+        let someFlag = 0;
 
-        if (this.readHead !== this.readTail) {
-            pkg.seek(offStart + 4, "set");
-            this.mipmaps.load(pkg, null); // what the fuck is this but it works
+        if (verArchive >= 123 && verLicense >= 16) {
+            someFlag = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
+
+            if (someFlag !== 0)
+                debugger;
         }
 
+        if (verArchive < 84) {
+            debugger;
+            throw new Error("Don't know what to do");
+        }
+
+        if ((someFlag & 0x100) !== 0)
+            debugger;
+
+        this.mipmaps.load(pkg);
         this.readHead = pkg.tell();
 
         console.assert(this.readTail === this.readHead);
-
-        // if (this.readHead !== this.readTail)
-        //     debugger;
-        // else console.error(`'${exp.objectName}' ready properly.`)
-
-        // debugger;
 
         return this;
     }
@@ -128,9 +190,7 @@ class UTexture extends UObject {
         }
     }
 
-    protected async decodeTexture(library: DecodeLibrary) {
-        await this.onLoaded();
-
+    protected decodeTexture(library: DecodeLibrary) {
         const totalMipCount = this.mipmaps.length;
 
         if (totalMipCount === 0) return null;
@@ -245,7 +305,7 @@ class UTexture extends UObject {
                     const buff = new Uint8Array(imSize * 4);
 
                     for (let i = 0, len = imSize; i < len; i++) {
-                        const c = this.palette.colors.getElem(data[i]);
+                        const c = this.palette.loadSelf().colors.getElem(data[i]);
                         const ii = i * 4;
 
                         buff[ii + 0] = c.r;
@@ -273,7 +333,7 @@ class UTexture extends UObject {
         } as ITextureDecodeInfo;
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<string> {
+    public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
@@ -284,7 +344,7 @@ class UTexture extends UObject {
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(await tex.decodeTexture(library));
+                sprites.push(tex.loadSelf().decodeTexture(library));
                 tex = tex.animNext;
             }
 
@@ -295,12 +355,78 @@ class UTexture extends UObject {
                 framerate: 1000 / this.maxFrameRate
             } as IAnimatedSpriteDecodeInfo;
         } else {
-            library.materials[this.uuid] = await this.decodeTexture(library);
+            library.materials[this.uuid] = this.decodeTexture(library);
         }
 
         return this.uuid;
     }
+
+    public toString() { return `Texture=${this.objectName}`; }
 }
 
 export default UTexture;
 export { UTexture };
+
+function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
+    const width_half = width / 2;
+    const height_half = height / 2;
+
+    const gridX = Math.floor(widthSegments);
+    const gridY = Math.floor(heightSegments);
+
+    const gridX1 = gridX + 1;
+    const gridY1 = gridY + 1;
+
+    const segment_width = width / gridX;
+    const segment_height = height / gridY;
+
+    //
+
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+
+    for (let iy = 0; iy < gridY1; iy++) {
+
+        const y = iy * segment_height - height_half;
+
+        for (let ix = 0; ix < gridX1; ix++) {
+
+            const x = ix * segment_width - width_half;
+
+            vertices.push(x, - y, 0);
+
+            normals.push(0, 0, 1);
+
+            uvs.push(ix / gridX);
+            uvs.push(1 - (iy / gridY));
+
+        }
+
+    }
+
+    for (let iy = 0; iy < gridY; iy++) {
+
+        for (let ix = 0; ix < gridX; ix++) {
+
+            const a = ix + gridX1 * iy;
+            const b = ix + gridX1 * (iy + 1);
+            const c = (ix + 1) + gridX1 * (iy + 1);
+            const d = (ix + 1) + gridX1 * iy;
+
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+
+        }
+    }
+
+    const TypedIndicesArray = getTypedArrayConstructor(indices.length / 3);
+
+    return {
+        indices: new TypedIndicesArray(indices),
+        positions: new Float32Array(vertices),
+        uvs: new Float32Array(uvs),
+        normals: new Float32Array(normals)
+    };
+}

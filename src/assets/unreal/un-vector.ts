@@ -29,7 +29,7 @@ class FVector extends FConstructable {
         return this;
     }
 
-    public getElements(): [number, number, number] { return [this.x, this.y, this.z]; }
+    public getElements(): Vector3Arr { return [this.x, this.y, this.z]; }
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {
@@ -49,6 +49,14 @@ class FVector extends FConstructable {
             this.x - other.x,
             this.y - other.y,
             this.z - other.z
+        );
+    }
+
+    public mul(other: FVector) {
+        return new FVector(
+            this.x * other.x,
+            this.y * other.y,
+            this.z * other.z
         );
     }
 
@@ -122,7 +130,11 @@ class FVector extends FConstructable {
         );
     }
 
-    getVectorElements(): Vector3Arr { return [this.x, this.z, this.y]; }
+    public negate() { return this.multiplyScalar(-1); }
+
+    getVectorElements(): Vector3Arr {
+        return [this.x, this.z, this.y];
+    }
 
     applyRotator(rotator: FRotator, negate: boolean): FVector {
 
@@ -257,6 +269,13 @@ class FVector extends FConstructable {
 
         return outVector;
     }
+
+    public clone() { return new FVector(this.x, this.y, this.z); }
+
+    public nequals(other: FVector) { return this.x !== other.x || this.y !== other.y || this.z !== other.z; }
+    public equals(other: FVector) { return !this.nequals(other); }
+
+    public toString() {return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})`}
 }
 
 export default FVector;

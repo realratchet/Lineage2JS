@@ -36,17 +36,6 @@ class UMatrix extends UObject {
         });
     }
 
-    protected preLoad(pkg: UPackage, tag: any): void {
-        this.readHead = pkg.tell();
-        this.readTail = this.readHead + tag.dataSize;
-    }
-
-    public doLoad(pkg: UPackage, tag: any): this {
-        this.readNamedProps(pkg);
-
-        return this;
-    }
-
     public getElements3x3() {
         return [
             this.planeX.x, this.planeX.y, this.planeX.z,

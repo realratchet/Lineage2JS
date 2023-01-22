@@ -1,8 +1,17 @@
-import ZoneObject from "../zone-object";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3 } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereBufferGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneBufferGeometry, AnimationMixer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
+import Player from "@client/player";
+import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
+import RAPIER from "@dimforge/rapier3d";
+import type { ICollidable } from "@client/objects/objects";
+import Stats from "./stats";
+
+const stats = new (Stats as any)(0);
+
+stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+// document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -10,26 +19,39 @@ const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 
+type ZoneObject = import("../objects/zone-object").ZoneObject;
+type SectorObject = import("../objects/zone-object").SectorObject;
+
 class RenderManager {
-    public readonly renderer: WebGLRenderer;
+    public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(75, 1, 0.1, DEFAULT_FAR);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
-    public readonly lastSize: Vector2 = new Vector2();
-    public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = {} as any;
+    public readonly lastSize = new Vector2();
+    public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = { orbit: null, fps: null };
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public readonly raycaster = new Raycaster();
-    public speedCameraFPS = 50;
+    public speedCameraFPS = 5;
+    public readonly mixer = new AnimationMixer(this.scene);
 
+    protected shiftTimeDown: number;
+    protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
     protected lastRender: number = 0;
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
+
+    public readonly player = new Player(this);
+
+    protected readonly sun: THREE.Mesh;
+    protected readonly sunCam: THREE.Camera;
+
+    public readonly physicsWorld: RAPIER.World;
 
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
@@ -38,8 +60,10 @@ class RenderManager {
             preserveDrawingBuffer: true,
             premultipliedAlpha: false,
             logarithmicDepthBuffer: true,
-            alpha: true
+            alpha: true,
         });
+
+        this.renderer.autoClear = false;
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
         this.controls.orbit = new OrbitControls(this.camera, this.renderer.domElement);
@@ -50,6 +74,13 @@ class RenderManager {
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+
+        this.sun = new Mesh(new PlaneBufferGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
+        this.sunCam = new Camera();
+
+        this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8 * 100, 0));
+
+        // this.scene.add(this.sun);
 
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
@@ -95,6 +126,13 @@ class RenderManager {
         // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
+        // // world origin
+        // this.camera.position.set(20, 20, 20);
+        // this.controls.orbit.target.set(0, 0, 0);
+
+        // look player
+        // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
+        // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -111,6 +149,14 @@ class RenderManager {
             this.controls.orbit.enabled = false;
             this.controls.fps.lock();
         }
+
+        this.scene.add(this.player);
+        this.player.name = "Player";
+        // this.player.visible = false;
+        // this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
+        this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
+        // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
+        // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
         addResizeListeners(this);
     }
@@ -176,7 +222,10 @@ class RenderManager {
             case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
             case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
             case "s": if (!this.isOrbitControls) this.dirKeys.down = true; break;
-            case "shift": if (!this.isOrbitControls) this.dirKeys.shift = true; break;
+            case "shift": if (!this.isOrbitControls) {
+                this.shiftTimeDown = Date.now();
+                this.dirKeys.shift = true;
+            } break;
         }
     }
 
@@ -195,6 +244,8 @@ class RenderManager {
     }
 
     public onHandleMouseUp(event: MouseEvent) {
+        if (event.button !== 0 || !this.isOrbitControls) return;
+
         try {
             const position = new Vector2(event.pageX, event.pageY);
             const ssPosition = this.toScreenSpaceCoords(position);
@@ -207,7 +258,16 @@ class RenderManager {
 
             const intersection = intersections[0];
 
-            console.log(intersection.object);
+            const collidable = intersections.find(i => (i.object as any).isCollidable);
+
+            if (collidable)
+                // this.player.getRigidbody().setTranslation(
+                //     new Vector3().addVectors(intersection.point, new Vector3(0, 100 * 1, 0)),
+                //     true
+                // );
+                this.player.goTo(collidable.point);
+
+            console.log(intersection);
         } catch (e) { }
     }
 
@@ -237,9 +297,11 @@ class RenderManager {
         const isFrameDirty = this.isPersistentRendering || this.needsUpdate;
 
         if (isFrameDirty) {
+            stats.begin();
             this._preRender(currentTime, deltaTime);
             this._doRender(currentTime, deltaTime);
             this._postRender(currentTime, deltaTime);
+            stats.end();
             this.needsUpdate = false;
         }
 
@@ -250,22 +312,39 @@ class RenderManager {
 
     public enableZoneCulling = true;
 
-    protected _updateObjects(currentTime: number, deltaTime: number) {
-        let fog: THREE.Fog;
+    public getSector(position: THREE.Vector3) {
+        const sectorSize = 256 * 128;
+        const sectorX = Math.floor(position.x / sectorSize) + 20;
+        const sectorY = Math.floor(position.z / sectorSize) + 18;
 
+        if (!this.sectors.has(sectorX))
+            return null;
+
+        const xsect = this.sectors.get(sectorX);
+
+        if (!xsect.has(sectorY))
+            return null;
+
+        return xsect.get(sectorY);
+    }
+
+    protected _updateObjects(currentTime: number, deltaTime: number) {
         const globalTime = currentTime / 600;
 
         this.scene.traverse((object: THREE.Object3D) => {
 
             if ((object as ZoneObject).isZoneObject) {
 
-                const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
+                // const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
 
-                if (inBounds) fog = (object as ZoneObject).fog;
+                // if (inBounds) fog = (object as ZoneObject).fog;
 
-                if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
+                // // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
 
                 (object as THREE.Object3D).traverseVisible(object => {
+                    if ((object as any).isUpdatable)
+                        (object as any).update(currentTime);
+
                     if ((object as THREE.Mesh).isMesh)
                         (((((object as THREE.Mesh).material as THREE.Material).isMaterial)
                             ? [(object as THREE.Mesh).material]
@@ -277,6 +356,16 @@ class RenderManager {
                 });
             }
         });
+
+        let fog: THREE.Fog;
+
+        const sector = this.getSector(this.camera.position);
+
+        if (sector) {
+            const zoneIndex = sector.findPositionZone(this.camera.position);
+            const zone = sector.zones.children[zoneIndex] as ZoneObject;
+            fog = zone.fog;
+        }
 
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
 
@@ -303,13 +392,22 @@ class RenderManager {
         // this.scene.fog = new FogExp2(0xff00ff, 0.1);
     }
 
+    protected nextPhysicsTick: number;
+
     protected _preRender(currentTime: number, deltaTime: number) {
+        this.mixer.update(deltaTime / 1000);
+
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
 
         if (!this.isOrbitControls) {
             let forwardVelocity = 0, sidewaysVelocity = 0;
-            const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? 2 : 1);
+            const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? (
+                Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2))
+            ) : 1);
+
+            if (this.dirKeys.shift)
+                console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
 
             if (this.dirKeys.left) sidewaysVelocity -= 1;
             if (this.dirKeys.right) sidewaysVelocity += 1;
@@ -325,17 +423,116 @@ class RenderManager {
             this.camera.position.add(cameraVelocity);
         }
 
-        this.renderer.clear();
+        // const sector = this.scene.children[1].children[0].children[0] as any;
+
+        // // debugger;
+
+        // const zoneIndex = sector.findPositionZone(this.camera.position);
+        // // sector.children.forEach((ch: any) => ch.visible = false);
+        // // sector.children[zoneIndex].visible = true;
+
+        // const bspZone = sector.bspZones[zoneIndex];
+        // const connectivityFlags = bspZone.connectivity
+
+        // for (let i = 0, len = sector.bspZones.length, flag = 1n; i < len; i++, flag = flag << 1n) {
+        //     const flagValue = connectivityFlags & flag;
+        //     const isZoneVisible = Boolean(flagValue).valueOf();
+
+        //     sector.zones.children[i].visible = isZoneVisible;
+        // }
+
+        if (this.nextPhysicsTick <= currentTime) {
+            // this.physicsWorld.step();
+            // this.player.update(this, currentTime, deltaTime);
+
+            // console.log(this.player.position);
+
+            this.nextPhysicsTick = currentTime + 1000 / 30;
+        }
+
+        const desiredPosition = new Vector3().copy(this.player.getRigidbody().translation() as THREE.Vector3).add(new Vector3(0, -this.player.getColliderSize().y * 0.5 - this.player.getStepHeight(), 0));
+
+        this.player.position.lerp(desiredPosition, 0.1);
+
         this._updateObjects(currentTime, deltaTime);
+        this._updateSun();
+
+        this.renderer.clear();
+    }
+
+    protected _updateSun() {
+        const sector = this.getSector(this.camera.position);
+
+        if (sector) {
+            const sunMaterial = sector.sunTexture;
+            (this.sun.material as THREE.MeshBasicMaterial).map = sunMaterial.texture;
+        }
+
+        // debugger;
+
+        const radius = 3000;
+        const multiplier = (2 * Math.PI) / 24;
+        const px = (radius * Math.cos(Math.PI + multiplier * 9));
+        const py = (radius * Math.sin(Math.PI + multiplier * 9));
+
+        this.sun.position.copy(this.camera.position);
+        this.sun.position.z += py;
+        this.sun.position.y += px;
+
+        // this.sun.material.color.setRGB(255 / 255, 219 / 255, 151 / 255);
+        this.sun.scale.set(10000 * 0.5, 10000 * 0.5, 10000 * 0.5);
+        this.sun.lookAt(this.camera.position);
+
+        // this.renderer.setClearColor(new Color(66 / 255, 124 / 255, 176 / 255));
+
+        this.sun.updateMatrixWorld(true);
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
+        // this.renderer.render(this.sun, this.camera);
         this.renderer.render(this.scene, this.camera);
     }
 
     protected _postRender(currentTime: number, deltaTime: number) { }
 
-    public startRendering() { this.onHandleRender(0); }
+    public startRendering() {
+        this.physicsWorld.step();
+        this.nextPhysicsTick = 3000;
+        this.scene.updateMatrixWorld(true);
+
+        this.collectColliders();
+
+        this.onHandleRender(0);
+    }
+
+    protected readonly collidables: ICollidable[] = [];
+    public readonly colliderMap = new WeakMap<RAPIER.Collider, ICollidable>()
+
+    protected collectColliders() {
+        this.scene.traverse((obj: ICollidable) => {
+            if (!obj.isCollidable) return;
+
+            // if (this.collidables.length > 1) return;
+
+            this.collidables.push(obj);
+            this.colliderMap.set(obj.createCollider(this.physicsWorld), obj);
+        });
+
+        // debugger;
+
+        // this.collidables.push(this.player.createCollider(this.physicsWorld));
+    }
+
+    public addSector(sector: SectorObject) {
+        if (sector.index) {
+            if (!this.sectors.has(sector.index.x))
+                this.sectors.set(sector.index.x, new Map());
+
+            this.sectors.get(sector.index.x).set(sector.index.y, sector);
+        }
+
+        this.objectGroup.add(sector);
+    }
 }
 
 export default RenderManager;
