@@ -23,7 +23,7 @@ class USpriteEmitter extends UParticleEmitter {
         return Object.assign(super.getDecodeInfo(library), {
             type: "SpriteEmitter",
             spriteDirection: directionNames[this.spriteDirection],
-            object: this.texture?.loadSelf().getDecodeInfo(library)
+            texture: this.texture?.loadSelf().getDecodeInfo(library)
         });
     }
 }

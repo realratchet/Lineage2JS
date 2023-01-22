@@ -116,7 +116,7 @@ abstract class BaseEmitter extends Object3D {
     }
 
     protected abstract initSettings(info: EmitterConfig_T): void;
-    protected abstract initParticleMesh(): THREE.Mesh;
+    protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>;
 }
 
 export default BaseEmitter;
@@ -124,7 +124,7 @@ export { BaseEmitter };
 
 class Particle extends Object3D {
     protected readonly particleSystem: BaseEmitter;
-    protected readonly visualizer: THREE.Mesh;
+    protected readonly visualizer: THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>;
 
     public isAlive: boolean = false;
     public visible: boolean = false;
@@ -149,7 +149,7 @@ class Particle extends Object3D {
     };
 
 
-    private constructor(particleSystem: BaseEmitter, visualizer: THREE.Mesh) {
+    private constructor(particleSystem: BaseEmitter, visualizer: THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>) {
         super();
 
         this.particleSystem = particleSystem;
@@ -158,7 +158,7 @@ class Particle extends Object3D {
         this.add(visualizer);
     }
 
-    static init(particleSystem: BaseEmitter, visualizer: THREE.Mesh): Particle {
+    static init(particleSystem: BaseEmitter, visualizer: THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>): Particle {
         return new Particle(particleSystem, visualizer);
     }
 
@@ -183,22 +183,24 @@ class Particle extends Object3D {
         const lifespan = this.deathTime - this.bornTime;
 
 
-        if (!(this.visualizer.material instanceof Array)) { // mesh emitter not yet supported
+        const mats = this.visualizer.material instanceof Array ? this.visualizer.material : [this.visualizer.material];
+
+        for (const mat of mats) {
             if (this.fadeIn && this.fadeIn.time > timeAlive) {
                 const fade = mapLinear(timeAlive, 0, this.fadeIn.time, 0, 1);
                 const [r, g, b, a] = this.fadeIn.color.toArray().map(v => v * fade);
 
-                (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
-                (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w * a;
+                mat.color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
+                mat.opacity = this.initial.color.w * a;
             } else if (this.fadeOut && this.fadeOut.time < timeAlive) {
                 const fade = mapLinear(timeAlive, this.fadeOut.time, lifespan, 0, 1);
                 const [r, g, b, a] = this.fadeOut.color.toArray().map(v => 1 - v * fade);
 
-                (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
-                (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w * a;
-            } else {
-                (this.visualizer.material as THREE.MeshBasicMaterial).color.setRGB(this.initial.color.x, this.initial.color.y, this.initial.color.z);
-                (this.visualizer.material as THREE.MeshBasicMaterial).opacity = this.initial.color.w;
+                mat.color.setRGB(this.initial.color.x * r, this.initial.color.y * g, this.initial.color.z * b);
+                mat.opacity = this.initial.color.w * a;
+            } else if (this.fadeIn || this.fadeOut) {
+                mat.color.setRGB(this.initial.color.x, this.initial.color.y, this.initial.color.z);
+                mat.opacity = this.initial.color.w;
             }
         }
 

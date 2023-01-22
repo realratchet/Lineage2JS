@@ -1,8 +1,9 @@
+import ParticleMaterial from "@client/materials/particle-material";
 import { Mesh } from "three";
 import BaseEmitter from "./base-emitter";
 
 class MeshEmitter extends BaseEmitter {
-    protected materials: THREE.Material | THREE.Material[];
+    protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
     protected geometry: THREE.BufferGeometry;
 
     protected initSettings(config: MeshEmitterConfig_T): void {
@@ -11,12 +12,10 @@ class MeshEmitter extends BaseEmitter {
     }
 
     protected initParticleMesh() {
-        const particle = new ParticleMesh(
+        return new ParticleMesh(
             this.geometry,
-            this.materials// instanceof Array ? this.materials.map(m => m.clone()) : this.materials.clone()
+            this.materials instanceof Array ? this.materials.map(m => new ParticleMaterial(m)) : new ParticleMaterial(this.materials)
         );
-
-        return particle;
     }
 }
 
@@ -31,5 +30,5 @@ class ParticleMesh extends Mesh {
 
 type MeshEmitterConfig_T = EmitterConfig_T & {
     geometry: THREE.BufferGeometry,
-    materials: THREE.Material | THREE.Material[]
+    materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[]
 };

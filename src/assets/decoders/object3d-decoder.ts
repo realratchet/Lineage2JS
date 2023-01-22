@@ -479,10 +479,14 @@ function decodeEmitterConfig(info: IEmitterDecodeInfo) {
 
 function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo) {
     const infoGeo = library.geometries[info.mesh.geometry] as IGeometryDecodeInfo;
-    const infoMats = library.materials[info.mesh.materials] as ITextureDecodeInfo;
 
     const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    const materials = decodeMaterial(library, {
+        materialType: "particle",
+        material: info.mesh.materials,
+        opacity: info.opacity,
+        blendingMode: info.blendingMode
+    } as IParticleMaterialDecodeInfo) || new MeshBasicMaterial({ color: 0xff00ff });
 
     const emitter = new MeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials }));
 
@@ -492,15 +496,19 @@ function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo)
 }
 
 function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
-    const infoMats = library.materials[info.object] as ITextureDecodeInfo;
-    const texture = decodeTexture(library, infoMats);
+    const material = decodeMaterial(library, {
+        materialType: "particle",
+        material: info.texture,
+        opacity: info.opacity,
+        blendingMode: info.blendingMode
+    } as IParticleMaterialDecodeInfo) as any as ParticleMaterialInitSettings_T;
 
     if (!isFinite(info.maxParticles))
         debugger;
 
     // debugger;
 
-    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { texture }));
+    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { material }));
 
     applySimpleProperties(library, emitter, info);
 
