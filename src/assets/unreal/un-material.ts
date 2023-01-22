@@ -2,6 +2,7 @@ import FColor from "./un-color";
 import UObject from "./un-object"
 import BufferValue from "../buffer-value";
 import { FPrimitiveArray } from "./un-array";
+import DecodeLibrary from "./decode-library";
 
 abstract class UBaseMaterial extends UObject {
     public readonly skipRemaining = true;
@@ -45,11 +46,11 @@ abstract class UBaseMaterial extends UObject {
     }
 }
 
-abstract class UBaseModifier extends UBaseMaterial { 
+abstract class UBaseModifier extends UBaseMaterial {
     protected texCoordSource: number;
     protected texCoordCount: number;
     protected texCoordProjected: number;
-    
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "TexCoordSource": "texCoordSource",
@@ -58,8 +59,7 @@ abstract class UBaseModifier extends UBaseMaterial {
         });
     }
 }
-abstract class UMaterial extends UBaseMaterial {
-}
+abstract class UMaterial extends UBaseMaterial { }
 
 enum OutputBlending_T {
     OB_Normal,
@@ -419,6 +419,19 @@ class UTexOscillator extends UBaseModifier {
     }
 }
 
+class UTexCoordSource extends UBaseModifier {
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
+
+        this.material.loadSelf().getDecodeInfo(library);
+
+        return this.material.uuid;
+    }
+}
+
 class UTexPanner extends UBaseModifier {
     protected rate: number;
     protected z: number;
@@ -482,4 +495,4 @@ class FStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap };
+export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource };

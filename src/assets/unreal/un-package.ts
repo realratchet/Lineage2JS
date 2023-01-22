@@ -773,6 +773,7 @@ class UNativePackage extends UPackage {
 
             case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
             case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
+            case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
             case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
             case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
             case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
@@ -797,6 +798,7 @@ class UNativePackage extends UPackage {
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
             case "L2FogInfo": Constructor = UObject; break;
+            case "L2SeamlessInfo": Constructor = UObject; break;
             case "SceneManager": Constructor = UObject; break;
             default:
                 debugger;

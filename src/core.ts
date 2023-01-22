@@ -424,7 +424,7 @@ async function startCore() {
     } as LoadSettings_T;
 
     // working (or mostly working)
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -436,6 +436,11 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_21", loadSettings));  // death pass
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_22", loadSettings));  // giran castle
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_19", loadSettings));  // elven village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "25_21", loadSettings));  // antharas lair
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "24_17", loadSettings));  // blazing swamp
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "24_18", loadSettings));  // aden castle town
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_20", loadSettings));  // hunters village
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 

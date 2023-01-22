@@ -157,6 +157,7 @@ type NativeTypes_T =
     | "StaticMeshInstance"
     | "TexRotator"
     | "TexPanner"
+    | "TexCoordSource"
     | "ColorModifier"
     | "TexOscillator"
     | "DefaultPhysicsVolume"
@@ -172,6 +173,7 @@ type UObjectTypes_T =
     | "NSun"
     | "NMoon"
     | "L2FogInfo"
+    | "L2SeamlessInfo"
     | "SceneManager"
     | "MovableStaticMeshActor";
 

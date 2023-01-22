@@ -54,7 +54,7 @@ function addImpExtension(ext: SupportedExtensions_T, ...classList: string[]) {
 }
 
 addImpExtension("UNR", "Level");
-addImpExtension("UTX", "Texture", "TexOscillator", "Shader", "ColorModifier", "FinalBlend", "TexEnvMap", "Combiner");
+addImpExtension("UTX", "Texture", "TexOscillator", "Shader", "ColorModifier", "FinalBlend", "TexEnvMap", "Combiner", "TexCoordSource", "TexPanner");
 addImpExtension("UAX", "Sound");
 addImpExtension("USX", "StaticMesh");
 addImpExtension("UKX", "Animation", "SkeletalMesh", "VertMesh");

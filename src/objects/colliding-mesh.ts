@@ -13,13 +13,13 @@ class CollidingMesh extends Mesh implements ICollidable {
     public constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], colliderIndices: Uint32Array) {
         super(geometry, material);
 
-        if (colliderIndices && geometry.hasAttribute("position"))
+        if (colliderIndices && geometry.hasAttribute("position") && colliderIndices.length > 0)
             this.makeCollider(colliderIndices, geometry.getAttribute("position").array as Float32Array);
         else this.isCollidable = false;
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
-        this.colliderDesc = ColliderDesc.trimesh(vertices, indices)
+        this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
         this.rigidbodyDesc = RigidBodyDesc.fixed();
     }
 
