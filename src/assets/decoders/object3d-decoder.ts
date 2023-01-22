@@ -178,7 +178,7 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
 
     applySimpleProperties(library, object, info);
 
-    object.add(new Mesh(geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
+    // object.add(new Mesh(geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
 
     return object;
 }

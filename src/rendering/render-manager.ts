@@ -11,7 +11,7 @@ import Stats from "./stats";
 const stats = new (Stats as any)(0);
 
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild(stats.dom);
+// document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -488,7 +488,7 @@ class RenderManager {
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
-        this.renderer.render(this.sun, this.camera);
+        // this.renderer.render(this.sun, this.camera);
         this.renderer.render(this.scene, this.camera);
     }
 
