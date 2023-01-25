@@ -68,10 +68,17 @@ abstract class UBaseExportProperty<T extends UField> extends UProperty {
 
 class UByteProperty extends UBaseExportProperty<UEnum> {
     static dtype = BufferValue.uint8;
-    public createObject() {
-        // if (this.valueId !== 0)
-        //     debugger;
+    
+    public loadSelf() {
+        super.loadSelf();
 
+        if (this.valueId !== 0 && !this.value)
+            this.value = this.pkg.fetchObject(this.valueId);
+
+        return this;
+    }
+    
+    public createObject() {
         return (pkg: UPackage) => {
             return pkg.read(new BufferValue(BufferValue.uint8)).value as number;
         }

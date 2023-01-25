@@ -1,5 +1,6 @@
 import UObject from "../un-object";
 import { UPlane } from "../un-plane";
+import { PropertyTag } from "../un-property-tag";
 import URange, { URangeVector } from "../un-range";
 import FVector from "../un-vector";
 
@@ -171,6 +172,7 @@ abstract class UParticleEmitter extends UObject {
     protected velocityLossRange: URangeVector;
     protected velocityScale: FArray<UParticleVelocityScale>;
     protected velocityScaleRepeats: number;
+    protected rotateVelocityLossRange: boolean = false;
 
     /* Warmup
        Note: Warmup precalculates particle spawning and movement so when the emitter first comes into sight it looks like it has been running for some time already. */
@@ -193,7 +195,7 @@ abstract class UParticleEmitter extends UObject {
     protected _particles: any;
     protected _particleIndex: any;
     protected _activeParticles: any;
-    protected _pPSFraction: any;
+    protected ppsFraction: number = 0;
     protected _boundingBox: any;
     protected _realExtentMultiplier: any;
     protected _realDisableFogging: any;
@@ -209,11 +211,11 @@ abstract class UParticleEmitter extends UObject {
     protected _currentSpawningSoundIndex: any;
     protected _currentMeshSpawningIndex: any;
     protected _maxSizeScale: any;
-    protected _killPending: any;
-    protected _deferredParticles: any;
+    protected killPending: any = false;
+    protected deferredParticles: number = 0;
     protected _realMeshNormal: any;
     protected _meshVertsAndNormals: any;
-    protected _currentSpawnOnTrigger: any;
+    protected currentSpawnOnTrigger: number = 0;
     protected _bOwnerTracking: any;
     protected _curLifeTime: any;
     protected _bNotifyPreDestroy: any;
@@ -348,6 +350,7 @@ abstract class UParticleEmitter extends UObject {
             "StartLocationPolarRange": "startLocationPolarRange",
             "StartLocationRange": "startLocationRange",
             "StartLocationShape": "startLocationShape",
+            "RotateVelocityLossRange": "rotateVelocityLossRange",
 
 
             "IndependentSprayAccel": "_independentSprayAccel",
@@ -362,7 +365,7 @@ abstract class UParticleEmitter extends UObject {
             "Particles": "_particles",
             "ParticleIndex": "_particleIndex",
             "ActiveParticles": "_activeParticles",
-            "PPSFraction": "_pPSFraction",
+            "PPSFraction": "ppsFraction",
             "BoundingBox": "_boundingBox",
             "RealExtentMultiplier": "_realExtentMultiplier",
             "RealDisableFogging": "_realDisableFogging",
@@ -378,11 +381,11 @@ abstract class UParticleEmitter extends UObject {
             "CurrentSpawningSoundIndex": "_currentSpawningSoundIndex",
             "CurrentMeshSpawningIndex": "_currentMeshSpawningIndex",
             "MaxSizeScale": "_maxSizeScale",
-            "KillPending": "_killPending",
-            "DeferredParticles": "_deferredParticles",
+            "KillPending": "killPending",
+            "DeferredParticles": "deferredParticles",
             "RealMeshNormal": "_realMeshNormal",
             "MeshVertsAndNormals": "_meshVertsAndNormals",
-            "CurrentSpawnOnTrigger": "_currentSpawnOnTrigger",
+            "CurrentSpawnOnTrigger": "currentSpawnOnTrigger",
             "bOwnerTracking": "_bOwnerTracking",
             "CurLifeTime": "_curLifeTime",
             "bNotifyPreDestroy": "_bNotifyPreDestroy",
@@ -393,6 +396,13 @@ abstract class UParticleEmitter extends UObject {
         });
     }
 
+    protected setProperty(tag: PropertyTag, value: any): boolean {
+        // if (value > 2)
+        //     debugger;
+
+        return super.setProperty(tag, value);
+    }
+
     public getDecodeInfo(library: DecodeLibrary) {
         if (this._particles && this._particles.length > 0)
             debugger;
@@ -401,6 +411,7 @@ abstract class UParticleEmitter extends UObject {
         //     debugger;
 
         // debugger;
+        // console.log(this);
 
         if (this.sizeScale?.length === 1)
             debugger;
@@ -416,7 +427,7 @@ abstract class UParticleEmitter extends UObject {
             acceleration: this.acceleration?.getVectorElements(),
             warmupTime: this.relativeWarmupTime,
             initial: {
-                particlesPerSecond: this.initialParticlesPerSecond,
+                particlesPerSecond: this.isAutomaticInitialSpawning ? this.maxParticles / this.lifetimeRange.mid() : this.initialParticlesPerSecond,
                 scale: this.startSizeRange.loadSelf().getDecodeInfo(library),
                 angularVelocity: this.startSpinRange?.loadSelf().getDecodeInfo(library),
                 velocity: this.startVelocityRange?.loadSelf().getDecodeInfo(library),
@@ -425,13 +436,20 @@ abstract class UParticleEmitter extends UObject {
             colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
             particlesPerSecond: this.particlesPerSecond,
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
-            blendingMode: blendingNames[this.drawStyle],
+            blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
             changesOverLifetime: {
                 scale: this.isUsingSizeScale && this.sizeScale.length > 1 ? {
                     values: this.sizeScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.sizeScaleRepeats
                 } : null
-            }
+            },
+            /**
+             * 
+             * 
+             * 
+             * 
+             */
+            allSettings: this
         };
     }
 }

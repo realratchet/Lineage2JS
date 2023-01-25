@@ -218,7 +218,20 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
 
     function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): any {
         return {
+            name: info.name,
+            type: "texture",
             map: decodeParameter(library, info),
+            blendingMode,
+            opacity
+        };
+    }
+
+    function decodeSprite(library: DecodeLibrary, info: IAnimatedSpriteDecodeInfo): any {
+        return {
+            name: info.name,
+            type: "sprite",
+            sprites: info.sprites.map(v => decodeParameter(library, v)),
+            framerate: info.framerate,
             blendingMode,
             opacity
         };
@@ -227,6 +240,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
     function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
         switch (info.materialType) {
             case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
+            case "sprite": return decodeSprite(library, info as IAnimatedSpriteDecodeInfo);
             default: throw new Error(`Unknown decodable type: ${info.materialType}`);
         }
     }

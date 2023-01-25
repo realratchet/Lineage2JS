@@ -217,7 +217,7 @@ class UShader extends UMaterial {
 
         let blendingMode: SupportedBlendingTypes_T;
 
-        switch (this.outputBlending) {
+        switch (this.outputBlending.valueOf()) {
             case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
             case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
             case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;

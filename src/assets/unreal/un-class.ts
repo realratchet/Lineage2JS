@@ -2,11 +2,12 @@ import { flagBitsToDict } from "@client/utils/flags";
 import BufferValue from "../buffer-value";
 import FArray from "./un-array";
 import FConstructable from "./un-constructable";
+import UEnum from "./un-enum";
 import UExport, { ObjectFlags_T } from "./un-export";
 import FNumber from "./un-number";
-import UObject from "./un-object";
+import UObject, { EnumeratedValue } from "./un-object";
 import UPackage from "./un-package";
-import { UArrayProperty, UProperty } from "./un-properties";
+import { UArrayProperty, UByteProperty, UProperty } from "./un-properties";
 import { PropertyTag } from "./un-property-tag";
 import UState from "./un-state";
 
@@ -139,6 +140,7 @@ class UClass extends UState {
             debugger;
 
         const clsNamedProperties: Record<string, any> = {};
+        const clsEnumProperties: Record<string, { defaultValue: number, names: string[] }> = {};
         const inheretenceChain = new Array<string>();
 
         let lastNative: UClass = null;
@@ -160,6 +162,12 @@ class UClass extends UState {
 
                 const propertyName = field.propertyName;
 
+                // if (field.propertyName.includes("Clamp"))
+                //     debugger;
+
+                // if (field.propertyName === "Style" && (this as any)[propertyName] === 8)
+                //     debugger;
+
                 if (field instanceof UArrayProperty) {
                     if (field.arrayDimensions !== 1)
                         debugger;
@@ -171,11 +179,39 @@ class UClass extends UState {
                     continue;
                 }
 
+                if (field instanceof UByteProperty && (field as any).value) {
+                    if (!((field as any).value instanceof UEnum))
+                        debugger;
+
+                    if (field.arrayDimensions !== 1)
+                        debugger;
+
+                    clsEnumProperties[propertyName] = {
+                        defaultValue: (this as any)[propertyName],
+                        names: (field as any).value.names
+                    };
+
+                    // let value: number = undefined;
+
+                    // clsEnumProperties[propertyName] = {
+                    //     get value(): number { return value; },
+                    //     set value(v: number) { value = v; },
+                    //     valueOf() { return value; },
+                    //     toString() {
+                    //         return isFinite(value) && value < (field as any).value.names.length ? (field as any).value.names[value] : `<invalid '${value}'>`;
+                    //     }
+                    // };
+
+                    continue;
+                }
+
                 clsNamedProperties[propertyName] = field.arrayDimensions > 1
                     ? propertyName in this
                         ? (this as any)[propertyName]
                         : new Array(field.arrayDimensions)
                     : (this as any)[propertyName];
+
+
             }
 
             for (const propertyName of Object.keys(defaultProperties))
@@ -215,9 +251,39 @@ class UClass extends UState {
                             missingProps.push(varname);
                         }
 
+                        // if (value === 8 && name === "Style")
+                        //     debugger;
+
                         if (value !== undefined || !(varname in this))
                             (this as any)[varname] = value;
                     }
+
+                    for (const [name, { defaultValue, names }] of Object.entries(clsEnumProperties)) {
+                        const varname = name in oldProps ? oldProps[name] : name;
+
+                        if (!(name in oldProps)) {
+                            newProps[varname] = varname;
+                            missingProps.push(varname);
+                        }
+
+                        // if (defaultValue === 8 && name === "Style")
+                        //     debugger;
+
+                        const oldValue = varname in this && (this as any)[varname] !== undefined ? (this as any)[varname] as number : defaultValue;
+                        const value = new EnumeratedValue(oldValue, names);
+
+                        if (varname in this)
+                            delete (this as any)[varname];
+
+                        (this as any)[varname] = value;
+
+                        // Object.defineProperty(this, varname, {
+                        //     value,
+                        //     writable: false
+                        // });
+                    }
+
+                    // debugger;
 
                     if (missingProps.length > 0)
                         console.warn(`Native type '${Constructor.name}' is missing property '${missingProps.join(", ")}'`);

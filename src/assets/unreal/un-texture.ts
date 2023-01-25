@@ -110,7 +110,6 @@ class UTexture extends UMaterial {
 
             "LODSet": "lodSet",
 
-
             "LossDetail": "_lossDetail",
 
             "DetailTexture": "_detailTexture",
@@ -174,7 +173,7 @@ class UTexture extends UMaterial {
     }
 
     protected getTexturePixelFormat(): ETexturePixelFormat {
-        switch (this.format) {
+        switch (this.format.valueOf()) {
             // case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
             case ETextureFormat.TEXF_DXT1: return ETexturePixelFormat.TPF_DXT1;
             // case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;

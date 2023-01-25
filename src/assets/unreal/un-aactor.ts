@@ -36,15 +36,15 @@ abstract class UAActor extends UObject {
     protected _mesh: any;
     protected forcedRegionTag: string;
 
-    protected _physics: any;
-    protected _drawType: any;
+    protected _physics: EPhysics_T;
+    protected _drawType: EDrawType_T;
     protected _staticMesh: any;
     protected _owner: any;
     protected _base: any;
     protected _actorRenderData: any;
     protected _lightRenderData: any;
     protected _renderRevision: any;
-    protected _staticFilterState: any;
+    protected _staticFilterState: EFilterState_T;
     protected _forcedVisibilityZoneTag: any;
     protected _bSpecialLit: any;
     protected _bActorShadows: any;
@@ -266,7 +266,7 @@ abstract class UAActor extends UObject {
     protected _associatedActorTag: any;
 
     protected skins = new FObjectArray();
-    protected style: number;
+    protected style: ERenderStyle_T;
     protected isIgnoredRange: boolean;
     protected isDirectional: boolean = false;
 
@@ -608,3 +608,76 @@ abstract class UAActor extends UObject {
 
 export default UAActor;
 export { UAActor };
+
+enum ERenderStyle_T {
+    STY_None,
+    STY_Normal,
+    STY_Masked,
+    STY_Translucent,
+    STY_Modulated,
+    STY_Alpha,
+    STY_Additive,
+    STY_Subtractive,
+    STY_Particle,
+    STY_AlphaZ,
+};
+
+enum EPhysics_T {
+    PHYS_None,
+    PHYS_Walking,
+    PHYS_Falling,
+    PHYS_Swimming,
+    PHYS_Flying,
+    PHYS_Rotating,
+    PHYS_Projectile,
+    PHYS_Interpolating,
+    PHYS_MovingBrush,
+    PHYS_Spider,
+    PHYS_Trailer,
+    PHYS_Ladder,
+    PHYS_RootMotion,
+    PHYS_Karma,
+    PHYS_KarmaRagDoll,
+    PHYS_MovingTrailer,
+    PHYS_EffectTrailer,
+    PHYS_NProjectile,
+    PHYS_NMover,
+    PHYS_L2Movement,
+};
+
+enum EDrawType_T {
+    DT_None,
+    DT_Sprite,
+    DT_Mesh,
+    DT_Brush,
+    DT_RopeSprite,
+    DT_VerticalSprite,
+    DT_Terraform,
+    DT_SpriteAnimOnce,
+    DT_StaticMesh,
+    DT_DrawType,
+    DT_Particle,
+    DT_AntiPortal,
+    DT_FluidSurface,
+    DT_Sun,
+    DT_MusicVolume,
+    DT_Custom // need collision detection even without its mesh
+};
+
+enum EFilterState_T {
+    FS_Maybe,
+    FS_Yes,
+    FS_No
+};
+
+enum EDetailMode_T {
+    DM_Low,
+    DM_High,
+    DM_SuperHigh
+};
+
+enum EL2EventCmd_T {
+    LEC_None,
+    LEC_Show,
+    LEC_Play
+};

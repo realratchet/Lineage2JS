@@ -30,6 +30,8 @@ class URange extends UObject {
     public getDecodeInfo(library: DecodeLibrary): Range_T { return [this.min, this.max]; }
 
     public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
+
+    public mid() { return (this.max + this.min) / 2; }
 }
 
 class URangeVector extends UObject {

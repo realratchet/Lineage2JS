@@ -8,5 +8,14 @@ declare module "*.fs" {
     export default value;
 }
 
-type ParticleMaterialInitSettings_T = { map: IDecodedParameter, blendingMode: ParticleBlendModes_T, opacity: number }
+type ParticleMaterialInitSettings_T = {
+    name: string
+    type: "sprite" | "texture",
+    map: IDecodedParameter,
+    sprites: IDecodedParameter[],
+    blendingMode: ParticleBlendModes_T,
+    opacity: number,
+    framerate?: number
+};
+
 type ParticleMaterial = import("./particle-material").ParticleMaterial;

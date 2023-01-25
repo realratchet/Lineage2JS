@@ -18,6 +18,23 @@ type RegisterNativeFunc_T = {
 
 // const dependencyMap = new Array();
 
+class EnumeratedValue {
+    public value: number;
+    protected enumerations: Readonly<string[]>;
+
+    constructor(value: number, enumerations: string[]) {
+        this.value = value;
+        this.enumerations = Object.freeze(enumerations);
+
+        Object.seal(this);
+    }
+
+    valueOf(): number { return this.value; }
+    toString() {
+        return isFinite(this.value) && this.value < this.enumerations.length ? this.enumerations[this.value] : `<invalid '${this.value}'>`;
+    }
+}
+
 abstract class UObject {
     public objectName = "Exp_None";
     public exportIndex?: number = null;
@@ -363,6 +380,9 @@ abstract class UObject {
         const varName = this.getPropertyVarName(tag);
         const { name: propName, arrayIndex } = tag;
 
+        if (value === 8 && this.constructor.friendlyName?.toLowerCase().includes("emitter"))
+            debugger;
+
         if (!varName)
             throw new Error(`Unrecognized property '${propName}' for '${this.constructor.name}' of type '${value === null ? "NULL" : typeof (value) === "object" ? value.constructor.name : typeof (value)}'`);
 
@@ -372,8 +392,12 @@ abstract class UObject {
         if (tag.arrayIndex < 0 || tag.arrayIndex >= this.getPropCount(tag.name))
             throw new Error(`Something went wrong, expected index '${tag.arrayIndex} (max: '${this.getPropCount(tag.name)}')'.`);
 
+        if (tag.name === "Style")
+            debugger;
+
         if ((this as any)[varName] instanceof Array) ((this as any)[varName] as Array<any>)[arrayIndex] = value;
         else if ((this as any)[varName] instanceof Set) ((this as any)[varName] as Set<any>).add(value);
+        else if ((this as any)[varName] instanceof EnumeratedValue) (this as any)[varName].value = value;
         else (this as any)[varName] = value;
 
         // console.log(`Setting '${this.constructor.name}' property: ${propName}[${arrayIndex}] -> ${typeof (value) === "object" && value !== null ? value.constructor.name : value}`);
@@ -385,4 +409,4 @@ abstract class UObject {
 }
 
 export default UObject;
-export { UObject };
+export { UObject, EnumeratedValue };

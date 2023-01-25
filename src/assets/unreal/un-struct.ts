@@ -169,6 +169,9 @@ class UStruct extends UField {
 
                 const field = pkg.fetchObject<UProperty>(childPropId).loadSelf();
 
+                // if (field.propertyName === "Style")
+                //     debugger;
+
                 this.childPropFields.push(field);
 
                 childPropId = field.nextFieldId;

@@ -473,7 +473,8 @@ function decodeEmitterConfig(info: IEmitterDecodeInfo) {
         },
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
-        colorMultiplierRange: info.colorMultiplierRange
+        colorMultiplierRange: info.colorMultiplierRange,
+        allSettings: info.allSettings
     };
 }
 
@@ -494,6 +495,7 @@ function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo)
 
     return emitter;
 }
+
 
 function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
     const material = decodeMaterial(library, {

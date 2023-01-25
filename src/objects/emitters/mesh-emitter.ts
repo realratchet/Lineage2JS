@@ -1,4 +1,4 @@
-import ParticleMaterial from "@client/materials/particle-material";
+import ParticleMaterial, { AnimatedParticleMaterial } from "@client/materials/particle-material";
 import { Mesh } from "three";
 import BaseEmitter from "./base-emitter";
 
@@ -14,8 +14,10 @@ class MeshEmitter extends BaseEmitter {
     protected initParticleMesh() {
         return new ParticleMesh(
             this.geometry,
-            this.materials instanceof Array ? this.materials.map(m => new ParticleMaterial(m)) : new ParticleMaterial(this.materials)
-        );
+            this.materials instanceof Array
+                ? this.materials.map(m => new (m.type === "sprite" ? AnimatedParticleMaterial : ParticleMaterial)(m))
+                : new (this.materials.type === "sprite" ? AnimatedParticleMaterial : ParticleMaterial)(this.materials)
+        ) as any;
     }
 }
 

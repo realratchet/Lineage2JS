@@ -106,7 +106,11 @@ abstract class UEmitter extends UAActor {
     }
 
     public getDecodeInfo(library: DecodeLibrary) {
+        // debugger;
+
         const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as IBaseObjectOrInstanceDecodeInfo[];
+
+        // debugger;
 
         const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
         const _position = this.location.getVectorElements();
