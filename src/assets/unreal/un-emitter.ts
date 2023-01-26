@@ -105,12 +105,33 @@ abstract class UEmitter extends UAActor {
         });
     }
 
+    _setProperties = [];
+
+    protected setProperty(tag: PropertyTag, value: any): boolean {
+        // if (value > 2)
+        //     debugger;
+
+        this._setProperties.push([
+            tag.name,
+            value.toString()
+        ]);
+
+        return super.setProperty(tag, value);
+    }
+
     public getDecodeInfo(library: DecodeLibrary) {
         // debugger;
 
         const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as IBaseObjectOrInstanceDecodeInfo[];
 
-        // debugger;
+        // this.rotation.pitch = 0;
+        // this.rotation.yaw = 0;
+        // this.rotation.roll = 0;
+
+        debugger;
+
+        // if (this.objectName === "Exp_Emitter7")
+        //     debugger;
 
         const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
         const _position = this.location.getVectorElements();

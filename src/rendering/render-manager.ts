@@ -53,6 +53,9 @@ class RenderManager {
 
     public readonly physicsWorld: RAPIER.World;
 
+    protected activeSector = 0;
+    protected sectorBounds = new Array<THREE.Box3>();
+
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
         this.renderer = new WebGLRenderer({
@@ -217,6 +220,12 @@ class RenderManager {
                 this.controls.orbit.target.set(18965.828211115713, -6064.126549127763, 106770.89206042158);
                 this.controls.orbit.update();
                 break;
+            case "+":
+                this.nextSector();
+                break;
+            case "-":
+                this.prevSector();
+                break;
             case "w": if (!this.isOrbitControls) this.dirKeys.up = true; break;
             case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
             case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
@@ -226,6 +235,28 @@ class RenderManager {
                 this.dirKeys.shift = true;
             } break;
         }
+    }
+
+    protected setSector(index: number) {
+        const sector = this.sectorBounds[index];
+
+        this.camera.position.copy(sector.max);
+        this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
+        this.controls.orbit.update();
+
+        this.activeSector = index;
+    }
+
+    protected nextSector() {
+        if (this.sectorBounds.length <= 0) return;
+
+        this.setSector((this.activeSector + 1) % this.sectorBounds.length);
+    }
+
+    protected prevSector() {
+        if (this.sectorBounds.length <= 0) return;
+
+        this.setSector(this.activeSector === 0 ? (this.sectorBounds.length - 1) : (this.activeSector - 1))
     }
 
     public onHandleKeyUp(event: KeyboardEvent) {
@@ -529,6 +560,8 @@ class RenderManager {
 
             this.sectors.get(sector.index.x).set(sector.index.y, sector);
         }
+
+        this.sectorBounds.push(new Box3().setFromObject(sector));
 
         this.objectGroup.add(sector);
     }

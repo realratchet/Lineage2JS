@@ -800,6 +800,7 @@ class UNativePackage extends UPackage {
             case "L2FogInfo": Constructor = UObject; break;
             case "L2SeamlessInfo": Constructor = UObject; break;
             case "SceneManager": Constructor = UObject; break;
+            case "PathNode": Constructor = UObject; break;
             default:
                 debugger;
                 throw new Error(`Not implemented native class: ${constructorName}`);

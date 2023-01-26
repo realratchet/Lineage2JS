@@ -1,10 +1,11 @@
 import UObject from "./un-object";
+import FVector from "./un-vector";
 
 class URange extends UObject {
-    protected min: number = 0;
-    protected max: number = 0;
+    protected min: number;
+    protected max: number;
 
-    constructor(min: number, max: number) {
+    constructor(min: number = 0, max: number = 0) {
         super();
 
         this.min = min;
@@ -32,6 +33,7 @@ class URange extends UObject {
     public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
 
     public mid() { return (this.max + this.min) / 2; }
+    public rand() { return this.max + (this.min - this.max) * Math.random(); }
 }
 
 class URangeVector extends UObject {
@@ -39,7 +41,7 @@ class URangeVector extends UObject {
     protected y: URange;
     protected z: URange;
 
-    constructor(x: URange, y: URange, z: URange) {
+    constructor(x = new URange(), y = new URange(), z = new URange()) {
         super();
 
         this.x = x;
@@ -67,6 +69,8 @@ class URangeVector extends UObject {
     }
 
     public toString() { return `RangeVector=(x=${this.x}, y=${this.y}, z=${this.z})`; }
+
+    public rand() { return new FVector(this.x.rand(), this.y.rand(), this.z.rand()); }
 }
 
 export default URange;
