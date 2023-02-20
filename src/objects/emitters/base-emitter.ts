@@ -1,6 +1,7 @@
 import { Box3, Object3D, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 
+
 class Particle_T {
     public readonly position = new Vector3();
     public readonly OldLocation = new Vector3();
@@ -158,7 +159,7 @@ abstract class BaseEmitter extends Object3D {
 
         this.maxActiveParticles = this.maxParticles;
 
-        // debugger;
+        debugger;
 
         this.initSettings(config);
 

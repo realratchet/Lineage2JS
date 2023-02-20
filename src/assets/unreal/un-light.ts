@@ -7,12 +7,12 @@ import FNumber from "./un-number";
 import FVector from "./un-vector";
 
 class ULight extends UAActor {
-    public effect: LightEffect_T = 0;
+    public effect: LightEffect_T = LightEffect_T.LE_None;
     public lightness: number = 255;
     public radius: number;
     public hue: number = 0;
     public saturation: number = 127;
-  
+
     public type: LightType_T = 1;
     public hasCorona: boolean = false;
     public period: number = 0;
@@ -21,8 +21,6 @@ class ULight extends UAActor {
     public isDynamic: boolean = false;
     public lightOnTime: number;
     public lightOffTime: number;
-    
-
 
 
     protected maxCoronaSize: number;
@@ -43,19 +41,19 @@ class ULight extends UAActor {
             "LightBrightness": "lightness",
             "LightHue": "hue",
             "LightSaturation": "saturation",
-       
+
             "LightType": "type",
             "bCorona": "hasCorona",
-            
+
             "LightPeriod": "period",
             "LightPhase": "phase",
             "LightCone": "cone",
             "bDynamicLight": "isDynamic",
-          
+
             "LightOnTime": "lightOnTime",
             "LightOffTime": "lightOffTime",
 
-           
+
 
 
             "MaxCoronaSize": "maxCoronaSize",
@@ -137,13 +135,15 @@ class ULight extends UAActor {
     }
 
     public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
+        // debugger;
+
         return {
             uuid: this.uuid,
             type: "Light",
             color: this.getColor(),
             cone: this.cone,
-            lightType: this.type,
-            lightEffect: this.effect,
+            lightType: this.type.valueOf(),
+            lightEffect: this.effect.valueOf(),
             directional: this.isDirectional,
             radius: this.radius,
             name: this.objectName,
@@ -155,8 +155,47 @@ class ULight extends UAActor {
     }
 }
 
+enum LightEffect_T {
+    LE_None = 0x00,
+    LE_TorchWaver = 0x01,
+    LE_FireWaver = 0x02,
+    LE_WateryShimmer = 0x03,
+    LE_Searchlight = 0x04,
+    LE_SlowWave = 0x05,
+    LE_FastWave = 0x06,
+    LE_CloudCast = 0x07,
+    LE_StaticSpot = 0x08,
+    LE_Shock = 0x09,
+    LE_Disco = 0x0A,
+    LE_Warp = 0x0B,
+    LE_Spotlight = 0x0C,
+    LE_NonIncidence = 0x0D,
+    LE_Shell = 0x0E,
+    LE_OmniBumpMap = 0x0F,
+    LE_Interference = 0x10,
+    LE_Cylinder = 0x11,
+    LE_Rotor = 0x12,
+    LE_Sunlight = 0x13,
+    LE_QuadraticNonIncidence = 0x14
+}
+
+enum LightType_T {
+    LT_None = 0x0,
+    LT_Steady = 0x1,
+    LT_Pulse = 0x2,
+    LT_Blink = 0x3,
+    LT_Flicker = 0x4,
+    LT_Strobe = 0x5,
+    LT_BackdropLight = 0x6,
+    LT_SubtlePulse = 0x7,
+    LT_TexturePaletteOnce = 0x8,
+    LT_TexturePaletteLoop = 0x9,
+    LT_FadeOut = 0xA,
+    LT_Fade = 0xB
+};
+
 export default ULight;
-export { ULight };
+export { ULight, LightEffect_T, LightType_T };
 
 function LODWORD(x: number) { return x & 0xFFFFFFFF };
 
@@ -264,4 +303,5 @@ const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
 
 //     return out;
 // })();
+
 

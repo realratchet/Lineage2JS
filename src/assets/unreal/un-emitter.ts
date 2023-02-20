@@ -128,7 +128,7 @@ abstract class UEmitter extends UAActor {
         // this.rotation.yaw = 0;
         // this.rotation.roll = 0;
 
-        debugger;
+        // debugger;
 
         // if (this.objectName === "Exp_Emitter7")
         //     debugger;
@@ -137,7 +137,7 @@ abstract class UEmitter extends UAActor {
         const _position = this.location.getVectorElements();
         const actorInfo = {
             uuid: this.uuid,
-            type: "Group",
+            type: "Emitter",
             name: this.objectName,
             position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],

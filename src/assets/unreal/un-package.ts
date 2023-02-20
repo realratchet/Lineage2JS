@@ -269,7 +269,7 @@ class UPackage extends UEncodedFile {
             list.push({ index, export: exp });
 
             return accum;
-        }, {} as Record<string, { index: number, export: UExport }[]>)
+        }, {} as Record<string, { index: number, export: UExport }[]>);
 
         Object.assign(this, readable, { isReadable: false });
 
@@ -451,13 +451,10 @@ class UPackage extends UEncodedFile {
                 throw new Error(`(${packageName}) [${className}, ${objectName}, ${groupName}] should not be null`);
             }
 
-            // What a garbage engine!
             if (!obj && packageName == "UnrealI")
-                debugger;
-            // obj = Packages->GetPackage("UnrealShare")->GetUObject(className, objectName, groupName);
+                throw new Error("Not yet implemented");
             else if (!obj && packageName == "UnrealShare")
-                debugger
-            // obj = Packages->GetPackage("UnrealI")->GetUObject(className, objectName, groupName);
+                throw new Error("Not yet implemented");
 
             return obj as T;
         }

@@ -75,6 +75,16 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
     return object;
 }
 
+
+function decodeEmitterObject(library: DecodeLibrary, info: IBaseObjectDecodeInfo) {
+    const object = decodeSimpleObject(library, Object3D, info);
+
+    object.add(new AxesHelper(100));
+
+    return object;
+}
+
+
 function decodeSimpleObject(library: DecodeLibrary, Constructor: (typeof Object3D | typeof Group), info: IBaseObjectDecodeInfo) {
     const object = new Constructor();
 
@@ -522,6 +532,7 @@ function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecod
         case "Group":
         case "Level":
         case "TerrainInfo": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
+        case "Emitter": return decodeEmitterObject(library, info as IBaseObjectDecodeInfo);
         case "StaticMeshActor": return decodeStaticMeshActor(library, info as IStaticMeshActorDecodeInfo);
         case "Light": return decodeLight(library, info as ILightDecodeInfo);
         case "TerrainSegment": return decodeTerrainSegment(library, info as IStaticMeshObjectDecodeInfo);

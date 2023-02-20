@@ -31,11 +31,10 @@ class UState extends UStruct {
     protected ignoreMask: bigint;
     protected stateFlags: number;
     protected labelTableOffset: number;
+    protected probes: string[];
 
     public readonly functions: Record<string, UFunction> = {};
-
     public readonly isState = true;
-    probes: string[];
 
     protected static getConstructorName() { return "State"; }
 

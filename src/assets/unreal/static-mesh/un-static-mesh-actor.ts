@@ -357,6 +357,8 @@ class UStaticMeshActor extends UAActor {
                     instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity * lightInfo.lightness);
                     instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity * lightInfo.lightness);
                     instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity * lightInfo.lightness);
+
+                    // debugger;
                 }
 
                 if ((someFlag & 0x7f) === 0x0) {

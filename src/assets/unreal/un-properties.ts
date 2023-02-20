@@ -43,8 +43,6 @@ abstract class UProperty extends UField {
 
         this.readHead = pkg.tell();
     }
-
-    public abstract loadValue(pkg: UPackage): this;
     public abstract createObject(): any;
 }
 

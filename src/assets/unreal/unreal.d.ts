@@ -40,6 +40,8 @@ type ULevel = import("./un-level").ULevel;
 type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
 type USound = import("./un-sound").USound;
 type ULight = import("./un-light").ULight;
+type LightEffect_T = import("./un-light").LightEffect_T;
+type LightType_T = import("./un-light").LightType_T;
 type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
 type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
 type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
@@ -247,7 +249,7 @@ interface IDecodedSpriteParameter extends IDecodedParameter {
 type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effect" | "Animation" | "Script";
 type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone";
+type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone" | "Emitter";
 
 type Vector2Arr = [number, number];
 type Vector4Arr = [number, number, number, number];
@@ -396,37 +398,6 @@ interface IBoneDecodeInfo extends IBaseObjectDecodeInfo {
 
 type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
-type LightType_T = number | {
-    None: 0,
-    Steady: 1,
-    Pulse: 2,
-    Blink: 3,
-    Flicker: 4,
-    Strobe: 5,
-    SubtlePulse: 6,
-    TexturePaletteOnce: 7,
-    TexturePaletteLoop: 8
-};
-
-type LightEffect_T = number | {
-    TorchWaver: 0x0,
-    FireWaver: 0x1,
-    WateryShimmer: 0x2,
-    SearchLight: 0x3,
-    SlowWave: 0x4,
-    FastWave: 0x5,
-    Shock: 0x6,
-    Disco: 0x7,
-    Spotlight: 0x8,
-    NonIncidence: 0x9,
-    ShellOnly: 0xA,
-    OmniBumpMap: 0xB,
-    Interference: 0xC,
-    Cylinder: 0xD,
-    Rotor: 0xE,
-    Unused: 0xF
-};
-
 interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
 
 interface IZoneFogInfo {
@@ -458,3 +429,4 @@ type IKeyframeDecodeInfo_T = {
 
 type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+

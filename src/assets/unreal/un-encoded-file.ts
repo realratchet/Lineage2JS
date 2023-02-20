@@ -1,5 +1,4 @@
 import BufferValue from "../buffer-value";
-import * as forge from "node-forge";
 import * as decoders from "./decryption/decoders";
 import * as _gmp from "gmp-wasm";
 
