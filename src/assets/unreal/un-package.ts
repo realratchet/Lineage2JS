@@ -21,7 +21,7 @@
 // import UModel from "./model/un-model";
 // import UPolys from "./un-polys";
 // import UBrush from "./un-brush";
-// import ULevel from "./un-level";
+import ULevel from "./un-level";
 // import UAmbientSoundObject from "./un-ambient-sound";
 // import USound from "./un-sound";
 // import ULight from "./un-light";
@@ -93,25 +93,31 @@ class UPackage extends AUPackage {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 }
-
-enum PackageFlags_T {
-    NoFlags = 0,
-    AllowDownload = 0x0001, // Allow downloading package
-    ClientOptional = 0x0002, // Purely optional for clients
-    ServerSideOnly = 0x0004, // Only needed on the server side
-    BrokenLinks = 0x0008, // Loaded from linker with broken import links
-    Unsecure = 0x0010, // Not trusted
-    Need = 0x8000 // Client needs to download this package
-}
-
 class UNativePackage extends AUNativePackage {
 
     public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: string): new () => T {
-        throw new Error("Not implemented yet");
+        let Constructor: any;
+
+        switch (constructorName) {
+            default:
+                debugger;
+                throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
+        }
+
+        return Constructor;
     }
 
     protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: C.NativeTypes_T): new () => T {
-        throw new Error("Not implemented yet");
+        let Constructor: any;
+
+        switch (constructorName) {
+            case "Level": Constructor = ULevel; break;
+            default:
+                debugger;
+                throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
+        }
+
+        return Constructor;
     }
 
     // public readonly nativeClassess = new Map<C.NativeTypes_T, typeof UObject>();
@@ -438,7 +444,7 @@ class UNativePackage extends AUNativePackage {
 }
 
 export default UPackage;
-export { UPackage, PackageFlags_T, UNativePackage };
+export { UPackage, UNativePackage };
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;
