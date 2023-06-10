@@ -1,4 +1,5 @@
 import C = L2JS.Core;
+import IConstructable = C.IConstructable;
 
 // type DecodeLibrary = import("./decode-library").DecodeLibrary;
 // type UPackage = import("./un-package").UPackage;

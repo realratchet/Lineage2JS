@@ -1,5 +1,4 @@
 import UPrimitive from "../un-primitive";
-import FArray, { FPrimitiveArray } from "../un-array";
 import FVert from "./un-vert";
 import FVector from "../un-vector";
 import FBSPNode from "../bsp/un-bsp-node";
@@ -8,17 +7,14 @@ import UPolys, { PolyFlags_T } from "../un-polys";
 import { BufferValue } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
 import FBox from "../un-box";
-import FNumber from "../un-number";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import { FPlane } from "../un-plane";
+import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-type UPackage = import("../un-package").UPackage;
-type UExport = import("../un-export").UExport;
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
@@ -38,16 +34,16 @@ class UModel extends UPrimitive {
     protected polys: UPolys = null;
     protected zones: FZoneProperties[] = [];
     protected bounds = new FArray(FBox);
-    protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
+    protected leafHulls = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
     protected rootOutside: boolean;
     protected linked: boolean;
 
-    protected unkArr0: number[];
+    protected unkArr0 = new FIndexArray();
     protected unkInt0: number;
     protected unkInt1: number;
 
-    protected doLoad(pkg: UPackage, exp: UExport): this {
+    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
@@ -98,7 +94,7 @@ class UModel extends UPrimitive {
         this.leafHulls.load(pkg);
         this.leaves.load(pkg);
 
-        this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
+        this.unkArr0.load(pkg);
 
         this.readHead = pkg.tell();
 

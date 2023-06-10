@@ -1,8 +1,7 @@
 import { BufferValue } from "@l2js/core";
-import { FPrimitiveArray } from "./un-array";
-import FConstructable from "./un-constructable";
+import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-class FURL extends FConstructable {
+class FURL implements C.IConstructable {
     public protocol: string;
     public host: string;
     public port: number = 0;
@@ -11,7 +10,7 @@ class FURL extends FConstructable {
     public op = new FPrimitiveArray(BufferValue.uint32);
     public isValid: boolean = false;
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
         this.isValid = true;
 
         const uint32 = new BufferValue(BufferValue.uint32);

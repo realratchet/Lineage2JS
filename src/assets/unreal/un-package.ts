@@ -1,3 +1,5 @@
+import "./un-object-mixin";
+
 // import { BufferValue } from "@l2js/core";
 // import UHeader from "./un-header";
 // import UGeneration from "./un-generation";
@@ -7,7 +9,6 @@
 // import UTexture from "./un-texture";
 // import UMeshEmitter from "./emitters/un-mesh-emitter";
 // import { UObject } from "@l2js/core";
-// import "./un-object-mixin";
 // import UClass from "./un-class";
 // import UStruct from "./un-struct";
 // import UPlatte from "./un-palette";
@@ -78,9 +79,9 @@ import ULevel from "./un-level";
 // import { UPlane } from "./un-plane";
 // import { UParticle, UParticleColorScale, UParticleRevolutionScale, UParticleSound, UParticleTimeScale, UParticleVelocityScale } from "./emitters/un-particle-emitter";
 // import UMovableStaticMeshActor from "./static-mesh/un-movable-static-mesh-actor";
-import { AUNativePackage, AUPackage, UObject } from "@l2js/core";
+import { ANativePackage, APackage, UObject } from "@l2js/core";
 
-class UPackage extends AUPackage {
+class UPackage extends APackage {
     protected async readArrayBuffer() {
         const response = await fetch(this.path);
 
@@ -93,7 +94,7 @@ class UPackage extends AUPackage {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 }
-class UNativePackage extends AUNativePackage {
+class UNativePackage extends ANativePackage {
 
     public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: string): new () => T {
         let Constructor: any;
@@ -111,6 +112,7 @@ class UNativePackage extends AUNativePackage {
         let Constructor: any;
 
         switch (constructorName) {
+            // case "Model": Constructor = UModel; break;
             case "Level": Constructor = ULevel; break;
             default:
                 debugger;

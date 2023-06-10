@@ -1,6 +1,6 @@
 // import * as _path from "path";
 
-import { AAssetLoader, AUNativePackage, AUPackage } from "@l2js/core";
+import { AAssetLoader, ANativePackage, APackage } from "@l2js/core";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
 
@@ -206,11 +206,11 @@ class AssetLoader extends AAssetLoader {
         return new AssetLoader().init(assetList, Library);
     }
 
-    protected createNativePackage(UNativePackage: C.AUNativePackageConstructor): AUNativePackage {
+    protected createNativePackage(UNativePackage: C.ANativePackageConstructor): ANativePackage {
         return new UNativePackage(this);
     }
 
-    protected createPackage(UPackage: C.AUPackageConstructor, downloadPath: string): AUPackage {
+    protected createPackage(UPackage: C.APackageConstructor, downloadPath: string): APackage {
         return new UPackage(this, `assets/${downloadPath}`);
     }
 }

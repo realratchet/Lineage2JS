@@ -1,21 +1,21 @@
-import { UObject } from "@l2js/core";
-import { BufferValue } from "@l2js/core";
 import FURL from "./un-url";
-import { FPrimitiveArray } from "./un-array";
+import { UObject, BufferValue } from "@l2js/core";
+import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
     public readonly url: FURL = new FURL();
-    protected reachSpecs: FPrimitiveArray = new FPrimitiveArray(BufferValue.uint32);
+    protected reachSpecs = new FPrimitiveArray(BufferValue.uint32);
     public baseModelId: number;
     protected baseModel: UModel;
 
     protected unkBytes = BufferValue.allocBytes(3);
     protected unkInt0: number;
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
+        debugger;
         const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);
 
@@ -23,7 +23,7 @@ class ULevel extends UObject {
 
         pkg.seek(this.readHead, "set");
 
-        this.readNamedProps(pkg);
+        this.readNamedProps(pkg, exp);
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();

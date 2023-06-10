@@ -1,27 +1,16 @@
 import { UObject } from "@l2js/core";
-import FArray from "./un-array";
 import { FStaticMeshMaterial } from "./un-material";
 import FBox from "./un-box";
 import USphere from "./un-sphere";
-import UExport from "./un-export";
-import UPackage from "./un-package";
+import FArray from "@l2js/core/src/unreal/un-array";
 
 class UPrimitive extends UObject {
     protected static getConstructorName() { return "Primitive"; }
 
-    protected materials: FArray<FStaticMeshMaterial> = new FArray(FStaticMeshMaterial);
-    protected swayObject: boolean;
     protected boundingBox: FBox = new FBox();
     protected boundingSphere: USphere = new USphere();
 
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "Materials": "materials",
-            "bSwayObject": "swayObject"
-        });
-    }
-
-    protected doLoad(pkg: UPackage, exp: UExport) {
+    protected doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
         this.boundingBox.load(pkg);

@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "",
     "main": "index.js",
+    "typings": "index.d.ts",
     "scripts": {
         "start": "node_modules/.bin/webpack serve --config configs/development.config.js --port 8080 --host 0.0.0.0",
         "build-dev": "rm -rf bin/ && node_modules/.bin/webpack --config configs/development.config.js"
