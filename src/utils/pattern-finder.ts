@@ -1,4 +1,4 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 
 function findPattern(pkg: UPackage, pattern: number[]) {
     const prevOffset = pkg.tell();

@@ -1,4 +1,4 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 import { NumberContainerType, UTF16ContainerType } from "./dat-container";
 
 const SCHEMA_NPCGRP_DAT = [

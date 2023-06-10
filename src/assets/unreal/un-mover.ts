@@ -1,4 +1,4 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 
 // Likely for doors and stuff
 class UMover extends UObject {

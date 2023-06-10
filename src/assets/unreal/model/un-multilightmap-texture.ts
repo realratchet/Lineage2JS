@@ -1,5 +1,5 @@
 import { generateUUID } from "three/src/math/MathUtils";
-import BufferValue from "../../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
 import FConstructable from "../un-constructable";
 import decompressDDS from "../../dds/dds-decode";

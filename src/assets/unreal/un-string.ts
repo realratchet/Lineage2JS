@@ -1,7 +1,7 @@
 import FConstructable from "./un-constructable";
 import UPackage from "./un-package";
 import { PropertyTag } from "./un-property-tag";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class FString extends FConstructable {
     public value: string;

@@ -1,7 +1,7 @@
 import FConstructable from "./un-constructable";
 import FArray from "./un-array";
 import FColor from "./un-color";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class FRawColorStream extends FConstructable {
     public color: FArray<FColor> = new FArray(FColor);

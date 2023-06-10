@@ -1,6 +1,6 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import FString from "./un-string";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class UTextBuffer extends UObject {
     public pos: number;

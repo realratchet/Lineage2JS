@@ -1,6 +1,6 @@
 import FArray from "./un-array";
 import FNumber from "./un-number";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import UInfo from "./un-info";
 
 class UZoneInfo extends UInfo implements IInfo {

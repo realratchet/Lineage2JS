@@ -1,4 +1,4 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import { FColor } from "./un-color";
 import { URange, URangeVector } from "./un-range";
 import UPointRegion from "./un-point-region";

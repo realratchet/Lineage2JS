@@ -1,5 +1,5 @@
 import FConstructable from "./un-constructable";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class FZoneProperties extends FConstructable {
     public connectivity: bigint;

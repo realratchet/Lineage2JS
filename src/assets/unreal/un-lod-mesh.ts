@@ -1,4 +1,4 @@
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "./un-array";
 import FColor from "./un-color";
 import FConstructable from "./un-constructable";

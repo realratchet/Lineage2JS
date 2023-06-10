@@ -1,6 +1,6 @@
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import UAActor from "./un-aactor";
 import FArray, { FObjectArray } from "./un-array";
 import FNumber from "./un-number";

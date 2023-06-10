@@ -1,6 +1,6 @@
 import FArray from "../un-array";
 import FConstructable from "../un-constructable";
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class FBSPSection extends FConstructable {
     public bspVertices = new FArray(FBSPVertex);

@@ -1,6 +1,6 @@
 import FConstructable from "./un-constructable";
-import BufferValue from "../buffer-value";
-import UObject from "./un-object";
+import { BufferValue } from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 class FPlane extends FConstructable {
     public x: number;

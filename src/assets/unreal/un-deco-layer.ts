@@ -1,4 +1,4 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 
 class UDecoLayer extends UObject {
     public readonly careUnread: boolean = false;

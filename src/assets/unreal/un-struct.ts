@@ -1,7 +1,7 @@
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import UExport, { ObjectFlags_T } from "./un-export";
 import UField from "./un-field";
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import UPackage from "./un-package";
 import UTextBuffer from "./un-text-buffer";
 import FRotator from "./un-rotator";

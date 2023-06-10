@@ -1,5 +1,5 @@
 import FArray from "../un-array";
-import BufferValue from "../../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FConstructable from "../un-constructable";
 
 class FStaticMeshUVStream extends FConstructable {

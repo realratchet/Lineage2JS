@@ -1,6 +1,6 @@
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FConstructable from "./un-constructable";
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import { UPlane } from "./un-plane";
 
 class FMatrix extends FConstructable {

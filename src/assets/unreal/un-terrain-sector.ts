@@ -1,6 +1,6 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import FBox from "./un-box";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "./un-array";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient } from "./un-time-list";

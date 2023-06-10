@@ -1,10 +1,10 @@
 import { flagBitsToDict } from "@client/utils/flags";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FArray, { FNameArray, FObjectArray, FPrimitiveArray } from "./un-array";
 import FConstructable from "./un-constructable";
 import UExport from "./un-export";
 import UField from "./un-field";
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import UPackage from "./un-package";
 
 abstract class UProperty extends UField {

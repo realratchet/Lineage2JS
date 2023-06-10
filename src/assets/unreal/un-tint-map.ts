@@ -1,5 +1,5 @@
-import UObject from "./un-object";
-import BufferValue from "../buffer-value";
+import { UObject } from "@l2js/core";
+import { BufferValue } from "@l2js/core";
 import { FPrimitiveArray } from "./un-array";
 
 class FTIntMap extends UObject {

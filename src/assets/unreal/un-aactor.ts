@@ -1,8 +1,8 @@
-import UObject from "./un-object";
 import FVector from "./un-vector";
 import FRotator from "./un-rotator";
 import { generateUUID } from "three/src/math/MathUtils";
 import { FObjectArray } from "./un-array";
+import { UObject } from "@l2js/core";
 
 abstract class UAActor extends UObject {
     protected texModifyInfo: UTextureModifyInfo;

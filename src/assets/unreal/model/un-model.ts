@@ -5,7 +5,7 @@ import FVector from "../un-vector";
 import FBSPNode from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import UPolys, { PolyFlags_T } from "../un-polys";
-import BufferValue from "../../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
 import FBox from "../un-box";
 import FNumber from "../un-number";

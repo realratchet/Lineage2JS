@@ -1,4 +1,4 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 
 class UTerrainLayer extends UObject {
     public map: UTexture = null;

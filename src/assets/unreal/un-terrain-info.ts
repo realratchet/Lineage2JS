@@ -1,7 +1,7 @@
 import UTerrainLayer from "./un-terrain-layer";
 import FArray, { FPrimitiveArray } from "./un-array";
 import UDecoLayer from "./un-deco-layer";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import UAActor from "./un-aactor";
 import FTIntMap from "./un-tint-map";
 import FNumber from "./un-number";

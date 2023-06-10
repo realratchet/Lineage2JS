@@ -1,4 +1,4 @@
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 
 enum UNP_PropertyTypes {
     UNP_ByteProperty /*      */ = 0x1,

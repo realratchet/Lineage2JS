@@ -1,8 +1,8 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "../un-array";
 import FConstructable from "../un-constructable";
 import FNumber from "../un-number";
-import UObject from "../un-object";
+import { UObject } from "@l2js/core";
 import FQuaternion from "../un-quaternion";
 import FVector from "../un-vector";
 

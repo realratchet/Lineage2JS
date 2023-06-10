@@ -1,6 +1,6 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 import FVector from "./un-vector";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FConstructable from "./un-constructable";
 
 enum PolyFlags_T {

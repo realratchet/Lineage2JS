@@ -1,4 +1,4 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class UTF16ContainerType implements IDatContainerType {
     public isContainerType = true;

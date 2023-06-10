@@ -1,4 +1,4 @@
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FArray from "./un-array";
 import UField from "./un-field";
 import FNumber from "./un-number";

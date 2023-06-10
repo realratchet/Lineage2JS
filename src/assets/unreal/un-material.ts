@@ -1,6 +1,6 @@
 import FColor from "./un-color";
-import UObject from "./un-object"
-import BufferValue from "../buffer-value";
+import { UObject } from "@l2js/core";
+import { BufferValue } from "@l2js/core";
 import { FPrimitiveArray } from "./un-array";
 import DecodeLibrary from "./decode-library";
 

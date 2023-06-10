@@ -1,6 +1,6 @@
 import UAActor from "../un-aactor";
 import FArray, { FPrimitiveArray } from "../un-array";
-import BufferValue from "../../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FVector from "../un-vector";
 import { clamp } from "three/src/math/MathUtils";
 import { FPlane } from "../un-plane";

@@ -1,5 +1,5 @@
 import hsvToRgb from "@client/utils/hsv-to-rgb";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FConstructable from "./un-constructable";
 import { FPlane } from "./un-plane";
 

@@ -1,4 +1,4 @@
-import UObject from "./un-object";
+import { UObject } from "@l2js/core";
 
 enum AlphaOperation_T {
     AO_Use_Mask,

@@ -1,25 +1,32 @@
-import BufferValue from "../../buffer-value";
-import UEncodedFile from "../un-encoded-file";
 import * as schemas from "./schema/schema-types";
+import { UEncodedFile, BufferValue } from "@l2js/core";
 
 class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
 
+    protected async readArrayBuffer(): Promise<ArrayBuffer> {
+        const response = await fetch(this.path);
+
+        if (!response.ok) throw new Error(response.statusText);
+
+        const buffer = await response.arrayBuffer();
+
+        return buffer;
+    }
+
+    public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
+
     public async decode(): Promise<this> {
-        if (this.buffer) return this;
-        if (this.promiseDecoding) {
-            await this.promiseDecoding;
-            return this;
-        }
+        await super.decode();
 
         const readable = this.asReadable();
-        const signature = await readable._doDecode();
+        const signature = this.signature;
 
-        if (signature.value !== 0x69004c)
+        if (signature !== 0x69004c)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
 
-        const uint16 = new BufferValue(BufferValue.uint32);
-        const rowCount = readable.read(uint16).value as number;
+        const uint32 = new BufferValue(BufferValue.uint32);
+        const rowCount = readable.read(uint32).value;
         const schema = schemas.SCHEMA_NPCGRP_DAT;
         const rows = [] as Record<string, any>[];
 
@@ -28,7 +35,7 @@ class UDataFile extends UEncodedFile {
 
             for (let { type, name } of schema) {
                 if (!(type as IDatContainerType).isContainerType) {
-                    const schemaValue = readable.read(new BufferValue(type as ValidTypes_T<any>));
+                    const schemaValue = readable.read(new BufferValue(type as C.ValidTypes_T<any>));
                     const value = schemaValue.value;
 
                     values[name] = value as any;

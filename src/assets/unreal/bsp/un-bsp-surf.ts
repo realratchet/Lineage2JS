@@ -1,7 +1,7 @@
 import FConstructable from "../un-constructable";
 
 import { FPlane } from "../un-plane";
-import BufferValue from "../../buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class FBSPSurf extends FConstructable {
     public material: UShader;

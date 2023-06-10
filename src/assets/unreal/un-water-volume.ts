@@ -1,6 +1,6 @@
 import UBrush from "./un-brush";
 import FArray from "./un-array";
-import BufferValue from "../buffer-value";
+import { BufferValue } from "@l2js/core";
 import FNumber from "./un-number";
 import UPhysicsVolume from "./un-physics-volume";
 
