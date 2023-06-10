@@ -113,6 +113,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                     ]
                 ],
                 plugins: [
+                    ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
                     "@babel/plugin-proposal-class-properties"
                 ]
@@ -136,6 +137,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                     ]
                 ],
                 plugins: [
+                    ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
                     "@babel/plugin-proposal-class-properties"
                 ]
@@ -181,7 +183,8 @@ module.exports.createConfigBundle = createModuleConfig({
         extensions: [".tsx", ".ts", ".js"],
         alias: {
             "@client": path.resolve(__dirname, "../src"),
-            "@unreal": path.resolve(__dirname, "../src/assets/unreal")
+            "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
+            "@l2js/core": "@l2js/core/src"
         }
     },
     entry: "../src/index.ts"

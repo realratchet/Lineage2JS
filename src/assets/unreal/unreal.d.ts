@@ -1,432 +1,434 @@
-type DecodeLibrary = import("./decode-library").DecodeLibrary;
-type UPackage = import("./un-package").UPackage;
-type UNativePackage = import("./un-package").UNativePackage;
-type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue<T>;
-type UHeader = import("./un-header").UHeader;
-type UGeneration = import("./un-generation").UGeneration;
-type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
-type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
-type FArray<T extends FConstructable = FConstructable> = import("./un-array").FArray<T>;
-type FObjectArray<T extends UObject = UObject> = import("./un-array").FObjectArray<T>;
-type FArrayLazy<T extends FConstructable = FConstructable> = import("./un-array").FArrayLazy<T>;
-type FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> = import("./un-array").FPrimitiveArray<T>;
-type FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> = import("./un-array").FPrimitiveArrayLazy<T>;
-type UName = import("./un-name").UName;
-type UImport = import("./un-import").UImport;
-type UTexture = import("./un-texture").UTexture;
-type UCubemap = import("./un-cubemap").UCubemap;
-type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
-type UObject = import("./un-object").UObject;
-type UAActor = import("./un-aactor").UAActor;
-type UClass = import("./un-class").UClass;
-type UFunction = import("./un-function").UFunction;
-type UField = import("./un-field").UField;
-type UEnum = import("./un-enum").UEnum;
-type UProperty = import("./un-properties").UProperty;
-type UStruct = import("./un-struct").UStruct;
-type UPlatte = import("./un-palette").UPlatte;
-type UStaticMesh = import("./static-mesh/un-static-mesh").UStaticMesh;
-type ULevelInfo = import("./un-level-info").ULevelInfo;
-type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
-type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer
-type UZoneInfo = import("./un-zone-info").UZoneInfo;
-type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
-type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
-type UModel = import("./model/un-model").UModel;
-type UPolys = import("./un-polys").UPolys;
-type PolyFlags_T = import("./un-polys").PolyFlags_T;
-type UBrush = import("./un-brush").UBrush;
-type ULevel = import("./un-level").ULevel;
-type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
-type USound = import("./un-sound").USound;
-type ULight = import("./un-light").ULight;
-type LightEffect_T = import("./un-light").LightEffect_T;
-type LightType_T = import("./un-light").LightType_T;
-type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
-type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
-type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
-type UWaterVolume = import("./un-water-volume").UWaterVolume;
-type UEmitter = import("./un-emitter").UEmitter;
-type UFont = import("./un-font").UFont;
-type UNSun = import("./un-nsun").UNSun;
-type UNMoon = import("./un-nmoon").UNMoon;
-type UFogInfo = import("./un-fog-info").UFogInfo;
-type UPlayerStart = import("./un-player-start").UPlayerStart;
-type UMusicVolume = import("./un-music-volume").UMusicVolume;
-type UMover = import("./un-mover").UMover;
-type UBlockingVolume = import("./un-blocking-volume").UBlockingVolume;
-type UCamera = import("./un-camera").UCamera;
-type UStaticMeshInstance = import("./static-mesh/un-static-mesh-instance").UStaticMeshInstance;
-type ULevelSummary = import("./un-level-summary").ULevelSummary;
-type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
-type UEncodedFile = import("./un-encoded-file").UEncodedFile;
-type UTextBuffer = import("./un-text-buffer").UTextBuffer;
-type USkeletalMesh = import("./skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
-type UMeshAnimation = import("./skeletal-mesh/un-mesh-animation").UMeshAnimation;
+import C = L2JS.Core;
 
-type UMaterial = import("./un-material").UMaterial;
-type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
-type OutputBlending_T = import("./un-material").OutputBlending_T;
+// type DecodeLibrary = import("./decode-library").DecodeLibrary;
+// type UPackage = import("./un-package").UPackage;
+// type UNativePackage = import("./un-package").UNativePackage;
+// type BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> = import("../buffer-value").BufferValue<T>;
+// type UHeader = import("./un-header").UHeader;
+// type UGeneration = import("./un-generation").UGeneration;
+// type UExport<T extends UObject = UObject> = import("./un-export").UExport<T>;
+// type FConstructable = import("./un-constructable").FConstructable | import("./un-object").UObject;
+// type FArray<T extends FConstructable = FConstructable> = import("./un-array").FArray<T>;
+// type FObjectArray<T extends UObject = UObject> = import("./un-array").FObjectArray<T>;
+// type FArrayLazy<T extends FConstructable = FConstructable> = import("./un-array").FArrayLazy<T>;
+// type FPrimitiveArray<T extends ValueTypeNames_T = ValueTypeNames_T> = import("./un-array").FPrimitiveArray<T>;
+// type FPrimitiveArrayLazy<T extends ValueTypeNames_T = ValueTypeNames_T> = import("./un-array").FPrimitiveArrayLazy<T>;
+// type UName = import("./un-name").UName;
+// type UImport = import("./un-import").UImport;
+// type UTexture = import("./un-texture").UTexture;
+// type UCubemap = import("./un-cubemap").UCubemap;
+// type UTextureModifyInfo = import("./un-texture-modify-info").UTextureModifyInfo;
+// type UObject = import("./un-object").UObject;
+// type UAActor = import("./un-aactor").UAActor;
+// type UClass = import("./un-class").UClass;
+// type UFunction = import("./un-function").UFunction;
+// type UField = import("./un-field").UField;
+// type UEnum = import("./un-enum").UEnum;
+// type UProperty = import("./un-properties").UProperty;
+// type UStruct = import("./un-struct").UStruct;
+// type UPlatte = import("./un-palette").UPlatte;
+// type UStaticMesh = import("./static-mesh/un-static-mesh").UStaticMesh;
+// type ULevelInfo = import("./un-level-info").ULevelInfo;
+// type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
+// type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer
+// type UZoneInfo = import("./un-zone-info").UZoneInfo;
+// type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
+// type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
+// type UModel = import("./model/un-model").UModel;
+// type UPolys = import("./un-polys").UPolys;
+// type PolyFlags_T = import("./un-polys").PolyFlags_T;
+// type UBrush = import("./un-brush").UBrush;
+// type ULevel = import("./un-level").ULevel;
+// type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
+// type USound = import("./un-sound").USound;
+// type ULight = import("./un-light").ULight;
+// type LightEffect_T = import("./un-light").LightEffect_T;
+// type LightType_T = import("./un-light").LightType_T;
+// type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
+// type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
+// type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
+// type UWaterVolume = import("./un-water-volume").UWaterVolume;
+// type UEmitter = import("./un-emitter").UEmitter;
+// type UFont = import("./un-font").UFont;
+// type UNSun = import("./un-nsun").UNSun;
+// type UNMoon = import("./un-nmoon").UNMoon;
+// type UFogInfo = import("./un-fog-info").UFogInfo;
+// type UPlayerStart = import("./un-player-start").UPlayerStart;
+// type UMusicVolume = import("./un-music-volume").UMusicVolume;
+// type UMover = import("./un-mover").UMover;
+// type UBlockingVolume = import("./un-blocking-volume").UBlockingVolume;
+// type UCamera = import("./un-camera").UCamera;
+// type UStaticMeshInstance = import("./static-mesh/un-static-mesh-instance").UStaticMeshInstance;
+// type ULevelSummary = import("./un-level-summary").ULevelSummary;
+// type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
+// type UEncodedFile = import("./un-encoded-file").UEncodedFile;
+// type UTextBuffer = import("./un-text-buffer").UTextBuffer;
+// type USkeletalMesh = import("./skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
+// type UMeshAnimation = import("./skeletal-mesh/un-mesh-animation").UMeshAnimation;
 
-type UShader = import("./un-material").UShader;
-type UFadeColor = import("./un-material").UFadeColor;
-type UTexRotator = import("./un-material").UTexRotator;
-type UTexPanner = import("./un-material").UTexPanner;
-type UColorModifier = import("./un-material").UColorModifier;
-type UTexOscillator = import("./un-material").UTexOscillator;
-type UTexEnvMap = import("./un-material").UTexEnvMap;
-type URangeVector = import("./un-range").URangeVector;
-type URange = import("./un-range").URange;
-type FPlane = import("./un-plane").FPlane;
-type FScale = import("./un-scale").FScale;
-type UPlane = import("./un-plane").UPlane;
+// type UMaterial = import("./un-material").UMaterial;
+// type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
+// type OutputBlending_T = import("./un-material").OutputBlending_T;
 
-type PropertyTag = import("./un-property-tag").PropertyTag;
-type FColor = import("./un-color").FColor;
-type UMatrix = import("./un-matrix").UMatrix;
-type FMatrix = import("./un-matrix").FMatrix;
-type UPointRegion = import("./un-point-region").UPointRegion;
-type FVector = import("./un-vector").FVector;
-type FQuaternion = import("./un-quaternion").FQuaternion;
-type FRotator = import("./un-rotator").FRotator;
-type FCoords = import("./un-coords").FCoords;
+// type UShader = import("./un-material").UShader;
+// type UFadeColor = import("./un-material").UFadeColor;
+// type UTexRotator = import("./un-material").UTexRotator;
+// type UTexPanner = import("./un-material").UTexPanner;
+// type UColorModifier = import("./un-material").UColorModifier;
+// type UTexOscillator = import("./un-material").UTexOscillator;
+// type UTexEnvMap = import("./un-material").UTexEnvMap;
+// type URangeVector = import("./un-range").URangeVector;
+// type URange = import("./un-range").URange;
+// type FPlane = import("./un-plane").FPlane;
+// type FScale = import("./un-scale").FScale;
+// type UPlane = import("./un-plane").UPlane;
 
-type FMipmap = import("./un-mipmap").FMipmap;
-type UDecoLayer = import("./un-deco-layer").UDecoLayer;
-type FUnknownStruct = import("./un-unknown-struct").FUnknownStruct;
-type FBSPNode = import("./bsp/un-bsp-node").FBSPNode;
-type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
-type FVert = import("./model/un-vert").FVert;
-type FBox = import("./un-box").FBox;
+// type PropertyTag = import("./un-property-tag").PropertyTag;
+// type FColor = import("./un-color").FColor;
+// type UMatrix = import("./un-matrix").UMatrix;
+// type FMatrix = import("./un-matrix").FMatrix;
+// type UPointRegion = import("./un-point-region").UPointRegion;
+// type FVector = import("./un-vector").FVector;
+// type FQuaternion = import("./un-quaternion").FQuaternion;
+// type FRotator = import("./un-rotator").FRotator;
+// type FCoords = import("./un-coords").FCoords;
 
-type FMultiLightmapTexture = import("./model/un-multilightmap-texture").FMultiLightmapTexture;
-type FStaticLightmapTexture = import("./model/un-multilightmap-texture").FStaticLightmapTexture;
+// type FMipmap = import("./un-mipmap").FMipmap;
+// type UDecoLayer = import("./un-deco-layer").UDecoLayer;
+// type FUnknownStruct = import("./un-unknown-struct").FUnknownStruct;
+// type FBSPNode = import("./bsp/un-bsp-node").FBSPNode;
+// type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
+// type FVert = import("./model/un-vert").FVert;
+// type FBox = import("./un-box").FBox;
 
-type ETextureFormat = import("./un-tex-format").ETextureFormat;
-type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
+// type FMultiLightmapTexture = import("./model/un-multilightmap-texture").FMultiLightmapTexture;
+// type FStaticLightmapTexture = import("./model/un-multilightmap-texture").FStaticLightmapTexture;
 
-type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
-type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
-interface IBaseMaterialDecodeInfo { name?: string, materialType: DecodableMaterial_T, color?: boolean }
-interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "modifier",
-    modifierType: DecodableMaterialModifier_T
-}
+// type ETextureFormat = import("./un-tex-format").ETextureFormat;
+// type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
-interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "particle",
-    material: string,
-    blendingMode: ParticleBlendModes_T,
-    opacity: number
-}
+// type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
+// type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
+// type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
+// interface IBaseMaterialDecodeInfo { name?: string, materialType: DecodableMaterial_T, color?: boolean }
+// interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "modifier",
+//     modifierType: DecodableMaterialModifier_T
+// }
 
-interface ISolidMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "solid",
-    solidColor: number
-}
+// interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "particle",
+//     material: string,
+//     blendingMode: ParticleBlendModes_T,
+//     opacity: number
+// }
 
-interface IBSPLeafDecodeInfo_T {
-    zone: number,
-    permiating: number,
-    volumetric: number,
-    visibleZones: bigint
-}
+// interface ISolidMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "solid",
+//     solidColor: number
+// }
 
-interface IBSPZoneDecodeInfo_T {
-    connectivity: bigint,
-    visibility: bigint,
-    zoneInfo: IBaseZoneDecodeInfo
-}
+// interface IBSPLeafDecodeInfo_T {
+//     zone: number,
+//     permiating: number,
+//     volumetric: number,
+//     visibleZones: bigint
+// }
 
-interface IBSPNodeCollisionInfo_T {
-    flags: number[],
-    bounds: IBoxDecodeInfo
-}
+// interface IBSPZoneDecodeInfo_T {
+//     connectivity: bigint,
+//     visibility: bigint,
+//     zoneInfo: IBaseZoneDecodeInfo
+// }
 
-interface IBSPNodeDecodeInfo_T {
-    children: [number, number],
-    plane: Vector4Arr,
-    leaves: [number, number],
-    zones: [number, number],
-    collision?: IBSPNodeCollisionInfo_T
-}
+// interface IBSPNodeCollisionInfo_T {
+//     flags: number[],
+//     bounds: IBoxDecodeInfo
+// }
 
-interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "sprite",
-    sprites: ITextureDecodeInfo[],
-    framerate: number
-}
+// interface IBSPNodeDecodeInfo_T {
+//     children: [number, number],
+//     plane: Vector4Arr,
+//     leaves: [number, number],
+//     zones: [number, number],
+//     collision?: IBSPNodeCollisionInfo_T
+// }
 
-interface IMaterialTerrainSegmentDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "terrainSegment";
-    terrainMaterial: string,
-    uvs: IDataTextureDecodeInfo
-}
+// interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "sprite",
+//     sprites: ITextureDecodeInfo[],
+//     framerate: number
+// }
 
-interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "terrain";
-    layers: { map: string, alphaMap: string }[]
-}
+// interface IMaterialTerrainSegmentDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "terrainSegment";
+//     terrainMaterial: string,
+//     uvs: IDataTextureDecodeInfo
+// }
 
-interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "instance",
-    baseMaterial: string,
-    modifiers: string[]
-}
+// interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "terrain";
+//     layers: { map: string, alphaMap: string }[]
+// }
 
-interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "texture",
-    textureType: DecodableTexture_T,
-    buffer: ArrayBuffer,
-    wrapS?: number, wrapT?: number,
-    width: number, height: number,
-}
+// interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "instance",
+//     baseMaterial: string,
+//     modifiers: string[]
+// }
 
-type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
-interface IDataTextureDecodeInfo extends ITextureDecodeInfo { format?: DataTextureFormats_T }
+// interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "texture",
+//     textureType: DecodableTexture_T,
+//     buffer: ArrayBuffer,
+//     wrapS?: number, wrapT?: number,
+//     width: number, height: number,
+// }
 
-interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "group",
-    materials: string[]
-}
+// type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
+// interface IDataTextureDecodeInfo extends ITextureDecodeInfo { format?: DataTextureFormats_T }
 
-interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "lightmapped",
-    material: string,
-    lightmap: string
-}
+// interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "group",
+//     materials: string[]
+// }
 
-interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
-    materialType: "shader",
-    diffuse: string,
-    opacity: string,
-    specular: string,
-    specularMask: string,
-    blendingMode: SupportedBlendingTypes_T,
-    depthWrite: boolean,
-    doubleSide: boolean,
-    transparent: boolean,
-    alphaTest: number,
-    visible: boolean
-}
+// interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "lightmapped",
+//     material: string,
+//     lightmap: string
+// }
 
-interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
-    modifierType: "panTexture",
-    transform: {
-        matrix: number[],
-        rate: number,
-        map: string
-    }
-}
+// interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
+//     materialType: "shader",
+//     diffuse: string,
+//     opacity: string,
+//     specular: string,
+//     specularMask: string,
+//     blendingMode: SupportedBlendingTypes_T,
+//     depthWrite: boolean,
+//     doubleSide: boolean,
+//     transparent: boolean,
+//     alphaTest: number,
+//     visible: boolean
+// }
 
-interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
-    modifierType: "fadeColor",
-    fadeColors: {
-        color1: number[],
-        color2: number[],
-        period: number
-    }
-}
+// interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+//     modifierType: "panTexture",
+//     transform: {
+//         matrix: number[],
+//         rate: number,
+//         map: string
+//     }
+// }
 
-interface IBaseTimedConstructable {
-    time: number;
-}
+// interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+//     modifierType: "fadeColor",
+//     fadeColors: {
+//         color1: number[],
+//         color2: number[],
+//         period: number
+//     }
+// }
 
-interface IDecodedParameter {
-    uniforms: Record<string, any>,
-    defines: Record<string, any>,
-    isUsingMap: boolean,
-    transformType: "none" | "pan" | "rotate",
-}
+// interface IBaseTimedConstructable {
+//     time: number;
+// }
 
-interface IDecodedSpriteParameter extends IDecodedParameter {
-    isSprite: true,
-    sprites: any[],
-    framerate: number
-}
+// interface IDecodedParameter {
+//     uniforms: Record<string, any>,
+//     defines: Record<string, any>,
+//     isUsingMap: boolean,
+//     transformType: "none" | "pan" | "rotate",
+// }
 
-type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effect" | "Animation" | "Script";
-type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+// interface IDecodedSpriteParameter extends IDecodedParameter {
+//     isSprite: true,
+//     sprites: any[],
+//     framerate: number
+// }
 
-type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone" | "Emitter";
+// type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effect" | "Animation" | "Script";
+// type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-type Vector2Arr = [number, number];
-type Vector4Arr = [number, number, number, number];
-type QuaternionArr = Vector4Arr;
-type ColorArr = Vector4Arr;
-type Vector3Arr = [number, number, number];
-type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
-type EulerArr = [...Vector3Arr, EulerOrder];
-type ArrGeometryGroup = [number, number, number];
+// type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone" | "Emitter";
 
-interface IBaseObjectOrInstanceDecodeInfo {
-    uuid: string,
-    type: DecodableObject_T | "StaticMeshInstance"
-}
+// type Vector2Arr = [number, number];
+// type Vector4Arr = [number, number, number, number];
+// type QuaternionArr = Vector4Arr;
+// type ColorArr = Vector4Arr;
+// type Vector3Arr = [number, number, number];
+// type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
+// type EulerArr = [...Vector3Arr, EulerOrder];
+// type ArrGeometryGroup = [number, number, number];
 
-interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
-    actorName: string;
-    type: "StaticMeshActor",
-    instance: IStaticMeshInstanceDecodeInfo
-}
+// interface IBaseObjectOrInstanceDecodeInfo {
+//     uuid: string,
+//     type: DecodableObject_T | "StaticMeshInstance"
+// }
 
-interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
-    type: "SkinnedMesh";
-    geometry: string;
-    materials?: string;
-    skeleton: IBoneDecodeInfo[];
-    animations: Record<string, IKeyframeDecodeInfo_T[]>
-}
+// interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
+//     actorName: string;
+//     type: "StaticMeshActor",
+//     instance: IStaticMeshInstanceDecodeInfo
+// }
 
-interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
+// interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+//     type: "SkinnedMesh";
+//     geometry: string;
+//     materials?: string;
+//     skeleton: IBoneDecodeInfo[];
+//     animations: Record<string, IKeyframeDecodeInfo_T[]>
+// }
 
-interface IBaseZoneDecodeInfo {
-    type: "Sector" | "Zone" | "Sky",
-    uuid: string,
-    name?: string,
-    bounds: IBoxDecodeInfo,
-    children: IBaseObjectOrInstanceDecodeInfo[],
-    fog?: IZoneFogInfo
-}
+// interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
 
-interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
-interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
-interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
+// interface IBaseZoneDecodeInfo {
+//     type: "Sector" | "Zone" | "Sky",
+//     uuid: string,
+//     name?: string,
+//     bounds: IBoxDecodeInfo,
+//     children: IBaseObjectOrInstanceDecodeInfo[],
+//     fog?: IZoneFogInfo
+// }
 
-interface IStaticMeshInstanceDecodeInfo {
-    uuid?: string,
-    name?: string,
-    type: "StaticMeshInstance",
-    mesh: IStaticMeshObjectDecodeInfo,
-    attributes?: {
-        colors?: Float32Array
-    }
-}
+// interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
+// interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
+// interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
 
-interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
-    type: DecodableObject_T,
-    name?: string,
-    position?: Vector3Arr,
-    rotation?: EulerArr,
-    scale?: Vector3Arr,
-    siblings?: IBaseObjectOrInstanceDecodeInfo[],
-    children?: IBaseObjectOrInstanceDecodeInfo[]
-}
+// interface IStaticMeshInstanceDecodeInfo {
+//     uuid?: string,
+//     name?: string,
+//     type: "StaticMeshInstance",
+//     mesh: IStaticMeshObjectDecodeInfo,
+//     attributes?: {
+//         colors?: Float32Array
+//     }
+// }
 
-type IBoundsDecodeInfo = {
-    sphere?: {
-        center: Vector3Arr;
-        radius: number;
-    };
-    box?: {
-        min: Vector3Arr;
-        max: Vector3Arr;
-    };
-}
+// interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
+//     type: DecodableObject_T,
+//     name?: string,
+//     position?: Vector3Arr,
+//     rotation?: EulerArr,
+//     scale?: Vector3Arr,
+//     siblings?: IBaseObjectOrInstanceDecodeInfo[],
+//     children?: IBaseObjectOrInstanceDecodeInfo[]
+// }
 
-type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
+// type IBoundsDecodeInfo = {
+//     sphere?: {
+//         center: Vector3Arr;
+//         radius: number;
+//     };
+//     box?: {
+//         min: Vector3Arr;
+//         max: Vector3Arr;
+//     };
+// }
 
-interface IGeometryDecodeInfo {
-    attributes: {
-        positions?: Float32Array;
-        normals?: Float32Array;
-        colors?: Float32Array,
-        colorsInstance?: Float32Array,
-        uvs?: Float32Array | Float32Array[];
-        uvs2?: Float32Array | Float32Array[];
-        skinIndex?: Uint8Array;
-        skinWeight?: Float32Array;
-    };
-    indices?: IndexLikeArray;
-    colliderIndices?: Uint32Array;
-    groups?: ArrGeometryGroup[],
-    bounds?: IBoundsDecodeInfo
-}
+// type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
 
-interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
-    type: "StaticMesh",
-    geometry: string,
-    materials?: string
-}
+// interface IGeometryDecodeInfo {
+//     attributes: {
+//         positions?: Float32Array;
+//         normals?: Float32Array;
+//         colors?: Float32Array,
+//         colorsInstance?: Float32Array,
+//         uvs?: Float32Array | Float32Array[];
+//         uvs2?: Float32Array | Float32Array[];
+//         skinIndex?: Uint8Array;
+//         skinWeight?: Float32Array;
+//     };
+//     indices?: IndexLikeArray;
+//     colliderIndices?: Uint32Array;
+//     groups?: ArrGeometryGroup[],
+//     bounds?: IBoundsDecodeInfo
+// }
 
-interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
-    type: "Edges",
-    geometry: string,
-    color?: [number, number, number],
-    ignoreDepth?: boolean
-}
+// interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+//     type: "StaticMesh",
+//     geometry: string,
+//     materials?: string
+// }
 
-interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
-    type: "Light",
-    color: [number, number, number],
-    radius: number,
-    directional: boolean,
-    lightType: LightType_T,
-    lightEffect: LightEffect_T,
-    cone: number
-}
+// interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
+//     type: "Edges",
+//     geometry: string,
+//     color?: [number, number, number],
+//     ignoreDepth?: boolean
+// }
 
-interface IMaterialModifier {
-    type: "Lighting"
-}
+// interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
+//     type: "Light",
+//     color: [number, number, number],
+//     radius: number,
+//     directional: boolean,
+//     lightType: LightType_T,
+//     lightEffect: LightEffect_T,
+//     cone: number
+// }
 
-interface IBaseLightingMaterialModifier extends IMaterialModifier {
-    type: "Lighting",
-    lightType: "Directional" | "Ambient",
-    color: [number, number, number],
-    brightness: number
-}
+// interface IMaterialModifier {
+//     type: "Lighting"
+// }
 
-interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
-    lightType: "Directional",
-    direction: Vector3Arr,
-}
+// interface IBaseLightingMaterialModifier extends IMaterialModifier {
+//     type: "Lighting",
+//     lightType: "Directional" | "Ambient",
+//     color: [number, number, number],
+//     brightness: number
+// }
 
-interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
-    lightType: "Ambient"
-}
+// interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
+//     lightType: "Directional",
+//     direction: Vector3Arr,
+// }
 
-interface IBoneDecodeInfo extends IBaseObjectDecodeInfo {
-    type: "Bone",
-    name: string,
-    position: Vector3Arr,
-    quaternion: QuaternionArr,
-    scale: Vector3Arr,
-    parent: number
-}
+// interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
+//     lightType: "Ambient"
+// }
 
-type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
+// interface IBoneDecodeInfo extends IBaseObjectDecodeInfo {
+//     type: "Bone",
+//     name: string,
+//     position: Vector3Arr,
+//     quaternion: QuaternionArr,
+//     scale: Vector3Arr,
+//     parent: number
+// }
 
-interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
+// type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
-interface IZoneFogInfo {
-    start: number,
-    end: number,
-    color: ColorArr
-}
+// interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
 
-type LoadSettings_T = {
-    loadTerrain?: boolean,
-    loadBaseModel?: boolean,
-    loadStaticModels?: boolean,
-    loadStaticModelList?: number[],
-    loadEmitters?: boolean,
-    helpersZoneBounds?: boolean
-};
+// interface IZoneFogInfo {
+//     start: number,
+//     end: number,
+//     color: ColorArr
+// }
 
-type ISunDecodeInfo_T = {
-    type: "Sun",
-    sprites: string[]
-}
+// type LoadSettings_T = {
+//     loadTerrain?: boolean,
+//     loadBaseModel?: boolean,
+//     loadStaticModels?: boolean,
+//     loadStaticModelList?: number[],
+//     loadEmitters?: boolean,
+//     helpersZoneBounds?: boolean
+// };
 
-type IKeyframeDecodeInfo_T = {
-    name: string,
-    times: Float32Array,
-    values: Float32Array,
-    type: "Vector" | "Quaternion"
-}
+// type ISunDecodeInfo_T = {
+//     type: "Sun",
+//     sprites: string[]
+// }
 
-type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
-type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+// type IKeyframeDecodeInfo_T = {
+//     name: string,
+//     times: Float32Array,
+//     values: Float32Array,
+//     type: "Vector" | "Quaternion"
+// }
+
+// type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
+// type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
 

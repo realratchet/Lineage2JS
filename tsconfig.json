@@ -13,6 +13,9 @@
             "@unreal/*": [
                 "./src/assets/unreal/*"
             ],
+            "@l2js/core/*": [
+                "./node_modules/@l2js/core/src/*"
+            ]
         },
         "noImplicitAny": true,
         "noImplicitReturns": true,

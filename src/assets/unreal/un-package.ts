@@ -79,490 +79,503 @@ import FTIntMap from "./un-tint-map";
 import { UPlane } from "./un-plane";
 import { UParticle, UParticleColorScale, UParticleRevolutionScale, UParticleSound, UParticleTimeScale, UParticleVelocityScale } from "./emitters/un-particle-emitter";
 import UMovableStaticMeshActor from "./static-mesh/un-movable-static-mesh-actor";
+import { AUPackage } from "@l2js/core";
 
-class UPackage extends UEncodedFile {
-    public readonly loader: AssetLoader;
+class UPackage extends AUPackage {
+    protected async readArrayBuffer() {
+        const response = await fetch(this.path);
 
-    public exports: UExport[];
-    public imports: UImport[];
-    public nameTable: UName[];
-    public header: UHeader;
-    public exportGroups: Record<string, { index: number; export: UExport; }[]>;
-    public importGroups: Record<string, { import: UImport; index: number; }[]>;
-    public readonly isCore: boolean;
-    public readonly isEngine: boolean;
-    public readonly isNative: boolean;
-    public nameHash = new Map<string, number>();
+        if (!response.ok) throw new Error(response.statusText);
 
-    constructor(loader: AssetLoader, path: string) {
-        super(path);
-        this.loader = loader;
+        const buffer = await response.arrayBuffer();
 
-        this.isCore = this.path.toLocaleLowerCase().endsWith("core.u");
-        this.isEngine = this.path.toLocaleLowerCase().endsWith("engine.u");
+        return buffer;
     }
 
-    public isDecoded() { return !!this.buffer; }
-
-    public async decode(): Promise<this> {
-        if (this.buffer) return this;
-        if (this.promiseDecoding) {
-            await this.promiseDecoding;
-            return this;
-        }
-
-        const readable = this.asReadable();
-        const signature = await readable._doDecode();
-
-        if (signature.value !== 0x9E2A83C1)
-            throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
-
-        const header = new UHeader();
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const int32 = new BufferValue(BufferValue.uint32);
-
-        header.version = readable.read(uint32).value as number;
-        header.packageFlags = readable.read(int32).value as number;
-        header.nameCount = readable.read(int32).value as number;
-        header.nameOffset = readable.read(int32).value as number;
-        header.exportCount = readable.read(int32).value as number;
-        header.exportOffset = readable.read(int32).value as number;
-        header.importCount = readable.read(int32).value as number;
-        header.importOffset = readable.read(int32).value as number;
-
-        const dbgNameCount = header.nameCount;
-        const dbgNameOffset = header.nameOffset.toString(16).toUpperCase();
-        const dbgExportCount = header.exportCount;
-        const dbgExportOffset = header.exportOffset.toString(16).toUpperCase();
-        const dbgImportCount = header.importCount;
-        const dbgImportOffset = header.importOffset.toString(16).toUpperCase();
-
-        console.log(`'${readable.path}' => Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
-
-        if (readable.path === "assets/maps/20_21.unr") {
-            console.assert(header.getArchiveFileVersion() === 123);
-            console.assert(header.packageFlags === 0x1);
-            console.assert(header.nameCount === 12165);
-            console.assert(header.nameOffset === 0x40);
-            console.assert(header.exportCount === 11379);
-            console.assert(header.exportOffset === 0xFB1BF5);
-            console.assert(header.importCount === 490);
-            console.assert(header.importOffset === 0xFB0712);
-        }
-
-        if (header.getArchiveFileVersion() < 68) {
-            header.heritageCount = readable.read(uint32).value as number;
-            header.heritageOffset = readable.read(uint32).value as number;
-        } else {
-            readable.read(header.guid);
-
-            const generationCount = readable.read(new BufferValue(BufferValue.int32)).value as number;
-
-            if (readable.path === "assets/maps/20_21.unr") {
-                console.assert(generationCount === 1);
-            }
-
-            for (let i = 0, gc = generationCount as number; i < gc; i++) {
-                const gen = new UGeneration();
-
-                gen.exportCount = readable.read(uint32).value as number;
-                gen.nameCount = readable.read(uint32).value as number;
-
-                header.generations.push(gen);
-            }
-        }
-
-        const [nameTable, nameHash] = readable.loadNames(header);
+    public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
+
+    // public readonly loader: C.AAssetLoader;
+
+    // public exports: UExport[];
+    // public imports: UImport[];
+    // public nameTable: UName[];
+    // public header: UHeader;
+    // public exportGroups: Record<string, { index: number; export: UExport; }[]>;
+    // public importGroups: Record<string, { import: UImport; index: number; }[]>;
+    // public readonly isCore: boolean;
+    // public readonly isEngine: boolean;
+    // public readonly isNative: boolean;
+    // public nameHash = new Map<string, number>();
+
+    // constructor(loader: AssetLoader, path: string) {
+    //     super(path);
+    //     this.loader = loader;
+
+    //     this.isCore = this.path.toLocaleLowerCase().endsWith("core.u");
+    //     this.isEngine = this.path.toLocaleLowerCase().endsWith("engine.u");
+    // }
+
+    // public isDecoded() { return !!this.buffer; }
+
+    // public async decode(): Promise<this> {
+    //     if (this.buffer) return this;
+    //     if (this.promiseDecoding) {
+    //         await this.promiseDecoding;
+    //         return this;
+    //     }
+
+    //     const readable = this.asReadable();
+    //     const signature = await readable._doDecode();
+
+    //     if (signature.value !== 0x9E2A83C1)
+    //         throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
+
+    //     const header = new UHeader();
+    //     const uint32 = new BufferValue(BufferValue.uint32);
+    //     const int32 = new BufferValue(BufferValue.uint32);
+
+    //     header.version = readable.read(uint32).value as number;
+    //     header.packageFlags = readable.read(int32).value as number;
+    //     header.nameCount = readable.read(int32).value as number;
+    //     header.nameOffset = readable.read(int32).value as number;
+    //     header.exportCount = readable.read(int32).value as number;
+    //     header.exportOffset = readable.read(int32).value as number;
+    //     header.importCount = readable.read(int32).value as number;
+    //     header.importOffset = readable.read(int32).value as number;
+
+    //     const dbgNameCount = header.nameCount;
+    //     const dbgNameOffset = header.nameOffset.toString(16).toUpperCase();
+    //     const dbgExportCount = header.exportCount;
+    //     const dbgExportOffset = header.exportOffset.toString(16).toUpperCase();
+    //     const dbgImportCount = header.importCount;
+    //     const dbgImportOffset = header.importOffset.toString(16).toUpperCase();
+
+    //     console.log(`'${readable.path}' => Names:${dbgNameOffset}[${dbgNameCount}] Exports:${dbgExportOffset}[${dbgExportCount}] Imports:${dbgImportOffset}[${dbgImportCount}]`);
+
+    //     if (readable.path === "assets/maps/20_21.unr") {
+    //         console.assert(header.getArchiveFileVersion() === 123);
+    //         console.assert(header.packageFlags === 0x1);
+    //         console.assert(header.nameCount === 12165);
+    //         console.assert(header.nameOffset === 0x40);
+    //         console.assert(header.exportCount === 11379);
+    //         console.assert(header.exportOffset === 0xFB1BF5);
+    //         console.assert(header.importCount === 490);
+    //         console.assert(header.importOffset === 0xFB0712);
+    //     }
+
+    //     if (header.getArchiveFileVersion() < 68) {
+    //         header.heritageCount = readable.read(uint32).value as number;
+    //         header.heritageOffset = readable.read(uint32).value as number;
+    //     } else {
+    //         readable.read(header.guid);
+
+    //         const generationCount = readable.read(new BufferValue(BufferValue.int32)).value as number;
+
+    //         if (readable.path === "assets/maps/20_21.unr") {
+    //             console.assert(generationCount === 1);
+    //         }
+
+    //         for (let i = 0, gc = generationCount as number; i < gc; i++) {
+    //             const gen = new UGeneration();
+
+    //             gen.exportCount = readable.read(uint32).value as number;
+    //             gen.nameCount = readable.read(uint32).value as number;
+
+    //             header.generations.push(gen);
+    //         }
+    //     }
+
+    //     const [nameTable, nameHash] = readable.loadNames(header);
+
+    //     const exports = readable.loadExports(header, nameTable);
+    //     const imports = readable.loadImports(header, nameTable);
+
+    //     readable.exports = exports;
+    //     readable.imports = imports;
+    //     readable.nameTable = nameTable;
+    //     readable.nameHash = nameHash;
+    //     readable.header = header;
 
-        const exports = readable.loadExports(header, nameTable);
-        const imports = readable.loadImports(header, nameTable);
+    //     if (this.isCore) {
+    //         const nativeIndex = -(imports.length + 1);
+    //         for (const imp of imports) {
+    //             if (imp.className === "Package")
+    //                 continue;
 
-        readable.exports = exports;
-        readable.imports = imports;
-        readable.nameTable = nameTable;
-        readable.nameHash = nameHash;
-        readable.header = header;
+    //             if (imp.classPackage !== "Core")
+    //                 continue;
 
-        if (this.isCore) {
-            const nativeIndex = -(imports.length + 1);
-            for (const imp of imports) {
-                if (imp.className === "Package")
-                    continue;
-
-                if (imp.classPackage !== "Core")
-                    continue;
-
-                imp.classPackage = "Native";
-                imp.idPackage = nativeIndex;
-
-                {
-                    const className = imp.objectName;
-
-                    registerNameTable(nameTable, nameHash, className);
-
-                    {
-                        const exp = new UExport();
-
-                        exp.index = exports.length
-                        exp.idClass = -(imp.index + 1);
-                        exp.idSuper = 0;
-                        exp.idPackage = nativeIndex;
-                        exp.idObjectName = nameHash.get(className);
-                        exp.objectName = className;
-                        exp.flags = ObjectFlags_T.Native;
-                        exp.size = 0;
-                        exp.offset = 0;
+    //             imp.classPackage = "Native";
+    //             imp.idPackage = nativeIndex;
 
-                        exports.push(exp);
-                    }
-                }
-            }
+    //             {
+    //                 const className = imp.objectName;
 
+    //                 registerNameTable(nameTable, nameHash, className);
 
-            addPackageDependendency(nameTable, nameHash, imports, "Native")
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "State");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "DelegateProperty");
+    //                 {
+    //                     const exp = new UExport();
 
-        } else if (this.isEngine) {
-            addPackageDependendency(nameTable, nameHash, imports, "Native")
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Sound");
+    //                     exp.index = exports.length
+    //                     exp.idClass = -(imp.index + 1);
+    //                     exp.idSuper = 0;
+    //                     exp.idPackage = nativeIndex;
+    //                     exp.idObjectName = nameHash.get(className);
+    //                     exp.objectName = className;
+    //                     exp.flags = ObjectFlags_T.Native;
+    //                     exp.size = 0;
+    //                     exp.offset = 0;
 
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Primitive");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Model");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMeshInstance");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMeshInstance");
+    //                     exports.push(exp);
+    //                 }
+    //             }
+    //         }
 
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshAnimation");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMeshInstance");
 
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Viewport");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Player");
+    //         addPackageDependendency(nameTable, nameHash, imports, "Native")
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "State");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "DelegateProperty");
 
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainSector");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainPrimitive");
+    //     } else if (this.isEngine) {
+    //         addPackageDependendency(nameTable, nameHash, imports, "Native")
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Sound");
 
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "LevelBase");
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Primitive");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Model");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMeshInstance");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMeshInstance");
 
-            addClassDependency(nameTable, nameHash, imports, exports, "Native", "Client");
-        }
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshAnimation");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMeshInstance");
 
-        readable.importGroups = readable.imports.reduce((accum, imp, index) => {
-            const impType = imp.className;
-            const list = accum[impType] = accum[impType] || [];
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Viewport");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Player");
 
-            list.push({ import: imp, index: -index - 1 });
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainSector");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainPrimitive");
 
-            return accum;
-        }, {} as Record<string, { import: UImport, index: number }[]>);
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LevelBase");
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
 
-        readable.exportGroups = readable.exports.reduce((accum, exp, index) => {
+    //         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Client");
+    //     }
 
-            const expType = readable.getPackageName(exp.idClass as number) || "Class";
-            const list = accum[expType] = accum[expType] || [];
+    //     readable.importGroups = readable.imports.reduce((accum, imp, index) => {
+    //         const impType = imp.className;
+    //         const list = accum[impType] = accum[impType] || [];
 
-            list.push({ index, export: exp });
+    //         list.push({ import: imp, index: -index - 1 });
 
-            return accum;
-        }, {} as Record<string, { index: number, export: UExport }[]>);
+    //         return accum;
+    //     }, {} as Record<string, { import: UImport, index: number }[]>);
 
-        Object.assign(this, readable, { isReadable: false });
+    //     readable.exportGroups = readable.exports.reduce((accum, exp, index) => {
 
-        return this;
-    }
+    //         const expType = readable.getPackageName(exp.idClass as number) || "Class";
+    //         const list = accum[expType] = accum[expType] || [];
 
-    protected findObjectRef(className: string, objectName: string, groupName: string = "None"): number {
-        const isClass = className == "Class";
+    //         list.push({ index, export: exp });
 
-        for (const exp of this.exports) {
-            if (exp.objectName !== objectName) continue;
-            if (groupName !== "None") {
-                if (exp.idPackage > 0) {
-                    const pkg = this.exports[exp.idPackage - 1];
+    //         return accum;
+    //     }, {} as Record<string, { index: number, export: UExport }[]>);
 
-                    if (pkg && groupName !== pkg.objectName) {
-                        continue;
-                    }
+    //     Object.assign(this, readable, { isReadable: false });
 
-                } else if (exp.idPackage < 0) {
-                    debugger;
-                } else {
-                    debugger;
-                }
-            }
+    //     return this;
+    // }
 
-            if (isClass) {
-                if (exp.idClass > 0) {
-                    const other = this.exports[exp.idClass as number + 1];
+    // protected findObjectRef(className: string, objectName: string, groupName: string = "None"): number {
+    //     const isClass = className == "Class";
 
-                    if (other && className === other.objectName)
-                        return exp.index + 1;
+    //     for (const exp of this.exports) {
+    //         if (exp.objectName !== objectName) continue;
+    //         if (groupName !== "None") {
+    //             if (exp.idPackage > 0) {
+    //                 const pkg = this.exports[exp.idPackage - 1];
 
-                    debugger;
-                } else if (exp.idClass < 0) {
-                    const clsImport = this.imports[-exp.idClass - 1];
+    //                 if (pkg && groupName !== pkg.objectName) {
+    //                     continue;
+    //                 }
 
-                    if (clsImport && objectName === clsImport.objectName) {
-                        if (clsImport.classPackage === "Native")
-                            return -(clsImport.index + 1);
+    //             } else if (exp.idPackage < 0) {
+    //                 debugger;
+    //             } else {
+    //                 debugger;
+    //             }
+    //         }
 
-                        return exp.index + 1;
-                    }
-                } else if (exp.idClass === 0) return exp.index + 1;
+    //         if (isClass) {
+    //             if (exp.idClass > 0) {
+    //                 const other = this.exports[exp.idClass as number + 1];
 
-            } else if (exp.idClass !== 0) {
+    //                 if (other && className === other.objectName)
+    //                     return exp.index + 1;
 
-                const obj = this.fetchObject(exp.idClass) as any as typeof UObject;
+    //                 debugger;
+    //             } else if (exp.idClass < 0) {
+    //                 const clsImport = this.imports[-exp.idClass - 1];
 
-                if (obj) {
-                    const inheritenceChain = obj instanceof UClass ? [obj.loadSelf().friendlyName] : obj.inheritenceChain;
+    //                 if (clsImport && objectName === clsImport.objectName) {
+    //                     if (clsImport.classPackage === "Native")
+    //                         return -(clsImport.index + 1);
 
-                    if (!inheritenceChain)
-                        debugger;
+    //                     return exp.index + 1;
+    //                 }
+    //             } else if (exp.idClass === 0) return exp.index + 1;
 
-                    if (inheritenceChain.includes(className))
-                        return exp.index + 1;
-                }
-            }
-        }
+    //         } else if (exp.idClass !== 0) {
 
-        return 0;
-    }
+    //             const obj = this.fetchObject(exp.idClass) as any as typeof UObject;
 
-    public newObject<T extends UObject = UObject>(objclass: UClass | ObjectConstructor): T {
-        if (objclass instanceof UClass) {
-            const Constructor = objclass.buildClass<T>(this.loader.getPackage("native", "Script") as UNativePackage);
+    //             if (obj) {
+    //                 const inheritenceChain = obj instanceof UClass ? [obj.loadSelf().friendlyName] : obj.inheritenceChain;
 
-            return new Constructor();
-        }
+    //                 if (!inheritenceChain)
+    //                     debugger;
 
-        const obj = new (objclass as ObjectConstructor)();
+    //                 if (inheritenceChain.includes(className))
+    //                     return exp.index + 1;
+    //             }
+    //         }
+    //     }
 
-        return obj as T;
-    }
+    //     return 0;
+    // }
 
-    public loadExportObject(index: number) {
-        const entry = this.exports[index];
-        const objname = entry.objectName;
+    // public newObject<T extends UObject = UObject>(objclass: UClass | ObjectConstructor): T {
+    //     if (objclass instanceof UClass) {
+    //         const Constructor = objclass.buildClass<T>(this.loader.getPackage("native", "Script") as UNativePackage);
 
-        if (entry.idClass !== 0) {
-            const objclass: UClass = this.fetchObject(entry.idClass) as UClass;
+    //         return new Constructor();
+    //     }
 
-            if (!objclass) {
-                debugger;
-                throw Error("Could not find the object class for " + objname);
-            }
+    //     const obj = new (objclass as ObjectConstructor)();
 
-            const object = entry.object = this.newObject(objclass) as UObject;
+    //     return obj as T;
+    // }
 
-            object.setExport(this, entry);
+    // public loadExportObject(index: number) {
+    //     const entry = this.exports[index];
+    //     const objname = entry.objectName;
 
-        } else {
-            let objbase = entry.idSuper === 0 ? null : this.fetchObject(entry.idSuper) as UClass;
-            let pkg: UPackage = this;
+    //     if (entry.idClass !== 0) {
+    //         const objclass: UClass = this.fetchObject(entry.idClass) as UClass;
 
-            if (!objbase && objname !== "Object") {
-                debugger;
-                pkg = this.loader.getPackage("Core", "Script");
+    //         if (!objclass) {
+    //             debugger;
+    //             throw Error("Could not find the object class for " + objname);
+    //         }
 
-                if (!pkg.isDecoded()) throw new Error(`Package must be decoded: 'Core'`);
+    //         const object = entry.object = this.newObject(objclass) as UObject;
 
-                objbase = pkg.fetchObjectByType("Class", "Object") as UClass;
-            }
+    //         object.setExport(this, entry);
 
-            if (!this.exports[index].object) {
-                const obj = new UClass();
+    //     } else {
+    //         let objbase = entry.idSuper === 0 ? null : this.fetchObject(entry.idSuper) as UClass;
+    //         let pkg: UPackage = this;
 
-                this.exports[index].object = obj as unknown as UObject;
+    //         if (!objbase && objname !== "Object") {
+    //             debugger;
+    //             pkg = this.loader.getPackage("Core", "Script");
 
-                if (entry.size === 0) {
-                    if (entry.flags !== ObjectFlags_T.Native)
-                        throw new Error("0xdeadbeef")
+    //             if (!pkg.isDecoded()) throw new Error(`Package must be decoded: 'Core'`);
 
-                    obj.friendlyName = objname;
-                }
+    //             objbase = pkg.fetchObjectByType("Class", "Object") as UClass;
+    //         }
 
-                obj.setExport(pkg, entry);
-            }
-        }
-    }
+    //         if (!this.exports[index].object) {
+    //             const obj = new UClass();
 
-    getImportEntry(objref: number) {
-        if (objref === 0)
-            return null;
-        else if (objref > 0)
-            throw Error("Expected an import table entry");
+    //             this.exports[index].object = obj as unknown as UObject;
 
-        const index = -objref - 1;
-        if (index >= this.imports.length)
-            throw Error("Import table entry out of bounds!");
+    //             if (entry.size === 0) {
+    //                 if (entry.flags !== ObjectFlags_T.Native)
+    //                     throw new Error("0xdeadbeef")
 
-        return this.imports[index];
-    }
+    //                 obj.friendlyName = objname;
+    //             }
 
-    public fetchObject<T extends UObject = UObject>(objref: number): T {
-        if (objref > 0) {   // Export table object
-            const index = objref - 1;
+    //             obj.setExport(pkg, entry);
+    //         }
+    //     }
+    // }
 
-            if (index > this.exports.length)
-                throw new Error("Invalid object reference");
+    // getImportEntry(objref: number) {
+    //     if (objref === 0)
+    //         return null;
+    //     else if (objref > 0)
+    //         throw Error("Expected an import table entry");
 
-            const entry = this.exports[index];
+    //     const index = -objref - 1;
+    //     if (index >= this.imports.length)
+    //         throw Error("Import table entry out of bounds!");
 
-            if (!entry.object)
-                this.loadExportObject(index);
+    //     return this.imports[index];
+    // }
 
-            return entry.object as T;
-        } else if (objref < 0) {    // Import table object
+    // public fetchObject<T extends UObject = UObject>(objref: number): T {
+    //     if (objref > 0) {   // Export table object
+    //         const index = objref - 1;
 
-            const entry = this.getImportEntry(objref);
-            let entrypackage = this.getImportEntry(entry.idPackage);
+    //         if (index > this.exports.length)
+    //             throw new Error("Invalid object reference");
 
-            let groupName = "None";
-            if (entrypackage.idPackage !== 0)
-                groupName = entrypackage.objectName;
+    //         const entry = this.exports[index];
 
-            while (entrypackage.idPackage !== 0)
-                entrypackage = this.getImportEntry(entrypackage.idPackage);
+    //         if (!entry.object)
+    //             this.loadExportObject(index);
 
-            const packageName = entrypackage.objectName;
-            const objectName = entry.objectName;
-            const className = entry.className;
+    //         return entry.object as T;
+    //     } else if (objref < 0) {    // Import table object
 
-            const pkg = this.loader.getPackage(packageName, className as SupportedImports_T);
+    //         const entry = this.getImportEntry(objref);
+    //         let entrypackage = this.getImportEntry(entry.idPackage);
 
-            if (!pkg.isDecoded()) throw new Error(`Package must be decoded: '${packageName}'`);
+    //         let groupName = "None";
+    //         if (entrypackage.idPackage !== 0)
+    //             groupName = entrypackage.objectName;
 
-            if (pkg.isNative && className === "State" && objectName === "State" && groupName === "None") {
-                console.log(entry);
-                debugger;
-            }
+    //         while (entrypackage.idPackage !== 0)
+    //             entrypackage = this.getImportEntry(entrypackage.idPackage);
 
-            let obj = pkg.fetchObjectByType(className, objectName, groupName);
+    //         const packageName = entrypackage.objectName;
+    //         const objectName = entry.objectName;
+    //         const className = entry.className;
 
-            if (obj === null) {
-                console.log(pkg);
-                debugger;
-                throw new Error(`(${packageName}) [${className}, ${objectName}, ${groupName}] should not be null`);
-            }
+    //         const pkg = this.loader.getPackage(packageName, className as SupportedImports_T);
 
-            if (!obj && packageName == "UnrealI")
-                throw new Error("Not yet implemented");
-            else if (!obj && packageName == "UnrealShare")
-                throw new Error("Not yet implemented");
+    //         if (!pkg.isDecoded()) throw new Error(`Package must be decoded: '${packageName}'`);
 
-            return obj as T;
-        }
+    //         if (pkg.isNative && className === "State" && objectName === "State" && groupName === "None") {
+    //             console.log(entry);
+    //             debugger;
+    //         }
 
-        return null;
-    }
+    //         let obj = pkg.fetchObjectByType(className, objectName, groupName);
 
-    public fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
-        const index = this.findObjectRef(className, objectName, groupName);
+    //         if (obj === null) {
+    //             console.log(pkg);
+    //             debugger;
+    //             throw new Error(`(${packageName}) [${className}, ${objectName}, ${groupName}] should not be null`);
+    //         }
 
-        return this.fetchObject(index);
-    }
+    //         if (!obj && packageName == "UnrealI")
+    //             throw new Error("Not yet implemented");
+    //         else if (!obj && packageName == "UnrealShare")
+    //             throw new Error("Not yet implemented");
 
-    public getPackageName(index: number) {
-        return index < 0
-            ? this.imports[-index - 1].objectName as string
-            : index > 0
-                ? this.exports[index].objectName as string
-                : null;
-    }
+    //         return obj as T;
+    //     }
 
-    protected loadImports(header: UHeader, nameTable: UName[]) {
-        this.seek(header.importOffset as number, "set");
+    //     return null;
+    // }
 
-        const imports: UImport[] = [];
-        const index = new BufferValue(BufferValue.compat32);
-        const int32 = new BufferValue(BufferValue.int32);
+    // public fetchObjectByType(className: string, objectName: string, groupName: string = "None") {
+    //     const index = this.findObjectRef(className, objectName, groupName);
 
-        for (let i = 0, ic = header.importCount; i < ic; i++) {
-            const uimport = new UImport();
+    //     return this.fetchObject(index);
+    // }
 
-            uimport.index = i;
+    // public getPackageName(index: number) {
+    //     return index < 0
+    //         ? this.imports[-index - 1].objectName as string
+    //         : index > 0
+    //             ? this.exports[index].objectName as string
+    //             : null;
+    // }
 
-            this.read(index);
-            uimport.idClassPackage = index.value as number;
-            uimport.classPackage = nameTable[uimport.idClassPackage].name;
+    // protected loadImports(header: UHeader, nameTable: UName[]) {
+    //     this.seek(header.importOffset as number, "set");
 
-            this.read(index);
-            uimport.idClassName = index.value as number;
-            uimport.className = nameTable[uimport.idClassName].name;
+    //     const imports: UImport[] = [];
+    //     const index = new BufferValue(BufferValue.compat32);
+    //     const int32 = new BufferValue(BufferValue.int32);
 
-            uimport.idPackage = this.read(int32).value as number;
+    //     for (let i = 0, ic = header.importCount; i < ic; i++) {
+    //         const uimport = new UImport();
 
-            this.read(index);
-            uimport.idObjectName = index.value as number;
-            uimport.objectName = nameTable[uimport.idObjectName].name;
+    //         uimport.index = i;
 
-            imports.push(uimport);
-        }
+    //         this.read(index);
+    //         uimport.idClassPackage = index.value as number;
+    //         uimport.classPackage = nameTable[uimport.idClassPackage].name;
 
-        return imports;
-    }
+    //         this.read(index);
+    //         uimport.idClassName = index.value as number;
+    //         uimport.className = nameTable[uimport.idClassName].name;
 
-    protected loadNames(header: UHeader): [UName[], Map<string, number>] {
-        this.seek(header.nameOffset as number, "set");
+    //         uimport.idPackage = this.read(int32).value as number;
 
-        const nameTable: UName[] = [];
-        const nameHash = new Map<string, number>();
+    //         this.read(index);
+    //         uimport.idObjectName = index.value as number;
+    //         uimport.objectName = nameTable[uimport.idObjectName].name;
 
-        const char = new BufferValue<"char">(BufferValue.char);
-        const uint32 = new BufferValue<"uint32">(BufferValue.uint32);
+    //         imports.push(uimport);
+    //     }
 
-        for (let i = 0, nc = header.nameCount as number; i < nc; i++) {
-            const uname = new UName();
+    //     return imports;
+    // }
 
-            uname.name = this.read(char).string;
-            uname.flags = this.read(uint32).value as number;
+    // protected loadNames(header: UHeader): [UName[], Map<string, number>] {
+    //     this.seek(header.nameOffset as number, "set");
 
-            nameTable.push(uname);
-            nameHash.set(uname.name, i);
+    //     const nameTable: UName[] = [];
+    //     const nameHash = new Map<string, number>();
 
-            // console.log(`Name[${i}]: "${(uname.name)}"`);
-        }
+    //     const char = new BufferValue<"char">(BufferValue.char);
+    //     const uint32 = new BufferValue<"uint32">(BufferValue.uint32);
 
-        return [nameTable, nameHash];
-    }
+    //     for (let i = 0, nc = header.nameCount as number; i < nc; i++) {
+    //         const uname = new UName();
 
-    protected loadExports(header: UHeader, nameTable: UName[]) {
-        this.seek(header.exportOffset as number, "set");
+    //         uname.name = this.read(char).string;
+    //         uname.flags = this.read(uint32).value as number;
 
-        const exports: UExport[] = [];
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const uint32 = new BufferValue(BufferValue.uint32);
+    //         nameTable.push(uname);
+    //         nameHash.set(uname.name, i);
 
-        for (let i = 0, ec = header.exportCount as number; i < ec; i++) {
-            const uexport = new UExport();
+    //         // console.log(`Name[${i}]: "${(uname.name)}"`);
+    //     }
 
-            uexport.idClass = this.read(compat32).value as number;
-            uexport.idSuper = this.read(compat32).value as number;
-            uexport.idPackage = this.read(uint32).value as number;
-            uexport.idObjectName = this.read(compat32).value as number;
+    //     return [nameTable, nameHash];
+    // }
 
-            uexport.index = i;
-            uexport.objectName = nameTable[uexport.idObjectName as number].name;
+    // protected loadExports(header: UHeader, nameTable: UName[]) {
+    //     this.seek(header.exportOffset as number, "set");
 
-            uexport.flags = this.read(uint32).value as number;
-            uexport.size = this.read(compat32).value as number;
+    //     const exports: UExport[] = [];
+    //     const compat32 = new BufferValue(BufferValue.compat32);
+    //     const uint32 = new BufferValue(BufferValue.uint32);
 
-            if (uexport.size as number > 0)
-                uexport.offset = this.read(compat32).value as number;
+    //     for (let i = 0, ec = header.exportCount as number; i < ec; i++) {
+    //         const uexport = new UExport();
 
-            exports.push(uexport);
-        }
+    //         uexport.idClass = this.read(compat32).value as number;
+    //         uexport.idSuper = this.read(compat32).value as number;
+    //         uexport.idPackage = this.read(uint32).value as number;
+    //         uexport.idObjectName = this.read(compat32).value as number;
 
-        return exports;
-    }
+    //         uexport.index = i;
+    //         uexport.objectName = nameTable[uexport.idObjectName as number].name;
 
-    public toString() { return `Package=(${this.path}, imports=${this.imports.length}, exports=${this.exports.length})` }
+    //         uexport.flags = this.read(uint32).value as number;
+    //         uexport.size = this.read(compat32).value as number;
+
+    //         if (uexport.size as number > 0)
+    //             uexport.offset = this.read(compat32).value as number;
+
+    //         exports.push(uexport);
+    //     }
+
+    //     return exports;
+    // }
+
+    // public toString() { return `Package=(${this.path}, imports=${this.imports.length}, exports=${this.exports.length})` }
 }
 
 enum PackageFlags_T {
