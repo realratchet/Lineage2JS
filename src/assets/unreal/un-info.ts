@@ -1,7 +1,7 @@
 import UAActor from "./un-aactor";
 
-class UInfo extends UAActor {
+class AInfo extends UAActor {
 }
 
-export default UInfo;
-export { UInfo };
+export default AInfo;
+export { AInfo };

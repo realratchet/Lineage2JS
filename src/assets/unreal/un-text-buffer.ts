@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import FString from "./un-string";
 import { BufferValue } from "@l2js/core";
 

@@ -1,14 +1,13 @@
-import FConstructable from "./un-constructable";
-import { BufferValue } from "@l2js/core";
 import FVector from "./un-vector";
+import { BufferValue } from "@l2js/core";
 
-class FBox extends FConstructable {
+class FBox implements C.IConstructable {
     public readonly min: FVector = new FVector();
     public readonly max: FVector = new FVector();
 
     public isValid: boolean = false;
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
         const b = new BufferValue(BufferValue.int8);
 
         this.min.load(pkg);

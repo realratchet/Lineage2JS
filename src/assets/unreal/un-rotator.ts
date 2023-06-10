@@ -1,4 +1,3 @@
-import FConstructable from "./un-constructable";
 import { BufferValue } from "@l2js/core";
 import { RAD2DEG } from "three/src/math/MathUtils";
 
@@ -7,8 +6,6 @@ const _TWO_PI = 2 * _PI;
 const _TWO_TO_FIFTEEN = 2 ** 15;
 const _INV_TWO_TO_FIFTEEN = 1 / _TWO_TO_FIFTEEN;
 const _INV_TWO_TO_FIFTEEN_TIMES_PI = _INV_TWO_TO_FIFTEEN * _PI;
-
-
 
 class GMath {
     static ANGLE_SHIFT = 2;		// Bits to right-shift to get lookup value.
@@ -34,20 +31,18 @@ for (let i = 0; i < GMath.NUM_SQRTS; i++)
     SqrtFLOAT[i] = Math.sqrt(i / 16384);
 
 
-class FRotator extends FConstructable {
+class FRotator implements C.IConstructable {
     public pitch: number;
     public yaw: number;
     public roll: number;
 
     public constructor(pitch = 0, yaw = 0, roll = 0) {
-        super();
-
         this.pitch = pitch;
         this.yaw = yaw;
         this.roll = roll;
     }
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
         const int32 = new BufferValue(BufferValue.int32);
 
         for (let key of ["pitch", "yaw", "roll"])
@@ -56,7 +51,7 @@ class FRotator extends FConstructable {
         return this;
     }
 
-    public getEulerElements(): EulerArr {
+    public getEulerElements(): GD.EulerArr {
         const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const xAxis = (_TWO_PI - this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
@@ -76,6 +71,7 @@ class FRotator extends FConstructable {
     }
 
     public rotationMatrix() {
+        throw new Error("Not implemented");
         // let SR = GMath.SinTab(this.roll),
         //     SP = GMath.SinTab(this.pitch),
         //     SY = GMath.SinTab(this.yaw),

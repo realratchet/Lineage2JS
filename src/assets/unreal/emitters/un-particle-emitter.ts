@@ -1,6 +1,6 @@
 import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "../un-array";
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import { UPlane } from "../un-plane";
 import { PropertyTag } from "../un-property-tag";
 import URange, { URangeVector } from "../un-range";

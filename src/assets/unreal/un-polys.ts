@@ -1,7 +1,6 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import FVector from "./un-vector";
 import { BufferValue } from "@l2js/core";
-import FConstructable from "./un-constructable";
 
 enum PolyFlags_T {
     // Regular in-game flags.
@@ -33,174 +32,174 @@ enum PolyFlags_T {
 };
 
 
-class FPoly extends FConstructable {
-    public base: FVector = new FVector();
-    public normal: FVector = new FVector();
-    public textureU: FVector = new FVector();
-    public textureV: FVector = new FVector();
-    public vertices: FVector[];
-    public flags: number;
-    public actor: UObject = null;
-    public texture: UMaterial = null;
-    public link: number;
-    public brushPoly: number;
-    public name: string;
-    public panU: number;
-    public panV: number;
+class FPoly extends UObject {
+    // public base: FVector = new FVector();
+    // public normal: FVector = new FVector();
+    // public textureU: FVector = new FVector();
+    // public textureV: FVector = new FVector();
+    // public vertices: FVector[];
+    // public flags: number;
+    // public actor: UObject = null;
+    // public texture: UMaterial = null;
+    // public link: number;
+    // public brushPoly: number;
+    // public name: string;
+    // public panU: number;
+    // public panV: number;
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const compat = new BufferValue(BufferValue.compat32);
-        const int16 = new BufferValue(BufferValue.int16);
+    // public load(pkg: UPackage): this {
+    //     const uint32 = new BufferValue(BufferValue.uint32);
+    //     const compat = new BufferValue(BufferValue.compat32);
+    //     const int16 = new BufferValue(BufferValue.int16);
 
-        const vcount = pkg.read(compat).value as number;
+    //     const vcount = pkg.read(compat).value as number;
 
-        debugger;
+    //     debugger;
 
-        console.assert(vcount >= 0);
+    //     console.assert(vcount >= 0);
 
-        this.base.load(pkg);
-        this.normal.load(pkg);
-        this.textureU.load(pkg);
-        this.textureV.load(pkg);
+    //     this.base.load(pkg);
+    //     this.normal.load(pkg);
+    //     this.textureU.load(pkg);
+    //     this.textureV.load(pkg);
 
-        this.vertices = new Array(vcount);
+    //     this.vertices = new Array(vcount);
 
-        for (let i = 0; i < vcount; i++)
-            this.vertices[i] = new FVector().load(pkg);
+    //     for (let i = 0; i < vcount; i++)
+    //         this.vertices[i] = new FVector().load(pkg);
 
-        this.flags = pkg.read(uint32).value as number;
+    //     this.flags = pkg.read(uint32).value as number;
 
-        const actorId = pkg.read(compat).value as number;
-        const textureId = pkg.read(compat).value as number;
-        const nameId = pkg.read(compat).value as number;
+    //     const actorId = pkg.read(compat).value as number;
+    //     const textureId = pkg.read(compat).value as number;
+    //     const nameId = pkg.read(compat).value as number;
 
-        this.name = pkg.nameTable[nameId].name as string;
-        this.link = pkg.read(compat).value as number;
-        this.brushPoly = pkg.read(compat).value as number;
+    //     this.name = pkg.nameTable[nameId].name as string;
+    //     this.link = pkg.read(compat).value as number;
+    //     this.brushPoly = pkg.read(compat).value as number;
 
-        this.panU = pkg.read(int16).value as number;
-        this.panV = pkg.read(int16).value as number;
+    //     this.panU = pkg.read(int16).value as number;
+    //     this.panV = pkg.read(int16).value as number;
 
-        pkg.seek(4);
+    //     pkg.seek(4);
 
-        // debugger;
+    //     // debugger;
 
-        if (actorId !== 0) debugger;
+    //     if (actorId !== 0) debugger;
 
-        const offset = pkg.tell();
-        if (actorId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.actor = await pkg.fetchObject<UObject>(actorId);
-            resolve();
-        }));
-        if (textureId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.texture = await pkg.fetchObject<UMaterial>(textureId);
-            resolve();
-        }));
-        pkg.seek(offset, "set");
+    //     const offset = pkg.tell();
+    //     if (actorId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+    //         this.actor = await pkg.fetchObject<UObject>(actorId);
+    //         resolve();
+    //     }));
+    //     if (textureId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+    //         this.texture = await pkg.fetchObject<UMaterial>(textureId);
+    //         resolve();
+    //     }));
+    //     pkg.seek(offset, "set");
 
-        // debugger;
+    //     // debugger;
 
-        return this;
-    }
-
-    // public async decodeMesh(): Promise<Mesh> {
-
-    //     const flags = this.flags;
-
-    //     const isInvisible = flags & PolyFlags_T.PF_Invisible;
-    //     const isNotSolid = flags & PolyFlags_T.PF_NotSolid;
-    //     const isUnk0 = flags & 0x00000080;
-    //     const isUnk1 = flags & PolyFlags_T.PF_Unk1;
-    //     const isUnk2 = flags & PolyFlags_T.PF_Unk2;
-    //     const isSheet = this.name === "Sheet";
-    //     const vcount = this.vertices.length;
-
-    //     if (isInvisible || isNotSolid || isUnk0 || isUnk1 || isUnk2 || isSheet || vcount === 0) return null;
-
-    //     const uvs = [], normals = [], positions = [];
-
-    //     for (let vertex of this.vertices) {
-    //         const [tu, tv] = [this.textureU, this.textureV].map(vtex => vertex.sub(this.base).dot(vtex) / 128);
-
-    //         uvs.push(tu, tv);
-    //         normals.push(this.normal.vector.x, this.normal.vector.z, this.normal.vector.y);
-    //         positions.push(vertex.vector.x, vertex.vector.z, vertex.vector.y);
-    //     }
-
-    //     const attrUvs = new Float32BufferAttribute(uvs, 2);
-    //     const attrNormals = new Float32BufferAttribute(normals, 3);
-    //     const attrPositions = new Float32BufferAttribute(positions, 3);
-    //     const geometry = new BufferGeometry();
-
-    //     geometry.setAttribute("uv", attrUvs);
-    //     geometry.setAttribute("normal", attrNormals);
-    //     geometry.setAttribute("position", attrPositions);
-
-    //     const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
-    //     const materials = await this.texture?.decodeMaterial();
-
-    //     const mesh = new Mesh(fanGeo, materials);
-
-    //     mesh.name = this.name || "";
-
-    //     return mesh;
+    //     return this;
     // }
+
+    // // public async decodeMesh(): Promise<Mesh> {
+
+    // //     const flags = this.flags;
+
+    // //     const isInvisible = flags & PolyFlags_T.PF_Invisible;
+    // //     const isNotSolid = flags & PolyFlags_T.PF_NotSolid;
+    // //     const isUnk0 = flags & 0x00000080;
+    // //     const isUnk1 = flags & PolyFlags_T.PF_Unk1;
+    // //     const isUnk2 = flags & PolyFlags_T.PF_Unk2;
+    // //     const isSheet = this.name === "Sheet";
+    // //     const vcount = this.vertices.length;
+
+    // //     if (isInvisible || isNotSolid || isUnk0 || isUnk1 || isUnk2 || isSheet || vcount === 0) return null;
+
+    // //     const uvs = [], normals = [], positions = [];
+
+    // //     for (let vertex of this.vertices) {
+    // //         const [tu, tv] = [this.textureU, this.textureV].map(vtex => vertex.sub(this.base).dot(vtex) / 128);
+
+    // //         uvs.push(tu, tv);
+    // //         normals.push(this.normal.vector.x, this.normal.vector.z, this.normal.vector.y);
+    // //         positions.push(vertex.vector.x, vertex.vector.z, vertex.vector.y);
+    // //     }
+
+    // //     const attrUvs = new Float32BufferAttribute(uvs, 2);
+    // //     const attrNormals = new Float32BufferAttribute(normals, 3);
+    // //     const attrPositions = new Float32BufferAttribute(positions, 3);
+    // //     const geometry = new BufferGeometry();
+
+    // //     geometry.setAttribute("uv", attrUvs);
+    // //     geometry.setAttribute("normal", attrNormals);
+    // //     geometry.setAttribute("position", attrPositions);
+
+    // //     const fanGeo = BufferGeometryUtils.toTrianglesDrawMode(geometry, TriangleFanDrawMode);
+    // //     const materials = await this.texture?.decodeMaterial();
+
+    // //     const mesh = new Mesh(fanGeo, materials);
+
+    // //     mesh.name = this.name || "";
+
+    // //     return mesh;
+    // // }
 }
 
 class UPolys extends UObject {
-    protected polyList: FPoly[];
+    // protected polyList: FPoly[];
 
-    protected doLoad(pkg: UPackage, exp: UExport): this {
-        pkg.seek(this.readHead, "set");
-
-
-        super.doLoad(pkg, exp);
-
-        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    // protected doLoad(pkg: UPackage, exp: UExport): this {
+    //     pkg.seek(this.readHead, "set");
 
 
-        // super.load(pkg, exp);
+    //     super.doLoad(pkg, exp);
 
-        const int32 = new BufferValue(BufferValue.int32);
+    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
 
-        const dbNum = pkg.read(int32).value as number;
-        const dbMax = pkg.read(int32).value as number;
 
-        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    //     // super.load(pkg, exp);
 
-        this.polyList = new Array(dbMax);
+    //     const int32 = new BufferValue(BufferValue.int32);
 
-        // debugger;
+    //     const dbNum = pkg.read(int32).value as number;
+    //     const dbMax = pkg.read(int32).value as number;
 
-        for (let i = 0; i < dbMax; i++) {
-            // this.polyList[i] = await new FPoly().load(pkg);
-            // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
-        }
+    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
 
-        // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    //     this.polyList = new Array(dbMax);
 
-        // console.assert((exp.size as number - (pkg.tell() - startOffset)) === 0);
+    //     // debugger;
 
-        // debugger;
-
-        return this;
-    }
-
-    // public async decodePolys(): Promise<Group> {
-    //     const group = new Group();
-
-    //     for (let poly of this.polyList) {
-    //         const mesh = await poly.decodeMesh();
-
-    //         if (mesh) group.add(mesh);
-
-    //         if (poly.actor)
-    //             debugger;
+    //     for (let i = 0; i < dbMax; i++) {
+    //         // this.polyList[i] = await new FPoly().load(pkg);
+    //         // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
     //     }
 
-    //     return group;
+    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+
+    //     // console.assert((exp.size as number - (pkg.tell() - startOffset)) === 0);
+
+    //     // debugger;
+
+    //     return this;
     // }
+
+    // // public async decodePolys(): Promise<Group> {
+    // //     const group = new Group();
+
+    // //     for (let poly of this.polyList) {
+    // //         const mesh = await poly.decodeMesh();
+
+    // //         if (mesh) group.add(mesh);
+
+    // //         if (poly.actor)
+    // //             debugger;
+    // //     }
+
+    // //     return group;
+    // // }
 }
 
 export default UPolys;

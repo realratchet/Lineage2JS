@@ -1,105 +1,103 @@
-import FArray from "./un-array";
-import FNumber from "./un-number";
+import AInfo from "./un-info";
 import { BufferValue } from "@l2js/core";
-import UInfo from "./un-info";
 
-class UZoneInfo extends UInfo implements IInfo {
-    protected isFogZone: boolean;
-    protected hasTerrain: boolean;
+class UZoneInfo extends AInfo/* implements IInfo*/ {
+    // protected isFogZone: boolean;
+    // protected hasTerrain: boolean;
 
-    protected useFogColorClear: boolean;
+    // protected useFogColorClear: boolean;
 
-    public ambientBrightness: number;
-    public ambientVector: FVector;
+    // public ambientBrightness: number;
+    // public ambientVector: FVector;
 
-    protected killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
-    protected killZType: number;
-    protected isSoftKillZ: boolean;
+    // protected killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
+    // protected killZType: number;
+    // protected isSoftKillZ: boolean;
 
-    protected terrains: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    // protected terrains: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
 
-    protected ambientHue: number;
-    protected ambientSaturation: number;
+    // protected ambientHue: number;
+    // protected ambientSaturation: number;
 
-    protected zoneTag: string;
+    // protected zoneTag: string;
 
-    protected lensFlare = new Set();
-    protected lensFlareOffset = new Set();
-    protected lensFlareScale = new Set();
+    // protected lensFlare = new Set();
+    // protected lensFlareOffset = new Set();
+    // protected lensFlareScale = new Set();
 
-    protected panSpeedU: number;
-    protected panSpeedV: number;
+    // protected panSpeedU: number;
+    // protected panSpeedV: number;
 
-    protected skyZone: any;
-    protected locationName: any;
-    protected distanceFogBlendTime: any;
-    protected environmentMap: any;
-    protected zoneEffect: any;
-    protected isLonelyZone: boolean;
-    protected manualExcludes: any;
+    // protected skyZone: any;
+    // protected locationName: any;
+    // protected distanceFogBlendTime: any;
+    // protected environmentMap: any;
+    // protected zoneEffect: any;
+    // protected isLonelyZone: boolean;
+    // protected manualExcludes: any;
 
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "bFogZone": "isFogZone",
-            "bTerrainZone": "hasTerrain",
-            "Terrains": "terrains",
-            "AmbientBrightness": "ambientBrightness",
-            "AmbientVector": "ambientVector",
-            "KillZ": "killZ",
-            "KillZType": "killZType",
-            "bSoftKillZ": "isSoftKillZ",
-            "bClearToFogColor": "useFogColorClear",
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         "bFogZone": "isFogZone",
+    //         "bTerrainZone": "hasTerrain",
+    //         "Terrains": "terrains",
+    //         "AmbientBrightness": "ambientBrightness",
+    //         "AmbientVector": "ambientVector",
+    //         "KillZ": "killZ",
+    //         "KillZType": "killZType",
+    //         "bSoftKillZ": "isSoftKillZ",
+    //         "bClearToFogColor": "useFogColorClear",
 
-            "AmbientHue": "ambientHue",
-            "AmbientSaturation": "ambientSaturation",
+    //         "AmbientHue": "ambientHue",
+    //         "AmbientSaturation": "ambientSaturation",
 
-            "ZoneTag": "zoneTag",
+    //         "ZoneTag": "zoneTag",
 
-            "LensFlare": "lensFlare",
-            "LensFlareOffset": "lensFlareOffset",
-            "LensFlareScale": "lensFlareScale",
+    //         "LensFlare": "lensFlare",
+    //         "LensFlareOffset": "lensFlareOffset",
+    //         "LensFlareScale": "lensFlareScale",
 
-            "TexUPanSpeed": "panSpeedU",
-            "TexVPanSpeed": "panSpeedV",
+    //         "TexUPanSpeed": "panSpeedU",
+    //         "TexVPanSpeed": "panSpeedV",
 
-            "SkyZone": "skyZone",
-            "LocationName": "locationName",
-            "DistanceFogBlendTime": "distanceFogBlendTime",
-            "EnvironmentMap": "environmentMap",
-            "ZoneEffect": "zoneEffect",
-            "bLonelyZone": "isLonelyZone",
-            "ManualExcludes": "manualExcludes",
-        });
-    }
+    //         "SkyZone": "skyZone",
+    //         "LocationName": "locationName",
+    //         "DistanceFogBlendTime": "distanceFogBlendTime",
+    //         "EnvironmentMap": "environmentMap",
+    //         "ZoneEffect": "zoneEffect",
+    //         "bLonelyZone": "isLonelyZone",
+    //         "ManualExcludes": "manualExcludes",
+    //     });
+    // }
 
-    public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
-        pkg.seek(this.readHead, "set");
+    // public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
+    //     pkg.seek(this.readHead, "set");
 
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
+    //     const verArchive = pkg.header.getArchiveFileVersion();
+    //     const verLicense = pkg.header.getLicenseeVersion();
 
-        super.doLoad(pkg, exp);
+    //     super.doLoad(pkg, exp);
 
-        this.readHead = pkg.tell();
+    //     this.readHead = pkg.tell();
 
-        const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
+    //     const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
 
-    }
+    // }
 
-    public getDecodeInfo(library: DecodeLibrary): IZoneDecodeInfo {
-        return {
-            uuid: this.uuid,
-            type: "Zone",
-            name: this.objectName,
-            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
-            children: [],
-            fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
-                start: this.distanceFogStart,
-                end: this.distanceFogEnd,
-                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
-            }
-        };
-    }
+    // public getDecodeInfo(library: DecodeLibrary): IZoneDecodeInfo {
+    //     return {
+    //         uuid: this.uuid,
+    //         type: "Zone",
+    //         name: this.objectName,
+    //         bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+    //         children: [],
+    //         fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
+    //             start: this.distanceFogStart,
+    //             end: this.distanceFogEnd,
+    //             color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
+    //         }
+    //     };
+    // }
 }
 
 export default UZoneInfo;

@@ -13,7 +13,7 @@ class ZoneObject extends Object3D {
     public readonly isZoneObject = true;
     public readonly type: "Zone" | "Sector" = "Zone";
 
-    public setRenderBounds(min: Vector3Arr, max: Vector3Arr): this {
+    public setRenderBounds(min: GD.Vector3Arr, max: GD.Vector3Arr): this {
 
         this.boundsRender.min.fromArray(min);
         this.boundsRender.max.fromArray(max);

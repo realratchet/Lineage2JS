@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import FBox from "./un-box";
 import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "./un-array";
@@ -236,8 +236,8 @@ class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getVectorElements() as Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getVectorElements() as Vector3Arr
+                    min: this.boundingBox.min.sub(center).getVectorElements() as GD.Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getVectorElements() as GD.Vector3Arr
                 } : null
             }
         };

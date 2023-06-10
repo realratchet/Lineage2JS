@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 
 class USound extends UObject {
     protected static getConstructorName() { return "Sound"; }

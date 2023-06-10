@@ -2,7 +2,7 @@ import { BufferValue } from "@l2js/core";
 import UExport from "./un-export";
 import UField from "./un-field";
 import UFunction from "./un-function";
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import UPackage from "./un-package";
 import UStruct from "./un-struct";
 

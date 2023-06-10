@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 
 class UPointRegion extends UObject {
     protected zone: UZoneInfo;

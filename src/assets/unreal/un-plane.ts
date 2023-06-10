@@ -1,16 +1,13 @@
-import FConstructable from "./un-constructable";
 import { BufferValue } from "@l2js/core";
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 
-class FPlane extends FConstructable {
+class FPlane implements C.IConstructable {
     public x: number;
     public y: number;
     public z: number;
     public w: number;
 
     constructor(x = 0, y = 0, z = 0, w = 0) {
-        super();
-
         this.x = x;
         this.y = y;
         this.z = z;
@@ -37,7 +34,7 @@ class FPlane extends FConstructable {
         return array;
     }
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
         const f = new BufferValue(BufferValue.float);
 
         ["x", "y", "z", "w"].forEach((ax: "x" | "y" | "z" | "w") => {
@@ -72,8 +69,8 @@ class UPlane extends UObject {
         });
     }
 
-    public getElements(): Vector4Arr { return [this.x, this.y, this.z, this.w]; }
-    public toString() {return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})`}
+    public getElements(): GD.Vector4Arr { return [this.x, this.y, this.z, this.w]; }
+    public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})` }
 }
 
 export { FPlane, UPlane };

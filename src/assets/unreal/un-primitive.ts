@@ -1,8 +1,6 @@
-import { UObject } from "@l2js/core";
-import { FStaticMeshMaterial } from "./un-material";
 import FBox from "./un-box";
+import UObject from "@l2js/core";
 import USphere from "./un-sphere";
-import FArray from "@l2js/core/src/unreal/un-array";
 
 class UPrimitive extends UObject {
     protected static getConstructorName() { return "Primitive"; }

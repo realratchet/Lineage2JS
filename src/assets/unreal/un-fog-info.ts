@@ -1,8 +1,8 @@
 import FArray from "./un-array";
 import FColor from "./un-color";
-import UInfo from "./un-info";
+import AInfo from "./un-info";
 
-class UFogInfo extends UInfo {
+class UFogInfo extends AInfo {
     protected affectRange: URange;
     protected fogRange1: URange;
     protected fogRange2: URange;

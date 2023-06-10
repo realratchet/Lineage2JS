@@ -1,51 +1,47 @@
 import FURL from "./un-url";
 import { UObject, BufferValue } from "@l2js/core";
-import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
+const LOAD_SOUNDS = false;
 
 class ULevel extends UObject {
     protected objectList: UObject[] = [];
     public readonly url: FURL = new FURL();
     protected reachSpecs = new FPrimitiveArray(BufferValue.uint32);
     public baseModelId: number;
-    protected baseModel: UModel;
+    protected baseModel: GA.UModel;
 
     protected unkBytes = BufferValue.allocBytes(3);
     protected unkInt0: number;
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
-        debugger;
         const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);
 
-        this.setReadPointers(exp);
-
-        pkg.seek(this.readHead, "set");
-
-        this.readNamedProps(pkg, exp);
+        super.doLoad(pkg, exp);
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         let dbNum: number;
         let dbMax: number;
-        let ambientSoundIds: number[] = [];
+        let ambientSoundIds: number[];
         let objectIds: number[];
 
         if (0x16 < verLicense) {
             dbNum = pkg.read(int32).value as number;
             dbMax = pkg.read(int32).value as number;
 
-            ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
-        }
+            ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
+        } else ambientSoundIds = [];
 
         this.readHead = pkg.tell();
 
         dbNum = pkg.read(int32).value as number;
         dbMax = pkg.read(int32).value as number;
 
-        objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
+        objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
 
         this.url.load(pkg);
 
@@ -64,13 +60,15 @@ class ULevel extends UObject {
         this.readHead = pkg.tell();
 
         if (LOAD_SUB_OBJECTS) {
-            this.baseModel = pkg.fetchObject<UModel>(this.baseModelId);
+            this.baseModel = pkg.fetchObject<GA.UModel>(this.baseModelId);
 
-            for (let objectId of ambientSoundIds) {
-                const object = pkg.fetchObject(objectId);
+            if (LOAD_SOUNDS) {
+                for (let objectId of ambientSoundIds) {
+                    const object = pkg.fetchObject(objectId);
 
-                if (object)
-                    this.objectList.push(object);
+                    if (object)
+                        this.objectList.push(object);
+                }
             }
 
             for (let objectId of objectIds) {
@@ -95,6 +93,8 @@ class ULevel extends UObject {
         // debugger;
 
         this.readHead = this.readTail;
+
+        debugger;
 
         return this;
     }

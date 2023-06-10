@@ -22,7 +22,7 @@ class DecodeLibrary {
     public failedDecode: any[] = [];
     public sun: ISunDecodeInfo_T;
 
-    public static async fromPackage(pkg: UPackage, {
+    public static async fromPackage(pkg: C.APackage, {
         loadBaseModel = true,
         loadStaticModels = true,
         loadStaticModelList = null,
@@ -35,7 +35,7 @@ class DecodeLibrary {
         const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
-        const uLevel = pkg.fetchObject<ULevel>(expGroups.Level[0].index + 1).loadSelf();
+        const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;

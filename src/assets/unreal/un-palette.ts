@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import FArray from "./un-array";
 import FColor from "./un-color";
 

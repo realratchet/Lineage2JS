@@ -2,7 +2,7 @@ import { v5 as seededUuid } from "uuid";
 import FArray, { FPrimitiveArray } from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import { BufferValue } from "@l2js/core";

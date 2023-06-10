@@ -297,7 +297,7 @@ function decodeSector(library: DecodeLibrary) {
 
     //         boundsNeedUpdate = true;
     //         [[Math.min, sectorInfo.bounds.min], [Math.max, sectorInfo.bounds.max]].forEach(
-    //             ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+    //             ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
     //                 for (let i = 0; i < 3; i++)
     //                     arr[i] = fn(arr[i], min[i], max[i]);
     //             }

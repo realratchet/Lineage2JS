@@ -1,27 +1,7 @@
-import { BufferValue } from "@l2js/core";
-import FConstructable from "./un-constructable";
-import { UObject } from "@l2js/core";
+import { APackage, UExport } from "@l2js/core";
+import UObject from "@l2js/core";
 import { UPlane } from "./un-plane";
-
-class FMatrix extends FConstructable {
-    elements = [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
-    ];
-
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-
-        // debugger;
-
-        for (let i = 0; i < 16; i++)
-            this.elements[i] = pkg.read(float).value as number;
-
-        return this;
-    }
-}
+import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
 
 class UMatrix extends UObject {
     public planeX: UPlane;
@@ -29,13 +9,11 @@ class UMatrix extends UObject {
     public planeZ: UPlane;
     public planeW: UPlane;
 
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "XPlane": "planeX",
-            "YPlane": "planeY",
-            "ZPlane": "planeZ",
-            "WPlane": "planeW",
-        });
+    public load(pkg: APackage): this;
+    public load(pkg: APackage, info: UExport<UObject>): this;
+    public load(pkg: APackage, info: PropertyTag): this;
+    public load(pkg: APackage, info?: any): this {
+        throw new Error("not implemented");
     }
 
     public getElements3x3() {
@@ -74,4 +52,4 @@ class UMatrix extends UObject {
 }
 
 export default UMatrix;
-export { UMatrix, FMatrix };
+export { UMatrix };

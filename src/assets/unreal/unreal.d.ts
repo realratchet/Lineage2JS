@@ -1,6 +1,3 @@
-import C = L2JS.Core;
-import IConstructable = C.IConstructable;
-
 // type DecodeLibrary = import("./decode-library").DecodeLibrary;
 // type UPackage = import("./un-package").UPackage;
 // type UNativePackage = import("./un-package").UNativePackage;
@@ -35,11 +32,9 @@ import IConstructable = C.IConstructable;
 // type UZoneInfo = import("./un-zone-info").UZoneInfo;
 // type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
 // type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
-// type UModel = import("./model/un-model").UModel;
 // type UPolys = import("./un-polys").UPolys;
 // type PolyFlags_T = import("./un-polys").PolyFlags_T;
 // type UBrush = import("./un-brush").UBrush;
-// type ULevel = import("./un-level").ULevel;
 // type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
 // type USound = import("./un-sound").USound;
 // type ULight = import("./un-light").ULight;
@@ -254,14 +249,7 @@ import IConstructable = C.IConstructable;
 
 // type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone" | "Emitter";
 
-// type Vector2Arr = [number, number];
-// type Vector4Arr = [number, number, number, number];
-// type QuaternionArr = Vector4Arr;
-// type ColorArr = Vector4Arr;
-// type Vector3Arr = [number, number, number];
-// type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
-// type EulerArr = [...Vector3Arr, EulerOrder];
-// type ArrGeometryGroup = [number, number, number];
+
 
 // interface IBaseObjectOrInstanceDecodeInfo {
 //     uuid: string,

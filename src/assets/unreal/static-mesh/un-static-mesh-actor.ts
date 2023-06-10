@@ -453,7 +453,7 @@ class UStaticMeshActor extends UAActor {
             zoneInfo.bounds.isValid = true;
 
             [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
                     for (let i = 0; i < 3; i++)
                         arr[i] = fn(arr[i], _min[i], _max[i]);
                 }

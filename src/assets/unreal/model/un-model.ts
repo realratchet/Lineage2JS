@@ -5,7 +5,7 @@ import FBSPNode from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import UPolys, { PolyFlags_T } from "../un-polys";
 import { BufferValue } from "@l2js/core";
-import FZoneProperties from "../un-zone-properties";
+import UZoneProperties from "../un-zone-properties";
 import FBox from "../un-box";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
@@ -32,7 +32,7 @@ class UModel extends UPrimitive {
     protected multiLightmaps = new FArray(FMultiLightmapTexture);
     protected numSharedSides: number;
     protected polys: UPolys = null;
-    protected zones: FZoneProperties[] = [];
+    protected zones: UZoneProperties[] = [];
     protected bounds = new FArray(FBox);
     protected leafHulls = new FPrimitiveArray(BufferValue.int32);
     protected leaves = new FArray(FLeaf)
@@ -73,7 +73,7 @@ class UModel extends UPrimitive {
         this.zones = new Array(numZones);
 
         for (let i = 0; i < numZones; i++)
-            this.zones[i] = new FZoneProperties().load(pkg);
+            this.zones[i] = new UZoneProperties().load(pkg);
 
         this.readHead = pkg.tell();
         const polysId = pkg.read(compat32).value as number;
@@ -125,7 +125,7 @@ class UModel extends UPrimitive {
         this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
 
         this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
-        this.zones.forEach((zone: FZoneProperties, index: number) => {
+        this.zones.forEach((zone: UZoneProperties, index: number) => {
             const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 
             library.bspZones.push(bspZone);
@@ -322,7 +322,7 @@ class UModel extends UPrimitive {
 
                                 zoneInfo.bounds.isValid = true;
                                 [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                                    ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
+                                    ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
                                         for (let i = 0; i < 3; i++)
                                             arr[i] = fn(arr[i], positions[vOffset + i]);
                                     }

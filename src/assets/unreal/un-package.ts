@@ -1,85 +1,15 @@
 import "./un-object-mixin";
-
-// import { BufferValue } from "@l2js/core";
-// import UHeader from "./un-header";
-// import UGeneration from "./un-generation";
-// import UExport, { ObjectFlags_T } from "./un-export";
-// import UName from "./un-name";
-// import UImport from "./un-import";
-// import UTexture from "./un-texture";
-// import UMeshEmitter from "./emitters/un-mesh-emitter";
-// import { UObject } from "@l2js/core";
-// import UClass from "./un-class";
-// import UStruct from "./un-struct";
-// import UPlatte from "./un-palette";
-// import UStaticMesh from "./static-mesh/un-static-mesh";
-// import * as UnMaterials from "./un-material";
-// import ULevelInfo from "./un-level-info";
-// import UTerrainSector from "./un-terrain-sector";
-// import UZoneInfo from "./un-zone-info";
-// import UPhysicsVolume from "./un-physics-volume";
-// import USkyZoneInfo from "./un-sky-zone-info";
-// import UModel from "./model/un-model";
-// import UPolys from "./un-polys";
-// import UBrush from "./un-brush";
-import ULevel from "./un-level";
-// import UAmbientSoundObject from "./un-ambient-sound";
-// import USound from "./un-sound";
-// import ULight from "./un-light";
-// import UTerrainInfo from "./un-terrain-info";
-// import UNMovableSunLight from "./un-movable-sunlight";
-// import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
-// import UWaterVolume from "./un-water-volume";
-// import UEmitter from "./un-emitter";
-// import UNSun from "./un-nsun";
-// import UNMoon from "./un-nmoon";
-// import UFogInfo from "./un-fog-info";
-// import UPlayerStart from "./un-player-start";
-// import UMusicVolume from "./un-music-volume";
-// import UMover from "./un-mover";
-// import UBlockingVolume from "./un-blocking-volume";
-// import UCamera from "./un-camera";
-// import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
-// import ULevelSummary from "./un-level-summary";
-// import UDefaultPhysicsVolume from "./un-physics";
-// import UTextBuffer from "./un-text-buffer";
-// import UCubemap from "./un-cubemap";
-// import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
-// import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
-// import UFunction from "./un-function";
-// import UEnum from "./un-enum";
-// import UConst from "./un-const";
-// import * as UnProperties from "./un-properties";
-// import UState from "./un-state";
-// import UField from "./un-field";
-// import UFont from "./un-font";
-// import UWeapon from "./un-weapon";
-// import decodeObject3D from "../decoders/object3d-decoder";
-// import UPrimitive from "./un-primitive";
-// import UMesh from "./un-mesh";
-// import ULodMesh from "./un-lod-mesh";
-// import FBSPNode from "./bsp/un-bsp-node";
-// import FBSPSurf from "./bsp/un-bsp-surf";
-// import FVector from "./un-vector";
-// import FVert from "./model/un-vert";
-// import UAActor from "./un-aactor";
-// import UInfo from "./un-info";
-// import UPawn from "./un-pawn";
-// import UController from "./un-controller";
-// import UViewport from "./un-viewport";
-// import UClient from "./un-client";
-// import UPlayer from "./un-player";
-// import UTerrainPrimitive from "./un-terrain-primitive";
-// import UMeshInstance from "./un-mesh-instance";
-// import UConvexVolume from "./un-convex-volume";
-// import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
-// import USpriteEmitter from "./emitters/un-sprite-emitter";
-// import UDecoLayer from "./un-deco-layer";
-// import FTIntMap from "./un-tint-map";
-// import { UPlane } from "./un-plane";
-// import { UParticle, UParticleColorScale, UParticleRevolutionScale, UParticleSound, UParticleTimeScale, UParticleVelocityScale } from "./emitters/un-particle-emitter";
-// import UMovableStaticMeshActor from "./static-mesh/un-movable-static-mesh-actor";
 import { ANativePackage, APackage, UObject } from "@l2js/core";
+import UModel from "./model/un-model";
+import ULevel from "./un-level";
+import FScale from "./un-scale";
+import FVector from "./un-vector";
+import UBrush from "./un-brush";
+import FColor from "./un-color";
+import ULevelInfo from "./un-level-info";
+import UZoneInfo from "./un-zone-info";
+import UTerrainInfo from "./un-terrain-info";
+import USkyZoneInfo from "./un-sky-zone-info";
 
 class UPackage extends APackage {
     protected async readArrayBuffer() {
@@ -100,6 +30,9 @@ class UNativePackage extends ANativePackage {
         let Constructor: any;
 
         switch (constructorName) {
+            case "Scale": Constructor = FScale; break;
+            case "Vector": Constructor = FVector; break;
+            case "Color": Constructor = FColor; break;
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -112,8 +45,78 @@ class UNativePackage extends ANativePackage {
         let Constructor: any;
 
         switch (constructorName) {
-            // case "Model": Constructor = UModel; break;
             case "Level": Constructor = ULevel; break;
+            case "Model": Constructor = UModel; break;
+            case "Brush": Constructor = UBrush; break;
+
+            case "LevelInfo": Constructor = ULevelInfo; break;
+            case "ZoneInfo": Constructor = UZoneInfo; break;
+            case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
+            case "TerrainInfo": Constructor = UTerrainInfo; break;
+
+            //         case "Font": Constructor = UFont; break;
+            //         case "StaticMesh": Constructor = UStaticMesh; break;
+            //         case "TerrainSector": Constructor = UTerrainSector; break;
+            //         case "Mesh": Constructor = UMesh; break;
+            //         case "MeshAnimation": Constructor = UMeshAnimation; break;
+            //         case "Level": Constructor = ULevel; break;
+            //         case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
+            //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+            //         case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
+            //         case "Viewport": Constructor = UViewport; break;
+            //         case "Client": Constructor = UClient; break;
+            //         case "Player": Constructor = UPlayer; break;
+            //         case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
+            //         case "MeshInstance": Constructor = UMeshInstance; break;
+            //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
+
+            //         case "Texture": Constructor = UTexture; break;
+            //         case "Palette": Constructor = UPlatte; break;
+
+            //         case "Emitter": Constructor = UEmitter; break;
+            //         case "MeshEmitter": Constructor = UMeshEmitter; break;
+            //         case "SpriteEmitter": Constructor = USpriteEmitter; break;
+
+
+
+            //         case "NSun": Constructor = UNSun; break;
+            //         case "NMoon": Constructor = UNMoon; break;
+            //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
+
+            //         case "LevelSummary": Constructor = ULevelSummary; break;
+            //         case "PlayerStart": Constructor = UPlayerStart; break;
+
+            //         case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
+            //         case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
+            //         case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
+            //         case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
+            //         case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
+            //         case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
+            //         case "Shader": Constructor = UnMaterials.UShader; break;
+            //         case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
+            //         case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
+            //         case "Cubemap": Constructor = UCubemap; break;
+
+            //         case "Camera": Constructor = UCamera; break;
+
+            //         case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            //         case "BlockingVolume": Constructor = UBlockingVolume; break;
+            //         case "MusicVolume": Constructor = UMusicVolume; break;
+            //         case "ConvexVolume": Constructor = UConvexVolume; break;
+
+            //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
+            //         case "Sound": Constructor = USound; break;
+
+            //         case "Light": Constructor = ULight; break;
+
+            //         case "Mover": Constructor = UMover; break;
+
+            //         // Classes we don't care about atm are marked as UObject for general puprose constructor
+            //         case "L2FogInfo": Constructor = UObject; break;
+            //         case "L2SeamlessInfo": Constructor = UObject; break;
+            //         case "SceneManager": Constructor = UObject; break;
+            //         case "PathNode": Constructor = UObject; break;
+
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -254,92 +257,7 @@ class UNativePackage extends ANativePackage {
     //     //     debugger;
 
     //     switch (constructorName) {
-    //         case "Class": Constructor = UClass; break;
-    //         case "Struct": Constructor = UStruct; break;
-    //         case "Const": Constructor = UConst; break;
-    //         case "Enum": Constructor = UEnum; break;
-    //         case "Function": Constructor = UFunction; break;
 
-    //         case "FloatProperty": Constructor = UnProperties.UFloatProperty; break;
-    //         case "ByteProperty": Constructor = UnProperties.UByteProperty; break;
-    //         case "StrProperty": Constructor = UnProperties.UStrProperty; break;
-    //         case "IntProperty": Constructor = UnProperties.UIntProperty; break;
-    //         case "BoolProperty": Constructor = UnProperties.UBoolProperty; break;
-    //         case "NameProperty": Constructor = UnProperties.UNameProperty; break;
-    //         case "ClassProperty": Constructor = UnProperties.UClassProperty; break;
-    //         case "ArrayProperty": Constructor = UnProperties.UArrayProperty; break;
-    //         case "StructProperty": Constructor = UnProperties.UStructProperty; break;
-    //         case "ObjectProperty": Constructor = UnProperties.UObjectProperty; break;
-    //         case "DelegateProperty": Constructor = UnProperties.UDelegateProperty; break;
-
-    //         case "State": Constructor = UState; break;
-    //         case "Font": Constructor = UFont; break;
-    //         case "StaticMesh": Constructor = UStaticMesh; break;
-    //         case "TerrainSector": Constructor = UTerrainSector; break;
-    //         case "Mesh": Constructor = UMesh; break;
-    //         case "MeshAnimation": Constructor = UMeshAnimation; break;
-    //         case "Level": Constructor = ULevel; break;
-    //         case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
-    //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
-    //         case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
-    //         case "Model": Constructor = UModel; break;
-    //         case "Viewport": Constructor = UViewport; break;
-    //         case "Client": Constructor = UClient; break;
-    //         case "Player": Constructor = UPlayer; break;
-    //         case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
-    //         case "MeshInstance": Constructor = UMeshInstance; break;
-    //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
-
-    //         case "Texture": Constructor = UTexture; break;
-    //         case "Palette": Constructor = UPlatte; break;
-
-    //         case "Emitter": Constructor = UEmitter; break;
-    //         case "MeshEmitter": Constructor = UMeshEmitter; break;
-    //         case "SpriteEmitter": Constructor = USpriteEmitter; break;
-
-    //         case "ZoneInfo": Constructor = UZoneInfo; break;
-    //         case "LevelInfo": Constructor = ULevelInfo; break;
-    //         case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
-    //         case "TerrainInfo": Constructor = UTerrainInfo; break;
-
-    //         case "NSun": Constructor = UNSun; break;
-    //         case "NMoon": Constructor = UNMoon; break;
-    //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
-
-    //         case "LevelSummary": Constructor = ULevelSummary; break;
-    //         case "PlayerStart": Constructor = UPlayerStart; break;
-    //         case "Brush": Constructor = UBrush; break;
-
-    //         case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
-    //         case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
-    //         case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
-    //         case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
-    //         case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
-    //         case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
-    //         case "Shader": Constructor = UnMaterials.UShader; break;
-    //         case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
-    //         case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
-    //         case "Cubemap": Constructor = UCubemap; break;
-
-    //         case "Camera": Constructor = UCamera; break;
-
-    //         case "PhysicsVolume": Constructor = UPhysicsVolume; break;
-    //         case "BlockingVolume": Constructor = UBlockingVolume; break;
-    //         case "MusicVolume": Constructor = UMusicVolume; break;
-    //         case "ConvexVolume": Constructor = UConvexVolume; break;
-
-    //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
-    //         case "Sound": Constructor = USound; break;
-
-    //         case "Light": Constructor = ULight; break;
-
-    //         case "Mover": Constructor = UMover; break;
-
-    //         // Classes we don't care about atm are marked as UObject for general puprose constructor
-    //         case "L2FogInfo": Constructor = UObject; break;
-    //         case "L2SeamlessInfo": Constructor = UObject; break;
-    //         case "SceneManager": Constructor = UObject; break;
-    //         case "PathNode": Constructor = UObject; break;
     //         default:
     //             debugger;
     //             throw new Error(`Not implemented native class: ${constructorName}`);

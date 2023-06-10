@@ -26,9 +26,7 @@ class FURL implements C.IConstructable {
 
         this.op.load(pkg);
 
-
         this.portal = pkg.read(new BufferValue(BufferValue.char)).value as string;
-        // debugger;
 
         return this;
     }

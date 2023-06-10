@@ -2,7 +2,7 @@ import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "../un-array";
 import FConstructable from "../un-constructable";
 import FNumber from "../un-number";
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import FQuaternion from "../un-quaternion";
 import FVector from "../un-vector";
 

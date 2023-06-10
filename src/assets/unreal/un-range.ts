@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import FVector from "./un-vector";
 
 class URange extends UObject {
@@ -77,4 +77,4 @@ export default URange;
 export { URange, URangeVector };
 
 type Range_T = [number, number];
-type RangeVector_T = { min: Vector3Arr, max: Vector3Arr };
+type RangeVector_T = { min: GD.Vector3Arr, max: GD.Vector3Arr };

@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "@l2js/core";
 import { BufferValue } from "@l2js/core";
 import { FPrimitiveArray } from "./un-array";
 
