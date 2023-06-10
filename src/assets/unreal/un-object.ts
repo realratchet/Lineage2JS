@@ -147,6 +147,14 @@ abstract class UObject {
             do {
                 const tag = PropertyTag.from(pkg, this.readHead);
 
+                // if (this.objectName === "Exp_NMovableSunLight0") {
+                //     console.log(tag);
+                //     debugger;
+                // }
+
+                if (tag.name === "Emitters")
+                    debugger;
+
                 if (!tag.isValid()) break;
 
                 this.loadProperty(pkg, tag);
@@ -156,6 +164,9 @@ abstract class UObject {
             } while (this.readHead < this.readTail);
 
         }
+
+        if (this.objectName === "Exp_NMovableSunLight0")
+            debugger;
 
         this.readHead = pkg.tell();
     }
@@ -321,6 +332,9 @@ abstract class UObject {
             case UNP_PropertyTypes.UNP_MapProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_FixedArrayProperty: throw new Error("Not yet implemented");
             case UNP_PropertyTypes.UNP_StructProperty:
+                // if (tag.name === "DrawScale3D")
+                //     debugger;
+
                 this.setProperty(tag, this.readStruct(pkg, tag));
                 break;
             default:
@@ -379,6 +393,9 @@ abstract class UObject {
     protected setProperty(tag: PropertyTag, value: any) {
         const varName = this.getPropertyVarName(tag);
         const { name: propName, arrayIndex } = tag;
+
+        if (tag.name === "DrawScale3D")
+            debugger;
 
         if (value === 8 && this.constructor.friendlyName?.toLowerCase().includes("emitter"))
             debugger;

@@ -21,12 +21,25 @@ Object.assign(UObject.prototype, {
         exp.offset = pkg.tell();
         exp.size = tag.dataSize;
 
+        // switch (tag.structName) {
+        //     // case "Vector": debugger; break;
+        //     case "Plane": debugger; break;
+        // }
+
+        // switch(tag.structName) {
+        //     case "Matrix": debugger; break;
+        //     case "PointRegion": debugger; break;
+        //     case "TextureModifyinfo": debugger; break;
+        //     case "RangeVector": debugger; break;
+        //     case "Range": debugger; break;
+        // }
+
         switch (tag.structName as StructTypes_T) {
             case "Color": return new FColor().load(pkg);
-            case "Plane": return new UPlane().load(pkg, exp);
             case "Scale": return new FScale().load(pkg);
             case "Vector": return new FVector().load(pkg);
             case "Rotator": return new FRotator().load(pkg);
+            case "Plane": return new UPlane().load(pkg, exp);
             case "Matrix": return new UMatrix().load(pkg, exp);
             case "PointRegion": return new UPointRegion().load(pkg, exp);
             case "TextureModifyinfo": return new UTextureModifyInfo().load(pkg, exp);

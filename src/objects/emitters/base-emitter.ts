@@ -159,7 +159,7 @@ abstract class BaseEmitter extends Object3D {
 
         this.maxActiveParticles = this.maxParticles;
 
-        debugger;
+        // debugger;
 
         this.initSettings(config);
 
@@ -1283,8 +1283,8 @@ abstract class BaseEmitter extends Object3D {
 
         // if (this.name !== "Exp_SpriteEmitter3" || this.parent.name !== "Exp_Emitter7") return;
 
-        // if (this.isDisabled)
-        //     return;
+        if (this.isDisabled)
+            return;
 
 
         if (this.currentTime === undefined) this.currentTime = currentTime;

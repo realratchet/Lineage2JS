@@ -111,6 +111,9 @@ abstract class UEmitter extends UAActor {
         // if (value > 2)
         //     debugger;
 
+        if (tag.name === "Emitters")
+            debugger;
+
         this._setProperties.push([
             tag.name,
             value.toString()

@@ -86,6 +86,9 @@ class UStruct extends UField {
         // if (tag.arrayIndex !== 0)
         //     debugger;
 
+        // if (tag.name === "DrawScale3D")
+        //     debugger;
+
         while (field) {
 
             const index = field.childPropFields.findIndex(x => x.propertyName === tag.name);
@@ -242,6 +245,9 @@ class UStruct extends UField {
         if (lastNative)
             debugger;
 
+        // if (this.friendlyName === "Vector")
+        //     debugger;
+
         const cls = {
             [this.friendlyName]: class extends Constructor {
                 public static readonly isDynamicClass = true;
@@ -274,6 +280,13 @@ class UStruct extends UField {
                     if (missingProps.length > 0 && lastNative)
                         console.warn(`Native type '${friendlyName}' is missing property '${missingProps.join(", ")}'`);
                 }
+
+                // protected load(pkg: UPackage, exp: UExport<UObject>): this {
+                //     // if (friendlyName === "Vector")
+                //         debugger;
+
+                //     return super.load(pkg, exp);
+                // }
 
                 protected getPropertyMap(): Record<string, string> {
                     return {

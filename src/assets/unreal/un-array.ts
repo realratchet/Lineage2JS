@@ -69,6 +69,9 @@ class FObjectArray<T extends UObject = UObject> extends FArray<T> {
     constructor() { super(null); }
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
+        if (this.indexArray.length !== 0)
+            debugger;
+
         this.indexArray.load(pkg, tag);
 
 

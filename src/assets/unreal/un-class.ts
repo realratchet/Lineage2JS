@@ -243,6 +243,9 @@ class UClass extends UState {
                     const newProps = this.newProps;
                     const missingProps = [];
 
+                    if (friendlyName === "Emitter")
+                        debugger;
+
                     for (const [name, value] of Object.entries(clsNamedProperties)) {
                         const varname = name in oldProps ? oldProps[name] : name;
 
@@ -260,6 +263,9 @@ class UClass extends UState {
 
                     for (const [name, { defaultValue, names }] of Object.entries(clsEnumProperties)) {
                         const varname = name in oldProps ? oldProps[name] : name;
+
+                        if (typeof defaultValue === "object")
+                            debugger;
 
                         if (!(name in oldProps)) {
                             newProps[varname] = varname;

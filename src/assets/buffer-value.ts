@@ -52,7 +52,7 @@ class BufferValue<T extends ValueTypeNames_T = ValueTypeNames_T> {
     }
 
     public readValue(buffer: ArrayBuffer, offset: number) {
-        if (buffer.byteLength <= offset + this.type.bytes)
+        if (buffer.byteLength < offset + this.type.bytes)
             throw new Error("Out of bounds");
 
         let byteOffset = 0;
