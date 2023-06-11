@@ -22,7 +22,7 @@ abstract class UBaseMaterial extends UObject {
     // protected depthTest: boolean = true;
     // protected isTreatingDoubleSided: boolean = false;
 
-    // protected material: UBaseMaterial;
+    // declare protected material: UBaseMaterial;
 
     // protected getPropertyMap(): Record<string, string> {
     //     return Object.assign({}, super.getPropertyMap(), {
@@ -317,7 +317,7 @@ class UColorModifier extends UBaseMaterial {
 }
 
 class UTexRotator extends UBaseModifier {
-    // protected matrix: UMatrix;
+    // protected matrix: FMatrix;
     // protected type: TexRotationType_T;
     // protected rotation: FRotator;
     // protected offsetU: number;
@@ -370,7 +370,7 @@ class UTexRotator extends UBaseModifier {
 
 
 class UTexOscillator extends UBaseModifier {
-    // protected matrix: UMatrix;
+    // protected matrix: FMatrix;
     // protected rateU: number;
     // protected rateV: number;
     // protected phaseU: number;
@@ -434,7 +434,7 @@ class UTexCoordSource extends UBaseModifier {
 class UTexPanner extends UBaseModifier {
     // protected rate: number;
     // protected z: number;
-    // protected matrix: UMatrix;
+    // protected matrix: FMatrix;
     // protected internalTime = new FPrimitiveArray(BufferValue.int32);
     // protected direction: FRotator;
 

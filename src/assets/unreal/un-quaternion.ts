@@ -20,10 +20,10 @@ class FQuaternion extends FConstructable {
     public load(pkg: UPackage): this {
         const float = new BufferValue(BufferValue.float);
 
-        this.x = pkg.read(float).value as number;
-        this.y = pkg.read(float).value as number;
-        this.z = pkg.read(float).value as number;
-        this.w = pkg.read(float).value as number;
+        this.x = pkg.read(float).value;
+        this.y = pkg.read(float).value;
+        this.z = pkg.read(float).value;
+        this.w = pkg.read(float).value;
 
         return this;
     }

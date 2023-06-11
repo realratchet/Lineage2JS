@@ -7,7 +7,7 @@ import FVector from "./un-vector";
 import UBrush from "./un-brush";
 import FColor from "./un-color";
 import ULevelInfo from "./un-level-info";
-import UZoneInfo from "./un-zone-info";
+import FZoneInfo from "./un-zone-info";
 import UTerrainInfo from "./un-terrain-info";
 import USkyZoneInfo from "./un-sky-zone-info";
 import UNSun from "./un-nsun";
@@ -31,16 +31,21 @@ import UTexture from "./un-texture";
 import UPlatte from "./un-palette";
 import FBox from "./un-box";
 import { FPlane } from "./un-plane";
+import * as UnMaterials from "./un-material";
+import UCubemap from "./un-cubemap";
+import FMatrix from "./un-matrix";
 
 type CoreStructs_T =
     | "Vector"
     | "Plane"
-    | "Box";
+    | "Box"
+    | "Matrix";
 
 type CoreStructsReturnType_T<T extends CoreStructs_T> =
     | T extends "Vector" ? GA.FVector
     : T extends "Plane" ? GA.FPlane
     : T extends "Box" ? GA.FBox
+    : T extends "Matrix" ? GA.FMatrix
     : never;
 
 class UPackage extends APackage {
@@ -90,6 +95,7 @@ class UNativePackage extends ANativePackage {
             case "TextureModifyinfo": Constructor = UTextureModifyInfo; break;
             case "Box": Constructor = FBox; break;
             case "Plane": Constructor = FPlane; break;
+            case "Matrix": Constructor = FMatrix; break;
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -107,7 +113,7 @@ class UNativePackage extends ANativePackage {
             case "Brush": Constructor = UBrush; break;
 
             case "LevelInfo": Constructor = ULevelInfo; break;
-            case "ZoneInfo": Constructor = UZoneInfo; break;
+            case "ZoneInfo": Constructor = FZoneInfo; break;
             case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
             case "TerrainInfo": Constructor = UTerrainInfo; break;
 
@@ -156,16 +162,16 @@ class UNativePackage extends ANativePackage {
             //         case "LevelSummary": Constructor = ULevelSummary; break;
 
 
-            //         case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
-            //         case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
-            //         case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
-            //         case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
-            //         case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
-            //         case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
-            //         case "Shader": Constructor = UnMaterials.UShader; break;
-            //         case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
-            //         case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
-            //         case "Cubemap": Constructor = UCubemap; break;
+            case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
+            case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
+            case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
+            case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
+            case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
+            case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
+            case "Shader": Constructor = UnMaterials.UShader; break;
+            case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
+            case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
+            case "Cubemap": Constructor = UCubemap; break;
 
 
 
@@ -352,7 +358,7 @@ class UNativePackage extends ANativePackage {
     // //         case "Shader": Constructor = UShader; break;
     // //         case "LevelInfo": Constructor = ULevelInfo; break;
     // //         case "TerrainSector": Constructor = UTerrainSector; break;
-    // //         case "ZoneInfo": Constructor = UZoneInfo; break;
+    // //         case "ZoneInfo": Constructor = FZoneInfo; break;
     // //         case "PhysicsVolume": Constructor = UPhysicsVolume; break;
     // //         case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
     // //         case "Model": Constructor = UModel; break;
@@ -369,7 +375,7 @@ class UNativePackage extends ANativePackage {
     // //         case "Emitter": Constructor = UEmitter; break;
     // //         case "NSun": Constructor = UNSun; break;
     // //         case "NMoon": Constructor = UNMoon; break;
-    // //         case "L2FogInfo": Constructor = UFogInfo; break;
+    // //         case "L2FogInfo": Constructor = FFogInfo; break;
     // //         case "PlayerStart": Constructor = UPlayerStart; break;
     // //         case "MusicVolume": Constructor = UMusicVolume; break;
     // //         case "Mover": Constructor = UMover; break;

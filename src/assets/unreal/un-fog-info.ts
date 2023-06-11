@@ -2,7 +2,7 @@ import FArray from "./un-array";
 import FColor from "./un-color";
 import AInfo from "./un-info";
 
-class UFogInfo extends AInfo {
+class FFogInfo extends AInfo {
     protected affectRange: URange;
     protected fogRange1: URange;
     protected fogRange2: URange;
@@ -26,5 +26,5 @@ class UFogInfo extends AInfo {
     }
 }
 
-export default UFogInfo;
-export { UFogInfo };
+export default FFogInfo;
+export { FFogInfo };

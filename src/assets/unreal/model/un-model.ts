@@ -2,10 +2,9 @@ import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
 import FBSPNode from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
-import UPolys, { PolyFlags_T } from "../un-polys";
+import { PolyFlags_T } from "../un-polys";
 import { BufferValue } from "@l2js/core";
-import UZoneProperties from "../un-zone-properties";
-import FBox from "../un-box";
+import FZoneProperties from "../un-zone-properties";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
@@ -31,8 +30,8 @@ class UModel extends UPrimitive {
     declare protected lightmaps: C.FArray<FLightmapIndex>;
     declare protected multiLightmaps: C.FArray<FMultiLightmapTexture>;
     declare protected numSharedSides: number;
-    declare protected polys: UPolys;
-    declare protected zones: UZoneProperties[];
+    declare protected polys: GA.UPolys;
+    declare protected zones: FZoneProperties[];
     declare protected bounds: FArray<GA.FBox>;
     declare protected leafHulls: FPrimitiveArray<"int32">;
     declare protected leaves: FArray<FLeaf>
@@ -44,9 +43,10 @@ class UModel extends UPrimitive {
     declare protected unkInt1: number;
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
-        const FVector = pkg.findCoreStruct("Vector");
+        super.preLoad(pkg, exp);
 
-        debugger;
+        const FVector = pkg.findCoreStruct("Vector");
+        const FBox = pkg.findCoreStruct("Box");
 
         this.vectors = new FArray(FVector);
         this.points = new FArray(FVector);
@@ -64,91 +64,88 @@ class UModel extends UPrimitive {
         this.unkArr0 = new FIndexArray();
     }
 
-    // protected doLoad(pkg: C.APackage, exp: C.UExport): this {
+    protected doLoad(pkg: GA.UPackage, exp: C.UExport): this {
 
-    //     const verArchive = pkg.header.getArchiveFileVersion();
-    //     const verLicense = pkg.header.getLicenseeVersion();
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-    //     // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
-    //     // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
+        // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-    //     const int32 = new BufferValue(BufferValue.int32);
-    //     const compat32 = new BufferValue(BufferValue.compat32);
+        const int32 = new BufferValue(BufferValue.int32);
+        const compat32 = new BufferValue(BufferValue.compat32);
 
-    //     pkg.seek(this.readHead, "set");
+        pkg.seek(this.readHead, "set");
 
-    //     super.doLoad(pkg, exp);
+        super.doLoad(pkg, exp);
 
-    //     this.vectors.load(pkg);     // 0x78
-    //     this.points.load(pkg);      // 0x88
-    //     this.bspNodes.load(pkg);    // 0x58
-    //     this.bspSurfs.load(pkg);    // 0x98
-    //     this.vertices.load(pkg);    // 0x68
+        this.vectors.load(pkg);     // 0x78
+        this.points.load(pkg);      // 0x88
+        this.bspNodes.load(pkg);    // 0x58
+        this.bspSurfs.load(pkg);    // 0x98
+        this.vertices.load(pkg);    // 0x68
 
-    //     this.numSharedSides = pkg.read(int32).value as number;  // 0x124
+        this.numSharedSides = pkg.read(int32).value;  // 0x124
 
-    //     const numZones = pkg.read(int32).value as number;       // 0x128
+        const numZones = pkg.read(int32).value;       // 0x128
 
-    //     console.assert(numZones <= MAX_ZONES);
+        console.assert(numZones <= MAX_ZONES);
 
-    //     this.zones = new Array(numZones);
+        this.zones = new Array(numZones);
 
-    //     for (let i = 0; i < numZones; i++)
-    //         this.zones[i] = new UZoneProperties().load(pkg);
+        for (let i = 0; i < numZones; i++)
+            this.zones[i] = new FZoneProperties().load(pkg);
 
-    //     this.readHead = pkg.tell();
-    //     const polysId = pkg.read(compat32).value as number;
+        this.readHead = pkg.tell();
+        const polysId = pkg.read(compat32).value;
+        const polyExp = pkg.exports[polysId - 1];
+        const className = pkg.getPackageName(polyExp.idClass)
 
-    //     debugger;
+        console.assert(className === "Polys");
 
-    //     const polyExp = pkg.exports[polysId - 1];
-    //     const className = pkg.getPackageName(polyExp.idClass as number)
+        // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+        //     this.polys = await pkg.fetchObject<UPolys>(polysId);
+        //     resolve();
+        // }));
 
-    //     console.assert(className === "Polys");
+        this.readHead = pkg.tell();
 
-    //     // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
-    //     //     this.polys = await pkg.fetchObject<UPolys>(polysId);
-    //     //     resolve();
-    //     // }));
+        this.bounds.load(pkg);
+        this.leafHulls.load(pkg);
+        this.leaves.load(pkg);
 
-    //     this.readHead = pkg.tell();
+        this.unkArr0.load(pkg);
 
-    //     this.bounds.load(pkg);
-    //     this.leafHulls.load(pkg);
-    //     this.leaves.load(pkg);
+        this.readHead = pkg.tell();
 
-    //     this.unkArr0.load(pkg);
+        this.unkInt0 = pkg.read(int32).value;
+        this.unkInt1 = pkg.read(int32).value;
 
-    //     this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-    //     this.unkInt0 = pkg.read(int32).value as number;
-    //     this.unkInt1 = pkg.read(int32).value as number;
+        this.bspSection.load(pkg);
 
-    //     this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-    //     this.bspSection.load(pkg);
+        this.lightmaps.load(pkg);
+        this.multiLightmaps.load(pkg);
 
-    //     this.readHead = pkg.tell();
+        this.readHead = pkg.tell();
 
-    //     this.lightmaps.load(pkg);
-    //     this.multiLightmaps.load(pkg);
+        pkg.seek(this.readHead, "set");
 
-    //     this.readHead = pkg.tell();
+        // if (this.lightmaps.length > 0)
+        //     debugger;
 
-    //     pkg.seek(this.readHead, "set");
-
-    //     // if (this.lightmaps.length > 0)
-    //     //     debugger;
-
-    //     return this;
-    // }
+        return this;
+    }
 
     // public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
 
     //     this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
 
     //     this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
-    //     this.zones.forEach((zone: UZoneProperties, index: number) => {
+    //     this.zones.forEach((zone: FZoneProperties, index: number) => {
     //         const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 
     //         library.bspZones.push(bspZone);
@@ -263,7 +260,7 @@ class UModel extends UPrimitive {
     //         gData.nodes.push({ node, surf, light });
     //     }
 
-    //     const createZoneInfo = (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
+    //     const createZoneInfo = (priority: PriorityGroups_T, zone: FZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
     //         const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
     //         const positions = new Float32Array(totalVertices * 3);
     //         const normals = new Float32Array(totalVertices * 3);
@@ -328,7 +325,7 @@ class UModel extends UPrimitive {
     //                             groupOffset = groupOffset + fcount;
     //                         }
 
- 
+
     //                         for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
     //                             const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
     //                             const position: FVector = this.points.getElem(vert.pVertex);
@@ -430,7 +427,7 @@ export default UModel;
 export { UModel };
 
 type PriorityGroups_T = "opaque" | "transparent";
-type ObjectsForPriority_T = Map<UZoneInfo, ObjectsForZone_T>;
+type ObjectsForPriority_T = Map<FZoneInfo, ObjectsForZone_T>;
 type ObjectsForZone_T = { totalVertices: number, objects: Map<UMaterial, ObjectsForMaterial_T> };
 type ObjectsForMaterial_T = Map<FStaticLightmapTexture, ObjectsForLightmap_T>;
 type ObjectsForLightmap_T = { numVertices: number, nodes: NodeInfo_T[] };

@@ -52,7 +52,7 @@ class FPoly extends UObject {
     //     const compat = new BufferValue(BufferValue.compat32);
     //     const int16 = new BufferValue(BufferValue.int16);
 
-    //     const vcount = pkg.read(compat).value as number;
+    //     const vcount = pkg.read(compat).value;
 
     //     debugger;
 
@@ -68,18 +68,18 @@ class FPoly extends UObject {
     //     for (let i = 0; i < vcount; i++)
     //         this.vertices[i] = new FVector().load(pkg);
 
-    //     this.flags = pkg.read(uint32).value as number;
+    //     this.flags = pkg.read(uint32).value;
 
-    //     const actorId = pkg.read(compat).value as number;
-    //     const textureId = pkg.read(compat).value as number;
-    //     const nameId = pkg.read(compat).value as number;
+    //     const actorId = pkg.read(compat).value;
+    //     const textureId = pkg.read(compat).value;
+    //     const nameId = pkg.read(compat).value;
 
     //     this.name = pkg.nameTable[nameId].name as string;
-    //     this.link = pkg.read(compat).value as number;
-    //     this.brushPoly = pkg.read(compat).value as number;
+    //     this.link = pkg.read(compat).value;
+    //     this.brushPoly = pkg.read(compat).value;
 
-    //     this.panU = pkg.read(int16).value as number;
-    //     this.panV = pkg.read(int16).value as number;
+    //     this.panU = pkg.read(int16).value;
+    //     this.panV = pkg.read(int16).value;
 
     //     pkg.seek(4);
 
@@ -156,17 +156,17 @@ class UPolys extends UObject {
 
     //     super.doLoad(pkg, exp);
 
-    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size - (pkg.tell() - startOffset)}`);
 
 
     //     // super.load(pkg, exp);
 
     //     const int32 = new BufferValue(BufferValue.int32);
 
-    //     const dbNum = pkg.read(int32).value as number;
-    //     const dbMax = pkg.read(int32).value as number;
+    //     const dbNum = pkg.read(int32).value;
+    //     const dbMax = pkg.read(int32).value;
 
-    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size - (pkg.tell() - startOffset)}`);
 
     //     this.polyList = new Array(dbMax);
 
@@ -174,12 +174,12 @@ class UPolys extends UObject {
 
     //     for (let i = 0; i < dbMax; i++) {
     //         // this.polyList[i] = await new FPoly().load(pkg);
-    //         // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    //         // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size - (pkg.tell() - startOffset)}`);
     //     }
 
-    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size as number - (pkg.tell() - startOffset)}`);
+    //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size - (pkg.tell() - startOffset)}`);
 
-    //     // console.assert((exp.size as number - (pkg.tell() - startOffset)) === 0);
+    //     // console.assert((exp.size - (pkg.tell() - startOffset)) === 0);
 
     //     // debugger;
 

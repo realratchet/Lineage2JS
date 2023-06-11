@@ -48,7 +48,7 @@ class FRotator extends UObject {
     //     const int32 = new BufferValue(BufferValue.int32);
 
     //     for (let key of ["pitch", "yaw", "roll"])
-    //         this[key as ("pitch" | "yaw" | "roll")] = pkg.read(int32).value as number;
+    //         this[key as ("pitch" | "yaw" | "roll")] = pkg.read(int32).value;
 
     //     return this;
     // }

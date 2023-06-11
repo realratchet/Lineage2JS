@@ -9,7 +9,7 @@ class FRawColorStream extends FConstructable {
 
     public load(pkg: UPackage, tag?: PropertyTag): this {
         this.color.load(pkg, tag);
-        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
+        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value;
         
         return this;
     }

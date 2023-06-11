@@ -1,7 +1,7 @@
 import AInfo from "./un-info";
 import { BufferValue } from "@l2js/core";
 
-class UZoneInfo extends AInfo/* implements IInfo*/ {
+class FZoneInfo extends AInfo/* implements IInfo*/ {
     // protected isFogZone: boolean;
     // protected hasTerrain: boolean;
 
@@ -70,7 +70,7 @@ class UZoneInfo extends AInfo/* implements IInfo*/ {
     //     });
     // }
 
-    // public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
+    // public doLoad(pkg: UPackage, exp: UExport<FZoneInfo>) {
     //     pkg.seek(this.readHead, "set");
 
     //     const verArchive = pkg.header.getArchiveFileVersion();
@@ -100,5 +100,5 @@ class UZoneInfo extends AInfo/* implements IInfo*/ {
     // }
 }
 
-export default UZoneInfo;
-export { UZoneInfo };
+export default FZoneInfo;
+export { FZoneInfo };

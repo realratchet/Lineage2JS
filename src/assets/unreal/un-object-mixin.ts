@@ -4,7 +4,7 @@ import { UExport, UObject } from "@l2js/core";
 // import UPointRegion from "./un-point-region";
 // import UTextureModifyInfo from "./un-texture-modify-info";
 // import FScale from "./un-scale";
-// import UMatrix from "./un-matrix";
+// import FMatrix from "./un-matrix";
 // import { UPlane } from "./un-plane";
 // import FVector from "./un-vector";
 // import FRotator from "./un-rotator";
@@ -43,7 +43,7 @@ Object.assign(UObject.prototype, {
     //         case "Vector": return new FVector().load(pkg);
     //         case "Rotator": return new FRotator().load(pkg);
     //         case "Plane": return new UPlane().load(pkg, exp);
-    //         case "Matrix": return new UMatrix().load(pkg, exp);
+    //         case "Matrix": return new FMatrix().load(pkg, exp);
     //         case "PointRegion": return new UPointRegion().load(pkg, exp);
     //         case "TextureModifyinfo": return new UTextureModifyInfo().load(pkg, exp);
     //         case "RangeVector": return new URangeVector().load(pkg, exp);

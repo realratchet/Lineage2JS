@@ -1,7 +1,7 @@
 import UObject from "@l2js/core";
 
 class UPointRegion extends UObject {
-    // protected zone: UZoneInfo;
+    // protected zone: FZoneInfo;
     // protected indexLeaf: number;
     // protected zoneNumber: number;
 

@@ -10,7 +10,7 @@ class UTerrainLayer extends UObject {
     protected mapAxis: number;
     protected mapRotation: number;
     protected layerRotation: FRotator;
-    protected terrainMatrix: UMatrix;
+    protected terrainMatrix: FMatrix;
     protected zPlane: FPlane;
     protected wPlane: FPlane;
     protected level: number[];

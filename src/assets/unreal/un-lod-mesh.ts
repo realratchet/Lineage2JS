@@ -16,10 +16,10 @@ class FUnknownStruct1 extends FConstructable {
     public load(pkg: UPackage): this {
         const uint16 = new BufferValue(BufferValue.uint16);
 
-        this.a = pkg.read(uint16).value as number;
-        this.b = pkg.read(uint16).value as number;
-        this.c = pkg.read(uint16).value as number;
-        this.d = pkg.read(uint16).value as number;
+        this.a = pkg.read(uint16).value;
+        this.b = pkg.read(uint16).value;
+        this.c = pkg.read(uint16).value;
+        this.d = pkg.read(uint16).value;
 
         return this;
     }
@@ -35,9 +35,9 @@ class FUnknownStruct2 extends FConstructable {
         const uint16 = new BufferValue(BufferValue.uint16);
         const uint32 = new BufferValue(BufferValue.uint32);
 
-        this.unkInt16 = pkg.read(uint16).value as number;
-        this.unkInt32_0 = pkg.read(uint32).value as number;
-        this.unkInt32_1 = pkg.read(uint32).value as number;
+        this.unkInt16 = pkg.read(uint16).value;
+        this.unkInt32_0 = pkg.read(uint32).value;
+        this.unkInt32_1 = pkg.read(uint32).value;
 
         return this;
     }
@@ -50,8 +50,8 @@ class FUnknownStruct3 extends FConstructable {
     public load(pkg: UPackage): this {
         const uint32 = new BufferValue(BufferValue.uint32);
 
-        this.unkInt32_0 = pkg.read(uint32).value as number;
-        this.unkInt32_1 = pkg.read(uint32).value as number;
+        this.unkInt32_0 = pkg.read(uint32).value;
+        this.unkInt32_1 = pkg.read(uint32).value;
 
         return this;
     }
@@ -84,8 +84,8 @@ class ULodMesh extends UMesh {
         const uint8 = new BufferValue(BufferValue.uint8);
         const float = new BufferValue(BufferValue.float);
 
-        this.version = pkg.read(uint32).value as number;
-        this.vertexCount = pkg.read(uint32).value as number;
+        this.version = pkg.read(uint32).value;
+        this.vertexCount = pkg.read(uint32).value;
 
         this.unkArr0.load(pkg);
 
@@ -95,7 +95,7 @@ class ULodMesh extends UMesh {
 
         const lodMeshMaterialsIds = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg);
 
-        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(float).value as number);
+        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(float).value);
 
         if (this.version < 2) {
             debugger;
@@ -107,10 +107,10 @@ class ULodMesh extends UMesh {
         this.unkArr5.load(pkg);
         this.unkArr6.load(pkg);
 
-        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(float).value as number);
+        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(float).value);
 
         if (this.version >= 3) {
-            const maybeHasImpostor = pkg.read(uint32).value as number;
+            const maybeHasImpostor = pkg.read(uint32).value;
 
             if (maybeHasImpostor !== 0 && maybeHasImpostor !== 1) {
                 debugger;
@@ -121,11 +121,11 @@ class ULodMesh extends UMesh {
         }
 
         if (this.version >= 4) {
-            this.skinTesselationFactor = pkg.read(uint32).value as number;
+            this.skinTesselationFactor = pkg.read(uint32).value;
         }
 
         if (this.version >= 5) {
-            this.unkVar2 = pkg.read(uint32).value as number;
+            this.unkVar2 = pkg.read(uint32).value;
         }
 
         this.promisesLoading.push(new Promise<void>(async resolve => {
@@ -158,15 +158,15 @@ class MeshImpostor extends FConstructable {
         const uint32 = new BufferValue(BufferValue.uint32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.materialId = pkg.read(compat).value as number;
+        this.materialId = pkg.read(compat).value;
 
         this.location = new FVector().load(pkg);
         this.rotation = new FRotator().load(pkg);
         this.scale = new FVector().load(pkg);
         this.color = new FColor().load(pkg);
-        this.spaceMode = pkg.read(uint32).value as number;
-        this.drawMode = pkg.read(uint32).value as number;
-        this.lightMode = pkg.read(uint32).value as number;
+        this.spaceMode = pkg.read(uint32).value;
+        this.drawMode = pkg.read(uint32).value;
+        this.lightMode = pkg.read(uint32).value;
 
         if (this.materialId !== 0) {
             this.promisesLoading.push(new Promise<void>(async resolve => {

@@ -1,57 +1,64 @@
 import { FPlane } from "../un-plane";
 import { BufferValue, UObject } from "@l2js/core";
+import { flagBitsToDict } from "@l2js/core/src/utils/flags";
+import { PolyFlags_T } from "../un-polys";
 
-class FBSPSurf extends UObject {
-    // public material: UShader;
+class FBSPSurf implements C.IConstructable {
+    declare public material: GA.UShader;
 
-    // public flags: PolyFlags_T;       // 4 bytes polygon flags.
-    // public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
-    // public vNormal: number;          // 4 bytes index to polygon normal.
-    // public vTextureU: number;        // 4 bytes texture U-vector index.
-    // public vTextureV: number;        // 4 bytes texture V-vector index.
-    // public iBrushPoly: number;       // 4 bytes editor brush polygon index.
-    // public lightMapScale: number;
+    declare public flags: number;       // 4 bytes polygon flags.
+    declare public polyFlags: C.FlagDict<keyof typeof PolyFlags_T>;
+    declare public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
+    declare public vNormal: number;          // 4 bytes index to polygon normal.
+    declare public vTextureU: number;        // 4 bytes texture U-vector index.
+    declare public vTextureV: number;        // 4 bytes texture V-vector index.
+    declare public iBrushPoly: number;       // 4 bytes editor brush polygon index.
+    declare public lightMapScale: number;
 
-    // public plane: FPlane = new FPlane();
+    declare public plane: FPlane;
 
-    // public actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
-    // // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
+    declare public actor: GA.UBrush;            // 4 bytes brush actor owning this Bsp surface.
+    // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
-    // public unkInt32: number;
+    declare public unkInt32: number;
 
-    // public load(pkg: UPackage, tag?: PropertyTag): this {
-    //     const float = new BufferValue(BufferValue.float);
-    //     const uint32 = new BufferValue(BufferValue.uint32);
-    //     const int32 = new BufferValue(BufferValue.int32);
-    //     const compat32 = new BufferValue(BufferValue.compat32);
+    public load(pkg: GA.UPackage): this {
+        this.plane = pkg.makeCoreStruct("Plane");
 
-    //     const materialId = pkg.read(compat32).value as number;
+        const float = new BufferValue(BufferValue.float);
+        const uint32 = new BufferValue(BufferValue.uint32);
+        const int32 = new BufferValue(BufferValue.int32);
+        const compat32 = new BufferValue(BufferValue.compat32);
 
-    //     this.flags = pkg.read(uint32).value as number;
-    //     this.pBase = pkg.read(compat32).value as number;
-    //     this.vNormal = pkg.read(compat32).value as number;
-    //     this.vTextureU = pkg.read(compat32).value as number;
-    //     this.vTextureV = pkg.read(compat32).value as number;
+        const materialId = pkg.read(compat32).value;
 
-    //     this.iBrushPoly = pkg.read(compat32).value as number;
+        this.flags = pkg.read(uint32).value;
+        this.polyFlags = flagBitsToDict(this.flags, PolyFlags_T);
 
-    //     const ownerId = pkg.read(compat32).value as number;
+        this.pBase = pkg.read(compat32).value;
+        this.vNormal = pkg.read(compat32).value;
+        this.vTextureU = pkg.read(compat32).value;
+        this.vTextureV = pkg.read(compat32).value;
 
-    //     this.plane.load(pkg);
+        this.iBrushPoly = pkg.read(compat32).value;
 
-    //     this.lightMapScale = pkg.read(float).value as number;
+        const ownerId = pkg.read(compat32).value;
 
-    //     this.unkInt32 = pkg.read(int32).value as number;
+        this.plane.load(pkg);
 
-    //     const offset = pkg.tell();
+        this.lightMapScale = pkg.read(float).value;
 
-    //     this.material = pkg.fetchObject<UShader>(materialId);
-    //     this.actor = pkg.fetchObject<UBrush>(ownerId);
+        this.unkInt32 = pkg.read(int32).value;
 
-    //     pkg.seek(offset, "set");
+        const offset = pkg.tell();
 
-    //     return this;
-    // }
+        this.material = pkg.fetchObject<GA.UShader>(materialId);
+        this.actor = pkg.fetchObject<GA.UBrush>(ownerId);
+
+        pkg.seek(offset, "set");
+
+        return this;
+    }
 }
 
 export default FBSPSurf;

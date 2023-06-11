@@ -1,7 +1,7 @@
-import UZoneInfo from "./un-zone-info";
+import FZoneInfo from "./un-zone-info";
 import ULevelSummary from "./un-level-summary";
 
-class ULevelInfo extends UZoneInfo/* implements IInfo*/ {
+class ULevelInfo extends FZoneInfo/* implements IInfo*/ {
     // protected time: number;
     // protected summary: ULevelSummary;
     // protected visibleGroups: string;

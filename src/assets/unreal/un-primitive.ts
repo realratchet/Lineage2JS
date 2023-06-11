@@ -6,6 +6,8 @@ class UPrimitive extends UObject {
 
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
+        super.preLoad(pkg, exp);
+
         this.boundingBox = pkg.makeCoreStruct("Box");
         this.boundingSphere = pkg.makeCoreStruct("Plane");
     }

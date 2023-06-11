@@ -15,10 +15,10 @@ class FMipmap implements C.IConstructable {
         const int32 = new BufferValue(BufferValue.int32);
         const int8 = new BufferValue(BufferValue.int8);
 
-        this.sizeW = pkg.read(int32).value as number;
-        this.sizeH = pkg.read(int32).value as number;
-        this.bitsW = pkg.read(int8).value as number;
-        this.bitsH = pkg.read(int8).value as number;
+        this.sizeW = pkg.read(int32).value;
+        this.sizeH = pkg.read(int32).value;
+        this.bitsW = pkg.read(int8).value;
+        this.bitsH = pkg.read(int8).value;
 
         return this;
     }

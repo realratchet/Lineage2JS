@@ -1,12 +1,9 @@
-import { v5 as seededUuid } from "uuid";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
-import UObject from "@l2js/core";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import FVector from "./un-vector";
 import UMaterial from "./un-material";
 import FArray from "@l2js/core/src/unreal/un-array";
 
@@ -50,33 +47,10 @@ class UTexture extends UMaterial {
     declare protected lodSet: number;
 
     public readonly mipmaps = new FArray(FMipmap);
-    // declare public readonly _mips: C.FPrimitiveArray<"uint32">;
-
-    // protected _lossDetail: any;
-
-    // protected _detailTexture: any;
-    // protected _environmentMap: any;
-    // protected _envMapTransformType: any;
-    // protected _specular: any;
-    // protected _bHighColorQuality: any;
-    // protected _bHighTextureQuality: any;
-    // protected _bRealtime: any;
-    // protected _bParametric: any;
-    // protected _bRealtimeChanged: any;
-    // protected _bHasComp: any;
-    // protected _normalLOD: any;
-    // protected _minLOD: any;
-    // protected _maxLOD: any;
-    // protected _animCurrent: any;
-    // protected _primeCount: any;
-    // protected _primeCurrent: any;
-    // protected _accumulator: any;
-    // protected _compFormat: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Palette": "palette",
-            // "Mips": "_mipmaps",
 
             "Format": "format",
             "InternalTime": "internalTime",
@@ -107,27 +81,6 @@ class UTexture extends UMaterial {
 
 
             "LODSet": "lodSet",
-
-            // "LossDetail": "_lossDetail",
-
-            // "DetailTexture": "_detailTexture",
-            // "EnvironmentMap": "_environmentMap",
-            // "EnvMapTransformType": "_envMapTransformType",
-            // "Specular": "_specular",
-            // "bHighColorQuality": "_bHighColorQuality",
-            // "bHighTextureQuality": "_bHighTextureQuality",
-            // "bRealtime": "_bRealtime",
-            // "bParametric": "_bParametric",
-            // "bRealtimeChanged": "_bRealtimeChanged",
-            // "bHasComp": "_bHasComp",
-            // "NormalLOD": "_normalLOD",
-            // "MinLOD": "_minLOD",
-            // "MaxLOD": "_maxLOD",
-            // "AnimCurrent": "_animCurrent",
-            // "PrimeCount": "_primeCount",
-            // "PrimeCurrent": "_primeCurrent",
-            // "Accumulator": "_accumulator",
-            // "CompFormat": "_compFormat"
         });
     }
 

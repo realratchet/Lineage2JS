@@ -29,7 +29,7 @@
 // type ULevelInfo = import("./un-level-info").ULevelInfo;
 // type UTerrainSector = import("./un-terrain-sector").UTerrainSector;
 // type UTerrainLayer = import("./un-terrain-layer").UTerrainLayer
-// type UZoneInfo = import("./un-zone-info").UZoneInfo;
+// type FZoneInfo = import("./un-zone-info").FZoneInfo;
 // type UPhysicsVolume = import("./un-physics-volume").UPhysicsVolume;
 // type USkyZoneInfo = import("./un-sky-zone-info").USkyZoneInfo;
 // type UPolys = import("./un-polys").UPolys;
@@ -48,7 +48,7 @@
 // type UFont = import("./un-font").UFont;
 // type UNSun = import("./un-nsun").UNSun;
 // type UNMoon = import("./un-nmoon").UNMoon;
-// type UFogInfo = import("./un-fog-info").UFogInfo;
+// type FFogInfo = import("./un-fog-info").FFogInfo;
 // type UPlayerStart = import("./un-player-start").UPlayerStart;
 // type UMusicVolume = import("./un-music-volume").UMusicVolume;
 // type UMover = import("./un-mover").UMover;
@@ -81,7 +81,7 @@
 
 // type PropertyTag = import("./un-property-tag").PropertyTag;
 // type FColor = import("./un-color").FColor;
-// type UMatrix = import("./un-matrix").UMatrix;
+// type FMatrix = import("./un-matrix").FMatrix;
 // type FMatrix = import("./un-matrix").FMatrix;
 // type UPointRegion = import("./un-point-region").UPointRegion;
 // type FVector = import("./un-vector").FVector;

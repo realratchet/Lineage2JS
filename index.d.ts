@@ -27,19 +27,21 @@ declare global {
             }
 
             namespace Assets {
-                export type UPackage = import("./src/assets/unreal/un-package").UPackage;
-                export type UNativePackage = import("./src/assets/unreal/un-package").UNativePackage;
+                export type UPackage = import("@unreal/un-package").UPackage;
+                export type UNativePackage = import("@unreal/un-package").UNativePackage;
 
-                export type ULevel = import("./src/assets/unreal/un-level").ULevel;
-                export type UModel = import("./src/assets/unreal/model/un-model").UModel;
-                export type FVector = import("./src/assets/unreal/un-vector").FVector;
-                export type FRotator = import("./src/assets/unreal/un-rotator").FRotator;
-                export type FPlane = import("./src/assets/unreal/un-plane").FPlane;
-                export type FBox = import("./src/assets/unreal/un-box").FBox;
-                // export type UMatrix = import("./src/assets/unreal/un-matrix").UMatrix;
+                export type ULevel = import("@unreal/un-level").ULevel;
+                export type ULevelInfo = import("@unreal/un-level-info").ULevelInfo;
 
-                export type UPlatte = import("./src/assets/unreal/un-palette").UPlatte;
-                export type UTexture = import("./src/assets/unreal/un-texture").UTexture;
+                export type UModel = import("@unreal/model/un-model").UModel;
+                export type FVector = import("@unreal/un-vector").FVector;
+                export type FRotator = import("@unreal/un-rotator").FRotator;
+                export type FPlane = import("@unreal/un-plane").FPlane;
+                export type FBox = import("@unreal/un-box").FBox;
+                export type FMatrix = import("@unreal/un-matrix").FMatrix;
+
+                export type UPlatte = import("@unreal/un-palette").UPlatte;
+                export type UTexture = import("@unreal/un-texture").UTexture;
 
                 export type NativeClientTypes_T =
                     | C.NativeTypes_T
@@ -50,6 +52,20 @@ declare global {
                     | "L2SeamlessInfo"
                     | "SceneManager"
                     | "MovableStaticMeshActor";
+
+                export type UPolys = import("@unreal/un-polys").UPolys;
+                export type PolyFlags_T = import("@unreal/un-polys").PolyFlags_T;
+
+                export type UBrush = import("@unreal/un-brush").UBrush;
+
+                export type UMaterial = import("@unreal/un-material").UMaterial;
+                export type UShader = import("@unreal/un-material").UShader;
+
+                export type AActor = import("@unreal/un-aactor").UAActor;
+
+                export type AInfo = import("@unreal/un-info").AInfo;
+                export type FFogInfo = import("@unreal/un-fog-info").FFogInfo;
+                export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
             }
 
             namespace Decoding {
@@ -62,7 +78,7 @@ declare global {
                 export type EulerArr = [...Vector3Arr, EulerOrder];
                 export type ArrGeometryGroup = [number, number, number];
 
-                export type DecodeLibrary = import("./src/assets/unreal/decode-library").DecodeLibrary;
+                export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
             }
         }
     }

@@ -30,22 +30,22 @@ class ULevel extends UObject {
         let objectIds: number[];
 
         if (0x16 < verLicense) {
-            dbNum = pkg.read(int32).value as number;
-            dbMax = pkg.read(int32).value as number;
+            dbNum = pkg.read(int32).value;
+            dbMax = pkg.read(int32).value;
 
             ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
         } else ambientSoundIds = [];
 
         this.readHead = pkg.tell();
 
-        dbNum = pkg.read(int32).value as number;
-        dbMax = pkg.read(int32).value as number;
+        dbNum = pkg.read(int32).value;
+        dbMax = pkg.read(int32).value;
 
         objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
 
         this.url.load(pkg);
 
-        this.unkInt0 = pkg.read(int32).value as number;
+        this.unkInt0 = pkg.read(int32).value;
         pkg.read(this.unkBytes);
 
         this.readHead = pkg.tell();
@@ -56,7 +56,7 @@ class ULevel extends UObject {
 
         this.readHead = pkg.tell();
 
-        this.baseModelId = pkg.read(compat32).value as number;
+        this.baseModelId = pkg.read(compat32).value;
         this.readHead = pkg.tell();
 
         if (LOAD_SUB_OBJECTS) {

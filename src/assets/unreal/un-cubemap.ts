@@ -1,20 +1,12 @@
 import UTexture from "./un-texture";
 
 class UCubemap extends UTexture {
-    protected faces = new Array<UTexture>(6);
-    protected material: UShader;
-
-    protected _cubemapRenderInterface: any;
+    declare protected faces: [UTexture, UTexture, UTexture, UTexture, UTexture, UTexture];
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "Faces": "faces",
-            "CubemapRenderInterface": "_cubemapRenderInterface",
+            "Faces": "faces"
         });
-    }
-
-    public getDecodeInfo(library: DecodeLibrary): string {
-        throw new Error("Method not implemented.");
     }
 }
 

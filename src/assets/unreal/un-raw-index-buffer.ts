@@ -11,7 +11,7 @@ class FRawIndexBuffer extends FConstructable {
     public load(pkg: UPackage, tag?: PropertyTag): this {
         this.indices.load(pkg, tag);
 
-        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
+        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value;
 
         return this;
     }

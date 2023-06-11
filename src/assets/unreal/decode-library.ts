@@ -60,7 +60,7 @@ class DecodeLibrary {
         }
 
         if (loadTerrain) {
-            const uTerrainInfo = pkg.fetchObject<UZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
+            const uTerrainInfo = pkg.fetchObject<FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
             uTerrainInfo.getDecodeInfo(decodeLibrary);
         }
 

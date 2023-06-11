@@ -70,7 +70,7 @@ class FPlane extends UObject {
     }
 
     // public getElements(): GD.Vector4Arr { return [this.x, this.y, this.z, this.w]; }
-    // public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})` }
+    public toString() { return `Plane=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})`; }
 }
 
 export { FPlane };
