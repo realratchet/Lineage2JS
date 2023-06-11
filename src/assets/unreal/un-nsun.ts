@@ -7,7 +7,7 @@ class UNSun extends UNCelestial {
     //     });
     // }
 
-    // public getDecodeInfo(library: any): any {
+    // public getDecodeInfo(library: GD.DecodeLibrary): any {
     //     const sprites = this.skins.map(skin => skin.loadSelf().getDecodeInfo(library));
 
     //     return {

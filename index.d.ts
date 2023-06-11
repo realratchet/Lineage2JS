@@ -3,6 +3,7 @@ import UObject from "@l2js/core";
 declare module "@l2js/core" {
     class UObject {
         public uuid: string;
+        public getDecodeInfo(library: GD.DecodeLibrary, ...args: any): any;
     }
 }
 
@@ -40,6 +41,8 @@ declare global {
                 export type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
                 export type EulerArr = [...Vector3Arr, EulerOrder];
                 export type ArrGeometryGroup = [number, number, number];
+
+                export type DecodeLibrary = import("./src/assets/unreal/decode-library").DecodeLibrary;
             }
         }
     }

@@ -94,37 +94,37 @@ class ULevel extends UObject {
 
         this.readHead = this.readTail;
 
-        debugger;
-
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
-        const groupedObjectList = this.objectList.reduce((accum, obj) => {
+    // public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
+    //     const groupedObjectList = this.objectList.reduce((accum, obj) => {
 
-            const constrName = (obj.constructor as any).isDynamicClass ? (obj.constructor as any).getConstructorName() : obj.constructor.name;
+    //         const constrName = (obj.constructor as any).isDynamicClass
+    //             ? (obj.constructor as any).getConstructorName()
+    //             : obj.constructor.name;
 
-            accum[constrName] = accum[constrName] || [];
-            accum[constrName].push(obj);
+    //         accum[constrName] = accum[constrName] || [];
+    //         accum[constrName].push(obj);
 
-            return accum;
-        }, {} as Record<string, UObject[]>);
+    //         return accum;
+    //     }, {} as Record<string, UObject[]>);
 
-        for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
-            emitter.loadSelf().getDecodeInfo(library);
+    //     for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
+    //         emitter.loadSelf().getDecodeInfo(library);
 
-        // debugger;
+    //     // debugger;
 
-        // return {
-        //     type: "Level",
-        //     name: this.url.map,
-        //     children: (await Promise.all([
-        //         this.baseModel.getDecodeInfo(library),
-        //         "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-        //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
-        //     ])).flat()
-        // };
-    }
+    //     // return {
+    //     //     type: "Level",
+    //     //     name: this.url.map,
+    //     //     children: (await Promise.all([
+    //     //         this.baseModel.getDecodeInfo(library),
+    //     //         "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+    //     //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
+    //     //     ])).flat()
+    //     // };
+    // }
 }
 
 export default ULevel;
