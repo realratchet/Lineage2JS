@@ -29,6 +29,19 @@ import UPointRegion from "./un-point-region";
 import UTextureModifyInfo from "./un-texture-modify-info";
 import UTexture from "./un-texture";
 import UPlatte from "./un-palette";
+import FBox from "./un-box";
+import { FPlane } from "./un-plane";
+
+type CoreStructs_T =
+    | "Vector"
+    | "Plane"
+    | "Box";
+
+type CoreStructsReturnType_T<T extends CoreStructs_T> =
+    | T extends "Vector" ? GA.FVector
+    : T extends "Plane" ? GA.FPlane
+    : T extends "Box" ? GA.FBox
+    : never;
 
 class UPackage extends APackage {
     protected async readArrayBuffer() {
@@ -42,6 +55,26 @@ class UPackage extends APackage {
     }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
+
+    public findCoreStruct<T extends CoreStructs_T>(className: T): new () => CoreStructsReturnType_T<T> {
+        const pkgCore = this.loader.getCorePackage() as UPackage;
+        const pkgNative = this.loader.getNativePackage() as UNativePackage;
+        const expIndex = pkgCore.findObjectRef("Struct", className);
+
+        if (expIndex === 0)
+            throw new Error(`Could not find '${className}' in core package`);
+
+        const object = pkgCore.fetchObject<C.UClass>(expIndex);
+        const cls = object.loadSelf().buildClass(pkgNative) as any;
+
+        return cls;
+    }
+
+    public makeCoreStruct<T extends CoreStructs_T>(className: T) {
+        const cls = this.findCoreStruct<T>(className);
+
+        return new cls();
+    }
 }
 class UNativePackage extends ANativePackage {
 
@@ -55,6 +88,8 @@ class UNativePackage extends ANativePackage {
             case "Rotator": Constructor = FRotator; break;
             case "PointRegion": Constructor = UPointRegion; break;
             case "TextureModifyinfo": Constructor = UTextureModifyInfo; break;
+            case "Box": Constructor = FBox; break;
+            case "Plane": Constructor = FPlane; break;
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);

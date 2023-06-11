@@ -17,8 +17,6 @@ const triggerDebuggerOnUnsupported = true;
 
 
 class UStaticMesh extends UPrimitive {
-    protected static getConstructorName() { return "StaticMesh"; }
-
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
     protected vertexStream: FStaticMeshVertexStream = new FStaticMeshVertexStream();
     protected colorStream: FRawColorStream = new FRawColorStream();

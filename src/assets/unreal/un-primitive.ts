@@ -1,21 +1,26 @@
-import FBox from "./un-box";
 import UObject from "@l2js/core";
-import USphere from "./un-sphere";
 
 class UPrimitive extends UObject {
-    // protected static getConstructorName() { return "Primitive"; }
+    declare protected boundingBox: GA.FBox;
+    declare protected boundingSphere: GA.FPlane;
 
-    // protected boundingBox: FBox = new FBox();
-    // protected boundingSphere: USphere = new USphere();
 
-    // protected doLoad(pkg: C.APackage, exp: C.UExport) {
-    //     super.doLoad(pkg, exp);
+    protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
+        this.boundingBox = pkg.makeCoreStruct("Box");
+        this.boundingSphere = pkg.makeCoreStruct("Plane");
+    }
 
-    //     this.boundingBox.load(pkg);
-    //     this.boundingSphere.load(pkg);
+    protected doLoad(pkg: GA.UPackage, exp: C.UExport) {
+        super.doLoad(pkg, exp);
 
-    //     this.readHead = pkg.tell();
-    // }
+        this.boundingBox = pkg.makeCoreStruct("Box");
+        this.boundingSphere = pkg.makeCoreStruct("Plane");
+
+        this.boundingBox.load(pkg);
+        this.boundingSphere.load(pkg);
+
+        this.readHead = pkg.tell();
+    }
 
     // public decodeBoundsInfo(): IBoundsDecodeInfo {
     //     return {

@@ -4,36 +4,55 @@ import { generateUUID } from "three/src/math/MathUtils";
 import UObject from "@l2js/core";
 
 abstract class UAActor extends UObject {
-    // protected texModifyInfo: UTextureModifyInfo;
-    // protected isDynamicActorFilterState: boolean;
-    // protected level: ULevel;
-    // protected region: UPointRegion;
-    // protected drawScale: number = 1;
-    // protected tag: string;
-    // protected group: string = "None";
-    // protected isSunAffected: boolean;
-    // protected physicsVolume: UPhysicsVolume;
-    // public readonly location: FVector = new FVector();
-    // public readonly rotation: FRotator = new FRotator();
-    // public readonly scale: FVector = new FVector(1, 1, 1);
-    // protected swayRotationOrig: FRotator = new FRotator();
+    declare protected texModifyInfo: GA.UTextureModifyInfo;
+    declare protected isDynamicActorFilterState: boolean;
+    declare protected level: GA.ULevel;
+    declare protected region: GA.UPointRegion;
+    declare protected drawScale: number;
+    declare protected tag: string;
+    declare protected group: string;
+    declare protected isSunAffected: boolean;
+    declare protected physicsVolume: GA.UPhysicsVolume;
+    declare public readonly location: FVector;
+    declare public readonly rotation: FRotator;
+    declare public readonly scale: FVector;
+    declare protected swayRotationOrig: FRotator;
 
-    // protected hasDistanceFog: boolean;
-    // protected distanceFogEnd: number;
-    // protected distanceFogStart: number;
-    // protected distanceFogColor: FColor;
+    declare protected hasDistanceFog: boolean;
+    declare protected distanceFogEnd: number;
+    declare protected distanceFogStart: number;
+    declare protected distanceFogColor: FColor;
 
-    // protected isHiddenInEditor: boolean;
-    // protected isLightChanged: boolean;
-    // protected isDeleteMe: boolean;
-    // protected isPendingDelete: boolean;
-    // protected isSelected: boolean;
+    declare protected isHiddenInEditor: boolean;
+    declare protected isLightChanged: boolean;
+    declare protected isDeleteMe: boolean;
+    declare protected isPendingDelete: boolean;
+    declare protected isSelected: boolean;
 
-    // protected mainScale: FScale;
+    declare protected mainScale: GA.FScale;
     // protected dummy: boolean;
 
     // protected _mesh: any;
-    // protected forcedRegionTag: string;
+    declare protected forcedRegionTag: string;
+
+    declare protected skins: C.FObjectArray<GA.UTexture>;
+    declare protected style: ERenderStyle_T;
+    declare protected isIgnoredRange: boolean;
+    declare protected isDirectional: boolean;
+
+    declare protected postScale: GA.FScale;
+    declare protected polyFlags: number;
+    declare protected brush: GA.UModel;
+    declare protected prePivot: FVector;
+    declare protected postPivot: FVector;
+    declare protected isRangeIgnored: boolean;
+    declare protected isBlockingActors: boolean;
+    declare protected isBlockingPlayers: boolean;
+    declare protected isBlockingKarma: boolean;
+    declare protected isDynamicLight: boolean;
+    declare protected isStaticLighting: boolean;
+
+    declare protected isCastingShadow: boolean;
 
     // protected _physics: EPhysics_T;
     // protected _drawType: EDrawType_T;
@@ -264,27 +283,10 @@ abstract class UAActor extends UObject {
     // protected _associatedActor: any;
     // protected _associatedActorTag: any;
 
-    // protected skins = new FObjectArray();
-    // protected style: ERenderStyle_T;
-    // protected isIgnoredRange: boolean;
-    // protected isDirectional: boolean = false;
+
 
     // protected csgOper: number;
 
-    // protected postScale: FScale;
-    // protected polyFlags: number;
-    // protected brush: UModel;
-    // protected prePivot: FVector = new FVector();
-    // protected postPivot: FVector = new FVector();
-    // protected isRangeIgnored: boolean;
-    // protected isBlockingActors: boolean;
-    // protected isBlockingPlayers: boolean;
-    // protected isBlockingKarma: boolean;
-    // protected isDynamicLight: boolean;
-    // protected isStaticLighting: boolean;
-
-
-    // protected isCastingShadow: boolean;
 
     // public getRegion() { return this.region; }
     // public getZone() { return this.region?.loadSelf().getZone(); }
@@ -318,291 +320,291 @@ abstract class UAActor extends UObject {
     //     return regionHelper;
     // }
 
-    // protected getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "MainScale": "mainScale",
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "MainScale": "mainScale",
 
-    //         "bDummy": "dummy",
+            // "bDummy": "dummy",
 
-    //         "bDynamicActorFilterState": "isDynamicActorFilterState",
-    //         "Level": "level",
-    //         "Region": "region",
-    //         "Tag": "tag",
-    //         "bSunAffect": "isSunAffected",
-    //         "PhysicsVolume": "physicsVolume",
-    //         "Location": "location",
-    //         "Rotation": "rotation",
-    //         "SwayRotationOrig": "swayRotationOrig",
-    //         "DrawScale": "drawScale",
-    //         "TexModifyInfo": "texModifyInfo",
-    //         "DrawScale3D": "scale",
-    //         "Group": "group",
+            "bDynamicActorFilterState": "isDynamicActorFilterState",
+            "Level": "level",
+            "Region": "region",
+            "Tag": "tag",
+            "bSunAffect": "isSunAffected",
+            "PhysicsVolume": "physicsVolume",
+            "Location": "location",
+            "Rotation": "rotation",
+            "SwayRotationOrig": "swayRotationOrig",
+            "DrawScale": "drawScale",
+            "TexModifyInfo": "texModifyInfo",
+            "DrawScale3D": "scale",
+            "Group": "group",
 
-    //         "bDistanceFog": "hasDistanceFog",
-    //         "DistanceFogEnd": "distanceFogEnd",
-    //         "DistanceFogStart": "distanceFogStart",
-    //         "DistanceFogColor": "distanceFogColor",
+            "bDistanceFog": "hasDistanceFog",
+            "DistanceFogEnd": "distanceFogEnd",
+            "DistanceFogStart": "distanceFogStart",
+            "DistanceFogColor": "distanceFogColor",
 
-    //         "bHiddenEd": "isHiddenInEditor",
-    //         "bLightChanged": "isLightChanged",
-    //         "bSelected": "isSelected",
+            "bHiddenEd": "isHiddenInEditor",
+            "bLightChanged": "isLightChanged",
+            "bSelected": "isSelected",
 
-    //         "bDeleteMe": "isDeleteMe",
-    //         "bPendingDelete": "isPendingDelete",
+            "bDeleteMe": "isDeleteMe",
+            "bPendingDelete": "isPendingDelete",
 
-    //         "ForcedRegionTag": "forcedRegionTag",
-    //         "Skins": "skins",
-    //         "Style": "style",
-    //         "bDirectional": "isDirectional",
+            "ForcedRegionTag": "forcedRegionTag",
+            "Skins": "skins",
+            "Style": "style",
+            "bDirectional": "isDirectional",
 
-    //         "bShadowCast": "isCastingShadow",
-    //         "CsgOper": "csgOper",
-    //         "PostScale": "postScale",
-    //         "PolyFlags": "polyFlags",
-    //         "Brush": "brush",
-    //         "PrePivot": "prePivot",
-    //         "PostPivot": "postPivot",
-    //         "bIgnoredRange": "isRangeIgnored",
-    //         "bBlockActors": "isBlockingActors",
-    //         "bBlockPlayers": "isBlockingPlayers",
-    //         "bBlockKarma": "isBlockingKarma",
-    //         "bDynamicLight": "isDynamicLight",
-    //         "bStaticLighting": "isStaticLighting",
+            "bShadowCast": "isCastingShadow",
+            // "CsgOper": "csgOper",
+            "PostScale": "postScale",
+            "PolyFlags": "polyFlags",
+            "Brush": "brush",
+            "PrePivot": "prePivot",
+            "PostPivot": "postPivot",
+            "bIgnoredRange": "isRangeIgnored",
+            "bBlockActors": "isBlockingActors",
+            "bBlockPlayers": "isBlockingPlayers",
+            "bBlockKarma": "isBlockingKarma",
+            "bDynamicLight": "isDynamicLight",
+            "bStaticLighting": "isStaticLighting",
 
-    //         "Mesh": "_mesh",
+            // "Mesh": "_mesh",
 
-    //         "Physics": "_physics",
-    //         "DrawType": "_drawType",
-    //         "StaticMesh": "_staticMesh",
-    //         "Owner": "_owner",
-    //         "Base": "_base",
-    //         "ActorRenderData": "_actorRenderData",
-    //         "LightRenderData": "_lightRenderData",
-    //         "RenderRevision": "_renderRevision",
-    //         "StaticFilterState": "_staticFilterState",
-    //         "ForcedVisibilityZoneTag": "_forcedVisibilityZoneTag",
-    //         "bSpecialLit": "_bSpecialLit",
-    //         "bActorShadows": "_bActorShadows",
-    //         "bCorona": "_bCorona",
-    //         "bLightingVisibility": "_bLightingVisibility",
-    //         "bUseDynamicLights": "_bUseDynamicLights",
-    //         "bUpdateShadow": "_bUpdateShadow",
-    //         "bHideShadow": "_bHideShadow",
-    //         "bHideRightHandMesh": "_bHideRightHandMesh",
-    //         "bHideLeftHandMesh": "_bHideLeftHandMesh",
-    //         "bNeedCleanup": "_bNeedCleanup",
-    //         "bShadowOnly": "_bShadowOnly",
-    //         "CreatureID": "_creatureID",
-    //         "NoCheatCollision": "_noCheatCollision",
-    //         "CanIngnoreCollision": "_canIngnoreCollision",
-    //         "bDeleteNow": "_bDeleteNow",
-    //         "bAlwaysVisible": "_bAlwaysVisible",
-    //         "bStatic": "_bStatic",
-    //         "bHidden": "_bHidden",
-    //         "bNoDelete": "_bNoDelete",
-    //         "bTicked": "_bTicked",
+            // "Physics": "_physics",
+            // "DrawType": "_drawType",
+            // "StaticMesh": "_staticMesh",
+            // "Owner": "_owner",
+            // "Base": "_base",
+            // "ActorRenderData": "_actorRenderData",
+            // "LightRenderData": "_lightRenderData",
+            // "RenderRevision": "_renderRevision",
+            // "StaticFilterState": "_staticFilterState",
+            // "ForcedVisibilityZoneTag": "_forcedVisibilityZoneTag",
+            // "bSpecialLit": "_bSpecialLit",
+            // "bActorShadows": "_bActorShadows",
+            // "bCorona": "_bCorona",
+            // "bLightingVisibility": "_bLightingVisibility",
+            // "bUseDynamicLights": "_bUseDynamicLights",
+            // "bUpdateShadow": "_bUpdateShadow",
+            // "bHideShadow": "_bHideShadow",
+            // "bHideRightHandMesh": "_bHideRightHandMesh",
+            // "bHideLeftHandMesh": "_bHideLeftHandMesh",
+            // "bNeedCleanup": "_bNeedCleanup",
+            // "bShadowOnly": "_bShadowOnly",
+            // "CreatureID": "_creatureID",
+            // "NoCheatCollision": "_noCheatCollision",
+            // "CanIngnoreCollision": "_canIngnoreCollision",
+            // "bDeleteNow": "_bDeleteNow",
+            // "bAlwaysVisible": "_bAlwaysVisible",
+            // "bStatic": "_bStatic",
+            // "bHidden": "_bHidden",
+            // "bNoDelete": "_bNoDelete",
+            // "bTicked": "_bTicked",
 
-    //         "bTimerLoop": "_bTimerLoop",
-    //         "bOnlyOwnerSee": "_bOnlyOwnerSee",
-    //         "bHighDetail": "_bHighDetail",
-    //         "bSuperHighDetail": "_bSuperHighDetail",
-    //         "bOnlyDrawIfAttached": "_bOnlyDrawIfAttached",
+            // "bTimerLoop": "_bTimerLoop",
+            // "bOnlyOwnerSee": "_bOnlyOwnerSee",
+            // "bHighDetail": "_bHighDetail",
+            // "bSuperHighDetail": "_bSuperHighDetail",
+            // "bOnlyDrawIfAttached": "_bOnlyDrawIfAttached",
 
-    //         "bStasis": "_bStasis",
-    //         "bTrailerAllowRotation": "_bTrailerAllowRotation",
-    //         "bTrailerSameRotation": "_bTrailerSameRotation",
-    //         "bTrailerPrePivot": "_bTrailerPrePivot",
-    //         "bTrailerNoOwnerDestroy": "_bTrailerNoOwnerDestroy",
-    //         "bRelativeTrail": "_bRelativeTrail",
-    //         "RelativeTrailOffset": "_relativeTrailOffset",
-    //         "bSelfRotation": "_bSelfRotation",
-    //         "bWorldGeometry": "_bWorldGeometry",
-    //         "bAcceptsProjectors": "_bAcceptsProjectors",
-    //         "bOrientOnSlope": "_bOrientOnSlope",
-    //         "bOnlyAffectPawns": "_bOnlyAffectPawns",
-    //         "bIgnoreEncroachers": "_bIgnoreEncroachers",
-    //         "bShowOctreeNodes": "_bShowOctreeNodes",
-    //         "bWasSNFiltered": "_bWasSNFiltered",
-    //         "bNetTemporary": "_bNetTemporary",
-    //         "bOnlyRelevantToOwner": "_bOnlyRelevantToOwner",
-    //         "bNetDirty": "_bNetDirty",
-    //         "bAlwaysRelevant": "_bAlwaysRelevant",
-    //         "bReplicateInstigator": "_bReplicateInstigator",
-    //         "bReplicateMovement": "_bReplicateMovement",
-    //         "bSkipActorPropertyReplication": "_bSkipActorPropertyReplication",
-    //         "bUpdateSimulatedPosition": "_bUpdateSimulatedPosition",
-    //         "bTearOff": "_bTearOff",
-    //         "bOnlyDirtyReplication": "_bOnlyDirtyReplication",
-    //         "bReplicateAnimations": "_bReplicateAnimations",
-    //         "bNetInitialRotation": "_bNetInitialRotation",
-    //         "bCompressedPosition": "_bCompressedPosition",
-    //         "bAlwaysZeroBoneOffset": "_bAlwaysZeroBoneOffset",
-    //         "RelativeLocInVehicle": "_relativeLocInVehicle",
-    //         "VehicleID": "_vehicleID",
-    //         "bVehicleTargetMove": "_bVehicleTargetMove",
-    //         "bVehicleCompensativeMove": "_bVehicleCompensativeMove",
-    //         "bHasActorTarget": "_bHasActorTarget",
-    //         "bL2DesiredRotated": "_bL2DesiredRotated",
-    //         "L2DesriedRotator": "_l2DesriedRotator",
-    //         "L2NeedTick": "_l2NeedTick",
-    //         "bCheckChangableLevel": "_bCheckChangableLevel",
-    //         "bImmediatelyStop": "_bImmediatelyStop",
-    //         "L2ActorViewtype": "_l2ActorViewtype",
-    //         "L2ActorViewDuration": "_l2ActorViewDuration",
-    //         "L2ActorViewElapsedTime": "_l2ActorViewElapsedTime",
-    //         "L2LodViewType": "_l2LodViewType",
-    //         "L2LodViewElapsedTime": "_l2LodViewElapsedTime",
-    //         "RemoteRole": "_remoteRole",
-    //         "Role": "_role",
-    //         "NetTag": "_netTag",
-    //         "NetUpdateTime": "_netUpdateTime",
-    //         "NetUpdateFrequency": "_netUpdateFrequency",
-    //         "NetPriority": "_netPriority",
-    //         "Instigator": "_instigator",
-    //         "AttachmentBone": "_attachmentBone",
-    //         "AttachType": "_attachType",
-    //         "XLevel": "_xLevel",
-    //         "LifeSpan": "_lifeSpan",
-    //         "TimerRate": "_timerRate",
-    //         "LastRenderTime": "_lastRenderTime",
+            // "bStasis": "_bStasis",
+            // "bTrailerAllowRotation": "_bTrailerAllowRotation",
+            // "bTrailerSameRotation": "_bTrailerSameRotation",
+            // "bTrailerPrePivot": "_bTrailerPrePivot",
+            // "bTrailerNoOwnerDestroy": "_bTrailerNoOwnerDestroy",
+            // "bRelativeTrail": "_bRelativeTrail",
+            // "RelativeTrailOffset": "_relativeTrailOffset",
+            // "bSelfRotation": "_bSelfRotation",
+            // "bWorldGeometry": "_bWorldGeometry",
+            // "bAcceptsProjectors": "_bAcceptsProjectors",
+            // "bOrientOnSlope": "_bOrientOnSlope",
+            // "bOnlyAffectPawns": "_bOnlyAffectPawns",
+            // "bIgnoreEncroachers": "_bIgnoreEncroachers",
+            // "bShowOctreeNodes": "_bShowOctreeNodes",
+            // "bWasSNFiltered": "_bWasSNFiltered",
+            // "bNetTemporary": "_bNetTemporary",
+            // "bOnlyRelevantToOwner": "_bOnlyRelevantToOwner",
+            // "bNetDirty": "_bNetDirty",
+            // "bAlwaysRelevant": "_bAlwaysRelevant",
+            // "bReplicateInstigator": "_bReplicateInstigator",
+            // "bReplicateMovement": "_bReplicateMovement",
+            // "bSkipActorPropertyReplication": "_bSkipActorPropertyReplication",
+            // "bUpdateSimulatedPosition": "_bUpdateSimulatedPosition",
+            // "bTearOff": "_bTearOff",
+            // "bOnlyDirtyReplication": "_bOnlyDirtyReplication",
+            // "bReplicateAnimations": "_bReplicateAnimations",
+            // "bNetInitialRotation": "_bNetInitialRotation",
+            // "bCompressedPosition": "_bCompressedPosition",
+            // "bAlwaysZeroBoneOffset": "_bAlwaysZeroBoneOffset",
+            // "RelativeLocInVehicle": "_relativeLocInVehicle",
+            // "VehicleID": "_vehicleID",
+            // "bVehicleTargetMove": "_bVehicleTargetMove",
+            // "bVehicleCompensativeMove": "_bVehicleCompensativeMove",
+            // "bHasActorTarget": "_bHasActorTarget",
+            // "bL2DesiredRotated": "_bL2DesiredRotated",
+            // "L2DesriedRotator": "_l2DesriedRotator",
+            // "L2NeedTick": "_l2NeedTick",
+            // "bCheckChangableLevel": "_bCheckChangableLevel",
+            // "bImmediatelyStop": "_bImmediatelyStop",
+            // "L2ActorViewtype": "_l2ActorViewtype",
+            // "L2ActorViewDuration": "_l2ActorViewDuration",
+            // "L2ActorViewElapsedTime": "_l2ActorViewElapsedTime",
+            // "L2LodViewType": "_l2LodViewType",
+            // "L2LodViewElapsedTime": "_l2LodViewElapsedTime",
+            // "RemoteRole": "_remoteRole",
+            // "Role": "_role",
+            // "NetTag": "_netTag",
+            // "NetUpdateTime": "_netUpdateTime",
+            // "NetUpdateFrequency": "_netUpdateFrequency",
+            // "NetPriority": "_netPriority",
+            // "Instigator": "_instigator",
+            // "AttachmentBone": "_attachmentBone",
+            // "AttachType": "_attachType",
+            // "XLevel": "_xLevel",
+            // "LifeSpan": "_lifeSpan",
+            // "TimerRate": "_timerRate",
+            // "LastRenderTime": "_lastRenderTime",
 
-    //         "bDisableSorting": "_bDisableSorting",
-    //         "L2LodViewDuration": "_l2LodViewDuration",
-    //         "L2CurrentLod": "_l2CurrentLod",
-    //         "L2ServerObjectRealID": "_l2ServerObjectRealID",
-    //         "L2ServerObjectID": "_l2ServerObjectID",
-    //         "L2ServerObjectType": "_l2ServerObjectType",
-    //         "ForcedRegion": "_forcedRegion",
-    //         "Leaves": "_leaves",
-    //         "Event": "_event",
-    //         "L2GameEvent": "_l2GameEvent",
-    //         "Inventory": "_inventory",
-    //         "TimerCounter": "_timerCounter",
-    //         "MeshInstance": "_meshInstance",
-    //         "L2MoveEvent": "_l2MoveEvent",
-    //         "TargetSpineStatus": "_targetSpineStatus",
-    //         "LODBias": "_lODBias",
-    //         "InitialState": "_initialState",
-    //         "Child": "_child",
-    //         "Touching": "_touching",
-    //         "OctreeNodes": "_octreeNodes",
-    //         "OctreeBox": "_octreeBox",
-    //         "OctreeBoxCenter": "_octreeBoxCenter",
-    //         "OctreeBoxRadii": "_octreeBoxRadii",
-    //         "Deleted": "_deleted",
-    //         "LatentFloat": "_latentFloat",
-    //         "CollisionTag": "_collisionTag",
-    //         "JoinedTag": "_joinedTag",
-    //         "Velocity": "_velocity",
-    //         "Acceleration": "_acceleration",
-    //         "AttachTag": "_attachTag",
-    //         "Attached": "_attached",
-    //         "RelativeLocation": "_relativeLocation",
-    //         "RelativeRotation": "_relativeRotation",
-    //         "bHardAttach": "_bHardAttach",
-    //         "HardRelMatrix": "_hardRelMatrix",
-    //         "Projectors": "_projectors",
-    //         "StaticMeshProjectors": "_staticMeshProjectors",
-    //         "Texture": "_texture",
-    //         "StaticMeshInstance": "_staticMeshInstance",
+            // "bDisableSorting": "_bDisableSorting",
+            // "L2LodViewDuration": "_l2LodViewDuration",
+            // "L2CurrentLod": "_l2CurrentLod",
+            // "L2ServerObjectRealID": "_l2ServerObjectRealID",
+            // "L2ServerObjectID": "_l2ServerObjectID",
+            // "L2ServerObjectType": "_l2ServerObjectType",
+            // "ForcedRegion": "_forcedRegion",
+            // "Leaves": "_leaves",
+            // "Event": "_event",
+            // "L2GameEvent": "_l2GameEvent",
+            // "Inventory": "_inventory",
+            // "TimerCounter": "_timerCounter",
+            // "MeshInstance": "_meshInstance",
+            // "L2MoveEvent": "_l2MoveEvent",
+            // "TargetSpineStatus": "_targetSpineStatus",
+            // "LODBias": "_lODBias",
+            // "InitialState": "_initialState",
+            // "Child": "_child",
+            // "Touching": "_touching",
+            // "OctreeNodes": "_octreeNodes",
+            // "OctreeBox": "_octreeBox",
+            // "OctreeBoxCenter": "_octreeBoxCenter",
+            // "OctreeBoxRadii": "_octreeBoxRadii",
+            // "Deleted": "_deleted",
+            // "LatentFloat": "_latentFloat",
+            // "CollisionTag": "_collisionTag",
+            // "JoinedTag": "_joinedTag",
+            // "Velocity": "_velocity",
+            // "Acceleration": "_acceleration",
+            // "AttachTag": "_attachTag",
+            // "Attached": "_attached",
+            // "RelativeLocation": "_relativeLocation",
+            // "RelativeRotation": "_relativeRotation",
+            // "bHardAttach": "_bHardAttach",
+            // "HardRelMatrix": "_hardRelMatrix",
+            // "Projectors": "_projectors",
+            // "StaticMeshProjectors": "_staticMeshProjectors",
+            // "Texture": "_texture",
+            // "StaticMeshInstance": "_staticMeshInstance",
 
-    //         "UnusedLightMesh": "_unusedLightMesh",
-    //         "TempScale": "_tempScale",
-    //         "BrushColor": "_brushColor",
-    //         "bColored": "_bColored",
-    //         "AssociatedActor": "_associatedActor",
-    //         "AssociatedActorTag": "_associatedActorTag",
+            // "UnusedLightMesh": "_unusedLightMesh",
+            // "TempScale": "_tempScale",
+            // "BrushColor": "_brushColor",
+            // "bColored": "_bColored",
+            // "AssociatedActor": "_associatedActor",
+            // "AssociatedActorTag": "_associatedActorTag",
 
-    //         "OverlayMaterial": "_overlayMaterial",
-    //         "OverlayTimer": "_overlayTimer",
-    //         "OverlayColor": "_overlayColor",
-    //         "RepSkin": "_repSkin",
-    //         "AmbientGlow": "_ambientGlow",
-    //         "MaxLights": "_maxLights",
-    //         "AntiPortal": "_antiPortal",
-    //         "CullDistance": "_cullDistance",
-    //         "ScaleGlow": "_scaleGlow",
-    //         "NMoverActor": "_nMoverActor",
-    //         "L2NMover": "_l2NMover",
-    //         "SWXLevel": "_sWXLevel",
-    //         "bDontBatch": "_bDontBatch",
-    //         "bUnlit": "_bUnlit",
-    //         "bUseLightingFromBase": "_bUseLightingFromBase",
-    //         "bUnlitCheck": "_bUnlitCheck",
-    //         "bCulledSunlight": "_bCulledSunlight",
-    //         "bHurtEntry": "_bHurtEntry",
-    //         "bGameRelevant": "_bGameRelevant",
-    //         "bCollideWhenPlacing": "_bCollideWhenPlacing",
-    //         "bTravel": "_bTravel",
-    //         "bMovable": "_bMovable",
-    //         "bDestroyInPainVolume": "_bDestroyInPainVolume",
-    //         "bShouldBaseAtStartup": "_bShouldBaseAtStartup",
-    //         "bAnimByOwner": "_bAnimByOwner",
-    //         "bOwnerNoSee": "_bOwnerNoSee",
-    //         "bCanTeleport": "_bCanTeleport",
-    //         "bClientAnim": "_bClientAnim",
-    //         "bDisturbFluidSurface": "_bDisturbFluidSurface",
-    //         "bAlwaysTick": "_bAlwaysTick",
-    //         "TransientSoundVolume": "_transientSoundVolume",
-    //         "TransientSoundRadius": "_transientSoundRadius",
-    //         "CollisionRadius": "_collisionRadius",
-    //         "CollisionHeight": "_collisionHeight",
-    //         "bCollideActors": "_bCollideActors",
-    //         "bCollideWorld": "_bCollideWorld",
+            // "OverlayMaterial": "_overlayMaterial",
+            // "OverlayTimer": "_overlayTimer",
+            // "OverlayColor": "_overlayColor",
+            // "RepSkin": "_repSkin",
+            // "AmbientGlow": "_ambientGlow",
+            // "MaxLights": "_maxLights",
+            // "AntiPortal": "_antiPortal",
+            // "CullDistance": "_cullDistance",
+            // "ScaleGlow": "_scaleGlow",
+            // "NMoverActor": "_nMoverActor",
+            // "L2NMover": "_l2NMover",
+            // "SWXLevel": "_sWXLevel",
+            // "bDontBatch": "_bDontBatch",
+            // "bUnlit": "_bUnlit",
+            // "bUseLightingFromBase": "_bUseLightingFromBase",
+            // "bUnlitCheck": "_bUnlitCheck",
+            // "bCulledSunlight": "_bCulledSunlight",
+            // "bHurtEntry": "_bHurtEntry",
+            // "bGameRelevant": "_bGameRelevant",
+            // "bCollideWhenPlacing": "_bCollideWhenPlacing",
+            // "bTravel": "_bTravel",
+            // "bMovable": "_bMovable",
+            // "bDestroyInPainVolume": "_bDestroyInPainVolume",
+            // "bShouldBaseAtStartup": "_bShouldBaseAtStartup",
+            // "bAnimByOwner": "_bAnimByOwner",
+            // "bOwnerNoSee": "_bOwnerNoSee",
+            // "bCanTeleport": "_bCanTeleport",
+            // "bClientAnim": "_bClientAnim",
+            // "bDisturbFluidSurface": "_bDisturbFluidSurface",
+            // "bAlwaysTick": "_bAlwaysTick",
+            // "TransientSoundVolume": "_transientSoundVolume",
+            // "TransientSoundRadius": "_transientSoundRadius",
+            // "CollisionRadius": "_collisionRadius",
+            // "CollisionHeight": "_collisionHeight",
+            // "bCollideActors": "_bCollideActors",
+            // "bCollideWorld": "_bCollideWorld",
 
-    //         "bProjTarget": "_bProjTarget",
-    //         "bBlockZeroExtentTraces": "_bBlockZeroExtentTraces",
-    //         "bBlockNonZeroExtentTraces": "_bBlockNonZeroExtentTraces",
-    //         "bAutoAlignToTerrain": "_bAutoAlignToTerrain",
-    //         "bUseCylinderCollision": "_bUseCylinderCollision",
-    //         "bNetNotify": "_bNetNotify",
-    //         "bIgnoreOutOfWorld": "_bIgnoreOutOfWorld",
-    //         "bBounce": "_bBounce",
-    //         "bFixedRotationDir": "_bFixedRotationDir",
-    //         "bRotateToDesired": "_bRotateToDesired",
-    //         "bInterpolating": "_bInterpolating",
-    //         "bJustTeleported": "_bJustTeleported",
-    //         "Mass": "_mass",
-    //         "Buoyancy": "_buoyancy",
-    //         "RotationRate": "_rotationRate",
-    //         "KayboardRotationRate": "_kayboardRotationRate",
-    //         "KeyboardRotationYawFromServer": "_keyboardRotationYawFromServer",
-    //         "DesiredRotation": "_desiredRotation",
-    //         "PendingTouch": "_pendingTouch",
-    //         "ColLocation": "_colLocation",
-    //         "KParams": "_kParams",
-    //         "KStepTag": "_kStepTag",
-    //         "SimAnim": "_simAnim",
-    //         "ForceType": "_forceType",
-    //         "ForceRadius": "_forceRadius",
-    //         "ForceScale": "_forceScale",
-    //         "bNetInitial": "_bNetInitial",
-    //         "bNetOwner": "_bNetOwner",
-    //         "bNetRelevant": "_bNetRelevant",
-    //         "bDemoRecording": "_bDemoRecording",
-    //         "bClientDemoRecording": "_bClientDemoRecording",
-    //         "bClientDemoNetFunc": "_bClientDemoNetFunc",
-    //         "bNoRepMesh": "_bNoRepMesh",
-    //         "bHiddenEdGroup": "_bHiddenEdGroup",
-    //         "bEdShouldSnap": "_bEdShouldSnap",
-    //         "bEdSnap": "_bEdSnap",
-    //         "bTempEditor": "_bTempEditor",
-    //         "bObsolete": "_bObsolete",
-    //         "bPathColliding": "_bPathColliding",
-    //         "bPathTemp": "_bPathTemp",
-    //         "bScriptInitialized": "_bScriptInitialized",
-    //         "bLockLocation": "_bLockLocation",
-    //         "bLockUndelete": "_bLockUndelete",
-    //         "MessageClass": "_messageClass",
-    //         "NSkillProjectileActor": "_nSkillProjectileActor",
-    //         "SpelledNEffectActor": "_spelledNEffectActor",
-    //         "NProjectileActor": "_nProjectileActor",
-    //         "NAttackStatus": "_nAttackStatus",
-    //         "EffectOwner": "_effectOwner",
-    //         "SpawnPos": "_spawnPos",
-    //         "L2ActorEffecttype": "_l2ActorEffecttype",
-    //     });
-    // };
+            // "bProjTarget": "_bProjTarget",
+            // "bBlockZeroExtentTraces": "_bBlockZeroExtentTraces",
+            // "bBlockNonZeroExtentTraces": "_bBlockNonZeroExtentTraces",
+            // "bAutoAlignToTerrain": "_bAutoAlignToTerrain",
+            // "bUseCylinderCollision": "_bUseCylinderCollision",
+            // "bNetNotify": "_bNetNotify",
+            // "bIgnoreOutOfWorld": "_bIgnoreOutOfWorld",
+            // "bBounce": "_bBounce",
+            // "bFixedRotationDir": "_bFixedRotationDir",
+            // "bRotateToDesired": "_bRotateToDesired",
+            // "bInterpolating": "_bInterpolating",
+            // "bJustTeleported": "_bJustTeleported",
+            // "Mass": "_mass",
+            // "Buoyancy": "_buoyancy",
+            // "RotationRate": "_rotationRate",
+            // "KayboardRotationRate": "_kayboardRotationRate",
+            // "KeyboardRotationYawFromServer": "_keyboardRotationYawFromServer",
+            // "DesiredRotation": "_desiredRotation",
+            // "PendingTouch": "_pendingTouch",
+            // "ColLocation": "_colLocation",
+            // "KParams": "_kParams",
+            // "KStepTag": "_kStepTag",
+            // "SimAnim": "_simAnim",
+            // "ForceType": "_forceType",
+            // "ForceRadius": "_forceRadius",
+            // "ForceScale": "_forceScale",
+            // "bNetInitial": "_bNetInitial",
+            // "bNetOwner": "_bNetOwner",
+            // "bNetRelevant": "_bNetRelevant",
+            // "bDemoRecording": "_bDemoRecording",
+            // "bClientDemoRecording": "_bClientDemoRecording",
+            // "bClientDemoNetFunc": "_bClientDemoNetFunc",
+            // "bNoRepMesh": "_bNoRepMesh",
+            // "bHiddenEdGroup": "_bHiddenEdGroup",
+            // "bEdShouldSnap": "_bEdShouldSnap",
+            // "bEdSnap": "_bEdSnap",
+            // "bTempEditor": "_bTempEditor",
+            // "bObsolete": "_bObsolete",
+            // "bPathColliding": "_bPathColliding",
+            // "bPathTemp": "_bPathTemp",
+            // "bScriptInitialized": "_bScriptInitialized",
+            // "bLockLocation": "_bLockLocation",
+            // "bLockUndelete": "_bLockUndelete",
+            // "MessageClass": "_messageClass",
+            // "NSkillProjectileActor": "_nSkillProjectileActor",
+            // "SpelledNEffectActor": "_spelledNEffectActor",
+            // "NProjectileActor": "_nProjectileActor",
+            // "NAttackStatus": "_nAttackStatus",
+            // "EffectOwner": "_effectOwner",
+            // "SpawnPos": "_spawnPos",
+            // "L2ActorEffecttype": "_l2ActorEffecttype",
+        });
+    };
 }
 
 export default UAActor;

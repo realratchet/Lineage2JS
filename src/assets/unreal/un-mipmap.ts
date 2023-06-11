@@ -1,20 +1,15 @@
-import FConstructable from "./un-constructable";
 import { BufferValue } from "@l2js/core";
-import FNumber from "./un-number";
-import { FPrimitiveArrayLazy } from "./un-array";
+import { FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 
-type UPackage = import("./un-package").UPackage;
-type PropertyTag = import("./un-property-tag").PropertyTag;
-
-class FMipmap extends FConstructable {
-    protected dataArray: FPrimitiveArrayLazy<"uint8"> = new FPrimitiveArrayLazy(BufferValue.uint8);
+class FMipmap implements C.IConstructable {
+    protected dataArray = new FPrimitiveArrayLazy(BufferValue.uint8);
 
     public sizeW: number;
     public sizeH: number;
     public bitsW: number;
     public bitsH: number;
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
+    public load(pkg: C.APackage, tag: C.PropertyTag): this {
         this.dataArray.load(pkg, tag);
 
         const int32 = new BufferValue(BufferValue.int32);
@@ -38,4 +33,4 @@ class FMipmap extends FConstructable {
 }
 
 export default FMipmap;
-export { FMipmap, FNumber };
+export { FMipmap };

@@ -1,6 +1,5 @@
 import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
-import FVector from "../un-vector";
 import FBSPNode from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import UPolys, { PolyFlags_T } from "../un-polys";
@@ -14,6 +13,7 @@ import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FVector from "../un-vector";
 
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -22,385 +22,408 @@ const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 
 class UModel extends UPrimitive {
-    protected vectors = new FArray(FVector);
-    protected points = new FArray(FVector);
-    protected vertices = new FArray(FVert);
-    protected bspNodes = new FArray(FBSPNode);
-    protected bspSurfs = new FArray(FBSPSurf);
-    protected bspSection = new FArray(FBSPSection);
-    protected lightmaps = new FArray(FLightmapIndex);
-    protected multiLightmaps = new FArray(FMultiLightmapTexture);
-    protected numSharedSides: number;
-    protected polys: UPolys = null;
-    protected zones: UZoneProperties[] = [];
-    protected bounds = new FArray(FBox);
-    protected leafHulls = new FPrimitiveArray(BufferValue.int32);
-    protected leaves = new FArray(FLeaf)
-    protected rootOutside: boolean;
-    protected linked: boolean;
+    declare protected vectors: C.FArray<GA.FVector>;
+    declare protected points: C.FArray<GA.FVector>;
+    declare protected vertices: C.FArray<FVert>;
+    declare protected bspNodes: C.FArray<FBSPNode>;
+    declare protected bspSurfs: C.FArray<FBSPSurf>;
+    declare protected bspSection: C.FArray<FBSPSection>;
+    declare protected lightmaps: C.FArray<FLightmapIndex>;
+    declare protected multiLightmaps: C.FArray<FMultiLightmapTexture>;
+    declare protected numSharedSides: number;
+    declare protected polys: UPolys;
+    declare protected zones: UZoneProperties[];
+    declare protected bounds: FArray<GA.FBox>;
+    declare protected leafHulls: FPrimitiveArray<"int32">;
+    declare protected leaves: FArray<FLeaf>
+    declare protected rootOutside: boolean;
+    declare protected linked: boolean;
 
-    protected unkArr0 = new FIndexArray();
-    protected unkInt0: number;
-    protected unkInt1: number;
+    declare protected unkArr0: FIndexArray;
+    declare protected unkInt0: number;
+    declare protected unkInt1: number;
 
-    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
+    protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
+        const FVector = pkg.findCoreStruct("Vector");
 
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
+        debugger;
 
-        // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
-        // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
-
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
-
-        pkg.seek(this.readHead, "set");
-
-        super.doLoad(pkg, exp);
-
-        this.vectors.load(pkg);     // 0x78
-        this.points.load(pkg);      // 0x88
-        this.bspNodes.load(pkg);    // 0x58
-        this.bspSurfs.load(pkg);    // 0x98
-        this.vertices.load(pkg);    // 0x68
-
-        this.numSharedSides = pkg.read(int32).value as number;  // 0x124
-
-        const numZones = pkg.read(int32).value as number;       // 0x128
-
-        console.assert(numZones <= MAX_ZONES);
-
-        this.zones = new Array(numZones);
-
-        for (let i = 0; i < numZones; i++)
-            this.zones[i] = new UZoneProperties().load(pkg);
-
-        this.readHead = pkg.tell();
-        const polysId = pkg.read(compat32).value as number;
-
-        const polyExp = pkg.exports[polysId - 1];
-        const className = pkg.getPackageName(polyExp.idClass as number)
-
-        console.assert(className === "Polys");
-
-        // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
-        //     this.polys = await pkg.fetchObject<UPolys>(polysId);
-        //     resolve();
-        // }));
-
-        this.readHead = pkg.tell();
-
-        this.bounds.load(pkg);
-        this.leafHulls.load(pkg);
-        this.leaves.load(pkg);
-
-        this.unkArr0.load(pkg);
-
-        this.readHead = pkg.tell();
-
-        this.unkInt0 = pkg.read(int32).value as number;
-        this.unkInt1 = pkg.read(int32).value as number;
-
-        this.readHead = pkg.tell();
-
-        this.bspSection.load(pkg);
-
-        this.readHead = pkg.tell();
-
-        this.lightmaps.load(pkg);
-        this.multiLightmaps.load(pkg);
-
-        this.readHead = pkg.tell();
-
-        pkg.seek(this.readHead, "set");
-
-        // if (this.lightmaps.length > 0)
-        //     debugger;
-
-        return this;
+        this.vectors = new FArray(FVector);
+        this.points = new FArray(FVector);
+        this.vertices = new FArray(FVert);
+        this.bspNodes = new FArray(FBSPNode);
+        this.bspSurfs = new FArray(FBSPSurf);
+        this.bspSection = new FArray(FBSPSection);
+        this.lightmaps = new FArray(FLightmapIndex);
+        this.multiLightmaps = new FArray(FMultiLightmapTexture);
+        this.polys = null;
+        this.zones = [];
+        this.bounds = new FArray(FBox);
+        this.leafHulls = new FPrimitiveArray(BufferValue.int32);
+        this.leaves = new FArray(FLeaf);
+        this.unkArr0 = new FIndexArray();
     }
 
-    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
+    // protected doLoad(pkg: C.APackage, exp: C.UExport): this {
 
-        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
+    //     const verArchive = pkg.header.getArchiveFileVersion();
+    //     const verLicense = pkg.header.getLicenseeVersion();
 
-        this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
-        this.zones.forEach((zone: UZoneProperties, index: number) => {
-            const bspZone = zone.getDecodeInfo(library, uLevelInfo);
+    //     // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+    //     // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-            library.bspZones.push(bspZone);
+    //     const int32 = new BufferValue(BufferValue.int32);
+    //     const compat32 = new BufferValue(BufferValue.compat32);
 
-            library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
-        });
+    //     pkg.seek(this.readHead, "set");
 
-        const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
+    //     super.doLoad(pkg, exp);
 
-        for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
-            const node: FBSPNode = this.bspNodes[nodeIndex];
-            const surf: FBSPSurf = this.bspSurfs[node.iSurf];
-            const nodeInfo = node.getBSPDecodeInfo();
+    //     this.vectors.load(pkg);     // 0x78
+    //     this.points.load(pkg);      // 0x88
+    //     this.bspNodes.load(pkg);    // 0x58
+    //     this.bspSurfs.load(pkg);    // 0x98
+    //     this.vertices.load(pkg);    // 0x68
 
-            library.bspNodes.push(nodeInfo);
+    //     this.numSharedSides = pkg.read(int32).value as number;  // 0x124
 
-            if (node.iCollisionBound >= 0) {
-                const hulls = this.leafHulls.getTypedArray() as Int32Array;
-                const hullIndexList = hulls.slice(node.iCollisionBound);
+    //     const numZones = pkg.read(int32).value as number;       // 0x128
 
-                let hullPlanesCount = 0;
-                while (hullIndexList[hullPlanesCount] >= 0)
-                    hullIndexList[hullPlanesCount++];
+    //     console.assert(numZones <= MAX_ZONES);
 
-                // reinterpret as floats
-                const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
-                const hullFlags = hullIndexList.slice(0, hullPlanesCount);
+    //     this.zones = new Array(numZones);
 
-                nodeInfo.collision = {
-                    flags: [...hullFlags],
-                    bounds: {
-                        isValid: true,
-                        min: [initialVector[0], initialVector[2], initialVector[1]],
-                        max: [initialVector[3], initialVector[5], initialVector[4]]
-                    }
-                };
-            }
+    //     for (let i = 0; i < numZones; i++)
+    //         this.zones[i] = new UZoneProperties().load(pkg);
 
-            if (surf.flags & PolyFlags_T.PF_Invisible) continue;
+    //     this.readHead = pkg.tell();
+    //     const polysId = pkg.read(compat32).value as number;
 
-            const vert: FVert = this.vertices.getElem(node.iVertPool);
-            const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+    //     debugger;
 
-            if (testY <= -16000 || testY >= 16000) continue;
-            if (testX <= -327680.00 || testX >= 327680.00) continue;
-            if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+    //     const polyExp = pkg.exports[polysId - 1];
+    //     const className = pkg.getPackageName(polyExp.idClass as number)
 
-            if (node.iCollisionBound >= 0) {
-                library.bspColliders.push(nodeInfo.collision.bounds);
-            }
+    //     console.assert(className === "Polys");
 
-            // if (node.iCollisionBound >= 0 && node.iLeaf[0] === -1 && node.iLeaf[1] === -1 && nodeIndex === 1211) {
-            //     const hulls = this.leafHulls.getTypedArray() as Int32Array;
-            //     const hullIndexList = hulls.slice(node.iCollisionBound);
+    //     // if (polysId !== 0) this.promisesLoading.push(new Promise<void>(async resolve => {
+    //     //     this.polys = await pkg.fetchObject<UPolys>(polysId);
+    //     //     resolve();
+    //     // }));
 
-            //     let hullPlanesCount = 0;
-            //     while (hullIndexList[hullPlanesCount] >= 0)
-            //         hullIndexList[hullPlanesCount++];
+    //     this.readHead = pkg.tell();
 
-            //     // reinterpret as floats
-            //     const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
-            //     const hullFlags = hullIndexList.slice(0, hullPlanesCount);
+    //     this.bounds.load(pkg);
+    //     this.leafHulls.load(pkg);
+    //     this.leaves.load(pkg);
 
-            //     nodeInfo.collision = {
-            //         flags: [...hullFlags],
-            //         bounds: {
-            //             isValid: true,
-            //             min: [initialVector[0], initialVector[2], initialVector[1]],
-            //             max: [initialVector[3], initialVector[5], initialVector[4]]
-            //         }
-            //     };
-            // }
+    //     this.unkArr0.load(pkg);
 
-            // continue;
+    //     this.readHead = pkg.tell();
 
-            // debugger;
+    //     this.unkInt0 = pkg.read(int32).value as number;
+    //     this.unkInt1 = pkg.read(int32).value as number;
 
-            const zone = surf.actor.loadSelf().getZone();
-            const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
-            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
-            const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
+    //     this.readHead = pkg.tell();
 
-            if (!objectMap.has(priority)) objectMap.set(priority, new Map());
+    //     this.bspSection.load(pkg);
 
-            const gPriority = objectMap.get(priority);
+    //     this.readHead = pkg.tell();
 
-            if (!gPriority.has(zone)) gPriority.set(zone, { totalVertices: 0, objects: new Map() });
+    //     this.lightmaps.load(pkg);
+    //     this.multiLightmaps.load(pkg);
 
-            const gZone = gPriority.get(zone);
+    //     this.readHead = pkg.tell();
 
-            if (!gZone.objects.has(surf.material)) gZone.objects.set(surf.material, new Map());
+    //     pkg.seek(this.readHead, "set");
 
-            const gSurf = gZone.objects.get(surf.material);
+    //     // if (this.lightmaps.length > 0)
+    //     //     debugger;
 
-            if (!gSurf.has(lightmap)) gSurf.set(lightmap, { numVertices: 0, nodes: [] });
+    //     return this;
+    // }
 
-            const gData = gSurf.get(lightmap);
-            const vcount = node.numVertices;
+    // public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
 
-            const light: LightmapInfo = !lightmap ? null : {
-                uuid: lightmap.uuid,
-                resolution: { width: lightmap.width, height: lightmap.height },
-                offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
-                size: { width: lightmapIndex.sizeX, height: lightmapIndex.sizeY },
-                matrix: lightmapIndex.uvMatrix
-            };
+    //     this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
 
-            node.iVertexIndex = gData.numVertices;
-            gData.numVertices += vcount;
-            gZone.totalVertices += vcount;
+    //     this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
+    //     this.zones.forEach((zone: UZoneProperties, index: number) => {
+    //         const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 
-            gData.nodes.push({ node, surf, light });
-        }
+    //         library.bspZones.push(bspZone);
 
-        const createZoneInfo = (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
-            const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
-            const positions = new Float32Array(totalVertices * 3);
-            const normals = new Float32Array(totalVertices * 3);
-            const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
+    //         library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
+    //     });
 
-            const materials: string[] = [];
-            const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
-            const indices: number[] = [], groups: ArrGeometryGroup[] = [];
+    //     const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
-            let dstVertices = 0;
-            let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
+    //     for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
+    //         const node: FBSPNode = this.bspNodes[nodeIndex];
+    //         const surf: FBSPSurf = this.bspSurfs[node.iSurf];
+    //         const nodeInfo = node.getBSPDecodeInfo();
 
-            if (totalVertices > 0) {
-                for (let material of objectMap.keys()) {
-                    const gSurf = objectMap.get(material);
+    //         library.bspNodes.push(nodeInfo);
 
-                    for (let staticLightmap of gSurf.keys()) {
-                        const materialUuid = material.loadSelf().getDecodeInfo(library);
+    //         if (node.iCollisionBound >= 0) {
+    //             const hulls = this.leafHulls.getTypedArray() as Int32Array;
+    //             const hullIndexList = hulls.slice(node.iCollisionBound);
 
-                        if (staticLightmap) {
-                            const lightmappedMaterialUuid = generateUUID();
+    //             let hullPlanesCount = 0;
+    //             while (hullIndexList[hullPlanesCount] >= 0)
+    //                 hullIndexList[hullPlanesCount++];
 
-                            library.materials[lightmappedMaterialUuid] = {
-                                materialType: "lightmapped",
-                                material: materialUuid,
-                                lightmap: staticLightmap?.uuid || null,
-                            } as IBaseMaterialDecodeInfo;
+    //             // reinterpret as floats
+    //             const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
+    //             const hullFlags = hullIndexList.slice(0, hullPlanesCount);
 
-                            materials.push(lightmappedMaterialUuid);
-                        } else {
-                            materials.push(materialUuid);
-                        }
+    //             nodeInfo.collision = {
+    //                 flags: [...hullFlags],
+    //                 bounds: {
+    //                     isValid: true,
+    //                     min: [initialVector[0], initialVector[2], initialVector[1]],
+    //                     max: [initialVector[3], initialVector[5], initialVector[4]]
+    //                 }
+    //             };
+    //         }
 
-                        const { numVertices, nodes } = gSurf.get(staticLightmap);
-                        const startGroupOffset = groupOffset;
+    //         if (surf.flags & PolyFlags_T.PF_Invisible) continue;
 
-                        for (let { node, surf, light } of nodes) {
-                            const textureBase: FVector = this.points.getElem(surf.pBase);
-                            const textureX: FVector = this.vectors.getElem(surf.vTextureU);
-                            const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+    //         const vert: FVert = this.vertices.getElem(node.iVertPool);
+    //         const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
 
-                            // // Use the texture coordinates and normal to create an orthonormal tangent basis.
-                            // const tangentX: FVector = textureX;
-                            // const tangentY: FVector = textureY;
-                            const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
-                            const fcount = node.numVertices - 2;
-                            const findex = vertexOffset + node.iVertexIndex;
+    //         if (testY <= -16000 || testY >= 16000) continue;
+    //         if (testX <= -327680.00 || testX >= 327680.00) continue;
+    //         if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
-                            // createOrthonormalBasis(tangentX, tangentY, tangentZ);
+    //         if (node.iCollisionBound >= 0) {
+    //             library.bspColliders.push(nodeInfo.collision.bounds);
+    //         }
 
-                            for (let i = 0; i < fcount; i++) {
-                                indices.push(findex, findex + i + 2, findex + i + 1)
-                            }
+    //         // if (node.iCollisionBound >= 0 && node.iLeaf[0] === -1 && node.iLeaf[1] === -1 && nodeIndex === 1211) {
+    //         //     const hulls = this.leafHulls.getTypedArray() as Int32Array;
+    //         //     const hullIndexList = hulls.slice(node.iCollisionBound);
 
-                            groupOffset = groupOffset + fcount;
+    //         //     let hullPlanesCount = 0;
+    //         //     while (hullIndexList[hullPlanesCount] >= 0)
+    //         //         hullIndexList[hullPlanesCount++];
 
-                            if (surf.flags & PolyFlags_T.PF_TwoSided) {
-                                for (let i = 0; i < fcount; i++) {
-                                    indices.push(findex, findex + i + 1, findex + i + 2)
-                                }
+    //         //     // reinterpret as floats
+    //         //     const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
+    //         //     const hullFlags = hullIndexList.slice(0, hullPlanesCount);
 
-                                groupOffset = groupOffset + fcount;
-                            }
+    //         //     nodeInfo.collision = {
+    //         //         flags: [...hullFlags],
+    //         //         bounds: {
+    //         //             isValid: true,
+    //         //             min: [initialVector[0], initialVector[2], initialVector[1]],
+    //         //             max: [initialVector[3], initialVector[5], initialVector[4]]
+    //         //         }
+    //         //     };
+    //         // }
+
+    //         // continue;
+
+    //         // debugger;
+
+    //         const zone = surf.actor.loadSelf().getZone();
+    //         const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
+    //         const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
+    //         const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
+
+    //         if (!objectMap.has(priority)) objectMap.set(priority, new Map());
+
+    //         const gPriority = objectMap.get(priority);
+
+    //         if (!gPriority.has(zone)) gPriority.set(zone, { totalVertices: 0, objects: new Map() });
+
+    //         const gZone = gPriority.get(zone);
+
+    //         if (!gZone.objects.has(surf.material)) gZone.objects.set(surf.material, new Map());
+
+    //         const gSurf = gZone.objects.get(surf.material);
+
+    //         if (!gSurf.has(lightmap)) gSurf.set(lightmap, { numVertices: 0, nodes: [] });
+
+    //         const gData = gSurf.get(lightmap);
+    //         const vcount = node.numVertices;
+
+    //         const light: LightmapInfo = !lightmap ? null : {
+    //             uuid: lightmap.uuid,
+    //             resolution: { width: lightmap.width, height: lightmap.height },
+    //             offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
+    //             size: { width: lightmapIndex.sizeX, height: lightmapIndex.sizeY },
+    //             matrix: lightmapIndex.uvMatrix
+    //         };
+
+    //         node.iVertexIndex = gData.numVertices;
+    //         gData.numVertices += vcount;
+    //         gZone.totalVertices += vcount;
+
+    //         gData.nodes.push({ node, surf, light });
+    //     }
+
+    //     const createZoneInfo = (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
+    //         const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
+    //         const positions = new Float32Array(totalVertices * 3);
+    //         const normals = new Float32Array(totalVertices * 3);
+    //         const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
+
+    //         const materials: string[] = [];
+    //         const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
+    //         const indices: number[] = [], groups: ArrGeometryGroup[] = [];
+
+    //         let dstVertices = 0;
+    //         let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
+
+    //         if (totalVertices > 0) {
+    //             for (let material of objectMap.keys()) {
+    //                 const gSurf = objectMap.get(material);
+
+    //                 for (let staticLightmap of gSurf.keys()) {
+    //                     const materialUuid = material.loadSelf().getDecodeInfo(library);
+
+    //                     if (staticLightmap) {
+    //                         const lightmappedMaterialUuid = generateUUID();
+
+    //                         library.materials[lightmappedMaterialUuid] = {
+    //                             materialType: "lightmapped",
+    //                             material: materialUuid,
+    //                             lightmap: staticLightmap?.uuid || null,
+    //                         } as IBaseMaterialDecodeInfo;
+
+    //                         materials.push(lightmappedMaterialUuid);
+    //                     } else {
+    //                         materials.push(materialUuid);
+    //                     }
+
+    //                     const { numVertices, nodes } = gSurf.get(staticLightmap);
+    //                     const startGroupOffset = groupOffset;
+
+    //                     for (let { node, surf, light } of nodes) {
+    //                         const textureBase: FVector = this.points.getElem(surf.pBase);
+    //                         const textureX: FVector = this.vectors.getElem(surf.vTextureU);
+    //                         const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+
+    //                         // // Use the texture coordinates and normal to create an orthonormal tangent basis.
+    //                         // const tangentX: FVector = textureX;
+    //                         // const tangentY: FVector = textureY;
+    //                         const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
+    //                         const fcount = node.numVertices - 2;
+    //                         const findex = vertexOffset + node.iVertexIndex;
+
+    //                         // createOrthonormalBasis(tangentX, tangentY, tangentZ);
+
+    //                         for (let i = 0; i < fcount; i++) {
+    //                             indices.push(findex, findex + i + 2, findex + i + 1)
+    //                         }
+
+    //                         groupOffset = groupOffset + fcount;
+
+    //                         if (surf.flags & PolyFlags_T.PF_TwoSided) {
+    //                             for (let i = 0; i < fcount; i++) {
+    //                                 indices.push(findex, findex + i + 1, findex + i + 2)
+    //                             }
+
+    //                             groupOffset = groupOffset + fcount;
+    //                         }
 
  
-                            for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
-                                const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-                                const position: FVector = this.points.getElem(vert.pVertex);
+    //                         for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
+    //                             const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
+    //                             const position: FVector = this.points.getElem(vert.pVertex);
 
-                                const texB = position.sub(textureBase);
-                                const texU = texB.dot(textureX) / TEXEL_SCALE;
-                                const texV = texB.dot(textureY) / TEXEL_SCALE;
+    //                             const texB = position.sub(textureBase);
+    //                             const texU = texB.dot(textureX) / TEXEL_SCALE;
+    //                             const texV = texB.dot(textureY) / TEXEL_SCALE;
 
-                                const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
+    //                             const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
 
-                                positions[vOffset + 0] = position.x;
-                                positions[vOffset + 1] = position.z;
-                                positions[vOffset + 2] = position.y;
+    //                             positions[vOffset + 0] = position.x;
+    //                             positions[vOffset + 1] = position.z;
+    //                             positions[vOffset + 2] = position.y;
 
-                                zoneInfo.bounds.isValid = true;
-                                [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                                    ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
-                                        for (let i = 0; i < 3; i++)
-                                            arr[i] = fn(arr[i], positions[vOffset + i]);
-                                    }
-                                );
+    //                             zoneInfo.bounds.isValid = true;
+    //                             [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+    //                                 ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+    //                                     for (let i = 0; i < 3; i++)
+    //                                         arr[i] = fn(arr[i], positions[vOffset + i]);
+    //                                 }
+    //                             );
 
-                                normals[vOffset + 0] = tangentZ.x;
-                                normals[vOffset + 1] = tangentZ.z;
-                                normals[vOffset + 2] = tangentZ.y;
+    //                             normals[vOffset + 0] = tangentZ.x;
+    //                             normals[vOffset + 1] = tangentZ.z;
+    //                             normals[vOffset + 2] = tangentZ.y;
 
-                                uvs[uOffset + 0] = texU;
-                                uvs[uOffset + 1] = texV;
+    //                             uvs[uOffset + 0] = texU;
+    //                             uvs[uOffset + 1] = texV;
 
-                                if (light) {
-                                    const posLightmapped = position.applyMatrix4(light.matrix);
-                                    const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
+    //                             if (light) {
+    //                                 const posLightmapped = position.applyMatrix4(light.matrix);
+    //                                 const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
 
-                                    const { width, height } = light.resolution;
+    //                                 const { width, height } = light.resolution;
 
-                                    const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
-                                    const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
+    //                                 const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
+    //                                 const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
 
-                                    uvs2[uOffset + 0] = lmU;
-                                    uvs2[uOffset + 1] = lmV;
-                                }
+    //                                 uvs2[uOffset + 0] = lmU;
+    //                                 uvs2[uOffset + 1] = lmV;
+    //                             }
 
-                                // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
-                                // tangentX.toArray(tangentsX, dstVertices * 3);
-                                // tangentZ.toArray(tangentsZ, dstVertices * 4);
+    //                             // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
+    //                             // tangentX.toArray(tangentsX, dstVertices * 3);
+    //                             // tangentZ.toArray(tangentsZ, dstVertices * 4);
 
-                                // // store the sign of the determinant in TangentZ.W
-                                // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
+    //                             // // store the sign of the determinant in TangentZ.W
+    //                             // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
 
-                                dstVertices++;
-                            }
-                        }
+    //                             dstVertices++;
+    //                         }
+    //                     }
 
 
-                        vertexOffset = vertexOffset + numVertices;
+    //                     vertexOffset = vertexOffset + numVertices;
 
-                        groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
-                    }
-                }
-            }
+    //                     groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
+    //                 }
+    //             }
+    //         }
 
-            const uuid = generateUUID();
-            const materialUuid = `${priority}/${zone.uuid}/${this.uuid}`;
-            const geometryUuid = `${priority}/${zone.uuid}/${this.uuid}`;
+    //         const uuid = generateUUID();
+    //         const materialUuid = `${priority}/${zone.uuid}/${this.uuid}`;
+    //         const geometryUuid = `${priority}/${zone.uuid}/${this.uuid}`;
 
-            library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-            library.geometries[geometryUuid] = {
-                groups,
-                indices: new TypedIndicesArray(indices),
-                attributes: {
-                    normals,
-                    positions,
-                    uvs: [uvs, uvs2]
-                }
-            };
+    //         library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+    //         library.geometries[geometryUuid] = {
+    //             groups,
+    //             indices: new TypedIndicesArray(indices),
+    //             attributes: {
+    //                 normals,
+    //                 positions,
+    //                 uvs: [uvs, uvs2]
+    //             }
+    //         };
 
-            // debugger;
+    //         // debugger;
 
-            zoneInfo.children.push({
-                uuid,
-                type: "Model",
-                name: `Sub_${priority}_${this.objectName}_${zone.objectName}`,
-                geometry: geometryUuid,
-                materials: materialUuid,
-            } as IStaticMeshObjectDecodeInfo);
+    //         zoneInfo.children.push({
+    //             uuid,
+    //             type: "Model",
+    //             name: `Sub_${priority}_${this.objectName}_${zone.objectName}`,
+    //             geometry: geometryUuid,
+    //             materials: materialUuid,
+    //         } as IStaticMeshObjectDecodeInfo);
 
-            return uuid;
-        };
+    //         return uuid;
+    //     };
 
-        const createPriorityGroup = ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): string[] => {
-            return [...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects));
-        };
+    //     const createPriorityGroup = ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): string[] => {
+    //         return [...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects));
+    //     };
 
-        return [...objectMap.entries()].map(createPriorityGroup);
-    }
+    //     return [...objectMap.entries()].map(createPriorityGroup);
+    // }
 }
 
 export default UModel;

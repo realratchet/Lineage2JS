@@ -10,10 +10,9 @@ import { UExport, UObject } from "@l2js/core";
 // import FRotator from "./un-rotator";
 import { generateUUID } from "three/src/math/MathUtils";
 
-
 Object.assign(UObject.prototype, {
     uuid: generateUUID(),
-    getDecodeInfo() { debugger; throw new Error(`'${this.constructor.name}' must implemented 'getDecodeInfo' method!`) }
+    getDecodeInfo() { debugger; throw new Error(`'${this.constructor.name}' must implemented 'getDecodeInfo' method!`) },
 
     // readStruct(pkg: C.APackage, tag: C.PropertyTag): any {
     //     if (!tag)

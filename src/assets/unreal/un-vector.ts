@@ -1,9 +1,17 @@
 import { BufferValue, UObject } from "@l2js/core";
 
 class FVector extends UObject {
-    // public x: number = 0;
-    // public y: number = 0;
-    // public z: number = 0;
+    declare public x: number;
+    declare public y: number;
+    declare public z: number;
+
+    protected getPropertyMap() {
+        return {
+            "X": "x",
+            "Y": "y",
+            "Z": "z"
+        };
+    }
 
     // public load(pkg: C.APackage): this {
     //     const f = new BufferValue(BufferValue.float);
@@ -270,7 +278,7 @@ class FVector extends UObject {
     // public nequals(other: FVector) { return this.x !== other.x || this.y !== other.y || this.z !== other.z; }
     // public equals(other: FVector) { return !this.nequals(other); }
 
-    // public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})` }
+    public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})` }
 }
 
 export default FVector;
