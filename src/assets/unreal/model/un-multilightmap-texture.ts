@@ -55,7 +55,7 @@ class FStaticLightmapTexture extends UObject {
             case ETexturePixelFormat.TPF_DXT3:
             case ETexturePixelFormat.TPF_DXT5:
                 textureType = "dds";
-                decodedBuffer = await decompressDDS(format, mipCount, width, height, data);
+                decodedBuffer = decompressDDS(format, mipCount, width, height, data);
                 break;
             default: throw new Error(`Unsupported texture format: ${format}`);
         }

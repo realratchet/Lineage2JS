@@ -62,6 +62,8 @@ class FLightmapIndex implements C.IConstructable {
 
         this.uvMatrix.load(pkg);
 
+        debugger;
+
         const unkArray = pkg.read(BufferValue.allocBytes(9 * 4));
 
         this.unkArrAsFloats = new Array(9);
