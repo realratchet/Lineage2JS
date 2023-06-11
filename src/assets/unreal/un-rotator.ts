@@ -1,4 +1,4 @@
-import { BufferValue } from "@l2js/core";
+import { BufferValue, UObject } from "@l2js/core";
 import { RAD2DEG } from "three/src/math/MathUtils";
 
 const _PI = Math.PI;
@@ -31,74 +31,76 @@ for (let i = 0; i < GMath.NUM_SQRTS; i++)
     SqrtFLOAT[i] = Math.sqrt(i / 16384);
 
 
-class FRotator implements C.IConstructable {
-    public pitch: number;
-    public yaw: number;
-    public roll: number;
+class FRotator extends UObject {
+    // public pitch: number;
+    // public yaw: number;
+    // public roll: number;
 
-    public constructor(pitch = 0, yaw = 0, roll = 0) {
-        this.pitch = pitch;
-        this.yaw = yaw;
-        this.roll = roll;
-    }
+    // public constructor(pitch = 0, yaw = 0, roll = 0) {
+    //     super();
 
-    public load(pkg: C.APackage): this {
-        const int32 = new BufferValue(BufferValue.int32);
+    //     this.pitch = pitch;
+    //     this.yaw = yaw;
+    //     this.roll = roll;
+    // }
 
-        for (let key of ["pitch", "yaw", "roll"])
-            this[key as ("pitch" | "yaw" | "roll")] = pkg.read(int32).value as number;
+    // public load(pkg: C.APackage): this {
+    //     const int32 = new BufferValue(BufferValue.int32);
 
-        return this;
-    }
+    //     for (let key of ["pitch", "yaw", "roll"])
+    //         this[key as ("pitch" | "yaw" | "roll")] = pkg.read(int32).value as number;
 
-    public getEulerElements(): GD.EulerArr {
-        const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
-        const xAxis = (_TWO_PI - this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
-        const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+    //     return this;
+    // }
 
-        // const yAxis = Math.asin(GMath.sin(TrigFLOAT[this.yaw]));
-        // const xAxis = Math.asin(GMath.sin(TrigFLOAT[this.roll]));
-        // const zAxis = Math.asin(GMath.sin(TrigFLOAT[this.pitch]));
+    // public getEulerElements(): GD.EulerArr {
+    //     const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+    //     const xAxis = (_TWO_PI - this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+    //     const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
 
-        return [xAxis, yAxis, zAxis, "XYZ"];
-    }
+    //     // const yAxis = Math.asin(GMath.sin(TrigFLOAT[this.yaw]));
+    //     // const xAxis = Math.asin(GMath.sin(TrigFLOAT[this.roll]));
+    //     // const zAxis = Math.asin(GMath.sin(TrigFLOAT[this.pitch]));
 
-    public toString() {
-        const [x, z, y, axis] = this.getEulerElements();
+    //     return [xAxis, yAxis, zAxis, "XYZ"];
+    // }
+
+    // public toString() {
+    //     const [x, z, y, axis] = this.getEulerElements();
 
 
-        return `Rotator=(x=${(x * RAD2DEG).toFixed(2)}, y=${(y * RAD2DEG).toFixed(2)}, z=${(z * RAD2DEG).toFixed(2)}, axis=${axis})`;
-    }
+    //     return `Rotator=(x=${(x * RAD2DEG).toFixed(2)}, y=${(y * RAD2DEG).toFixed(2)}, z=${(z * RAD2DEG).toFixed(2)}, axis=${axis})`;
+    // }
 
-    public rotationMatrix() {
-        throw new Error("Not implemented");
-        // let SR = GMath.SinTab(this.roll),
-        //     SP = GMath.SinTab(this.pitch),
-        //     SY = GMath.SinTab(this.yaw),
-        //     CR = GMath.CosTab(this.roll),
-        //     CP = GMath.CosTab(this.pitch),
-        //     CY = GMath.CosTab(this.yaw);
+    // public rotationMatrix() {
+    //     throw new Error("Not implemented");
+    //     // let SR = GMath.SinTab(this.roll),
+    //     //     SP = GMath.SinTab(this.pitch),
+    //     //     SY = GMath.SinTab(this.yaw),
+    //     //     CR = GMath.CosTab(this.roll),
+    //     //     CP = GMath.CosTab(this.pitch),
+    //     //     CY = GMath.CosTab(this.yaw);
 
-        // M[0][0] = CP * CY;
-        // M[0][1] = CP * SY;
-        // M[0][2] = SP;
-        // M[0][3] = 0;
+    //     // M[0][0] = CP * CY;
+    //     // M[0][1] = CP * SY;
+    //     // M[0][2] = SP;
+    //     // M[0][3] = 0;
 
-        // M[1][0] = SR * SP * CY - CR * SY;
-        // M[1][1] = SR * SP * SY + CR * CY;
-        // M[1][2] = - SR * CP;
-        // M[1][3] = 0;
+    //     // M[1][0] = SR * SP * CY - CR * SY;
+    //     // M[1][1] = SR * SP * SY + CR * CY;
+    //     // M[1][2] = - SR * CP;
+    //     // M[1][3] = 0;
 
-        // M[2][0] = -(CR * SP * CY + SR * SY);
-        // M[2][1] = CY * SR - CR * SP * SY;
-        // M[2][2] = CR * CP;
-        // M[2][3] = 0;
+    //     // M[2][0] = -(CR * SP * CY + SR * SY);
+    //     // M[2][1] = CY * SR - CR * SP * SY;
+    //     // M[2][2] = CR * CP;
+    //     // M[2][3] = 0;
 
-        // M[3][0] = 0;
-        // M[3][1] = 0;
-        // M[3][2] = 0;
-        // M[3][3] = 1;
-    }
+    //     // M[3][0] = 0;
+    //     // M[3][1] = 0;
+    //     // M[3][2] = 0;
+    //     // M[3][3] = 1;
+    // }
 }
 
 export default FRotator;

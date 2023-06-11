@@ -19,6 +19,16 @@ declare global {
                 export type FVector = import("./src/assets/unreal/un-vector").FVector;
                 export type FRotator = import("./src/assets/unreal/un-rotator").FRotator;
                 // export type UMatrix = import("./src/assets/unreal/un-matrix").UMatrix;
+
+                export type NativeClientTypes_T =
+                    | C.NativeTypes_T
+                    | "NMovableSunLight"
+                    | "NSun"
+                    | "NMoon"
+                    | "L2FogInfo"
+                    | "L2SeamlessInfo"
+                    | "SceneManager"
+                    | "MovableStaticMeshActor";
             }
 
             namespace Decoding {

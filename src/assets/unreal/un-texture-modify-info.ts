@@ -20,25 +20,25 @@ enum ColorOperation_T {
 };
 
 class UTextureModifyInfo extends UObject {
-    protected useModify: boolean;
-    protected doubleSide: boolean;
-    protected alphaBlend: boolean;
-    protected dummy: boolean;
-    protected color: FColor;
-    protected alphaOp: AlphaOperation_T;
-    protected colorOp: ColorOperation_T;
+    // protected useModify: boolean;
+    // protected doubleSide: boolean;
+    // protected alphaBlend: boolean;
+    // protected dummy: boolean;
+    // protected color: FColor;
+    // protected alphaOp: AlphaOperation_T;
+    // protected colorOp: ColorOperation_T;
 
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "bUseModify": "useModify",
-            "bTwoSide": "doubleSide",
-            "bAlphaBlend": "alphaBlend",
-            "bDummy": "dummy",
-            "Color": "color",
-            "AlphaOp": "alphaOp",
-            "ColorOp": "colorOp"
-        });
-    }
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         "bUseModify": "useModify",
+    //         "bTwoSide": "doubleSide",
+    //         "bAlphaBlend": "alphaBlend",
+    //         "bDummy": "dummy",
+    //         "Color": "color",
+    //         "AlphaOp": "alphaOp",
+    //         "ColorOp": "colorOp"
+    //     });
+    // }
 }
 
 export default UTextureModifyInfo;

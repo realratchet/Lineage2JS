@@ -10,6 +10,25 @@ import ULevelInfo from "./un-level-info";
 import UZoneInfo from "./un-zone-info";
 import UTerrainInfo from "./un-terrain-info";
 import USkyZoneInfo from "./un-sky-zone-info";
+import UNSun from "./un-nsun";
+import UNMoon from "./un-nmoon";
+import UNMovableSunLight from "./un-movable-sunlight";
+import ULight from "./un-light";
+import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UPlayerStart from "./un-player-start";
+import UPhysicsVolume from "./un-physics-volume";
+import UBlockingVolume from "./un-blocking-volume";
+import UMusicVolume from "./un-music-volume";
+import UConvexVolume from "./un-convex-volume";
+import UEmitter from "./un-emitter";
+import UMeshEmitter from "./emitters/un-mesh-emitter";
+import USpriteEmitter from "./emitters/un-sprite-emitter";
+import FRotator from "./un-rotator";
+import UCamera from "./un-camera";
+import UPointRegion from "./un-point-region";
+import UTextureModifyInfo from "./un-texture-modify-info";
+import UTexture from "./un-texture";
+import UPlatte from "./un-palette";
 
 class UPackage extends APackage {
     protected async readArrayBuffer() {
@@ -33,6 +52,9 @@ class UNativePackage extends ANativePackage {
             case "Scale": Constructor = FScale; break;
             case "Vector": Constructor = FVector; break;
             case "Color": Constructor = FColor; break;
+            case "Rotator": Constructor = FRotator; break;
+            case "PointRegion": Constructor = UPointRegion; break;
+            case "TextureModifyinfo": Constructor = UTextureModifyInfo; break;
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -41,7 +63,7 @@ class UNativePackage extends ANativePackage {
         return Constructor;
     }
 
-    protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: C.NativeTypes_T): new () => T {
+    protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: GA.NativeClientTypes_T): new () => T {
         let Constructor: any;
 
         switch (constructorName) {
@@ -54,6 +76,24 @@ class UNativePackage extends ANativePackage {
             case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
             case "TerrainInfo": Constructor = UTerrainInfo; break;
 
+
+
+            case "NSun": Constructor = UNSun; break;
+            case "NMoon": Constructor = UNMoon; break;
+
+            case "NMovableSunLight": Constructor = UNMovableSunLight; break;
+            case "Light": Constructor = ULight; break;
+
+            case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+
+            case "PlayerStart": Constructor = UPlayerStart; break;
+            case "Camera": Constructor = UCamera; break;
+
+            case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "BlockingVolume": Constructor = UBlockingVolume; break;
+            case "MusicVolume": Constructor = UMusicVolume; break;
+            case "ConvexVolume": Constructor = UConvexVolume; break;
+
             //         case "Font": Constructor = UFont; break;
             //         case "StaticMesh": Constructor = UStaticMesh; break;
             //         case "TerrainSector": Constructor = UTerrainSector; break;
@@ -61,7 +101,6 @@ class UNativePackage extends ANativePackage {
             //         case "MeshAnimation": Constructor = UMeshAnimation; break;
             //         case "Level": Constructor = ULevel; break;
             //         case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
-            //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
             //         case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
             //         case "Viewport": Constructor = UViewport; break;
             //         case "Client": Constructor = UClient; break;
@@ -70,21 +109,17 @@ class UNativePackage extends ANativePackage {
             //         case "MeshInstance": Constructor = UMeshInstance; break;
             //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
-            //         case "Texture": Constructor = UTexture; break;
-            //         case "Palette": Constructor = UPlatte; break;
+            case "Texture": Constructor = UTexture; break;
+            case "Palette": Constructor = UPlatte; break;
 
-            //         case "Emitter": Constructor = UEmitter; break;
-            //         case "MeshEmitter": Constructor = UMeshEmitter; break;
-            //         case "SpriteEmitter": Constructor = USpriteEmitter; break;
+            case "Emitter": Constructor = UEmitter; break;
+            case "MeshEmitter": Constructor = UMeshEmitter; break;
+            case "SpriteEmitter": Constructor = USpriteEmitter; break;
 
 
-
-            //         case "NSun": Constructor = UNSun; break;
-            //         case "NMoon": Constructor = UNMoon; break;
-            //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
 
             //         case "LevelSummary": Constructor = ULevelSummary; break;
-            //         case "PlayerStart": Constructor = UPlayerStart; break;
+
 
             //         case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
             //         case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
@@ -97,17 +132,12 @@ class UNativePackage extends ANativePackage {
             //         case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
             //         case "Cubemap": Constructor = UCubemap; break;
 
-            //         case "Camera": Constructor = UCamera; break;
 
-            //         case "PhysicsVolume": Constructor = UPhysicsVolume; break;
-            //         case "BlockingVolume": Constructor = UBlockingVolume; break;
-            //         case "MusicVolume": Constructor = UMusicVolume; break;
-            //         case "ConvexVolume": Constructor = UConvexVolume; break;
+
 
             //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
             //         case "Sound": Constructor = USound; break;
 
-            //         case "Light": Constructor = ULight; break;
 
             //         case "Mover": Constructor = UMover; break;
 
