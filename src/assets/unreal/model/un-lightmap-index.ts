@@ -49,7 +49,6 @@ class FLightmapIndex implements C.IConstructable {
 
         this.uvMatrix = pkg.makeCoreStruct("Matrix");
 
-
         this.iLightmapTexture = pkg.read(compat).value;
         this.surfaceIndex = pkg.read(compat).value;
         this.unkIndex0 = pkg.read(compat).value;
@@ -61,8 +60,6 @@ class FLightmapIndex implements C.IConstructable {
         // 18430.568359375 110065 -9380 27.42898941040039 0 0 0 64 0
 
         this.uvMatrix.load(pkg);
-
-        debugger;
 
         const unkArray = pkg.read(BufferValue.allocBytes(9 * 4));
 

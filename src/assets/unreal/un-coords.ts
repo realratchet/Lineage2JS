@@ -1,13 +1,25 @@
-import FVector from "./un-vector";
-import FConstructable from "./un-constructable";
+import { UObject } from "@l2js/core";
 
-class FCoords extends FConstructable {
-    public origin = new FVector();
-    public xAxis = new FVector();
-    public yAxis = new FVector();
-    public zAxis = new FVector();
+class FCoords extends UObject {
+    declare ["constructor"]: typeof FCoords;
 
-    public load(pkg: UPackage) {
+    declare public origin: GA.FVector;
+    declare public xAxis: GA.FVector;
+    declare public yAxis: GA.FVector;
+    declare public zAxis: GA.FVector;
+
+    protected getPropertyMap() {
+        debugger;
+        throw new Error("not implemented yet")
+        // return Object.assign({}, super.getPropertyMap(), {
+        //     "X": "x",
+        //     "Y": "y",
+        //     "Z": "z",
+        //     "W": "w",
+        // });
+    }
+
+    public load(pkg: GA.UPackage) {
         this.origin.load(pkg);
 
         this.xAxis.load(pkg);
@@ -18,7 +30,8 @@ class FCoords extends FConstructable {
     }
 
     multiply(other: FCoords): FCoords {
-        const _this = new FCoords();
+        const cls = this.constructor;
+        const _this = new cls();
 
         let { x, y, z } = multiplyOrigin(other, this.origin);
         _this.origin.x = x;
@@ -43,7 +56,7 @@ class FCoords extends FConstructable {
         return _this;
     }
 
-    static fromRotator({ pitch, yaw, roll }: FRotator) {
+    static fromRotator({ pitch, yaw, roll }: GA.FRotator) {
         const tmpCoords = new FCoords();
         let _this = new FCoords();
 
@@ -106,7 +119,7 @@ class FCoords extends FConstructable {
 export default FCoords;
 export { FCoords };
 
-function multiplyAxis(coords: FCoords, inVector: FVector) {
+function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
     const outVector = new FVector();
 
     const fVar1 = inVector.x;
@@ -126,7 +139,7 @@ function multiplyAxis(coords: FCoords, inVector: FVector) {
     return outVector;
 }
 
-function multiplyOrigin(coord: FCoords, inVector: FVector) {
+function multiplyOrigin(coord: FCoords, inVector: GA.FVector) {
     const outVector = new FVector();
 
     const fVar7 = inVector.x - (coord.origin).x;

@@ -4,7 +4,7 @@ import decompressDDS from "../../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
 import FArray, { FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 
-class FStaticLightmapTexture extends UObject {
+class FStaticLightmapTexture implements C.IConstructable {
     public data = new FPrimitiveArrayLazy(BufferValue.uint8);
     public dataHalfRes = new FPrimitiveArrayLazy(BufferValue.uint8);
 

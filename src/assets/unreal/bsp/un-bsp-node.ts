@@ -1,4 +1,3 @@
-import UPackage from "../un-package";
 import { BufferValue } from "@l2js/core";
 import { FPlane } from "../un-plane";
 import { flagBitsToDict } from "@l2js/core/src/utils/flags";

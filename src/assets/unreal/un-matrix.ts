@@ -1,10 +1,10 @@
 import UObject from "@l2js/core";
 
 class FMatrix extends UObject {
-    // public planeX: UPlane;
-    // public planeY: UPlane;
-    // public planeZ: UPlane;
-    // public planeW: UPlane;
+    declare public planeX: GA.FPlane;
+    declare public planeY: GA.FPlane;
+    declare public planeZ: GA.FPlane;
+    declare public planeW: GA.FPlane;
 
     // public load(pkg: APackage): this;
     // public load(pkg: APackage, info: UExport<UObject>): this;
@@ -46,6 +46,15 @@ class FMatrix extends UObject {
     //         this.planeX.w, this.planeY.w, this.planeZ.w, this.planeW.w
     //     );
     // }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "XPlane": "planeX",
+            "YPlane": "planeY",
+            "ZPlane": "planeZ",
+            "WPlane": "planeW",
+        });
+    }
 }
 
 export default FMatrix;
