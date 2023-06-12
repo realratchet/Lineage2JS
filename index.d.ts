@@ -35,6 +35,7 @@ declare global {
 
                 export type UModel = import("@unreal/model/un-model").UModel;
                 export type FVector = import("@unreal/un-vector").FVector;
+                export type FCoords = import("@unreal/un-coords").FCoords;
                 export type FRotator = import("@unreal/un-rotator").FRotator;
                 export type FPlane = import("@unreal/un-plane").FPlane;
                 export type FBox = import("@unreal/un-box").FBox;
@@ -42,6 +43,8 @@ declare global {
 
                 export type UPlatte = import("@unreal/un-palette").UPlatte;
                 export type UTexture = import("@unreal/un-texture").UTexture;
+
+                export type FStaticLightmapTexture = import("@unreal/model/un-multilightmap-texture").FStaticLightmapTexture;
 
                 export type NativeClientTypes_T =
                     | C.NativeTypes_T

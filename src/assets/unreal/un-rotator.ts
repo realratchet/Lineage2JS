@@ -32,9 +32,9 @@ for (let i = 0; i < GMath.NUM_SQRTS; i++)
 
 
 class FRotator extends UObject {
-    // public pitch: number;
-    // public yaw: number;
-    // public roll: number;
+    declare public pitch: number;
+    declare public yaw: number;
+    declare public roll: number;
 
     // public constructor(pitch = 0, yaw = 0, roll = 0) {
     //     super();
