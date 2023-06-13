@@ -137,6 +137,8 @@ class UModel extends UPrimitive {
         // if (this.lightmaps.length > 0)
         //     debugger;
 
+        // debugger;
+
         return this;
     }
 
@@ -226,7 +228,7 @@ class UModel extends UPrimitive {
             const zone = surf.actor.loadSelf().getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as GA.FStaticLightmapTexture : null;
-            const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
+            const priority: PriorityGroups_T = /*false &&*/ surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
             if (!objectMap.has(priority)) objectMap.set(priority, new Map());
 

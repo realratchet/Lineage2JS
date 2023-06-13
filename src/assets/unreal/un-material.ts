@@ -20,7 +20,7 @@ abstract class UBaseMaterial extends UObject {
     declare protected depthTest: boolean;
     // protected isTreatingDoubleSided: boolean = false;
 
-    // declare protected material: UBaseMaterial;
+    declare protected material: UBaseMaterial;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -38,7 +38,7 @@ abstract class UBaseMaterial extends UObject {
             "ZTest": "depthTest",
             //         "TreatAsTwoSided": "isTreatingDoubleSided",
 
-            //         "Material": "material"
+            "Material": "material"
         });
     }
 }
@@ -199,6 +199,9 @@ class UShader extends UMaterial {
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
+
+        if (this.transparent)
+            debugger;
 
         library.materials[this.uuid] = null;
 
@@ -384,15 +387,15 @@ class UTexOscillator extends UBaseModifier {
     // protected _lastSu: any;
     // protected _lastSV: any;
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.material.uuid;
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.material.uuid;
 
-    //     library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
-    //     this.material.loadSelf().getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
-    //     return this.material.uuid;
-    // }
+        return this.material.uuid;
+    }
 
     // protected getPropertyMap() {
     //     return Object.assign({}, super.getPropertyMap(), {
