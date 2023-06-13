@@ -34,6 +34,9 @@ declare global {
                 export type ULevelInfo = import("@unreal/un-level-info").ULevelInfo;
 
                 export type UModel = import("@unreal/model/un-model").UModel;
+                export type UTerrainLayer = import("@unreal/un-terrain-layer").UTerrainLayer;
+                export type UTerrainSector = import("@unreal/un-terrain-sector").UTerrainSector;
+
                 export type FVector = import("@unreal/un-vector").FVector;
                 export type FCoords = import("@unreal/un-coords").FCoords;
                 export type FRotator = import("@unreal/un-rotator").FRotator;
@@ -42,11 +45,15 @@ declare global {
                 export type FMatrix = import("@unreal/un-matrix").FMatrix;
                 export type FColor = import("@unreal/un-color").FColor;
                 export type FScale = import("@unreal/un-scale").FScale;
+                export type FRange = import("@unreal/un-range").FRange;
+                export type FRangeVector = import("@unreal/un-range").FRangeVector;
 
                 export type UPlatte = import("@unreal/un-palette").UPlatte;
                 export type UTexture = import("@unreal/un-texture").UTexture;
                 export type UTextureModifyInfo = import("@unreal/un-texture-modify-info").UTextureModifyInfo;
                 export type FStaticLightmapTexture = import("@unreal/model/un-multilightmap-texture").FStaticLightmapTexture;
+
+
 
                 export type NativeClientTypes_T =
                     | C.NativeTypes_T
@@ -66,12 +73,12 @@ declare global {
                 export type UMaterial = import("@unreal/un-material").UMaterial;
                 export type UShader = import("@unreal/un-material").UShader;
 
-
                 export type AActor = import("@unreal/un-aactor").UAActor;
 
                 export type AInfo = import("@unreal/un-info").AInfo;
                 export type FFogInfo = import("@unreal/un-fog-info").FFogInfo;
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
+                export type FTerrainInfo = import("@unreal/un-terrain-info").FTerrainInfo;
 
                 export type UPointRegion = import("@unreal/un-point-region").UPointRegion;
 

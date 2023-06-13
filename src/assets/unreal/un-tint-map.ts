@@ -1,10 +1,8 @@
 import UObject from "@l2js/core";
-import { BufferValue } from "@l2js/core";
-import { FPrimitiveArray } from "./un-array";
 
 class FTIntMap extends UObject {
-    public time: number;
-    public intensity = new FPrimitiveArray(BufferValue.uint8);
+    declare public time: number;
+    declare public intensity: C.FPrimitiveArray<"uint8">;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

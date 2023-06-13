@@ -1,7 +1,7 @@
 import * as dat from "dat.gui";
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
-// import UTerrainInfo from "./assets/unreal/un-terrain-info";
+// import FTerrainInfo from "./assets/unreal/un-terrain-info";
 // import UTerrainSector from "./assets/unreal/un-terrain-sector";
 // import UTexture from "./assets/unreal/un-texture";
 // import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
@@ -387,7 +387,7 @@ async function startCore() {
 
     const loadSettings = {
         helpersZoneBounds: false,
-        loadTerrain: false,
+        loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: false,
         loadEmitters: false,

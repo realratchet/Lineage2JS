@@ -7,15 +7,16 @@ import FColor from "./un-color";
 import FBox from "./un-box";
 import FCoords from "./un-coords";
 import AInfo from "./un-info";
+import { FObjectArray } from "@l2js/core/src/unreal/un-array";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
-class UTerrainInfo extends AInfo {
-    // public terrainMap: UTexture;
-    // public terrainScale: FVector;
+class FTerrainInfo extends AInfo {
+    declare public terrainMap: GA.UTexture;
+    declare public terrainScale: GA.FVector;
+    declare public readonly layers: GA.UTerrainLayer[];
 
-    // public readonly layers = new Array<UTerrainLayer>();
     // protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
     // protected showOnTerrain: number;
     // public readonly quadVisibilityBitmap: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
@@ -89,68 +90,68 @@ class UTerrainInfo extends AInfo {
     // protected _nightMapStart: any;
     // protected _dayMapStart: any;
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "TerrainMap": "terrainMap",
-    //         "TerrainScale": "terrainScale",
-    //         "Layers": "layers",
-    //         "DecoLayers": "decoLayers",
-    //         "QuadVisibilityBitmap": "quadVisibilityBitmap",
-    //         "EdgeTurnBitmap": "edgeTurnBitmap",
-    //         "MapX": "mapX",
-    //         "MapY": "mapY",
-    //         "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig",
-    //         "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
-    //         "GeneratedSectorCounter": "generatedSectorCounter",
-    //         "NumIntMap": "numIntMap",
-    //         "bAutoTimeGeneration": "autoTimeGeneration",
-    //         "TIntMap": "tIntMap",
-    //         "TickTime": "tickTime",
-    //         "ShowOnInvisibleTerrain": "showOnInvisibleTerrain",
-    //         "LitDirectional": "litDirectional",
-    //         "DisregardTerrainLighting": "disregardTerrainLighting",
-    //         "RandomYaw": "randomYaw",
-    //         "bForceRender": "bForceRender",
-    //         "bDynamicLight": "hasDynamicLight",
-    //         "ForcedRegion": "forcedRegion",
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "TerrainMap": "terrainMap",
+            "TerrainScale": "terrainScale",
+            "Layers": "layers",
+            //         "DecoLayers": "decoLayers",
+            //         "QuadVisibilityBitmap": "quadVisibilityBitmap",
+            //         "EdgeTurnBitmap": "edgeTurnBitmap",
+            //         "MapX": "mapX",
+            //         "MapY": "mapY",
+            //         "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig",
+            //         "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
+            //         "GeneratedSectorCounter": "generatedSectorCounter",
+            //         "NumIntMap": "numIntMap",
+            //         "bAutoTimeGeneration": "autoTimeGeneration",
+            //         "TIntMap": "tIntMap",
+            //         "TickTime": "tickTime",
+            //         "ShowOnInvisibleTerrain": "showOnInvisibleTerrain",
+            //         "LitDirectional": "litDirectional",
+            //         "DisregardTerrainLighting": "disregardTerrainLighting",
+            //         "RandomYaw": "randomYaw",
+            //         "bForceRender": "bForceRender",
+            //         "bDynamicLight": "hasDynamicLight",
+            //         "ForcedRegion": "forcedRegion",
 
-    //         "TerrainSectorSize": "_terrainSectorSize",
-    //         "DecoLayerOffset": "_decoLayerOffset",
-    //         "Inverted": "_inverted",
-    //         "bKCollisionHalfRes": "_bKCollisionHalfRes",
-    //         "JustLoaded": "_justLoaded",
-    //         "DecoLayerData": "_decoLayerData",
-    //         "Sectors": "_sectors",
-    //         "Vertices": "_vertices",
-    //         "HeightmapX": "_heightmapX",
-    //         "HeightmapY": "_heightmapY",
-    //         "SectorsX": "_sectorsX",
-    //         "SectorsY": "_sectorsY",
-    //         "Primitive": "_primitive",
-    //         "FaceNormals": "_faceNormals",
-    //         "ToWorld": "_toWorld",
-    //         "ToHeightmap": "_toHeightmap",
-    //         "SelectedVertices": "_selectedVertices",
-    //         "ShowGrid": "_showGrid",
-    //         "QuadDomMaterialBitmap": "_quadDomMaterialBitmap",
-    //         "RenderCombinations": "_renderCombinations",
-    //         "VertexStreams": "_vertexStreams",
-    //         "VertexColors": "_vertexColors",
-    //         "PaintedColor": "_paintedColor",
-    //         "OldTerrainMap": "_oldTerrainMap",
-    //         "OldHeightmap": "_oldHeightmap",
-    //         "BaseHeight": "_baseHeight",
-    //         "VTGruop": "_vTGruop",
-    //         "VTGroupOrig": "_vTGroupOrig",
-    //         "bUpdatedHEdge": "_bUpdatedHEdge",
-    //         "bUpdatedVEdge": "_bUpdatedVEdge",
-    //         "bUpdatedZ": "_bUpdatedZ",
-    //         "SectorsOrig": "_sectorsOrig",
-    //         "ToHeightmapOrig": "_toHeightmapOrig",
-    //         "NightMapStart": "_nightMapStart",
-    //         "DayMapStart": "_dayMapStart",
-    //     });
-    // }
+            //         "TerrainSectorSize": "_terrainSectorSize",
+            //         "DecoLayerOffset": "_decoLayerOffset",
+            //         "Inverted": "_inverted",
+            //         "bKCollisionHalfRes": "_bKCollisionHalfRes",
+            //         "JustLoaded": "_justLoaded",
+            //         "DecoLayerData": "_decoLayerData",
+            //         "Sectors": "_sectors",
+            //         "Vertices": "_vertices",
+            //         "HeightmapX": "_heightmapX",
+            //         "HeightmapY": "_heightmapY",
+            //         "SectorsX": "_sectorsX",
+            //         "SectorsY": "_sectorsY",
+            //         "Primitive": "_primitive",
+            //         "FaceNormals": "_faceNormals",
+            //         "ToWorld": "_toWorld",
+            //         "ToHeightmap": "_toHeightmap",
+            //         "SelectedVertices": "_selectedVertices",
+            //         "ShowGrid": "_showGrid",
+            //         "QuadDomMaterialBitmap": "_quadDomMaterialBitmap",
+            //         "RenderCombinations": "_renderCombinations",
+            //         "VertexStreams": "_vertexStreams",
+            //         "VertexColors": "_vertexColors",
+            //         "PaintedColor": "_paintedColor",
+            //         "OldTerrainMap": "_oldTerrainMap",
+            //         "OldHeightmap": "_oldHeightmap",
+            //         "BaseHeight": "_baseHeight",
+            //         "VTGruop": "_vTGruop",
+            //         "VTGroupOrig": "_vTGroupOrig",
+            //         "bUpdatedHEdge": "_bUpdatedHEdge",
+            //         "bUpdatedVEdge": "_bUpdatedVEdge",
+            //         "bUpdatedZ": "_bUpdatedZ",
+            //         "SectorsOrig": "_sectorsOrig",
+            //         "ToHeightmapOrig": "_toHeightmapOrig",
+            //         "NightMapStart": "_nightMapStart",
+            //         "DayMapStart": "_dayMapStart",
+        });
+    }
 
     // protected readStruct(pkg: UPackage, tag: PropertyTag): any {
     //     const exp = new UExport();
@@ -158,7 +159,7 @@ class UTerrainInfo extends AInfo {
     //     exp.objectName = `${tag.name}[Struct]`;
     //     exp.offset = pkg.tell();
     //     exp.size = tag.dataSize;
-        
+
     //     switch (tag.structName) {
     //         case "TerrainLayer": return new UTerrainLayer().load(pkg, exp);
     //     }
@@ -166,173 +167,169 @@ class UTerrainInfo extends AInfo {
     //     return super.readStruct(pkg, tag);
     // }
 
-    // public doLoad(pkg: UPackage, exp: UExport<UTerrainInfo>) {
-    //     const verArchive = pkg.header.getArchiveFileVersion();
-    //     const verLicense = pkg.header.getLicenseeVersion();
+    public doLoad(pkg: GA.UPackage, exp: C.UExport<FTerrainInfo>) {
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
 
-    //     const int32 = new BufferValue(BufferValue.int32);
-    //     const float = new BufferValue(BufferValue.float);
+        const int32 = new BufferValue(BufferValue.int32);
+        const float = new BufferValue(BufferValue.float);
 
-    //     // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
-    //     // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
+        // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
+        // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-    //     super.doLoad(pkg, exp);
-
-
-    //     this.readHead = pkg.tell();
-
-    //     if (verLicense >= 0x11) {
-    //         const sectorIds = new FArray(FNumber.forType(BufferValue.compat32) as any)
-    //             .load(pkg, null)
-    //             .map(id => id.value) as number[];
-
-    //         this.readHead = pkg.tell();
-
-    //         sectorIds.forEach(id => {
-    //             const object = pkg.fetchObject<UTerrainSector>(id);
-
-    //             object.info = this;
-
-    //             this.boundingBox.expandByPoint(object.boundingBox.min);
-    //             this.boundingBox.expandByPoint(object.boundingBox.max);
-
-    //             this.sectors.push(object);
-    //         });
-
-    //         pkg.seek(this.readHead, "set");
-
-    //         this.sectorsX = pkg.read(int32).value as number;
-    //         this.sectorsY = pkg.read(int32).value as number;
-    //     } else {
-    //         console.warn("Unsupported yet");
-    //         debugger;
-    //     }
-
-    //     if (verArchive >= 0x53) {
-    //         this.terrainCoords.load(pkg);
-    //         this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
-    //     } else {
-    //         console.warn("Unsupported yet");
-    //         debugger;
-    //     }
-
-    //     if (verArchive >= 0x4C) {
-    //         this.unkInt2 = pkg.read(int32).value as number;
-    //         this.unkInt3 = pkg.read(int32).value as number;
-    //     } else {
-    //         console.warn("Unsupported yet");
-    //         debugger;
-    //     }
-
-    //     if (verArchive <= 0x4A) {
-    //         console.warn("Unsupported yet");
-    //         debugger;
-    //     } else {
-    //         if (verArchive >= 0x52) {
-    //             if (verArchive >= 0x56) {
-    //                 if (verArchive <= 0x57) {
-    //                     console.warn("Unsupported yet");
-    //                     debugger;
-    //                 } else {
-    //                     if (verArchive >= 0x73) {
-    //                         if (verArchive >= 0x77) {
-    //                             if (verArchive >= 0x75) this.unkColorArr.load(pkg, null);
-    //                             else {
-    //                                 console.warn("Unsupported yet");
-    //                                 debugger;
-    //                             }
-    //                         } else {
-    //                             console.warn("Unsupported yet");
-    //                             debugger;
-    //                         }
-    //                     } else {
-    //                         console.warn("Unsupported yet");
-    //                         debugger;
-    //                     }
-    //                 }
-    //             } else {
-    //                 console.warn("Unsupported yet");
-    //                 debugger;
-    //             }
-    //         } else {
-    //             console.warn("Unsupported yet");
-    //             debugger;
-    //         }
-    //     }
-
-    //     this.readHead = pkg.tell();
+        super.doLoad(pkg, exp);
 
 
-    //     return this;
-    // }
+        this.readHead = pkg.tell();
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     const terrainLayers = this.layers.filter(x => x);
-    //     const layerCount = terrainLayers.length;
+        if (verLicense >= 0x11) {
+            const sectors = new FObjectArray<GA.UTerrainSector>().load(pkg);
 
-    //     const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
-    //     const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
-    //     const terrainData = new Uint16Array(iTerrainMap.buffer);
-    //     const heightmapData = { info: iTerrainMap, data: terrainData };
+            this.readHead = pkg.tell();
 
-    //     const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
+            sectors.forEach(object => {
+                object.info = this;
 
-    //     for (let k = 0; k < layerCount; k++) {
-    //         const layer = terrainLayers[k].loadSelf();
+                this.boundingBox.expandByPoint(object.boundingBox.min);
+                this.boundingBox.expandByPoint(object.boundingBox.max);
 
-    //         if (!layer.map && !layer.alphaMap) {
-    //             layers[k] = { map: null, alphaMap: null };
-    //             continue;
-    //         }
+                this.sectors.push(object);
+            });
 
-    //         if (layer.map?.loadSelf().mipmaps.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps.getElemCount() === 0) {
-    //             layers[k] = { map: null, alphaMap: null };
-    //             debugger;
-    //             continue;
-    //         }
+            pkg.seek(this.readHead, "set");
 
-    //         layers[k] = {
-    //             map: layer.map?.loadSelf().getDecodeInfo(library) || null,
-    //             alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) || null
-    //         };
+            this.sectorsX = pkg.read(int32).value as number;
+            this.sectorsY = pkg.read(int32).value as number;
+        } else {
+            console.warn("Unsupported yet");
+            debugger;
+        }
 
-    //         if (layers[k].alphaMap && !layers[k].map)
-    //             debugger;
-    //     }
+        if (verArchive >= 0x53) {
+            this.terrainCoords.load(pkg);
+            this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
+        } else {
+            console.warn("Unsupported yet");
+            debugger;
+        }
 
-    //     library.materials[this.uuid] = {
-    //         materialType: "terrain",
-    //         layers
-    //     } as IMaterialTerrainDecodeInfo;
+        if (verArchive >= 0x4C) {
+            this.unkInt2 = pkg.read(int32).value as number;
+            this.unkInt3 = pkg.read(int32).value as number;
+        } else {
+            console.warn("Unsupported yet");
+            debugger;
+        }
 
-    //     const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-    //     const children = this.sectors.map(sector => sector.loadSelf().getDecodeInfo(library, this, heightmapData));
+        if (verArchive <= 0x4A) {
+            console.warn("Unsupported yet");
+            debugger;
+        } else {
+            if (verArchive >= 0x52) {
+                if (verArchive >= 0x56) {
+                    if (verArchive <= 0x57) {
+                        console.warn("Unsupported yet");
+                        debugger;
+                    } else {
+                        if (verArchive >= 0x73) {
+                            if (verArchive >= 0x77) {
+                                if (verArchive >= 0x75) this.unkColorArr.load(pkg, null);
+                                else {
+                                    console.warn("Unsupported yet");
+                                    debugger;
+                                }
+                            } else {
+                                console.warn("Unsupported yet");
+                                debugger;
+                            }
+                        } else {
+                            console.warn("Unsupported yet");
+                            debugger;
+                        }
+                    }
+                } else {
+                    console.warn("Unsupported yet");
+                    debugger;
+                }
+            } else {
+                console.warn("Unsupported yet");
+                debugger;
+            }
+        }
 
-    //     const decodeInfo = {
-    //         uuid: this.uuid,
-    //         type: "TerrainInfo",
-    //         name: this.objectName,
-    //         // position,
-    //         children
-    //     } as IBaseObjectDecodeInfo;
+        this.readHead = pkg.tell();
 
-    //     zoneInfo.children.push(decodeInfo);
-    //     zoneInfo.bounds.isValid = true;
 
-    //     children.forEach(({ geometry: uuid }) => {
-    //         const { min, max } = library.geometries[uuid].bounds.box;
+        return this;
+    }
 
-    //         [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-    //             ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
-    //                 for (let i = 0; i < 3; i++)
-    //                     arr[i] = fn(arr[i], min[i], max[i]);
-    //             }
-    //         );
-    //     });
+    public getDecodeInfo(library: GD.DecodeLibrary): string {
+        const terrainLayers = this.layers.filter(x => x);
+        const layerCount = terrainLayers.length;
 
-    //     return this.uuid;
-    // }
+        const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
+        const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
+        const terrainData = new Uint16Array(iTerrainMap.buffer);
+        const heightmapData = { info: iTerrainMap, data: terrainData };
+
+        const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
+
+        for (let k = 0; k < layerCount; k++) {
+            const layer = terrainLayers[k].loadSelf();
+
+            if (!layer.map && !layer.alphaMap) {
+                layers[k] = { map: null, alphaMap: null };
+                continue;
+            }
+
+            if (layer.map?.loadSelf().mipmaps.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps.getElemCount() === 0) {
+                layers[k] = { map: null, alphaMap: null };
+                debugger;
+                continue;
+            }
+
+            layers[k] = {
+                map: layer.map?.loadSelf().getDecodeInfo(library) || null,
+                alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) || null
+            };
+
+            if (layers[k].alphaMap && !layers[k].map)
+                debugger;
+        }
+
+        library.materials[this.uuid] = {
+            materialType: "terrain",
+            layers
+        } as GD.IMaterialTerrainDecodeInfo;
+
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
+        const children = this.sectors.map(sector => sector.loadSelf().getDecodeInfo(library, this, heightmapData));
+
+        const decodeInfo = {
+            uuid: this.uuid,
+            type: "TerrainInfo",
+            name: this.objectName,
+            // position,
+            children
+        } as GD.IBaseObjectDecodeInfo;
+
+        zoneInfo.children.push(decodeInfo);
+        zoneInfo.bounds.isValid = true;
+
+        children.forEach(({ geometry: uuid }) => {
+            const { min, max } = library.geometries[uuid].bounds.box;
+
+            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+                    for (let i = 0; i < 3; i++)
+                        arr[i] = fn(arr[i], min[i], max[i]);
+                }
+            );
+        });
+
+        return this.uuid;
+    }
 }
 
-export default UTerrainInfo;
-export { UTerrainInfo };
+export default FTerrainInfo;
+export { FTerrainInfo };

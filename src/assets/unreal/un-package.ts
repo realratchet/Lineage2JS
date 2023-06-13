@@ -8,7 +8,7 @@ import UBrush from "./un-brush";
 import FColor from "./un-color";
 import ULevelInfo from "./un-level-info";
 import FZoneInfo from "./un-zone-info";
-import UTerrainInfo from "./un-terrain-info";
+import FTerrainInfo from "./un-terrain-info";
 import USkyZoneInfo from "./un-sky-zone-info";
 import UNSun from "./un-nsun";
 import UNMoon from "./un-nmoon";
@@ -34,6 +34,10 @@ import { FPlane } from "./un-plane";
 import * as UnMaterials from "./un-material";
 import UCubemap from "./un-cubemap";
 import FMatrix from "./un-matrix";
+import UTerrainLayer from "./un-terrain-layer";
+import UDecoLayer from "./un-deco-layer";
+import FRange, { FRangeVector } from "./un-range";
+import FTIntMap from "./un-tint-map";
 
 type CoreStructs_T =
     | "Vector"
@@ -81,6 +85,7 @@ class UPackage extends APackage {
         return new cls();
     }
 }
+
 class UNativePackage extends ANativePackage {
 
     public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: string): new () => T {
@@ -96,6 +101,11 @@ class UNativePackage extends ANativePackage {
             case "Box": Constructor = FBox; break;
             case "Plane": Constructor = FPlane; break;
             case "Matrix": Constructor = FMatrix; break;
+            case "TerrainLayer": Constructor = UTerrainLayer; break;
+            case "DecorationLayer": Constructor = UDecoLayer; break;
+            case "RangeVector": Constructor = FRangeVector; break;
+            case "Range": Constructor = FRange; break;
+            case "TerrainIntensityMap": Constructor = FTIntMap; break;
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -115,9 +125,7 @@ class UNativePackage extends ANativePackage {
             case "LevelInfo": Constructor = ULevelInfo; break;
             case "ZoneInfo": Constructor = FZoneInfo; break;
             case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
-            case "TerrainInfo": Constructor = UTerrainInfo; break;
-
-
+            case "TerrainInfo": Constructor = FTerrainInfo; break;
 
             case "NSun": Constructor = UNSun; break;
             case "NMoon": Constructor = UNMoon; break;
@@ -368,7 +376,7 @@ class UNativePackage extends ANativePackage {
     // //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
     // //         case "Sound": Constructor = USound; break;
     // //         case "Light": Constructor = ULight; break;
-    // //         case "TerrainInfo": Constructor = UTerrainInfo; break;
+    // //         case "TerrainInfo": Constructor = FTerrainInfo; break;
     // //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
     // //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
     // //         case "WaterVolume": Constructor = UWaterVolume; break;

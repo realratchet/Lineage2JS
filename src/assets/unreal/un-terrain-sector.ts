@@ -1,22 +1,21 @@
 import UObject from "@l2js/core";
 import FBox from "./un-box";
 import { BufferValue } from "@l2js/core";
-import FArray, { FPrimitiveArray } from "./un-array";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient } from "./un-time-list";
 import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
-import FConstructable from "./un-constructable";
+import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-class FTerrainLightInfo extends FConstructable {
+class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
     public someData = new FPrimitiveArray(BufferValue.uint8);
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
 
         const compat32 = new BufferValue(BufferValue.compat32);
 
-        this.lightIndex = pkg.read(compat32).value as number;
+        this.lightIndex = pkg.read(compat32).value;
         this.someData.load(pkg);
 
         return this;
@@ -27,7 +26,7 @@ class UTerrainSector extends UObject {
     public readonly boundingBox: FBox = new FBox();
     protected offsetX: number;
     protected offsetY: number;
-    public info: UTerrainInfo;
+    public info: GA.FTerrainInfo;
     protected cellNum: number;
     protected sectorWidth: number;
 
@@ -55,7 +54,7 @@ class UTerrainSector extends UObject {
     protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     protected unk64Bytes: Int32Array;
 
-    public getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary, info: FTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 

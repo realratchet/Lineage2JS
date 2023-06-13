@@ -40,7 +40,7 @@
 // type ULight = import("./un-light").ULight;
 // type LightEffect_T = import("./un-light").LightEffect_T;
 // type LightType_T = import("./un-light").LightType_T;
-// type UTerrainInfo = import("./un-terrain-info").UTerrainInfo;
+// type FTerrainInfo = import("./un-terrain-info").FTerrainInfo;
 // type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
 // type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
 // type UWaterVolume = import("./un-water-volume").UWaterVolume;
@@ -73,8 +73,8 @@
 // type UColorModifier = import("./un-material").UColorModifier;
 // type UTexOscillator = import("./un-material").UTexOscillator;
 // type UTexEnvMap = import("./un-material").UTexEnvMap;
-// type URangeVector = import("./un-range").URangeVector;
-// type URange = import("./un-range").URange;
+// type FRangeVector = import("./un-range").FRangeVector;
+// type FRange = import("./un-range").FRange;
 // type FPlane = import("./un-plane").FPlane;
 // type FScale = import("./un-scale").FScale;
 // type UPlane = import("./un-plane").UPlane;

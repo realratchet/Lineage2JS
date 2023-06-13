@@ -3,12 +3,12 @@ import FColor from "./un-color";
 import AInfo from "./un-info";
 
 class FFogInfo extends AInfo {
-    protected affectRange: URange;
-    protected fogRange1: URange;
-    protected fogRange2: URange;
-    protected fogRange3: URange;
-    protected fogRange4: URange;
-    protected fogRange5: URange;
+    protected affectRange: FRange;
+    protected fogRange1: FRange;
+    protected fogRange2: FRange;
+    protected fogRange3: FRange;
+    protected fogRange4: FRange;
+    protected fogRange5: FRange;
     protected colors: FArray<FColor> = new FArray(FColor);
 
     public readonly careUnread = false;

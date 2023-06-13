@@ -1,28 +1,28 @@
 import UObject from "@l2js/core";
 
 class UTerrainLayer extends UObject {
-    public map: UTexture = null;
-    public alphaMap: UTexture = null;
-    public scaleW: number;
-    public scaleH: number;
-    protected panW: number;
-    protected panH: number;
-    protected mapAxis: number;
-    protected mapRotation: number;
-    protected layerRotation: FRotator;
-    protected terrainMatrix: FMatrix;
-    protected zPlane: FPlane;
-    protected wPlane: FPlane;
-    protected level: number[];
-    protected friction: number;
-    protected restitution: number;
-    protected weightMap: UTexture;
-    public scale: FVector;
-    protected toWorld = new Set();
-    protected toMaskmap = new Set();
-    protected useAlpha: boolean;
-    protected unkNum0: number;
-    protected z: number;
+    declare public map: GA.UTexture;
+    declare public alphaMap: GA.UTexture;
+    declare public scaleW: number;
+    declare public scaleH: number;
+    declare protected panW: number;
+    declare protected panH: number;
+    declare protected mapAxis: number;
+    declare protected mapRotation: number;
+    declare protected layerRotation: GA.FRotator;
+    declare protected terrainMatrix: GA.FMatrix;
+    declare protected zPlane: GA.FPlane;
+    declare protected wPlane: GA.FPlane;
+    declare protected level: number[];
+    declare protected friction: number;
+    declare protected restitution: number;
+    declare protected weightMap: GA.UTexture;
+    declare public scale: GA.FVector;
+    declare protected toWorld: any;
+    declare protected toMaskmap: any;
+    declare protected useAlpha: boolean;
+    declare protected unkNum0: number;
+    declare protected z: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

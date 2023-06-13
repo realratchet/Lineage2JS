@@ -3,25 +3,25 @@ import UObject from "@l2js/core";
 class UDecoLayer extends UObject {
     public readonly careUnread: boolean = false;
 
-    protected showOnTerrain: number;
-    protected scaleMap: UTexture;
-    protected densityMap: UTexture;
-    protected colorMap: UTexture;
-    public staticMesh: UStaticMesh;
-    protected scaleMultiplier: URangeVector;
-    protected ambientSoundType: number[];
-    protected size: number;
-    protected fadeoutRadius: URange;
-    protected densityMultiplier: URange;
-    protected maxPerQuad: number;
-    protected seed: number;
-    protected alignToTerrain: number;
-    protected drawOrder: number;
-    protected isShowOnInvisibleTerrain: number;
-    protected dirLighting: number;
-    protected disregardTerrainLighting: number;
-    protected randomYaw: number;
-    protected isForcingRender: number;
+    declare protected showOnTerrain: number;
+    declare protected scaleMap: GA.UTexture;
+    declare protected densityMap: GA.UTexture;
+    declare protected colorMap: GA.UTexture;
+    declare public staticMesh: GA.UStaticMesh;
+    declare protected scaleMultiplier: GA.FRangeVector;
+    declare protected ambientSoundType: number[];
+    declare protected size: number;
+    declare protected fadeoutRadius: GA.FRange;
+    declare protected densityMultiplier: GA.FRange;
+    declare protected maxPerQuad: number;
+    declare protected seed: number;
+    declare protected alignToTerrain: number;
+    declare protected drawOrder: number;
+    declare protected isShowOnInvisibleTerrain: number;
+    declare protected dirLighting: number;
+    declare protected disregardTerrainLighting: number;
+    declare protected randomYaw: number;
+    declare protected isForcingRender: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

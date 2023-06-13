@@ -1,7 +1,7 @@
 import { BufferValue } from "@l2js/core";
 import UObject from "@l2js/core";
 import { UPlane } from "../un-plane";
-import URange, { URangeVector } from "../un-range";
+import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
 import FVector from "../un-vector";
 
@@ -13,11 +13,11 @@ abstract class UParticleEmitter extends UObject {
 
     // // Collision
     // protected collisionPlanes = new FArray(UPlane); // Can be used to specify planes in the Unreal world the particle will collide with. The planes will be used for collision when UseCollisionPlanes is True.
-    // protected dampingFactorRange = new URangeVector(new URange(1, 1), new URange(1, 1), new URange(1, 1)); // Damping applied to the particle's velocity when it collides with something.
+    // protected dampingFactorRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1)); // Damping applied to the particle's velocity when it collides with something.
     // protected extentMultiplier = new FVector(1, 1, 1); // A multiplier for the particles' size for collision calculations.
-    // protected maxCollisions = new URange(); // Maximum number of collisions before the particle is destroyed. This property will only be used when UseMaxCollisions is True.
+    // protected maxCollisions = new FRange(); // Maximum number of collisions before the particle is destroyed. This property will only be used when UseMaxCollisions is True.
     // protected spawnAmount = 0; // The number of sub-particles spawned when the particles collide with something.
-    // protected spawnedVelocityScaleRange = new URangeVector(); // The velocity of the spawned sub-particles.
+    // protected spawnedVelocityScaleRange = new FRangeVector(); // The velocity of the spawned sub-particles.
     // protected spawnFromOtherEmitter: number = -1; // The ParticleEmitter within the same Emitter actor used for the sub-particles.
     // protected isUsingCollision: boolean = false; // Whether the particles should use collision. If False, they will fall through static meshes, BSP, etc.
     // protected isUsingCollisionPlanes: boolean = false; // Whether the particles should collide with the CollisionPlanes.
@@ -25,7 +25,7 @@ abstract class UParticleEmitter extends UObject {
     // protected isUsingSpawnedVelocityScale: boolean = false; // Whether to use SpawnedVelocityScaleRange for collision sub-particles.
 
     // // Color
-    // protected colorMultiplierRange = new URangeVector(new URange(1, 1), new URange(1, 1), new URange(1, 1)); // Used to randomize the color of the particles. X corresponds to red, Y corresponds to Green and Z corresponds to blue. A value of 1 preserves the color of the original textures. To make everything darker, for example, set 0.5 for all values.
+    // protected colorMultiplierRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1)); // Used to randomize the color of the particles. X corresponds to red, Y corresponds to Green and Z corresponds to blue. A value of 1 preserves the color of the original textures. To make everything darker, for example, set 0.5 for all values.
     // protected colorScale = new FArray(UParticleColorScale); // Used to change the color of a particle over time. You set both a color you want it to be, and the relative time at which you want it to be that color. It will fade from whatever color it is to the color you want it to be over the interval you specify. The time is relative, so 0.5 would be half the particles lifespan.
     // protected colorScaleRepeats = 0; // How many times to repeat the color scales. Example, if you have a color scale that changes it to black at 0.5 time(half its lifespan), with color repeats it will be black by the time its half way done living. With one repeat, it will be black at 1/4 of its lifespan, normal at 1/2, and black again at 3/4ths of its lifespan.
     // protected isUsingColorScale: boolean = false; // Must be true for ColorScales and ColorScaleRepeats to have any effect on the particles.
@@ -58,19 +58,19 @@ abstract class UParticleEmitter extends UObject {
 
     // // Location
     // protected addLocationFromOtherEmitter: number = -1;
-    // protected sphereRadiusRange = new URange();
+    // protected sphereRadiusRange = new FRange();
     // protected startLocationOffset: FVector = new FVector();
-    // protected startLocationPolarRange = new URangeVector();
-    // protected startLocationRange = new URangeVector();
+    // protected startLocationPolarRange = new FRangeVector();
+    // protected startLocationRange = new FRangeVector();
     // protected startLocationShape = EParticleStartLocationShape_T.PTLS_Box;
 
     // // Mass
-    // protected startMassRange: URange = new URange(1, 1);
+    // protected startMassRange: FRange = new FRange(1, 1);
 
     // // Mesh
     // protected meshNormal: FVector = new FVector(0, 0, 1);
-    // protected meshNormalThresholdRange: URange;
-    // protected meshScaleRange: URangeVector = new URangeVector(new URange(1, 1), new URange(1, 1), new URange(1, 1)); // This determines the size scale of an emitted mesh, similar to DrawScale3D for actors. It takes each axis independantly, so setting a good range can result in a lot of different shapes on the same mesh.
+    // protected meshNormalThresholdRange: FRange;
+    // protected meshScaleRange: FRangeVector = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1)); // This determines the size scale of an emitted mesh, similar to DrawScale3D for actors. It takes each axis independantly, so setting a good range can result in a lot of different shapes on the same mesh.
     // protected meshSpawning: EParticleMeshSpawning_T = 0;
     // protected meshSpawningStaticMesh: UStaticMesh = null; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
     // protected isSpawningTowardsNormal: boolean = false;
@@ -78,7 +78,7 @@ abstract class UParticleEmitter extends UObject {
     // protected isUniformVelocityScale: boolean = false;
     // protected isUsingColorFromMesh: boolean = false;
     // protected isVelocityFromMesh: boolean = false;
-    // protected velocityScaleRange = new URangeVector(new URange(1, 1), new URange(1, 1), new URange(1, 1));
+    // protected velocityScaleRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1));
 
     // // Rendering
     // protected isAcceptingProjectors: boolean = false;
@@ -91,44 +91,44 @@ abstract class UParticleEmitter extends UObject {
     //    Note: Revolution moves all particles around a central point or area. This might be useful for vortex-like particle effects. */
     // protected isUsingRevolution: boolean = false; // If true, the particles will orbit a center point.
     // protected isUsingRevolutionScale: boolean = false; // Whether the RevolutionScale settings should be used.
-    // protected revolutionCenterOffsetRange = new URangeVector(); // The range of where the center of revolution for this particle will be
+    // protected revolutionCenterOffsetRange = new FRangeVector(); // The range of where the center of revolution for this particle will be
     // protected revolutionScale = new FArray(UParticleRevolutionScale);
     // protected revolutionScaleRepeats = 0;
-    // protected revolutionsPerSecondRange = new URangeVector(); // Determines how many times the particle will orbit the center per second, it takes each axis independantly.
+    // protected revolutionsPerSecondRange = new FRangeVector(); // Determines how many times the particle will orbit the center per second, it takes each axis independantly.
 
     // // Rotation
     // protected isDampingRotation: boolean = false; // Whether collision should affect a particle's rotation.
-    // protected rotationDampingFactorRange = new URangeVector(); // How collision affects the particle's rotation.
+    // protected rotationDampingFactorRange = new FRangeVector(); // How collision affects the particle's rotation.
     // protected rotationNormal = new FVector(); // The normal used when UseRotationFrom is set to PTRS_Normal.
     // protected rotationOffset = new FRotator();
     // protected clockwiseSpinChance = new FVector(0.5, 0.5, 0.5); // The chance that particles will spin clockwise. 0 will make all particles spin counterclockwise, 0.7 will give a 70% chance that particles spin clockwise and a 30% chance for spinning counterclockwise.
     // protected isSpinning: boolean = false; // Whether particles should spin.
-    // protected spinsPerSecondRange = new URangeVector(); // The range that determines how fast the particles will spin. X, Y and Z correspond to Pitch, Yaw and Roll.
-    // protected startSpinRange = new URangeVector(); // Specifies the initial rotation of the particles. Again, X, Y and Z correspond to Pitch, Yaw and Roll.
+    // protected spinsPerSecondRange = new FRangeVector(); // The range that determines how fast the particles will spin. X, Y and Z correspond to Pitch, Yaw and Roll.
+    // protected startSpinRange = new FRangeVector(); // Specifies the initial rotation of the particles. Again, X, Y and Z correspond to Pitch, Yaw and Roll.
     // protected rotationSource: EParticleRotationSource_T = 0; // What to base the rotation on.
 
     // // Size
     // protected sizeScale = new FArray(UParticleTimeScale);
     // protected sizeScaleRepeats: number = 0;
-    // protected startSizeRange = new URangeVector(new URange(100, 100), new URange(100, 100), new URange(100, 100));
+    // protected startSizeRange = new FRangeVector(new FRange(100, 100), new FRange(100, 100), new FRange(100, 100));
     // protected isUniformScale: boolean = false;
     // protected isScaleSizeRegular: boolean = true;
     // protected isUsingSizeScale: boolean = false;
 
     // // Skeletal mesh
-    // protected relativeBoneIndexRange = new URange(0, 1);
+    // protected relativeBoneIndexRange = new FRange(0, 1);
     // protected skeletalMeshActor: UAActor = null;
     // protected skeletalScale = new FVector(1, 1, 1);
     // protected useSkeletalLocationAs: ESkelLocationUpdate_T = 0;
 
     // // Sound
     // protected collisionSound: EParticleCollisionSound_T = 0;
-    // protected collisionSoundIndex = new URange();
-    // protected collisionSoundProbability = new URange();
+    // protected collisionSoundIndex = new FRange();
+    // protected collisionSoundProbability = new FRange();
     // protected sounds = new FArray(UParticleSound);
     // protected spawningSound: EParticleCollisionSound_T = 0;
-    // protected spawningSoundIndex = new URange();
-    // protected spawningSoundProbability = new URange();
+    // protected spawningSoundIndex = new FRange();
+    // protected spawningSoundProbability = new FRange();
 
     // // Spawning
     // protected isAutomaticInitialSpawning: boolean = true; // Automatically determines a particle spawn rate based on the particle lifetime and the maximum number of particles allowed so that the maximum number of particles is reached exactly when the first particle's lifetime is up. ParticlesPerSecond must be 0 for this to work.
@@ -152,25 +152,25 @@ abstract class UParticleEmitter extends UObject {
     // protected secondsBeforeInactive = 1; // The amount of time that has to pass when the emitter is out of view before particle calculation is paused. Set this to 0.0 to disable the pausing effect, e.g. for Emitter-based weapon effects like explosions, tracers, sparks, etc.
 
     // // Time
-    // protected initialTimeRange = new URange(); // Determines how long before this emitter will become active
-    // protected initialDelayRange = new URange(); // The initial particle age. For obvious reasons this should be lower than LifetimeRange. You might be able to create interesting effects in combination with the various scales parameters if you have a particle with e.g. LifetimeRange 4 seconds and InitialTimeRange 3 seconds. Effectively the particle will have 1 second left, but it already starts at 75% of its entire lifetime.
-    // protected lifetimeRange = new URange(4, 4); // Determines the lifespan of the particles that this emitter emits.
+    // protected initialTimeRange = new FRange(); // Determines how long before this emitter will become active
+    // protected initialDelayRange = new FRange(); // The initial particle age. For obvious reasons this should be lower than LifetimeRange. You might be able to create interesting effects in combination with the various scales parameters if you have a particle with e.g. LifetimeRange 4 seconds and InitialTimeRange 3 seconds. Effectively the particle will have 1 second left, but it already starts at 75% of its entire lifetime.
+    // protected lifetimeRange = new FRange(4, 4); // Determines the lifespan of the particles that this emitter emits.
 
     // // Trigger
     // protected isResetOnTrigger: boolean = false; // Whether this ParticleEmitter should be reset when it's triggered. When the ParticleEmitter is reset, all its particles are removed and it starts spawning according to its initial spawn parameters. (initial delay, initial particles per second, etc.)
     // protected spawnOnTriggerPPS = 0;
-    // protected spawnOnTriggerRange = new URange(); // When triggered, this ParticleEmitter should spawn SpawnOnTriggerRange.Min to SpawnOnTriggerRange.Max particles, with a spawn rate of SpawnOnTriggerPPS particles per second.
+    // protected spawnOnTriggerRange = new FRange(); // When triggered, this ParticleEmitter should spawn SpawnOnTriggerRange.Min to SpawnOnTriggerRange.Max particles, with a spawn rate of SpawnOnTriggerPPS particles per second.
     // protected isTriggerDisabled: boolean = false; // If true allows the emitter to be toggled on/off by the Event named in the Emitter system's Event>Tag. As the Tag belongs to the entire emitter system sub-emitters can only respond to the one Event, albeit in different ways. By default the initial status of emitters is active, and will be toggled off upon first firing of the Event, but setting Local>bDisabled=true will disable emitter at start and wait for Event to turn on. Always set this to false if you want to use the other trigger options or if you don't want the ParticleEmitter's regular particle spawning to be affected by triggering.
 
     // // Velocity
     // protected addVelocityFromOtherEmitter = -1;
-    // protected addVelocityMultiplierRange = new URangeVector(new URange(1, 1), new URange(1, 1), new URange(1, 1));
+    // protected addVelocityMultiplierRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1));
     // protected getVelocityDirectionFrom = EParticleVelocityDirection_T.PTVD_None;
     // protected maxAbsVelocity: FVector = new FVector(10000.000000, 10000.000000, 10000.000000);
-    // protected startVelocityRadialRange = new URange();
-    // protected startVelocityRange = new URangeVector();
+    // protected startVelocityRadialRange = new FRange();
+    // protected startVelocityRange = new FRangeVector();
     // protected isUsingVelocityScale: boolean = false;
-    // protected velocityLossRange = new URangeVector();
+    // protected velocityLossRange = new FRangeVector();
     // protected velocityScale = new FArray(UParticleVelocityScale);
     // protected velocityScaleRepeats: number = 0;
     // protected rotateVelocityLossRange: boolean = false;
