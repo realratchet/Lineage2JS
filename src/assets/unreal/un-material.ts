@@ -1,6 +1,4 @@
-import FColor from "./un-color";
 import UObject from "@l2js/core";
-import { BufferValue } from "@l2js/core";
 import DecodeLibrary from "./decode-library";
 
 abstract class UBaseMaterial extends UObject {
@@ -18,31 +16,31 @@ abstract class UBaseMaterial extends UObject {
     // protected detailScale: number;
     // protected defaultMaterial: typeof this;
 
-    // protected depthWrite: boolean = true;
-    // protected depthTest: boolean = true;
+    declare protected depthWrite: boolean;
+    declare protected depthTest: boolean;
     // protected isTreatingDoubleSided: boolean = false;
 
     // declare protected material: UBaseMaterial;
 
-    // protected getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "FallbackMaterial": "_fallbackMaterial",
-    //         "UseFallback": "_useFallback",
-    //         "Validated": "_validated",
-    //         "Reserved": "_reserved",
-    //         "__LastUpdateTime": "_lastUpdateTime",
-    //         "RenderInterface": "_renderInterface",
-    //         "DefaultMaterial": "defaultMaterial",
-    //         "DetailScale": "detailScale",
-    //         "Detail": "_detail",
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            //         "FallbackMaterial": "_fallbackMaterial",
+            //         "UseFallback": "_useFallback",
+            //         "Validated": "_validated",
+            //         "Reserved": "_reserved",
+            //         "__LastUpdateTime": "_lastUpdateTime",
+            //         "RenderInterface": "_renderInterface",
+            //         "DefaultMaterial": "defaultMaterial",
+            //         "DetailScale": "detailScale",
+            //         "Detail": "_detail",
 
-    //         "ZWrite": "depthWrite",
-    //         "ZTest": "depthTest",
-    //         "TreatAsTwoSided": "isTreatingDoubleSided",
+            "ZWrite": "depthWrite",
+            "ZTest": "depthTest",
+            //         "TreatAsTwoSided": "isTreatingDoubleSided",
 
-    //         "Material": "material"
-    //     });
-    // }
+            //         "Material": "material"
+        });
+    }
 }
 
 abstract class UBaseModifier extends UBaseMaterial {
@@ -152,18 +150,19 @@ class UFinalBlend extends UBaseModifier {
 }
 
 class UShader extends UMaterial {
-    // protected diffuse: UMaterial = null;
-    // protected opacity: UMaterial = null;
-    // protected doubleSide: boolean = false;
-    // protected specular: UMaterial = null;
-    // protected specularMask: UMaterial = null;
-    // protected outputBlending: OutputBlending_T = OutputBlending_T.OB_Normal;
+    declare protected diffuse: UMaterial;
+    declare protected opacity: UMaterial;
+    declare protected doubleSide: boolean;
+    declare protected specular: UMaterial;
+    declare protected specularMask: UMaterial;
+    declare protected outputBlending: OutputBlending_T;
 
-    // protected transparent: boolean = false;
-    // protected alphaTest: number = 0;
+    declare protected transparent: boolean;
+    declare protected alphaTest: number;
+    declare protected selfIllumination: UMaterial;
+    declare protected selfIlluminationMask: UMaterial;
+
     // protected isPerformingLightingOnSpecularPass: boolean = false;
-    // protected selfIllumination: UMaterial = null;
-    // protected selfIlluminationMask: UMaterial = null;
     // protected unkBytes: BufferValue<"buffer">;
 
     // protected _wireframe: any;
@@ -177,74 +176,72 @@ class UShader extends UMaterial {
     //     this.readHead = pkg.tell();
     // }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "Diffuse": "diffuse",
-    //         "Opacity": "opacity",
-    //         "TwoSided": "doubleSide",
-    //         "Specular": "specular",
-    //         "SpecularityMask": "specularMask",
-    //         "OutputBlending": "outputBlending",
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Diffuse": "diffuse",
+            "Opacity": "opacity",
+            "TwoSided": "doubleSide",
+            "Specular": "specular",
+            "SpecularityMask": "specularMask",
+            "OutputBlending": "outputBlending",
 
+            "SelfIllumination": "selfIllumination",
+            "SelfIlluminationMask": "selfIlluminationMask",
 
-    //         "AlphaTest": "transparent",
-    //         "SelfIllumination": "selfIllumination",
-    //         "SelfIlluminationMask": "selfIlluminationMask",
-    //         "AlphaRef": "alphaTest",
-    //         "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
+            "AlphaTest": "transparent",
+            "AlphaRef": "alphaTest",
 
-    //         "Wireframe": "_wireframe",
-    //         "ModulateStaticLighting2X": "_modulateStaticLighting2X"
-    //     });
-    // }
+            // "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
+            // "Wireframe": "_wireframe",
+            // "ModulateStaticLighting2X": "_modulateStaticLighting2X"
+        });
+    }
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.uuid;
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.uuid;
 
-    //     library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
-    //     // await this.onDecodeReady();
+        const diffuse = this.diffuse?.loadSelf().getDecodeInfo(library) || null;
+        const opacity = this.opacity?.loadSelf().getDecodeInfo(library) || null;
+        const specular = this.specular?.loadSelf().getDecodeInfo(library) || null;
+        const specularMask = this.specularMask?.loadSelf().getDecodeInfo(library) || null;
+        const depthWrite = this.depthWrite;
+        const doubleSide = this.doubleSide;
+        const transparent = this.transparent;
+        const alphaTest = this.alphaTest / 255;
 
-    //     const diffuse = this.diffuse?.loadSelf().getDecodeInfo(library) || null;
-    //     const opacity = this.opacity?.loadSelf().getDecodeInfo(library) || null;
-    //     const specular = this.specular?.loadSelf().getDecodeInfo(library) || null;
-    //     const specularMask = this.specularMask?.loadSelf().getDecodeInfo(library) || null;
-    //     const depthWrite = this.depthWrite;
-    //     const doubleSide = this.doubleSide
-    //     const transparent = this.transparent;
-    //     const alphaTest = this.alphaTest / 255;
+        let blendingMode: GA.SupportedBlendingTypes_T;
 
-    //     let blendingMode: SupportedBlendingTypes_T;
+        switch (this.outputBlending.valueOf()) {
+            case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
+            case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
+            case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;
+            case OutputBlending_T.OB_Translucent: blendingMode = "translucent"; break;
+            case OutputBlending_T.OB_Invisible: blendingMode = "invisible"; break;
+            case OutputBlending_T.OB_Brighten: blendingMode = "brighten"; break;
+            case OutputBlending_T.OB_Darken: blendingMode = "darken"; break;
+            default: console.warn("Unknown blending mode:", this.outputBlending); break;
+        }
 
-    //     switch (this.outputBlending.valueOf()) {
-    //         case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
-    //         case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
-    //         case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;
-    //         case OutputBlending_T.OB_Translucent: blendingMode = "translucent"; break;
-    //         case OutputBlending_T.OB_Invisible: blendingMode = "invisible"; break;
-    //         case OutputBlending_T.OB_Brighten: blendingMode = "brighten"; break;
-    //         case OutputBlending_T.OB_Darken: blendingMode = "darken"; break;
-    //         default: console.warn("Unknown blending mode:", this.outputBlending); break;
-    //     }
+        // debugger;
 
-    //     // debugger;
+        library.materials[this.uuid] = {
+            materialType: "shader",
+            blendingMode,
+            diffuse,
+            opacity,
+            specular,
+            specularMask,
+            depthWrite,
+            doubleSide,
+            transparent,
+            alphaTest,
+            visible: true,
+        } as GD.IShaderDecodeInfo;
 
-    //     library.materials[this.uuid] = {
-    //         materialType: "shader",
-    //         blendingMode,
-    //         diffuse,
-    //         opacity,
-    //         specular,
-    //         specularMask,
-    //         depthWrite,
-    //         doubleSide,
-    //         transparent,
-    //         alphaTest,
-    //         visible: true,
-    //     } as IShaderDecodeInfo;
-
-    //     return this.uuid;
-    // }
+        return this.uuid;
+    }
 }
 
 class UFadeColor extends UBaseModifier {

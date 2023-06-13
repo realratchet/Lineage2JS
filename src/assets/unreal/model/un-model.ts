@@ -140,7 +140,7 @@ class UModel extends UPrimitive {
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
+    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): string[][] {
 
         this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
 
@@ -225,7 +225,7 @@ class UModel extends UPrimitive {
 
             const zone = surf.actor.loadSelf().getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
-            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
+            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as GA.FStaticLightmapTexture : null;
             const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
             if (!objectMap.has(priority)) objectMap.set(priority, new Map());
@@ -287,7 +287,7 @@ class UModel extends UPrimitive {
                                 materialType: "lightmapped",
                                 material: materialUuid,
                                 lightmap: staticLightmap?.uuid || null,
-                            } as IBaseMaterialDecodeInfo;
+                            } as GD.IBaseMaterialDecodeInfo;
 
                             materials.push(lightmappedMaterialUuid);
                         } else {
@@ -391,7 +391,7 @@ class UModel extends UPrimitive {
             const materialUuid = `${priority}/${zone.uuid}/${this.uuid}`;
             const geometryUuid = `${priority}/${zone.uuid}/${this.uuid}`;
 
-            library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+            library.materials[materialUuid] = { materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
             library.geometries[geometryUuid] = {
                 groups,
                 indices: new TypedIndicesArray(indices),
@@ -410,7 +410,7 @@ class UModel extends UPrimitive {
                 name: `Sub_${priority}_${this.objectName}_${zone.objectName}`,
                 geometry: geometryUuid,
                 materials: materialUuid,
-            } as IStaticMeshObjectDecodeInfo);
+            } as GD.IStaticMeshObjectDecodeInfo);
 
             return uuid;
         };
@@ -419,7 +419,11 @@ class UModel extends UPrimitive {
             return [...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects));
         };
 
-        return [...objectMap.entries()].map(createPriorityGroup);
+        const result = [...objectMap.entries()].map(createPriorityGroup);
+
+        // debugger;
+
+        return result;
     }
 }
 

@@ -1,33 +1,43 @@
-import { BufferValue, UObject } from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 class FColor extends UObject {
-    // public r: number = 0;
-    // public g: number = 0;
-    // public b: number = 0;
-    // public a: number = 0;
+    declare public ["constructor"]: typeof FColor;
 
-    // public load(pkg: UPackage): this {
-    //     const b = new BufferValue(BufferValue.uint8);
+    declare public r: number;
+    declare public g: number;
+    declare public b: number;
+    declare public a: number;
 
-    //     for (let ax of ["b", "g", "r", "a"])
-    //         this[ax as ("r" | "g" | "b" | "a")] = pkg.read(b).value as number;
+    public constructor(r = 0, g = 0, b = 0, a = 0) {
+        super();
 
-    //     return this;
-    // }
+        this.r = r;
+        this.g = g;
+        this.b = b;
+        this.a = a;
+    }
 
-    // getBrightness() { return (this.g * 3.0 + this.b + this.b + this.r) * 0.0006510417; }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "R": "r",
+            "G": "g",
+            "B": "b",
+            "A": "a",
+        });
+    }
 
-    // toArray(array: number[] | ArrayLike<number> | ColorArr = [], offset = 0) {
+    getBrightness() { return (this.g * 3.0 + this.b + this.b + this.r) * 0.0006510417; }
 
-    //     (array as number[])[offset] = this.r;
-    //     (array as number[])[offset + 1] = this.g;
-    //     (array as number[])[offset + 2] = this.b;
-    //     (array as number[])[offset + 3] = this.a;
+    toArray(array: number[] | ArrayLike<number> | GD.ColorArr = [], offset = 0) {
+        (array as number[])[offset] = this.r;
+        (array as number[])[offset + 1] = this.g;
+        (array as number[])[offset + 2] = this.b;
+        (array as number[])[offset + 3] = this.a;
 
-    //     return array;
-    // }
+        return array;
+    }
 
-    // public toString() {return `Color=(r=${this.r.toFixed(2)}, g=${this.g.toFixed(2)}, b=${this.b.toFixed(2)}, a=${this.a.toFixed(2)})`}
+    public toString() { return `Color=(r=${this.r.toFixed(2)}, g=${this.g.toFixed(2)}, b=${this.b.toFixed(2)}, a=${this.a.toFixed(2)})` }
 }
 
 export default FColor;

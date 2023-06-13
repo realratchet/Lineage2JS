@@ -1,31 +1,22 @@
-import { BufferValue, UObject } from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 class FScale extends UObject {
-    // public x: number;
-    // public y: number;
-    // public z: number;
+    declare public x: number;
+    declare public y: number;
+    declare public z: number;
 
-    // public sheerRate: number;
-    // public sheerAxis: number;
+    declare public sheerRate: number;
+    declare public sheerAxis: number;
 
-    // public unk0: BufferValue;
-
-    // public load(pkg: UPackage): this {
-
-    //     const float = new BufferValue(BufferValue.float);
-    //     const int8 = new BufferValue(BufferValue.int8);
-
-    //     this.x = pkg.read(float).value;
-    //     this.y = pkg.read(float).value;
-    //     this.z = pkg.read(float).value;
-
-    //     this.sheerRate = pkg.read(float).value;
-    //     this.sheerAxis = pkg.read(int8).value;
-
-    //     this.unk0 = pkg.read(BufferValue.allocBytes(8));
-
-    //     return this;
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "X": "x",
+            "Y": "y",
+            "Z": "z",
+            "SheerRate": "sheerRate",
+            "SheerAxis": "sheerAxis"
+        });
+    }
 }
 
 export default FScale;

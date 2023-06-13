@@ -90,15 +90,15 @@ class FBSPNode implements C.IConstructable {
         return this;
     }
 
-    // public getBSPDecodeInfo(): IBSPNodeDecodeInfo_T {
-    //     return {
-    //         children: [this.iFront, this.iBack],
-    //         // plane: this.plane.toArray() as Vector4Arr,
-    //         plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as Vector4Arr,
-    //         leaves: [this.iLeaf[0], this.iLeaf[1]],
-    //         zones: [this.iZone[0], this.iZone[1]]
-    //     };
-    // }
+    public getBSPDecodeInfo(): GD.IBSPNodeDecodeInfo_T {
+        return {
+            children: [this.iFront, this.iBack],
+            // plane: this.plane.toArray() as Vector4Arr,
+            plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,
+            leaves: [this.iLeaf[0], this.iLeaf[1]],
+            zones: [this.iZone[0], this.iZone[1]]
+        };
+    }
 }
 
 export default FBSPNode;

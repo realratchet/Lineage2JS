@@ -1,7 +1,7 @@
 import UObject from "@l2js/core";
 
 class FPlane extends UObject {
-    declare ["constructor"]: typeof FPlane;
+    declare public ["constructor"]: typeof FPlane;
 
     declare public x: number;
     declare public y: number;

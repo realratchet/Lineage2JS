@@ -1,19 +1,19 @@
 import UObject from "@l2js/core";
 
 class UPointRegion extends UObject {
-    // protected zone: FZoneInfo;
-    // protected indexLeaf: number;
-    // protected zoneNumber: number;
+    declare protected zone: GA.FZoneInfo;
+    declare protected indexLeaf: number;
+    declare protected zoneNumber: number;
 
-    // public getZone() { return this.zone; }
+    public getZone() { return this.zone; }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "Zone": "zone",
-    //         "iLeaf": "indexLeaf",
-    //         "ZoneNumber": "zoneNumber"
-    //     });
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Zone": "zone",
+            "iLeaf": "indexLeaf",
+            "ZoneNumber": "zoneNumber"
+        });
+    }
 }
 
 export default UPointRegion;

@@ -1,7 +1,7 @@
 import { UObject } from "@l2js/core";
 
 class FCoords extends UObject {
-    declare ["constructor"]: typeof FCoords;
+    declare public ["constructor"]: typeof FCoords;
 
     declare public origin: GA.FVector;
     declare public xAxis: GA.FVector;

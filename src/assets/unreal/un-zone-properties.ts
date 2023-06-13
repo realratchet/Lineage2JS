@@ -22,7 +22,7 @@ class FZoneProperties implements C.IConstructable {
         return this;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): IBSPZoneDecodeInfo_T {
+    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): GD.IBSPZoneDecodeInfo_T {
         return {
             connectivity: this.connectivity,
             visibility: this.visibility,

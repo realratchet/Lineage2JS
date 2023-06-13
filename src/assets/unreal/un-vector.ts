@@ -234,7 +234,7 @@ class FVector extends UObject {
     applyMatrix4(m: GA.FMatrix) {
         const cls = this.constructor;
         const x = this.x, y = this.y, z = this.z;
-        const e = m.elements;
+        const e = m.getElements4x4();
 
         const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
 

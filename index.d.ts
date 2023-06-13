@@ -40,10 +40,12 @@ declare global {
                 export type FPlane = import("@unreal/un-plane").FPlane;
                 export type FBox = import("@unreal/un-box").FBox;
                 export type FMatrix = import("@unreal/un-matrix").FMatrix;
+                export type FColor = import("@unreal/un-color").FColor;
+                export type FScale = import("@unreal/un-scale").FScale;
 
                 export type UPlatte = import("@unreal/un-palette").UPlatte;
                 export type UTexture = import("@unreal/un-texture").UTexture;
-
+                export type UTextureModifyInfo = import("@unreal/un-texture-modify-info").UTextureModifyInfo;
                 export type FStaticLightmapTexture = import("@unreal/model/un-multilightmap-texture").FStaticLightmapTexture;
 
                 export type NativeClientTypes_T =
@@ -64,11 +66,18 @@ declare global {
                 export type UMaterial = import("@unreal/un-material").UMaterial;
                 export type UShader = import("@unreal/un-material").UShader;
 
+
                 export type AActor = import("@unreal/un-aactor").UAActor;
 
                 export type AInfo = import("@unreal/un-info").AInfo;
                 export type FFogInfo = import("@unreal/un-fog-info").FFogInfo;
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
+
+                export type UPointRegion = import("@unreal/un-point-region").UPointRegion;
+
+                export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
+
+                export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
             }
 
             namespace Decoding {

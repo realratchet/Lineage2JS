@@ -84,20 +84,20 @@ class FZoneInfo extends AInfo/* implements IInfo*/ {
 
     // }
 
-    // public getDecodeInfo(library: DecodeLibrary): IZoneDecodeInfo {
-    //     return {
-    //         uuid: this.uuid,
-    //         type: "Zone",
-    //         name: this.objectName,
-    //         bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
-    //         children: [],
-    //         fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
-    //             start: this.distanceFogStart,
-    //             end: this.distanceFogEnd,
-    //             color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
-    //         }
-    //     };
-    // }
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IZoneDecodeInfo {
+        return {
+            uuid: this.uuid,
+            type: "Zone",
+            name: this.objectName,
+            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            children: [],
+            fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
+                start: this.distanceFogStart,
+                end: this.distanceFogEnd,
+                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as GD.ColorArr
+            }
+        };
+    }
 }
 
 export default FZoneInfo;
