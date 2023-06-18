@@ -116,7 +116,7 @@ const staticMeshAmbient = [
     [24, 75, 103, 131],
 ].map(toColor);
 
-function selectByTime<T extends IBaseTimedConstructable>(timeOfDay: number, array: T[]): T {
+function selectByTime<T extends GD.IBaseTimedConstructable>(timeOfDay: number, array: T[]): T {
     for (let i = 0, len = array.length; i < len; i++) {
         const elem = array[i];
 

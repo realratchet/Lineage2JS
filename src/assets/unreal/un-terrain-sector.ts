@@ -5,7 +5,7 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient } from "./un-time-list";
 import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
-import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -23,38 +23,38 @@ class FTerrainLightInfo implements C.IConstructable {
 }
 
 class UTerrainSector extends UObject {
-    public readonly boundingBox: FBox = new FBox();
-    protected offsetX: number;
-    protected offsetY: number;
-    public info: GA.FTerrainInfo;
-    protected cellNum: number;
-    protected sectorWidth: number;
+    declare public boundingBox: FBox;
+    declare protected offsetX: number;
+    declare protected offsetY: number;
+    declare public info: GA.FTerrainInfo;
+    declare protected cellNum: number;
+    declare protected sectorWidth: number;
 
-    protected infoId: number;
-    protected unkNum0: number;
-    protected unkNum1: number;
-    protected unkNum2: number;
+    declare protected infoId: number;
+    declare protected unkNum0: number;
+    declare protected unkNum1: number;
+    declare protected unkNum2: number;
 
-    protected unkBuf0: any;
+    declare protected unkBuf0: any;
 
     // likely mesh lights?
-    protected likelySegmentLights = new FArray(FTerrainLightInfo);
+    declare protected likelySegmentLights: FArray<FTerrainLightInfo>;
 
-    protected shadowMaps = [
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8)
+    declare protected shadowMaps: [
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">,
+        FPrimitiveArray<"uint8">
     ];
 
-    protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
-    protected unk64Bytes: Int32Array;
+    declare protected texInfo: FPrimitiveArray<"uint16">;
+    declare protected unk64Bytes: Int32Array;
 
-    public getDecodeInfo(library: DecodeLibrary, info: FTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
@@ -81,7 +81,7 @@ class UTerrainSector extends UObject {
         const trueBoundingBox = new FBox();
         const tmpVector = new FVector();
 
-        let validShadowmap: FPrimitiveArray = null;
+        let validShadowmap: C.FPrimitiveArray<any> = null;
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
@@ -251,8 +251,8 @@ class UTerrainSector extends UObject {
                 width: 17 * 17,
                 height: layerCount + 1,
                 format: "rg"
-            } as IDataTextureDecodeInfo
-        } as IMaterialTerrainSegmentDecodeInfo;
+            } as GD.IDataTextureDecodeInfo
+        } as GD.IMaterialTerrainSegmentDecodeInfo;
 
         return {
             uuid: this.uuid,
@@ -264,14 +264,9 @@ class UTerrainSector extends UObject {
         };
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
-
-        // debugger;
-
-        this.setReadPointers(exp);
-        pkg.seek(this.readHead, "set");
 
         // if (verArchive <= 0x5E) {
         //     console.warn("Unsupported yet");
@@ -313,10 +308,13 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
+        this.boundingBox = pkg.makeCoreStruct("Box");
+
         // pkg.dump(1, true, false);
         pkg.seek(1);
 
-        this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
+        this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value;
+        this.info = pkg.fetchObject(this.infoId);
 
         // const uint16 = new BufferValue(BufferValue.uint16);
         // const int32 = new BufferValue(BufferValue.int32);
@@ -324,8 +322,8 @@ class UTerrainSector extends UObject {
 
         // pkg.dump(1, true, false);
 
-        this.unkNum0 = pkg.read(uint32).value as number;
-        this.unkNum1 = pkg.read(uint32).value as number;
+        this.unkNum0 = pkg.read(uint32).value;
+        this.unkNum1 = pkg.read(uint32).value;
 
         // console.log(this.unkNum0, this.unkNum1)
 
@@ -333,8 +331,8 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.offsetX = pkg.read(uint32).value as number;
-        this.offsetY = pkg.read(uint32).value as number;
+        this.offsetX = pkg.read(uint32).value;
+        this.offsetY = pkg.read(uint32).value;
 
         // console.log(this.offsetX, this.offsetY);
 
@@ -343,20 +341,29 @@ class UTerrainSector extends UObject {
         this.boundingBox.load(pkg);
 
         // debugger;
+        this.likelySegmentLights = new FArray(FTerrainLightInfo);
         this.likelySegmentLights.load(pkg);
 
 
-        this.cellNum = pkg.read(uint32).value as number;
-        this.sectorWidth = pkg.read(uint32).value as number;
+        this.cellNum = pkg.read(uint32).value;
+        this.sectorWidth = pkg.read(uint32).value;
 
         this.readHead = pkg.tell();
 
-        this.shadowMaps.forEach(sm => sm.load(pkg));
+        this.shadowMaps = [
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg),
+            new FPrimitiveArray(BufferValue.uint8).load(pkg)
+        ];
 
         this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
 
-
-        this.texInfo.load(pkg);
+        this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
 
         this.readHead = pkg.tell();
 
@@ -367,4 +374,4 @@ class UTerrainSector extends UObject {
 export default UTerrainSector;
 export { UTerrainSector };
 
-type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo };
+type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo };

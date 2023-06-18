@@ -38,18 +38,25 @@ import UTerrainLayer from "./un-terrain-layer";
 import UDecoLayer from "./un-deco-layer";
 import FRange, { FRangeVector } from "./un-range";
 import FTIntMap from "./un-tint-map";
+import UTerrainSector from "./un-terrain-sector";
+import UTerrainPrimitive from "./un-terrain-primitive";
+import FCoords from "./un-coords";
 
 type CoreStructs_T =
     | "Vector"
     | "Plane"
     | "Box"
-    | "Matrix";
+    | "Matrix"
+    | "Color"
+    | "Coords";
 
 type CoreStructsReturnType_T<T extends CoreStructs_T> =
     | T extends "Vector" ? GA.FVector
     : T extends "Plane" ? GA.FPlane
     : T extends "Box" ? GA.FBox
     : T extends "Matrix" ? GA.FMatrix
+    : T extends "Color" ? GA.FColor
+    : T extends "Coords" ? GA.FCoords
     : never;
 
 class UPackage extends APackage {
@@ -65,7 +72,7 @@ class UPackage extends APackage {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 
-    public findCoreStruct<T extends CoreStructs_T>(className: T): new () => CoreStructsReturnType_T<T> {
+    public findCoreStruct<T extends CoreStructs_T>(className: T): new (...args: any) => CoreStructsReturnType_T<T> {
         const pkgCore = this.loader.getCorePackage() as UPackage;
         const pkgNative = this.loader.getNativePackage() as UNativePackage;
         const expIndex = pkgCore.findObjectRef("Struct", className);
@@ -79,10 +86,10 @@ class UPackage extends APackage {
         return cls;
     }
 
-    public makeCoreStruct<T extends CoreStructs_T>(className: T) {
+    public makeCoreStruct<T extends CoreStructs_T>(className: T, ...args: any) {
         const cls = this.findCoreStruct<T>(className);
 
-        return new cls();
+        return new cls(...args);
     }
 }
 
@@ -106,6 +113,7 @@ class UNativePackage extends ANativePackage {
             case "RangeVector": Constructor = FRangeVector; break;
             case "Range": Constructor = FRange; break;
             case "TerrainIntensityMap": Constructor = FTIntMap; break;
+            case "Coords": Constructor = FCoords; break;
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -143,9 +151,12 @@ class UNativePackage extends ANativePackage {
             case "MusicVolume": Constructor = UMusicVolume; break;
             case "ConvexVolume": Constructor = UConvexVolume; break;
 
+            case "TerrainSector": Constructor = UTerrainSector; break;
+            case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
+
+
             //         case "Font": Constructor = UFont; break;
             //         case "StaticMesh": Constructor = UStaticMesh; break;
-            //         case "TerrainSector": Constructor = UTerrainSector; break;
             //         case "Mesh": Constructor = UMesh; break;
             //         case "MeshAnimation": Constructor = UMeshAnimation; break;
             //         case "Level": Constructor = ULevel; break;
@@ -154,7 +165,6 @@ class UNativePackage extends ANativePackage {
             //         case "Viewport": Constructor = UViewport; break;
             //         case "Client": Constructor = UClient; break;
             //         case "Player": Constructor = UPlayer; break;
-            //         case "TerrainPrimitive": Constructor = UTerrainPrimitive; break;
             //         case "MeshInstance": Constructor = UMeshInstance; break;
             //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 

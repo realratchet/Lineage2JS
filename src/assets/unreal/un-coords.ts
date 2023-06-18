@@ -9,27 +9,15 @@ class FCoords extends UObject {
     declare public zAxis: GA.FVector;
 
     protected getPropertyMap() {
-        debugger;
-        throw new Error("not implemented yet")
-        // return Object.assign({}, super.getPropertyMap(), {
-        //     "X": "x",
-        //     "Y": "y",
-        //     "Z": "z",
-        //     "W": "w",
-        // });
+        return Object.assign({}, super.getPropertyMap(), {
+            "X": "x",
+            "Y": "y",
+            "Z": "z",
+            "W": "w",
+        });
     }
 
-    public load(pkg: GA.UPackage) {
-        this.origin.load(pkg);
-
-        this.xAxis.load(pkg);
-        this.yAxis.load(pkg);
-        this.zAxis.load(pkg);
-
-        return this;
-    }
-
-    multiply(other: FCoords): FCoords {
+    public multiply(other: FCoords): FCoords {
         const cls = this.constructor;
         const _this = new cls();
 

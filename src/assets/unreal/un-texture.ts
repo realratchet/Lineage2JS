@@ -117,11 +117,9 @@ class UTexture extends UMaterial {
         return this;
     }
 
-    public postLoad(pkg: C.APackage, exp: C.UExport) { this.readHead = pkg.tell(); }
-
     protected getTexturePixelFormat(): ETexturePixelFormat {
         switch (this.format.valueOf()) {
-            // case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
+            case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
             case ETextureFormat.TEXF_DXT1: return ETexturePixelFormat.TPF_DXT1;
             // case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;
             case ETextureFormat.TEXF_RGBA8: return ETexturePixelFormat.TPF_BGRA8;
@@ -228,7 +226,7 @@ class UTexture extends UMaterial {
 
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         let decodedBuffer: ArrayBuffer;
-        let textureType: DecodableTexture_T;
+        let textureType: GD.DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -243,7 +241,8 @@ class UTexture extends UMaterial {
                 decodedBuffer = data.buffer;
                 break;
             case ETexturePixelFormat.TPF_BGRA8:
-            case ETexturePixelFormat.TPF_RGBA8: {
+            case ETexturePixelFormat.TPF_RGBA8:
+            case ETexturePixelFormat.TPF_P8: {
                 textureType = "rgba";
                 if (!this.palette) {
                     decodedBuffer = data.buffer;
@@ -276,7 +275,7 @@ class UTexture extends UMaterial {
             wrapS: this.wrapS,
             wrapT: this.wrapT,
             useMipmaps: mipCount > 0
-        } as ITextureDecodeInfo;
+        } as GD.ITextureDecodeInfo;
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {
@@ -285,7 +284,7 @@ class UTexture extends UMaterial {
         library.materials[this.uuid] = null;
 
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
-            const sprites: ITextureDecodeInfo[] = [];
+            const sprites: GD.ITextureDecodeInfo[] = [];
 
             let tex: UTexture = this;
 
@@ -299,15 +298,13 @@ class UTexture extends UMaterial {
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate
-            } as IAnimatedSpriteDecodeInfo;
+            } as GD.IAnimatedSpriteDecodeInfo;
         } else {
             library.materials[this.uuid] = this.decodeTexture(library);
         }
 
         return this.uuid;
     }
-
-    public toString() { return `Texture=${this.objectName}`; }
 }
 
 export default UTexture;

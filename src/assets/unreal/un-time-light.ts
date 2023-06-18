@@ -1,10 +1,11 @@
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import { BufferValue } from "@l2js/core";
-import FConstructable from "./un-constructable";
 import { FPlane } from "./un-plane";
 
-abstract class FNBaseTimedConstructable extends FConstructable implements IBaseTimedConstructable {
+abstract class FNBaseTimedConstructable implements C.IConstructable, GD.IBaseTimedConstructable {
     public time: number;
+
+    abstract load(pkg: GA.UPackage): this;
 }
 
 class FNTimeColor extends FNBaseTimedConstructable {
@@ -23,7 +24,7 @@ class FNTimeColor extends FNBaseTimedConstructable {
 
     public getColor(): [number, number, number] { return [this.r / 255, this.g / 255, this.b / 255]; }
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
         const int8 = new BufferValue(BufferValue.int8);
         const int32 = new BufferValue(BufferValue.int32);
 
@@ -51,7 +52,7 @@ class FNTimeHSV extends FNBaseTimedConstructable {
         this.lightness = v;
     }
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
         const int8 = new BufferValue(BufferValue.int8);
         const int32 = new BufferValue(BufferValue.int32);
         const float = new BufferValue(BufferValue.float);
@@ -72,7 +73,7 @@ class FNTimeHSV extends FNBaseTimedConstructable {
 class FNTimeScale extends FNBaseTimedConstructable {
     public scale: number;
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
         const float = new BufferValue(BufferValue.float);
 
         this.time = pkg.read(float).value as number;

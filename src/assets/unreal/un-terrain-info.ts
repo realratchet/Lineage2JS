@@ -1,13 +1,6 @@
-import UTerrainLayer from "./un-terrain-layer";
-import UDecoLayer from "./un-deco-layer";
 import { BufferValue } from "@l2js/core";
-import UAActor from "./un-aactor";
-import FTIntMap from "./un-tint-map";
-import FColor from "./un-color";
-import FBox from "./un-box";
-import FCoords from "./un-coords";
 import AInfo from "./un-info";
-import { FObjectArray } from "@l2js/core/src/unreal/un-array";
+import FArray, { FObjectArray } from "@l2js/core/src/unreal/un-array";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -30,24 +23,24 @@ class FTerrainInfo extends AInfo {
     // protected autoTimeGeneration: boolean;
     // protected tIntMap: FArray<FTIntMap> = new FArray(FTIntMap);
     // protected tickTime: number;
-    // protected sectors: UTerrainSector[] = [];
+    declare protected sectors: C.FObjectArray<GA.UTerrainSector>;
     // protected showOnInvisibleTerrain: boolean;
     // protected litDirectional: boolean;
     // protected disregardTerrainLighting: boolean;
     // protected randomYaw: boolean;
     // protected bForceRender: boolean;
 
-    // public readonly isTerrainInfo = true;
+    public readonly isTerrainInfo = true;
 
-    // protected sectorsX: number;
-    // protected sectorsY: number;
-    // public readonly terrainCoords = new FCoords();
-    // protected unkIntArr1: number[];
-    // protected unkInt2: number;
-    // protected unkInt3: number;
-    // protected unkColorArr = new FArray(FColor);
+    declare protected sectorsX: number;
+    declare protected sectorsY: number;
+    declare public terrainCoords: GA.FCoords;
+    declare protected unkIntArr1: number[];
+    declare protected unkInt2: number;
+    declare protected unkInt3: number;
+    declare protected unkColorArr: C.FArray<GA.FColor>;
 
-    // public readonly boundingBox = new FBox();
+    declare public boundingBox: GA.FBox;
     // public heightmapMin: number;
     // public heightmapMax: number;
 
@@ -95,6 +88,12 @@ class FTerrainInfo extends AInfo {
             "TerrainMap": "terrainMap",
             "TerrainScale": "terrainScale",
             "Layers": "layers",
+
+            "SectorsX": "sectorsX",
+            "SectorsY": "sectorsY",
+
+            "Sectors": "sectors",
+
             //         "DecoLayers": "decoLayers",
             //         "QuadVisibilityBitmap": "quadVisibilityBitmap",
             //         "EdgeTurnBitmap": "edgeTurnBitmap",
@@ -121,12 +120,11 @@ class FTerrainInfo extends AInfo {
             //         "bKCollisionHalfRes": "_bKCollisionHalfRes",
             //         "JustLoaded": "_justLoaded",
             //         "DecoLayerData": "_decoLayerData",
-            //         "Sectors": "_sectors",
+
             //         "Vertices": "_vertices",
             //         "HeightmapX": "_heightmapX",
             //         "HeightmapY": "_heightmapY",
-            //         "SectorsX": "_sectorsX",
-            //         "SectorsY": "_sectorsY",
+
             //         "Primitive": "_primitive",
             //         "FaceNormals": "_faceNormals",
             //         "ToWorld": "_toWorld",
@@ -182,24 +180,26 @@ class FTerrainInfo extends AInfo {
 
         this.readHead = pkg.tell();
 
+        const FVector = pkg.findCoreStruct("Vector");
+
+        this.boundingBox = pkg.makeCoreStruct("Box", new FVector(), new FVector());
+        this.terrainCoords = pkg.makeCoreStruct("Coords");
+        this.unkColorArr = new FArray(pkg.findCoreStruct("Color"));
+
         if (verLicense >= 0x11) {
-            const sectors = new FObjectArray<GA.UTerrainSector>().load(pkg);
+            this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();
 
             this.readHead = pkg.tell();
 
-            sectors.forEach(object => {
-                object.info = this;
-
-                this.boundingBox.expandByPoint(object.boundingBox.min);
-                this.boundingBox.expandByPoint(object.boundingBox.max);
-
-                this.sectors.push(object);
+            this.sectors.forEach(sector => {
+                this.boundingBox.expandByPoint(sector.boundingBox.min);
+                this.boundingBox.expandByPoint(sector.boundingBox.max);
             });
 
             pkg.seek(this.readHead, "set");
 
-            this.sectorsX = pkg.read(int32).value as number;
-            this.sectorsY = pkg.read(int32).value as number;
+            this.sectorsX = pkg.read(int32).value;
+            this.sectorsY = pkg.read(int32).value;
         } else {
             console.warn("Unsupported yet");
             debugger;
@@ -207,15 +207,15 @@ class FTerrainInfo extends AInfo {
 
         if (verArchive >= 0x53) {
             this.terrainCoords.load(pkg);
-            this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value as number);
+            this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value);
         } else {
             console.warn("Unsupported yet");
             debugger;
         }
 
         if (verArchive >= 0x4C) {
-            this.unkInt2 = pkg.read(int32).value as number;
-            this.unkInt3 = pkg.read(int32).value as number;
+            this.unkInt2 = pkg.read(int32).value;
+            this.unkInt3 = pkg.read(int32).value;
         } else {
             console.warn("Unsupported yet");
             debugger;

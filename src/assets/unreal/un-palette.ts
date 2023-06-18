@@ -1,27 +1,19 @@
 import UObject from "@l2js/core";
-import FColor from "./un-color";
+import FArray from "@l2js/core/src/unreal/un-array";
 
 class UPlatte extends UObject {
-    // public colors: FArray<FColor> = new FArray(FColor);
+    public colors: FArray<GA.FColor>
     // public readonly skipRemaining = true;
 
-    // protected getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "Colors": "_colors"
-    //     });
-    // }
+    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
+        super.doLoad(pkg, exp);
 
-    // public doLoad(pkg: UPackage, exp: UExport) {
-    //     super.doLoad(pkg, exp);
+        const FColor = pkg.findCoreStruct("Color");
 
-    //     this.colors.load(pkg, null);
+        this.colors = new FArray(FColor).load(pkg);
 
-    //     console.assert(this.colors.getElemCount() === 256);
-
-    //     this.colors.getElem(0).a = 0;
-
-    //     return this;
-    // }
+        console.assert(this.colors.getElemCount() === 256);
+    }
 }
 
 export default UPlatte;
