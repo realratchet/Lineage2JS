@@ -10,10 +10,10 @@ class FCoords extends UObject {
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "X": "x",
-            "Y": "y",
-            "Z": "z",
-            "W": "w",
+            "Origin": "origin",
+            "XAxis": "xAxis",
+            "YAxis": "yAxis",
+            "ZAxis": "zAxis",
         });
     }
 

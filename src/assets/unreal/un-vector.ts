@@ -1,7 +1,10 @@
+import FPlane from "@client/assets/unreal/un-plane";
 import { UObject } from "@l2js/core";
 
-class FVector extends UObject {
-    declare ["constructor"]: typeof FVector;
+
+
+abstract class FVector extends UObject {
+    declare protected ["constructor"]: { new(): never } & typeof FVector;
 
     declare public x: number;
     declare public y: number;
@@ -15,15 +18,20 @@ class FVector extends UObject {
         };
     }
 
+
     public constructor(x = 0, y = 0, z = 0) {
         super();
         this.set(x, y, z);
     }
 
+    // public static make(this: typeof FVector, ...args: MakeParams<typeof FVector>): FVector {
+    //     return new FVector(...args);
+    // }
+
     public set(x: number, y: number, z: number) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
+        // this.x = x;
+        // this.y = y;
+        // this.z = z;
 
         return this;
     }
@@ -32,9 +40,13 @@ class FVector extends UObject {
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {
+
+        new FVector(0,0,0)
         const cls = this.constructor;
 
-        return new cls(this.x * scalar, this.y * scalar, this.z * scalar);
+        const z = FVector.make(0, 0, 0);
+        const p = FPlane.make_<FPlane, typeof FPlane>(0, 0, 0, 0);
+
     }
 
     public add(other: FVector) {
@@ -288,6 +300,8 @@ class FVector extends UObject {
 
     public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})` }
 }
+
+new FVector()
 
 export default FVector;
 export { FVector };

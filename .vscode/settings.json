@@ -6,6 +6,7 @@
         "**/bower_components": true,
         "**/*.code-search": true
     },
+    "typescript.preferences.importModuleSpecifier": "non-relative",
     "files.associations": {
         "*.pyx": "python",
         "cstddef": "cpp",
@@ -87,4 +88,5 @@
         "typeinfo": "cpp",
         "variant": "cpp"
     }
+    
 }

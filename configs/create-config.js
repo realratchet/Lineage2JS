@@ -121,27 +121,30 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
         }, {
             test: /\.(js|jsx|ts|tsx)$/,
             exclude: /(node_modules|submodules)/,
-            loader: "babel-loader",
-            options: {
-                presets: [
-                    ["@babel/preset-env", {
-                        targets: { browsers: ["chrome >= 80"] }
-                    }],
-                    [
-                        "@babel/preset-typescript", {
-                            allowNamespaces: true,
-                            targets: {
-                                browsers: ["chrome >= 80"]
-                            }
-                        }
-                    ]
-                ],
-                plugins: [
-                    ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
-                    "@babel/transform-runtime",
-                    "@babel/plugin-proposal-class-properties"
-                ]
-            }
+            use: [
+                {
+                    loader: "babel-loader",
+                    options: {
+                        presets: [
+                            ["@babel/preset-env", {
+                                targets: { browsers: ["chrome >= 80"] }
+                            }],
+                            [
+                                "@babel/preset-typescript", {
+                                    allowNamespaces: true,
+                                    targets: {
+                                        browsers: ["chrome >= 80"]
+                                    }
+                                }
+                            ]
+                        ],
+                        plugins: [
+                            ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
+                            "@babel/transform-runtime",
+                            "@babel/plugin-proposal-class-properties"
+                        ]
+                    }
+                }]
         });
 
         return {

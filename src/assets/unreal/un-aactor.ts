@@ -1,5 +1,5 @@
-import FVector from "./un-vector";
-import FRotator from "./un-rotator";
+// import FVector from "./un-vector";
+// import FRotator from "./un-rotator";
 import UObject from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
@@ -13,10 +13,10 @@ abstract class UAActor extends UObject {
     declare protected group: string;
     declare protected isSunAffected: boolean;
     declare protected physicsVolume: GA.UPhysicsVolume;
-    declare public readonly location: FVector;
-    declare public readonly rotation: FRotator;
-    declare public readonly scale: FVector;
-    declare protected swayRotationOrig: FRotator;
+    declare public readonly location: GA.FVector;
+    declare public readonly rotation: GA.FRotator;
+    declare public readonly scale: GA.FVector;
+    declare protected swayRotationOrig: GA.FRotator;
 
     declare protected hasDistanceFog: boolean;
     declare protected distanceFogEnd: number;
@@ -43,8 +43,8 @@ abstract class UAActor extends UObject {
     declare protected postScale: GA.FScale;
     declare protected polyFlags: number;
     declare protected brush: GA.UModel;
-    declare protected prePivot: FVector;
-    declare protected postPivot: FVector;
+    declare protected prePivot: GA.FVector;
+    declare protected postPivot: GA.FVector;
     declare protected isRangeIgnored: boolean;
     declare protected isBlockingActors: boolean;
     declare protected isBlockingPlayers: boolean;

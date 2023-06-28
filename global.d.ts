@@ -8,3 +8,5 @@ declare namespace EnumKeys {
     type BspNodeFlags_T = keyof typeof import("@unreal/bsp/un-bsp-node").BspNodeFlags_T;
     type PolyFlags_T = keyof typeof import("@unreal/un-polys").PolyFlags_T;
 }
+
+type MakeParams<T> = ConstructorParameters<{ new(): never } & T>;

@@ -47,16 +47,16 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     pkg = await assetLoader.load(pkg);
 
 
-    async function getTextures(pkg: string | UPackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
+    async function getTextures(pkg: string | GA.UPackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
         if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Texture");
 
         pkg = await assetLoader.load(pkg);
 
         // debugger;
 
-        const texExps = texNames.map(v => (pkg as UPackage).exports.find(x => x.objectName === v));
+        const texExps = texNames.map(v => (pkg as GA.UPackage).exports.find(x => x.objectName === v));
 
-        const textures = await Promise.all(texExps.map(exp => (pkg as UPackage).fetchObject<UShader>(exp.index + 1)));
+        const textures = await Promise.all(texExps.map(exp => (pkg as GA.UPackage).fetchObject<GA.UShader>(exp.index + 1)));
 
         const infos = await Promise.all(textures.map(mesh => mesh.getDecodeInfo(decodeLibrary)));
 
@@ -91,9 +91,9 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     ];
 
 
-    const bodyPartExps = bodypartMeshNames.map(v => (pkg as UPackage).exportGroups.SkeletalMesh.find(x => x.export.objectName === v));
+    const bodyPartExps = bodypartMeshNames.map(v => (pkg as GA.UPackage).exportGroups.SkeletalMesh.find(x => x.export.objectName === v));
 
-    const bodypartMeshes = await Promise.all(bodyPartExps.map(exp => (pkg as UPackage).fetchObject<USkeletalMesh>(exp.index + 1)));
+    const bodypartMeshes = await Promise.all(bodyPartExps.map(exp => (pkg as GA.UPackage).fetchObject<GA.USkeletalMesh>(exp.index + 1)));
 
     const decodeLibrary = new DecodeLibrary();
 
@@ -104,7 +104,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     const bodypartInfos = await Promise.all(bodypartMeshes.map(mesh => mesh.getDecodeInfo(decodeLibrary)));
 
     bodypartMeshes.forEach(({ uuid }, index) => {
-        const material = decodeLibrary.materials[uuid] as IMaterialGroupDecodeInfo;
+        const material = decodeLibrary.materials[uuid] as GD.IMaterialGroupDecodeInfo;
 
         material.materials = [textures[index]];
     });
@@ -162,7 +162,7 @@ async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLo
 
     const meshIndex = antaras.index + 1;
 
-    const mesh = await pkg.fetchObject<USkeletalMesh>(meshIndex);
+    const mesh = await pkg.fetchObject<GA.USkeletalMesh>(meshIndex);
 
     const decodeLibrary = new DecodeLibrary();
 
@@ -420,7 +420,7 @@ async function startCore() {
 
             ...[/*2092,*/ /*3052*/, 2517], // talking island collision
         ]
-    } as LoadSettings_T;
+    } as GD.LoadSettings_T;
 
     // working (or mostly working)
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower

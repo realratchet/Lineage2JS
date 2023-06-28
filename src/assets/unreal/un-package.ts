@@ -3,7 +3,7 @@ import { ANativePackage, APackage, UObject } from "@l2js/core";
 import UModel from "./model/un-model";
 import ULevel from "./un-level";
 import FScale from "./un-scale";
-import FVector from "./un-vector";
+'native use'; import FVector from "./un-vector";
 import UBrush from "./un-brush";
 import FColor from "./un-color";
 import ULevelInfo from "./un-level-info";

@@ -3,7 +3,7 @@ import FBox from "./un-box";
 import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { selectByTime, terrainAmbient } from "./un-time-list";
-import FVector from "./un-vector";
+// import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
@@ -36,6 +36,8 @@ class UTerrainSector extends UObject {
     declare protected unkNum2: number;
 
     declare protected unkBuf0: any;
+
+    declare pkg: GA.UPackage;
 
     // likely mesh lights?
     declare protected likelySegmentLights: FArray<FTerrainLightInfo>;
@@ -78,7 +80,9 @@ class UTerrainSector extends UObject {
         const indices = new TypedIndicesArray(16 * 16 * 6);
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
-        const trueBoundingBox = new FBox();
+        const FVector = this.pkg.findCoreStruct("Vector");
+
+        const trueBoundingBox = this.pkg.makeCoreStruct("Box");
         const tmpVector = new FVector();
 
         let validShadowmap: C.FPrimitiveArray<any> = null;
@@ -92,7 +96,6 @@ class UTerrainSector extends UObject {
         }
 
         const v = new FVector();
-
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -370,6 +373,7 @@ class UTerrainSector extends UObject {
         return this;
     }
 }
+
 
 export default UTerrainSector;
 export { UTerrainSector };
