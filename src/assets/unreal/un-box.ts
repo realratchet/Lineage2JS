@@ -1,7 +1,8 @@
+import FVector from "@client/assets/unreal/un-vector";
 import { UObject } from "@l2js/core";
 
 
-class FBox extends UObject {
+abstract class FBox extends UObject {
     declare ["constructor"]: typeof FBox;
 
     declare public readonly min: GA.FVector;
@@ -9,8 +10,8 @@ class FBox extends UObject {
 
     declare public isValid: 0 | 1;
 
-    public getSize() { return !this.isValid ? new (this.max.constructor)() : this.max.sub(this.min); }
-    public getCenter() { return !this.isValid ? new (this.max.constructor)() : this.max.add(this.min).multiplyScalar(0.5); }
+    public getSize() { return !this.isValid ? FVector.make() : this.max.sub(this.min); }
+    public getCenter() { return !this.isValid ? FVector.make() : this.max.add(this.min).multiplyScalar(0.5); }
 
     public constructor(min?: GA.FVector, max?: GA.FVector) {
         super();

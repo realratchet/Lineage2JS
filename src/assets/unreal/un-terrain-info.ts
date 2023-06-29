@@ -1,6 +1,10 @@
 import { BufferValue } from "@l2js/core";
 import AInfo from "./un-info";
 import FArray, { FObjectArray } from "@l2js/core/src/unreal/un-array";
+import FVector from "@client/assets/unreal/un-vector";
+import FBox from "@client/assets/unreal/un-box";
+import FCoords from "@client/assets/unreal/un-coords";
+import FColor from "@client/assets/unreal/un-color";
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -180,11 +184,10 @@ class FTerrainInfo extends AInfo {
 
         this.readHead = pkg.tell();
 
-        const FVector = pkg.findCoreStruct("Vector");
 
-        this.boundingBox = pkg.makeCoreStruct("Box", new FVector(), new FVector());
-        this.terrainCoords = pkg.makeCoreStruct("Coords");
-        this.unkColorArr = new FArray(pkg.findCoreStruct("Color"));
+        this.boundingBox = FBox.make();
+        this.terrainCoords = FCoords.make();
+        this.unkColorArr = new FArray(FColor.class());
 
         if (verLicense >= 0x11) {
             this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();

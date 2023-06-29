@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 
-class FMatrix extends UObject {
+abstract class FMatrix extends UObject {
     declare public planeX: GA.FPlane;
     declare public planeY: GA.FPlane;
     declare public planeZ: GA.FPlane;

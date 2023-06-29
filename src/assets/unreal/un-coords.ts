@@ -1,6 +1,7 @@
+import FVector from "@client/assets/unreal/un-vector";
 import { UObject } from "@l2js/core";
 
-class FCoords extends UObject {
+abstract class FCoords extends UObject {
     declare public ["constructor"]: typeof FCoords;
 
     declare public origin: GA.FVector;
@@ -18,8 +19,7 @@ class FCoords extends UObject {
     }
 
     public multiply(other: FCoords): FCoords {
-        const cls = this.constructor;
-        const _this = new cls();
+        const _this = FCoords.make();
 
         let { x, y, z } = multiplyOrigin(other, this.origin);
         _this.origin.x = x;
@@ -45,8 +45,8 @@ class FCoords extends UObject {
     }
 
     static fromRotator({ pitch, yaw, roll }: GA.FRotator) {
-        const tmpCoords = new FCoords();
-        let _this = new FCoords();
+        const tmpCoords = FCoords.make();
+        let _this = FCoords.make();
 
         const DAT_101e29dc = 1.0;
         let tmp = roll >> 0x2 & 0x3fff;
@@ -108,7 +108,7 @@ export default FCoords;
 export { FCoords };
 
 function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
-    const outVector = new FVector();
+    const outVector = FVector.make();
 
     const fVar1 = inVector.x;
     const fVar2 = inVector.y;
@@ -128,7 +128,7 @@ function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
 }
 
 function multiplyOrigin(coord: FCoords, inVector: GA.FVector) {
-    const outVector = new FVector();
+    const outVector = FVector.make();
 
     const fVar7 = inVector.x - (coord.origin).x;
     const fVar8 = inVector.y - (coord.origin).y;

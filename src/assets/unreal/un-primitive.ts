@@ -1,22 +1,23 @@
+import FBox from "@client/assets/unreal/un-box";
+import FPlane from "@client/assets/unreal/un-plane";
 import UObject from "@l2js/core";
 
-class UPrimitive extends UObject {
+abstract class UPrimitive extends UObject {
     declare protected boundingBox: GA.FBox;
     declare protected boundingSphere: GA.FPlane;
-
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
 
-        this.boundingBox = pkg.makeCoreStruct("Box");
-        this.boundingSphere = pkg.makeCoreStruct("Plane");
+        this.boundingBox = FBox.make();
+        this.boundingSphere = FPlane.make();
     }
 
     protected doLoad(pkg: GA.UPackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
-        this.boundingBox = pkg.makeCoreStruct("Box");
-        this.boundingSphere = pkg.makeCoreStruct("Plane");
+        this.boundingBox = FBox.make();
+        this.boundingSphere = FPlane.make();
 
         this.boundingBox.load(pkg);
         this.boundingSphere.load(pkg);

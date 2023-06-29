@@ -1,3 +1,4 @@
+import FMatrix from "@client/assets/unreal/un-matrix";
 import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
@@ -47,7 +48,7 @@ class FLightmapIndex implements C.IConstructable {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
-        this.uvMatrix = pkg.makeCoreStruct("Matrix");
+        this.uvMatrix = FMatrix.make();
 
         this.iLightmapTexture = pkg.read(compat).value;
         this.surfaceIndex = pkg.read(compat).value;

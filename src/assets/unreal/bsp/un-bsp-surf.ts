@@ -23,7 +23,7 @@ class FBSPSurf implements C.IConstructable {
     declare public unkInt32: number;
 
     public load(pkg: GA.UPackage): this {
-        this.plane = pkg.makeCoreStruct("Plane");
+        this.plane = FPlane.make();
 
         const float = new BufferValue(BufferValue.float);
         const uint32 = new BufferValue(BufferValue.uint32);

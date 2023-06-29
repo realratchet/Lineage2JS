@@ -42,8 +42,8 @@ class FBSPNode implements C.IConstructable {
     public unkBytes = BufferValue.allocBytes(16) // 16 bytes, usually 0?
 
     public load(pkg: GA.UPackage): this {
-        this.plane = pkg.makeCoreStruct("Plane");
-        this.plane2 = pkg.makeCoreStruct("Plane");
+        this.plane = FPlane.make();
+        this.plane2 = FPlane.make();
 
         const uint64 = new BufferValue(BufferValue.uint64);
         const int32 = new BufferValue(BufferValue.int32);

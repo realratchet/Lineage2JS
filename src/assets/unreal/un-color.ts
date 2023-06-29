@@ -1,6 +1,6 @@
 import { UObject } from "@l2js/core";
 
-class FColor extends UObject {
+abstract class FColor extends UObject {
     declare public ["constructor"]: typeof FColor;
 
     declare public r: number;

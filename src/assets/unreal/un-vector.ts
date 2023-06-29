@@ -1,10 +1,7 @@
-import FPlane from "@client/assets/unreal/un-plane";
 import { UObject } from "@l2js/core";
 
-
-
 abstract class FVector extends UObject {
-    declare protected ["constructor"]: { new(): never } & typeof FVector;
+    // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
     declare public x: number;
     declare public y: number;
@@ -24,14 +21,10 @@ abstract class FVector extends UObject {
         this.set(x, y, z);
     }
 
-    // public static make(this: typeof FVector, ...args: MakeParams<typeof FVector>): FVector {
-    //     return new FVector(...args);
-    // }
-
     public set(x: number, y: number, z: number) {
-        // this.x = x;
-        // this.y = y;
-        // this.z = z;
+        this.x = x;
+        this.y = y;
+        this.z = z;
 
         return this;
     }
@@ -40,18 +33,11 @@ abstract class FVector extends UObject {
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {
-
-        new FVector(0,0,0)
-        const cls = this.constructor;
-
-        const z = FVector.make(0, 0, 0);
-        const p = FPlane.make_<FPlane, typeof FPlane>(0, 0, 0, 0);
-
+        return FVector.make(this.x * scalar, this.y * scalar, this.z * scalar);
     }
 
     public add(other: FVector) {
-        const cls = this.constructor;
-        return new cls(
+        return FVector.make(
             this.x + other.x,
             this.y + other.y,
             this.z + other.z
@@ -59,8 +45,7 @@ abstract class FVector extends UObject {
     }
 
     public sub(other: FVector) {
-        const cls = this.constructor;
-        return new cls(
+        return FVector.make(
             this.x - other.x,
             this.y - other.y,
             this.z - other.z
@@ -68,8 +53,7 @@ abstract class FVector extends UObject {
     }
 
     public mul(other: FVector) {
-        const cls = this.constructor;
-        return new cls(
+        return FVector.make(
             this.x * other.x,
             this.y * other.y,
             this.z * other.z
@@ -77,8 +61,7 @@ abstract class FVector extends UObject {
     }
 
     public div(other: FVector) {
-        const cls = this.constructor;
-        return new cls(
+        return FVector.make(
             this.x / other.x,
             this.y / other.y,
             this.z / other.z
@@ -102,7 +85,6 @@ abstract class FVector extends UObject {
      * @param other 
      */
     public cross(other: FVector) {
-        const cls = this.constructor;
         const ax = this.x, ay = this.y, az = this.z;
         const bx = other.x, by = other.y, bz = other.z;
 
@@ -110,7 +92,7 @@ abstract class FVector extends UObject {
         const y = az * bx - ax * bz;
         const z = ax * by - ay * bx;
 
-        return new cls(x, y, z);
+        return FVector.make(x, y, z);
     }
 
     /**
@@ -139,10 +121,9 @@ abstract class FVector extends UObject {
     }
 
     normalized() {
-        const cls = this.constructor;
         const len = this.length();
 
-        return new cls(
+        return FVector.make(
             this.x / len,
             this.y / len,
             this.z / len
@@ -223,7 +204,6 @@ abstract class FVector extends UObject {
     }
 
     applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
-        const cls = this.constructor;
         const x = this.x, y = this.y, z = this.z;
 
         // calculate quat * vector
@@ -239,12 +219,11 @@ abstract class FVector extends UObject {
         const ny = iy * qw + iw * - qy + iz * - qx - ix * - qz;
         const nz = iz * qw + iw * - qz + ix * - qy - iy * - qx;
 
-        return new cls(nx, ny, nz);
+        return FVector.make(nx, ny, nz);
     }
 
 
     applyMatrix4(m: GA.FMatrix) {
-        const cls = this.constructor;
         const x = this.x, y = this.y, z = this.z;
         const e = m.getElements4x4();
 
@@ -254,13 +233,12 @@ abstract class FVector extends UObject {
         const ny = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
         const nz = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
 
-        return new cls(nx, ny, nz);
+        return FVector.make(nx, ny, nz);
     }
 
     transformBy(coord: GA.FCoords) {
-        const cls = this.constructor;
         const inVector = this;
-        const outVector = new cls();
+        const outVector = FVector.make();
 
         let fVar1: number;
         let fVar2: number;
@@ -290,10 +268,7 @@ abstract class FVector extends UObject {
         return outVector;
     }
 
-    public clone() {
-        const cls = this.constructor;
-        return new cls(this.x, this.y, this.z);
-    }
+    public clone(): FVector { return FVector.make(this.x, this.y, this.z); }
 
     public nequals(other: FVector) { return this.x !== other.x || this.y !== other.y || this.z !== other.z; }
     public equals(other: FVector) { return !this.nequals(other); }
@@ -301,7 +276,6 @@ abstract class FVector extends UObject {
     public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})` }
 }
 
-new FVector()
 
 export default FVector;
 export { FVector };

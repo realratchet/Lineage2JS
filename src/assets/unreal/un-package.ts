@@ -71,26 +71,6 @@ class UPackage extends APackage {
     }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
-
-    public findCoreStruct<T extends CoreStructs_T>(className: T): new (...args: any) => CoreStructsReturnType_T<T> {
-        const pkgCore = this.loader.getCorePackage() as UPackage;
-        const pkgNative = this.loader.getNativePackage() as UNativePackage;
-        const expIndex = pkgCore.findObjectRef("Struct", className);
-
-        if (expIndex === 0)
-            throw new Error(`Could not find '${className}' in core package`);
-
-        const object = pkgCore.fetchObject<C.UClass>(expIndex);
-        const cls = object.loadSelf().buildClass(pkgNative) as any;
-
-        return cls;
-    }
-
-    public makeCoreStruct<T extends CoreStructs_T>(className: T, ...args: any) {
-        const cls = this.findCoreStruct<T>(className);
-
-        return new cls(...args);
-    }
 }
 
 class UNativePackage extends ANativePackage {

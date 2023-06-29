@@ -6,6 +6,7 @@ import { selectByTime, terrainAmbient } from "./un-time-list";
 // import FVector from "./un-vector";
 import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FVector from "@client/assets/unreal/un-vector";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -22,7 +23,7 @@ class FTerrainLightInfo implements C.IConstructable {
     }
 }
 
-class UTerrainSector extends UObject {
+abstract class UTerrainSector extends UObject {
     declare public boundingBox: FBox;
     declare protected offsetX: number;
     declare protected offsetY: number;
@@ -80,10 +81,10 @@ class UTerrainSector extends UObject {
         const indices = new TypedIndicesArray(16 * 16 * 6);
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
-        const FVector = this.pkg.findCoreStruct("Vector");
+        
 
-        const trueBoundingBox = this.pkg.makeCoreStruct("Box");
-        const tmpVector = new FVector();
+        const trueBoundingBox = FBox.make();
+        const tmpVector = FVector.make();
 
         let validShadowmap: C.FPrimitiveArray<any> = null;
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
@@ -95,7 +96,7 @@ class UTerrainSector extends UObject {
             }
         }
 
-        const v = new FVector();
+        const v = FVector.make();
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -311,7 +312,7 @@ class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.boundingBox = pkg.makeCoreStruct("Box");
+        this.boundingBox = FBox.make();
 
         // pkg.dump(1, true, false);
         pkg.seek(1);

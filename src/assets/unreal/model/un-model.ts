@@ -13,6 +13,7 @@ import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
+import FBox from "@client/assets/unreal/un-box";
 
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -45,11 +46,8 @@ class UModel extends UPrimitive {
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
 
-        const FVector = pkg.findCoreStruct("Vector");
-        const FBox = pkg.findCoreStruct("Box");
-
-        this.vectors = new FArray(FVector);
-        this.points = new FArray(FVector);
+        this.vectors = new FArray(FVector.class());
+        this.points = new FArray(FVector.class());
         this.vertices = new FArray(FVert);
         this.bspNodes = new FArray(FBSPNode);
         this.bspSurfs = new FArray(FBSPSurf);
@@ -58,7 +56,7 @@ class UModel extends UPrimitive {
         this.multiLightmaps = new FArray(FMultiLightmapTexture);
         this.polys = null;
         this.zones = [];
-        this.bounds = new FArray(FBox);
+        this.bounds = new FArray(FBox.class());
         this.leafHulls = new FPrimitiveArray(BufferValue.int32);
         this.leaves = new FArray(FLeaf);
         this.unkArr0 = new FIndexArray();

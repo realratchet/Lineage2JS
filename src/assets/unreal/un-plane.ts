@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 
-class FPlane extends UObject {
+abstract class FPlane extends UObject {
     declare public ["constructor"]: typeof FPlane;
 
     declare public x: number;
@@ -31,9 +31,7 @@ class FPlane extends UObject {
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {
-        const FPlane = this.constructor;
-
-        return new FPlane(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
+        return FPlane.make(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
     }
 
     public dot(other: FPlane) { return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w; }
