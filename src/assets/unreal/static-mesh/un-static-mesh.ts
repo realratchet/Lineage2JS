@@ -1,5 +1,4 @@
 import { v5 as seededUuid } from "uuid";
-import FArray, { FArrayLazy } from "../un-array";
 import UPrimitive from "../un-primitive";
 import FStaticMeshSection from "./un-static-mesh-section";
 import FStaticMeshVertexStream from "./un-static-vertex-stream";
@@ -12,51 +11,52 @@ import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import StringSet from "@client/utils/string-set";
+import FArray, { FArrayLazy } from "@l2js/core/src/unreal/un-array";
 
 const triggerDebuggerOnUnsupported = true;
 
 
 abstract class UStaticMesh extends UPrimitive {
-    protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
-    protected vertexStream: FStaticMeshVertexStream = new FStaticMeshVertexStream();
-    protected colorStream: FRawColorStream = new FRawColorStream();
-    protected alphaStream: FRawColorStream = new FRawColorStream();
-    protected uvStream: FArray<FStaticMeshUVStream> = new FArray(FStaticMeshUVStream);
-    protected indexStream = new FRawIndexBuffer(); // triangle indices
-    protected edgesStream = new FRawIndexBuffer(); // triangle edge indices
-    protected staticMeshLod2: UStaticMesh;
-    protected staticMeshLod1: UStaticMesh;
-    protected lodRange1: number;
-    protected lodRange2: number;
-    protected hasStaticMeshLod: boolean;
-    protected isMadeTwoSideMesh: boolean;
-    protected isStaticMeshLodBlend: boolean;
-    protected isUsingBillboard: boolean;
-    protected frequency: number;
+    declare protected sections: FArray<FStaticMeshSection>;
+    declare protected vertexStream: FStaticMeshVertexStream;
+    declare protected colorStream: FRawColorStream;
+    declare protected alphaStream: FRawColorStream;
+    declare protected uvStream: FArray<FStaticMeshUVStream>;
+    declare protected indexStream: FRawIndexBuffer; // triangle indices
+    declare protected edgesStream: FRawIndexBuffer; // triangle edge indices
+    declare protected staticMeshLod2: UStaticMesh;
+    declare protected staticMeshLod1: UStaticMesh;
+    declare protected lodRange1: number;
+    declare protected lodRange2: number;
+    declare protected hasStaticMeshLod: boolean;
+    declare protected isMadeTwoSideMesh: boolean;
+    declare protected isStaticMeshLodBlend: boolean;
+    declare protected isUsingBillboard: boolean;
+    declare protected frequency: number;
 
-    protected collisionFaces: FStaticMeshCollisionTriangle[];
-    protected collisionNodes: FStaticMeshCollisionNode[];
-    protected staticMeshTris: FArrayLazy<FStaticMeshTriangle> = new FArrayLazy(FStaticMeshTriangle);
+    declare protected collisionFaces: FStaticMeshCollisionTriangle[];
+    declare protected collisionNodes: FStaticMeshCollisionNode[];
+    declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
 
-    protected unkIndex0: number;
+    declare protected unkIndex0: number;
 
-    protected unkInt_5x0: number;
-    protected unkInd_5x0: number;
-    protected unkInd_5x1: number;
-    protected unkInt_5x1: number;
-    protected unkInt_5x2: number;
+    declare protected unkInt_5x0: number;
+    declare protected unkInd_5x0: number;
+    declare protected unkInd_5x1: number;
+    declare protected unkInt_5x1: number;
+    declare protected unkInt_5x2: number;
 
-    protected unkInt_6x0: number;
-    protected unkInt_6x1: number;
-    protected unkInt_Ax0: number;
-    protected unkInt_Cx0: number;
-    protected unkInt_Dx0: number;
-    protected unkInt_Dx1: number;
-    protected unkInt_Ex0: number;
+    declare protected unkInt_6x0: number;
+    declare protected unkInt_6x1: number;
+    declare protected unkInt_Ax0: number;
+    declare protected unkInt_Cx0: number;
+    declare protected unkInt_Dx0: number;
+    declare protected unkInt_Dx1: number;
+    declare protected unkInt_Ex0: number;
 
-    protected unkInt0: number;
-    protected unkIndex1: number;
-    protected unkInt1: number;
+    declare protected unkInt0: number;
+    declare protected unkIndex1: number;
+    declare protected unkInt1: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -73,12 +73,24 @@ abstract class UStaticMesh extends UPrimitive {
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
+
+        debugger;
+
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
+
+        this.sections = new FArray(FStaticMeshSection);
+        this.vertexStream = new FStaticMeshVertexStream();
+        this.colorStream = new FRawColorStream();
+        this.alphaStream = new FRawColorStream();
+        this.uvStream = new FArray(FStaticMeshUVStream);
+        this.indexStream = new FRawIndexBuffer(); // triangle indices
+        this.edgesStream = new FRawIndexBuffer(); // triangle edge indices
+        this.staticMeshTris = new FArrayLazy(FStaticMeshTriangle);
 
         super.doLoad(pkg, exp);
 
@@ -185,7 +197,7 @@ abstract class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(library: DecodeLibrary, matModifiers?: string[]): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, matModifiers?: string[]): GD.IStaticMeshObjectDecodeInfo {
         // await this.onDecodeReady();
 
         // debugger;
@@ -203,7 +215,7 @@ abstract class UStaticMesh extends UPrimitive {
                     materialType: "instance",
                     baseMaterial: this.uuid,
                     modifiers: matModifiers
-                } as IMaterialInstancedDecodeInfo;
+                } as GD.IMaterialInstancedDecodeInfo;
 
                 // debugger;
             }
@@ -233,7 +245,7 @@ abstract class UStaticMesh extends UPrimitive {
             name: this.objectName,
             geometry: this.uuid,
             materials: materialUuid,
-        } as IStaticMeshObjectDecodeInfo;
+        } as GD.IStaticMeshObjectDecodeInfo;
 
         library.geometryInstances[this.uuid] = 0;
         library.geometries[this.uuid] = null;
@@ -365,7 +377,7 @@ abstract class UStaticMesh extends UPrimitive {
         };
 
         // const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
-        const materials = this.materials.map((mat: FStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
+        const materials = this.materials.map((mat: GA.FStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
 
         materials.forEach(uuid => {
             if (!library.materials[uuid]) return;
@@ -373,7 +385,7 @@ abstract class UStaticMesh extends UPrimitive {
             library.materials[uuid].color = true;
         });
 
-        library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+        library.materials[this.uuid] = { materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
 
         return {
             uuid: this.uuid,
@@ -387,7 +399,7 @@ abstract class UStaticMesh extends UPrimitive {
         };
     }
 
-    protected getDecodeTrisInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
+    protected getDecodeTrisInfo(library: GA.DecodeLibrary): GD.IBaseObjectDecodeInfo {
         const trisCount = this.staticMeshTris.length;
         const trisGeometryUuid = generateUUID();
         const TypedIndicesArray = getTypedArrayConstructor(trisCount);
@@ -426,7 +438,7 @@ abstract class UStaticMesh extends UPrimitive {
             type: "Edges",
             geometry: trisGeometryUuid,
             color: [1, 0, 1]
-        } as IEdgesObjectDecodeInfo;
+        } as GD.IEdgesObjectDecodeInfo;
     }
 }
 

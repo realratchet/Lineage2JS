@@ -42,6 +42,8 @@ import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
 import FCoords from "./un-coords";
 import FQuaternion from "@client/assets/unreal/un-quaternion";
+import UStaticMeshInstance from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
+import UStaticMesh from "@client/assets/unreal/static-mesh/un-static-mesh";
 
 type CoreStructs_T =
     | "Vector"
@@ -166,7 +168,9 @@ class UNativePackage extends ANativePackage {
             case "NMovableSunLight": Constructor = UNMovableSunLight; break;
             case "Light": Constructor = ULight; break;
 
+            case "StaticMesh": Constructor = UStaticMesh; break;
             case "StaticMeshActor": Constructor = UStaticMeshActor; break;
+            case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
 
             case "PlayerStart": Constructor = UPlayerStart; break;
             case "Camera": Constructor = UCamera; break;
@@ -181,11 +185,9 @@ class UNativePackage extends ANativePackage {
 
 
             //         case "Font": Constructor = UFont; break;
-            //         case "StaticMesh": Constructor = UStaticMesh; break;
             //         case "Mesh": Constructor = UMesh; break;
             //         case "MeshAnimation": Constructor = UMeshAnimation; break;
             //         case "Level": Constructor = ULevel; break;
-            //         case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
             //         case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
             //         case "Viewport": Constructor = UViewport; break;
             //         case "Client": Constructor = UClient; break;

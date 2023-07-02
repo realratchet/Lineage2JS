@@ -94,6 +94,9 @@ declare global {
                 export type FTerrainInfo = import("@unreal/un-terrain-info").FTerrainInfo;
 
                 export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
+                export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;
+                export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
+                export type FStaticMeshMaterial = import("@unreal/un-material").FStaticMeshMaterial;
 
                 export type FTIntMap = import("@unreal/un-tint-map").FTIntMap;
                 export type UDecoLayer = import("@unreal/un-deco-layer").UDecoLayer;

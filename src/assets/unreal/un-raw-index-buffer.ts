@@ -1,14 +1,11 @@
-import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-import { PropertyTag } from "./un-property-tag";
-import { FPrimitiveArray } from "./un-array";
 import { BufferValue } from "@l2js/core";
+import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-class FRawIndexBuffer extends FConstructable {
-    public readonly indices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
+class FRawIndexBuffer implements C.IConstructable {
+    public readonly indices = new FPrimitiveArray(BufferValue.uint16);
     public revision: number;
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
+    public load(pkg: GA.UPackage, tag?: C.PropertyTag): this {
         this.indices.load(pkg, tag);
 
         this.revision = pkg.read(new BufferValue(BufferValue.int32)).value;

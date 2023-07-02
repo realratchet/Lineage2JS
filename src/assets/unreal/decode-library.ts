@@ -1,4 +1,4 @@
-const ALLOW_FAILED_OBJECTS = true;
+const ALLOW_FAILED_OBJECTS = false;
 
 class DecodeLibrary {
     public name: string = "Untitled";

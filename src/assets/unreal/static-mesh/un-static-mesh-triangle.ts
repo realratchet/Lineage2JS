@@ -1,13 +1,12 @@
 import FVector from "../un-vector";
 import { BufferValue } from "@l2js/core";
-import FConstructable from "../un-constructable";
 
-class FStaticMeshTriangleSub extends FConstructable {
-    public f0: number[];
-    public f1: number[];
-    public f2: number[];
+class FStaticMeshTriangleSub implements C.IConstructable {
+    declare public f0: number[];
+    declare public f1: number[];
+    declare public f2: number[];
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
 
         const float = new BufferValue(BufferValue.float);
 
@@ -19,21 +18,25 @@ class FStaticMeshTriangleSub extends FConstructable {
     }
 }
 
-class FStaticMeshTriangle extends FConstructable {
-    public v0 = new FVector();
-    public v1 = new FVector();
-    public v2 = new FVector();
+class FStaticMeshTriangle implements C.IConstructable {
+    declare public v0: FVector;
+    declare public v1: FVector;
+    declare public v2: FVector;
 
-    public unkSubs: FStaticMeshTriangleSub[]; // uvs?
-    public unkBytes: number[];                // color [[r, g, b, a] x 3]
+    declare public unkSubs: FStaticMeshTriangleSub[]; // uvs?
+    declare public unkBytes: number[];                // color [[r, g, b, a] x 3]
 
-    public unkInt0: number;                  // material section I think
-    public unkInt1: number;                  // always pow2, flags?
+    declare public unkInt0: number;                  // material section I think
+    declare public unkInt1: number;                  // always pow2, flags?
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const uint32 = new BufferValue(BufferValue.uint32);
         const uint8 = new BufferValue(BufferValue.uint8);
+
+        this.v0 = FVector.make();
+        this.v1 = FVector.make();
+        this.v2 = FVector.make();
 
         if (verArchive < 0x6f) {
             console.warn("Not supported yet");

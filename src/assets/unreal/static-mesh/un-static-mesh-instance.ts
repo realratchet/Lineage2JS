@@ -1,20 +1,19 @@
 import UObject from "@l2js/core";
 import { BufferValue } from "@l2js/core";
-import FConstructable from "../un-constructable";
 import FRawColorStream from "../un-raw-color-stream";
-import FArray, { FPrimitiveArray } from "../un-array";
 import { selectByTime, staticMeshLight } from "../un-time-list";
 import ULight from "../un-light";
 import timeOfDay, { indexToTime } from "../un-time-of-day-helper";
+import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-class FAssignedLight extends FConstructable {
+class FAssignedLight implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public unkInt0: number;
 
     public light: ULight;
 
-    public load(pkg: UPackage): this {
+    public load(pkg: GA.UPackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
 
@@ -27,7 +26,7 @@ class FAssignedLight extends FConstructable {
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary): any {
+    public getDecodeInfo(library: GD.DecodeLibrary): any {
         return {
             vertexFlags: this.vertexFlags.getTypedArray(),
             ...(this.light.loadSelf().getDecodeInfo(library))
@@ -35,23 +34,22 @@ class FAssignedLight extends FConstructable {
     }
 }
 
-class UStaticMeshInstance extends UObject {
-    protected colorStream = new FRawColorStream();
+abstract class UStaticMeshInstance extends UObject {
+    declare protected colorStream: FRawColorStream;
+    declare protected sceneLights: FArray<FAssignedLight>;
+    declare protected environmentLights: FArray<FAssignedLight>;
 
-    protected sceneLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
-    protected environmentLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
+    declare protected unkArrIndex: number[];
 
-    protected unkArrIndex: number[];
+    declare protected actor: GA.UStaticMeshActor;
 
-    protected actor: UStaticMeshActor;
+    public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
 
-    public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
-
-    public getDecodeInfo(library: DecodeLibrary): any {
+    public getDecodeInfo(library: GD.DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
 
         for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
-            const { r, g, b } = this.colorStream.color[i] as FColor;
+            const { r, g, b } = this.colorStream.color[i] as GA.FColor;
             const offset = i * 3;
 
             color[offset + 0] = r / 255;
@@ -107,10 +105,14 @@ class UStaticMeshInstance extends UObject {
         // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }
 
-    protected doLoad(pkg: UPackage, exp: UExport): this {
+    protected doLoad(pkg: GA.UPackage, exp: C.UExport): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
         const compat32 = new BufferValue(BufferValue.compat32);
+
+        this.colorStream = new FRawColorStream();
+        this.sceneLights = new FArray(FAssignedLight);
+        this.environmentLights = new FArray(FAssignedLight);
 
         super.doLoad(pkg, exp);
 
