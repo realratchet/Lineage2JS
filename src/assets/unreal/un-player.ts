@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 
-class UPlayer extends UObject {
+abstract class UPlayer extends UObject {
 
 }
 

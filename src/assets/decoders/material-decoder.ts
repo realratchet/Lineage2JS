@@ -261,8 +261,6 @@ function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): 
 
     if (!info) return null;
 
-
-
     switch (info.materialType) {
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);

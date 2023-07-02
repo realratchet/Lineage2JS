@@ -21,7 +21,7 @@ const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping
 const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 
-class UModel extends UPrimitive {
+abstract class UModel extends UPrimitive {
     declare protected vectors: C.FArray<GA.FVector>;
     declare protected points: C.FArray<GA.FVector>;
     declare protected vertices: C.FArray<FVert>;

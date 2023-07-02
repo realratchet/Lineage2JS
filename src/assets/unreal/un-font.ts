@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 
-class UFont extends UObject {
+abstract class UFont extends UObject {
 
 }
 

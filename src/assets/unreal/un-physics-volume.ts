@@ -1,6 +1,6 @@
 import UVolume from "./un-volume";
 
-class UPhysicsVolume extends UVolume {
+abstract class UPhysicsVolume extends UVolume {
     // protected locationPriority: number;
     // protected locationName: string;
 

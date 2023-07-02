@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 
-class UClient extends UObject {
+abstract class UClient extends UObject {
 
 }
 

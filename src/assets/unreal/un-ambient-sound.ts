@@ -1,7 +1,7 @@
 import UAActor from "./un-aactor";
 
-class UAmbientSoundObject extends UAActor {
-    protected sound: USound;
+abstract class UAmbientSoundObject extends UAActor {
+    protected sound: GA.USound;
     protected radius: number;
     protected volume: number;
     protected pitch: number;

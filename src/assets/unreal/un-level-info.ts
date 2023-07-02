@@ -1,6 +1,6 @@
 import FZoneInfo from "./un-zone-info";
 
-class ULevelInfo extends FZoneInfo/* implements IInfo*/ {
+abstract class ULevelInfo extends FZoneInfo/* implements IInfo*/ {
     public getDecodeInfo(library: GD.DecodeLibrary): GD.ISectorDecodeInfo {
         return {
             uuid: this.uuid,

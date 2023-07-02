@@ -5,7 +5,7 @@ import { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
 
-class ULevel extends UObject {
+abstract class ULevel extends UObject {
     protected objectList: UObject[] = [];
     public readonly url: FURL = new FURL();
     protected reachSpecs = new FPrimitiveArray(BufferValue.uint32);

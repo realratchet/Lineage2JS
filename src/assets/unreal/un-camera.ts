@@ -1,6 +1,6 @@
 import UAActor from "./un-aactor";
 
-class UCamera extends UAActor {
+abstract class UCamera extends UAActor {
     // public readonly careUnread = false;
 
     // protected _pawn: any;

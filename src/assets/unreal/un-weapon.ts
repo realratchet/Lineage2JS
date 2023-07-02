@@ -1,6 +1,6 @@
 import UInventory from "./un-inventory";
 
-class UWeapon extends UInventory {
+abstract class UWeapon extends UInventory {
 
 }
 

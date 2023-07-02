@@ -1,6 +1,6 @@
 import UNCelestial from "./un-ncelestial";
 
-class UNSun extends UNCelestial {
+abstract class UNSun extends UNCelestial {
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "SunScale": "celestialScale",

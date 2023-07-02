@@ -1,6 +1,6 @@
 import UPhysicsVolume from "./un-physics-volume";
 
-class UDefaultPhysicsVolume extends UPhysicsVolume {
+abstract class UDefaultPhysicsVolume extends UPhysicsVolume {
 }
 
 export default UDefaultPhysicsVolume;

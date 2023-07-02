@@ -67,7 +67,7 @@ class FNTimeHSV extends FNBaseTimedConstructable {
     }
 
     public getColor(): [number, number, number] { return hsvToRgb(this.hue, this.saturation, this.lightness); }
-    public toColorPlane() { return new FPlane(...this.getColor(), 1); }
+    public toColorPlane() { return FPlane.make(...this.getColor(), 1); }
 };
 
 class FNTimeScale extends FNBaseTimedConstructable {

@@ -260,6 +260,9 @@ async function startCore() {
 
     const pkgEngine = await assetLoader.load(assetLoader.getPackage("engine", "Script"));
 
+    pkgCore.loadNativeClasses();
+    // pkgEngine.loadNativeClasses();
+
     // debugger;
 
 

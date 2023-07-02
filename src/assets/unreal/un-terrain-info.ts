@@ -9,30 +9,30 @@ import FColor from "@client/assets/unreal/un-color";
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
-class FTerrainInfo extends AInfo {
-    declare public terrainMap: GA.UTexture;
-    declare public terrainScale: GA.FVector;
+abstract class FTerrainInfo extends AInfo {
+    declare public readonly terrainMap: GA.UTexture;
+    declare public readonly terrainScale: GA.FVector;
     declare public readonly layers: GA.UTerrainLayer[];
 
-    // protected decoLayers: FArray<UDecoLayer> = new FArray(UDecoLayer);
-    // protected showOnTerrain: number;
-    // public readonly quadVisibilityBitmap: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
-    // public readonly edgeTurnBitmap: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
-    // protected mapX: number;
-    // protected mapY: number;
-    // public readonly quadVisibilityBitmapOrig: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
-    // public readonly edgeTurnBitmapOrig: FPrimitiveArray<"uint32"> = new FPrimitiveArray(BufferValue.uint32);
-    // protected generatedSectorCounter: number;
-    // protected numIntMap: number;
-    // protected autoTimeGeneration: boolean;
-    // protected tIntMap: FArray<FTIntMap> = new FArray(FTIntMap);
-    // protected tickTime: number;
+    declare protected readonly decoLayers: C.FArray<GA.UDecoLayer>
+    declare protected readonly showOnTerrain: number;
+    declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"uint32">;
+    declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"uint32">;
+    declare protected readonly mapX: number;
+    declare protected readonly mapY: number;
+    declare public readonly quadVisibilityBitmapOrig: C.FPrimitiveArray<"uint32">;
+    declare public readonly edgeTurnBitmapOrig: C.FPrimitiveArray<"uint32">;
+    declare protected readonly generatedSectorCounter: number;
+    declare protected readonly numIntMap: number;
+    declare protected readonly autoTimeGeneration: boolean;
+    declare protected readonly tIntMap: C.FArray<GA.FTIntMap>;
+    declare protected readonly tickTime: number;
     declare protected sectors: C.FObjectArray<GA.UTerrainSector>;
-    // protected showOnInvisibleTerrain: boolean;
-    // protected litDirectional: boolean;
-    // protected disregardTerrainLighting: boolean;
-    // protected randomYaw: boolean;
-    // protected bForceRender: boolean;
+    declare protected readonly showOnInvisibleTerrain: boolean;
+    declare protected readonly litDirectional: boolean;
+    declare protected readonly disregardTerrainLighting: boolean;
+    declare protected readonly randomYaw: boolean;
+    declare protected readonly bForceRender: boolean;
 
     public readonly isTerrainInfo = true;
 
@@ -48,8 +48,8 @@ class FTerrainInfo extends AInfo {
     // public heightmapMin: number;
     // public heightmapMax: number;
 
-    // protected hasDynamicLight: boolean;
-    // protected forcedRegion: number;
+    declare protected readonly hasDynamicLight: boolean;
+    declare protected readonly forcedRegion: number;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -98,25 +98,25 @@ class FTerrainInfo extends AInfo {
 
             "Sectors": "sectors",
 
-            //         "DecoLayers": "decoLayers",
-            //         "QuadVisibilityBitmap": "quadVisibilityBitmap",
-            //         "EdgeTurnBitmap": "edgeTurnBitmap",
-            //         "MapX": "mapX",
-            //         "MapY": "mapY",
-            //         "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig",
-            //         "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
-            //         "GeneratedSectorCounter": "generatedSectorCounter",
-            //         "NumIntMap": "numIntMap",
-            //         "bAutoTimeGeneration": "autoTimeGeneration",
-            //         "TIntMap": "tIntMap",
-            //         "TickTime": "tickTime",
-            //         "ShowOnInvisibleTerrain": "showOnInvisibleTerrain",
-            //         "LitDirectional": "litDirectional",
-            //         "DisregardTerrainLighting": "disregardTerrainLighting",
-            //         "RandomYaw": "randomYaw",
-            //         "bForceRender": "bForceRender",
-            //         "bDynamicLight": "hasDynamicLight",
-            //         "ForcedRegion": "forcedRegion",
+            "DecoLayers": "decoLayers",
+            "QuadVisibilityBitmap": "quadVisibilityBitmap",
+            "EdgeTurnBitmap": "edgeTurnBitmap",
+            "MapX": "mapX",
+            "MapY": "mapY",
+            "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig",
+            "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
+            "GeneratedSectorCounter": "generatedSectorCounter",
+            "NumIntMap": "numIntMap",
+            "bAutoTimeGeneration": "autoTimeGeneration",
+            "TIntMap": "tIntMap",
+            "TickTime": "tickTime",
+            "ShowOnInvisibleTerrain": "showOnInvisibleTerrain",
+            "LitDirectional": "litDirectional",
+            "DisregardTerrainLighting": "disregardTerrainLighting",
+            "RandomYaw": "randomYaw",
+            "bForceRender": "bForceRender",
+            "bDynamicLight": "hasDynamicLight",
+            "ForcedRegion": "forcedRegion",
 
             //         "TerrainSectorSize": "_terrainSectorSize",
             //         "DecoLayerOffset": "_decoLayerOffset",

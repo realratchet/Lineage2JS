@@ -45,6 +45,11 @@ class FLightmapIndex implements C.IConstructable {
     public unkInt0: number;
 
     public load(pkg: GA.UPackage): this {
+        // pkg.addDependencies(
+        //     pkg,
+        //     ["Struct", "Matrix"],
+        // );
+
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 

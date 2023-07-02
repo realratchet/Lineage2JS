@@ -1,7 +1,7 @@
 import AInfo from "./un-info";
 import { BufferValue } from "@l2js/core";
 
-class FZoneInfo extends AInfo/* implements IInfo*/ {
+abstract class FZoneInfo extends AInfo/* implements IInfo*/ {
     // protected isFogZone: boolean;
     // protected hasTerrain: boolean;
 

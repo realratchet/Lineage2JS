@@ -1,6 +1,6 @@
 import UAActor from "./un-aactor";
 
-class UInventory extends UAActor {
+abstract class UInventory extends UAActor {
 
 }
 

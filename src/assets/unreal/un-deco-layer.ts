@@ -1,27 +1,25 @@
 import UObject from "@l2js/core";
 
-class UDecoLayer extends UObject {
-    public readonly careUnread: boolean = false;
-
-    declare protected showOnTerrain: number;
-    declare protected scaleMap: GA.UTexture;
-    declare protected densityMap: GA.UTexture;
-    declare protected colorMap: GA.UTexture;
-    declare public staticMesh: GA.UStaticMesh;
-    declare protected scaleMultiplier: GA.FRangeVector;
-    declare protected ambientSoundType: number[];
-    declare protected size: number;
-    declare protected fadeoutRadius: GA.FRange;
-    declare protected densityMultiplier: GA.FRange;
-    declare protected maxPerQuad: number;
-    declare protected seed: number;
-    declare protected alignToTerrain: number;
-    declare protected drawOrder: number;
-    declare protected isShowOnInvisibleTerrain: number;
-    declare protected dirLighting: number;
-    declare protected disregardTerrainLighting: number;
-    declare protected randomYaw: number;
-    declare protected isForcingRender: number;
+abstract class UDecoLayer extends UObject {
+    declare protected readonly showOnTerrain: number;
+    declare protected readonly scaleMap: GA.UTexture;
+    declare protected readonly densityMap: GA.UTexture;
+    declare protected readonly colorMap: GA.UTexture;
+    declare public readonly staticMesh: GA.UStaticMesh;
+    declare protected readonly scaleMultiplier: GA.FRangeVector;
+    declare protected readonly ambientSoundType: number[];
+    declare protected readonly size: number;
+    declare protected readonly fadeoutRadius: GA.FRange;
+    declare protected readonly densityMultiplier: GA.FRange;
+    declare protected readonly maxPerQuad: number;
+    declare protected readonly seed: number;
+    declare protected readonly alignToTerrain: number;
+    declare protected readonly drawOrder: number;
+    declare protected readonly isShowOnInvisibleTerrain: number;
+    declare protected readonly dirLighting: number;
+    declare protected readonly disregardTerrainLighting: number;
+    declare protected readonly randomYaw: number;
+    declare protected readonly isForcingRender: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

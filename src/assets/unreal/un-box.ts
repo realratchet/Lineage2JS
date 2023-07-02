@@ -16,8 +16,8 @@ abstract class FBox extends UObject {
     public constructor(min?: GA.FVector, max?: GA.FVector) {
         super();
 
-        this.min = min || this.min;
-        this.max = max || this.max;
+        this.min = min || this.min || FVector.make();
+        this.max = max || this.max || FVector.make();
         this.isValid = 0;
     }
 

@@ -1,7 +1,7 @@
 import DecodeLibrary from "./decode-library";
 import FZoneInfo from "./un-zone-info";
 
-class USkyZoneInfo extends FZoneInfo/* implements IInfo*/ {
+abstract class USkyZoneInfo extends FZoneInfo/* implements IInfo*/ {
     // public getDecodeInfo(library: DecodeLibrary): ISkyZoneDecodeInfo {
     //     return {
     //         uuid: this.uuid,

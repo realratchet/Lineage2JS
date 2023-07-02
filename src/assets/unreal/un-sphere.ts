@@ -1,7 +1,7 @@
 import FVector from "./un-vector";
 import { BufferValue, UObject } from "@l2js/core";
 
-class USphere extends UObject {
+abstract class USphere extends UObject {
     // public center: FVector = new FVector();
     // public radius: number;
 

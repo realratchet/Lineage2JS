@@ -1,6 +1,6 @@
 import ULight from "./un-light";
 
-class UNMovableSunLight extends ULight {
+abstract class UNMovableSunLight extends ULight {
     // public lightness: number = 128;
     // public type = 0x13;
 

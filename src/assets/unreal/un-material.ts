@@ -108,7 +108,7 @@ enum TexRotationType_T {
     }
  */
 
-class UTexEnvMap extends UBaseModifier {
+abstract class UTexEnvMap extends UBaseModifier {
     // protected type: number;
 
     // protected getPropertyMap() {
@@ -122,7 +122,7 @@ class UTexEnvMap extends UBaseModifier {
     // }
 }
 
-class UFinalBlend extends UBaseModifier {
+abstract class UFinalBlend extends UBaseModifier {
     // protected frameBufferBlending: number;
     // protected doubleSide: boolean;
     // protected alphaTest: boolean;
@@ -149,7 +149,7 @@ class UFinalBlend extends UBaseModifier {
     // }
 }
 
-class UShader extends UMaterial {
+abstract class UShader extends UMaterial {
     declare protected diffuse: UMaterial;
     declare protected opacity: UMaterial;
     declare protected doubleSide: boolean;
@@ -247,7 +247,7 @@ class UShader extends UMaterial {
     }
 }
 
-class UFadeColor extends UBaseModifier {
+abstract class UFadeColor extends UBaseModifier {
     // public color1: FColor = new FColor();
     // public color2: FColor = new FColor();
     // public period: number = 0;
@@ -279,7 +279,7 @@ class UFadeColor extends UBaseModifier {
     // }
 }
 
-class UColorModifier extends UBaseMaterial {
+abstract class UColorModifier extends UBaseMaterial {
     // protected color: FColor;
     // protected doubleSide: boolean;
     // protected alphaBlend: boolean;
@@ -316,7 +316,7 @@ class UColorModifier extends UBaseMaterial {
     // }
 }
 
-class UTexRotator extends UBaseModifier {
+abstract class UTexRotator extends UBaseModifier {
     // protected matrix: FMatrix;
     // protected type: TexRotationType_T;
     // protected rotation: FRotator;
@@ -369,7 +369,7 @@ class UTexRotator extends UBaseModifier {
 
 
 
-class UTexOscillator extends UBaseModifier {
+abstract class UTexOscillator extends UBaseModifier {
     // protected matrix: FMatrix;
     // protected rateU: number;
     // protected rateV: number;
@@ -418,7 +418,7 @@ class UTexOscillator extends UBaseModifier {
     // }
 }
 
-class UTexCoordSource extends UBaseModifier {
+abstract class UTexCoordSource extends UBaseModifier {
     // public getDecodeInfo(library: DecodeLibrary): string {
     //     if (this.uuid in library.materials) return this.material.uuid;
 
@@ -431,7 +431,7 @@ class UTexCoordSource extends UBaseModifier {
     // }
 }
 
-class UTexPanner extends UBaseModifier {
+abstract class UTexPanner extends UBaseModifier {
     // protected rate: number;
     // protected z: number;
     // protected matrix: FMatrix;
@@ -467,7 +467,7 @@ class UTexPanner extends UBaseModifier {
     // }
 }
 
-class FStaticMeshMaterial extends UBaseMaterial {
+abstract class FStaticMeshMaterial extends UBaseMaterial {
     // protected noDynamicShadowCast: boolean;
     // protected collisionForShadow: boolean;
     // protected enableCollision: boolean;

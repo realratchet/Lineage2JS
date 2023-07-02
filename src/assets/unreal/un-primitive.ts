@@ -7,6 +7,12 @@ abstract class UPrimitive extends UObject {
     declare protected boundingSphere: GA.FPlane;
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
+        // pkg.addDependencies(
+        //     pkg,
+        //     ["Struct", "Box"],
+        //     ["Struct", "Plane"],
+        // );
+
         super.preLoad(pkg, exp);
 
         this.boundingBox = FBox.make();

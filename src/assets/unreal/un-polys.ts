@@ -32,7 +32,7 @@ enum PolyFlags_T {
 };
 
 
-class FPoly extends UObject {
+abstract class FPoly extends UObject {
     // public base: FVector = new FVector();
     // public normal: FVector = new FVector();
     // public textureU: FVector = new FVector();

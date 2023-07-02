@@ -1,6 +1,6 @@
 import UPhysicsVolume from "./un-physics-volume";
 
-class UBlockingVolume extends UPhysicsVolume {
+abstract class UBlockingVolume extends UPhysicsVolume {
     // public readonly careUnread = false;
 
     // protected isFluidClamped: boolean;

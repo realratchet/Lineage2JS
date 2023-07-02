@@ -1,6 +1,6 @@
 import UPrimitive from "./un-primitive";
 
-class UMeshInstance extends UPrimitive {
+abstract class UMeshInstance extends UPrimitive {
 
 }
 

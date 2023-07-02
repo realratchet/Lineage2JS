@@ -1,5 +1,6 @@
 import UObject from "@l2js/core";
 
+
 declare module "@l2js/core" {
     abstract class UObject {
         public uuid: string;
@@ -61,8 +62,6 @@ declare global {
                 export type UTextureModifyInfo = import("@unreal/un-texture-modify-info").UTextureModifyInfo;
                 export type FStaticLightmapTexture = import("@unreal/model/un-multilightmap-texture").FStaticLightmapTexture;
 
-
-
                 export type NativeClientTypes_T =
                     | C.NativeTypes_T
                     | "NMovableSunLight"
@@ -72,6 +71,12 @@ declare global {
                     | "L2SeamlessInfo"
                     | "SceneManager"
                     | "MovableStaticMeshActor";
+
+                export type USound = import("@unreal/un-sound").USound;
+                export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;
+
+                export type UNSun = import("@unreal/un-nsun").UNSun;
+                export type UNMoon = import("@unreal/un-nmoon").UNMoon;
 
                 export type UPolys = import("@unreal/un-polys").UPolys;
                 export type PolyFlags_T = import("@unreal/un-polys").PolyFlags_T;
@@ -88,11 +93,18 @@ declare global {
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
                 export type FTerrainInfo = import("@unreal/un-terrain-info").FTerrainInfo;
 
+                export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
+
+                export type FTIntMap = import("@unreal/un-tint-map").FTIntMap;
+                export type UDecoLayer = import("@unreal/un-deco-layer").UDecoLayer;
+
                 export type UPointRegion = import("@unreal/un-point-region").UPointRegion;
 
                 export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
 
                 export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+
+
             }
 
             namespace Decoding {

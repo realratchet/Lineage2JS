@@ -6,21 +6,21 @@ class DecodeLibrary {
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
     public helpersZoneBounds = false;
-    public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
-    public readonly bspColliders: IBoxDecodeInfo[] = [];
-    public readonly bspLeaves: IBSPLeafDecodeInfo_T[] = [];
-    public readonly bspZones: IBSPZoneDecodeInfo_T[] = [];
+    public readonly bspNodes: GD.IBSPNodeDecodeInfo_T[] = [];
+    public readonly bspColliders: GD.IBoxDecodeInfo[] = [];
+    public readonly bspLeaves: GD.IBSPLeafDecodeInfo_T[] = [];
+    public readonly bspZones: GD.IBSPZoneDecodeInfo_T[] = [];
     public readonly bspZoneIndexMap: Record<string, number> = {};
     // public readonly zones: Record<string, IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
-    public readonly geometries: Record<string, IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
+    public readonly geometries: Record<string, GD.IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
     public readonly geometryInstances: Record<string, number> = {};               // a dictionary containing all geometray instance decode info
-    public readonly materials: Record<string, IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
-    public readonly materialModifiers: Record<string, IMaterialModifier> = {};    // a dictionary containing all material modifiers
+    public readonly materials: Record<string, GD.IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
+    public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
 
     public failed: any[] = [];
     public failedLoad: any[] = [];
     public failedDecode: any[] = [];
-    public sun: ISunDecodeInfo_T;
+    public sun: GD.ISunDecodeInfo_T;
 
     public static async fromPackage(pkg: C.APackage, {
         loadBaseModel = true,
@@ -29,7 +29,7 @@ class DecodeLibrary {
         loadTerrain = true,
         helpersZoneBounds = false,
         loadEmitters = true
-    }: LoadSettings_T) {
+    }: GD.LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
         const expGroups = pkg.exportGroups;
@@ -40,9 +40,9 @@ class DecodeLibrary {
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
 
-        const uLevelInfo = pkg.fetchObject<ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
+        const uLevelInfo = pkg.fetchObject<GA.ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
 
-        const sun = pkg.fetchObject<UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
+        const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 
         decodeLibrary.sun = sun.getDecodeInfo(decodeLibrary);
 
@@ -55,25 +55,25 @@ class DecodeLibrary {
         decodeLibrary.sector = sectorIndex;
 
         if (loadBaseModel) {
-            const uModel = pkg.fetchObject<UModel>(uLevel.baseModelId).loadSelf(); // base model
+            const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId).loadSelf(); // base model
             uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         }
 
         if (loadTerrain) {
-            const FTerrainInfo = pkg.fetchObject<FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
+            const FTerrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
             FTerrainInfo.getDecodeInfo(decodeLibrary);
         }
 
         if (loadEmitters) {
             const actorsToLoad = expGroups["Emitter"] || [];
-            const uEmitters = actorsToLoad.map(exp => pkg.fetchObject<UEmitter>(exp.index + 1).loadSelf());
+            const uEmitters = actorsToLoad.map(exp => pkg.fetchObject<GA.UEmitter>(exp.index + 1).loadSelf());
 
             for (const actor of uEmitters)
                 actor.getDecodeInfo(decodeLibrary);
         }
 
         if (loadStaticModels) {
-            let actorsToLoad: { index: number; export: UExport; }[];
+            let actorsToLoad: { index: number; export: C.UExport; }[];
 
             if (loadStaticModelList && loadStaticModelList.length)
                 actorsToLoad = loadStaticModelList.map(i => { return { index: i - 1, export: pkg.exports[i - 1] } });
@@ -84,7 +84,7 @@ class DecodeLibrary {
 
                 for (let exp of actorsToLoad) {
                     try {
-                        const actor = pkg.fetchObject<UStaticMeshActor>(exp.index + 1).loadSelf();
+                        const actor = pkg.fetchObject<GA.UStaticMeshActor>(exp.index + 1).loadSelf();
                         try {
                             try {
                                 actor.getDecodeInfo(decodeLibrary)
@@ -102,7 +102,7 @@ class DecodeLibrary {
                     debugger;
                 }
             } else {
-                const uStaticMeshActors = actorsToLoad.map(exp => pkg.fetchObject<UStaticMeshActor>(exp.index + 1).loadSelf());
+                const uStaticMeshActors = actorsToLoad.map(exp => pkg.fetchObject<GA.UStaticMeshActor>(exp.index + 1).loadSelf());
 
                 for (const actor of uStaticMeshActors)
                     actor.getDecodeInfo(decodeLibrary);

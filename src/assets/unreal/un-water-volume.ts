@@ -4,7 +4,7 @@ import { BufferValue } from "@l2js/core";
 import FNumber from "./un-number";
 import UPhysicsVolume from "./un-physics-volume";
 
-class UWaterVolume extends UPhysicsVolume {
+abstract class UWaterVolume extends UPhysicsVolume {
     // protected colLocation: FVector;
     // protected nextPhysicsVolume: UPhysicsVolume;
     // protected touching: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);

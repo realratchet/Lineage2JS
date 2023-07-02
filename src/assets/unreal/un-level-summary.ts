@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 
-class ULevelSummary extends UObject { 
+abstract class ULevelSummary extends UObject { 
     // protected title: string;
     // protected author: string;
     // protected levelEnterText: string;

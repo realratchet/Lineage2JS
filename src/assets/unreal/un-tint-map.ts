@@ -1,8 +1,8 @@
 import UObject from "@l2js/core";
 
-class FTIntMap extends UObject {
-    declare public time: number;
-    declare public intensity: C.FPrimitiveArray<"uint8">;
+abstract class FTIntMap extends UObject {
+    declare public readonly time: number;
+    declare public readonly intensity: C.FPrimitiveArray<"uint8">;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

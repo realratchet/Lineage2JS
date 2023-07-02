@@ -6,7 +6,7 @@ import FArray, { FObjectArray } from "./un-array";
 import FNumber from "./un-number";
 import FVector from "./un-vector";
 
-class ULight extends UAActor {
+abstract class ULight extends UAActor {
     // public effect: LightEffect_T = LightEffect_T.LE_None;
     // public lightness: number = 255;
     // public radius: number;

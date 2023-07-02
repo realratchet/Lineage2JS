@@ -1,5 +1,6 @@
 // import FVector from "./un-vector";
 // import FRotator from "./un-rotator";
+import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
@@ -63,8 +64,8 @@ abstract class UAActor extends UObject {
         const _a = this.region.getZone().location;
         const _b = this.location;
 
-        const a = new FVector(_a.x, _a.z, _a.y);
-        const b = new FVector(_b.x, _b.z, _b.y);
+        const a = FVector.make(_a.x, _a.z, _a.y);
+        const b = FVector.make(_b.x, _b.z, _b.y);
 
         const geoPosition = a.sub(b).applyRotator(this.rotation, true);
         const regionHelper = {

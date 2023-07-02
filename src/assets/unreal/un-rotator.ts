@@ -31,10 +31,10 @@ for (let i = 0; i < GMath.NUM_SQRTS; i++)
     SqrtFLOAT[i] = Math.sqrt(i / 16384);
 
 
-class FRotator extends UObject {
-    declare public pitch: number;
-    declare public yaw: number;
-    declare public roll: number;
+abstract class FRotator extends UObject {
+    declare public readonly pitch: number;
+    declare public readonly yaw: number;
+    declare public readonly roll: number;
 
     public constructor(pitch = 0, yaw = 0, roll = 0) {
         super();

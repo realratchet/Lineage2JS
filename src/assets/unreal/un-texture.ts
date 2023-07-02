@@ -16,7 +16,7 @@ import FArray from "@l2js/core/src/unreal/un-array";
     0000100000 ( 32)
 */
 
-class UTexture extends UMaterial {
+abstract class UTexture extends UMaterial {
     declare protected palette: GA.UPlatte;
     declare protected internalTime: number[];
     declare protected format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;

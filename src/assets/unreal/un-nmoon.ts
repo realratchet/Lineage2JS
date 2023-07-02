@@ -1,6 +1,6 @@
 import UNCelestial from "./un-ncelestial";
 
-class UNMoon extends UNCelestial {
+abstract class UNMoon extends UNCelestial {
     // public readonly careUnread: boolean = false;
 
     // protected isMoonLight: boolean;

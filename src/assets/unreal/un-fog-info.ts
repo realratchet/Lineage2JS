@@ -1,15 +1,13 @@
-import FArray from "./un-array";
-import FColor from "./un-color";
 import AInfo from "./un-info";
 
-class FFogInfo extends AInfo {
-    protected affectRange: FRange;
-    protected fogRange1: FRange;
-    protected fogRange2: FRange;
-    protected fogRange3: FRange;
-    protected fogRange4: FRange;
-    protected fogRange5: FRange;
-    protected colors: FArray<FColor> = new FArray(FColor);
+abstract class FFogInfo extends AInfo {
+    declare protected readonly affectRange: GA.FRange;
+    declare protected readonly fogRange1: GA.FRange;
+    declare protected readonly fogRange2: GA.FRange;
+    declare protected readonly fogRange3: GA.FRange;
+    declare protected readonly fogRange4: GA.FRange;
+    declare protected readonly fogRange5: GA.FRange;
+    declare protected readonly colors: C.FArray<GA.FColor>;
 
     public readonly careUnread = false;
 

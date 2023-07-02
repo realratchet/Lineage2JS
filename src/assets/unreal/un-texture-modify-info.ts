@@ -19,7 +19,7 @@ enum ColorOperation_T {
     CO_Use_Color_From_Mask,
 };
 
-class UTextureModifyInfo extends UObject {
+abstract class UTextureModifyInfo extends UObject {
     // protected useModify: boolean;
     // protected doubleSide: boolean;
     // protected alphaBlend: boolean;

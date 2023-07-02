@@ -3,7 +3,7 @@ import { ANativePackage, APackage, UObject } from "@l2js/core";
 import UModel from "./model/un-model";
 import ULevel from "./un-level";
 import FScale from "./un-scale";
-'native use'; import FVector from "./un-vector";
+import FVector from "./un-vector";
 import UBrush from "./un-brush";
 import FColor from "./un-color";
 import ULevelInfo from "./un-level-info";
@@ -41,6 +41,7 @@ import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
 import FCoords from "./un-coords";
+import FQuaternion from "@client/assets/unreal/un-quaternion";
 
 type CoreStructs_T =
     | "Vector"
@@ -59,6 +60,7 @@ type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : T extends "Coords" ? GA.FCoords
     : never;
 
+
 class UPackage extends APackage {
     protected async readArrayBuffer() {
         const response = await fetch(this.path);
@@ -71,6 +73,39 @@ class UPackage extends APackage {
     }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
+
+    // public addDependencies(pkg: GA.UPackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
+    //     const pkgCore = pkg.loader.getCorePackage();
+    //     const pkgNative = pkg.loader.getNativePackage();
+
+    //     for (let [clsType, clsName] of deps) {
+    //         const cls = pkgCore.fetchObjectByType<C.UClass>(clsType, clsName);
+
+    //         if (!cls) throw new Error(`Could not find '${clsName}' of type '${clsType}'`);
+
+    //         cls.loadSelf().buildClass(pkgNative);
+    //     }
+    // }
+
+    public loadNativeClasses() {
+        const native = this.loader.getNativePackage();
+
+        this.exportGroups["Struct"].forEach(exp => {
+            if (exp.export.isFake)
+                return;
+
+            const obj = this.fetchObject<C.UStruct>(exp.index + 1);
+
+
+            obj.loadSelf().buildClass(native);
+        });
+
+        //     this.exportGroups["Class"].forEach(exp => {
+        //         const obj = this.fetchObject<C.UClass>(exp.index + 1);
+
+        //         obj.loadSelf().buildClass(native);
+        //     });
+    }
 }
 
 class UNativePackage extends ANativePackage {
@@ -94,6 +129,16 @@ class UNativePackage extends ANativePackage {
             case "Range": Constructor = FRange; break;
             case "TerrainIntensityMap": Constructor = FTIntMap; break;
             case "Coords": Constructor = FCoords; break;
+            case "Quat": Constructor = FQuaternion; break;
+
+
+            // structs we dont care about yet
+            case "InterpCurve": Constructor = UObject; break;
+            case "InterpCurvePoint": Constructor = UObject; break;
+            case "CompressedPosition": Constructor = UObject; break;
+            case "BoundingVolume": Constructor = UObject; break;
+            case "Guid": Constructor = UObject; break;
+
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);

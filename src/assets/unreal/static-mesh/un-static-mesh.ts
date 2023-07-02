@@ -16,7 +16,7 @@ import StringSet from "@client/utils/string-set";
 const triggerDebuggerOnUnsupported = true;
 
 
-class UStaticMesh extends UPrimitive {
+abstract class UStaticMesh extends UPrimitive {
     protected sections: FArray<FStaticMeshSection> = new FArray(FStaticMeshSection);
     protected vertexStream: FStaticMeshVertexStream = new FStaticMeshVertexStream();
     protected colorStream: FRawColorStream = new FRawColorStream();

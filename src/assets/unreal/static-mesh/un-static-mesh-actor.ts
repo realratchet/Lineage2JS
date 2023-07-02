@@ -11,7 +11,7 @@ import UPackage from "../un-package";
 import UTexture from "../un-texture";
 import FArray, { FIndexArray } from "@l2js/core/src/unreal/un-array";
 
-class FAccessory extends UObject {
+abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
 
     // public load(pkg: UPackage, tag?: PropertyTag): this {
@@ -21,7 +21,7 @@ class FAccessory extends UObject {
     // }
 }
 
-class UStaticMeshActor extends UAActor {
+abstract class UStaticMeshActor extends UAActor {
     // protected mesh: UStaticMesh | UTexture;
     // protected instance: UStaticMeshInstance;
 
