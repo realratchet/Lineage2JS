@@ -1,4 +1,5 @@
-import UObject from "@l2js/core";
+import UPackage from "@client/assets/unreal/un-package";
+import UObject, { APackage, UExport } from "@l2js/core";
 import DecodeLibrary from "./decode-library";
 
 abstract class UBaseMaterial extends UObject {
@@ -137,16 +138,16 @@ abstract class UFinalBlend extends UBaseModifier {
     //     });
     // }
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.material.uuid;
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.material.uuid;
 
-    //     library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
 
-    //     this.material.loadSelf().getDecodeInfo(library);
+        this.material.loadSelf().getDecodeInfo(library);
 
-    //     return this.material.uuid;
-    // }
+        return this.material.uuid;
+    }
 }
 
 abstract class UShader extends UMaterial {
@@ -200,8 +201,8 @@ abstract class UShader extends UMaterial {
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
-        if (this.transparent)
-            debugger;
+        // if (this.transparent)
+        //     debugger;
 
         library.materials[this.uuid] = null;
 
@@ -467,31 +468,46 @@ abstract class UTexPanner extends UBaseModifier {
     // }
 }
 
-abstract class FStaticMeshMaterial extends UBaseMaterial {
-    // protected noDynamicShadowCast: boolean;
-    // protected collisionForShadow: boolean;
-    // protected enableCollision: boolean;
+abstract class UStaticMeshMaterial extends UBaseMaterial {
+    declare protected noDynamicShadowCast: boolean;
+    declare protected collisionForShadow: boolean;
+    declare protected enableCollision: boolean;
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "bNoDynamicShadowCast": "noDynamicShadowCast",
-    //         "EnableCollisionforShadow": "collisionForShadow",
-    //         "EnableCollision": "enableCollision",
-    //     });
+    protected getUnserializedPropertyies() {
+        return super.getUnserializedPropertyies().concat([
+            ["EnableCollision", "BoolProperty"],
+            ["EnableCollisionforShadow", "BoolProperty"],
+            ["bNoDynamicShadowCast", "BoolProperty"]
+        ]);
+    }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "bNoDynamicShadowCast": "noDynamicShadowCast",
+            "EnableCollisionforShadow": "collisionForShadow",
+            "EnableCollision": "enableCollision",
+        });
+    }
+
+
+    // protected doLoad(pkg: unknown, exp: unknown): void {
+    //     debugger;
+    //     super.doLoad(pkg as any, exp as any);
+    //     debugger;
     // }
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
+    public getDecodeInfo(library: DecodeLibrary): string {
 
-    //     if (this.uuid in library.materials) return this.material?.uuid || null;
+        if (this.uuid in library.materials) return this.material?.uuid || null;
 
-    //     library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
-    //     if (this.material)
-    //         this.material.loadSelf().getDecodeInfo(library);
+        if (this.material)
+            this.material.loadSelf().getDecodeInfo(library);
 
-    //     return this.material?.uuid || null;
-    // }
+        return this.material?.uuid || null;
+    }
 }
 
 export default UMaterial;
-export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource };
+export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource };

@@ -250,10 +250,12 @@ function decodeSector(library: DecodeLibrary) {
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
 
-    const spriteUuid = library.sun.sprites[0];
-    const spriteInfo = library.materials[spriteUuid] as ITextureDecodeInfo;
+    if (library.sun) {
+        const spriteUuid = library.sun.sprites[0];
+        const spriteInfo = library.materials[spriteUuid] as ITextureDecodeInfo;
 
-    sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
+        sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
+    }
 
     // library.bspColliders.forEach(collider => {
     //     const box = new Box3();

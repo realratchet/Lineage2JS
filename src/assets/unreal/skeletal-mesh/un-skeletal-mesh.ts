@@ -416,7 +416,7 @@ class USkeletalMesh extends ULodMesh {
         const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
 
-        const materials = await Promise.all(this.lodMeshMaterials.map((mat: FStaticMeshMaterial) => mat?.getDecodeInfo(library) || null));
+        const materials = await Promise.all(this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => mat?.getDecodeInfo(library) || null));
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
         library.geometries[this.uuid] = {

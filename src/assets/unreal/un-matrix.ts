@@ -1,10 +1,41 @@
-import UObject from "@l2js/core";
+import UPackage from "@client/assets/unreal/un-package";
+import UObject, { APackage, UExport } from "@l2js/core";
+import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
 
 abstract class FMatrix extends UObject {
-    declare public planeX: GA.FPlane;
-    declare public planeY: GA.FPlane;
-    declare public planeZ: GA.FPlane;
-    declare public planeW: GA.FPlane;
+    declare public readonly planeX: GA.FPlane;
+    declare public readonly planeY: GA.FPlane;
+    declare public readonly planeZ: GA.FPlane;
+    declare public readonly planeW: GA.FPlane;
+
+    // public nativeClone(): FMatrix {
+    //     debugger;
+
+    //     const clone = super.nativeClone() as FMatrix;
+
+    //     debugger;
+
+    //     return clone;
+    // }
+
+    
+    // public load(pkg: UPackage, info?: any): this {
+    //     debugger;
+
+    //     super.load(pkg, info);
+
+    //     debugger;
+
+    //     return this;
+    // }
+
+    // protected loadProperty(pkg: APackage, tag: PropertyTag): void {
+    //     debugger;
+
+    //     super.loadProperty(pkg, tag)
+
+    //     debugger;
+    // }
 
     public getElements3x3() {
         return [

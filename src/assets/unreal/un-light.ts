@@ -1,29 +1,25 @@
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
-import { BufferValue } from "@l2js/core";
 import UAActor from "./un-aactor";
-import FArray, { FObjectArray } from "./un-array";
-import FNumber from "./un-number";
 import FVector from "./un-vector";
 
 abstract class ULight extends UAActor {
-    // public effect: LightEffect_T = LightEffect_T.LE_None;
-    // public lightness: number = 255;
-    // public radius: number;
-    // public hue: number = 0;
-    // public saturation: number = 127;
+    declare public readonly effect: LightEffect_T;
+    declare public readonly lightness: number;
+    declare public readonly radius: number;
+    declare public readonly hue: number;
+    declare public readonly saturation: number;
 
-    // public type: LightType_T = 1;
-    // public hasCorona: boolean = false;
-    // public period: number = 0;
-    // public phase: number = 0;
-    // public cone: number = 0;
-    // public isDynamic: boolean = false;
-    // public lightOnTime: number;
-    // public lightOffTime: number;
+    declare public readonly type: LightType_T;
+    declare public readonly hasCorona: boolean;
+    declare public readonly period: number;
+    declare public readonly phase: number;
+    declare public readonly cone: number;
+    declare public readonly isDynamic: boolean;
+    declare public readonly lightOnTime: number;
+    declare public readonly lightOffTime: number;
 
-
-    // protected maxCoronaSize: number;
+    declare public readonly maxCoronaSize: number;
 
     // protected _bSunlightColor: any;
     // protected _bTimeLight: any;
@@ -34,125 +30,123 @@ abstract class ULight extends UAActor {
     // protected _coronaRotationOffset: any;
     // protected _useOwnFinalBlend: any;
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "LightEffect": "effect",
-    //         "LightRadius": "radius",
-    //         "LightBrightness": "lightness",
-    //         "LightHue": "hue",
-    //         "LightSaturation": "saturation",
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "LightEffect": "effect",
+            "LightRadius": "radius",
+            "LightBrightness": "lightness",
+            "LightHue": "hue",
+            "LightSaturation": "saturation",
 
-    //         "LightType": "type",
-    //         "bCorona": "hasCorona",
+            "LightType": "type",
+            "bCorona": "hasCorona",
 
-    //         "LightPeriod": "period",
-    //         "LightPhase": "phase",
-    //         "LightCone": "cone",
-    //         "bDynamicLight": "isDynamic",
+            "LightPeriod": "period",
+            "LightPhase": "phase",
+            "LightCone": "cone",
+            "bDynamicLight": "isDynamic",
 
-    //         "LightOnTime": "lightOnTime",
-    //         "LightOffTime": "lightOffTime",
-
-
+            "LightOnTime": "lightOnTime",
+            "LightOffTime": "lightOffTime",
 
 
-    //         "MaxCoronaSize": "maxCoronaSize",
+            "MaxCoronaSize": "maxCoronaSize",
 
-    //         "bSunlightColor": "_bSunlightColor",
-    //         "bTimeLight": "_bTimeLight",
-    //         "LightPrevTime": "_lightPrevTime",
-    //         "LightLifeTime": "_lightLifeTime",
-    //         "MinCoronaSize": "_minCoronaSize",
-    //         "CoronaRotation": "_coronaRotation",
-    //         "CoronaRotationOffset": "_coronaRotationOffset",
-    //         "UseOwnFinalBlend": "_useOwnFinalBlend"
-    //     });
-    // }
+            // "bSunlightColor": "_bSunlightColor",
+            // "bTimeLight": "_bTimeLight",
+            // "LightPrevTime": "_lightPrevTime",
+            // "LightLifeTime": "_lightLifeTime",
+            // "MinCoronaSize": "_minCoronaSize",
+            // "CoronaRotation": "_coronaRotation",
+            // "CoronaRotationOffset": "_coronaRotationOffset",
+            // "UseOwnFinalBlend": "_useOwnFinalBlend"
+        });
+    }
 
-    // protected getRegionLineHelper(library: DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
-    //     const lineGeometryUuid = generateUUID();
-    //     const _a = this.region.getZone().location;
-    //     const _b = this.location;
+    protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+        const lineGeometryUuid = generateUUID();
+        const _a = this.region.getZone().location;
+        const _b = this.location;
 
-    //     const a = new FVector(_a.x, _a.z, _a.y);
-    //     const b = new FVector(_b.x, _b.z, _b.y);
+        const a = FVector.make(_a.x, _a.z, _a.y);
+        const b = FVector.make(_b.x, _b.z, _b.y);
 
-    //     const geoPosition = a.sub(b);
-    //     const regionHelper = {
-    //         type: "Edges",
-    //         geometry: lineGeometryUuid,
-    //         color,
-    //         ignoreDepth
-    //     } as IEdgesObjectDecodeInfo;
+        const geoPosition = a.sub(b);
+        const regionHelper = {
+            type: "Edges",
+            geometry: lineGeometryUuid,
+            color,
+            ignoreDepth
+        } as GD.IEdgesObjectDecodeInfo;
 
-    //     library.geometries[lineGeometryUuid] = {
-    //         indices: new Uint8Array([0, 1]),
-    //         attributes: {
-    //             positions: new Float32Array([
-    //                 0, 0, 0,
-    //                 geoPosition.x, geoPosition.y, geoPosition.z
-    //             ])
-    //         }
-    //     };
+        library.geometries[lineGeometryUuid] = {
+            indices: new Uint8Array([0, 1]),
+            attributes: {
+                positions: new Float32Array([
+                    0, 0, 0,
+                    geoPosition.x, geoPosition.y, geoPosition.z
+                ])
+            }
+        };
 
-    //     return regionHelper;
-    // }
+        return regionHelper;
+    }
 
-    // public getColor(): [number, number, number] {
-    //     const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
-    //     const brightness = saturationToBrightness(this.lightness);
+    public getColor(): [number, number, number] {
+        const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
+        const brightness = saturationToBrightness(this.lightness);
 
-    //     // debugger;
+        // debugger;
 
-    //     // const lightType = this.type;
+        // const lightType = this.type;
 
-    //     // console.log(`x: ${x}, y: ${y}, z: ${z}, w: ${w}`);
+        // console.log(`x: ${x}, y: ${y}, z: ${z}, w: ${w}`);
 
-    //     // let someColor_88 = 0;
-    //     // let actor1: any;
-    //     // let GMath_exref: any;
+        // let someColor_88 = 0;
+        // let actor1: any;
+        // let GMath_exref: any;
 
-    //     // debugger;
+        // debugger;
 
-    //     // switch (lightType) {
-    //     //     case 0x7:
-    //     //         someColor_88 = actor1[0x2].field_0xe;
-    //     //         if (someColor_88 === 0x0) {
-    //     //             someColor_88 = 1.401298e-45;
-    //     //         }
-    //     //         let someFloat = actor1[0x2].field_0xf << 0x8;
-    //     //         let uVar4 = FUN_10740ab4();
-    //     //         let tmp_double = (GMath_exref + (uVar4 >> 0x2 & 0x3fff) * 0x4 + 0x8c) * 0.09 + 0.9;
+        // switch (lightType) {
+        //     case 0x7:
+        //         someColor_88 = actor1[0x2].field_0xe;
+        //         if (someColor_88 === 0x0) {
+        //             someColor_88 = 1.401298e-45;
+        //         }
+        //         let someFloat = actor1[0x2].field_0xf << 0x8;
+        //         let uVar4 = FUN_10740ab4();
+        //         let tmp_double = (GMath_exref + (uVar4 >> 0x2 & 0x3fff) * 0x4 + 0x8c) * 0.09 + 0.9;
 
-    //     //         debugger;
-    //     //         break;
-    //     //     default:
-    //     //         debugger;
-    //     //         break;
-    //     // }
+        //         debugger;
+        //         break;
+        //     default:
+        //         debugger;
+        //         break;
+        // }
 
-    //     return [x * brightness, y * brightness, z * brightness];
-    // }
+        return [x * brightness, y * brightness, z * brightness];
+    }
 
-    // public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
-    //     // debugger;
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.ILightDecodeInfo {
+        // debugger;
 
-    //     return {
-    //         uuid: this.uuid,
-    //         type: "Light",
-    //         color: this.getColor(),
-    //         cone: this.cone,
-    //         lightType: this.type.valueOf(),
-    //         lightEffect: this.effect.valueOf(),
-    //         directional: this.isDirectional,
-    //         radius: this.radius,
-    //         name: this.objectName,
-    //         position: this.location.getVectorElements(),
-    //         scale: this.scale.getVectorElements(),
-    //         rotation: this.rotation.getEulerElements(),
-    //         children: [/*this.getRegionLineHelper(library, [1, 0, 0])*/]
-    //     };
-    // }
+        return {
+            uuid: this.uuid,
+            type: "Light",
+            color: this.getColor(),
+            cone: this.cone,
+            lightType: this.type.valueOf(),
+            lightEffect: this.effect.valueOf(),
+            directional: this.isDirectional,
+            radius: this.radius,
+            name: this.objectName,
+            position: this.location.getVectorElements(),
+            scale: this.scale.getVectorElements(),
+            rotation: this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"],
+            children: [/*this.getRegionLineHelper(library, [1, 0, 0])*/]
+        };
+    }
 }
 
 enum LightEffect_T {

@@ -44,6 +44,7 @@ import FCoords from "./un-coords";
 import FQuaternion from "@client/assets/unreal/un-quaternion";
 import UStaticMeshInstance from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
 import UStaticMesh from "@client/assets/unreal/static-mesh/un-static-mesh";
+import { addClassDependency, addPackageDependendency } from "@l2js/core/src/unreal/un-package";
 
 type CoreStructs_T =
     | "Vector"
@@ -107,6 +108,55 @@ class UPackage extends APackage {
 
         //         obj.loadSelf().buildClass(native);
         //     });
+    }
+}
+
+class UCorePackage extends UPackage implements C.ICorePackage {
+    public readonly isCore = true;
+    public readonly isEngine = false;
+    public readonly isNative = false;
+}
+
+class UEnginePackage extends UPackage implements C.IEnginePackage {
+    public readonly isCore = false;
+    public readonly isEngine = true;
+    public readonly isNative = false;
+
+    protected addClassDependencies(nameTable: C.UName[], nameHash: Map<string, number>, imports: C.UImport[], exports: C.UExport<UObject>[]): void {
+        addPackageDependendency(nameTable, nameHash, imports, "Native");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Sound");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Primitive");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Model");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMeshInstance");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMeshInstance");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshAnimation");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMeshInstance");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Viewport");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Player");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainSector");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainPrimitive");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "LevelBase");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
+
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "Client");
+    }
+
+    protected registerNativeClasses(): void {
+        super.registerNativeClasses();
+
+        this.registerNativeClass("StaticMeshMaterial", "Modifier");
     }
 }
 
@@ -217,7 +267,7 @@ class UNativePackage extends ANativePackage {
             case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
             case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
             case "Cubemap": Constructor = UCubemap; break;
-
+            case "StaticMeshMaterial": Constructor = UnMaterials.UStaticMeshMaterial; break;
 
 
 
@@ -239,6 +289,37 @@ class UNativePackage extends ANativePackage {
         }
 
         return Constructor;
+    }
+
+    protected registerNativeClasses() {
+        super.registerNativeClasses();
+
+        this.registerNativeClass("Texture", "Object");
+        this.registerNativeClass("Font", "Object");
+        this.registerNativeClass("Sound", "Object");
+
+        this.registerNativeClass("Primitive", "Object");
+        this.registerNativeClass("Model", "Primitive");
+        this.registerNativeClass("ConvexVolume", "Primitive");
+        this.registerNativeClass("StaticMesh", "Primitive");
+        this.registerNativeClass("Mesh", "Primitive");
+        this.registerNativeClass("MeshInstance", "Primitive");
+        this.registerNativeClass("LodMeshInstance", "MeshInstance");
+        this.registerNativeClass("SkeletalMeshInstance", "LodMeshInstance");
+
+        this.registerNativeClass("MeshAnimation", "Object");
+        this.registerNativeClass("StaticMeshInstance", "Object");
+
+        this.registerNativeClass("Player", "Object");
+        this.registerNativeClass("Viewport", "Player");
+
+        this.registerNativeClass("TerrainSector", "Object");
+        this.registerNativeClass("TerrainPrimitive", "Primitive");
+
+        this.registerNativeClass("LevelBase", "Object");
+        this.registerNativeClass("Level", "LevelBase");
+
+        this.registerNativeClass("Client", "Object");
     }
 
     // public readonly nativeClassess = new Map<C.NativeTypes_T, typeof UObject>();
@@ -480,7 +561,7 @@ class UNativePackage extends ANativePackage {
 }
 
 export default UPackage;
-export { UPackage, UNativePackage };
+export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;

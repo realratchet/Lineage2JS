@@ -1,6 +1,6 @@
 // import * as _path from "path";
 
-import { AAssetLoader, ANativePackage, APackage } from "@l2js/core";
+import { AAssetLoader } from "@l2js/core";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
 
@@ -198,7 +198,7 @@ import { AAssetLoader, ANativePackage, APackage } from "@l2js/core";
 // }
 
 
-class AssetLoader extends AAssetLoader<GA.UPackage, GA.UNativePackage> {
+class AssetLoader extends AAssetLoader<GA.UPackage, GA.UCorePackage, GA.UEnginePackage, GA.UNativePackage> {
 
     static async Instantiate(assetList: C.IAssetListInfo) {
         const Library = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
@@ -210,7 +210,7 @@ class AssetLoader extends AAssetLoader<GA.UPackage, GA.UNativePackage> {
         return new UNativePackage(this);
     }
 
-    protected createPackage(UPackage: C.APackageConstructor<GA.UPackage>, downloadPath: string): GA.UPackage {
+    protected createPackage(UPackage: C.APackageConstructor<GA.UPackage> | C.ACorePackageConstructor<GA.UCorePackage> | C.AEnginePackageConstructor<GA.UEnginePackage>, downloadPath: string): GA.UPackage {
         return new UPackage(this, `assets/${downloadPath}`);
     }
 }

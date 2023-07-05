@@ -29,7 +29,10 @@ import { BufferValue } from "@l2js/core";
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | UPackage, settings: LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
-    const decodeLibrary = await DecodeLibrary.fromPackage(await assetLoader.load(pkg), settings);
+    pkg = await assetLoader.load(pkg);
+
+
+    const decodeLibrary = await DecodeLibrary.fromPackage(pkg, settings);
 
     // debugger;
 
@@ -201,6 +204,7 @@ async function _decodeDatFile(path: string) {
 }
 
 async function startCore() {
+    // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
 
@@ -263,7 +267,6 @@ async function startCore() {
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
 
-    // debugger;
 
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);
@@ -391,8 +394,8 @@ async function startCore() {
     const loadSettings = {
         helpersZoneBounds: false,
         loadTerrain: false,
-        loadBaseModel: false,
-        loadStaticModels: true,
+        loadBaseModel: true,
+        loadStaticModels: false,
         loadEmitters: false,
         _loadStaticModelList: [
             // 1441,

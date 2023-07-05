@@ -63,7 +63,7 @@
 // type UMeshAnimation = import("./skeletal-mesh/un-mesh-animation").UMeshAnimation;
 
 // type UMaterial = import("./un-material").UMaterial;
-// type FStaticMeshMaterial = import("./un-material").FStaticMeshMaterial;
+// type UStaticMeshMaterial = import("./un-material").UStaticMeshMaterial;
 // type OutputBlending_T = import("./un-material").OutputBlending_T;
 
 // type UShader = import("./un-material").UShader;

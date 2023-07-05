@@ -5,7 +5,7 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-import { BufferValue } from "@l2js/core";
+import { BufferValue, UObject } from "@l2js/core";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
@@ -34,8 +34,8 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected isUsingBillboard: boolean;
     declare protected frequency: number;
 
-    declare protected collisionFaces: FStaticMeshCollisionTriangle[];
-    declare protected collisionNodes: FStaticMeshCollisionNode[];
+    declare protected collisionFaces: FArray<FStaticMeshCollisionTriangle>;
+    declare protected collisionNodes: FArray<FStaticMeshCollisionNode>;
     declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
 
     declare protected unkIndex0: number;
@@ -58,6 +58,20 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected unkIndex1: number;
     declare protected unkInt1: number;
 
+    protected getUnserializedPropertyies() {
+        return super.getUnserializedPropertyies().concat([
+            ["LodRange01", "FloatProperty"],
+            ["StaticMeshLod01", "ObjectProperty"],
+            ["LodRange02", "FloatProperty"],
+            ["StaticMeshLod02", "ObjectProperty"],
+            ["bStaticMeshLod", "BoolProperty"],
+            ["bMakeTwoSideMesh", "BoolProperty"],
+            ["bStaticMeshLodBlend", "BoolProperty"],
+            ["Frequency", "FloatProperty"],
+            ["bUseBillBoard", "FloatProperty"],
+        ]);
+    }
+
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMeshLod02": "staticMeshLod2",
@@ -69,16 +83,19 @@ abstract class UStaticMesh extends UPrimitive {
             "bStaticMeshLodBlend": "isStaticMeshLodBlend",
             "bUseBillBoard": "isUsingBillboard",
             "Frequency": "frequency",
-
         });
     }
 
     public doLoad(pkg: GA.UPackage, exp: C.UExport) {
 
-        debugger;
+        // debugger;
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
+
+
+        if (verArchive < 0x55) (UObject as any).prototype.doLoad.call(this, pkg, exp);
+        else (UPrimitive as any).prototype.doLoad.call(this, pkg, exp);
 
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
@@ -92,7 +109,10 @@ abstract class UStaticMesh extends UPrimitive {
         this.edgesStream = new FRawIndexBuffer(); // triangle edge indices
         this.staticMeshTris = new FArrayLazy(FStaticMeshTriangle);
 
-        super.doLoad(pkg, exp);
+        // debugger;
+
+
+        // debugger;
 
         this.sections.load(pkg);
         this.boundingBox.load(pkg);
@@ -103,7 +123,7 @@ abstract class UStaticMesh extends UPrimitive {
         this.indexStream.load(pkg);
         this.edgesStream.load(pkg);
 
-        this.unkIndex0 = pkg.read(compat32).value as number;
+        this.unkIndex0 = pkg.read(compat32).value;
 
         // debugger;
 
@@ -112,8 +132,8 @@ abstract class UStaticMesh extends UPrimitive {
                 debugger;
             }
 
-            this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
-            this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg).map(x => x);
+            this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg);
+            this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg);
         } else {
             if (verArchive < 0x3E) {
                 console.warn("Not supported yet");
@@ -123,8 +143,8 @@ abstract class UStaticMesh extends UPrimitive {
             } else {
                 // debugger;
 
-                this.collisionFaces = new FArrayLazy(FStaticMeshCollisionTriangle).load(pkg).map(x => x);
-                this.collisionNodes = new FArrayLazy(FStaticMeshCollisionNode).load(pkg).map(x => x);
+                this.collisionFaces = new FArrayLazy(FStaticMeshCollisionTriangle).load(pkg);
+                this.collisionNodes = new FArrayLazy(FStaticMeshCollisionNode).load(pkg);
 
                 // debugger;
             }
@@ -145,26 +165,26 @@ abstract class UStaticMesh extends UPrimitive {
         }
 
         if (0x5 < verLicense) {
-            this.unkInt_5x0 = pkg.read(int32).value as number;
-            this.unkInd_5x0 = pkg.read(compat32).value as number;
-            this.unkInd_5x1 = pkg.read(compat32).value as number;
-            this.unkInt_5x1 = pkg.read(int32).value as number;
-            this.unkInt_5x2 = pkg.read(int32).value as number;
+            this.unkInt_5x0 = pkg.read(int32).value;
+            this.unkInd_5x0 = pkg.read(compat32).value;
+            this.unkInd_5x1 = pkg.read(compat32).value;
+            this.unkInt_5x1 = pkg.read(int32).value;
+            this.unkInt_5x2 = pkg.read(int32).value;
         }
 
         if (0x6 < verLicense) {
-            this.unkInt_6x0 = pkg.read(int32).value as number;
-            this.unkInt_6x1 = pkg.read(int32).value as number;
+            this.unkInt_6x0 = pkg.read(int32).value;
+            this.unkInt_6x1 = pkg.read(int32).value;
         }
 
-        if (0xA < verLicense) this.unkInt_Ax0 = pkg.read(int32).value as number;
-        if (0xC < verLicense) this.unkInt_Cx0 = pkg.read(int32).value as number;
+        if (0xA < verLicense) this.unkInt_Ax0 = pkg.read(int32).value;
+        if (0xC < verLicense) this.unkInt_Cx0 = pkg.read(int32).value;
         if (0xD < verLicense) {
-            this.unkInt_Dx0 = pkg.read(int32).value as number;
-            this.unkInt_Dx1 = pkg.read(int32).value as number;
+            this.unkInt_Dx0 = pkg.read(int32).value;
+            this.unkInt_Dx1 = pkg.read(int32).value;
         }
 
-        if (0xE < verLicense) this.unkInt_Ex0 = pkg.read(int32).value as number;
+        if (0xE < verLicense) this.unkInt_Ex0 = pkg.read(int32).value;
 
         if (verArchive < 0X5C) {
             console.warn("Not supported yet");
@@ -187,10 +207,10 @@ abstract class UStaticMesh extends UPrimitive {
             this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
-        } else this.unkInt0 = pkg.read(int32).value as number;
+        } else this.unkInt0 = pkg.read(int32).value;
 
-        if (99 < verArchive) this.unkIndex1 = pkg.read(compat32).value as number;
-        if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value as number;
+        if (99 < verArchive) this.unkIndex1 = pkg.read(compat32).value;
+        if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value;
 
         this.readHead = pkg.tell();
 
@@ -226,7 +246,7 @@ abstract class UStaticMesh extends UPrimitive {
 
         // if (!(materialUuid in library.materials)) {
         //     debugger;
-        //     const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        //     const materials = await Promise.all(this.materials.map((mat: UStaticMeshMaterial) => mat.getDecodeInfo(library)));
 
         //     materials.forEach(uuid => {
         //         if (!library.materials[uuid]) return;
@@ -376,8 +396,8 @@ abstract class UStaticMesh extends UPrimitive {
             bounds: this.decodeBoundsInfo()
         };
 
-        // const materials = await Promise.all(this.materials.map((mat: FStaticMeshMaterial) => mat.getDecodeInfo(library)));
-        const materials = this.materials.map((mat: GA.FStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
+        // const materials = await Promise.all(this.materials.map((mat: UStaticMeshMaterial) => mat.getDecodeInfo(library)));
+        const materials = this.materials.map((mat: GA.UStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
 
         materials.forEach(uuid => {
             if (!library.materials[uuid]) return;

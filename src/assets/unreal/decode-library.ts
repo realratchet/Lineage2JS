@@ -31,6 +31,8 @@ class DecodeLibrary {
         loadEmitters = true
     }: GD.LoadSettings_T) {
 
+        // debugger;
+
         const impGroups = pkg.importGroups;
         const expGroups = pkg.exportGroups;
 
@@ -44,7 +46,11 @@ class DecodeLibrary {
 
         const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 
+        // debugger;
+
         decodeLibrary.sun = sun.getDecodeInfo(decodeLibrary);
+
+        // debugger;
 
         const sectorIndex = uLevel.url.map.split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
 
@@ -108,6 +114,10 @@ class DecodeLibrary {
                     actor.getDecodeInfo(decodeLibrary);
             }
         }
+
+        // debugger;
+
+        // throw new Error("error")
 
         return decodeLibrary;
     }

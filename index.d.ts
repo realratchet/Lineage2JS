@@ -1,6 +1,5 @@
 import UObject from "@l2js/core";
 
-
 declare module "@l2js/core" {
     abstract class UObject {
         public uuid: string;
@@ -38,6 +37,8 @@ declare global {
             namespace Assets {
                 export type UPackage = import("@unreal/un-package").UPackage;
                 export type UNativePackage = import("@unreal/un-package").UNativePackage;
+                export type UCorePackage = import("@unreal/un-package").UCorePackage;
+                export type UEnginePackage = import("@unreal/un-package").UEnginePackage;
 
                 export type ULevel = import("@unreal/un-level").ULevel;
                 export type ULevelInfo = import("@unreal/un-level-info").ULevelInfo;
@@ -96,7 +97,7 @@ declare global {
                 export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
                 export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;
                 export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
-                export type FStaticMeshMaterial = import("@unreal/un-material").FStaticMeshMaterial;
+                export type UStaticMeshMaterial = import("@unreal/un-material").UStaticMeshMaterial;
 
                 export type FTIntMap = import("@unreal/un-tint-map").FTIntMap;
                 export type UDecoLayer = import("@unreal/un-deco-layer").UDecoLayer;

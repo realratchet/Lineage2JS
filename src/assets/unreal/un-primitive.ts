@@ -5,14 +5,17 @@ import UObject from "@l2js/core";
 abstract class UPrimitive extends UObject {
     declare protected boundingBox: GA.FBox;
     declare protected boundingSphere: GA.FPlane;
+    declare protected readonly materials: C.FArray<GA.UStaticMeshMaterial>;
+    declare protected readonly swayObject: boolean;
+
+    protected getUnserializedPropertyies() {
+        return super.getUnserializedPropertyies().concat([
+            ["Materials", "ArrayProperty", ["Class", "StaticMeshMaterial"]],
+            ["bSwayObject", "BoolProperty"]
+        ]);
+    }
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
-        // pkg.addDependencies(
-        //     pkg,
-        //     ["Struct", "Box"],
-        //     ["Struct", "Plane"],
-        // );
-
         super.preLoad(pkg, exp);
 
         this.boundingBox = FBox.make();
@@ -20,6 +23,7 @@ abstract class UPrimitive extends UObject {
     }
 
     protected doLoad(pkg: GA.UPackage, exp: C.UExport) {
+        // (UObject.prototype as any).doLoad.call(this, pkg, exp);
         super.doLoad(pkg, exp);
 
         this.boundingBox = FBox.make();
@@ -31,18 +35,25 @@ abstract class UPrimitive extends UObject {
         this.readHead = pkg.tell();
     }
 
-    // public decodeBoundsInfo(): IBoundsDecodeInfo {
-    //     return {
-    //         sphere: {
-    //             center: [this.boundingSphere.center.x, this.boundingSphere.center.z, this.boundingSphere.center.y],
-    //             radius: this.boundingSphere.radius
-    //         },
-    //         box: this.boundingBox.isValid ? {
-    //             min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
-    //             max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
-    //         } : null
-    //     };
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Materials": "materials",
+            "bSwayObject": "swayObject"
+        });
+    }
+
+    public decodeBoundsInfo(): GD.IBoundsDecodeInfo {
+        return {
+            sphere: {
+                center: [this.boundingSphere.x, this.boundingSphere.z, this.boundingSphere.y],
+                radius: this.boundingSphere.w
+            },
+            box: this.boundingBox.isValid ? {
+                min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
+                max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
+            } : null
+        };
+    }
 }
 
 export default UPrimitive;

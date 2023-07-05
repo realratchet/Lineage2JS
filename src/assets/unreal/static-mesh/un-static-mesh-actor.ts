@@ -281,7 +281,13 @@ abstract class UStaticMeshActor extends UAActor {
         // if (this.objectName === "Exp_StaticMeshActor810")
         //     debugger;
 
+        // debugger;
+        // console.clear();
+        console.warn(this.exp.objectName)
+
         const mesh = this.mesh.loadSelf();
+
+        // debugger;
 
         const meshInfo = mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[meshInfo.geometry].attributes;
@@ -302,7 +308,7 @@ abstract class UStaticMeshActor extends UAActor {
         const currentPosition = new Vector3().fromArray(this.location.getVectorElements());
 
         const scale = new Vector3().fromArray(this.scale.getVectorElements()).multiplyScalar(this.drawScale);
-        const euler = new Euler().fromArray(this.rotation.getEulerElements());
+        const euler = new Euler().fromArray(this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"]);
         const quaternion = new Quaternion().setFromEuler(euler);
 
         let someFlag = 0x1;
@@ -427,15 +433,15 @@ abstract class UStaticMeshActor extends UAActor {
             name: this.objectName,
             position: _position,
             scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
-            rotation: this.rotation.getEulerElements(),
+            rotation: this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"],
             instance: {
                 mesh: meshInfo,
                 type: "StaticMeshInstance",
                 uuid: this.instance ? this.instance.uuid : null,
                 name: this.instance ? this.instance.objectName : null,
                 attributes: { colors: instanceColors }
-            } as IStaticMeshInstanceDecodeInfo
-        } as IStaticMeshActorDecodeInfo;
+            } as GD.IStaticMeshInstanceDecodeInfo
+        } as GD.IStaticMeshActorDecodeInfo;
 
         zoneInfo.children.push(actorInfo);
 
