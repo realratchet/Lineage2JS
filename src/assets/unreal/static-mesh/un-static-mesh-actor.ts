@@ -11,6 +11,10 @@ import FArray, { FIndexArray } from "@l2js/core/src/unreal/un-array";
 import FCoords from "@client/assets/unreal/un-coords";
 import FRotator from "@client/assets/unreal/un-rotator";
 import { FNTimeHSV } from "@client/assets/unreal/un-time-light";
+import FMatrix from "@client/assets/unreal/un-matrix";
+import GMath from "@client/assets/unreal/un-gmath";
+import FColor from "@client/assets/unreal/un-color";
+import { LightEffect_T } from "@client/assets/unreal/un-light";
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -226,6 +230,50 @@ abstract class UStaticMeshActor extends UAActor {
         }
     }
 
+    public localToWorld(): FMatrix {
+        const Result = FMatrix.make();
+
+        const SR = GMath.sin(this.rotation.roll),
+            SP = GMath.sin(this.rotation.pitch),
+            SY = GMath.sin(this.rotation.yaw),
+            CR = GMath.cos(this.rotation.roll),
+            CP = GMath.cos(this.rotation.pitch),
+            CY = GMath.cos(this.rotation.yaw);
+
+        const LX = this.location.x,
+            LY = this.location.y,
+            LZ = this.location.z,
+            PX = this.prePivot.x,
+            PY = this.prePivot.y,
+            PZ = this.prePivot.z;
+
+        const DX = this.scale.x * this.drawScale,
+            DY = this.scale.y * this.drawScale,
+            DZ = this.scale.z * this.drawScale;
+
+        Result[0][0] = CP * CY * DX;
+        Result[0][1] = CP * DX * SY;
+        Result[0][2] = DX * SP;
+        Result[0][3] = 0;
+
+        Result[1][0] = DY * (CY * SP * SR - CR * SY);
+        Result[1][1] = DY * (CR * CY + SP * SR * SY);
+        Result[1][2] = -CP * DY * SR;
+        Result[1][3] = 0;
+
+        Result[2][0] = -DZ * (CR * CY * SP + SR * SY);
+        Result[2][1] = DZ * (CY * SR - CR * SP * SY);
+        Result[2][2] = CP * CR * DZ;
+        Result[2][3] = 0;
+
+        Result[3][0] = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
+        Result[3][1] = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
+        Result[3][2] = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
+        Result[3][3] = 1;
+
+        return Result;
+    }
+
     public getDecodeInfo(library: GD.DecodeLibrary): string {
         // if (this.objectName === "Exp_StaticMeshActor140" || this.objectName === "Exp_StaticMeshActor141")
         //     debugger;
@@ -287,7 +335,7 @@ abstract class UStaticMeshActor extends UAActor {
 
         const mesh = this.mesh.loadSelf();
 
-        // debugger;
+        const localToWorld = this.localToWorld();
 
         const meshInfo = mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[meshInfo.geometry].attributes;
@@ -331,91 +379,97 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-        // debugger;
 
-        if (instance.lights.environment) {
-            const lightInfo = instance.lights.environment;
-            const lightArray = lightInfo.vertexFlags;
-            let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
-            const [r, g, b] = lightInfo.color;
+        applyStaticMeshLight(vertexArrayLen, instanceColors, localToWorld, attributes, instance.lights.environment);
 
-            const euler = new Euler().fromArray(lightInfo.rotation);
-            const direction = new Vector3(0, -1, -1).normalize().applyEuler(euler);
 
-            for (let i = 0; i < vertexArrayLen; i += 3) {
-                if ((objectFlag & someFlag) !== 0) {
 
-                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
-                    normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
+        debugger;
 
-                    // debugger;
+        // if (instance.lights.environment) {
+        //     const lightInfo = instance.lights.environment;
+        //     const lightArray = lightInfo.vertexFlags;
+        //     let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
-                    const intensity = sampleLightIntensity({
-                        type: lightInfo.lightType,
-                        effect: lightInfo.lightEffect,
-                        direction,
-                        position: lightPosition.fromArray(lightInfo.position),
-                        radius: (lightInfo.radius + 1) * 25
-                    }, position as any, normal as any);
+        //     const [r, g, b] = lightInfo.color;
 
-                    instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity * lightInfo.lightness);
-                    instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity * lightInfo.lightness);
-                    instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity * lightInfo.lightness);
+        //     const euler = new Euler().fromArray(lightInfo.rotation);
+        //     const direction = new Vector3(0, -1, -1).normalize().applyEuler(euler);
 
-                    // debugger;
-                }
+        //     for (let i = 0; i < vertexArrayLen; i += 3) {
+        //         if ((objectFlag & someFlag) !== 0) {
 
-                if ((someFlag & 0x7f) === 0x0) {
-                    objectFlag = lightArray[++lightArrIterator];
-                    someFlag = 0x1;
-                } else someFlag = someFlag << 0x1;
-            }
-        }
+        //             position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+        //             normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
-        // debugger;    
+        //             // debugger;
 
-        instance.lights.scene.forEach((lightInfo: any, index: any) => {
-            const lightArray = lightInfo.vertexFlags;
-            const euler = new Euler().fromArray(lightInfo.rotation);
-            const direction = new Vector3(1, 0, 0).applyEuler(euler);
-            let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
+        //             const intensity = sampleLightIntensity({
+        //                 type: lightInfo.lightType,
+        //                 effect: lightInfo.lightEffect,
+        //                 direction,
+        //                 position: lightPosition.fromArray(lightInfo.position),
+        //                 radius: (lightInfo.radius + 1) * 25
+        //             }, position as any, normal as any);
 
-            const [r, g, b] = lightInfo.color;
+        //             instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + r * intensity * lightInfo.lightness);
+        //             instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + g * intensity * lightInfo.lightness);
+        //             instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + b * intensity * lightInfo.lightness);
 
-            //  debugger;
+        //             // debugger;
+        //         }
 
-            someFlag = 0x1;
+        //         if ((someFlag & 0x7f) === 0x0) {
+        //             objectFlag = lightArray[++lightArrIterator];
+        //             someFlag = 0x1;
+        //         } else someFlag = someFlag << 0x1;
+        //     }
+        // }
 
-            for (let i = 0; i < vertexArrayLen; i += 3) {
+        // // debugger;    
 
-                if ((objectFlag & someFlag) !== 0) {
-                    position.fromArray(attributes.positions, i).applyMatrix4(matrix);
-                    normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
+        // instance.lights.scene.forEach((lightInfo: any, index: any) => {
+        //     const lightArray = lightInfo.vertexFlags;
+        //     const euler = new Euler().fromArray(lightInfo.rotation);
+        //     const direction = new Vector3(1, 0, 0).applyEuler(euler);
+        //     let lightArrIterator = 0, objectFlag = lightArray[lightArrIterator];
 
-                    // debugger;
+        //     const [r, g, b] = lightInfo.color;
 
-                    const intensity = sampleLightIntensity({
-                        type: lightInfo.lightType,
-                        effect: lightInfo.lightEffect,
-                        position: lightPosition.fromArray(lightInfo.position),
-                        direction,
-                        radius: (lightInfo.radius + 1) * 25
-                    }, position as any, normal as any);
+        //     //  debugger;
 
-                    instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + clamp(r * intensity * 255, 0, 255) / 255);
-                    instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
-                    instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + clamp(b * intensity * 255, 0, 255) / 255);
+        //     someFlag = 0x1;
 
-                    // debugger;
-                }
+        //     for (let i = 0; i < vertexArrayLen; i += 3) {
 
-                if ((someFlag & 0x7f) === 0x0) {
-                    objectFlag = lightArray[++lightArrIterator];
-                    someFlag = 0x1;
-                } else someFlag = someFlag << 0x1;
-            }
-        });
+        //         if ((objectFlag & someFlag) !== 0) {
+        //             position.fromArray(attributes.positions, i).applyMatrix4(matrix);
+        //             normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
+
+        //             // debugger;
+
+        //             const intensity = sampleLightIntensity({
+        //                 type: lightInfo.lightType,
+        //                 effect: lightInfo.lightEffect,
+        //                 position: lightPosition.fromArray(lightInfo.position),
+        //                 direction,
+        //                 radius: (lightInfo.radius + 1) * 25
+        //             }, position as any, normal as any);
+
+        //             instanceColors[i + 0] = Math.min(1, instanceColors[i + 0] + clamp(r * intensity * 255, 0, 255) / 255);
+        //             instanceColors[i + 1] = Math.min(1, instanceColors[i + 1] + clamp(g * intensity * 255, 0, 255) / 255);
+        //             instanceColors[i + 2] = Math.min(1, instanceColors[i + 2] + clamp(b * intensity * 255, 0, 255) / 255);
+
+        //             // debugger;
+        //         }
+
+        //         if ((someFlag & 0x7f) === 0x0) {
+        //             objectFlag = lightArray[++lightArrIterator];
+        //             someFlag = 0x1;
+        //         } else someFlag = someFlag << 0x1;
+        //     }
+        // });
 
         // const attributes = library.geometries[mesh.geometry].attributes;
         // const colors = new Float32Array(attributes.positions.length);
@@ -519,4 +573,52 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     let _b = iVar1;
 
     return [_r, _g, _b];
+}
+
+function applyStaticMeshLight(vertexArrayLen: number, instanceColors: ArrayLike<number>, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, ...lights: any[]) {
+    const attrPositions = attributes.positions;
+    const attrNormals = attributes.normals;
+
+    const vertex = FVector.make();
+    const normal = FVector.make();
+
+
+    for (let lightInfo of lights) {
+        if (lightInfo.dynamic)
+            continue;
+
+        const bitArray = lightInfo.vertexFlags;
+
+        let bitmask = 1;
+        let bitPtrIter = 0;
+        let bitPtr = bitArray[bitPtrIter];
+
+        for (let i = 0; i < vertexArrayLen; i++) {
+
+            if (bitPtr & bitmask) {
+                const ox = i * 3, oy = ox + 1, oz = ox + 2;
+
+                vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
+                normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
+
+                const samplingPoint = localToWorld.transformVector(vertex);
+                const samplingNormal = localToWorld.transformNormal(normal).normalized();
+
+                const intensity = sampleLightIntensity(lightInfo, samplingPoint, samplingNormal);
+
+                // debugger;
+                console.log(intensity)
+            }
+
+            bitmask = bitmask << 1;
+
+            if (!bitmask) {
+                bitPtr = bitArray[++bitPtrIter];
+                bitmask = 1;
+            }
+        }
+
+
+        debugger;
+    }
 }

@@ -50,6 +50,7 @@ declare global {
                 export type FVector = import("@unreal/un-vector").FVector;
                 export type FCoords = import("@unreal/un-coords").FCoords;
                 export type FRotator = import("@unreal/un-rotator").FRotator;
+                export type FQuaternion = import("@unreal/un-quaternion").FQuaternion;
                 export type FPlane = import("@unreal/un-plane").FPlane;
                 export type FBox = import("@unreal/un-box").FBox;
                 export type FMatrix = import("@unreal/un-matrix").FMatrix;

@@ -9,7 +9,7 @@ import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 class FAssignedLight implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
-    public unkInt0: number;
+    public applied: boolean;
 
     public light: ULight;
 
@@ -17,9 +17,9 @@ class FAssignedLight implements C.IConstructable {
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
 
-        this.lightIndex = pkg.read(compat32).value as number;
+        this.lightIndex = pkg.read(compat32).value;
         this.vertexFlags.load(pkg);
-        this.unkInt0 = pkg.read(int32).value as number;
+        this.applied = pkg.read(int32).value !== 0;
 
         this.light = pkg.fetchObject<ULight>(this.lightIndex);
 

@@ -135,6 +135,7 @@ abstract class ULight extends UAActor {
             uuid: this.uuid,
             type: "Light",
             color: this.getColor(),
+            dynamic: this.isDynamic,
             cone: this.cone,
             lightType: this.type.valueOf(),
             lightEffect: this.effect.valueOf(),

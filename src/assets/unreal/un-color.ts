@@ -11,6 +11,10 @@ abstract class FColor extends UObject {
     public constructor(r = 0, g = 0, b = 0, a = 0) {
         super();
 
+        this.set(r, g, b, a);
+    }
+
+    public set(r: number, g: number, b: number, a: number) {
         this.r = r;
         this.g = g;
         this.b = b;

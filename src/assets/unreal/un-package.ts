@@ -192,7 +192,14 @@ class UNativePackage extends ANativePackage {
             case "InterpCurvePoint": Constructor = UObject; break;
             case "CompressedPosition": Constructor = UObject; break;
             case "BoundingVolume": Constructor = UObject; break;
-            case "Guid": Constructor = UObject; break;
+
+            case "Guid":
+            case "ActorRenderDataPtr":
+            case "LightRenderDataPtr":
+            case "NMoverPtr":
+            case "AnimRep":
+                Constructor = UObject;
+                break;
 
             default:
                 debugger;

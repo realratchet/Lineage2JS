@@ -8,9 +8,22 @@ abstract class FPlane extends UObject {
     declare public z: number;
     declare public w: number;
 
+    public get 0() { return this.x; }
+    public set 0(v: number) { this.x = v; }
+    public get 1() { return this.y; }
+    public set 1(v: number) { this.y = v; }
+    public get 2() { return this.z; }
+    public set 2(v: number) { this.z = v; }
+    public get 3() { return this.w; }
+    public set 3(v: number) { this.w = v; }
+
     constructor(x = 0, y = 0, z = 0, w = 0) {
         super();
 
+        this.set(x, y, z, w);
+    }
+
+    public set(x: number, y: number, z: number, w: number) {
         this.x = x;
         this.y = y;
         this.z = z;

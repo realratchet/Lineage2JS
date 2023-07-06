@@ -23,11 +23,11 @@ function sampleLightIntensity(light: GD.ILightRenderInfo, sampPosition /* param_
     let fStack16: number; // float
     let fStack12: number; // float
 
-    lightEffect = light.effect;
+    lightEffect = light.lightEffect;
 
     debugger;
 
-    if (lightEffect === 0x13) {
+    if (lightEffect === LightEffect_T.LE_Sunlight) {
         const dotProduct = sampNormal.x * light.direction.x + sampNormal.z * light.direction.z + sampNormal.y * light.direction.y;
 
         if (dotProduct < 0.0) {
