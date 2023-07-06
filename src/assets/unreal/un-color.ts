@@ -37,7 +37,7 @@ abstract class FColor extends UObject {
         return array;
     }
 
-    public toString() { return `Color=(r=${this.r.toFixed(2)}, g=${this.g.toFixed(2)}, b=${this.b.toFixed(2)}, a=${this.a.toFixed(2)})` }
+    public toString() { return `Color=(r=${this.r}, g=${this.g}, b=${this.b}, a=${this.a})` }
 }
 
 export default FColor;

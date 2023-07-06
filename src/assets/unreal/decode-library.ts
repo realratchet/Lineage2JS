@@ -66,8 +66,8 @@ class DecodeLibrary {
         }
 
         if (loadTerrain) {
-            const FTerrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
-            FTerrainInfo.getDecodeInfo(decodeLibrary);
+            const terrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
+            terrainInfo.getDecodeInfo(decodeLibrary);
         }
 
         if (loadEmitters) {

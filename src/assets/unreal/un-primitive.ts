@@ -8,11 +8,11 @@ abstract class UPrimitive extends UObject {
     declare protected readonly materials: C.FArray<GA.UStaticMeshMaterial>;
     declare protected readonly swayObject: boolean;
 
-    protected getUnserializedPropertyies() {
-        return super.getUnserializedPropertyies().concat([
+    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+        return [
             ["Materials", "ArrayProperty", ["Class", "StaticMeshMaterial"]],
             ["bSwayObject", "BoolProperty"]
-        ]);
+        ];
     }
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {

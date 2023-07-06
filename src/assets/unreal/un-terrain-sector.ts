@@ -55,7 +55,7 @@ abstract class UTerrainSector extends UObject {
     ];
 
     declare protected texInfo: FPrimitiveArray<"uint16">;
-    declare protected unk64Bytes: Int32Array;
+    declare protected unk64Bytes: DataView;
 
     public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
@@ -365,8 +365,7 @@ abstract class UTerrainSector extends UObject {
             new FPrimitiveArray(BufferValue.uint8).load(pkg)
         ];
 
-        this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
-
+        this.unk64Bytes = pkg.read(BufferValue.allocBytes(64)).bytes;
         this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
 
         this.readHead = pkg.tell();

@@ -45,6 +45,9 @@ import FQuaternion from "@client/assets/unreal/un-quaternion";
 import UStaticMeshInstance from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
 import UStaticMesh from "@client/assets/unreal/static-mesh/un-static-mesh";
 import { addClassDependency, addPackageDependendency } from "@l2js/core/src/unreal/un-package";
+import ULevelSummary from "@client/assets/unreal/un-level-summary";
+import USound from "@client/assets/unreal/un-sound";
+import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
 
 type CoreStructs_T =
     | "Vector"
@@ -254,7 +257,7 @@ class UNativePackage extends ANativePackage {
 
 
 
-            //         case "LevelSummary": Constructor = ULevelSummary; break;
+            case "LevelSummary": Constructor = ULevelSummary; break;
 
 
             case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
@@ -271,8 +274,8 @@ class UNativePackage extends ANativePackage {
 
 
 
-            //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
-            //         case "Sound": Constructor = USound; break;
+            case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
+            case "Sound": Constructor = USound; break;
 
 
             //         case "Mover": Constructor = UMover; break;

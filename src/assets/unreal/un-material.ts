@@ -110,17 +110,17 @@ enum TexRotationType_T {
  */
 
 abstract class UTexEnvMap extends UBaseModifier {
-    // protected type: number;
+    declare public readonly type: number;
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "EnvMapType": "type"
-    //     });
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "EnvMapType": "type"
+        });
+    }
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     return null;
-    // }
+    public getDecodeInfo(library: DecodeLibrary): string {
+        return null;
+    }
 }
 
 abstract class UFinalBlend extends UBaseModifier {
@@ -433,39 +433,39 @@ abstract class UTexCoordSource extends UBaseModifier {
 }
 
 abstract class UTexPanner extends UBaseModifier {
-    // protected rate: number;
-    // protected z: number;
-    // protected matrix: FMatrix;
-    // protected internalTime = new FPrimitiveArray(BufferValue.int32);
-    // protected direction: FRotator;
+    declare public readonly rate: number;
+    declare public readonly z: number;
+    declare public readonly matrix: GA.FMatrix;
+    declare public readonly internalTime: C.FPrimitiveArray<"int32">;
+    declare public readonly direction: GA.FRotator;
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.uuid;
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.uuid;
 
-    //     library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
-    //     library.materials[this.uuid] = {
-    //         materialType: "modifier",
-    //         modifierType: "panTexture",
-    //         transform: {
-    //             matrix: this.matrix.getElements3x3(),
-    //             map: this.material?.loadSelf().getDecodeInfo(library) || null,
-    //             rate: this.rate
-    //         }
-    //     } as ITexPannerDecodeInfo;
+        library.materials[this.uuid] = {
+            materialType: "modifier",
+            modifierType: "panTexture",
+            transform: {
+                matrix: this.matrix.getElements3x3(),
+                map: this.material?.loadSelf().getDecodeInfo(library) || null,
+                rate: this.rate
+            }
+        } as GA.ITexPannerDecodeInfo;
 
-    //     return this.material.uuid;
-    // }
+        return this.material.uuid;
+    }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "PanRate": "rate",
-    //         "M": "matrix",
-    //         "InternalTime": "internalTime",
-    //         "Z": "z",
-    //         "PanDirection": "direction"
-    //     });
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "PanRate": "rate",
+            "M": "matrix",
+            "InternalTime": "internalTime",
+            "Z": "z",
+            "PanDirection": "direction"
+        });
+    }
 }
 
 abstract class UStaticMeshMaterial extends UBaseMaterial {
@@ -473,12 +473,12 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
     declare protected collisionForShadow: boolean;
     declare protected enableCollision: boolean;
 
-    protected getUnserializedPropertyies() {
-        return super.getUnserializedPropertyies().concat([
+    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+        return [
             ["EnableCollision", "BoolProperty"],
             ["EnableCollisionforShadow", "BoolProperty"],
             ["bNoDynamicShadowCast", "BoolProperty"]
-        ]);
+        ];
     }
 
     protected getPropertyMap() {

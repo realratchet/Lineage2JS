@@ -58,8 +58,8 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected unkIndex1: number;
     declare protected unkInt1: number;
 
-    protected getUnserializedPropertyies() {
-        return super.getUnserializedPropertyies().concat([
+    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+        return [
             ["LodRange01", "FloatProperty"],
             ["StaticMeshLod01", "ObjectProperty"],
             ["LodRange02", "FloatProperty"],
@@ -69,7 +69,7 @@ abstract class UStaticMesh extends UPrimitive {
             ["bStaticMeshLodBlend", "BoolProperty"],
             ["Frequency", "FloatProperty"],
             ["bUseBillBoard", "FloatProperty"],
-        ]);
+        ];
     }
 
     protected getPropertyMap() {

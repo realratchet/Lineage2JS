@@ -1,18 +1,14 @@
 import { UObject } from "@l2js/core";
 
-class FScale extends UObject {
-    declare public x: number;
-    declare public y: number;
-    declare public z: number;
+abstract class FScale extends UObject {
+    declare public readonly scale: GA.FVector;
 
-    declare public sheerRate: number;
-    declare public sheerAxis: number;
+    declare public readonly sheerRate: number;
+    declare public readonly sheerAxis: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "X": "x",
-            "Y": "y",
-            "Z": "z",
+            "Scale": "scale",
             "SheerRate": "sheerRate",
             "SheerAxis": "sheerAxis"
         });
