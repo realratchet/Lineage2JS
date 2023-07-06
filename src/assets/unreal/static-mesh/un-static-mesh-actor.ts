@@ -349,8 +349,11 @@ abstract class UStaticMeshActor extends UAActor {
                     position.fromArray(attributes.positions, i).applyMatrix4(matrix);
                     normal.fromArray(attributes.normals, i).multiply(scale).applyQuaternion(quaternion).normalize();
 
+                    // debugger;
+
                     const intensity = sampleLightIntensity({
                         type: lightInfo.lightType,
+                        effect: lightInfo.lightEffect,
                         direction,
                         position: lightPosition.fromArray(lightInfo.position),
                         radius: (lightInfo.radius + 1) * 25

@@ -1,11 +1,11 @@
 import { Vector3 } from "three";
 import { LightEffect_T } from "./un-light";
 
-function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): FColor {
+function sampleLightColor(light: any, sampPosition /* param_1 */: GA.FVector, sampNormal /* param_2 */: GA.FVector): GA.FColor {
     return null;
 }
 
-function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
+function sampleLightIntensity(light: GD.ILightRenderInfo, sampPosition /* param_1 */: GA.FVector, sampNormal /* param_2 */: GA.FVector): number {
     let lightEffect: LightEffect_T; // char
     let fVar2: number; // float
     let fVar3: number; // float10
@@ -25,7 +25,7 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
 
     lightEffect = light.effect;
 
-    // debugger;
+    debugger;
 
     if (lightEffect === 0x13) {
         const dotProduct = sampNormal.x * light.direction.x + sampNormal.z * light.direction.z + sampNormal.y * light.direction.y;

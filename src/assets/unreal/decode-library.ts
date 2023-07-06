@@ -82,7 +82,11 @@ class DecodeLibrary {
             let actorsToLoad: { index: number; export: C.UExport; }[];
 
             if (loadStaticModelList && loadStaticModelList.length)
-                actorsToLoad = loadStaticModelList.map(i => { return { index: i - 1, export: pkg.exports[i - 1] } });
+                actorsToLoad = loadStaticModelList.map(i => {
+                    i = typeof i === "number" ? i : pkg.exports.find(x => x.objectName === i).index
+
+                    return { index: i - 1, export: pkg.exports[i - 1] };
+                });
             else actorsToLoad = expGroups["StaticMeshActor"] || [];
 
             if (ALLOW_FAILED_OBJECTS) {

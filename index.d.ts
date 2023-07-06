@@ -107,8 +107,6 @@ declare global {
                 export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
 
                 export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
-
-
             }
 
             namespace Decoding {
@@ -122,6 +120,15 @@ declare global {
                 export type ArrGeometryGroup = [number, number, number];
 
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
+
+                type LoadSettings_T = {
+                    loadTerrain?: boolean,
+                    loadBaseModel?: boolean,
+                    loadStaticModels?: boolean,
+                    loadStaticModelList?: (number | string)[],
+                    loadEmitters?: boolean,
+                    helpersZoneBounds?: boolean
+                };
             }
         }
     }
