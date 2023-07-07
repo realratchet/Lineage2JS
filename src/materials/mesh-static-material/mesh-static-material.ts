@@ -175,7 +175,7 @@ class MeshStaticMaterial extends ShaderMaterial {
             defines,
             uniforms,
             side: info.side,
-            // transparent: info.transparent,
+            transparent: info.transparent,
             depthWrite: info.depthWrite,
             visible: info.visible,
             // premultipliedAlpha: true,
