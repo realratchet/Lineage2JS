@@ -393,7 +393,7 @@ async function startCore() {
 
     const loadSettings = {
         helpersZoneBounds: false,
-        loadTerrain: false,
+        loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
@@ -425,7 +425,7 @@ async function startCore() {
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures
 
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
-            ...["StaticMeshActor2993"] // talking island village broken rock
+            ...["StaticMeshActor475"] // talking island village broken rock
         ]
     } as GD.LoadSettings_T;
 
@@ -457,8 +457,8 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI

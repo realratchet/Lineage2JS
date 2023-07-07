@@ -69,6 +69,8 @@ class SectorObject extends Object3D {
     }
 
     public findPositionZone(position: THREE.Vector3) {
+        if (this.bspNodes.length === 0) return null;
+
         const findZonePosition = tmpVec4.set(position.x, position.y, position.z, -1);
 
         let nodeIndex = 0;

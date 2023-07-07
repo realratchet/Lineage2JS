@@ -48,6 +48,7 @@ import { addClassDependency, addPackageDependendency } from "@l2js/core/src/unre
 import ULevelSummary from "@client/assets/unreal/un-level-summary";
 import USound from "@client/assets/unreal/un-sound";
 import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
+import UMover from "@client/assets/unreal/un-mover";
 
 type CoreStructs_T =
     | "Vector"
@@ -284,14 +285,13 @@ class UNativePackage extends ANativePackage {
             case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
             case "Sound": Constructor = USound; break;
 
+            case "Mover": Constructor = UMover; break;
 
-            //         case "Mover": Constructor = UMover; break;
-
-            //         // Classes we don't care about atm are marked as UObject for general puprose constructor
-            //         case "L2FogInfo": Constructor = UObject; break;
-            //         case "L2SeamlessInfo": Constructor = UObject; break;
-            //         case "SceneManager": Constructor = UObject; break;
-            //         case "PathNode": Constructor = UObject; break;
+            // Classes we don't care about atm are marked as UObject for general puprose constructor
+            case "L2FogInfo": Constructor = UObject; break;
+            case "L2SeamlessInfo": Constructor = UObject; break;
+            case "SceneManager": Constructor = UObject; break;
+            case "PathNode": Constructor = UObject; break;
 
             default:
                 debugger;

@@ -628,7 +628,7 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Arr
                 intensityArray[i + 1] = intensityArray[i + 1] + g;
                 intensityArray[i + 2] = intensityArray[i + 2] + b;
 
-                console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
+                // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
             if ((someFlag & 0x7f) === 0x0) {

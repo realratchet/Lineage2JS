@@ -61,10 +61,10 @@ class DecodeLibrary {
 
         decodeLibrary.sector = sectorIndex;
 
-        if (loadBaseModel) {
-            const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId).loadSelf(); // base model
-            uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
-        }
+        const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId).loadSelf(); // base model
+
+        if (loadBaseModel) uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
+        else uModel.getZoneDecodeInfo(decodeLibrary, uLevelInfo);
 
         if (loadTerrain) {
             const terrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
@@ -84,7 +84,7 @@ class DecodeLibrary {
 
             if (loadStaticModelList && loadStaticModelList.length)
                 actorsToLoad = loadStaticModelList.map(i => {
-                    i = typeof i === "number" ? i : pkg.exports.find(x => x.objectName === i).index
+                    i = typeof i === "number" ? i : pkg.exports.find(x => x.objectName === i).index + 1
 
                     return { index: i - 1, export: pkg.exports[i - 1] };
                 });

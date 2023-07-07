@@ -1,7 +1,7 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor, DoubleSide } from "three";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
 type ApplyParams_T = {
@@ -169,6 +169,11 @@ class MeshStaticMaterial extends ShaderMaterial {
         //     defines["USE_UV"] = "";
         // }
 
+        // debugger
+
+        // console.log(info);
+        
+
         super({
             vertexShader: VERTEX_SHADER,
             fragmentShader: FRAGMENT_SHADER,
@@ -176,11 +181,11 @@ class MeshStaticMaterial extends ShaderMaterial {
             uniforms,
             side: info.side,
             transparent: info.transparent,
-            depthWrite: info.depthWrite,
+            // depthWrite: info.depthWrite,
             visible: info.visible,
-            // premultipliedAlpha: true,
-            // lights: true
-            // wireframe: true
+            premultipliedAlpha: true,
+            lights: true,
+            wireframe: false
         });
 
         this.sprites = sprites;

@@ -68,8 +68,8 @@ class FDynamicLight {
             //         else Intensity = 1.0f;
         }
         else if (Actor.type == LightType_T.LT_SubtlePulse) {
-            throw new Error("not implemented");
-            // Intensity = 0.9 + 0.09 * GMath.sin(Math.floor((Actor. level. timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+            // throw new Error("not implemented");
+            Intensity = 0.9 + 0.09 * GMath().sin(Math.floor((Actor. level. timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
             //     else if (Actor .type === LightType_T.LT_TexturePaletteOnce) {
             // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
             //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(appFloor(255.0f * Actor -> LifeFraction()));

@@ -394,7 +394,7 @@ class RenderManager {
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
-            fog = zone.fog;
+            fog = zone?.fog ?? null;
         }
 
         GLOBAL_UNIFORMS.globalTime.value = globalTime;

@@ -140,10 +140,7 @@ abstract class UModel extends UPrimitive {
         return this;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): string[][] {
-
-        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
-
+    public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): void {
         this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
         this.zones.forEach((zone: FZoneProperties, index: number) => {
             const bspZone = zone.getDecodeInfo(library, uLevelInfo);
@@ -152,6 +149,13 @@ abstract class UModel extends UPrimitive {
 
             library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
         });
+    }
+
+    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): string[][] {
+
+        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
+
+        this.getZoneDecodeInfo(library, uLevelInfo);
 
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
@@ -324,7 +328,6 @@ abstract class UModel extends UPrimitive {
 
                                 groupOffset = groupOffset + fcount;
                             }
-
 
                             for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
                                 const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
