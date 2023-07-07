@@ -1,3 +1,4 @@
+import GMath from "@client/assets/unreal/un-gmath";
 import { UObject } from "@l2js/core";
 import { RAD2DEG } from "three/src/math/MathUtils";
 
@@ -28,6 +29,7 @@ abstract class FRotator extends UObject {
         });
     }
 
+    public toVector() { return GMath().unitCoords.div(this).xAxis; }
 
     public getEulerElements(): GD.EulerArr {
         const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
@@ -41,10 +43,14 @@ abstract class FRotator extends UObject {
         return [xAxis, yAxis, zAxis, "XYZ"];
     }
 
-    public toString() {
-        const [x, z, y, axis] = this.getEulerElements();
+    public toString(asEuler: boolean = false) {
+        if (asEuler) {
+            const [x, z, y, axis] = this.getEulerElements();
 
-        return `Rotator=(x=${(x * RAD2DEG).toFixed(2)}, y=${(y * RAD2DEG).toFixed(2)}, z=${(z * RAD2DEG).toFixed(2)}, axis=${axis})`;
+            return `Rotator=(x=${(x * RAD2DEG).toFixed(2)}, y=${(y * RAD2DEG).toFixed(2)}, z=${(z * RAD2DEG).toFixed(2)}, axis=${axis})`;
+        }
+
+        return `Rotator=(pitch=${this.pitch}, yaw=${this.yaw}, roll=${this.roll})`;
     }
 
     public rotationMatrix() {

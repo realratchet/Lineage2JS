@@ -233,12 +233,12 @@ abstract class UStaticMeshActor extends UAActor {
     public localToWorld(): FMatrix {
         const Result = FMatrix.make();
 
-        const SR = GMath.sin(this.rotation.roll),
-            SP = GMath.sin(this.rotation.pitch),
-            SY = GMath.sin(this.rotation.yaw),
-            CR = GMath.cos(this.rotation.roll),
-            CP = GMath.cos(this.rotation.pitch),
-            CY = GMath.cos(this.rotation.yaw);
+        const SR = GMath().sin(this.rotation.roll),
+            SP = GMath().sin(this.rotation.pitch),
+            SY = GMath().sin(this.rotation.yaw),
+            CR = GMath().cos(this.rotation.roll),
+            CP = GMath().cos(this.rotation.pitch),
+            CY = GMath().cos(this.rotation.yaw);
 
         const LX = this.location.x,
             LY = this.location.y,
@@ -351,18 +351,18 @@ abstract class UStaticMeshActor extends UAActor {
         const vertexArrayLen = attributes.positions.length;
         const instanceColors = instance.color;
         // const position = new FVector(), normal = new FVector(), color = new FPlane();
-        const position = new Vector3(), normal = new Vector3(), color = FPlane.make();
+        // const position = new Vector3(), normal = new Vector3(), color = FPlane.make();
 
-        const currentPosition = new Vector3().fromArray(this.location.getVectorElements());
+        // const currentPosition = new Vector3().fromArray(this.location.getVectorElements());
 
-        const scale = new Vector3().fromArray(this.scale.getVectorElements()).multiplyScalar(this.drawScale);
-        const euler = new Euler().fromArray(this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"]);
-        const quaternion = new Quaternion().setFromEuler(euler);
+        // const scale = new Vector3().fromArray(this.scale.getVectorElements()).multiplyScalar(this.drawScale);
+        // const euler = new Euler().fromArray(this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"]);
+        // const quaternion = new Quaternion().setFromEuler(euler);
 
-        let someFlag = 0x1;
+        // let someFlag = 0x1;
 
-        const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
-        const lightPosition = new Vector3();
+        // const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
+        // const lightPosition = new Vector3();
 
         if (this.isSunAffected) {
             const ambient = selectByTime(timeOfDay, staticMeshAmbient).getColor();
@@ -379,9 +379,7 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-
-
-        applyStaticMeshLight(vertexArrayLen, instanceColors, localToWorld, attributes, instance.lights.environment);
+        applyStaticMeshLight(vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment);
 
 
 
@@ -575,28 +573,35 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     return [_r, _g, _b];
 }
 
-function applyStaticMeshLight(vertexArrayLen: number, instanceColors: ArrayLike<number>, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, ...lights: any[]) {
+function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, ...lights: any[]) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
     const vertex = FVector.make();
     const normal = FVector.make();
 
+    let r: number, g: number, b: number;
+
+    const intensityArray = new Float32Array(instanceColors.length);
 
     for (let lightInfo of lights) {
-        if (lightInfo.dynamic)
-            continue;
+        const lightActor = lightInfo.light?.loadSelf();
 
-        const bitArray = lightInfo.vertexFlags;
+        if (!lightActor) continue;
 
-        let bitmask = 1;
-        let bitPtrIter = 0;
-        let bitPtr = bitArray[bitPtrIter];
+        const light = lightActor.getRenderInfo();
 
-        for (let i = 0; i < vertexArrayLen; i++) {
+        if (light.dynamic) continue;
 
-            if (bitPtr & bitmask) {
-                const ox = i * 3, oy = ox + 1, oz = ox + 2;
+        const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
+        const lightArrayPtr = lightArray.iter();
+
+        let someFlag = 0x1;
+        let objectFlag = lightArrayPtr.next().value;
+
+        for (let i = 0; i < vertexArrayLen; i += 3) {
+            if ((objectFlag & someFlag) !== 0) {
+                const ox = i, oy = ox + 1, oz = ox + 2;
 
                 vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
                 normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
@@ -604,21 +609,30 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: ArrayLike<
                 const samplingPoint = localToWorld.transformVector(vertex);
                 const samplingNormal = localToWorld.transformNormal(normal).normalized();
 
-                const intensity = sampleLightIntensity(lightInfo, samplingPoint, samplingNormal);
 
-                // debugger;
-                console.log(intensity)
+                const intensity = light.sampleIntensity(samplingPoint, samplingNormal) * scaleGlow;
+
+                if (!isFinite(intensity))
+                    debugger;
+
+                r = light.color.x * intensity;
+                g = light.color.y * intensity;
+                b = light.color.z * intensity;
+
+                intensityArray[i + 0] = intensityArray[i + 0] + r;
+                intensityArray[i + 1] = intensityArray[i + 1] + g;
+                intensityArray[i + 2] = intensityArray[i + 2] + b;
+
+                console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
-            bitmask = bitmask << 1;
-
-            if (!bitmask) {
-                bitPtr = bitArray[++bitPtrIter];
-                bitmask = 1;
-            }
+            if ((someFlag & 0x7f) === 0x0) {
+                objectFlag = lightArrayPtr.next().value;
+                someFlag = 0x1;
+            } else someFlag = someFlag << 0x1;
         }
-
-
-        debugger;
     }
+
+    for (let i = 0; i < vertexArrayLen; i++)
+        instanceColors[i] = instanceColors[i] * (intensityArray[i] / 1);
 }

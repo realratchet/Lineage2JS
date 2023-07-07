@@ -1,11 +1,214 @@
+import GMath from "@client/assets/unreal/un-gmath";
+import UPackage from "@client/assets/unreal/un-package";
+import FPlane from "@client/assets/unreal/un-plane";
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
-import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
+import { APackage, UExport, UObject } from "@l2js/core";
+import { clamp, generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import UAActor from "./un-aactor";
 import FVector from "./un-vector";
 
+function getHSV(H: number, S: number, V: number): FPlane {
+    let Brightness = V * 1.4 / 255;
+
+    Brightness *= 0.7 / (0.01 + Math.sqrt(Brightness));
+    Brightness = clamp(Brightness, 0, 1);
+
+    const Hue = (H < 86) ? FVector.make((85 - H) / 85, (H - 0) / 85, 0) : (H < 171) ? FVector.make(0, (170 - H) / 85, (H - 85) / 85) : FVector.make((H - 170) / 85, 0, (255 - H) / 84);
+    const invHue = FVector.make(1, 1, 1).sub(Hue);
+    const rgbComp = Hue.addScalar(S / 255).mul(invHue).multiplyScalar(Brightness);
+
+    return FPlane.make(rgbComp.x, rgbComp.y, rgbComp.z, 1);
+}
+
+class FDynamicLight {
+    public readonly actor: ULight;
+    public alpha: number;
+    public color: FPlane;
+    public direction: FVector;
+    public position: FVector;
+    public radius: number;
+    public dynamic: boolean;
+
+    public constructor(actor: ULight) {
+        this.actor = actor;
+        this.alpha = 1;
+        this.update();
+    }
+
+    public update() {
+        const Actor = this.actor;
+        const baseColor = getHSV(Actor.hue, Actor.saturation, 255);
+
+        let Intensity = 0;
+
+        if (Actor.type === LightType_T.LT_Steady)
+            Intensity = 1;
+        else if (Actor.type === LightType_T.LT_Pulse)
+            Intensity = 0.6 + 0.39 * GMath().sin(Math.floor((Actor.level.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+        else if (Actor.type === LightType_T.LT_Blink) {
+            if ((Math.floor((Actor.level.timeSeconds * 35 * 65536) / (Actor.period + 1) + (Actor.phase << 8))) & 1)
+                Intensity = 0;
+            else
+                Intensity = 1;
+        }
+        else if (Actor.type === LightType_T.LT_Flicker) {
+            const Rand = Math.random();
+
+            if (Rand < 0.5) Intensity = 0;
+            else Intensity = Rand;
+        }
+        else if (Actor.type === LightType_T.LT_Strobe) {
+            throw new Error("not implemented");
+            //         static float LastUpdateTime = 0; static int Toggle = 0;
+            // if (LastUpdateTime != Actor -> Level -> TimeSeconds) {
+            //     LastUpdateTime = Actor -> Level -> TimeSeconds;
+            //     Toggle ^= 1;
+            // }
+            // if (Toggle) Intensity = 0.0f;
+            //         else Intensity = 1.0f;
+        }
+        else if (Actor.type == LightType_T.LT_SubtlePulse) {
+            throw new Error("not implemented");
+            // Intensity = 0.9 + 0.09 * GMath.sin(Math.floor((Actor. level. timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+            //     else if (Actor .type === LightType_T.LT_TexturePaletteOnce) {
+            // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
+            //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(appFloor(255.0f * Actor -> LifeFraction()));
+            //     BaseColor = FVector(C.R, C.G, C.B).SafeNormal();
+            //     Intensity = C.FBrightness() * 2.8;
+            // }
+        }
+        else if (Actor.type === LightType_T.LT_TexturePaletteLoop) {
+            throw new Error("not implemented");
+            // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
+            //             FLOAT Time = Actor -> Level -> TimeSeconds * 35 / Max((int)Actor -> LightPeriod, 1) + Actor -> LightPhase;
+            //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(((int)(Time * 256) & 255) % 255);
+            //     BaseColor = FVector(C.R, C.G, C.B).UnsafeNormal();
+            //     Intensity = C.FBrightness() * 2.8f;
+            // }
+
+            // Dynamic = 1;
+        }
+        else if (Actor.type === LightType_T.LT_FadeOut) {
+            throw new Error("not implemented");
+            // Intensity = Math.min(1. 1.5 * (1 - Actor. LifeFraction()));
+        }
+
+        this.color = baseColor.multiplyScalar(Actor.brightness / 255).multiplyScalar(Intensity).multiplyScalar(Actor.level.ambientBrightness);
+
+        if (Actor.effect === LightEffect_T.LE_Sunlight) {
+            this.direction = Actor.rotation.toVector();
+            this.position = FVector.make(0, 0, 0);
+            this.radius = 0;
+        } else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect == LightEffect_T.LE_StaticSpot) {
+            this.position = Actor.location;
+            this.direction = Actor.rotation.toVector();
+            this.radius = Actor.worldLightRadius();
+        } else {
+            this.position = Actor.location;
+            this.radius = Actor.worldLightRadius();
+        }
+
+        this.alpha = 1;
+
+        this.dynamic = Actor.isDynamic;
+    }
+
+    sampleIntensity(SamplePosition: FVector, SampleNormal: FVector): number {
+        const Actor = this.actor;
+        const Direction = this.direction;
+        const Position = this.position;
+        const Radius = this.radius;
+
+        if (Actor.effect === LightEffect_T.LE_Sunlight) {
+            // Directional light.
+
+            if ((Direction.dot(SampleNormal)) < 0)
+                return (Direction.dot(SampleNormal)) * -2;
+            else
+                return 0;
+        }
+        else if (Actor.effect === LightEffect_T.LE_Cylinder) {
+            // Cylindrical light.
+
+            const LightVector = Position.sub(SamplePosition);
+            const DistanceSquared = LightVector.lengthSq(),
+                Distance = Math.sqrt(DistanceSquared);
+
+            if (Distance < Radius)
+                return Math.max(0, 1 - ((LightVector.x ** 2) + (LightVector.y ** 2)) / (Radius ** 2)) * 2;
+            else
+                return 0;
+        }
+        else if (Actor.effect === LightEffect_T.LE_NonIncidence) {
+            // Non incidence light.
+
+            const LightVector = Position.sub(SamplePosition);
+            const DistanceSquared = LightVector.lengthSq(),
+                Distance = Math.sqrt(DistanceSquared);
+
+            if ((LightVector.dot(SampleNormal)) > 0 && Distance < Radius)
+                return Math.sqrt(1.02 - Distance / Radius) * 2;
+            else
+                return 0;
+        }
+        else if (Actor.effect === LightEffect_T.LE_QuadraticNonIncidence) {
+            // Quadratic non incidence light.
+
+            const LightVector = Position.sub(SamplePosition);
+            const DistanceSquared = LightVector.lengthSq(),
+                RadiusSquared = (Radius ** 2);
+
+            if ((LightVector.dot(SampleNormal)) > 0 && DistanceSquared < RadiusSquared)
+                return (1.02 - DistanceSquared / RadiusSquared) * 2;
+            else
+                return 0;
+        }
+        else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect === LightEffect_T.LE_StaticSpot) {
+            // Spot light.
+
+            const LightVector = Position.sub(SamplePosition);
+            const DistanceSquared = LightVector.lengthSq(),
+                Distance = Math.sqrt(DistanceSquared),
+                BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
+
+            if (BaseAttenuation > 0) {
+                const Sine = 1.0 - Actor.cone / 256.0,
+                    RSine = 1.0 / (1.0 - Sine),
+                    SineRSine = Sine * RSine,
+                    SineSq = Sine * Sine,
+                    VDotV = -LightVector.dot(Direction);
+
+                if (VDotV > 0.0 && (VDotV ** 2) > SineSq * DistanceSquared)
+                    return Math.pow(VDotV * RSine / Distance - SineRSine, 2) * BaseAttenuation;
+            }
+
+            return 0;
+        }
+        else {
+            // Point light.
+
+            const LightVector = Position.sub(SamplePosition);
+
+            return UnrealAttenuation(Math.sqrt(LightVector.lengthSq()), Radius, LightVector, SampleNormal);
+        }
+    }
+}
+
+function UnrealAttenuation(Distance: number, Radius: number, LightVector: FVector, Normal: FVector) {
+    if ((LightVector.dot(Normal)) > 0 && Distance <= Radius) {
+        const A = Distance / Radius,					// Unreal's lighting model.
+            B = (2 * A * A * A - 3 * A * A + 1),
+            C = Math.abs((LightVector.dot(Normal)) / Radius);
+
+        return B / A * C * 2;
+    }
+
+    return 0;
+}
+
 abstract class ULight extends UAActor {
     declare public readonly effect: LightEffect_T;
-    declare public readonly lightness: number;
+    declare public readonly brightness: number;
     declare public readonly radius: number;
     declare public readonly hue: number;
     declare public readonly saturation: number;
@@ -21,6 +224,8 @@ abstract class ULight extends UAActor {
 
     declare public readonly maxCoronaSize: number;
 
+    public worldLightRadius() { return 25 * (this.radius + 1); }
+
     // protected _bSunlightColor: any;
     // protected _bTimeLight: any;
     // protected _lightPrevTime: any;
@@ -34,7 +239,7 @@ abstract class ULight extends UAActor {
         return Object.assign({}, super.getPropertyMap(), {
             "LightEffect": "effect",
             "LightRadius": "radius",
-            "LightBrightness": "lightness",
+            "LightBrightness": "brightness",
             "LightHue": "hue",
             "LightSaturation": "saturation",
 
@@ -62,6 +267,8 @@ abstract class ULight extends UAActor {
             // "UseOwnFinalBlend": "_useOwnFinalBlend"
         });
     }
+
+    protected getRenderInfo() { return new FDynamicLight(this); }
 
     protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();
@@ -94,7 +301,7 @@ abstract class ULight extends UAActor {
 
     public getColor(): [number, number, number] {
         const [x, y, z] = hsvToRgb(this.hue, this.saturation, 255);
-        const brightness = saturationToBrightness(this.lightness);
+        const brightness = saturationToBrightness(this.brightness);
 
         // debugger;
 

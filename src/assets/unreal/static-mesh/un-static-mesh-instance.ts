@@ -45,6 +45,8 @@ abstract class UStaticMeshInstance extends UObject {
 
     public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
 
+    
+
     public getDecodeInfo(library: GD.DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
 
@@ -90,10 +92,10 @@ abstract class UStaticMeshInstance extends UObject {
         return {
             color,
             lights: {
-                scene: this.sceneLights.map(l => l.getDecodeInfo(library)),
+                scene: this.sceneLights,
                 environment: validEnvironment ? {
                     color: lightingColor,
-                    ...validEnvironment.getDecodeInfo(library)
+                    ...validEnvironment
                 } : null
             }
         };

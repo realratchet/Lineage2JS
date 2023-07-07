@@ -31,6 +31,18 @@ abstract class FVector extends UObject {
 
     public getElements(): GD.Vector3Arr { return [this.x, this.y, this.z]; }
 
+    public addScalar(scalar: number) {
+        return FVector.make(
+            this.x + scalar,
+            this.y + scalar,
+            this.z + scalar
+        );
+    }
+
+    public subScalar(scalar: number) {
+        return this.addScalar(-scalar);
+    }
+
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {
         return FVector.make(this.x * scalar, this.y * scalar, this.z * scalar);
@@ -234,6 +246,16 @@ abstract class FVector extends UObject {
         const nz = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
 
         return FVector.make(nx, ny, nz);
+    }
+
+    public transformPointBy(coord: GA.FCoords): FVector {
+        const temp = this.sub(coord.origin);
+
+        return FVector.make(temp.dot(coord.xAxis), temp.dot(coord.yAxis), temp.dot(coord.zAxis));
+    }
+
+    public transformVectorBy(coord: GA.FCoords): FVector {
+        return FVector.make(this.dot(coord.xAxis), this.dot(coord.yAxis), this.dot(coord.zAxis));
     }
 
     transformBy(coord: GA.FCoords) {

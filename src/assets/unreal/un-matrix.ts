@@ -344,12 +344,12 @@ abstract class FMatrix extends UObject {
     }
 
     public static fromRotator(rot: GA.FRotator) {
-        const SR = GMath.sin(rot.roll),
-            SP = GMath.sin(rot.pitch),
-            SY = GMath.sin(rot.yaw),
-            CR = GMath.cos(rot.roll),
-            CP = GMath.cos(rot.pitch),
-            CY = GMath.cos(rot.yaw);
+        const SR = GMath().sin(rot.roll),
+            SP = GMath().sin(rot.pitch),
+            SY = GMath().sin(rot.yaw),
+            CR = GMath().cos(rot.roll),
+            CP = GMath().cos(rot.pitch),
+            CY = GMath().cos(rot.yaw);
 
         const M = FMatrix.make();
 

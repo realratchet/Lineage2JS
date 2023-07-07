@@ -1,3 +1,6 @@
+import GMath from "@client/assets/unreal/un-gmath";
+import FRotator from "@client/assets/unreal/un-rotator";
+import FScale from "@client/assets/unreal/un-scale";
 import FVector from "@client/assets/unreal/un-vector";
 import { UObject } from "@l2js/core";
 
@@ -16,6 +19,46 @@ abstract class FCoords extends UObject {
             "YAxis": "yAxis",
             "ZAxis": "zAxis",
         });
+    }
+
+    
+    public toString(): string {
+        return `Corrds=(name=${this.objectName}, orig=${this.origin}, x=${this.xAxis}, y=${this.yAxis}, ${this.zAxis})`;
+    }
+
+    public constructor(origin?: FVector, xAxis?: FVector, yAxis?: FVector, zAxis?: FVector) {
+        super();
+
+        this.origin = origin || this.origin;
+        this.xAxis = xAxis || this.xAxis;
+        this.yAxis = yAxis || this.yAxis;
+        this.zAxis = zAxis || this.zAxis;
+    }
+
+    public mul(other: FCoords): FCoords;
+    public mul(other: FRotator): FCoords;
+    public mul(other: FVector): FCoords;
+    public mul(other: FScale): FCoords;
+    public mul(other: unknown): FCoords {
+        if (other instanceof FCoords) return mulCoords(this, other);
+        if (other instanceof FRotator) return mulRotator(this, other);
+        if (other instanceof FVector) return mulVector(this, other);
+        if (other instanceof FScale) return mulScale(this, other);
+
+        debugger;
+        throw new Error("Invalid multiplication");
+    }
+
+    public div(other: FRotator): FCoords;
+    public div(other: FVector): FCoords;
+    public div(other: FScale): FCoords;
+    public div(other: unknown): FCoords {
+        if (other instanceof FRotator) return divRotator(this, other);
+        if (other instanceof FVector) return divVector(this, other);
+        if (other instanceof FScale) return divScale(this, other);
+
+        debugger;
+        throw new Error("Invalid division");
     }
 
     public multiply(other: FCoords): FCoords {
@@ -145,4 +188,109 @@ function multiplyOrigin(coord: FCoords, inVector: GA.FVector) {
     outVector.z = fVar9 * fVar6 + fVar8 * fVar4 + fVar7 * fVar2;
 
     return outVector;
+}
+
+function mulCoords(coord: FCoords, other: FCoords): FCoords {
+    const origin = coord.origin.transformPointBy(other);
+    const xAxis = coord.xAxis.transformVectorBy(other);
+    const yAxis = coord.yAxis.transformVectorBy(other);
+    const zAxis = coord.zAxis.transformVectorBy(other);
+
+    return FCoords.make(origin, xAxis, yAxis, zAxis);
+}
+
+function mulRotator(coord: FCoords, other: FRotator): FCoords {
+    coord = coord.mul(
+        FCoords.make
+            (
+                FVector.make(0, 0, 0),
+                FVector.make(+GMath().cos(other.yaw), +GMath().sin(other.yaw), +0),
+                FVector.make(-GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
+                FVector.make(+0, +0, +1)
+            )
+    );
+
+    // Apply pitch rotation.
+    coord = coord.mul(
+        FCoords.make
+            (
+                FVector.make(0, 0, 0),
+                FVector.make(+GMath().cos(other.pitch), +0, +GMath().sin(other.pitch)),
+                FVector.make(+0, +1, +0),
+                FVector.make(-GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
+            )
+    );
+
+    // Apply roll rotation.
+    coord = coord.mul(
+        FCoords.make
+            (
+                FVector.make(0, 0, 0),
+                FVector.make(+1, +0, +0),
+                FVector.make(+0, +GMath().cos(other.roll), -GMath().sin(other.roll)),
+                FVector.make(+0, +GMath().sin(other.roll), +GMath().cos(other.roll))
+            )
+    );
+
+    return coord;
+}
+
+function mulVector(coord: FCoords, other: FVector): FCoords {
+    return FCoords.make(
+        coord.origin.sub(other),
+        coord.xAxis, coord.yAxis, coord.zAxis
+    );
+}
+
+function mulScale(coord: FCoords, other: FScale): FCoords {
+    throw new Error("not implemented")
+}
+
+function divRotator(coord: FCoords, other: FRotator): FCoords {
+    coord = coord.mul(
+        FCoords.make
+            (
+                FVector.make(0, 0, 0),
+                FVector.make(+1, -0, +0),
+                FVector.make(-0, +GMath().cos(other.roll), +GMath().sin(other.roll)),
+                FVector.make(+0, -GMath().sin(other.roll), +GMath().cos(other.roll))
+            )
+    );
+
+    // Apply inverse pitch rotation.
+    coord = coord.mul(
+        FCoords.make
+            (
+                FVector.make(0, 0, 0),
+                FVector.make(+GMath().cos(other.pitch), +0, -GMath().sin(other.pitch)),
+                FVector.make(+0, +1, -0),
+                FVector.make(+GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
+            )
+    );
+
+    // Apply inverse yaw rotation.
+    coord = coord.mul(
+        FCoords.make
+            (
+                FVector.make(0, 0, 0),
+                FVector.make(+GMath().cos(other.yaw), -GMath().sin(other.yaw), -0),
+                FVector.make(+GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
+                FVector.make(-0, +0, +1)
+            )
+    );
+
+    return coord;
+}
+
+function divVector(coord: FCoords, other: FVector): FCoords {
+    const origin = coord.origin.add(other);
+
+    return FCoords.make(
+        origin,
+        coord.xAxis, coord.yAxis, coord.zAxis
+    );
+}
+
+function divScale(coord: FCoords, other: FScale): FCoords {
+    throw new Error("not implemented");
 }

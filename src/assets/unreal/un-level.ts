@@ -1,19 +1,26 @@
 import FURL from "./un-url";
 import { UObject, BufferValue } from "@l2js/core";
-import { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
 
 abstract class ULevel extends UObject {
+
     protected objectList: UObject[] = [];
     public readonly url: FURL = new FURL();
     protected reachSpecs = new FPrimitiveArray(BufferValue.uint32);
     public baseModelId: number;
     protected baseModel: GA.UModel;
 
+    public timeSeconds: number = 0;
+
     protected unkBytes = BufferValue.allocBytes(3);
     protected unkInt0: number;
+    protected info: GA.ULevelInfo;
+
+    public getInfo() { return this.info; }
+    public setInfo(info: GA.ULevelInfo) { this.info = info; }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const int32 = new BufferValue(BufferValue.int32);

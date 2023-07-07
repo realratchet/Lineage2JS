@@ -37,12 +37,13 @@ class DecodeLibrary {
         const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
+        const uLevelInfo = pkg.fetchObject<GA.ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
+
+        uLevel.setInfo(uLevelInfo);
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
-
-        const uLevelInfo = pkg.fetchObject<GA.ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
 
         const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 

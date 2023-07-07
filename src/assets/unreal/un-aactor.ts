@@ -5,55 +5,56 @@ import UObject from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
 abstract class UAActor extends UObject {
-    declare protected texModifyInfo: GA.UTextureModifyInfo;
-    declare protected isDynamicActorFilterState: boolean;
-    declare protected level: GA.ULevel;
-    declare protected region: GA.UPointRegion;
-    declare protected drawScale: number;
-    declare protected tag: string;
-    declare protected group: string;
-    declare protected isSunAffected: boolean;
-    declare protected physicsVolume: GA.UPhysicsVolume;
+    declare public readonly texModifyInfo: GA.UTextureModifyInfo;
+    declare public readonly isDynamicActorFilterState: boolean;
+    declare public readonly level: GA.ULevelInfo;
+    declare public readonly region: GA.UPointRegion;
+    declare public readonly drawScale: number;
+    declare public readonly tag: string;
+    declare public readonly group: string;
+    declare public readonly isSunAffected: boolean;
+    declare public readonly physicsVolume: GA.UPhysicsVolume;
     declare public readonly location: GA.FVector;
     declare public readonly rotation: GA.FRotator;
     declare public readonly scale: GA.FVector;
-    declare protected swayRotationOrig: GA.FRotator;
+    declare public readonly swayRotationOrig: GA.FRotator;
 
-    declare protected hasDistanceFog: boolean;
-    declare protected distanceFogEnd: number;
-    declare protected distanceFogStart: number;
-    declare protected distanceFogColor: GA.FColor;
+    declare public readonly hasDistanceFog: boolean;
+    declare public readonly distanceFogEnd: number;
+    declare public readonly distanceFogStart: number;
+    declare public readonly distanceFogColor: GA.FColor;
 
-    declare protected isHiddenInEditor: boolean;
-    declare protected isLightChanged: boolean;
-    declare protected isDeleteMe: boolean;
-    declare protected isPendingDelete: boolean;
-    declare protected isSelected: boolean;
+    declare public readonly isHiddenInEditor: boolean;
+    declare public readonly isLightChanged: boolean;
+    declare public readonly isDeleteMe: boolean;
+    declare public readonly isPendingDelete: boolean;
+    declare public readonly isSelected: boolean;
 
-    declare protected mainScale: GA.FScale;
+    declare public readonly mainScale: GA.FScale;
     // protected dummy: boolean;
 
     // protected _mesh: any;
-    declare protected forcedRegionTag: string;
+    declare public readonly forcedRegionTag: string;
 
-    declare protected skins: C.FObjectArray<GA.UTexture>;
-    declare protected style: ERenderStyle_T;
-    declare protected isIgnoredRange: boolean;
-    declare protected isDirectional: boolean;
+    declare public readonly skins: C.FObjectArray<GA.UTexture>;
+    declare public readonly style: ERenderStyle_T;
+    declare public readonly isIgnoredRange: boolean;
+    declare public readonly isDirectional: boolean;
 
-    declare protected postScale: GA.FScale;
-    declare protected polyFlags: number;
-    declare protected brush: GA.UModel;
-    declare protected prePivot: GA.FVector;
-    declare protected postPivot: GA.FVector;
-    declare protected isRangeIgnored: boolean;
-    declare protected isBlockingActors: boolean;
-    declare protected isBlockingPlayers: boolean;
-    declare protected isBlockingKarma: boolean;
-    declare protected isDynamicLight: boolean;
-    declare protected isStaticLighting: boolean;
+    declare public readonly postScale: GA.FScale;
+    declare public readonly polyFlags: number;
+    declare public readonly brush: GA.UModel;
+    declare public readonly prePivot: GA.FVector;
+    declare public readonly postPivot: GA.FVector;
+    declare public readonly isRangeIgnored: boolean;
+    declare public readonly isBlockingActors: boolean;
+    declare public readonly isBlockingPlayers: boolean;
+    declare public readonly isBlockingKarma: boolean;
+    declare public readonly isDynamicLight: boolean;
+    declare public readonly isStaticLighting: boolean;
 
-    declare protected isCastingShadow: boolean;
+    declare public readonly isCastingShadow: boolean;
+    declare public readonly scaleGlow: number;
 
 
     public getRegion() { return this.region; }
@@ -110,6 +111,8 @@ abstract class UAActor extends UObject {
             "DistanceFogEnd": "distanceFogEnd",
             "DistanceFogStart": "distanceFogStart",
             "DistanceFogColor": "distanceFogColor",
+
+            "ScaleGlow": "scaleGlow",
 
             "bHiddenEd": "isHiddenInEditor",
             "bLightChanged": "isLightChanged",
