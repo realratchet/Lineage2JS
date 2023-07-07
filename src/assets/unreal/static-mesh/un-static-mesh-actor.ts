@@ -379,11 +379,11 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-        applyStaticMeshLight(vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment);
+        applyStaticMeshLight(vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
 
 
 
-        debugger;
+        // debugger;
 
         // if (instance.lights.environment) {
         //     const lightInfo = instance.lights.environment;
@@ -573,7 +573,7 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     return [_r, _g, _b];
 }
 
-function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, ...lights: any[]) {
+function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any, lightsScene: any[]) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -584,7 +584,12 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Arr
 
     const intensityArray = new Float32Array(instanceColors.length);
 
-    for (let lightInfo of lights) {
+    for (let lightInfo of [lightEnvironment, ...lightsScene]) {
+        if (!lightInfo) continue;
+
+        if (!lightInfo || !lightInfo.light)
+            debugger;
+
         const lightActor = lightInfo.light?.loadSelf();
 
         if (!lightActor) continue;
@@ -633,6 +638,11 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Arr
         }
     }
 
-    for (let i = 0; i < vertexArrayLen; i++)
-        instanceColors[i] = instanceColors[i] * (intensityArray[i] / 1);
+    const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0]
+
+    for (let i = 0; i < vertexArrayLen; i += 3) {
+        instanceColors[i] = instanceColors[i] * (intensityArray[i] / 255) + ambientColor[0];
+        instanceColors[i + 1] = instanceColors[i + 1] * (intensityArray[i + 1] / 255) + ambientColor[1];
+        instanceColors[i + 2] = instanceColors[i + 2] * (intensityArray[i + 2] / 255) + ambientColor[2];
+    }
 }
