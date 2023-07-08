@@ -628,7 +628,7 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Arr
                 intensityArray[i + 1] = intensityArray[i + 1] + g;
                 intensityArray[i + 2] = intensityArray[i + 2] + b;
 
-                // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
+                console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
             if ((someFlag & 0x7f) === 0x0) {
@@ -641,8 +641,8 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Arr
     const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0]
 
     for (let i = 0; i < vertexArrayLen; i += 3) {
-        instanceColors[i] = instanceColors[i] * (intensityArray[i] / 255) + ambientColor[0];
-        instanceColors[i + 1] = instanceColors[i + 1] * (intensityArray[i + 1] / 255) + ambientColor[1];
-        instanceColors[i + 2] = instanceColors[i + 2] * (intensityArray[i + 2] / 255) + ambientColor[2];
+        instanceColors[i] = instanceColors[i] + (intensityArray[i] / 1) + ambientColor[0];
+        instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] / 1) + ambientColor[1];
+        instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] / 1) + ambientColor[2];
     }
 }

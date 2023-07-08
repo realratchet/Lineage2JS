@@ -249,35 +249,35 @@ abstract class UShader extends UMaterial {
 }
 
 abstract class UFadeColor extends UBaseModifier {
-    // public color1: FColor = new FColor();
-    // public color2: FColor = new FColor();
-    // public period: number = 0;
+    declare public readonly color1: GA.FColor;
+    declare public readonly color2: GA.FColor;
+    declare public readonly period: number;
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.uuid;
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.uuid;
 
-    //     library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null;
 
-    //     library.materials[this.uuid] = {
-    //         materialType: "modifier",
-    //         modifierType: "fadeColor",
-    //         fadeColors: {
-    //             color1: [this.color1.r / 255, this.color1.b / 255, this.color1.b / 255],
-    //             color2: [this.color2.r / 255, this.color2.b / 255, this.color2.b / 255],
-    //             period: this.period
-    //         }
-    //     } as IFadeColorDecodeInfo;
+        library.materials[this.uuid] = {
+            materialType: "modifier",
+            modifierType: "fadeColor",
+            fadeColors: {
+                color1: [this.color1.r / 255, this.color1.b / 255, this.color1.b / 255],
+                color2: [this.color2.r / 255, this.color2.b / 255, this.color2.b / 255],
+                period: this.period
+            }
+        } as GD.IFadeColorDecodeInfo;
 
-    //     return this.uuid;
-    // }
+        return this.uuid;
+    }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "Color1": "color1",
-    //         "Color2": "color2",
-    //         "FadePeriod": "period"
-    //     });
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Color1": "color1",
+            "Color2": "color2",
+            "FadePeriod": "period"
+        });
+    }
 }
 
 abstract class UColorModifier extends UBaseMaterial {
@@ -318,54 +318,54 @@ abstract class UColorModifier extends UBaseMaterial {
 }
 
 abstract class UTexRotator extends UBaseModifier {
-    // protected matrix: FMatrix;
-    // protected type: TexRotationType_T;
-    // protected rotation: FRotator;
-    // protected offsetU: number;
-    // protected offsetV: number;
+    declare public readonly matrix: GA.FMatrix;
+    declare public readonly type: TexRotationType_T;
+    declare public readonly rotation: GA.FRotator;
+    declare public readonly offsetU: number;
+    declare public readonly offsetV: number;
 
-    // // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
+    // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
-    // // public async getParameters() {
-    // //     // const matrix = this.matrix.getMatrix3(new Matrix3());
-    // //     const matrix = new Matrix3();
-    // //     this.matrix.getMatrix3(matrix);
-    // //     const texture = await (this.material as UTexture).decodeMipmap(0);
+    // public async getParameters() {
+    //     // const matrix = this.matrix.getMatrix3(new Matrix3());
+    //     const matrix = new Matrix3();
+    //     this.matrix.getMatrix3(matrix);
+    //     const texture = await (this.material as UTexture).decodeMipmap(0);
 
-    // //     // console.log(matrix.elements.slice(0, 3));
-    // //     // console.log(matrix.elements.slice(3, 6));
-    // //     // console.log(matrix.elements.slice(6, 9));
+    //     // console.log(matrix.elements.slice(0, 3));
+    //     // console.log(matrix.elements.slice(3, 6));
+    //     // console.log(matrix.elements.slice(6, 9));
 
-    // //     // debugger;
+    //     // debugger;
 
-    // //     return {
-    // //         transformedTexture: {
-    // //             transformRotate: true,
-    // //             texture,
-    // //             matrix
-    // //         }
-    // //     };
-    // // }
-
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.material.uuid;
-
-    //     library.materials[this.uuid] = null;
-
-    //     this.material.loadSelf().getDecodeInfo(library);
-
-    //     return this.material.uuid;
+    //     return {
+    //         transformedTexture: {
+    //             transformRotate: true,
+    //             texture,
+    //             matrix
+    //         }
+    //     };
     // }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "M": "matrix",
-    //         "TexRotationType": "type",
-    //         "Rotation": "rotation",
-    //         "UOffset": "offsetU",
-    //         "VOffset": "offsetV"
-    //     });
-    // }
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.material.uuid;
+
+        library.materials[this.uuid] = null;
+
+        this.material.loadSelf().getDecodeInfo(library);
+
+        return this.material.uuid;
+    }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "M": "matrix",
+            "TexRotationType": "type",
+            "Rotation": "rotation",
+            "UOffset": "offsetU",
+            "VOffset": "offsetV"
+        });
+    }
 }
 
 

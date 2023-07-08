@@ -41,15 +41,13 @@ class FDynamicLight {
 
         let Intensity = 0;
 
-        if (Actor.type === LightType_T.LT_Steady)
-            Intensity = 1;
+        if (Actor.type === LightType_T.LT_Steady) Intensity = 1;
         else if (Actor.type === LightType_T.LT_Pulse)
             Intensity = 0.6 + 0.39 * GMath().sin(Math.floor((Actor.level.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
         else if (Actor.type === LightType_T.LT_Blink) {
             if ((Math.floor((Actor.level.timeSeconds * 35 * 65536) / (Actor.period + 1) + (Actor.phase << 8))) & 1)
                 Intensity = 0;
-            else
-                Intensity = 1;
+            else Intensity = 1;
         }
         else if (Actor.type === LightType_T.LT_Flicker) {
             const Rand = Math.random();
@@ -69,7 +67,7 @@ class FDynamicLight {
         }
         else if (Actor.type == LightType_T.LT_SubtlePulse) {
             // throw new Error("not implemented");
-            Intensity = 0.9 + 0.09 * GMath().sin(Math.floor((Actor. level. timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+            Intensity = 0.9 + 0.09 * GMath().sin(Math.floor((Actor.level.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
             //     else if (Actor .type === LightType_T.LT_TexturePaletteOnce) {
             // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
             //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(appFloor(255.0f * Actor -> LifeFraction()));
@@ -124,59 +122,49 @@ class FDynamicLight {
 
             if ((Direction.dot(SampleNormal)) < 0)
                 return (Direction.dot(SampleNormal)) * -2;
-            else
-                return 0;
+            else return 0;
         }
         else if (Actor.effect === LightEffect_T.LE_Cylinder) {
             // Cylindrical light.
 
             const LightVector = Position.sub(SamplePosition);
-            const DistanceSquared = LightVector.lengthSq(),
-                Distance = Math.sqrt(DistanceSquared);
+            const DistanceSquared = LightVector.lengthSq(), Distance = Math.sqrt(DistanceSquared);
 
             if (Distance < Radius)
                 return Math.max(0, 1 - ((LightVector.x ** 2) + (LightVector.y ** 2)) / (Radius ** 2)) * 2;
-            else
-                return 0;
+            else return 0;
         }
         else if (Actor.effect === LightEffect_T.LE_NonIncidence) {
             // Non incidence light.
 
             const LightVector = Position.sub(SamplePosition);
-            const DistanceSquared = LightVector.lengthSq(),
-                Distance = Math.sqrt(DistanceSquared);
+            const DistanceSquared = LightVector.lengthSq(), Distance = Math.sqrt(DistanceSquared);
 
             if ((LightVector.dot(SampleNormal)) > 0 && Distance < Radius)
                 return Math.sqrt(1.02 - Distance / Radius) * 2;
-            else
-                return 0;
+            else return 0;
         }
         else if (Actor.effect === LightEffect_T.LE_QuadraticNonIncidence) {
             // Quadratic non incidence light.
 
             const LightVector = Position.sub(SamplePosition);
-            const DistanceSquared = LightVector.lengthSq(),
-                RadiusSquared = (Radius ** 2);
+            const DistanceSquared = LightVector.lengthSq(), RadiusSquared = (Radius ** 2);
 
             if ((LightVector.dot(SampleNormal)) > 0 && DistanceSquared < RadiusSquared)
                 return (1.02 - DistanceSquared / RadiusSquared) * 2;
-            else
-                return 0;
+            else return 0;
         }
         else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect === LightEffect_T.LE_StaticSpot) {
             // Spot light.
 
             const LightVector = Position.sub(SamplePosition);
             const DistanceSquared = LightVector.lengthSq(),
-                Distance = Math.sqrt(DistanceSquared),
-                BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
+                Distance = Math.sqrt(DistanceSquared), BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
 
             if (BaseAttenuation > 0) {
-                const Sine = 1.0 - Actor.cone / 256.0,
-                    RSine = 1.0 / (1.0 - Sine),
-                    SineRSine = Sine * RSine,
-                    SineSq = Sine * Sine,
-                    VDotV = -LightVector.dot(Direction);
+                const Sine = 1.0 - Actor.cone / 256.0, RSine = 1.0 / (1.0 - Sine);
+                const SineRSine = Sine * RSine, SineSq = Sine * Sine;
+                const VDotV = -LightVector.dot(Direction);
 
                 if (VDotV > 0.0 && (VDotV ** 2) > SineSq * DistanceSquared)
                     return Math.pow(VDotV * RSine / Distance - SineRSine, 2) * BaseAttenuation;

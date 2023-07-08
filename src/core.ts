@@ -393,11 +393,11 @@ async function startCore() {
 
     const loadSettings = {
         helpersZoneBounds: false,
-        loadTerrain: true,
-        loadBaseModel: true,
+        loadTerrain: false,
+        loadBaseModel: false,
         loadStaticModels: true,
         loadEmitters: false,
-        _loadStaticModelList: [
+        loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -425,12 +425,13 @@ async function startCore() {
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures
 
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
-            ...["StaticMeshActor475"] // talking island village broken rock
+            // ...["StaticMeshActor475"] // talking island village broken rock
+            ...["StaticMeshActor684"] // cruma light
         ]
     } as GD.LoadSettings_T;
 
     // working (or mostly working)
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -457,7 +458,7 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
