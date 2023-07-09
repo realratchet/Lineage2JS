@@ -108,13 +108,17 @@ class RenderManager {
         // this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
         // this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
 
+        // elven ruins light fixture with two lights
+        this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
+        this.controls.orbit.target.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
+
         // // // tower ceiling fixture (too red)
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
-        // tower outside
-        this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-        this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+        // // tower outside
+        // this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
+        // this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
@@ -124,17 +128,17 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // // talking island
-        this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
-        this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
+        // // // talking island
+        // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
+        // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);
         // this.controls.orbit.target.set(0, 0, 0);
 
-        // look player
-        this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
-        this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
+        // // look player
+        // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
+        // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

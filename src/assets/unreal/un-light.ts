@@ -1,8 +1,6 @@
 import GMath from "@client/assets/unreal/un-gmath";
-import UPackage from "@client/assets/unreal/un-package";
 import FPlane from "@client/assets/unreal/un-plane";
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
-import { APackage, UExport, UObject } from "@l2js/core";
 import { clamp, generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import UAActor from "./un-aactor";
 import FVector from "./un-vector";
@@ -30,6 +28,11 @@ class FDynamicLight {
     public dynamic: boolean;
 
     public constructor(actor: ULight) {
+        console.log(actor.dumpLayout());
+
+        debugger;
+        
+
         this.actor = actor;
         this.alpha = 1;
         this.update();

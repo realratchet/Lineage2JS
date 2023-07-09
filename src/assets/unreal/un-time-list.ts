@@ -3,6 +3,63 @@ import { FNTimeColor, FNTimeHSV } from "./un-time-light";
 const toHSV = ([t, h, s, v]: number[]) => new FNTimeHSV(t, h, s, v);
 const toColor = ([t, r, g, b]: number[]) => new FNTimeColor(t, r, g, b);
 
+const actorLight = [
+    [0, 138, 182, 0],
+    [1, 138, 182, 120],
+    [2, 138, 100, 120],
+    [3, 138, 182, 120],
+    [4, 138, 182, 120],
+    [5, 138, 182, 120],
+    [6, 138, 182, 0],
+    [6, 29, 153, 100],
+    [7, 29, 153, 140],
+    [8, 29, 153, 160],
+    [9, 29, 153, 160],
+    [10, 1, 255, 160],
+    [11, 1, 255, 160],
+    [12, 1, 255, 160],
+    [13, 1, 255, 160],
+    [14, 1, 255, 160],
+    [15, 1, 255, 160],
+    [16, 1, 255, 160],
+    [17, 1, 255, 160],
+    [18, 1, 255, 160],
+    [19, 1, 255, 160],
+    [20, 1, 255, 160],
+    [21, 24, 100, 190],
+    [22, 24, 100, 190],
+    [23, 24, 100, 190],
+    [24, 24, 100, 0],
+].map(toHSV);
+
+const actorAmbient = [
+    [0, 75, 103, 131],
+    [1, 84, 108, 131],
+    [2, 84, 108, 131],
+    [3, 84, 108, 131],
+    [4, 84, 108, 131],
+    [5, 64, 88, 111],
+    [6, 90, 97, 120],
+    [7, 67, 71, 88],
+    [8, 67, 71, 88],
+    [9, 67, 71, 88],
+    [10, 120, 120, 120],
+    [11, 150, 150, 150],
+    [12, 150, 150, 150],
+    [13, 150, 150, 150],
+    [14, 150, 150, 150],
+    [15, 150, 150, 150],
+    [16, 150, 150, 150],
+    [17, 120, 120, 120],
+    [18, 120, 120, 120],
+    [19, 120, 120, 120],
+    [20, 120, 120, 120],
+    [21, 120, 120, 120],
+    [22, 152, 119, 88],
+    [23, 152, 119, 88],
+    [24, 75, 103, 131]
+].map(toColor);
+
 const terrainLight = [
     [0, 138, 182, 0],
     [1, 138, 182, 200],
@@ -127,4 +184,4 @@ function selectByTime<T extends GD.IBaseTimedConstructable>(timeOfDay: number, a
     return null;
 }
 
-export { selectByTime, terrainLight, terrainAmbient, staticMeshLight, staticMeshAmbient };
+export { selectByTime, terrainLight, terrainAmbient, staticMeshLight, staticMeshAmbient, actorLight, actorAmbient };
