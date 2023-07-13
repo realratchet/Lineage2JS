@@ -1,5 +1,7 @@
 import GMath from "@client/assets/unreal/un-gmath";
 import FPlane from "@client/assets/unreal/un-plane";
+import { actorAmbient, actorLight, selectByTime } from "@client/assets/unreal/un-time-list";
+import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { clamp, generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import UAActor from "./un-aactor";
@@ -31,7 +33,7 @@ class FDynamicLight {
         console.log(actor.dumpLayout());
 
         debugger;
-        
+
 
         this.actor = actor;
         this.alpha = 1;
@@ -40,7 +42,12 @@ class FDynamicLight {
 
     public update() {
         const Actor = this.actor;
-        const baseColor = getHSV(Actor.hue, Actor.saturation, 255);
+
+        let baseColor: FPlane;
+
+        if (Actor.isSunlightColor) {
+            baseColor = selectByTime(timeOfDay, actorLight).toColorPlane();
+        } else baseColor = getHSV(Actor.hue, Actor.saturation, 255);
 
         let Intensity = 0;
 
@@ -217,8 +224,8 @@ abstract class ULight extends UAActor {
 
     public worldLightRadius() { return 25 * (this.radius + 1); }
 
-    // protected _bSunlightColor: any;
-    // protected _bTimeLight: any;
+    declare public readonly isSunlightColor: boolean;
+    declare public readonly isTimeLight: boolean;
     // protected _lightPrevTime: any;
     // protected _lightLifeTime: any;
     // protected _minCoronaSize: any;
@@ -248,8 +255,8 @@ abstract class ULight extends UAActor {
 
             "MaxCoronaSize": "maxCoronaSize",
 
-            // "bSunlightColor": "_bSunlightColor",
-            // "bTimeLight": "_bTimeLight",
+            "bSunlightColor": "isSunlightColor",
+            "bTimeLight": "isTimeLight",
             // "LightPrevTime": "_lightPrevTime",
             // "LightLifeTime": "_lightLifeTime",
             // "MinCoronaSize": "_minCoronaSize",

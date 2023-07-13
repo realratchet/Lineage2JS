@@ -1,36 +1,15 @@
 import * as dat from "dat.gui";
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
-// import FTerrainInfo from "./assets/unreal/un-terrain-info";
-// import UTerrainSector from "./assets/unreal/un-terrain-sector";
-// import UTexture from "./assets/unreal/un-texture";
-// import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
-// import UStaticMeshInstance from "./assets/unreal/static-mesh/un-static-mesh-instance";
-// import UModel from "./assets/unreal/model/un-model";
-// import UExport from "./assets/unreal/un-export";
-// import UBrush from "./assets/unreal/un-brush";
-// import ULevel from "./assets/unreal/un-level";
-// import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
-import decodeTexture from "./assets/decoders/texture-decoder";
-import decodeMaterial from "./assets/decoders/material-decoder";
-import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
 import decodeObject3D, { decodePackage } from "./assets/decoders/object3d-decoder";
-import ULight from "./assets/unreal/un-light";
-import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
-import UEncodedFile from "@unreal/un-encoded-file";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
-import { generateUUID } from "three/src/math/MathUtils";
-import UFunction from "./assets/unreal/un-function";
-import UEmitter from "./assets/unreal/un-emitter";
-import { BufferValue } from "@l2js/core";
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | UPackage, settings: LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
     pkg = await assetLoader.load(pkg);
-
 
     const decodeLibrary = await DecodeLibrary.fromPackage(pkg, settings);
 
@@ -266,7 +245,6 @@ async function startCore() {
 
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
-
 
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);

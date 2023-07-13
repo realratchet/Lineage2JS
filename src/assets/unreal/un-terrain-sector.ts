@@ -81,8 +81,6 @@ abstract class UTerrainSector extends UObject {
         const indices = new TypedIndicesArray(16 * 16 * 6);
         const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
 
-        
-
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
 

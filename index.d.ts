@@ -9,6 +9,7 @@ declare module "@l2js/core" {
          * Force LSP to mark all inheriting classes as needing to implement this to remind about needing to make the class itself abstract.
          */
         public abstract forceAbstract(): void;
+        public dumpLayout(): string;
 
         public load(pkg: GA.UPackage): this;
         public load(pkg: GA.UPackage, info: C.UExport): this;
@@ -24,6 +25,7 @@ declare module "@l2js/core" {
 
         public static make<T extends UObject, K extends abstract new (...args: any[]) => T>(this: K, ...args: MakeParams<K>): InstanceType<K>;
         public static class<T extends UObject, K extends abstract new (...args: any[]) => T>(this: K): new (...args: MakeParams<K>) => InstanceType<K>;
+
     }
 }
 
@@ -71,6 +73,8 @@ declare global {
                     | "NMoon"
                     | "L2FogInfo"
                     | "L2SeamlessInfo"
+                    | "L2NTimeLight"
+                    | "L2NEnvLight"
                     | "SceneManager"
                     | "MovableStaticMeshActor";
 

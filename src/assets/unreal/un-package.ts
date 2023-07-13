@@ -290,6 +290,8 @@ class UNativePackage extends ANativePackage {
             // Classes we don't care about atm are marked as UObject for general puprose constructor
             case "L2FogInfo": Constructor = UObject; break;
             case "L2SeamlessInfo": Constructor = UObject; break;
+            case "L2NTimeLight": Constructor = UObject; break;
+            case "L2NEnvLight": Constructor = UObject; break;
             case "SceneManager": Constructor = UObject; break;
             case "PathNode": Constructor = UObject; break;
 
