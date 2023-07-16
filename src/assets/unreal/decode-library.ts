@@ -23,6 +23,7 @@ class DecodeLibrary {
     public sun: GD.ISunDecodeInfo_T;
 
     public static async fromPackage(pkg: C.APackage, {
+        env,
         loadBaseModel = true,
         loadStaticModels = true,
         loadStaticModelList = null,
@@ -30,8 +31,6 @@ class DecodeLibrary {
         helpersZoneBounds = false,
         loadEmitters = true
     }: GD.LoadSettings_T) {
-
-        // debugger;
 
         const impGroups = pkg.importGroups;
         const expGroups = pkg.exportGroups;
@@ -115,8 +114,10 @@ class DecodeLibrary {
             } else {
                 const uStaticMeshActors = actorsToLoad.map(exp => pkg.fetchObject<GA.UStaticMeshActor>(exp.index + 1).loadSelf());
 
-                for (const actor of uStaticMeshActors)
+                for (const actor of uStaticMeshActors) {
+                    actor.setL2Env(env);
                     actor.getDecodeInfo(decodeLibrary);
+                }
             }
         }
 

@@ -1,21 +1,8 @@
 import UAActor from "../un-aactor";
-import { BufferValue, UObject } from "@l2js/core";
+import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
-import { clamp } from "three/src/math/MathUtils";
-import { FPlane } from "../un-plane";
-import { sampleLightIntensity } from "../un-sample-light";
-import { Euler, Matrix4, Quaternion, Vector3 } from "three";
-import { selectByTime, staticMeshAmbient } from "../un-time-list";
-import timeOfDay from "../un-time-of-day-helper";
-import FArray, { FIndexArray } from "@l2js/core/src/unreal/un-array";
-import FCoords from "@client/assets/unreal/un-coords";
-import FRotator from "@client/assets/unreal/un-rotator";
-import { FNTimeHSV } from "@client/assets/unreal/un-time-light";
 import FMatrix from "@client/assets/unreal/un-matrix";
 import GMath from "@client/assets/unreal/un-gmath";
-import FColor from "@client/assets/unreal/un-color";
-import { LightEffect_T } from "@client/assets/unreal/un-light";
-
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
 
@@ -27,11 +14,12 @@ abstract class FAccessory extends UObject {
 }
 
 abstract class UStaticMeshActor extends UAActor {
+
     declare protected mesh: GA.UStaticMesh | GA.UTexture;
     declare protected instance: GA.UStaticMeshInstance;
 
     declare protected colLocation: FVector;
-    declare protected touching: FIndexArray;
+    declare protected touching: C.FIndexArray;
     declare protected isUpdatingShadow: boolean;
     declare protected stepSound1: GA.USound;
     declare protected stepSound2: GA.USound;
@@ -70,6 +58,11 @@ abstract class UStaticMeshActor extends UAActor {
     // protected _showTime: any;
     // protected _hideTime: any;
     // protected _bExactProjectileCollision: any;
+
+    declare protected l2env: GA.UL2NEnvLight;
+
+    public setL2Env(l2env: GA.UL2NEnvLight) { this.l2env = l2env; }
+    public getL2Env(l2env: GA.UL2NEnvLight) { return this.l2env; }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -334,6 +327,7 @@ abstract class UStaticMeshActor extends UAActor {
         console.warn(this.exp.objectName)
 
         const mesh = this.mesh.loadSelf();
+        const env = this.l2env;
 
         const localToWorld = this.localToWorld();
 
@@ -365,7 +359,7 @@ abstract class UStaticMeshActor extends UAActor {
         // const lightPosition = new Vector3();
 
         if (this.isSunAffected) {
-            const ambient = selectByTime(timeOfDay, staticMeshAmbient).getColor();
+            const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 instanceColors[i + 0] += ambient[0];
@@ -379,7 +373,7 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-        applyStaticMeshLight(vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
+        applyStaticMeshLight(this.l2env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
 
 
 
@@ -573,7 +567,7 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     return [_r, _g, _b];
 }
 
-function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any, lightsScene: any[]) {
+function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any, lightsScene: any[]) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -594,7 +588,7 @@ function applyStaticMeshLight(vertexArrayLen: number, instanceColors: Float32Arr
 
         if (!lightActor) continue;
 
-        const light = lightActor.getRenderInfo();
+        const light = lightActor.getRenderInfo(env);
 
         if (light.dynamic) continue;
 

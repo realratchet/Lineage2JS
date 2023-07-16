@@ -2,9 +2,6 @@ import UObject from "@l2js/core";
 import FBox from "./un-box";
 import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import { selectByTime, terrainAmbient } from "./un-time-list";
-// import FVector from "./un-vector";
-import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
 

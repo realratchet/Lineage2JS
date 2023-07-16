@@ -112,6 +112,12 @@ declare global {
                 export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
 
                 export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+
+                export type FNTimeColor = import("@unreal/un-l2env").FNTimeColor;
+                export type FNTimeHSV = import("@unreal/un-l2env").FNTimeHSV;
+                export type FNTimeScale = import("@unreal/un-l2env").FNTimeScale;
+                export type UL2NEnvLight = import("@unreal/un-l2env").UL2NEnvLight;
+                export type UL2NTimeLight = import("@unreal/un-l2env").UL2NTimeLight;
             }
 
             namespace Decoding {
@@ -126,7 +132,8 @@ declare global {
 
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
 
-                type LoadSettings_T = {
+                export type LoadSettings_T = {
+                    env: GA.UL2NEnvLight,
                     loadTerrain?: boolean,
                     loadBaseModel?: boolean,
                     loadStaticModels?: boolean,

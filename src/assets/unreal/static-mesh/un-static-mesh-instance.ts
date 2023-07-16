@@ -1,10 +1,9 @@
 import UObject from "@l2js/core";
 import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
-import { selectByTime, staticMeshLight } from "../un-time-list";
 import ULight from "../un-light";
-import timeOfDay, { indexToTime } from "../un-time-of-day-helper";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { indexToTime } from "@client/assets/unreal/un-l2env";
 
 class FAssignedLight implements C.IConstructable {
     public lightIndex: number; // seems to be light index
@@ -49,6 +48,7 @@ abstract class UStaticMeshInstance extends UObject {
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
+        const env = this.actor.getL2Env();
 
         for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
             const { r, g, b } = this.colorStream.color[i] as GA.FColor;
@@ -63,18 +63,18 @@ abstract class UStaticMeshInstance extends UObject {
         let startIndex: number, finishIndex: number;
         // let startTime: number, finishTime: number;
 
-        let lightingColor: [number, number, number];
+        let lightingColor: GD.ColorArr;
 
         for (let i = 0, len = this.environmentLights.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if (timeForIndex > timeOfDay) {
+            if (timeForIndex > env.timeOfDay) {
                 validEnvironment = this.environmentLights[i];
                 startIndex = i;
                 finishIndex = i + 1;
                 // startTime = timeForIndex;
                 // finishTime = indexToTime(finishIndex, len);
-                lightingColor = selectByTime(timeOfDay, staticMeshLight).getColor();
+                lightingColor = env.selectByTime(env.lightStaticMesh).getColor();
 
                 break;
             }

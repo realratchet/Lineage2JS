@@ -5,8 +5,10 @@ import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBu
 import decodeObject3D, { decodePackage } from "./assets/decoders/object3d-decoder";
 import DecodeLibrary from "./assets/unreal/decode-library";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
+import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
+import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | UPackage, settings: LoadSettings_T) {
+async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | GA.UPackage, settings: GD.LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
     pkg = await assetLoader.load(pkg);
@@ -182,6 +184,12 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
+async function _decodTimeEnvFile(path: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): Promise<any> {
+    const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
+
+    return envFile.load(pkgNative, pkgEngine);
+}
+
 async function startCore() {
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
@@ -199,7 +207,7 @@ async function startCore() {
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
 
-    const pkgCore = await assetLoader.load(assetLoader.getPackage("core", "Script"));
+    const pkgCore = await assetLoader.load(assetLoader.getCorePackage());
 
     // debugger;
 
@@ -241,10 +249,14 @@ async function startCore() {
     // debugger;
 
 
-    const pkgEngine = await assetLoader.load(assetLoader.getPackage("engine", "Script"));
+    const pkgNative = assetLoader.getNativePackage();
+    const pkgEngine = await assetLoader.load(assetLoader.getEnginePackage());
 
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
+
+
+    const env = await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine);
 
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);
@@ -370,6 +382,7 @@ async function startCore() {
     // debugger;
 
     const loadSettings = {
+        env: env,
         helpersZoneBounds: false,
         loadTerrain: false,
         loadBaseModel: false,

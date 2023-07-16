@@ -3,7 +3,6 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
-import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
 import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";

@@ -1,7 +1,5 @@
 import GMath from "@client/assets/unreal/un-gmath";
 import FPlane from "@client/assets/unreal/un-plane";
-import { actorAmbient, actorLight, selectByTime } from "@client/assets/unreal/un-time-list";
-import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import { clamp, generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import UAActor from "./un-aactor";
@@ -22,6 +20,8 @@ function getHSV(H: number, S: number, V: number): FPlane {
 
 class FDynamicLight {
     public readonly actor: ULight;
+    public readonly env: GA.UL2NEnvLight;
+
     public alpha: number;
     public color: FPlane;
     public direction: FVector;
@@ -29,12 +29,10 @@ class FDynamicLight {
     public radius: number;
     public dynamic: boolean;
 
-    public constructor(actor: ULight) {
+    public constructor(actor: ULight, env: GA.UL2NEnvLight) {
         console.log(actor.dumpLayout());
 
-        debugger;
-
-
+        this.env = env;
         this.actor = actor;
         this.alpha = 1;
         this.update();
@@ -42,11 +40,12 @@ class FDynamicLight {
 
     public update() {
         const Actor = this.actor;
+        const Env = this.env;
 
         let baseColor: FPlane;
 
         if (Actor.isSunlightColor) {
-            baseColor = selectByTime(timeOfDay, actorLight).toColorPlane();
+            baseColor = Env.selectByTime(Env.lightActor).toColorPlane();
         } else baseColor = getHSV(Actor.hue, Actor.saturation, 255);
 
         let Intensity = 0;
@@ -266,7 +265,7 @@ abstract class ULight extends UAActor {
         });
     }
 
-    protected getRenderInfo() { return new FDynamicLight(this); }
+    protected getRenderInfo(env: GA.UL2NEnvLight) { return new FDynamicLight(this, env); }
 
     protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();

@@ -49,6 +49,7 @@ import ULevelSummary from "@client/assets/unreal/un-level-summary";
 import USound from "@client/assets/unreal/un-sound";
 import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
 import UMover from "@client/assets/unreal/un-mover";
+import * as NEnv from "@client/assets/unreal/un-l2env";
 
 type CoreStructs_T =
     | "Vector"
@@ -202,6 +203,10 @@ class UNativePackage extends ANativePackage {
                 Constructor = UObject;
                 break;
 
+            case "NTimeColor": Constructor = NEnv.FNTimeColor; break;
+            case "NTimeHSV": Constructor = NEnv.FNTimeHSV; break;
+            case "NTimeScale": Constructor = NEnv.FNTimeScale; break;
+
             default:
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
@@ -280,6 +285,8 @@ class UNativePackage extends ANativePackage {
             case "Cubemap": Constructor = UCubemap; break;
             case "StaticMeshMaterial": Constructor = UnMaterials.UStaticMeshMaterial; break;
 
+            case "L2NEnvLight": Constructor = NEnv.UL2NEnvLight; break;
+            case "L2NTimeLight": Constructor = NEnv.UL2NTimeLight; break;
 
 
             case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
@@ -290,8 +297,6 @@ class UNativePackage extends ANativePackage {
             // Classes we don't care about atm are marked as UObject for general puprose constructor
             case "L2FogInfo": Constructor = UObject; break;
             case "L2SeamlessInfo": Constructor = UObject; break;
-            case "L2NTimeLight": Constructor = UObject; break;
-            case "L2NEnvLight": Constructor = UObject; break;
             case "SceneManager": Constructor = UObject; break;
             case "PathNode": Constructor = UObject; break;
 
