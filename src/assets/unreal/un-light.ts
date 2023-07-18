@@ -30,7 +30,7 @@ class FDynamicLight {
     public dynamic: boolean;
 
     public constructor(actor: ULight, env: GA.UL2NEnvLight) {
-        console.log(actor.dumpLayout());
+        // console.log(actor.dumpLayout());
 
         this.env = env;
         this.actor = actor;

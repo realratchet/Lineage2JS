@@ -5,7 +5,28 @@ import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
 
-abstract class ULevel extends UObject {
+abstract class ULevelBase extends UObject {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
+        const int32 = new BufferValue(BufferValue.int32);
+        const compat32 = new BufferValue(BufferValue.compat32);
+
+        super.doLoad(pkg, exp);
+
+        const verArchive = pkg.header.getArchiveFileVersion();
+        const verLicense = pkg.header.getLicenseeVersion();
+
+        if (verLicense >= 23) {
+            let dbNum = 0, dbMax = 0;
+
+            dbNum = pkg.read(int32).value;
+            dbMax = pkg.read(int32).value;
+        } else {
+            debugger;
+        }
+    }
+}
+
+abstract class ULevel extends ULevelBase {
 
     protected objectList: UObject[] = [];
     public readonly url: FURL = new FURL();
@@ -40,7 +61,7 @@ abstract class ULevel extends UObject {
             dbNum = pkg.read(int32).value;
             dbMax = pkg.read(int32).value;
 
-            ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
+            ambientSoundIds = new Array(dbNum); new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
         } else ambientSoundIds = [];
 
         this.readHead = pkg.tell();

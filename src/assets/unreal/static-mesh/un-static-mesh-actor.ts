@@ -632,11 +632,11 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         }
     }
 
-    const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0]
+    const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0];
 
     for (let i = 0; i < vertexArrayLen; i += 3) {
-        instanceColors[i] = instanceColors[i] + (intensityArray[i] / 1) + ambientColor[0];
-        instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] / 1) + ambientColor[1];
-        instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] / 1) + ambientColor[2];
+        instanceColors[i + 0] = /*instanceColors[i + 0] +*/ (intensityArray[i + 0] / 1);// + ambientColor[0];
+        instanceColors[i + 1] = /*instanceColors[i + 1] +*/ (intensityArray[i + 1] / 1);// + ambientColor[1];
+        instanceColors[i + 2] = /*instanceColors[i + 2] +*/ (intensityArray[i + 2] / 1);// + ambientColor[2];
     }
 }
