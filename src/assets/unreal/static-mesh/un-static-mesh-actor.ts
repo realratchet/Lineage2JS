@@ -59,11 +59,6 @@ abstract class UStaticMeshActor extends UAActor {
     // protected _hideTime: any;
     // protected _bExactProjectileCollision: any;
 
-    declare protected l2env: GA.UL2NEnvLight;
-
-    public setL2Env(l2env: GA.UL2NEnvLight) { this.l2env = l2env; }
-    public getL2Env(l2env: GA.UL2NEnvLight) { return this.l2env; }
-
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "StaticMesh": "mesh",
@@ -327,7 +322,7 @@ abstract class UStaticMeshActor extends UAActor {
         console.warn(this.exp.objectName)
 
         const mesh = this.mesh.loadSelf();
-        const env = this.l2env;
+        const env = this.level.getL2Env();
 
         const localToWorld = this.localToWorld();
 
@@ -373,7 +368,7 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-        applyStaticMeshLight(this.l2env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
+        applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
 
 
 

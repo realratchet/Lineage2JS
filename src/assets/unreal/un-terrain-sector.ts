@@ -4,6 +4,7 @@ import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
+import { indexToTime } from "@client/assets/unreal/un-l2env";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -58,6 +59,8 @@ abstract class UTerrainSector extends UObject {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
+        const env = info.level.getL2Env();
+
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
             name: this.objectName,
@@ -76,7 +79,7 @@ abstract class UTerrainSector extends UObject {
 
         const positions = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
-        const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
+        const ambient = env.selectByTime(env.ambientTerrain).getColor();
 
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
@@ -85,7 +88,7 @@ abstract class UTerrainSector extends UObject {
         for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if (timeForIndex > timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
+            if (timeForIndex > env.timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
                 validShadowmap = this.shadowMaps[i];
                 break;
             }

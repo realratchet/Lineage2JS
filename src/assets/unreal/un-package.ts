@@ -50,6 +50,7 @@ import USound from "@client/assets/unreal/un-sound";
 import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
 import UMover from "@client/assets/unreal/un-mover";
 import * as NEnv from "@client/assets/unreal/un-l2env";
+import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
 
 type CoreStructs_T =
     | "Vector"
@@ -188,24 +189,25 @@ class UNativePackage extends ANativePackage {
             case "Coords": Constructor = FCoords; break;
             case "Quat": Constructor = FQuaternion; break;
 
+            case "NTimeColor": Constructor = NEnv.FNTimeColor; break;
+            case "NTimeHSV": Constructor = NEnv.FNTimeHSV; break;
+            case "NTimeScale": Constructor = NEnv.FNTimeScale; break;
 
             // structs we dont care about yet
-            case "InterpCurve": Constructor = UObject; break;
-            case "InterpCurvePoint": Constructor = UObject; break;
-            case "CompressedPosition": Constructor = UObject; break;
-            case "BoundingVolume": Constructor = UObject; break;
-
+            case "InterpCurve":
+            case "InterpCurvePoint":
+            case "CompressedPosition":
+            case "BoundingVolume":
             case "Guid":
             case "ActorRenderDataPtr":
             case "LightRenderDataPtr":
             case "NMoverPtr":
+            case "Interpolator":
+            case "L2RotatorTime":
             case "AnimRep":
+            case "Orientation":
                 Constructor = UObject;
                 break;
-
-            case "NTimeColor": Constructor = NEnv.FNTimeColor; break;
-            case "NTimeHSV": Constructor = NEnv.FNTimeHSV; break;
-            case "NTimeScale": Constructor = NEnv.FNTimeScale; break;
 
             default:
                 debugger;
@@ -254,7 +256,7 @@ class UNativePackage extends ANativePackage {
             //         case "Mesh": Constructor = UMesh; break;
             //         case "MeshAnimation": Constructor = UMeshAnimation; break;
             //         case "Level": Constructor = ULevel; break;
-            //         case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
+            case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
             //         case "Viewport": Constructor = UViewport; break;
             //         case "Client": Constructor = UClient; break;
             //         case "Player": Constructor = UPlayer; break;
@@ -284,6 +286,7 @@ class UNativePackage extends ANativePackage {
             case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
             case "Cubemap": Constructor = UCubemap; break;
             case "StaticMeshMaterial": Constructor = UnMaterials.UStaticMeshMaterial; break;
+            case "Combiner": Constructor = UnMaterials.UCombiner; break;
 
             case "L2NEnvLight": Constructor = NEnv.UL2NEnvLight; break;
             case "L2NTimeLight": Constructor = NEnv.UL2NTimeLight; break;
@@ -299,6 +302,8 @@ class UNativePackage extends ANativePackage {
             case "L2SeamlessInfo": Constructor = UObject; break;
             case "SceneManager": Constructor = UObject; break;
             case "PathNode": Constructor = UObject; break;
+            case "InterpolationPoint": Constructor = UObject; break;
+            case "VertexColor": Constructor = UObject; break;
 
             default:
                 debugger;

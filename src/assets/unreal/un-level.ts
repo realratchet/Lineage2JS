@@ -1,18 +1,22 @@
 import FURL from "./un-url";
 import { UObject, BufferValue } from "@l2js/core";
-import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
+const NUM_LEVEL_TEXT_BLOCKS = 16;
 
 abstract class ULevelBase extends UObject {
+    public readonly url: FURL = new FURL();
+
+    protected ambientActorIds: Array<number>;
+    protected actorIds: Array<number>;
+
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);
 
         super.doLoad(pkg, exp);
 
-        const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verLicense >= 23) {
@@ -20,25 +24,43 @@ abstract class ULevelBase extends UObject {
 
             dbNum = pkg.read(int32).value;
             dbMax = pkg.read(int32).value;
+
+            this.ambientActorIds = new Array<number>(dbNum);
+
+            for (let i = 0; i < dbNum; i++)
+                this.ambientActorIds[i] = pkg.read(compat32).value;
+
+            dbNum = pkg.read(int32).value;
+            dbMax = pkg.read(int32).value;
+
+            this.actorIds = new Array<number>(dbNum);
+
+            for (let i = 0; i < dbNum; i++)
+                this.actorIds[i] = pkg.read(compat32).value;
         } else {
-            debugger;
+            debugger
         }
+
+        this.url.load(pkg);
     }
 }
 
 abstract class ULevel extends ULevelBase {
 
-    protected objectList: UObject[] = [];
-    public readonly url: FURL = new FURL();
-    protected reachSpecs = new FPrimitiveArray(BufferValue.uint32);
     public baseModelId: number;
+    public levelInfoId: number;
+
     protected baseModel: GA.UModel;
+    protected levelInfo: GA.ULevelInfo;
 
-    public timeSeconds: number = 0;
+    public get timeSeconds() { return 0; };
 
-    protected unkBytes = BufferValue.allocBytes(3);
-    protected unkInt0: number;
     protected info: GA.ULevelInfo;
+
+    protected approxTime: number;
+    protected firstDeletedId: number;
+
+    protected objectList: UObject[] = [];
 
     public getInfo() { return this.info; }
     public setInfo(info: GA.ULevelInfo) { this.info = info; }
@@ -46,52 +68,42 @@ abstract class ULevel extends ULevelBase {
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);
+        const float = new BufferValue(BufferValue.float);
 
         super.doLoad(pkg, exp);
 
         const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
-
-        let dbNum: number;
-        let dbMax: number;
-        let ambientSoundIds: number[];
-        let objectIds: number[];
-
-        if (0x16 < verLicense) {
-            dbNum = pkg.read(int32).value;
-            dbMax = pkg.read(int32).value;
-
-            ambientSoundIds = new Array(dbNum); new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
-        } else ambientSoundIds = [];
-
-        this.readHead = pkg.tell();
-
-        dbNum = pkg.read(int32).value;
-        dbMax = pkg.read(int32).value;
-
-        objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value).filter(v => v !== 0);
-
-        this.url.load(pkg);
-
-        this.unkInt0 = pkg.read(int32).value;
-        pkg.read(this.unkBytes);
-
-        this.readHead = pkg.tell();
-
-        this.reachSpecs.load(pkg);
-
-        // debugger;
-
-        this.readHead = pkg.tell();
 
         this.baseModelId = pkg.read(compat32).value;
-        this.readHead = pkg.tell();
+
+        if (verArchive < 98) {
+            debugger;
+        }
+
+        this.approxTime = pkg.read(float).value;
+
+        this.firstDeletedId = pkg.read(compat32).value
+        const textBlockIds = new Array<number>(NUM_LEVEL_TEXT_BLOCKS);
+
+        for (let i = 0; i < NUM_LEVEL_TEXT_BLOCKS; i++)
+            textBlockIds[i] = pkg.read(compat32).value;
+
+        if (verArchive > 62) {
+            const travelInfoPairsCount = pkg.read(compat32).value;
+
+            if (travelInfoPairsCount !== 0)
+                debugger;
+        } else if (verArchive >= 61) {
+            debugger;
+        }
+
+        this.levelInfoId = this.actorIds[0];
 
         if (LOAD_SUB_OBJECTS) {
             this.baseModel = pkg.fetchObject<GA.UModel>(this.baseModelId);
 
             if (LOAD_SOUNDS) {
-                for (let objectId of ambientSoundIds) {
+                for (const objectId of this.ambientActorIds) {
                     const object = pkg.fetchObject(objectId);
 
                     if (object)
@@ -99,28 +111,23 @@ abstract class ULevel extends ULevelBase {
                 }
             }
 
-            for (let objectId of objectIds) {
+            for (const objectId of this.actorIds) {
                 const object = pkg.fetchObject(objectId);
 
                 if (object)
                     this.objectList.push(object);
             }
+
+            this.levelInfo = pkg.fetchObject<GA.ULevelInfo>(this.actorIds[0]);
+
+            console.assert(this.levelInfo.constructor.friendlyName === "LevelInfo");
         }
 
-        pkg.seek(this.readHead, "set");
+        this.readHead = this.readTail;
 
-        // const startBytes = pkg.tell();
-        // const unk1 = pkg.read(new BufferValue(BufferValue.float)).value;
-        // // console.log(pkg.tell() - startBytes);
-        // // const unk2 = pkg.read(compat32).value;
-        // // console.log(pkg.tell() - startBytes);
-
-
-        // // pkg.dump(2);
+        console.assert(this.bytesUnread === 0);
 
         // debugger;
-
-        this.readHead = this.readTail;
 
         return this;
     }

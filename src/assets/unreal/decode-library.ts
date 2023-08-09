@@ -1,4 +1,4 @@
-const ALLOW_FAILED_OBJECTS = false;
+const ALLOW_FAILED_OBJECTS = true;
 
 class DecodeLibrary {
     public name: string = "Untitled";
@@ -39,7 +39,7 @@ class DecodeLibrary {
         const uLevelInfo = pkg.fetchObject<GA.ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
 
-        uLevel.setInfo(uLevelInfo);
+        uLevelInfo.setL2Env(env);
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
@@ -52,11 +52,14 @@ class DecodeLibrary {
 
         // debugger;
 
-        const sectorIndex = uLevel.url.map.split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
+        let sectorIndex = uLevel.url.map.split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
 
         const isNotSector = sectorIndex.some(x => typeof (x) !== "number" || !isFinite(x));
 
-        if (isNotSector) debugger;
+        if (isNotSector) {
+            sectorIndex = [17, 25]
+            debugger;
+        }
 
         decodeLibrary.sector = sectorIndex;
 
@@ -65,7 +68,7 @@ class DecodeLibrary {
         if (loadBaseModel) uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         else uModel.getZoneDecodeInfo(decodeLibrary, uLevelInfo);
 
-        if (loadTerrain) {
+        if (loadTerrain && expGroups?.TerrainInfo?.length > 0) {
             const terrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
             terrainInfo.getDecodeInfo(decodeLibrary);
         }
@@ -115,7 +118,6 @@ class DecodeLibrary {
                 const uStaticMeshActors = actorsToLoad.map(exp => pkg.fetchObject<GA.UStaticMeshActor>(exp.index + 1).loadSelf());
 
                 for (const actor of uStaticMeshActors) {
-                    actor.setL2Env(env);
                     actor.getDecodeInfo(decodeLibrary);
                 }
             }

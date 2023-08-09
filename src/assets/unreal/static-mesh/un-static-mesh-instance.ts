@@ -48,7 +48,7 @@ abstract class UStaticMeshInstance extends UObject {
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
-        const env = this.actor.getL2Env();
+        const env = this.actor.level.getL2Env();
 
         for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
             const { r, g, b } = this.colorStream.color[i] as GA.FColor;

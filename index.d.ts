@@ -76,7 +76,9 @@ declare global {
                     | "L2NTimeLight"
                     | "L2NEnvLight"
                     | "SceneManager"
-                    | "MovableStaticMeshActor";
+                    | "MovableStaticMeshActor"
+                    | "Combiner"
+                    | "VertexColor";
 
                 export type USound = import("@unreal/un-sound").USound;
                 export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;

@@ -384,11 +384,11 @@ async function startCore() {
     const loadSettings = {
         env: env,
         helpersZoneBounds: false,
-        loadTerrain: false,
-        loadBaseModel: false,
+        loadTerrain: true,
+        loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
-        loadStaticModelList: [
+        _loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -449,8 +449,8 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
@@ -458,6 +458,8 @@ async function startCore() {
 
     // crashing
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
+
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings)); 
 
     console.info("System has loaded!");
 

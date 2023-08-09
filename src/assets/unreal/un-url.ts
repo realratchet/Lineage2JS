@@ -1,32 +1,26 @@
 import { BufferValue } from "@l2js/core";
-import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { FStringArray } from "@l2js/core/src/unreal/un-array";
 
 class FURL implements C.IConstructable {
     public protocol: string;
     public host: string;
-    public port: number = 0;
     public map: string;
     public portal: string;
-    public op = new FPrimitiveArray(BufferValue.uint32);
-    public isValid: boolean = false;
+    public options = new FStringArray();
+    public port: number;
+    public isValid: boolean;
 
     public load(pkg: C.APackage): this {
-        this.isValid = true;
+        const char = new BufferValue(BufferValue.char);
+        const int32 = new BufferValue(BufferValue.int32);
 
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.protocol = pkg.read(new BufferValue(BufferValue.char)).value as string;
-
-        this.host = pkg.read(new BufferValue(BufferValue.char)).value as string;
-
-        if (this.host.length > 0)
-            this.port = pkg.read(uint32).value as number;
-
-        this.map = pkg.read(new BufferValue(BufferValue.char)).value as string;
-
-        this.op.load(pkg);
-
-        this.portal = pkg.read(new BufferValue(BufferValue.char)).value as string;
+        this.protocol = pkg.read(char).value;
+        this.host = pkg.read(char).value;
+        this.map = pkg.read(char).value;
+        this.portal = pkg.read(char).value;
+        this.options = new FStringArray().load(pkg);
+        this.port = pkg.read(int32).value;
+        this.isValid = pkg.read(int32).value === 1;
 
         return this;
     }

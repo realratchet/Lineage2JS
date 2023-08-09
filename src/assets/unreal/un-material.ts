@@ -123,6 +123,12 @@ abstract class UTexEnvMap extends UBaseModifier {
     }
 }
 
+abstract class UCombiner extends UBaseModifier {
+    public getDecodeInfo(library: DecodeLibrary): string {
+        return null;
+    }
+}
+
 abstract class UFinalBlend extends UBaseModifier {
     // protected frameBufferBlending: number;
     // protected doubleSide: boolean;
@@ -510,4 +516,4 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource };
+export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UCombiner };

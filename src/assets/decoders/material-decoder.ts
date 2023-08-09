@@ -124,8 +124,7 @@ function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MeshSt
 }
 
 function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
-    debugger;
-    throw new Error("Does this ever happen?");
+    return new MeshBasicMaterial({ color: 0xff00ff }) as any;
 }
 
 function decodeGroup(library: DecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
