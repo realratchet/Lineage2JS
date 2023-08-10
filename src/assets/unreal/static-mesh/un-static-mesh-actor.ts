@@ -368,7 +368,7 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-        applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
+        // applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
 
 
 

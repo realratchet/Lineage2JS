@@ -384,11 +384,11 @@ async function startCore() {
     const loadSettings = {
         env: env,
         helpersZoneBounds: false,
-        loadTerrain: true,
-        loadBaseModel: true,
+        loadTerrain: false,
+        loadBaseModel: false,
         loadStaticModels: true,
         loadEmitters: false,
-        _loadStaticModelList: [
+        loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -449,8 +449,8 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
@@ -459,7 +459,8 @@ async function startCore() {
     // crashing
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
 
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings)); 
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "skylevel", loadSettings));  // skylevel
 
     console.info("System has loaded!");
 
