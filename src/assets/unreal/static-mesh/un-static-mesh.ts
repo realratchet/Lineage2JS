@@ -125,6 +125,12 @@ abstract class UStaticMesh extends UPrimitive {
 
         this.unkIndex0 = pkg.read(compat32).value;
 
+        if (this.unkIndex0 !== 0)
+            debugger;
+
+        // if (this.vertexStream.vert.length === 0x42)
+        //     debugger;
+
         // debugger;
 
         if (verLicense < 0x11) {
@@ -186,7 +192,7 @@ abstract class UStaticMesh extends UPrimitive {
 
         if (0xE < verLicense) this.unkInt_Ex0 = pkg.read(int32).value;
 
-        if (verArchive < 0X5C) {
+        if (verArchive < 0x5C) {
             console.warn("Not supported yet");
             this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;

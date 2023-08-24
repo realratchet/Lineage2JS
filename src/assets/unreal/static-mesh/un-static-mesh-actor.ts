@@ -368,7 +368,12 @@ abstract class UStaticMeshActor extends UAActor {
         //     // debugger;
         // }
 
-        // applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
+        // if (this.mesh.vertexStream.vert.length === 0xb3)
+        //     debugger;
+
+        // debugger;
+
+        applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
 
 
 
@@ -563,6 +568,8 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
 }
 
 function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any, lightsScene: any[]) {
+    if ((vertexArrayLen / 3) !== 0x42)
+        return;
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -588,13 +595,17 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         if (light.dynamic) continue;
 
         const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
-        const lightArrayPtr = lightArray.iter();
+        const bitPtrIter = lightArray.iter();
 
-        let someFlag = 0x1;
-        let objectFlag = lightArrayPtr.next().value;
+        let bitMask = 0x1;
+        let bitPtr = bitPtrIter.next().value;
 
-        for (let i = 0; i < vertexArrayLen; i += 3) {
-            if ((objectFlag & someFlag) !== 0) {
+        debugger;
+
+        for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
+            if ((bitPtr & bitMask) !== 0) {
+                debugger;
+
                 const ox = i, oy = ox + 1, oz = ox + 2;
 
                 vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
@@ -620,10 +631,19 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
                 console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
-            if ((someFlag & 0x7f) === 0x0) {
-                objectFlag = lightArrayPtr.next().value;
-                someFlag = 0x1;
-            } else someFlag = someFlag << 0x1;
+            const bResetMask = (bitMask << 1) === 0;
+
+            bitMask = bitMask << 1;
+
+            if (bResetMask) {
+                bitPtr = bitPtrIter.next().value;
+                bitMask = 1;
+            }
+
+            // if ((bitMask & 0x7f) === 0x0) {
+            //     bitPtr = bitPtrIter.next().value;
+            //     bitMask = 0x1;
+            // } else bitMask = bitMask << 0x1;
         }
     }
 
