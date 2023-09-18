@@ -6,16 +6,19 @@ import UAActor from "./un-aactor";
 import FVector from "./un-vector";
 
 function getHSV(H: number, S: number, V: number): FPlane {
-    let Brightness = V * 1.4 / 255;
 
-    Brightness *= 0.7 / (0.01 + Math.sqrt(Brightness));
-    Brightness = clamp(Brightness, 0, 1);
+    return FPlane.make(...hsvToRgb(H, S, V), 1);
+    
+    // let Brightness = V * 1.4 / 255;
 
-    const Hue = (H < 86) ? FVector.make((85 - H) / 85, (H - 0) / 85, 0) : (H < 171) ? FVector.make(0, (170 - H) / 85, (H - 85) / 85) : FVector.make((H - 170) / 85, 0, (255 - H) / 84);
-    const invHue = FVector.make(1, 1, 1).sub(Hue);
-    const rgbComp = Hue.addScalar(S / 255).mul(invHue).multiplyScalar(Brightness);
+    // Brightness *= 0.7 / (0.01 + Math.sqrt(Brightness));
+    // Brightness = clamp(Brightness, 0, 1);
 
-    return FPlane.make(rgbComp.x, rgbComp.y, rgbComp.z, 1);
+    // const Hue = (H < 86) ? FVector.make((85 - H) / 85, (H - 0) / 85, 0) : (H < 171) ? FVector.make(0, (170 - H) / 85, (H - 85) / 85) : FVector.make((H - 170) / 85, 0, (255 - H) / 84);
+    // const invHue = FVector.make(1, 1, 1).sub(Hue);
+    // const rgbComp = Hue.addScalar(S / 255).mul(invHue).multiplyScalar(Brightness);
+
+    // return FPlane.make(rgbComp.x, rgbComp.y, rgbComp.z, 1);
 }
 
 class FDynamicLight {
@@ -100,7 +103,10 @@ class FDynamicLight {
             // Intensity = Math.min(1. 1.5 * (1 - Actor. LifeFraction()));
         }
 
-        this.color = baseColor.multiplyScalar(Actor.brightness / 255).multiplyScalar(Intensity).multiplyScalar(Actor.level.ambientBrightness);
+        this.color = baseColor.multiplyScalar(saturationToBrightness(Actor.brightness));
+
+
+        // .multiplyScalar(Actor.level.ambientBrightness);
 
         if (Actor.effect === LightEffect_T.LE_Sunlight) {
             this.direction = Actor.rotation.toVector();
@@ -132,8 +138,7 @@ class FDynamicLight {
             if ((Direction.dot(SampleNormal)) < 0)
                 return (Direction.dot(SampleNormal)) * -2;
             else return 0;
-        }
-        else if (Actor.effect === LightEffect_T.LE_Cylinder) {
+        } else if (Actor.effect === LightEffect_T.LE_Cylinder) {
             // Cylindrical light.
 
             const LightVector = Position.sub(SamplePosition);
@@ -142,8 +147,7 @@ class FDynamicLight {
             if (Distance < Radius)
                 return Math.max(0, 1 - ((LightVector.x ** 2) + (LightVector.y ** 2)) / (Radius ** 2)) * 2;
             else return 0;
-        }
-        else if (Actor.effect === LightEffect_T.LE_NonIncidence) {
+        } else if (Actor.effect === LightEffect_T.LE_NonIncidence) {
             // Non incidence light.
 
             const LightVector = Position.sub(SamplePosition);
@@ -152,8 +156,7 @@ class FDynamicLight {
             if ((LightVector.dot(SampleNormal)) > 0 && Distance < Radius)
                 return Math.sqrt(1.02 - Distance / Radius) * 2;
             else return 0;
-        }
-        else if (Actor.effect === LightEffect_T.LE_QuadraticNonIncidence) {
+        } else if (Actor.effect === LightEffect_T.LE_QuadraticNonIncidence) {
             // Quadratic non incidence light.
 
             const LightVector = Position.sub(SamplePosition);
@@ -162,10 +165,8 @@ class FDynamicLight {
             if ((LightVector.dot(SampleNormal)) > 0 && DistanceSquared < RadiusSquared)
                 return (1.02 - DistanceSquared / RadiusSquared) * 2;
             else return 0;
-        }
-        else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect === LightEffect_T.LE_StaticSpot) {
+        } else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect === LightEffect_T.LE_StaticSpot) {
             // Spot light.
-
             const LightVector = Position.sub(SamplePosition);
             const DistanceSquared = LightVector.lengthSq(),
                 Distance = Math.sqrt(DistanceSquared), BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
@@ -180,8 +181,7 @@ class FDynamicLight {
             }
 
             return 0;
-        }
-        else {
+        } else {
             // Point light.
 
             const LightVector = Position.sub(SamplePosition);

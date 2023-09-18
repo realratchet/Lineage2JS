@@ -17,6 +17,15 @@ abstract class FMatrix extends UObject {
     public get 2() { return this.planeZ; }
     public get 3() { return this.planeW; }
 
+    public toString(..._: any) {
+        return "Matrix=(\n" + [
+            "\    " + [this.planeX.x.toFixed(3), this.planeX.y.toFixed(3), this.planeX.z.toFixed(3), this.planeX.w.toFixed(3)].join(", "),
+            "\    " + [this.planeY.x.toFixed(3), this.planeY.y.toFixed(3), this.planeY.z.toFixed(3), this.planeY.w.toFixed(3)].join(", "),
+            "\    " + [this.planeZ.x.toFixed(3), this.planeZ.y.toFixed(3), this.planeZ.z.toFixed(3), this.planeZ.w.toFixed(3)].join(", "),
+            "\    " + [this.planeW.x.toFixed(3), this.planeW.y.toFixed(3), this.planeW.z.toFixed(3), this.planeW.w.toFixed(3)].join(", ")
+        ].join("\n") + "\n)";
+    }
+
     public getElements3x3() {
         return [
             this.planeX.x, this.planeX.y, this.planeX.z,

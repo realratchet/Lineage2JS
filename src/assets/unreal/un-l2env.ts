@@ -67,7 +67,7 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
 }
 
 abstract class UL2NTimeLight extends UObject {
-    public readonly timeOfDay = 15;
+    public readonly timeOfDay = 12;
 
     declare public lightTerrain: C.FArray<FNTimeHSV>;
     declare public lightActor: C.FArray<FNTimeHSV>;
@@ -130,7 +130,7 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
     declare public scaleSun: C.FArray<FNTimeScale>;
     declare public scaleMoon: C.FArray<FNTimeScale>;
 
-    declare public envType: number;
+    declare public envType: 0 | 1 | 2;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -175,7 +175,18 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
     }
 
 
-    public toString(): string { return `UL2NEnvLight(EnvType=${this.envType})`; }
+    public toString(): string {
+        let envName: "Normal" | "[SS]Dusk" | "[SS]Dawn";
+
+        switch (this.envType) {
+            case 0: envName = "Normal"; break;
+            case 1: envName = "[SS]Dusk"; break;
+            case 2: envName = "[SS]Dawn"; break;
+            default: throw new Error(`Unknown sky type: ${this.envType}`);
+        }
+
+        return `UL2NEnvLight(EnvType=${envName})`;
+    }
 }
 
 function selectByTime<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): T {
@@ -190,17 +201,22 @@ function selectByTime<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): 
 }
 
 function indexToTime(index: number, totalElements: number) { return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements; }
+function timeToIndexFrac(timeOfDay: number, totalElements: number): [number, number] {
+    const indexWithOffset = ((timeOfDay - (24.0 / totalElements) * 0.5) * totalElements) / 24.0;
+    const index = Math.floor(indexWithOffset);
+    return [index, indexWithOffset - index];
+}
 
 export default UL2NEnvLight;
-export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime };
+export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndexFrac };
 
-function getEnvType(fileContents: string): number {
+function getEnvType(fileContents: string) {
     let readOffset = findSection(fileContents, "EnvType");
     let [nameMax, nameVal, _] = consumeNextValue(fileContents, readOffset);
 
     if (nameMax.toLowerCase() !== "envtype") throw new Error(`Invalid variable found '${nameMax}' expected 'NUM'`);
 
-    return parseInt(nameVal);
+    return parseInt(nameVal) as 0 | 1 | 2;
 }
 
 function loadHSV(fileContents: string, sectionName: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): FArray<FNTimeHSV> {

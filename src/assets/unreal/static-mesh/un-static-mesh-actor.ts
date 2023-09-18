@@ -3,6 +3,7 @@ import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FMatrix from "@client/assets/unreal/un-matrix";
 import GMath from "@client/assets/unreal/un-gmath";
+import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
 
@@ -219,7 +220,7 @@ abstract class UStaticMeshActor extends UAActor {
     }
 
     public localToWorld(): FMatrix {
-        const Result = FMatrix.make();
+        const result = FMatrix.make();
 
         const SR = GMath().sin(this.rotation.roll),
             SP = GMath().sin(this.rotation.pitch),
@@ -239,27 +240,27 @@ abstract class UStaticMeshActor extends UAActor {
             DY = this.scale.y * this.drawScale,
             DZ = this.scale.z * this.drawScale;
 
-        Result[0][0] = CP * CY * DX;
-        Result[0][1] = CP * DX * SY;
-        Result[0][2] = DX * SP;
-        Result[0][3] = 0;
+        result[0][0] = CP * CY * DX;
+        result[0][1] = CP * DX * SY;
+        result[0][2] = DX * SP;
+        result[0][3] = 0;
 
-        Result[1][0] = DY * (CY * SP * SR - CR * SY);
-        Result[1][1] = DY * (CR * CY + SP * SR * SY);
-        Result[1][2] = -CP * DY * SR;
-        Result[1][3] = 0;
+        result[1][0] = DY * (CY * SP * SR - CR * SY);
+        result[1][1] = DY * (CR * CY + SP * SR * SY);
+        result[1][2] = -CP * DY * SR;
+        result[1][3] = 0;
 
-        Result[2][0] = -DZ * (CR * CY * SP + SR * SY);
-        Result[2][1] = DZ * (CY * SR - CR * SP * SY);
-        Result[2][2] = CP * CR * DZ;
-        Result[2][3] = 0;
+        result[2][0] = -DZ * (CR * CY * SP + SR * SY);
+        result[2][1] = DZ * (CY * SR - CR * SP * SY);
+        result[2][2] = CP * CR * DZ;
+        result[2][3] = 0;
 
-        Result[3][0] = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
-        Result[3][1] = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
-        Result[3][2] = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
-        Result[3][3] = 1;
+        result[3][0] = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
+        result[3][1] = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
+        result[3][2] = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
+        result[3][3] = 1;
 
-        return Result;
+        return result;
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {
@@ -348,20 +349,12 @@ abstract class UStaticMeshActor extends UAActor {
         // const euler = new Euler().fromArray(this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"]);
         // const quaternion = new Quaternion().setFromEuler(euler);
 
-        // let someFlag = 0x1;
+        // // let someFlag = 0x1;
 
         // const matrix = new Matrix4().compose(currentPosition, quaternion, scale);
-        // const lightPosition = new Vector3();
+        // // const lightPosition = new Vector3();
 
-        if (this.isSunAffected) {
-            const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
 
-            for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += ambient[0];
-                instanceColors[i + 1] += ambient[1];
-                instanceColors[i + 2] += ambient[2];
-            }
-        }
 
         // if ((vertexArrayLen / 3) === 0x84 && this.instance.sceneLights.length === 0xE) {
         //     console.log("correct:", this.objectName, "exp:", this.exportIndex + 1);
@@ -373,9 +366,21 @@ abstract class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment, instance.lights.scene);
+        applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
+        // applyStaticMeshLightEnv(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment);
 
+        // pos: -1.189912890625e5, 2.3474190625e5, -3.3475771484375e3
+        // nor: 3.45625668764114379882812e-1, -1.58267430961132049560547e-2, 9.3823897838592529296875e-1
 
+        if (this.isSunAffected) {
+            const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
+
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                instanceColors[i + 0] += ambient[0];
+                instanceColors[i + 1] += ambient[1];
+                instanceColors[i + 2] += ambient[2];
+            }
+        }
 
         // debugger;
 
@@ -567,9 +572,13 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     return [_r, _g, _b];
 }
 
-function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any, lightsScene: any[]) {
-    if ((vertexArrayLen / 3) !== 0x42)
-        return;
+function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: any[]) {
+    // if ((vertexArrayLen / 3) !== 0x42)
+    //     return;
+    // if ((vertexArrayLen / 3) !== 0x69)
+    //     return;
+    // if ((vertexArrayLen / 3) === 0xC)
+    //     return;
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -580,7 +589,10 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
 
     const intensityArray = new Float32Array(instanceColors.length);
 
-    for (let lightInfo of [lightEnvironment, ...lightsScene]) {
+    for (let lightInfo of [
+        ...lightsScene,
+        // lightEnvironment,
+    ]) {
         if (!lightInfo) continue;
 
         if (!lightInfo || !lightInfo.light)
@@ -600,13 +612,13 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         let bitMask = 0x1;
         let bitPtr = bitPtrIter.next().value;
 
-        debugger;
+        // debugger;
 
         for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
             if ((bitPtr & bitMask) !== 0) {
-                debugger;
+                // debugger;
 
-                const ox = i, oy = ox + 1, oz = ox + 2;
+                const ox = i, oy = ox + 2, oz = ox + 1;
 
                 vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
                 normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
@@ -614,11 +626,11 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
                 const samplingPoint = localToWorld.transformVector(vertex);
                 const samplingNormal = localToWorld.transformNormal(normal).normalized();
 
+                // if(i === 0) {
+                //     debugger;
+                // }
 
-                const intensity = light.sampleIntensity(samplingPoint, samplingNormal) * scaleGlow;
-
-                if (!isFinite(intensity))
-                    debugger;
+                const intensity = scaleGlow * 0.5 * light.sampleIntensity(samplingPoint, samplingNormal) * scaleGlow;
 
                 r = light.color.x * intensity;
                 g = light.color.y * intensity;
@@ -647,11 +659,11 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         }
     }
 
-    const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0];
+    // const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0];
 
-    for (let i = 0; i < vertexArrayLen; i += 3) {
-        instanceColors[i + 0] = /*instanceColors[i + 0] +*/ (intensityArray[i + 0] / 1);// + ambientColor[0];
-        instanceColors[i + 1] = /*instanceColors[i + 1] +*/ (intensityArray[i + 1] / 1);// + ambientColor[1];
-        instanceColors[i + 2] = /*instanceColors[i + 2] +*/ (intensityArray[i + 2] / 1);// + ambientColor[2];
-    }
+    // for (let i = 0; i < vertexArrayLen; i += 3) {
+    //     instanceColors[i + 0] = /*instanceColors[i + 0] +*/ (intensityArray[i + 0] / 1);// + ambientColor[0];
+    //     instanceColors[i + 1] = /*instanceColors[i + 1] +*/ (intensityArray[i + 1] / 1);// + ambientColor[1];
+    //     instanceColors[i + 2] = /*instanceColors[i + 2] +*/ (intensityArray[i + 2] / 1);// + ambientColor[2];
+    // }
 }

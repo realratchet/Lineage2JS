@@ -411,8 +411,10 @@ async function startCore() {
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
             // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
-            // 610, // light fixture with 2 lights near elven ruins
-            591,
+            610, // light fixture with 2 lights near elven ruins
+            // 591,
+            // 602 // 0x42
+            // 470,    // first object with scene lights near elven ruins
             // 1755, // light fixture with 3 lights near elven ruins
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures
 

@@ -3,9 +3,9 @@ import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import { indexToTime } from "@client/assets/unreal/un-l2env";
+import { indexToTime, timeToIndexFrac } from "@client/assets/unreal/un-l2env";
 
-class FAssignedLight implements C.IConstructable {
+class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public applied: boolean;
@@ -18,11 +18,53 @@ class FAssignedLight implements C.IConstructable {
 
         this.lightIndex = pkg.read(compat32).value;
         this.vertexFlags.load(pkg);
+
+        if (this.vertexFlags.getElemCount() === 23) {
+            const arr = [88, 17, 156, 11, 45, 38, 201, 61, 16, 246, 16, 63, 6, 0, 0, 0, 160, 16, 224, 13, 0, 52, 249];
+            const same = new Array(arr.length);
+            let isAllSame = true;
+
+            for (let i = 0, len = arr.length; i < len; i++) {
+                const isSame = arr[i] === this.vertexFlags.getElem(i);
+                same[i] = isSame;
+                isAllSame = isAllSame && isSame;
+            }
+
+            if (isAllSame)
+                debugger;
+
+            const mostlySame = (same.reduce((acc, v) => acc = acc + v, 0) / (this.vertexFlags.getElemCount() - 1)) > 0.9
+
+            if (mostlySame)
+                debugger
+
+            debugger;
+        }
+
+        // if (this.vertexFlags.getElemCount() === 9) {
+        //     const arr = [127, 236, 127, 34, 102, 167, 7, 12, 0];
+        //     const same = new Array(arr.len);
+        //     let isAllSame = true;
+
+        //     for (let i = 0, len = arr.length; i < len; i++) {
+        //         const isSame = arr[i] === this.vertexFlags.getElem(i);
+        //         same[i] = isSame;
+        //         isAllSame = isAllSame && isSame;
+        //     }
+
+        //     if (isAllSame)
+        //         debugger;
+        // }
+
         this.applied = pkg.read(int32).value !== 0;
 
         this.light = pkg.fetchObject<ULight>(this.lightIndex);
 
         return this;
+    }
+
+    public toString(..._: any) {
+        return `FStaticMeshLightInfo(light=${this.light.toString()})`;
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
@@ -35,8 +77,8 @@ class FAssignedLight implements C.IConstructable {
 
 abstract class UStaticMeshInstance extends UObject {
     declare protected colorStream: FRawColorStream;
-    declare protected sceneLights: FArray<FAssignedLight>;
-    declare protected environmentLights: FArray<FAssignedLight>;
+    declare protected sceneLights: FArray<FStaticMeshLightInfo>;
+    declare protected environmentLights: FArray<FStaticMeshLightInfo>;
 
     declare protected unkArrIndex: number[];
 
@@ -44,7 +86,7 @@ abstract class UStaticMeshInstance extends UObject {
 
     public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
 
-    
+
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
@@ -59,7 +101,7 @@ abstract class UStaticMeshInstance extends UObject {
             color[offset + 2] = b / 255;
         }
 
-        let validEnvironment: FAssignedLight = null;
+        let validEnvironment: FStaticMeshLightInfo = null;
         let startIndex: number, finishIndex: number;
         // let startTime: number, finishTime: number;
 
@@ -94,6 +136,7 @@ abstract class UStaticMeshInstance extends UObject {
             lights: {
                 scene: this.sceneLights,
                 environment: validEnvironment ? {
+                    indexFrac: timeToIndexFrac(env.timeOfDay, this.environmentLights.length),
                     color: lightingColor,
                     ...validEnvironment
                 } : null
@@ -113,8 +156,8 @@ abstract class UStaticMeshInstance extends UObject {
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.colorStream = new FRawColorStream();
-        this.sceneLights = new FArray(FAssignedLight);
-        this.environmentLights = new FArray(FAssignedLight);
+        this.sceneLights = new FArray(FStaticMeshLightInfo);
+        this.environmentLights = new FArray(FStaticMeshLightInfo);
 
         super.doLoad(pkg, exp);
 

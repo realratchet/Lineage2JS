@@ -126,7 +126,8 @@
             "webRoot": "${workspaceFolder}",
             "sourceMapPathOverrides": {
                 "webpack:///../*": "${workspaceFolder}/*",
-            }
+            },
+            "pauseForSourceMap": true
         }
     ]
 }

@@ -7,8 +7,8 @@ import FVector from "@client/assets/unreal/un-vector";
 class GMathSingleton {
     public readonly ANGLE_SHIFT = 2;        // Bits to right-shift to get lookup value.
     public readonly ANGLE_BITS = 14;        // Number of valid bits in angles.
-    public readonly NUM_ANGLES = 16384;     // Number of angles that are in lookup table.
-    public readonly NUM_SQRTS = 16384;     // Number of square roots in lookup table.
+    public readonly NUM_ANGLES = 0x4000;     // Number of angles that are in lookup table.
+    public readonly NUM_SQRTS = 0x4000;     // Number of square roots in lookup table.
     public readonly ANGLE_MASK = ((1 << this.ANGLE_BITS) - 1) << (16 - this.ANGLE_BITS);
 
     protected readonly TrigFLOAT: number[];
@@ -21,7 +21,7 @@ class GMathSingleton {
     public readonly unitScale: FScale;
 
     public sin(i: number) { return this.TrigFLOAT[((i >> this.ANGLE_SHIFT) & (this.NUM_ANGLES - 1))]; }
-    public cos(i: number) { return this.TrigFLOAT[(((i + 16384) >> this.ANGLE_SHIFT) & (this.NUM_ANGLES - 1))]; };
+    public cos(i: number) { return this.TrigFLOAT[(((i + 0x4000) >> this.ANGLE_SHIFT) & (this.NUM_ANGLES - 1))]; };
 
     public constructor() {
         this.TrigFLOAT = new Array<number>(this.NUM_ANGLES);

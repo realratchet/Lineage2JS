@@ -128,7 +128,16 @@ abstract class UStaticMesh extends UPrimitive {
         if (this.unkIndex0 !== 0)
             debugger;
 
+        // if (this.vertexStream.vert.length === 0xB3)
+        //     debugger;
+
         // if (this.vertexStream.vert.length === 0x42)
+        //     debugger;
+
+        // if (this.vertexStream.vert.length === 0x69)
+        //     debugger;
+
+        // if (this.vertexStream.vert.length === 0xC)
         //     debugger;
 
         // debugger;
