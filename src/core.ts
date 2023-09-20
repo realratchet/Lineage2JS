@@ -405,13 +405,14 @@ async function startCore() {
             // 555,// elven ruins colon
             // 47, // rock with ambient light
             // 2369,
-            // 2011, // ceiling fixture that's too red
+            // 2011, // cruma: ceiling fixture that's too red
+            "StaticMeshActor2028", // cruma: why is this black
             // 2774, // necropolis entrance
             // 4718, // cruma base
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
             // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
-            610, // light fixture with 2 lights near elven ruins
+            // 610, // light fixture with 2 lights near elven ruins
             // 591,
             // 602 // 0x42
             // 470,    // first object with scene lights near elven ruins
@@ -425,7 +426,7 @@ async function startCore() {
     } as GD.LoadSettings_T;
 
     // working (or mostly working)
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -452,7 +453,7 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI

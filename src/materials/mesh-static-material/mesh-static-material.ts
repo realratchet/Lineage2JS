@@ -252,7 +252,7 @@ class MeshStaticMaterial extends ShaderMaterial {
 
         u.color.copy(color);
         u.direction.copy(direction);
-        u.brightness = brightness / 5;
+        u.brightness = brightness;
 
         this.defines["USE_DIRECTIONAL_AMBIENT"] = "";
 

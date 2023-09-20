@@ -283,26 +283,26 @@ abstract class UStaticMeshActor extends UAActor {
         // debugger;
 
         const siblings = [...lights];
-        // const zone = this.getZone();
+        const zone = this.getZone();
 
         let hasModifier = false;
         let modifierUuid: string;
 
-        // if (zone?.ambientVector) {
-        //     hasModifier = true;
-        //     modifierUuid = zone.uuid;
+        if (zone?.ambientVector) {
+            hasModifier = true;
+            modifierUuid = zone.uuid;
 
-        //     if (!(modifierUuid in library.materialModifiers))    {
-        //         library.materialModifiers[modifierUuid] = {
-        //             type: "Lighting",
-        //             lightType: "Directional",
-        //             brightness: zone.ambientBrightness,
-        //             direction: zone.ambientVector.getVectorElements()
-        //         } as ILightDirectionalMaterialModifier;
-        //     }
+            if (!(modifierUuid in library.materialModifiers)) {
+                library.materialModifiers[modifierUuid] = {
+                    type: "Lighting",
+                    lightType: "Directional",
+                    brightness: zone.ambientBrightness,
+                    direction: zone.ambientVector.getVectorElements()
+                } as ILightDirectionalMaterialModifier;
+            }
 
-        //     // debugger;
-        // }
+            // debugger;
+        }
 
         // if (this.isSunAffected) {
         //     hasModifier = true;
@@ -371,6 +371,16 @@ abstract class UStaticMeshActor extends UAActor {
 
         // pos: -1.189912890625e5, 2.3474190625e5, -3.3475771484375e3
         // nor: 3.45625668764114379882812e-1, -1.58267430961132049560547e-2, 9.3823897838592529296875e-1
+
+        // if (this.hasStaticLighting) {
+        //     const ambient = env.selectByTime(env.color).getColor();
+
+        //     for (let i = 0; i < vertexArrayLen; i += 3) {
+        //         instanceColors[i + 0] += ambient[0];
+        //         instanceColors[i + 1] += ambient[1];
+        //         instanceColors[i + 2] += ambient[2];
+        //     }
+        // }
 
         if (this.isSunAffected) {
             const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
@@ -640,7 +650,7 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
                 intensityArray[i + 1] = intensityArray[i + 1] + g;
                 intensityArray[i + 2] = intensityArray[i + 2] + b;
 
-                console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
+                // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
             const bResetMask = (bitMask << 1) === 0;
@@ -661,9 +671,9 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
 
     // const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0];
 
-    // for (let i = 0; i < vertexArrayLen; i += 3) {
-    //     instanceColors[i + 0] = /*instanceColors[i + 0] +*/ (intensityArray[i + 0] / 1);// + ambientColor[0];
-    //     instanceColors[i + 1] = /*instanceColors[i + 1] +*/ (intensityArray[i + 1] / 1);// + ambientColor[1];
-    //     instanceColors[i + 2] = /*instanceColors[i + 2] +*/ (intensityArray[i + 2] / 1);// + ambientColor[2];
-    // }
+    for (let i = 0; i < vertexArrayLen; i += 3) {
+        instanceColors[i + 0] = instanceColors[i + 0] + (intensityArray[i + 0] /* (lightsScene.length - 1)*/) //+ ambientColor[0];
+        instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] /* (lightsScene.length - 1)*/) //+ ambientColor[1];
+        instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] /* (lightsScene.length - 1)*/) //+ ambientColor[2];
+    }
 }
