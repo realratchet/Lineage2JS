@@ -23,7 +23,7 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected alphaStream: FRawColorStream;
     declare protected uvStream: FArray<FStaticMeshUVStream>;
     declare protected indexStream: FRawIndexBuffer; // triangle indices
-    declare protected edgesStream: FRawIndexBuffer; // triangle edge indices
+    declare protected wireframeIndexBuffer: FRawIndexBuffer; // triangle edge indices
     declare protected staticMeshLod2: UStaticMesh;
     declare protected staticMeshLod1: UStaticMesh;
     declare protected lodRange1: number;
@@ -38,7 +38,8 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected collisionNodes: FArray<FStaticMeshCollisionNode>;
     declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
 
-    declare protected unkIndex0: number;
+    declare protected collisionModelId: number;
+    declare protected collisionModel: UModel;
 
     declare protected unkInt_5x0: number;
     declare protected unkInd_5x0: number;
@@ -54,9 +55,13 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected unkInt_Dx1: number;
     declare protected unkInt_Ex0: number;
 
-    declare protected unkInt0: number;
-    declare protected unkIndex1: number;
-    declare protected unkInt1: number;
+    declare protected internalVersion: number;
+    declare protected kPhysicsProps: number;
+    declare protected authenticationKey: number;
+
+    protected useSimpleLineCollision: boolean = false;
+    protected UseSimpleBoxCollision: boolean = false;
+    protected useVertexColor: boolean = false;
 
     public static getUnserializedProperties(): C.UnserializedProperty_T[] {
         return [
@@ -94,7 +99,7 @@ abstract class UStaticMesh extends UPrimitive {
         const verLicense = pkg.header.getLicenseeVersion();
 
 
-        if (verArchive < 0x55) (UObject as any).prototype.doLoad.call(this, pkg, exp);
+        if (verArchive < 85) (UObject as any).prototype.doLoad.call(this, pkg, exp);
         else (UPrimitive as any).prototype.doLoad.call(this, pkg, exp);
 
         const compat32 = new BufferValue(BufferValue.compat32);
@@ -106,11 +111,8 @@ abstract class UStaticMesh extends UPrimitive {
         this.alphaStream = new FRawColorStream();
         this.uvStream = new FArray(FStaticMeshUVStream);
         this.indexStream = new FRawIndexBuffer(); // triangle indices
-        this.edgesStream = new FRawIndexBuffer(); // triangle edge indices
+        this.wireframeIndexBuffer = new FRawIndexBuffer(); // triangle edge indices
         this.staticMeshTris = new FArrayLazy(FStaticMeshTriangle);
-
-        // debugger;
-
 
         // debugger;
 
@@ -121,11 +123,12 @@ abstract class UStaticMesh extends UPrimitive {
         this.alphaStream.load(pkg);
         this.uvStream.load(pkg);
         this.indexStream.load(pkg);
-        this.edgesStream.load(pkg);
+        this.wireframeIndexBuffer.load(pkg);
 
-        this.unkIndex0 = pkg.read(compat32).value;
+        this.collisionModelId = pkg.read(compat32).value;
+        this.collisionModel = pkg.fetchObject<UModel>(this.collisionModelId);
 
-        if (this.unkIndex0 !== 0)
+        if (this.collisionModelId !== 0)
             debugger;
 
         // if (this.vertexStream.vert.length === 0xB3)
@@ -142,15 +145,15 @@ abstract class UStaticMesh extends UPrimitive {
 
         // debugger;
 
-        if (verLicense < 0x11) {
-            if (this.unkIndex0 > 0) {
+        if (verLicense < 17) {
+            if (this.collisionModelId > 0) {
                 debugger;
             }
 
             this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg);
             this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg);
         } else {
-            if (verArchive < 0x3E) {
+            if (verArchive < 62) {
                 console.warn("Not supported yet");
                 this.skipRemaining = true;
                 if (triggerDebuggerOnUnsupported) debugger;
@@ -167,19 +170,19 @@ abstract class UStaticMesh extends UPrimitive {
 
         // debugger;
 
-        if (this.unkIndex0 > 0)
+        if (this.collisionModelId > 0)
             debugger;
 
         this.readHead = pkg.tell();
 
-        if (verArchive < 0x72) {
+        if (verArchive < 114) {
             console.warn("Not supported yet");
             this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
         }
 
-        if (0x5 < verLicense) {
+        if (5 < verLicense) {
             this.unkInt_5x0 = pkg.read(int32).value;
             this.unkInd_5x0 = pkg.read(compat32).value;
             this.unkInd_5x1 = pkg.read(compat32).value;
@@ -187,29 +190,29 @@ abstract class UStaticMesh extends UPrimitive {
             this.unkInt_5x2 = pkg.read(int32).value;
         }
 
-        if (0x6 < verLicense) {
+        if (6 < verLicense) {
             this.unkInt_6x0 = pkg.read(int32).value;
             this.unkInt_6x1 = pkg.read(int32).value;
         }
 
-        if (0xA < verLicense) this.unkInt_Ax0 = pkg.read(int32).value;
-        if (0xC < verLicense) this.unkInt_Cx0 = pkg.read(int32).value;
-        if (0xD < verLicense) {
+        if (11 < verLicense) this.unkInt_Ax0 = pkg.read(int32).value;
+        if (12 < verLicense) this.unkInt_Cx0 = pkg.read(int32).value;
+        if (13 < verLicense) {
             this.unkInt_Dx0 = pkg.read(int32).value;
             this.unkInt_Dx1 = pkg.read(int32).value;
         }
 
-        if (0xE < verLicense) this.unkInt_Ex0 = pkg.read(int32).value;
+        if (14 < verLicense) this.unkInt_Ex0 = pkg.read(int32).value;
 
-        if (verArchive < 0x5C) {
+        if (verArchive < 92) {
             console.warn("Not supported yet");
             this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
         }
 
-        if (0x4E < verArchive) {
-            if (verArchive < 0x61) {
+        if (78 < verArchive) {
+            if (verArchive < 97) {
                 console.warn("Not supported yet");
                 this.skipRemaining = true;
                 if (triggerDebuggerOnUnsupported) debugger;
@@ -217,15 +220,15 @@ abstract class UStaticMesh extends UPrimitive {
             } else this.staticMeshTris.load(pkg);
         }
 
-        if (verArchive < 0x51) {
+        if (verArchive < 81) {
             console.warn("Not supported yet");
             this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
-        } else this.unkInt0 = pkg.read(int32).value;
+        } else this.internalVersion = pkg.read(int32).value;
 
-        if (99 < verArchive) this.unkIndex1 = pkg.read(compat32).value;
-        if (0x77 < verArchive) this.unkInt1 = pkg.read(int32).value;
+        if (99 < verArchive) this.kPhysicsProps = pkg.read(compat32).value;
+        if (119 < verArchive) this.authenticationKey = pkg.read(int32).value;
 
         this.readHead = pkg.tell();
 

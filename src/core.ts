@@ -408,7 +408,7 @@ async function startCore() {
             // 2011, // cruma: ceiling fixture that's too red
             "StaticMeshActor2028", // cruma: why is this black
             // 2774, // necropolis entrance
-            // 4718, // cruma base
+            4718, // cruma base
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
             // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red

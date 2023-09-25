@@ -11,7 +11,7 @@ import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FArray, { FIndexArray, FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
 
@@ -36,12 +36,10 @@ abstract class UModel extends UPrimitive {
     declare protected bounds: FArray<GA.FBox>;
     declare protected leafHulls: FPrimitiveArray<"int32">;
     declare protected leaves: FArray<FLeaf>
-    declare protected rootOutside: boolean;
-    declare protected linked: boolean;
+    declare protected isRootOutside: boolean;
+    declare protected isLinked: boolean;
 
-    declare protected unkArr0: FIndexArray;
-    declare protected unkInt0: number;
-    declare protected unkInt1: number;
+    declare protected lights: FObjectArray;
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
@@ -59,7 +57,7 @@ abstract class UModel extends UPrimitive {
         this.bounds = new FArray(FBox.class());
         this.leafHulls = new FPrimitiveArray(BufferValue.int32);
         this.leaves = new FArray(FLeaf);
-        this.unkArr0 = new FIndexArray();
+        this.lights = new FObjectArray();
     }
 
     protected doLoad(pkg: GA.UPackage, exp: C.UExport): this {
@@ -112,12 +110,15 @@ abstract class UModel extends UPrimitive {
         this.leafHulls.load(pkg);
         this.leaves.load(pkg);
 
-        this.unkArr0.load(pkg);
+        this.lights.load(pkg);
+
+        // if (this.lights.length !== 0)
+        //     debugger;
 
         this.readHead = pkg.tell();
 
-        this.unkInt0 = pkg.read(int32).value;
-        this.unkInt1 = pkg.read(int32).value;
+        this.isRootOutside = pkg.read(int32).value != 0;
+        this.isLinked = pkg.read(int32).value != 0;
 
         this.readHead = pkg.tell();
 

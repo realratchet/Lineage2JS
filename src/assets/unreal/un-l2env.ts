@@ -24,7 +24,7 @@ abstract class FNTimeHSV extends UObject implements IEnvTime {
         return `NTimeHSV(T=${this.time}, Hue=${this.hue}, Sat=${this.sat}, Bri=${this.bri})`;
     }
 
-    public getColor(): GD.ColorArr { return [...hsvToRgb(this.hue, this.sat, this.bri), 1]; }
+    public getColor(): GD.ColorArr { return [...hsvToRgb(this.hue, this.sat, 255), 1]; }
     public toColorPlane() { return FPlane.make(...this.getColor()); }
 }
 
@@ -110,6 +110,44 @@ abstract class UL2NTimeLight extends UObject {
     public selectByTime<T extends IEnvTime>(array: FArray<T>) {
         return selectByTime(this.timeOfDay, array);
     }
+
+    public getColorPlaneStaticMeshSunLight(): FPlane {
+        throw new Error("not yet implemented")
+    }
+
+    public getBrightnessStaticMeshSunLight(): number {
+        return getBrightness(this.timeOfDay, this.lightStaticMesh);
+    }
+
+    public getBaseColorPlaneStaticMeshSunLight(): FPlane {
+        return getColorPlane(this.timeOfDay, this.lightStaticMesh);
+    }
+}
+
+function pickArrayIndices(timeOfDay: number, array: FArray<FNTimeHSV>): [FNTimeHSV, FNTimeHSV, number] {
+    const nElements = array.length;
+    const [lIndex, lFrac] = timeToIndexFrac(timeOfDay, nElements)
+    const currIndex = Math.min(lIndex, nElements - 2);
+    const hsvCurr = array[currIndex], hsvNext = array[currIndex + 1];
+
+    return [hsvCurr, hsvNext, lFrac]
+}
+
+function getBrightness(timeOfDay: number, array: FArray<FNTimeHSV>) {
+    const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
+    const bri = lFrac * (hsvNext.bri - hsvCurr.bri) + hsvCurr.bri;
+
+    return bri;
+}
+
+function getColorPlane(timeOfDay: number, array: FArray<FNTimeHSV>) {
+    const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
+    const colorCurr = hsvCurr.toColorPlane(), colorNext = hsvNext.toColorPlane();
+
+    const delta = colorNext.sub(colorCurr).multiplyScalar(lFrac)
+    const final = colorCurr.add(delta);
+
+    return final;
 }
 
 abstract class UL2NEnvLight extends UL2NTimeLight {

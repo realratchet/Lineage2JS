@@ -39,6 +39,24 @@ abstract class FPlane extends UObject {
         });
     }
 
+    public add(other: FPlane) {
+        return FPlane.make(
+            this.x + other.x,
+            this.y + other.y,
+            this.z + other.z,
+            this.w + other.w
+        );
+    }
+
+    public sub(other: FPlane) {
+        return FPlane.make(
+            this.x - other.x,
+            this.y - other.y,
+            this.z - other.z,
+            this.w - other.w
+        );
+    }
+
     public getElements(): GD.Vector4Arr { return [this.x, this.y, this.z, this.w]; }
     public toString() { return `Plane=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})`; }
 

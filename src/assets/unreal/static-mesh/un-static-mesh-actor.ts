@@ -364,10 +364,13 @@ abstract class UStaticMeshActor extends UAActor {
         // if (this.mesh.vertexStream.vert.length === 0xb3)
         //     debugger;
 
+        // const baseColor = env.getBaseColorPlaneStaticMeshSunLight()
         // debugger;
 
         applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
-        // applyStaticMeshLightEnv(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment);
+
+        if (instance.lights.environment)
+            applyStaticMeshLightEnv(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment);
 
         // pos: -1.189912890625e5, 2.3474190625e5, -3.3475771484375e3
         // nor: 3.45625668764114379882812e-1, -1.58267430961132049560547e-2, 9.3823897838592529296875e-1
@@ -382,7 +385,7 @@ abstract class UStaticMeshActor extends UAActor {
         //     }
         // }
 
-        if (this.isSunAffected) {
+        if ( this.isSunAffected) {
             const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
@@ -580,6 +583,103 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     let _b = iVar1;
 
     return [_r, _g, _b];
+}
+
+function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any) {
+    const attrPositions = attributes.positions;
+    const attrNormals = attributes.normals;
+
+    const vertex = FVector.make();
+    const normal = FVector.make();
+
+    let r: number, g: number, b: number;
+
+    const intensityArray = new Float32Array(instanceColors.length);
+
+    for (let lightInfo of [
+        lightEnvironment,
+    ]) {
+        if (!lightInfo) continue;
+
+        if (!lightInfo || !lightInfo.light)
+            debugger;
+
+        const lightActor = lightInfo.light?.loadSelf();
+
+        if (!lightActor) continue;
+
+        const light = lightActor.getRenderInfo(env);
+
+        if (light.dynamic) continue;
+
+
+        const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
+        const bitPtrIter = lightArray.iter();
+
+        let bitMask = 0x1;
+        let bitPtr = bitPtrIter.next().value;
+
+        // debugger;
+
+        const col = env.getBaseColorPlaneStaticMeshSunLight();
+        const bri = env.getBrightnessStaticMeshSunLight();
+
+        for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
+            if ((bitPtr & bitMask) !== 0) {
+                // debugger;
+
+                const ox = i, oy = ox + 2, oz = ox + 1;
+
+                vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
+                normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
+
+                const samplingPoint = localToWorld.transformVector(vertex);
+                const samplingNormal = localToWorld.transformNormal(normal).normalized();
+
+                // if(i === 0) {
+                //     debugger;
+                // }
+
+                const intensity =  scaleGlow * 0.5 * light.sampleIntensity(samplingPoint, samplingNormal) * scaleGlow;
+
+                // r = light.color.x * intensity;
+                // g = light.color.y * intensity;
+                // b = light.color.z * intensity;
+
+                r = col.x * intensity;
+                g = col.y * intensity;
+                b = col.z * intensity;
+
+                intensityArray[i + 0] = intensityArray[i + 0] + r;
+                intensityArray[i + 1] = intensityArray[i + 1] + g;
+                intensityArray[i + 2] = intensityArray[i + 2] + b;
+
+                // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
+            }
+
+            const bResetMask = (bitMask << 1) === 0;
+
+            bitMask = bitMask << 1;
+
+            if (bResetMask) {
+                bitPtr = bitPtrIter.next().value;
+                bitMask = 1;
+            }
+
+            // if ((bitMask & 0x7f) === 0x0) {
+            //     bitPtr = bitPtrIter.next().value;
+            //     bitMask = 0x1;
+            // } else bitMask = bitMask << 0x1;
+        }
+    }
+
+    // const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0];
+
+    for (let i = 0; i < vertexArrayLen; i += 3) {
+        instanceColors[i + 0] = instanceColors[i + 0] + (intensityArray[i + 0] /* (lightsScene.length - 1)*/) //+ ambientColor[0];
+        instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] /* (lightsScene.length - 1)*/) //+ ambientColor[1];
+        instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] /* (lightsScene.length - 1)*/) //+ ambientColor[2];
+    }
 }
 
 function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: any[]) {
