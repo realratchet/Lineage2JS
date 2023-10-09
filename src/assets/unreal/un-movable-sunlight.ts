@@ -1,3 +1,4 @@
+import { saturationToBrightness } from "@client/utils/hsv-to-rgb";
 import ULight from "./un-light";
 
 abstract class UNMovableSunLight extends ULight {
@@ -20,10 +21,12 @@ abstract class UNMovableSunLight extends ULight {
         return {
             type: "Sunlight",
             name: this.objectName,
+            light: this,
             position: this.location.getVectorElements(),
             rotation: this.rotation.getEulerElements(),
             scale: this.scale.getVectorElements(),
-            lightness: this.lightness / 255,
+            color: this.getColor(),
+            lightness: saturationToBrightness(this.brightness),
             lightType: this.type,
             lightEffect: this.effect
         };

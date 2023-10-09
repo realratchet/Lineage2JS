@@ -59,7 +59,7 @@ abstract class UTerrainSector extends UObject {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
-        const env = info.level.getL2Env();
+        const env = info.levelInfo.getL2Env();
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,

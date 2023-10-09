@@ -1,9 +1,11 @@
-import UAActor from "../un-aactor";
+import UAActor, { EPhysics_T } from "../un-aactor";
 import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FMatrix from "@client/assets/unreal/un-matrix";
 import GMath from "@client/assets/unreal/un-gmath";
 import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
+import { indexToTime, timeToIndexFrac } from "@client/assets/unreal/un-l2env";
+import FBox from "@client/assets/unreal/un-box";
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
 
@@ -41,7 +43,6 @@ abstract class UStaticMeshActor extends UAActor {
     declare protected serverObjectRealID: number;
     declare protected serverObjectType: number;
 
-    declare protected ambientGlow: number;
     declare protected hasStaticLighting: boolean;
     declare protected isLightingVisibile: boolean;
 
@@ -86,7 +87,7 @@ abstract class UStaticMeshActor extends UAActor {
             "L2ServerObjectID": "serverObjectID",
             "L2ServerObjectRealID": "serverObjectRealID",
 
-            "AmbientGlow": "ambientGlow",
+
             "bStaticLighting": "hasStaticLighting",
             "bLightingVisibility": "isLightingVisibile",
 
@@ -288,21 +289,21 @@ abstract class UStaticMeshActor extends UAActor {
         let hasModifier = false;
         let modifierUuid: string;
 
-        if (zone?.ambientVector) {
-            hasModifier = true;
-            modifierUuid = zone.uuid;
+        // if (zone?.ambientVector) {
+        //     hasModifier = true;
+        //     modifierUuid = zone.uuid;
 
-            if (!(modifierUuid in library.materialModifiers)) {
-                library.materialModifiers[modifierUuid] = {
-                    type: "Lighting",
-                    lightType: "Directional",
-                    brightness: zone.ambientBrightness,
-                    direction: zone.ambientVector.getVectorElements()
-                } as ILightDirectionalMaterialModifier;
-            }
+        //     if (!(modifierUuid in library.materialModifiers)) {
+        //         library.materialModifiers[modifierUuid] = {
+        //             type: "Lighting",
+        //             lightType: "Directional",
+        //             brightness: zone.ambientBrightness,
+        //             direction: zone.ambientVector.getVectorElements()
+        //         } as ILightDirectionalMaterialModifier;
+        //     }
 
-            // debugger;
-        }
+        //     // debugger;
+        // }
 
         // if (this.isSunAffected) {
         //     hasModifier = true;
@@ -323,9 +324,14 @@ abstract class UStaticMeshActor extends UAActor {
         console.warn(this.exp.objectName)
 
         const mesh = this.mesh.loadSelf();
-        const env = this.level.getL2Env();
+        const env = this.levelInfo.getL2Env();
+        const level = this.getLevel();
+        const baseModel = level.getModel();
 
         const localToWorld = this.localToWorld();
+
+        // if (this.instance)
+        //     debugger;
 
         const meshInfo = mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[meshInfo.geometry].attributes;
@@ -367,10 +373,138 @@ abstract class UStaticMeshActor extends UAActor {
         // const baseColor = env.getBaseColorPlaneStaticMeshSunLight()
         // debugger;
 
+        let predictedBox: FBox;
+
+
+        if (this.physics !== EPhysics_T.PHYS_None) {
+            debugger;
+            throw new Error("not implemented");
+        } else {
+            predictedBox = (this.mesh as GA.UStaticMesh).getRenderBoundingBox(this).transformBy(this.localToWorld());
+        }
+
+        let leaves: GA.FLeaf[];
+
+        if(baseModel) {
+            leaves = baseModel.boxLeaves(predictedBox);
+        } else leaves = new Array<GA.FLeaf>();
+        
+        if(!this.forcedVisibilityZoneTag) {
+            debugger;
+            throw new Error("not implemented");
+        }
+
+
+        {
+            const ambActor = this.getAmbientLightingActor();
+            const zone = this.getZone();
+            const ambVector = zone.ambientVector;
+
+            let ambGlow: number;
+
+            if (ambActor.ambientGlow === 255) {
+                debugger;
+                throw new Error("not yet implemented")
+            } else {
+                ambGlow = ambActor.ambientGlow / 255;
+            }
+
+            const ambGlowVec = FVector.make(ambGlow, ambGlow, ambGlow);
+            const ambColor = ambVector.add(ambGlowVec);
+
+            if (this.isUnlit) {
+                for (let i = 0; i < vertexArrayLen; i += 3) {
+                    instanceColors[i + 0] += 0.5;
+                    instanceColors[i + 1] += 0.5;
+                    instanceColors[i + 2] += 0.5;
+                }
+            } else {
+                let ambientVector = FVector.make();
+
+                for(let leaf of leaves) {
+                    const iZone = leaf.iZone;
+                    const zoneInfo = baseModel.getZoneActor(iZone);
+                    const zoneAmbientVector = zoneInfo.ambientVector;
+
+                    ambientVector.x = Math.max(ambientVector.x, zoneAmbientVector.x);
+                    ambientVector.y = Math.max(ambientVector.y, zoneAmbientVector.y);
+                    ambientVector.z = Math.max(ambientVector.z, zoneAmbientVector.z);
+                }
+
+                let ambColor = ambientVector;
+                // let ambColor = FVector.make();
+
+                for (let i = 0; i < vertexArrayLen; i += 3) {
+                    instanceColors[i + 0] += ambColor.x * 0.5;
+                    instanceColors[i + 1] += ambColor.y * 0.5;
+                    instanceColors[i + 2] += ambColor.z * 0.5;
+                }
+
+                // debugger;
+
+                // if (zone?.ambientVector) {
+                //     for (let i = 0; i < vertexArrayLen; i += 3) {
+                //         instanceColors[i + 0] += ambColor.x * 0.5;
+                //         instanceColors[i + 1] += ambColor.y * 0.5;
+                //         instanceColors[i + 2] += ambColor.z * 0.5;
+                //     }
+                // }
+            }
+
+        }
+
+        if (this.getAmbientLightingActor().ambientGlow > 0) {
+            debugger;
+        }
+
+        // if (this.isUnlit) {
+        //     for (let i = 0; i < vertexArrayLen; i += 3) {
+        //         instanceColors[i + 0] += 0.5;
+        //         instanceColors[i + 1] += 0.5;
+        //         instanceColors[i + 2] += 0.5;
+        //     }
+        // }
+        //  else
+        // if (zone?.ambientVector) {
+        //     for (let i = 0; i < vertexArrayLen; i += 3) {
+        //         instanceColors[i + 0] += (zone.ambientVector.x * this.ambientGlow) * 0.5;
+        //         instanceColors[i + 1] += (zone.ambientVector.y * this.ambientGlow) * 0.5;
+        //         instanceColors[i + 2] += (zone.ambientVector.z * this.ambientGlow) * 0.5;
+        //     }
+        // }
+
+        // if(this.)
+
         applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
 
-        if (instance.lights.environment)
-            applyStaticMeshLightEnv(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.environment);
+        if (this.instance?.environmentLights.length > 0) {
+            const lightCount = this.instance.environmentLights.length;
+
+            if (lightCount < 2)
+                debugger;
+
+            const [currEnvIndex, _] = timeToIndexFrac(env.timeOfDay, lightCount);
+            const nextEnvIndex = (currEnvIndex + 1) % lightCount;
+            const currEnvTime = indexToTime(currEnvIndex, lightCount), nextEnvTime = indexToTime(nextEnvIndex, lightCount);
+
+            const lerp = (env.timeOfDay - currEnvTime) / (nextEnvTime - currEnvTime);
+            const staticMeshLight = env.getBaseColorPlaneStaticMeshSunLight();
+
+            applyStaticMeshLightEnv(
+                env,
+                vertexArrayLen,
+                instanceColors,
+                this.scaleGlow,
+                localToWorld,
+                attributes,
+                [
+                    [lerp, this.instance.environmentLights[currEnvIndex].getDecodeInfo(library)],
+                    [lerp - 1, this.instance.environmentLights[nextEnvIndex].getDecodeInfo(library)]
+                ],
+            );
+
+            // debugger;
+        }
 
         // pos: -1.189912890625e5, 2.3474190625e5, -3.3475771484375e3
         // nor: 3.45625668764114379882812e-1, -1.58267430961132049560547e-2, 9.3823897838592529296875e-1
@@ -385,7 +519,7 @@ abstract class UStaticMeshActor extends UAActor {
         //     }
         // }
 
-        if ( this.isSunAffected) {
+        if (this.isSunAffected) {
             const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
@@ -394,6 +528,9 @@ abstract class UStaticMeshActor extends UAActor {
                 instanceColors[i + 2] += ambient[2];
             }
         }
+        // else {
+        //     console.warn("-------->>", this.objectName)
+        // }
 
         // debugger;
 
@@ -585,7 +722,7 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     return [_r, _g, _b];
 }
 
-function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: any) {
+function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: [number, any][]) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -596,8 +733,8 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
 
     const intensityArray = new Float32Array(instanceColors.length);
 
-    for (let lightInfo of [
-        lightEnvironment,
+    for (let [lerp, lightInfo] of [
+        ...lightEnvironment,
     ]) {
         if (!lightInfo) continue;
 
@@ -610,14 +747,13 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
 
         const light = lightActor.getRenderInfo(env);
 
-        if (light.dynamic) continue;
-
-
         const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
         const bitPtrIter = lightArray.iter();
 
         let bitMask = 0x1;
         let bitPtr = bitPtrIter.next().value;
+
+        const bytes = lightArray.getTypedArray();
 
         // debugger;
 
@@ -640,7 +776,8 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
                 //     debugger;
                 // }
 
-                const intensity =  scaleGlow * 0.5 * light.sampleIntensity(samplingPoint, samplingNormal) * scaleGlow;
+                const sampledInt = light.sampleIntensity(samplingPoint, samplingNormal);
+                const intensity = lerp * 0.5 * scaleGlow * sampledInt;
 
                 // r = light.color.x * intensity;
                 // g = light.color.y * intensity;

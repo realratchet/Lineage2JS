@@ -49,6 +49,8 @@ declare global {
                 export type UTerrainLayer = import("@unreal/un-terrain-layer").UTerrainLayer;
                 export type UTerrainSector = import("@unreal/un-terrain-sector").UTerrainSector;
 
+                export type FLeaf = import("@unreal/un-leaf").FLeaf;
+
                 export type FVector = import("@unreal/un-vector").FVector;
                 export type FCoords = import("@unreal/un-coords").FCoords;
                 export type FRotator = import("@unreal/un-rotator").FRotator;
@@ -114,6 +116,9 @@ declare global {
                 export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
 
                 export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+
+                export type ULight = import("@unreal/un-light").ULight;
+                export type UNMovableSunLight = import("@unreal/un-movable-sunlight").UNMovableSunLight;
 
                 export type FNTimeColor = import("@unreal/un-l2env").FNTimeColor;
                 export type FNTimeHSV = import("@unreal/un-l2env").FNTimeHSV;

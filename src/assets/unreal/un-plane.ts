@@ -65,7 +65,12 @@ abstract class FPlane extends UObject {
         return FPlane.make(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
     }
 
-    public dot(other: FPlane) { return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w; }
+    public dot(other: FPlane | GA.FVector) {
+        if (other instanceof FPlane)
+            return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w;
+
+        return this.x * other.x + this.y * other.y + this.z * other.z - this.w;
+    }
 
     public toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 

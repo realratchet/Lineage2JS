@@ -21,7 +21,11 @@ const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping
 const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 
+const nodeCache = new Array<number>();
+
 abstract class UModel extends UPrimitive {
+    protected levelInfo: GA.ULevelInfo
+
     declare protected vectors: C.FArray<GA.FVector>;
     declare protected points: C.FArray<GA.FVector>;
     declare protected vertices: C.FArray<FVert>;
@@ -40,6 +44,9 @@ abstract class UModel extends UPrimitive {
     declare protected isLinked: boolean;
 
     declare protected lights: FObjectArray;
+
+    public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; }
+    public getLevelInfo() { return this.levelInfo; }
 
     protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
@@ -139,6 +146,79 @@ abstract class UModel extends UPrimitive {
         // debugger;
 
         return this;
+    }
+
+    public getZoneActor(iZone: number) { return this.zones[iZone].zoneActor ?? this.levelInfo; }
+
+    protected boxLeavesRecursive(iNode: number, origin: GA.FVector, extent: GA.FVector, outLeaves?: number[]): number[] {
+        outLeaves = outLeaves ?? [];
+        nodeCache.length = this.bspNodes.length;
+
+        const iNodes = nodeCache;
+
+        let index = 0;
+
+        iNodes[0] = iNode;
+
+        const min = Math.min(Math.min(extent.x, extent.y), extent.z);
+        const max = Math.max(Math.max(extent.x, extent.y), extent.z);
+
+        if (min * 2 > max) {
+            const pushOut = extent.length();
+            while (index >= 0) {
+                iNode = iNodes[index--];
+
+                const node = this.bspNodes[iNode];
+                const distance = node.plane.dot(origin);
+
+                if (distance < pushOut) {
+                    if (node.iBack !== -1)
+                        iNodes[++index] = node.iBack;
+                    else if (node.iLeaf[0] !== -1)
+                        outLeaves.push(node.iLeaf[0]);
+                }
+
+                if (-distance < pushOut) {
+                    if (node.iFront !== -1)
+                        iNodes[++index] = node.iFront;
+                    else if (node.iLeaf[1] !== -1)
+                        outLeaves.push(node.iLeaf[1]);
+                }
+            }
+        } else {
+            while (index >= 0) {
+                iNode = iNodes[index--];
+
+                const node = this.bspNodes[iNode];
+                const pushOut = boxPushOut(node.plane, extent);
+                const distance = node.plane.dot(origin);
+
+                if (distance < pushOut) {
+                    if (node.iBack !== -1)
+                        iNodes[++index] = node.iBack;
+                    else if (node.iLeaf[0] !== -1)
+                        outLeaves.push(node.iLeaf[0]);
+                }
+
+                if (-distance < pushOut) {
+                    if (node.iFront !== -1)
+                        iNodes[++index] = node.iFront;
+                    else if (node.iLeaf[1] !== -1)
+                        outLeaves.push(node.iLeaf[1]);
+                }
+            }
+        }
+
+        return outLeaves;
+    }
+
+    public boxLeaves(box: GA.FBox): GA.FLeaf[] {
+        if (this.bspNodes.length === 0) return [];
+
+        const origin = box.getCenter();
+        const extent = box.getExtents();
+
+        return this.boxLeavesRecursive(0, origin, extent).map(i => this.leaves[i]);
     }
 
     public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): void {
@@ -433,6 +513,10 @@ abstract class UModel extends UPrimitive {
 
 export default UModel;
 export { UModel };
+
+function boxPushOut(normal: GA.FVector | GA.FPlane, size: GA.FVector) {
+    return Math.abs(normal.x * size.x) + Math.abs(normal.y * size.y) + Math.abs(normal.z * size.z);
+}
 
 type PriorityGroups_T = "opaque" | "transparent";
 type ObjectsForPriority_T = Map<GA.FZoneInfo, ObjectsForZone_T>;

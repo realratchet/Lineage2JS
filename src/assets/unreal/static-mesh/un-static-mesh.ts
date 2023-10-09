@@ -365,9 +365,13 @@ abstract class UStaticMesh extends UPrimitive {
             // colors[i * 3 + 1] = _colors[i * 4 + 0] / 255;
             // colors[i * 3 + 2] = _colors[i * 4 + 3] / 255;
 
-            colors[i * 3 + 0] = color.r / 255;
-            colors[i * 3 + 1] = color.g / 255;
-            colors[i * 3 + 2] = color.b / 255;
+            // colors[i * 3 + 0] = color.r / 255;
+            // colors[i * 3 + 1] = color.g / 255;
+            // colors[i * 3 + 2] = color.b / 255;
+
+            colors[i * 3 + 0] = 1;
+            colors[i * 3 + 1] = 1;
+            colors[i * 3 + 2] = 1;
 
             uvs[i * 2 + 0] = u;
             uvs[i * 2 + 1] = v;

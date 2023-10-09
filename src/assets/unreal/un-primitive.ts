@@ -1,5 +1,6 @@
 import FBox from "@client/assets/unreal/un-box";
 import FPlane from "@client/assets/unreal/un-plane";
+import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 
 abstract class UPrimitive extends UObject {
@@ -53,6 +54,17 @@ abstract class UPrimitive extends UObject {
                 max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
             } : null
         };
+    }
+
+    public getRenderBoundingBox(owner?: GA.AActor): FBox {
+        if (owner) {
+            const extents = FVector.make(owner.collisionRadius + 1, owner.collisionRadius + 1, owner.collisionHeight + 1);
+            const box = FBox.make(extents.negate(), extents, 1);
+
+            return box;
+        }
+
+        return this.boundingBox;
     }
 }
 

@@ -40,6 +40,7 @@ class DecodeLibrary {
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
 
         uLevelInfo.setL2Env(env);
+        uLevelInfo.setLevel(uLevel);
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
@@ -65,6 +66,7 @@ class DecodeLibrary {
 
         const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId).loadSelf(); // base model
 
+        uModel.setLevelInfo(uLevelInfo);
         if (loadBaseModel) uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         else uModel.getZoneDecodeInfo(decodeLibrary, uLevelInfo);
 

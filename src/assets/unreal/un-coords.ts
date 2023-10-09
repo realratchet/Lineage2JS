@@ -247,6 +247,30 @@ function mulScale(coord: FCoords, other: FScale): FCoords {
 }
 
 function divRotator(coord: FCoords, other: FRotator): FCoords {
+    const roll = FCoords.make
+    (
+        FVector.make(0, 0, 0),
+        FVector.make(+1, -0, +0),
+        FVector.make(-0, +GMath().cos(other.roll), +GMath().sin(other.roll)),
+        FVector.make(+0, -GMath().sin(other.roll), +GMath().cos(other.roll))
+    );
+
+    const pitch = FCoords.make
+    (
+        FVector.make(0, 0, 0),
+        FVector.make(+GMath().cos(other.pitch), +0, -GMath().sin(other.pitch)),
+        FVector.make(+0, +1, -0),
+        FVector.make(+GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
+    );
+
+    const yaw = FCoords.make
+    (
+        FVector.make(0, 0, 0),
+        FVector.make(+GMath().cos(other.yaw), -GMath().sin(other.yaw), -0),
+        FVector.make(+GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
+        FVector.make(-0, +0, +1)
+    );
+
     coord = coord.mul(
         FCoords.make
             (

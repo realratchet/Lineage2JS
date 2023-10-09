@@ -2,6 +2,7 @@ import { UObject } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
 Object.assign(UObject, {
+    ALLOW_EDITING: false,
     onClassCreated(this: typeof UObject, cls: new (...args: any) => UObject) {
         if (this === UObject) {
             console.warn(`Cannot register '${cls.name}' because it's directly inheriting 'UObject'.`)

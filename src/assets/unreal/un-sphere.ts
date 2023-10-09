@@ -1,7 +1,8 @@
+import FPlane from "@client/assets/unreal/un-plane";
 import FVector from "./un-vector";
 import { BufferValue, UObject } from "@l2js/core";
 
-abstract class USphere extends UObject {
+abstract class USphere extends FPlane {
     // public center: FVector = new FVector();
     // public radius: number;
 

@@ -55,9 +55,9 @@ class FDynamicLight {
 
         if (Actor.type === LightType_T.LT_Steady) Intensity = 1;
         else if (Actor.type === LightType_T.LT_Pulse)
-            Intensity = 0.6 + 0.39 * GMath().sin(Math.floor((Actor.level.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+            Intensity = 0.6 + 0.39 * GMath().sin(Math.floor((Actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
         else if (Actor.type === LightType_T.LT_Blink) {
-            if ((Math.floor((Actor.level.timeSeconds * 35 * 65536) / (Actor.period + 1) + (Actor.phase << 8))) & 1)
+            if ((Math.floor((Actor.levelInfo.timeSeconds * 35 * 65536) / (Actor.period + 1) + (Actor.phase << 8))) & 1)
                 Intensity = 0;
             else Intensity = 1;
         }
@@ -79,7 +79,7 @@ class FDynamicLight {
         }
         else if (Actor.type == LightType_T.LT_SubtlePulse) {
             // throw new Error("not implemented");
-            Intensity = 0.9 + 0.09 * GMath().sin(Math.floor((Actor.level.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+            Intensity = 0.9 + 0.09 * GMath().sin(Math.floor((Actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
             //     else if (Actor .type === LightType_T.LT_TexturePaletteOnce) {
             // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
             //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(appFloor(255.0f * Actor -> LifeFraction()));
@@ -126,7 +126,7 @@ class FDynamicLight {
         this.dynamic = Actor.isDynamic;
     }
 
-    sampleIntensity(SamplePosition: FVector, SampleNormal: FVector): number {
+    public sampleIntensity(SamplePosition: FVector, SampleNormal: FVector): number {
         const Actor = this.actor;
         const Direction = this.direction;
         const Position = this.position;

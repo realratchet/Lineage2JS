@@ -1,3 +1,4 @@
+import ULevelInfo from "@client/assets/unreal/un-level-info";
 import FURL from "./un-url";
 import { UObject, BufferValue } from "@l2js/core";
 
@@ -46,7 +47,6 @@ abstract class ULevelBase extends UObject {
 }
 
 abstract class ULevel extends ULevelBase {
-
     public baseModelId: number;
     public levelInfoId: number;
 
@@ -64,6 +64,8 @@ abstract class ULevel extends ULevelBase {
 
     public getInfo() { return this.info; }
     public setInfo(info: GA.ULevelInfo) { this.info = info; }
+
+    public getModel() { return this.baseModel; }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const int32 = new BufferValue(BufferValue.int32);

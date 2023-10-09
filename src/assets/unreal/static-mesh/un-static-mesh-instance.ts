@@ -69,18 +69,18 @@ class FStaticMeshLightInfo implements C.IConstructable {
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
         return {
-            vertexFlags: this.vertexFlags.getTypedArray(),
+            vertexFlags: this.vertexFlags,
             ...(this.light.loadSelf().getDecodeInfo(library))
         };
     }
 }
 
 abstract class UStaticMeshInstance extends UObject {
-    declare protected colorStream: FRawColorStream;
-    declare protected sceneLights: FArray<FStaticMeshLightInfo>;
-    declare protected environmentLights: FArray<FStaticMeshLightInfo>;
+    declare public readonly colorStream: FRawColorStream;
+    declare public readonly sceneLights: FArray<FStaticMeshLightInfo>;
+    declare public readonly environmentLights: FArray<FStaticMeshLightInfo>;
 
-    declare protected unkArrIndex: number[];
+    declare public readonly unkArrIndex: number[];
 
     declare protected actor: GA.UStaticMeshActor;
 
@@ -90,7 +90,7 @@ abstract class UStaticMeshInstance extends UObject {
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
         const color = new Float32Array(this.colorStream.color.length * 3);
-        const env = this.actor.level.getL2Env();
+        const env = this.actor.levelInfo.getL2Env();
 
         for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
             const { r, g, b } = this.colorStream.color[i] as GA.FColor;

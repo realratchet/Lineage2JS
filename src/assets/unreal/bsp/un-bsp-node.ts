@@ -14,40 +14,43 @@ enum BspNodeFlags_T {
 };
 
 class FBSPNode implements C.IConstructable {
-    declare public plane: GA.FPlane;    // 16 byte plane the node falls into (X, Y, Z, W).
-    declare public zoneMask: bigint;                 // 8  byte mask for all zones at or below this node (up to 64).
-    declare public iVertPool: number;                // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
-    declare public iSurf: number;                    // 4  byte index to surface information.
+    declare public plane: GA.FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
+    declare public zoneMask: bigint;                // 8  byte mask for all zones at or below this node (up to 64).
+    declare public iVertPool: number;               // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
+    declare public iSurf: number;                   // 4  byte index to surface information.
 
-    public iBack: number;                    // 4  byte index to node in front (in direction of Normal).
-    public iFront: number;                   // 4  byte index to node in back  (opposite direction as Normal).
-    public iPlane: number;                   // 4  byte index to next coplanar poly in coplanar list.
+    public iBack: number;                            // 4  byte index to node in front (in direction of Normal).
+    public iFront: number;                           // 4  byte index to node in back  (opposite direction as Normal).
+    public iPlane: number;                           // 4  byte index to next coplanar poly in coplanar list.
 
-    public iCollisionBound: number;          // 4  byte collision bound.
-    public iRenderBound: number;             // 4  byte rendering bound.
-    public readonly iZone: number[] = new Array(2);   // 2  byte visibility zone in 1=front, 0=back.
-    public numVertices: number;              // 1  byte number of vertices in node.
-    public flags: number;            // 1  byte node flags.
-    public bspNodeflags: C.FlagDict<keyof typeof BspNodeFlags_T>;
-    public readonly iLeaf: number[] = new Array(2);   // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
+    public iCollisionBound: number;                 // 4  byte collision bound.
+    public iRenderBound: number;                    // 4  byte rendering bound.
+    public readonly iZone: number[] = new Array(2); // 2  byte visibility zone in 1=front, 0=back.
+    public numVertices: number;                     // 1  byte number of vertices in node.
+    public flags: number;                           // 1  byte node flags.
+    public bspNodeFlags: C.FlagDict<keyof typeof BspNodeFlags_T>;
+    public readonly iLeaf: number[] = new Array(2); // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
     public iVertexIndex: number;
     public iLightmapIndex: number;
 
-    public unkInt0: number;                  // 4 bytes, static between same surface nodes
-    public unkInt1: number;                  // 4 bytes, change between same surface nodes
+    public iSection: number;                        // 4 bytes, static between same surface nodes
+    public iFirstVertex: number;                    // 4 bytes, change between same surface nodes
 
-    declare public plane2: FPlane;                 // 12 bytes, origin of the bsp surface node
-    public unkFloat: number;
-    public unkBytes = BufferValue.allocBytes(16) // 16 bytes, usually 0?
+    declare exclusiveSphereBound: FPlane;           // 16 Bounding sphere excluding child nodes.
+    declare inclusiveSphereBound: FPlane;           // 16 Bounding sphere excluding child nodes.
+
+    public getChildren() { return [this.iBack, this.iFront, this.iPlane]; }
 
     public load(pkg: GA.UPackage): this {
         this.plane = FPlane.make();
-        this.plane2 = FPlane.make();
+        this.exclusiveSphereBound = FPlane.make();
+        this.inclusiveSphereBound = FPlane.make();
+
+        const verArchive = pkg.header.getArchiveFileVersion();
 
         const uint64 = new BufferValue(BufferValue.uint64);
         const int32 = new BufferValue(BufferValue.int32);
-        const uint32 = new BufferValue(BufferValue.uint32);
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint8 = new BufferValue(BufferValue.uint8);
 
@@ -55,7 +58,7 @@ class FBSPNode implements C.IConstructable {
 
         this.zoneMask = pkg.read(uint64).value;
         this.flags = pkg.read(uint8).value;
-        this.bspNodeflags = flagBitsToDict(this.flags, BspNodeFlags_T);
+        this.bspNodeFlags = flagBitsToDict(this.flags, BspNodeFlags_T);
         this.iVertPool = pkg.read(compat32).value;
         this.iSurf = pkg.read(compat32).value;
 
@@ -66,13 +69,10 @@ class FBSPNode implements C.IConstructable {
         this.iCollisionBound = pkg.read(compat32).value;
         this.iRenderBound = pkg.read(compat32).value;
 
-        this.plane2.load(pkg);
-
-        pkg.read(this.unkBytes);
-
-        // const unkId = pkg.read(uint32).value as number;
-        // const unkConnZones = pkg.read(uint64).value as number;
-        // const unkVisZones = pkg.read(uint64).value as number;
+        if (verArchive >= 70) {
+            this.exclusiveSphereBound.load(pkg);
+            this.inclusiveSphereBound.load(pkg);
+        }
 
         this.iZone[0] = pkg.read(compat32).value;
         this.iZone[1] = pkg.read(compat32).value;
@@ -82,10 +82,20 @@ class FBSPNode implements C.IConstructable {
         this.iLeaf[0] = pkg.read(int32).value;
         this.iLeaf[1] = pkg.read(int32).value;
 
-        this.unkInt0 = pkg.read(uint32).value;
-        this.unkInt1 = pkg.read(uint32).value;
-
-        this.iLightmapIndex = pkg.read(int32).value;
+        if (verArchive < 92) {
+            debugger;
+            throw new Error("not yet implemented");
+        } else if (verArchive < 93) {
+            debugger;
+            throw new Error("not yet implemented");
+        } else if (verArchive < 101) {
+            debugger;
+            throw new Error("not yet implemented");
+        } else {
+            this.iSection = pkg.read(int32).value;
+            this.iFirstVertex = pkg.read(int32).value;
+            this.iLightmapIndex = pkg.read(int32).value;
+        }
 
         return this;
     }

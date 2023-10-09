@@ -67,7 +67,7 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
 }
 
 abstract class UL2NTimeLight extends UObject {
-    public readonly timeOfDay = 12;
+    public readonly timeOfDay = 3;
 
     declare public lightTerrain: C.FArray<FNTimeHSV>;
     declare public lightActor: C.FArray<FNTimeHSV>;
@@ -123,6 +123,7 @@ abstract class UL2NTimeLight extends UObject {
         return getColorPlane(this.timeOfDay, this.lightStaticMesh);
     }
 }
+
 
 function pickArrayIndices(timeOfDay: number, array: FArray<FNTimeHSV>): [FNTimeHSV, FNTimeHSV, number] {
     const nElements = array.length;
