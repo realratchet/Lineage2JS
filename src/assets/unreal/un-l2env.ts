@@ -127,7 +127,7 @@ abstract class UL2NTimeLight extends UObject {
 
 function pickArrayIndices(timeOfDay: number, array: FArray<FNTimeHSV>): [FNTimeHSV, FNTimeHSV, number] {
     const nElements = array.length;
-    const [lIndex, lFrac] = timeToIndexFrac(timeOfDay, nElements)
+    const [lIndex, _, lFrac] = timeToIndicesLerp(timeOfDay, nElements)
     const currIndex = Math.min(lIndex, nElements - 2);
     const hsvCurr = array[currIndex], hsvNext = array[currIndex + 1];
 
@@ -240,25 +240,41 @@ function selectByTime<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): 
 }
 
 function indexToTime(index: number, totalElements: number) { return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements; }
-function timeToIndexFrac(timeOfDay: number, totalElements: number): [number, number] {
-    // const indexWithOffset = ((timeOfDay - (24.0 / totalElements) * 0.5) * totalElements) / 24.0;
-    // const index = Math.floor(indexWithOffset);
-    // return [index, indexWithOffset - index];
+function timeToIndex(timeOfDay: number, totalElements: number): number {
+    let index = totalElements - 1;
+    let time: number;
 
-    let index: number, time: number;
-
-    for (index = 0; index < totalElements; index++) {
+    for (let i = 0; i < totalElements; i++) {
         time = indexToTime(index, totalElements);
 
         if (timeOfDay <= time)
             break;
+
+        index = i;
     }
 
-    return [index, 0];
+    return index;
+}
+
+function timeToIndicesLerp(timeOfDay: number, totalElements: number) {
+    const currEnvIndex = timeToIndex(timeOfDay, totalElements);
+    const nextEnvIndex = (currEnvIndex + 1) % totalElements;
+
+    let currEnvTime = indexToTime(currEnvIndex, totalElements), nextEnvTime = indexToTime(nextEnvIndex, totalElements);
+
+    while (nextEnvTime < currEnvTime) nextEnvTime = nextEnvTime + 24.0;
+
+    let offset = timeOfDay;
+
+    while (offset < currEnvTime) offset = offset + 24.0;
+
+    const lerp = (offset - currEnvTime) / (nextEnvTime - currEnvTime);
+
+    return [currEnvIndex, nextEnvIndex, lerp];
 }
 
 export default UL2NEnvLight;
-export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndexFrac };
+export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndex, timeToIndicesLerp };
 
 function getEnvType(fileContents: string) {
     let readOffset = findSection(fileContents, "EnvType");

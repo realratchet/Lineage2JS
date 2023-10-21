@@ -324,7 +324,7 @@ class RenderManager {
         this.lastSize.set(width, height);
     }
 
-    protected async onHandleResize(): Promise<void> {
+    protected onHandleResize(): void {
         const oldStyle = this.getDomElement().style.display;
         this.getDomElement().style.display = "none";
         const { width, height } = this.viewport.getBoundingClientRect();

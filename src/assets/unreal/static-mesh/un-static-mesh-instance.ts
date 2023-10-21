@@ -3,7 +3,7 @@ import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import { indexToTime, timeToIndexFrac } from "@client/assets/unreal/un-l2env";
+import { indexToTime, timeToIndicesLerp } from "@client/assets/unreal/un-l2env";
 
 class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
@@ -136,7 +136,6 @@ abstract class UStaticMeshInstance extends UObject {
             lights: {
                 scene: this.sceneLights,
                 environment: validEnvironment ? {
-                    indexFrac: timeToIndexFrac(env.timeOfDay, this.environmentLights.length),
                     color: lightingColor,
                     ...validEnvironment
                 } : null

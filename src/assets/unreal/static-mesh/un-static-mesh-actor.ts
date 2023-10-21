@@ -4,7 +4,7 @@ import FVector from "../un-vector";
 import FMatrix from "@client/assets/unreal/un-matrix";
 import GMath from "@client/assets/unreal/un-gmath";
 import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
-import { indexToTime, timeToIndexFrac } from "@client/assets/unreal/un-l2env";
+import { indexToTime, timeToIndex, timeToIndicesLerp } from "@client/assets/unreal/un-l2env";
 import FBox from "@client/assets/unreal/un-box";
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -478,18 +478,16 @@ abstract class UStaticMeshActor extends UAActor {
 
         applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
 
-        if (false && this.instance?.environmentLights.length > 0) {
+        if (this.instance?.environmentLights.length > 0) {
             const lightCount = this.instance.environmentLights.length;
 
             if (lightCount < 2)
                 debugger;
 
-            const [currEnvIndex, _] = timeToIndexFrac(env.timeOfDay, lightCount);
-            const nextEnvIndex = (currEnvIndex + 1) % lightCount;
-            const currEnvTime = indexToTime(currEnvIndex, lightCount), nextEnvTime = indexToTime(nextEnvIndex, lightCount);
+            const [currEnvIndex, nextEnvIndex, lerp] = timeToIndicesLerp(env.timeOfDay, lightCount);
+            // const staticMeshLight = env.getBaseColorPlaneStaticMeshSunLight();
 
-            const lerp = (env.timeOfDay - currEnvTime) / (nextEnvTime - currEnvTime);
-            const staticMeshLight = env.getBaseColorPlaneStaticMeshSunLight();
+            // debugger;
 
             applyStaticMeshLightEnv(
                 env,
@@ -734,9 +732,7 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
 
     const intensityArray = new Float32Array(instanceColors.length);
 
-    for (let [lerp, lightInfo] of [
-        ...lightEnvironment,
-    ]) {
+    for (let [lerp, lightInfo] of lightEnvironment) {
         if (!lightInfo) continue;
 
         if (!lightInfo || !lightInfo.light)
@@ -754,12 +750,14 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
         let bitMask = 0x1;
         let bitPtr = bitPtrIter.next().value;
 
-        const bytes = lightArray.getTypedArray();
+        // const bytes = lightArray.getTypedArray();
 
         // debugger;
 
         const col = env.getBaseColorPlaneStaticMeshSunLight();
         const bri = env.getBrightnessStaticMeshSunLight();
+
+        // debugger;
 
         for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
             if ((bitPtr & bitMask) !== 0) {
@@ -780,6 +778,8 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
                 const sampledInt = light.sampleIntensity(samplingPoint, samplingNormal);
                 const intensity = lerp * 0.5 * scaleGlow * sampledInt;
 
+                // debugger;
+
                 // r = light.color.x * intensity;
                 // g = light.color.y * intensity;
                 // b = light.color.z * intensity;
@@ -795,7 +795,7 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
                 // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
-            bitMask = (bitMask << 1) % 0x100
+            bitMask = (bitMask << 1) % 0x100; // check for byte overflow
 
             if (!bitMask) {
                 bitPtr = bitPtrIter.next().value;
@@ -860,8 +860,8 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         let bitMask = 0x1;
         let bitPtr = bitPtrIter.next().value;
 
-        const _arr = lightArray.getTypedArray()
-        const _sum = lightArray.getTypedArray().reduce((acc, v) => acc + (v ? 1 : 0), 0)
+        // const _arr = lightArray.getTypedArray()
+        // const _sum = lightArray.getTypedArray().reduce((acc, v) => acc + (v ? 1 : 0), 0)
 
         // if (_sum > 0)
         //     debugger;
