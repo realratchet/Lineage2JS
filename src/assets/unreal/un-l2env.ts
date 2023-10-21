@@ -67,7 +67,7 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
 }
 
 abstract class UL2NTimeLight extends UObject {
-    public readonly timeOfDay = 3;
+    public readonly timeOfDay = 0;
 
     declare public lightTerrain: C.FArray<FNTimeHSV>;
     declare public lightActor: C.FArray<FNTimeHSV>;
@@ -131,7 +131,7 @@ function pickArrayIndices(timeOfDay: number, array: FArray<FNTimeHSV>): [FNTimeH
     const currIndex = Math.min(lIndex, nElements - 2);
     const hsvCurr = array[currIndex], hsvNext = array[currIndex + 1];
 
-    return [hsvCurr, hsvNext, lFrac]
+    return [hsvCurr, hsvNext, lFrac];
 }
 
 function getBrightness(timeOfDay: number, array: FArray<FNTimeHSV>) {
@@ -241,9 +241,20 @@ function selectByTime<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): 
 
 function indexToTime(index: number, totalElements: number) { return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements; }
 function timeToIndexFrac(timeOfDay: number, totalElements: number): [number, number] {
-    const indexWithOffset = ((timeOfDay - (24.0 / totalElements) * 0.5) * totalElements) / 24.0;
-    const index = Math.floor(indexWithOffset);
-    return [index, indexWithOffset - index];
+    // const indexWithOffset = ((timeOfDay - (24.0 / totalElements) * 0.5) * totalElements) / 24.0;
+    // const index = Math.floor(indexWithOffset);
+    // return [index, indexWithOffset - index];
+
+    let index: number, time: number;
+
+    for (index = 0; index < totalElements; index++) {
+        time = indexToTime(index, totalElements);
+
+        if (timeOfDay <= time)
+            break;
+    }
+
+    return [index, 0];
 }
 
 export default UL2NEnvLight;

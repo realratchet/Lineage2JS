@@ -100,6 +100,10 @@ class DecodeLibrary {
                 for (let exp of actorsToLoad) {
                     try {
                         const actor = pkg.fetchObject<GA.UStaticMeshActor>(exp.index + 1).loadSelf();
+
+                        if (actor.isDeleteMe)
+                            continue;
+
                         try {
                             try {
                                 actor.getDecodeInfo(decodeLibrary)
@@ -120,6 +124,9 @@ class DecodeLibrary {
                 const uStaticMeshActors = actorsToLoad.map(exp => pkg.fetchObject<GA.UStaticMeshActor>(exp.index + 1).loadSelf());
 
                 for (const actor of uStaticMeshActors) {
+                    if (actor.isDeleteMe)
+                        continue;
+
                     actor.getDecodeInfo(decodeLibrary);
                 }
             }

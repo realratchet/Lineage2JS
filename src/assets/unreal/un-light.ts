@@ -8,7 +8,7 @@ import FVector from "./un-vector";
 function getHSV(H: number, S: number, V: number): FPlane {
 
     return FPlane.make(...hsvToRgb(H, S, V), 1);
-    
+
     // let Brightness = V * 1.4 / 255;
 
     // Brightness *= 0.7 / (0.01 + Math.sqrt(Brightness));
@@ -168,8 +168,9 @@ class FDynamicLight {
         } else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect === LightEffect_T.LE_StaticSpot) {
             // Spot light.
             const LightVector = Position.sub(SamplePosition);
-            const DistanceSquared = LightVector.lengthSq(),
-                Distance = Math.sqrt(DistanceSquared), BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
+            const DistanceSquared = LightVector.lengthSq();
+            const Distance = Math.sqrt(DistanceSquared);
+            const BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
 
             if (BaseAttenuation > 0) {
                 const Sine = 1.0 - Actor.cone / 256.0, RSine = 1.0 / (1.0 - Sine);

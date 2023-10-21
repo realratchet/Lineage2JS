@@ -333,6 +333,8 @@ abstract class UStaticMeshActor extends UAActor {
         // if (this.instance)
         //     debugger;
 
+        // debugger;
+
         const meshInfo = mesh.getDecodeInfo(library, hasModifier ? [modifierUuid] : null);
         const attributes = library.geometries[meshInfo.geometry].attributes;
         const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
@@ -375,7 +377,6 @@ abstract class UStaticMeshActor extends UAActor {
 
         let predictedBox: FBox;
 
-
         if (this.physics !== EPhysics_T.PHYS_None) {
             debugger;
             throw new Error("not implemented");
@@ -385,11 +386,11 @@ abstract class UStaticMeshActor extends UAActor {
 
         let leaves: GA.FLeaf[];
 
-        if(baseModel) {
+        if (baseModel) {
             leaves = baseModel.boxLeaves(predictedBox);
         } else leaves = new Array<GA.FLeaf>();
-        
-        if(!this.forcedVisibilityZoneTag) {
+
+        if (!this.forcedVisibilityZoneTag) {
             debugger;
             throw new Error("not implemented");
         }
@@ -421,7 +422,7 @@ abstract class UStaticMeshActor extends UAActor {
             } else {
                 let ambientVector = FVector.make();
 
-                for(let leaf of leaves) {
+                for (let leaf of leaves) {
                     const iZone = leaf.iZone;
                     const zoneInfo = baseModel.getZoneActor(iZone);
                     const zoneAmbientVector = zoneInfo.ambientVector;
@@ -477,7 +478,7 @@ abstract class UStaticMeshActor extends UAActor {
 
         applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
 
-        if (this.instance?.environmentLights.length > 0) {
+        if (false && this.instance?.environmentLights.length > 0) {
             const lightCount = this.instance.environmentLights.length;
 
             if (lightCount < 2)
@@ -794,11 +795,9 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
                 // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
-            const bResetMask = (bitMask << 1) === 0;
+            bitMask = (bitMask << 1) % 0x100
 
-            bitMask = bitMask << 1;
-
-            if (bResetMask) {
+            if (!bitMask) {
                 bitPtr = bitPtrIter.next().value;
                 bitMask = 1;
             }
@@ -836,10 +835,12 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
 
     const intensityArray = new Float32Array(instanceColors.length);
 
-    for (let lightInfo of [
-        ...lightsScene,
-        // lightEnvironment,
-    ]) {
+    // debugger;
+
+    let i = -1;
+
+    for (let lightInfo of lightsScene) {
+        i++;
         if (!lightInfo) continue;
 
         if (!lightInfo || !lightInfo.light)
@@ -859,12 +860,20 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         let bitMask = 0x1;
         let bitPtr = bitPtrIter.next().value;
 
+        const _arr = lightArray.getTypedArray()
+        const _sum = lightArray.getTypedArray().reduce((acc, v) => acc + (v ? 1 : 0), 0)
+
+        // if (_sum > 0)
+        //     debugger;
+
+        // if (_sum === 0)
+        //     continue;
+
         // debugger;
 
         for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
             if ((bitPtr & bitMask) !== 0) {
                 // debugger;
-
                 const ox = i, oy = ox + 2, oz = ox + 1;
 
                 vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
@@ -890,14 +899,21 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
                 // console.log(`i => ${i} | int => ${intensity} | pos => ${samplingPoint} | rot => ${samplingNormal}`);
             }
 
-            const bResetMask = (bitMask << 1) === 0;
+            bitMask = (bitMask << 1) % 0x100; // check for byte overflow
 
-            bitMask = bitMask << 1;
-
-            if (bResetMask) {
+            if (!bitMask) {
                 bitPtr = bitPtrIter.next().value;
                 bitMask = 1;
             }
+
+            // const bResetMask = (bitMask << 1) === 0;
+
+            // bitMask = bitMask << 1;
+
+            // if (bResetMask) {
+            //     bitPtr = bitPtrIter.next().value;
+            //     bitMask = 1;
+            // }
 
             // if ((bitMask & 0x7f) === 0x0) {
             //     bitPtr = bitPtrIter.next().value;
@@ -905,6 +921,8 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
             // } else bitMask = bitMask << 0x1;
         }
     }
+
+    // debugger;
 
     // const ambientColor = lightEnvironment ? lightEnvironment.color : [0, 0, 0];
 
