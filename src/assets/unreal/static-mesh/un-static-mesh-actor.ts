@@ -454,9 +454,9 @@ abstract class UStaticMeshActor extends UAActor {
 
         }
 
-        if (this.getAmbientLightingActor().ambientGlow > 0) {
-            debugger;
-        }
+        // if (this.getAmbientLightingActor().ambientGlow > 0) {
+        //     debugger;
+        // }
 
         // if (this.isUnlit) {
         //     for (let i = 0; i < vertexArrayLen; i += 3) {
@@ -755,9 +755,9 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
         // debugger;
 
         const col = env.getBaseColorPlaneStaticMeshSunLight();
-        const bri = env.getBrightnessStaticMeshSunLight();
+        const bri = env.getBrightnessStaticMeshSunLight() * 0.0039215689;
 
-        // debugger;
+        debugger;
 
         for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
             if ((bitPtr & bitMask) !== 0) {

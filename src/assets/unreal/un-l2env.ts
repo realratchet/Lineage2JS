@@ -120,18 +120,36 @@ abstract class UL2NTimeLight extends UObject {
     }
 
     public getBaseColorPlaneStaticMeshSunLight(): FPlane {
+        debugger;
         return getColorPlane(this.timeOfDay, this.lightStaticMesh);
     }
 }
 
 
-function pickArrayIndices(timeOfDay: number, array: FArray<FNTimeHSV>): [FNTimeHSV, FNTimeHSV, number] {
+function pickArrayIndices<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): [T, T, number] {
     const nElements = array.length;
-    const [lIndex, _, lFrac] = timeToIndicesLerp(timeOfDay, nElements)
-    const currIndex = Math.min(lIndex, nElements - 2);
-    const hsvCurr = array[currIndex], hsvNext = array[currIndex + 1];
+    const nElementsMinusOne = nElements - 1;
 
-    return [hsvCurr, hsvNext, lFrac];
+    let idxCurr = 0, idxNext = 1;
+
+    if (nElementsMinusOne > 0) {
+        while (array[idxCurr].time > timeOfDay || array[idxNext].time <= timeOfDay) {
+            if (idxCurr >= nElementsMinusOne)
+                break;
+
+            idxCurr = idxCurr + 1;
+            idxNext = idxNext + 1;
+        }
+    } else {
+        debugger;
+        throw new Error("shouldn't happen");
+    }
+
+    const elemCurr = array[idxCurr], elemNext = array[idxNext];
+    const timeCurr = elemCurr.time, timeNext = elemNext.time;
+    const frac = (timeOfDay - timeCurr) / (timeNext - timeCurr);
+
+    return [elemCurr, elemNext, frac];
 }
 
 function getBrightness(timeOfDay: number, array: FArray<FNTimeHSV>) {
@@ -245,7 +263,7 @@ function timeToIndex(timeOfDay: number, totalElements: number): number {
     let time: number;
 
     for (let i = 0; i < totalElements; i++) {
-        time = indexToTime(index, totalElements);
+        time = indexToTime(i, totalElements);
 
         if (timeOfDay <= time)
             break;
