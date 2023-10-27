@@ -396,7 +396,7 @@ abstract class UStaticMeshActor extends UAActor {
         }
 
 
-        {
+        if (true) {
             const ambActor = this.getAmbientLightingActor();
             const zone = this.getZone();
             const ambVector = zone.ambientVector;
@@ -413,6 +413,7 @@ abstract class UStaticMeshActor extends UAActor {
             const ambGlowVec = FVector.make(ambGlow, ambGlow, ambGlow);
             const ambColor = ambVector.add(ambGlowVec);
 
+            // this seems to be overexposing somewhat otherwise seems accurate
             if (this.isUnlit) {
                 for (let i = 0; i < vertexArrayLen; i += 3) {
                     instanceColors[i + 0] += 0.5;
@@ -421,6 +422,8 @@ abstract class UStaticMeshActor extends UAActor {
                 }
             } else {
                 let ambientVector = FVector.make();
+
+                // debugger;
 
                 for (let leaf of leaves) {
                     const iZone = leaf.iZone;
@@ -451,7 +454,6 @@ abstract class UStaticMeshActor extends UAActor {
                 //     }
                 // }
             }
-
         }
 
         // if (this.getAmbientLightingActor().ambientGlow > 0) {
@@ -476,9 +478,9 @@ abstract class UStaticMeshActor extends UAActor {
 
         // if(this.)
 
-        applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
+        if (true) applyStaticMeshLight(env, vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
 
-        if (this.instance?.environmentLights.length > 0) {
+        if (true && this.instance?.environmentLights.length > 0) {
             const lightCount = this.instance.environmentLights.length;
 
             if (lightCount < 2)
@@ -518,13 +520,13 @@ abstract class UStaticMeshActor extends UAActor {
         //     }
         // }
 
-        if (this.isSunAffected) {
-            const ambient = env.selectByTime(env.ambientStaticMesh).getColor();
+        if (true && this.isSunAffected) {
+            const ambient = env.getAmbientPlaneStaticMeshSunLight();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += ambient[0];
-                instanceColors[i + 1] += ambient[1];
-                instanceColors[i + 2] += ambient[2];
+                instanceColors[i + 0] += ambient.x;
+                instanceColors[i + 1] += ambient.y;
+                instanceColors[i + 2] += ambient.z;
             }
         }
         // else {
@@ -754,10 +756,9 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
 
         // debugger;
 
-        const col = env.getBaseColorPlaneStaticMeshSunLight();
-        const bri = env.getBrightnessStaticMeshSunLight() * 0.0039215689;
+        const col = light.color;
 
-        debugger;
+        // debugger;
 
         for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
             if ((bitPtr & bitMask) !== 0) {

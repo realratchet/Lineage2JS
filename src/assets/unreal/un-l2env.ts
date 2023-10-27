@@ -47,6 +47,7 @@ abstract class FNTimeColor extends UObject implements IEnvTime {
         return `NTimeHSV(T=${this.time}, R=${this.r}, G=${this.g}, B=${this.b})`;
     }
 
+    public toColorPlane() { return FPlane.make(...this.getColor()); }
     public getColor(): GD.ColorArr { return [this.r / 255, this.g / 255, this.b / 255, 1]; }
 }
 
@@ -67,7 +68,7 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
 }
 
 abstract class UL2NTimeLight extends UObject {
-    public readonly timeOfDay = 0;
+    public readonly timeOfDay = 0.33;
 
     declare public lightTerrain: C.FArray<FNTimeHSV>;
     declare public lightActor: C.FArray<FNTimeHSV>;
@@ -120,7 +121,6 @@ abstract class UL2NTimeLight extends UObject {
     }
 
     public getBaseColorPlaneStaticMeshSunLight(): FPlane {
-        debugger;
         return getColorPlane(this.timeOfDay, this.lightStaticMesh);
     }
 }
@@ -159,7 +159,7 @@ function getBrightness(timeOfDay: number, array: FArray<FNTimeHSV>) {
     return bri;
 }
 
-function getColorPlane(timeOfDay: number, array: FArray<FNTimeHSV>) {
+function getColorPlane(timeOfDay: number, array: FArray<FNTimeHSV | FNTimeColor>) {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
     const colorCurr = hsvCurr.toColorPlane(), colorNext = hsvNext.toColorPlane();
 
@@ -231,6 +231,9 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         return this;
     }
 
+    public getAmbientPlaneStaticMeshSunLight(): FPlane {
+        return getColorPlane(this.timeOfDay, this.ambientStaticMesh);
+    }
 
     public toString(): string {
         let envName: "Normal" | "[SS]Dusk" | "[SS]Dawn";

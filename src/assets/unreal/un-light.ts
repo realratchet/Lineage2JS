@@ -42,32 +42,39 @@ class FDynamicLight {
     }
 
     public update() {
-        const Actor = this.actor;
-        const Env = this.env;
+        const actor = this.actor;
+        const env = this.env;
+        const levelInfo = actor.levelInfo;
 
         let baseColor: FPlane;
+        let brightness: number
 
-        if (Actor.isSunlightColor) {
-            baseColor = Env.selectByTime(Env.lightActor).toColorPlane();
-        } else baseColor = getHSV(Actor.hue, Actor.saturation, 255);
-
-        let Intensity = 0;
-
-        if (Actor.type === LightType_T.LT_Steady) Intensity = 1;
-        else if (Actor.type === LightType_T.LT_Pulse)
-            Intensity = 0.6 + 0.39 * GMath().sin(Math.floor((Actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
-        else if (Actor.type === LightType_T.LT_Blink) {
-            if ((Math.floor((Actor.levelInfo.timeSeconds * 35 * 65536) / (Actor.period + 1) + (Actor.phase << 8))) & 1)
-                Intensity = 0;
-            else Intensity = 1;
+        if (actor.isSunlightColor) {
+            // baseColor = env.selectByTime(env.lightActor).toColorPlane();
+            baseColor = env.getBaseColorPlaneStaticMeshSunLight();
+            brightness = env.getBrightnessStaticMeshSunLight();
+        } else {
+            baseColor = getHSV(actor.hue, actor.saturation, 255);
+            brightness = actor.brightness;
         }
-        else if (Actor.type === LightType_T.LT_Flicker) {
+
+        let intensity: number;
+
+        if (actor.type === LightType_T.LT_Steady) intensity = 1;
+        else if (actor.type === LightType_T.LT_Pulse)
+            intensity = 0.6 + 0.39 * GMath().sin(Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(actor.period), 1) + (actor.phase << 8)));
+        else if (actor.type === LightType_T.LT_Blink) {
+            if ((Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / (actor.period + 1) + (actor.phase << 8))) & 1)
+                intensity = 0;
+            else intensity = 1;
+        }
+        else if (actor.type === LightType_T.LT_Flicker) {
             const Rand = Math.random();
 
-            if (Rand < 0.5) Intensity = 0;
-            else Intensity = Rand;
+            if (Rand < 0.5) intensity = 0;
+            else intensity = Rand;
         }
-        else if (Actor.type === LightType_T.LT_Strobe) {
+        else if (actor.type === LightType_T.LT_Strobe) {
             throw new Error("not implemented");
             //         static float LastUpdateTime = 0; static int Toggle = 0;
             // if (LastUpdateTime != Actor -> Level -> TimeSeconds) {
@@ -77,9 +84,9 @@ class FDynamicLight {
             // if (Toggle) Intensity = 0.0f;
             //         else Intensity = 1.0f;
         }
-        else if (Actor.type == LightType_T.LT_SubtlePulse) {
+        else if (actor.type == LightType_T.LT_SubtlePulse) {
             // throw new Error("not implemented");
-            Intensity = 0.9 + 0.09 * GMath().sin(Math.floor((Actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(Actor.period), 1) + (Actor.phase << 8)));
+            intensity = 0.9 + 0.09 * GMath().sin(Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(actor.period), 1) + (actor.phase << 8)));
             //     else if (Actor .type === LightType_T.LT_TexturePaletteOnce) {
             // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
             //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(appFloor(255.0f * Actor -> LifeFraction()));
@@ -87,7 +94,7 @@ class FDynamicLight {
             //     Intensity = C.FBrightness() * 2.8;
             // }
         }
-        else if (Actor.type === LightType_T.LT_TexturePaletteLoop) {
+        else if (actor.type === LightType_T.LT_TexturePaletteLoop) {
             throw new Error("not implemented");
             // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
             //             FLOAT Time = Actor -> Level -> TimeSeconds * 35 / Max((int)Actor -> LightPeriod, 1) + Actor -> LightPhase;
@@ -98,32 +105,29 @@ class FDynamicLight {
 
             // Dynamic = 1;
         }
-        else if (Actor.type === LightType_T.LT_FadeOut) {
+        else if (actor.type === LightType_T.LT_FadeOut) {
             throw new Error("not implemented");
             // Intensity = Math.min(1. 1.5 * (1 - Actor. LifeFraction()));
         }
 
-        this.color = baseColor.multiplyScalar(saturationToBrightness(Actor.brightness));
+        this.color = baseColor.multiplyScalar((brightness / 255) * intensity * levelInfo.brightness);
 
-
-        // .multiplyScalar(Actor.level.ambientBrightness);
-
-        if (Actor.effect === LightEffect_T.LE_Sunlight) {
-            this.direction = Actor.rotation.toVector();
+        if (actor.effect === LightEffect_T.LE_Sunlight) {
+            this.direction = actor.rotation.toVector();
             this.position = FVector.make(0, 0, 0);
             this.radius = 0;
-        } else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect == LightEffect_T.LE_StaticSpot) {
-            this.position = Actor.location;
-            this.direction = Actor.rotation.toVector();
-            this.radius = Actor.worldLightRadius();
+        } else if (actor.effect == LightEffect_T.LE_Spotlight || actor.effect == LightEffect_T.LE_StaticSpot) {
+            this.position = actor.location;
+            this.direction = actor.rotation.toVector();
+            this.radius = actor.worldLightRadius();
         } else {
-            this.position = Actor.location;
-            this.radius = Actor.worldLightRadius();
+            this.position = actor.location;
+            this.radius = actor.worldLightRadius();
         }
 
         this.alpha = 1;
 
-        this.dynamic = Actor.isDynamic;
+        this.dynamic = actor.isDynamic;
     }
 
     public sampleIntensity(SamplePosition: FVector, SampleNormal: FVector): number {

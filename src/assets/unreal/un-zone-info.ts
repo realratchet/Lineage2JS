@@ -6,6 +6,7 @@ abstract class FZoneInfo extends AInfo/* implements IInfo*/ {
 
     declare public readonly useFogColorClear: boolean;
 
+    declare public readonly brightness: number;
     declare public readonly ambientBrightness: number;
     declare public readonly ambientVector: GA.FVector;
 
@@ -42,6 +43,7 @@ abstract class FZoneInfo extends AInfo/* implements IInfo*/ {
             "bFogZone": "isFogZone",
             "bTerrainZone": "hasTerrain",
             "Terrains": "terrains",
+            "Brightness": "brightness",
             "AmbientBrightness": "ambientBrightness",
             "AmbientVector": "ambientVector",
             "KillZ": "killZ",

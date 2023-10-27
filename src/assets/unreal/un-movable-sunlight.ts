@@ -18,6 +18,10 @@ abstract class UNMovableSunLight extends ULight {
     // }
 
     public getDecodeInfo(library: GD.DecodeLibrary): any {
+        // ((color pane x (bri x 0.0039215689)) x 1.0) x scale_glow
+        // not exactly sure why that 1.0 is constant and if it's always constant, need to trace paths
+
+
         return {
             type: "Sunlight",
             name: this.objectName,
