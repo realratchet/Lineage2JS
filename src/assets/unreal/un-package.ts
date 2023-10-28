@@ -117,10 +117,77 @@ class UPackage extends APackage {
     }
 }
 
+enum ERunningOS {
+    OS_WIN95 = 0,
+    OS_WIN98,
+    OS_WINME,
+    OS_WIN2K,
+    OS_WINXP,
+    OS_WINNT,
+    OS_LINUX_X86,
+    OS_FREEBSD_X86,
+    OS_LINUX_X86_64,
+    OS_MAC_OSX_PPC,
+    OS_UNKNOWN = 255
+};
+
+
 class UCorePackage extends UPackage implements C.ICorePackage {
     public readonly isCore = true;
     public readonly isEngine = false;
     public readonly isNative = false;
+
+    public static readonly NEAR_CLIPPING_PLANE = 10.0;
+    public static readonly FAR_CLIPPING_PLANE = 65536.0;
+    public static readonly GRunningOS = ERunningOS.OS_WINNT;
+    public static readonly GL2AntiPortalCR = 1.0;
+    public static readonly GL2ProjectorCR = 0.2;
+    public static readonly GL2OriginTerrainCR = 4.0;
+    public static readonly GL2OriginStaticMeshCR = 2.0;
+    public static readonly GL2OriginStaticMeshLodCR = 4.0;
+    public static readonly GL2OriginPawnCR = 1.0;
+    public static readonly GL2TerrainCR = 4.0;
+    public static readonly GL2StaticMeshCR = 2.0;
+    public static readonly GL2StaticMeshLodCR = 4.0;
+    public static readonly GL2PawnCR = 1.0;
+    public static readonly GIsL2Projector = false;
+    public static readonly GIsNative = true;
+    public static readonly GL2ShowMyName = true;
+    public static readonly GL2ShowNPCName = true;
+    public static readonly GL2ShowPledgeMemberName = true;
+    public static readonly GL2ShowPartyMemberName = true;
+    public static readonly GL2ShowOtherPCName = true;
+    public static readonly GIsStickyWindow = true;
+    public static readonly GIsOldChat = true;
+    public static readonly GIsKeyboardSecurity = true;
+    public static readonly GIsTransparencyMode = true;
+    public static readonly GIsArrowMode = true;
+    public static readonly GL2ActorCR = 4.0;
+    public static readonly GL2RenderDeco = false;
+    public static readonly GL2FogStart = 1.0;
+    public static readonly GL2FogEnd = 4.0;
+    public static readonly GL2FogSpeed = 1.0;
+    public static readonly GL2SeamlessMaginotLine = 0.75;
+    public static readonly GL2UseColorCursor = true;
+    public static readonly GL2EnableStaticMeshShadow = true;
+    public static readonly GSEKScreenX = 1920;
+    public static readonly GSEKScreenY = 1080;
+    public static readonly GColorBits = 32;
+    public static readonly GRefreshRate = 60;
+    public static readonly GIsLoadL2WaterEffect = true;
+    public static readonly GL2NeedEditChange = true;
+    public static readonly GL2UseBoneSimul = true;
+    public static readonly GL2UseHitWateEffect = true;
+    public static readonly GL2UseTrilinear = true;
+    public static readonly GL2UseAutoTrackingPawn = false;
+    public static readonly GL2RenderActorLimit = 50;
+    public static readonly GL2RenderActorLimitOpt = true;
+    public static readonly GL2ShowZoneTitle = true;
+    public static readonly GL2SystemMsgWnd = true;
+    public static readonly GL2SystemMsgWndDamage = true;
+    public static readonly GL2SystemMsgWndExpendableItem = true;
+    public static readonly GL2DrawTargetName = true;
+    public static readonly GUnicode = true;
 }
 
 class UEnginePackage extends UPackage implements C.IEnginePackage {

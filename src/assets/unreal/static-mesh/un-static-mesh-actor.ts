@@ -386,6 +386,8 @@ abstract class UStaticMeshActor extends UAActor {
 
         let leaves: GA.FLeaf[];
 
+        debugger;
+
         if (baseModel) {
             leaves = baseModel.boxLeaves(predictedBox);
         } else leaves = new Array<GA.FLeaf>();
