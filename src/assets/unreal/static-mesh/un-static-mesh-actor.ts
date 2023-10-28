@@ -390,13 +390,13 @@ abstract class UStaticMeshActor extends UAActor {
             leaves = baseModel.boxLeaves(predictedBox);
         } else leaves = new Array<GA.FLeaf>();
 
-        if (!this.forcedVisibilityZoneTag) {
+        if (this.forcedVisibilityZoneTag !== "None") {
             debugger;
             throw new Error("not implemented");
         }
 
-
         if (true) {
+            // debugger;
             const ambActor = this.getAmbientLightingActor();
             const zone = this.getZone();
             const ambVector = zone.ambientVector;
@@ -435,8 +435,10 @@ abstract class UStaticMeshActor extends UAActor {
                     ambientVector.z = Math.max(ambientVector.z, zoneAmbientVector.z);
                 }
 
-                let ambColor = ambientVector;
+                // let ambColor = ambientVector;
                 // let ambColor = FVector.make();
+
+                // debugger;
 
                 for (let i = 0; i < vertexArrayLen; i += 3) {
                     instanceColors[i + 0] += ambColor.x * 0.5;

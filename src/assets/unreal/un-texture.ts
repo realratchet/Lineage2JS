@@ -114,6 +114,8 @@ abstract class UTexture extends UMaterial {
 
         console.assert(this.readTail === this.readHead);
 
+        // debugger;
+
         return this;
     }
 
@@ -246,6 +248,19 @@ abstract class UTexture extends UMaterial {
                 textureType = "rgba";
                 if (!this.palette) {
                     decodedBuffer = data.buffer;
+
+                    if (format === ETexturePixelFormat.TPF_BGRA8) {
+                        const view = new Uint8Array(decodedBuffer);
+
+                        for(let i = 0, len = view.length; i < len; i += 4) {
+                            const r = view[i], b = view[i + 2];
+
+                            view[i] = b;
+                            view[i + 2] = r;
+                        }
+
+                        decodedBuffer = view.buffer;
+                    }
                 } else {
                     const buff = new Uint8Array(imSize * 4);
 
@@ -253,10 +268,17 @@ abstract class UTexture extends UMaterial {
                         const c = this.palette.loadSelf().colors.getElem(data[i]);
                         const ii = i * 4;
 
-                        buff[ii + 0] = c.r;
-                        buff[ii + 1] = c.g;
-                        buff[ii + 2] = c.b;
-                        buff[ii + 3] = c.a;
+                        if (format === ETexturePixelFormat.TPF_BGRA8) {
+                            buff[ii + 0] = c.b;
+                            buff[ii + 1] = c.g;
+                            buff[ii + 2] = c.r;
+                            buff[ii + 3] = c.a;
+                        } else {
+                            buff[ii + 0] = c.r;
+                            buff[ii + 1] = c.g;
+                            buff[ii + 2] = c.b;
+                            buff[ii + 3] = c.a;
+                        }
                     }
 
                     decodedBuffer = buff.buffer;

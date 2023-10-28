@@ -206,6 +206,7 @@ class UNativePackage extends ANativePackage {
             case "L2RotatorTime":
             case "AnimRep":
             case "Orientation":
+            case "AccessoryType":
                 Constructor = UObject;
                 break;
 

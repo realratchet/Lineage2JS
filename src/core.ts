@@ -384,11 +384,11 @@ async function startCore() {
     const loadSettings = {
         env: env,
         helpersZoneBounds: false,
-        loadTerrain: false,
-        loadBaseModel: false,
+        loadTerrain: true,
+        loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
-        loadStaticModelList: [
+        _loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -415,8 +415,8 @@ async function startCore() {
             // 610, // light fixture with 2 lights near elven ruins
             // 591,
             // 602 // 0x42
-            // "StaticMeshActor613",
-            "StaticMeshActor6", // talking island church (3705 vertices)
+            "StaticMeshActor613",
+            // "StaticMeshActor6", // talking island church (3705 vertices)
             // 470,    // first object with scene lights near elven ruins
             // 1755, // light fixture with 3 lights near elven ruins
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures

@@ -139,9 +139,9 @@ class RenderManager {
         // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
         // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
-        // ti church
-        this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
-        this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
+        // // ti church
+        // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
+        // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

@@ -40,6 +40,10 @@ abstract class FRotator extends UObject {
         // const xAxis = Math.asin(GMath.sin(TrigFLOAT[this.roll]));
         // const zAxis = Math.asin(GMath.sin(TrigFLOAT[this.pitch]));
 
+        // const v = this.toVector()
+
+        // debugger;
+
         return [xAxis, yAxis, zAxis, "XYZ"];
     }
 

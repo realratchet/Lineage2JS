@@ -428,6 +428,21 @@ abstract class FMatrix extends UObject {
 
         return M;
     }
+
+    public toArray(): [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number] {
+        const arr = new Array<number>(16) as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
+
+        for (let y = 0; y < 4; y++) {
+            const row = this[y as 0 | 1 | 2 | 3];
+            for (let x = 0; x < 4; x++) {
+                const v = row[x as 0 | 1 | 2 | 3]
+
+                arr[x * 4 + y] = v;
+            }
+        }
+
+        return arr;
+    }
 }
 
 export default FMatrix;
