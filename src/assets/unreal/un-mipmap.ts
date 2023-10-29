@@ -2,7 +2,7 @@ import { BufferValue } from "@l2js/core";
 import { FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 
 class FMipmap implements C.IConstructable {
-    protected dataArray = new FPrimitiveArrayLazy(BufferValue.uint8);
+    public readonly dataArray = new FPrimitiveArrayLazy(BufferValue.uint8);
 
     public sizeW: number;
     public sizeH: number;

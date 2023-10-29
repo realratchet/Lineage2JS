@@ -1,4 +1,5 @@
 import GMath from "@client/assets/unreal/un-gmath";
+import FMatrix from "@client/assets/unreal/un-matrix";
 import FRotator from "@client/assets/unreal/un-rotator";
 import FScale from "@client/assets/unreal/un-scale";
 import FVector from "@client/assets/unreal/un-vector";
@@ -21,7 +22,7 @@ abstract class FCoords extends UObject {
         });
     }
 
-    
+
     public toString(): string {
         return `Corrds=(name=${this.objectName}, orig=${this.origin}, x=${this.xAxis}, y=${this.yAxis}, ${this.zAxis})`;
     }
@@ -33,6 +34,40 @@ abstract class FCoords extends UObject {
         this.xAxis = xAxis || this.xAxis;
         this.yAxis = yAxis || this.yAxis;
         this.zAxis = zAxis || this.zAxis;
+    }
+
+    public transpose() {
+        return FCoords.make(
+            this.origin.multiplyScalar(-1).transformVectorBy(this),
+            FVector.make(this.xAxis.x, this.yAxis.x, this.zAxis.x),
+            FVector.make(this.xAxis.y, this.yAxis.y, this.zAxis.y),
+            FVector.make(this.xAxis.z, this.yAxis.z, this.zAxis.z)
+        );
+    }
+
+    public matrix() {
+
+        const matrix = FMatrix.make();
+        const minusOrigin = this.origin.multiplyScalar(-1);
+
+        matrix[0][0] = this.xAxis.x;
+        matrix[0][1] = this.yAxis.x;
+        matrix[0][2] = this.zAxis.x;
+        matrix[0][3] = 0;
+        matrix[1][0] = this.xAxis.y;
+        matrix[1][1] = this.yAxis.y;
+        matrix[1][2] = this.zAxis.y;
+        matrix[1][3] = 0;
+        matrix[2][0] = this.xAxis.z;
+        matrix[2][1] = this.yAxis.z;
+        matrix[2][2] = this.zAxis.z;
+        matrix[2][3] = 0;
+        matrix[3][0] = this.xAxis.dot(minusOrigin);
+        matrix[3][1] = this.yAxis.dot(minusOrigin);
+        matrix[3][2] = this.zAxis.dot(minusOrigin);
+        matrix[3][3] = 1;
+
+        return matrix;
     }
 
     public mul(other: FCoords): FCoords;
@@ -248,28 +283,28 @@ function mulScale(coord: FCoords, other: FScale): FCoords {
 
 function divRotator(coord: FCoords, other: FRotator): FCoords {
     const roll = FCoords.make
-    (
-        FVector.make(0, 0, 0),
-        FVector.make(+1, -0, +0),
-        FVector.make(-0, +GMath().cos(other.roll), +GMath().sin(other.roll)),
-        FVector.make(+0, -GMath().sin(other.roll), +GMath().cos(other.roll))
-    );
+        (
+            FVector.make(0, 0, 0),
+            FVector.make(+1, -0, +0),
+            FVector.make(-0, +GMath().cos(other.roll), +GMath().sin(other.roll)),
+            FVector.make(+0, -GMath().sin(other.roll), +GMath().cos(other.roll))
+        );
 
     const pitch = FCoords.make
-    (
-        FVector.make(0, 0, 0),
-        FVector.make(+GMath().cos(other.pitch), +0, -GMath().sin(other.pitch)),
-        FVector.make(+0, +1, -0),
-        FVector.make(+GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
-    );
+        (
+            FVector.make(0, 0, 0),
+            FVector.make(+GMath().cos(other.pitch), +0, -GMath().sin(other.pitch)),
+            FVector.make(+0, +1, -0),
+            FVector.make(+GMath().sin(other.pitch), +0, +GMath().cos(other.pitch))
+        );
 
     const yaw = FCoords.make
-    (
-        FVector.make(0, 0, 0),
-        FVector.make(+GMath().cos(other.yaw), -GMath().sin(other.yaw), -0),
-        FVector.make(+GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
-        FVector.make(-0, +0, +1)
-    );
+        (
+            FVector.make(0, 0, 0),
+            FVector.make(+GMath().cos(other.yaw), -GMath().sin(other.yaw), -0),
+            FVector.make(+GMath().sin(other.yaw), +GMath().cos(other.yaw), +0),
+            FVector.make(-0, +0, +1)
+        );
 
     coord = coord.mul(
         FCoords.make

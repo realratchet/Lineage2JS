@@ -1,3 +1,4 @@
+import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 
 abstract class FPlane extends UObject {
@@ -17,11 +18,20 @@ abstract class FPlane extends UObject {
     public get 3() { return this.w; }
     public set 3(v: number) { this.w = v; }
 
-    constructor(x = 0, y = 0, z = 0, w = 0) {
+    public constructor(x = 0, y = 0, z = 0, w = 0) {
         super();
 
         this.set(x, y, z, w);
     }
+
+    public static fromPoints(a: FVector, b: FVector, c: FVector): FPlane {
+        const xyz = ((b.sub(a)).cross(c.sub(a))).normalized();
+        const w = a.dot((b.sub(a)).cross(c.sub(a)).normalized());
+
+        return FPlane.make(xyz.x, xyz.y, xyz.z, w);
+    }
+
+    public vector() { return FVector.make(this.x, this.y, this.z); }
 
     public set(x: number, y: number, z: number, w: number) {
         this.x = x;

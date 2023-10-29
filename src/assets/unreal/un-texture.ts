@@ -17,31 +17,31 @@ import FArray from "@l2js/core/src/unreal/un-array";
 */
 
 abstract class UTexture extends UMaterial {
-    declare protected palette: GA.UPlatte;
-    declare protected internalTime: number[];
-    declare protected format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;
+    declare public readonly palette: GA.UPlatte;
+    declare public readonly internalTime: number[];
+    declare public readonly format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;
 
-    declare public width: number;
-    declare public height: number;
-    declare protected bitsW: number; // texture size log2 (number of bits in size value)
-    declare protected bitsH: number;
-    declare protected wrapS: number;
-    declare protected wrapT: number;
+    declare public readonly width: number;
+    declare public readonly height: number;
+    declare public readonly bitsW: number; // texture size log2 (number of bits in size value)
+    declare public readonly bitsH: number;
+    declare public readonly wrapS: number;
+    declare public readonly wrapT: number;
 
-    declare protected maxColor: FColor;
-    declare protected mipZero: FColor;
+    declare public readonly maxColor: FColor;
+    declare public readonly mipZero: FColor;
 
-    declare protected minFrameRate: number;
-    declare protected maxFrameRate: number;
-    declare protected totalFrameNum: number;
-    declare protected animNext: UTexture;
+    declare public readonly minFrameRate: number;
+    declare public readonly maxFrameRate: number;
+    declare public readonly totalFrameNum: number;
+    declare public readonly animNext: UTexture;
 
-    declare protected isTwoSided: boolean;
-    declare protected isAlphaTexture: boolean;
-    declare protected isMasked: boolean;
+    declare public readonly isTwoSided: boolean;
+    declare public readonly isAlphaTexture: boolean;
+    declare public readonly isMasked: boolean;
 
-    declare protected clampModeU: number;
-    declare protected clampModeV: number;
+    declare public readonly clampModeU: number;
+    declare public readonly clampModeV: number;
 
 
     declare protected lodSet: number;

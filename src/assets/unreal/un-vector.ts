@@ -133,12 +133,18 @@ abstract class FVector extends UObject {
     }
 
     normalized() {
-        const len = this.length();
+        const lenSq = this.lengthSq();
+
+        if (lenSq < 1e-8)
+            return FVector.make();
+
+        const len = Math.sqrt(lenSq);
+        const scale = 1 / len;
 
         return FVector.make(
-            this.x / len,
-            this.y / len,
-            this.z / len
+            this.x * scale,
+            this.y * scale,
+            this.z * scale
         );
     }
 
