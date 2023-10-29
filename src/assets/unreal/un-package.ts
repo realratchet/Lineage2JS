@@ -137,9 +137,10 @@ class UCorePackage extends UPackage implements C.ICorePackage {
     public readonly isEngine = false;
     public readonly isNative = false;
 
+    // ripped directly from memory, likely some parts are calculated based on settings
     public static readonly NEAR_CLIPPING_PLANE = 10.0;
     public static readonly FAR_CLIPPING_PLANE = 65536.0;
-    public static readonly GRunningOS = ERunningOS.OS_WINNT;
+    public static readonly GRunningOS = ERunningOS.OS_UNKNOWN;
     public static readonly GL2AntiPortalCR = 1.0;
     public static readonly GL2ProjectorCR = 0.2;
     public static readonly GL2OriginTerrainCR = 4.0;

@@ -8,14 +8,18 @@ import { indexToTime } from "@client/assets/unreal/un-l2env";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
-    public someData = new FPrimitiveArray(BufferValue.uint8);
+    public light: GA.ULight;
+    public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
     public load(pkg: GA.UPackage): this {
 
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.lightIndex = pkg.read(compat32).value;
-        this.someData.load(pkg);
+
+        if (this.lightIndex !== 0) this.light = pkg.fetchObject(this.lightIndex);
+
+        this.visibilityBitmap.load(pkg);
 
         return this;
     }
@@ -26,12 +30,12 @@ abstract class UTerrainSector extends UObject {
     declare protected offsetX: number;
     declare protected offsetY: number;
     declare public info: GA.FTerrainInfo;
-    declare protected cellNum: number;
-    declare protected sectorWidth: number;
+    declare protected hasShadows: boolean;
+    declare protected shadowCount: number;
 
     declare protected infoId: number;
-    declare protected unkNum0: number;
-    declare protected unkNum1: number;
+    declare protected quadsX: number;
+    declare protected quadsY: number;
     declare protected unkNum2: number;
 
     declare protected unkBuf0: any;
@@ -39,21 +43,13 @@ abstract class UTerrainSector extends UObject {
     declare pkg: GA.UPackage;
 
     // likely mesh lights?
-    declare protected likelySegmentLights: FArray<FTerrainLightInfo>;
+    declare protected lightInfos: FArray<FTerrainLightInfo>;
 
-    declare protected shadowMaps: [
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">,
-        FPrimitiveArray<"uint8">
-    ];
+    declare protected shadowMaps: FPrimitiveArray<"uint8">[];
+    declare protected shadowMapTimes: number[];
 
     declare protected texInfo: FPrimitiveArray<"uint16">;
-    declare protected unk64Bytes: DataView;
+    declare protected unkElements: Int16Array;
 
     public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
@@ -77,21 +73,23 @@ abstract class UTerrainSector extends UObject {
         const width = iTerrainMap.width;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
-        const positions = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
+        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
-        const ambient = env.selectByTime(env.ambientTerrain).getColor();
+        const ambient = env.getAmbientPlaneTerrainLight();
 
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
 
-        let validShadowmap: C.FPrimitiveArray<any> = null;
-        for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
-            const timeForIndex = indexToTime(i, len);
+        let validShadowmap: C.FPrimitiveArray<"uint8"> = null;
+        if (this.shadowCount > 0) {
+            let idx = 0;
+            do {
+                if (env.timeOfDay < this.shadowMapTimes[idx])
+                    break;
+                idx++;
 
-            if (timeForIndex > env.timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
-                validShadowmap = this.shadowMaps[i];
-                break;
-            }
+            } while (idx < this.shadowCount)
+            validShadowmap = this.shadowMaps[idx];
         }
 
         const v = FVector.make();
@@ -104,7 +102,7 @@ abstract class UTerrainSector extends UObject {
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
 
-                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
+                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
                 positions[idxVertOffset + 0] = px - ox;
                 positions[idxVertOffset + 1] = py - oy;
@@ -141,6 +139,13 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
+        for (let i = 0, len = this.lightInfos.length; i < len; i++) {
+            const lightInfo = this.lightInfos[i];
+
+            // if()
+
+            debugger;
+        }
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -270,62 +275,25 @@ abstract class UTerrainSector extends UObject {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
-        // if (verArchive <= 0x5E) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verArchive >= 0x75) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verArchive < 0x59) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verArchive < 0x75) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verLicense >= 4) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verLicense < 8) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // } else {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verLicense < 10) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // debugger;
-
         this.boundingBox = FBox.make();
 
-        // pkg.dump(1, true, false);
-        pkg.seek(1);
+        super.doLoad(pkg, exp);
+
+        if (verArchive < 94) {
+            debugger;
+            throw new Error("not implemented");
+        }
 
         this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value;
         this.info = pkg.fetchObject(this.infoId);
 
-        // const uint16 = new BufferValue(BufferValue.uint16);
-        // const int32 = new BufferValue(BufferValue.int32);
-        const uint32 = new BufferValue(BufferValue.uint32);
+        const int16 = new BufferValue(BufferValue.int16);
+        const int32 = new BufferValue(BufferValue.int32);
 
         // pkg.dump(1, true, false);
 
-        this.unkNum0 = pkg.read(uint32).value;
-        this.unkNum1 = pkg.read(uint32).value;
+        this.quadsX = pkg.read(int32).value;
+        this.quadsY = pkg.read(int32).value;
 
         // console.log(this.unkNum0, this.unkNum1)
 
@@ -333,38 +301,56 @@ abstract class UTerrainSector extends UObject {
 
         // debugger;
 
-        this.offsetX = pkg.read(uint32).value;
-        this.offsetY = pkg.read(uint32).value;
+        this.offsetX = pkg.read(int32).value;
+        this.offsetY = pkg.read(int32).value;
 
         // console.log(this.offsetX, this.offsetY);
 
         // debugger;
 
-        this.boundingBox.load(pkg);
+        if (verArchive >= 117)
+            this.boundingBox.load(pkg);
+        else {
+            debugger;
+            throw new Error("not implemented");
+        }
 
-        // debugger;
-        this.likelySegmentLights = new FArray(FTerrainLightInfo);
-        this.likelySegmentLights.load(pkg);
+        this.lightInfos = new FArray(FTerrainLightInfo);
+        this.lightInfos.load(pkg);
 
+        // if (this.lightInfos.length > 0) {
+        //     debugger;
+        // }
 
-        this.cellNum = pkg.read(uint32).value;
-        this.sectorWidth = pkg.read(uint32).value;
+        if (verLicense >= 4) {
+            const hasShadows = pkg.read(int32).value;
 
-        this.readHead = pkg.tell();
+            this.hasShadows = hasShadows !== 0;
 
-        this.shadowMaps = [
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg),
-            new FPrimitiveArray(BufferValue.uint8).load(pkg)
-        ];
+            if (hasShadows !== 0 && hasShadows !== 1)
+                debugger;
 
-        this.unk64Bytes = pkg.read(BufferValue.allocBytes(64)).bytes;
-        this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
+            if (this.hasShadows && this.info) {
+                this.shadowCount = pkg.read(int32).value;
+                this.shadowMaps = new Array<FPrimitiveArray<"uint8">>(this.shadowCount);
+                this.shadowMapTimes = new Array<number>(this.shadowCount);
+
+                for (let i = 0; i < this.shadowCount; i++) {
+                    this.shadowMaps[i] = new FPrimitiveArray(BufferValue.uint8).load(pkg);
+                    this.shadowMapTimes[i] = i * 24 / this.shadowCount + 12 / this.shadowCount
+                }
+            }
+        }
+
+        this.unkElements = new Int16Array(32);
+        if (verLicense >= 8) {
+            for (let i = 0; i < 32; i++) {
+                this.unkElements[i] = pkg.read(int16).value;
+            }
+        } else this.unkElements.fill(-1);
+
+        if (verLicense > 10)
+            this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
 
         this.readHead = pkg.tell();
 

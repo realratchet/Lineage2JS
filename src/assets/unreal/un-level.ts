@@ -129,8 +129,6 @@ abstract class ULevel extends ULevelBase {
 
         console.assert(this.bytesUnread === 0);
 
-        // debugger;
-
         return this;
     }
 

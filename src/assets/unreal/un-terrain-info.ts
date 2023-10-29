@@ -38,11 +38,11 @@ abstract class FTerrainInfo extends AInfo {
 
     declare protected sectorsX: number;
     declare protected sectorsY: number;
-    declare public terrainCoords: GA.FCoords;
-    declare protected unkIntArr1: number[];
-    declare protected unkInt2: number;
-    declare protected unkInt3: number;
-    declare protected unkColorArr: C.FArray<GA.FColor>;
+    declare public toWorld: GA.FCoords;
+    declare protected toHeightMap: GA.FCoords;
+    declare protected heightmapX: number;
+    declare protected heightmapY: number;
+    declare protected vertexColors: C.FArray<GA.FColor>;
 
     declare public boundingBox: GA.FBox;
     // public heightmapMin: number;
@@ -184,12 +184,12 @@ abstract class FTerrainInfo extends AInfo {
 
         this.readHead = pkg.tell();
 
-
         this.boundingBox = FBox.make();
-        this.terrainCoords = FCoords.make();
-        this.unkColorArr = new FArray(FColor.class());
+        this.toWorld = FCoords.make();
+        this.toHeightMap = FCoords.make();
+        this.vertexColors = new FArray(FColor.class());
 
-        if (verLicense >= 0x11) {
+        if (verLicense >= 17) {
             this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();
 
             this.readHead = pkg.tell();
@@ -208,60 +208,46 @@ abstract class FTerrainInfo extends AInfo {
             debugger;
         }
 
-        if (verArchive >= 0x53) {
-            this.terrainCoords.load(pkg);
-            this.unkIntArr1 = new Array(12).fill(1).map(() => pkg.read(float).value);
-        } else {
+        if (verArchive < 0x53) {
             console.warn("Unsupported yet");
             debugger;
         }
 
-        if (verArchive >= 0x4C) {
-            this.unkInt2 = pkg.read(int32).value;
-            this.unkInt3 = pkg.read(int32).value;
-        } else {
+        this.toWorld.load(pkg);
+        this.toHeightMap.load(pkg);
+
+        if (verArchive < 0x4c) {
             console.warn("Unsupported yet");
             debugger;
         }
 
-        if (verArchive <= 0x4A) {
+        this.heightmapX = pkg.read(int32).value;
+        this.heightmapY = pkg.read(int32).value;
+
+        if (verArchive > 74 && verArchive < 82) {
             console.warn("Unsupported yet");
             debugger;
-        } else {
-            if (verArchive >= 0x52) {
-                if (verArchive >= 0x56) {
-                    if (verArchive <= 0x57) {
-                        console.warn("Unsupported yet");
-                        debugger;
-                    } else {
-                        if (verArchive >= 0x73) {
-                            if (verArchive >= 0x77) {
-                                if (verArchive >= 0x75) this.unkColorArr.load(pkg, null);
-                                else {
-                                    console.warn("Unsupported yet");
-                                    debugger;
-                                }
-                            } else {
-                                console.warn("Unsupported yet");
-                                debugger;
-                            }
-                        } else {
-                            console.warn("Unsupported yet");
-                            debugger;
-                        }
-                    }
-                } else {
-                    console.warn("Unsupported yet");
-                    debugger;
-                }
-            } else {
-                console.warn("Unsupported yet");
-                debugger;
-            }
         }
+
+        if (verArchive === 86 || verArchive === 87) {
+            console.warn("Unsupported yet");
+            debugger;
+        }
+
+        if (verArchive < 115) {
+            console.warn("Unsupported yet");
+            debugger;
+        }
+
+        if (verArchive < 119) {
+            console.warn("Unsupported yet");
+            debugger;
+        }
+
+        if (verArchive >= 117) this.vertexColors.load(pkg);
 
         this.readHead = pkg.tell();
-
+        debugger;
 
         return this;
     }

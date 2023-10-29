@@ -231,6 +231,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         return this;
     }
 
+    public getAmbientPlaneTerrainLight(): FPlane {
+        return getColorPlane(this.timeOfDay, this.ambientTerrain);
+    }
+
     public getAmbientPlaneStaticMeshSunLight(): FPlane {
         return getColorPlane(this.timeOfDay, this.ambientStaticMesh);
     }
