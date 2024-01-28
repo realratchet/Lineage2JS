@@ -27,18 +27,15 @@ class FTerrainLightInfo implements C.IConstructable {
 
 abstract class UTerrainSector extends UObject {
     declare public boundingBox: FBox;
-    declare protected offsetX: number;
-    declare protected offsetY: number;
+    declare public offsetX: number;
+    declare public offsetY: number;
     declare public info: GA.FTerrainInfo;
     declare protected hasShadows: boolean;
     declare protected shadowCount: number;
 
     declare protected infoId: number;
-    declare protected quadsX: number;
-    declare protected quadsY: number;
-    declare protected unkNum2: number;
-
-    declare protected unkBuf0: any;
+    declare public quadsX: number;
+    declare public quadsY: number;
 
     declare pkg: GA.UPackage;
 
@@ -51,7 +48,7 @@ abstract class UTerrainSector extends UObject {
     declare protected texInfo: FPrimitiveArray<"uint16">;
     declare protected unkElements: Int16Array;
 
-    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
@@ -104,6 +101,13 @@ abstract class UTerrainSector extends UObject {
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
+                if (edgeTurns[offset >> 5] & (1 << (offset & 0x1f))) {
+                    // 124, 423
+                } else {
+                    // 123, 134
+                }
+
+
                 positions[idxVertOffset + 0] = px - ox;
                 positions[idxVertOffset + 1] = py - oy;
                 positions[idxVertOffset + 2] = pz - oz;
@@ -139,13 +143,13 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
-        for (let i = 0, len = this.lightInfos.length; i < len; i++) {
-            const lightInfo = this.lightInfos[i];
+        // for (let i = 0, len = this.lightInfos.length; i < len; i++) {
+        //     const lightInfo = this.lightInfos[i];
 
-            // if()
+        //     // if()
 
-            debugger;
-        }
+        //     debugger;
+        // }
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -356,10 +360,102 @@ abstract class UTerrainSector extends UObject {
 
         return this;
     }
+
+    protected getVertex(x: number, y: number): FVector {
+        const info = this.info;
+        const vertices = info.vertices;
+        const offset = info.getGlobalVertex(x, y);
+
+        return vertices[offset];
+    }
+
+    protected getVertexNormal(x: number, y: number): FVector {
+        const info = this.info;
+        const ox = this.offsetX, oy = this.offsetY;
+        const tx = (ox === 240 && x === 16) ? 15 : x;
+        const ty = (oy === 240 && y === 16) ? 15 : y;
+        const normal = info.getVertexNormal(ox + tx, oy + ty);
+
+        return normal;
+    }
+
+
+
+    public generateTriangles() {
+        const info = this.info;
+        const invSize = 1 / 4096;
+        const hmx = info.heightmapX, hmy = info.heightmapY;
+
+        const vertexCount = (this.quadsX + 1) * (this.quadsY + 1);
+        const vertices = new Float32Array(vertexCount * 3);
+        const normals = new Float32Array(vertexCount * 3);
+        const uvs = new Float32Array(vertexCount * 2);
+
+
+        for (let y = 0, it3 = 0, it2 = 0; y <= this.quadsY; y++) {
+            for (let x = 0; x <= this.quadsX; x++, it3 += 3, it2 += 2) {
+                const vertex = this.getVertex(x, y);
+                const normal = this.getVertexNormal(x, y);
+
+                const ix = this.offsetX + x, iy = this.offsetY + y;
+                const hix = ix + 0.5, hiy = iy + 0.5;
+                const u = hix / hmx - (ix >= 240 ? (ix - 240) * invSize : 0);
+                const v = hiy / hmy - (iy >= 240 ? (iy - 240) * invSize : 0);
+
+                vertices[it3 + 0] = vertex.x;
+                vertices[it3 + 1] = vertex.y;
+                vertices[it3 + 2] = vertex.z;
+
+                normals[it3 + 0] = normal.x;
+                normals[it3 + 1] = normal.y;
+                normals[it3 + 2] = normal.z;
+
+                uvs[it2 + 0] = u;
+                uvs[it2 + 1] = v;
+            }
+        }
+
+        const layers = info.layers, layerCount = layers.length;
+        const sectorLayers = layers.filter((layer, index) => {
+            if (!layer && this.isSectorAll(layer, 0)) return false;
+
+            for (let i = index + 1; i < layerCount; i++) {
+                const other = layers[i].loadSelf();
+
+                if (!other) return false;
+
+                if (!other.map.isTransparent() && this.isSectorAll(other, 255))
+                    return false;
+
+            }
+
+            return true;
+        });
+
+        debugger;
+    }
+
+    protected isSectorAll(layer: GA.UTerrainLayer, alphaValue: number) {
+        const info = this.info;
+        const alphaMap = layer.alphaMap;
+        const ratio = (alphaMap.width || 0) / info.heightmapX;
+
+        const minx = Math.floor(ratio * this.offsetX), maxx = Math.ceil(ratio * (this.offsetX + this.quadsX));
+        const miny = Math.floor(ratio * this.offsetY), maxy = Math.ceil(ratio * (this.offsetY + this.quadsY));
+
+        for (let x = minx; x < maxx; x++) {
+            for (let y = miny; y < maxy; y++) {
+                if (info.getLayerAlpha(x, y, -2, alphaMap) !== alphaValue)
+                    return 0;
+            }
+        }
+
+        return 1;
+    }
 }
 
 
 export default UTerrainSector;
 export { UTerrainSector };
 
-type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo };
+type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo, edgeTurns: Int32Array };

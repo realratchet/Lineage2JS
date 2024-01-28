@@ -79,10 +79,11 @@ abstract class UTexture extends UMaterial {
             "bAlphaTexture": "isAlphaTexture",
             "bMasked": "isMasked",
 
-
             "LODSet": "lodSet",
         });
     }
+
+    public isTransparent() { return this.isAlphaTexture || this.isMasked; }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {    // 2785
         super.doLoad(pkg, exp);
@@ -143,8 +144,8 @@ abstract class UTexture extends UMaterial {
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
 
-        const firstMipmap = this.mipmaps[0] as FMipmap;
-        const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] as FMipmap : firstMipmap;
+        const firstMipmap = this.mipmaps[0];
+        const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] : firstMipmap;
         const insertMipmap = loadMipmaps ? lastMipmap.sizeW !== 1 || lastMipmap.sizeH !== 1 : false;
         const levelsToInsert = loadMipmaps ? Math.log2(Math.max(lastMipmap.sizeW, lastMipmap.sizeH)) : 0;
 
@@ -252,7 +253,7 @@ abstract class UTexture extends UMaterial {
                     if (format === ETexturePixelFormat.TPF_BGRA8) {
                         const view = new Uint8Array(decodedBuffer);
 
-                        for(let i = 0, len = view.length; i < len; i += 4) {
+                        for (let i = 0, len = view.length; i < len; i += 4) {
                             const r = view[i], b = view[i + 2];
 
                             view[i] = b;

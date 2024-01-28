@@ -61,8 +61,8 @@ abstract class FTerrainInfo extends AInfo {
     declare protected sectorsY: number;
     declare public toWorld: GA.FCoords;
     declare protected toHeightMap: GA.FCoords;
-    declare protected heightmapX: number;
-    declare protected heightmapY: number;
+    declare public readonly heightmapX: number;
+    declare public readonly heightmapY: number;
     declare protected vertexColors: C.FArray<GA.FColor>;
 
     declare public boundingBox: GA.FBox;
@@ -71,6 +71,10 @@ abstract class FTerrainInfo extends AInfo {
 
     declare protected readonly hasDynamicLight: boolean;
     declare protected readonly forcedRegion: number;
+    declare protected readonly inverted: boolean;
+
+    declare public vertices: Array<FVector>;
+    declare public faceNormals: Array<FTerrainNormalPair>;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -139,6 +143,11 @@ abstract class FTerrainInfo extends AInfo {
             "bDynamicLight": "hasDynamicLight",
             "ForcedRegion": "forcedRegion",
 
+            "Inverted": "inverted",
+
+            "Vertices": "vertices",
+            "FaceNormals": "faceNormals",
+
             //         "TerrainSectorSize": "_terrainSectorSize",
             //         "DecoLayerOffset": "_decoLayerOffset",
             //         "Inverted": "_inverted",
@@ -146,12 +155,10 @@ abstract class FTerrainInfo extends AInfo {
             //         "JustLoaded": "_justLoaded",
             //         "DecoLayerData": "_decoLayerData",
 
-            //         "Vertices": "_vertices",
             //         "HeightmapX": "_heightmapX",
             //         "HeightmapY": "_heightmapY",
 
             //         "Primitive": "_primitive",
-            //         "FaceNormals": "_faceNormals",
             //         "ToWorld": "_toWorld",
             //         "ToHeightmap": "_toHeightmap",
             //         "SelectedVertices": "_selectedVertices",
@@ -189,6 +196,36 @@ abstract class FTerrainInfo extends AInfo {
 
     //     return super.readStruct(pkg, tag);
     // }
+
+    public getLayerAlpha(x: number, y: number, layer: number, alphaMap: GA.UTexture) {
+        const texture = alphaMap
+            ? alphaMap
+            : (layer === -1 ? this.terrainMap : this.layers[layer].alphaMap);
+
+        if (!texture) return 0;
+
+        texture.loadSelf();
+
+        if (layer !== 2) {
+            x = x * texture.width / this.heightmapX;
+            y = y * texture.height / this.heightmapY;
+        }
+
+        if (texture.mipmaps.getElemCount() <= 0) return 0;
+
+        const data = texture.mipmaps.getElem(0)?.dataArray;
+
+        if (!data) return 0;
+
+        const offset = x + y * texture.width;
+
+        switch (texture.format) {
+            case ETextureFormat.TEXF_L8: return data.getElem(offset);
+            case ETextureFormat.TEXF_P8: return texture.palette.colors[data.getElem(offset)].r;
+            case ETextureFormat.TEXF_RGB8: return data.getElem(offset * 4 + 3);
+            default: throw new Error("invalid");
+        }
+    }
 
     public doLoad(pkg: GA.UPackage, exp: C.UExport<FTerrainInfo>) {
         const verArchive = pkg.header.getArchiveFileVersion();
@@ -304,53 +341,56 @@ abstract class FTerrainInfo extends AInfo {
     protected calcLayerTexCoords() {
         // seems to be precomputed in lineage2 but keep algo for the moment
 
-        // const toHeightmapTransposed = this.toHeightMap.transpose();
-        // for (let i = 0, lcount = this.layers.length; i < lcount; i++) {
-        //     const layer = this.layers[i];
+        const toHeightmapTransposed = this.toHeightMap.transpose();
+        for (let i = 0, lcount = this.layers.length; i < lcount; i++) {
+            const layer = this.layers[i];
 
-        //     if (!layer || !layer.map || !layer.alphaMap) continue;
+            if (!layer || !layer.map || !layer.alphaMap) continue;
 
-        //     if (layer.alphaMap.loadSelf().format === ETextureFormat.TEXF_P8) {
-        //         const palette = layer.alphaMap.palette.loadSelf();
+            if (layer.alphaMap.loadSelf().format === ETextureFormat.TEXF_P8) {
+                const palette = layer.alphaMap.palette.loadSelf();
 
-        //         for (let p = 0; p < 256; p++) {
-        //             const colr = palette.colors[p];
+                for (let p = 0; p < 256; p++) {
+                    const colr = palette.colors[p];
 
-        //             colr.a = colr.r;
-        //         }
-        //     }
+                    colr.a = colr.r;
+                }
+            }
 
-        //     const rotator = FRotator.make(0, layer.mapRotation, 0);
-        //     const texCoords = GMath().unitCoords.div(rotator).mul(toHeightmapTransposed);
-        //     const addOrigin = FVector.make(layer.panW * layer.scaleW, layer.panH * layer.scaleH, 0).transformVectorBy(this.toWorld);
+            const rotator = FRotator.make(0, layer.mapRotation, 0);
+            const texCoords = GMath().unitCoords.div(rotator).mul(toHeightmapTransposed);
+            const addOrigin = FVector.make(layer.panW * layer.scaleW, layer.panH * layer.scaleH, 0).transformVectorBy(this.toWorld);
 
-        //     texCoords.xAxis = texCoords.xAxis.divideScalar(layer.scaleW);
-        //     texCoords.yAxis = texCoords.yAxis.divideScalar(layer.scaleH);
-        //     texCoords.origin = texCoords.origin.add(addOrigin);
+            texCoords.xAxis = texCoords.xAxis.divideScalar(layer.scaleW);
+            texCoords.yAxis = texCoords.yAxis.divideScalar(layer.scaleH);
+            texCoords.origin = texCoords.origin.add(addOrigin);
 
 
-        //     switch (layer.mapAxis) {
-        //         case TextureMapAxis_T.TEXMAPAXIS_XZ:
-        //             [texCoords.origin.y, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.y];
-        //             [texCoords.origin.x, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.x];
-        //             [texCoords.xAxis.x, texCoords.xAxis.z] = [texCoords.xAxis.z, texCoords.xAxis.x];
-        //             [texCoords.yAxis.x, texCoords.yAxis.y] = [texCoords.yAxis.y, texCoords.yAxis.x];
-        //             [texCoords.zAxis.y, texCoords.zAxis.z] = [texCoords.zAxis.z, texCoords.zAxis.y];
-        //             break;
-        //         case TextureMapAxis_T.TEXMAPAXIS_YZ:
-        //             [texCoords.origin.x, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.x];
-        //             [texCoords.xAxis.x, texCoords.xAxis.z] = [texCoords.xAxis.z, texCoords.xAxis.x];
-        //             [texCoords.zAxis.x, texCoords.zAxis.z] = [texCoords.zAxis.z, texCoords.zAxis.x];
-        //             break;
-        //     }
+            switch (layer.mapAxis) {
+                case TextureMapAxis_T.TEXMAPAXIS_XZ:
+                    [texCoords.origin.y, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.y];
+                    [texCoords.origin.x, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.x];
+                    [texCoords.xAxis.x, texCoords.xAxis.z] = [texCoords.xAxis.z, texCoords.xAxis.x];
+                    [texCoords.yAxis.x, texCoords.yAxis.y] = [texCoords.yAxis.y, texCoords.yAxis.x];
+                    [texCoords.zAxis.y, texCoords.zAxis.z] = [texCoords.zAxis.z, texCoords.zAxis.y];
+                    break;
+                case TextureMapAxis_T.TEXMAPAXIS_YZ:
+                    [texCoords.origin.x, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.x];
+                    [texCoords.xAxis.x, texCoords.xAxis.z] = [texCoords.xAxis.z, texCoords.xAxis.x];
+                    [texCoords.zAxis.x, texCoords.zAxis.z] = [texCoords.zAxis.z, texCoords.zAxis.x];
+                    break;
+            }
 
-        //     const texCoordsFinal = texCoords.mul(GMath().unitCoords.div(layer.layerRotation));
+            const texCoordsFinal = texCoords.mul(GMath().unitCoords.div(layer.layerRotation));
+            const terrainMatrix = texCoordsFinal.matrix();
 
-        //     layer.terrainMatrix = texCoordsFinal.matrix();
-        // }
+            // debugger;
+            // internally called textureMatrix? maybe version change renamed it?
+            layer.terrainMatrix = terrainMatrix;
+        }
     }
 
-    protected getGlobalVertex(x: number, y: number) { return x + y * this.heightmapX; }
+    public getGlobalVertex(x: number, y: number) { return x + y * this.heightmapX; }
     protected heightmapToWorld(H: FVector) { return H.transformPointBy(this.toWorld); }
     protected getHeightmap(x: number, y: number) {
         const width = this.terrainMap.width;
@@ -368,6 +408,39 @@ abstract class FTerrainInfo extends AInfo {
         return (this.edgeTurnBitmap.getElem(BitIndex >> 5) & (1 << (BitIndex & 0x1f))) ? 1 : 0;
     }
 
+    public getVertexNormal(x: number, y: number) {
+        const v = this.getGlobalVertex(x, y);
+        const fn = this.faceNormals[v];
+
+        let n = fn.normal1.add(fn.normal2);
+
+        if (x > 0) {
+            const fn = this.faceNormals[v - 1];
+
+            n = n.add(fn.normal1).add(fn.normal2);
+        }
+
+        if (y > 0) {
+            const v = this.getGlobalVertex(x, y - 1);
+            const fn = this.faceNormals[v];
+
+            n = n.add(fn.normal1).add(fn.normal2);
+
+            if (x > 0) {
+                const fn = this.faceNormals[v - 1];
+
+                n = n.add(fn.normal1).add(fn.normal2);
+            }
+        }
+
+        n = n.normalized();
+
+        if (this.inverted)
+            n = n.negate();
+
+        return n;
+    }
+
     protected updateVertices(startX: number, startY: number, endX: number, endY: number) {
 
         if (!this.terrainMap)
@@ -382,7 +455,7 @@ abstract class FTerrainInfo extends AInfo {
         for (let i = 0; i < vCount; i++)
             faceNormals[i] = new FTerrainNormalPair();
 
-        debugger;
+        // debugger;
 
         for (let y = startY; y < endY; y++) {
             for (let x = startX; x < endX; x++) {
@@ -403,12 +476,16 @@ abstract class FTerrainInfo extends AInfo {
                 }
             }
         }
+
+        this.faceNormals = faceNormals;
+        this.vertices = vertices;
     }
 
     protected updateTriangles(startX: number, startY: number, endX: number, endY: number) {
         //!! make this faster
         for (let i = 0, len = this.sectors.length; i < len; i++) {
-            const sector = this.sectors[i];
+            const sector = this.sectors[i].loadSelf();
+
             if (
                 sector.offsetX > endX ||
                 sector.offsetY > endY ||
@@ -417,14 +494,15 @@ abstract class FTerrainInfo extends AInfo {
             )
                 continue;
 
-            debugger;
-
             // if( UpdateLighting )
             //     Sectors(i)->StaticLight(1);
             // Sectors(i)->GenerateTriangles();
-        }
-    }
 
+            sector.generateTriangles();
+        }
+
+        debugger;
+    }
 
     protected combineLayerWeights() { throw new Error("not yet implemented"); }
 
@@ -454,7 +532,8 @@ abstract class FTerrainInfo extends AInfo {
         const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
         const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
-        const heightmapData = { info: iTerrainMap, data: terrainData };
+        const edgeTurnBitmap = this.edgeTurnBitmap.getTypedArray();
+        const heightmapData = { info: iTerrainMap, data: terrainData, edgeTurns: edgeTurnBitmap };
 
         const layers: { map: string, alphaMap: string }[] = new Array(layerCount);
 

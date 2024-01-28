@@ -33,6 +33,7 @@ abstract class UTerrainLayer extends UObject {
             "AlphaMap": "alphaMap",
             "UScale": "scaleW",
             "VScale": "scaleH",
+            "Scale": "scale",
             "UPan": "panW",
             "VPan": "panH",
             "TextureMapAxis": "mapAxis",
@@ -42,7 +43,6 @@ abstract class UTerrainLayer extends UObject {
             "KFriction": "friction",
             "KRestitution": "restitution",
             "LayerWeightMap": "weightMap",
-            "Scale": "Scale",
             "ToWorld": "toWorld",
             "ToMaskmap": "toMaskmap",
             "bUseAlpha": "useAlpha"
