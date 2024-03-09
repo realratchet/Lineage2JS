@@ -46,7 +46,7 @@ abstract class UTerrainSector extends UObject {
     declare protected shadowMapTimes: number[];
 
     declare protected texInfo: FPrimitiveArray<"uint16">;
-    declare protected unkElements: Int16Array;
+    declare protected someSectorVisibilityMask: Int16Array;
 
     public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
@@ -346,12 +346,12 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
-        this.unkElements = new Int16Array(32);
+        this.someSectorVisibilityMask = new Int16Array(32);
         if (verLicense >= 8) {
             for (let i = 0; i < 32; i++) {
-                this.unkElements[i] = pkg.read(int16).value;
+                this.someSectorVisibilityMask[i] = pkg.read(int16).value;
             }
-        } else this.unkElements.fill(-1);
+        } else this.someSectorVisibilityMask.fill(-1);
 
         if (verLicense > 10)
             this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
@@ -398,14 +398,13 @@ abstract class UTerrainSector extends UObject {
         const vertices = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
+        const colors = new Float32Array(vertexCount * 4);
 
-
-        for (let y = 0, it3 = 0, it2 = 0; y <= this.quadsY; y++) {
-            for (let x = 0; x <= this.quadsX; x++, it3 += 3, it2 += 2) {
+        for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= this.quadsY; y++) {
+            for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
-
-                debugger;
+                const color = this.getVertexColor(x, y);
 
                 const ix = this.offsetX + x, iy = this.offsetY + y;
                 const hix = ix + 0.5, hiy = iy + 0.5;
@@ -420,37 +419,51 @@ abstract class UTerrainSector extends UObject {
                 normals[it3 + 1] = normal.y;
                 normals[it3 + 2] = normal.z;
 
+                colors[it4 + 0] = color.r / 255;
+                colors[it4 + 1] = color.g / 255;
+                colors[it4 + 2] = color.b / 255;
+                colors[it4 + 3] = color.a / 255;
+
                 uvs[it2 + 0] = u;
                 uvs[it2 + 1] = v;
             }
         }
 
+        
         const layers = info.layers, layerCount = layers.length;
-        const sectorLayers = layers.filter((layer, index) => {
-            layer?.loadSelf();
+        const layerIndices = new Array<number>(); // expected: 0, 1, 4, 5, 7
 
-            if (!layer || this.isSectorAll(layer, 0))
-                return false;
+        for (let index = 0; index < layerCount; index++) {
+            if (!info.layers[index] || this.isSectorAll(index, 0))
+                continue;
 
-            for (let i = index + 1; i < layerCount; i++) {
-                const other = layers[i]?.loadSelf();
+            for (let indexOther = index + 1; indexOther < layerCount; indexOther++) {
+                const other = info.layers[indexOther]?.loadSelf();
 
-                if (!other || !other.map)
+                if (!other?.map?.isTransparent() && this.isSectorAll(indexOther, 255))
                     continue;
-
-                if (!other.map.isTransparent() && this.isSectorAll(other, 255))
-                    return false;
 
             }
 
-            return true;
-        });
+            layerIndices.push(index);
+        }
 
         debugger;
     }
 
-    protected isSectorAll(layer: GA.UTerrainLayer, alphaValue: number) {
+    protected isSectorAll(index: number, alphaValue: number) {
         const info = this.info;
+        const layer = info.layers[index]?.loadSelf();
+
+        if (!layer) return false;
+
+        const sectorFlag = this.someSectorVisibilityMask[index];
+
+        if (sectorFlag !== -1)
+            return alphaValue === sectorFlag;
+
+        // there's some stuff here related to edges
+
         const alphaMap = layer.alphaMap;
 
         if (!alphaMap) return false;
