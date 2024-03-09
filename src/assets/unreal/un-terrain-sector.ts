@@ -369,6 +369,14 @@ abstract class UTerrainSector extends UObject {
         return vertices[offset];
     }
 
+    protected getVertexColor(x: number, y: number): GA.FColor {
+        const info = this.info;
+        const colors = info.vertexColors;
+        const offset = info.getGlobalVertex(x, y);
+
+        return colors[offset];
+    }
+
     protected getVertexNormal(x: number, y: number): FVector {
         const info = this.info;
         const ox = this.offsetX, oy = this.offsetY;
@@ -397,6 +405,8 @@ abstract class UTerrainSector extends UObject {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
 
+                debugger;
+
                 const ix = this.offsetX + x, iy = this.offsetY + y;
                 const hix = ix + 0.5, hiy = iy + 0.5;
                 const u = hix / hmx - (ix >= 240 ? (ix - 240) * invSize : 0);
@@ -417,12 +427,16 @@ abstract class UTerrainSector extends UObject {
 
         const layers = info.layers, layerCount = layers.length;
         const sectorLayers = layers.filter((layer, index) => {
-            if (!layer && this.isSectorAll(layer, 0)) return false;
+            layer?.loadSelf();
+
+            if (!layer || this.isSectorAll(layer, 0))
+                return false;
 
             for (let i = index + 1; i < layerCount; i++) {
-                const other = layers[i].loadSelf();
+                const other = layers[i]?.loadSelf();
 
-                if (!other) return false;
+                if (!other || !other.map)
+                    continue;
 
                 if (!other.map.isTransparent() && this.isSectorAll(other, 255))
                     return false;
@@ -438,6 +452,9 @@ abstract class UTerrainSector extends UObject {
     protected isSectorAll(layer: GA.UTerrainLayer, alphaValue: number) {
         const info = this.info;
         const alphaMap = layer.alphaMap;
+
+        if (!alphaMap) return false;
+
         const ratio = (alphaMap.width || 0) / info.heightmapX;
 
         const minx = Math.floor(ratio * this.offsetX), maxx = Math.ceil(ratio * (this.offsetX + this.quadsX));
@@ -445,12 +462,14 @@ abstract class UTerrainSector extends UObject {
 
         for (let x = minx; x < maxx; x++) {
             for (let y = miny; y < maxy; y++) {
-                if (info.getLayerAlpha(x, y, -2, alphaMap) !== alphaValue)
-                    return 0;
+                const layerAlphaValue = info.getLayerAlpha(x, y, -2, alphaMap);
+
+                if (layerAlphaValue !== alphaValue)
+                    return false;
             }
         }
 
-        return 1;
+        return true;
     }
 }
 

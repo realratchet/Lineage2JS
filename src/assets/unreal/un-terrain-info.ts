@@ -63,18 +63,18 @@ abstract class FTerrainInfo extends AInfo {
     declare protected toHeightMap: GA.FCoords;
     declare public readonly heightmapX: number;
     declare public readonly heightmapY: number;
-    declare protected vertexColors: C.FArray<GA.FColor>;
-
+    
     declare public boundingBox: GA.FBox;
     // public heightmapMin: number;
     // public heightmapMax: number;
-
+    
     declare protected readonly hasDynamicLight: boolean;
     declare protected readonly forcedRegion: number;
     declare protected readonly inverted: boolean;
-
+    
     declare public vertices: Array<FVector>;
     declare public faceNormals: Array<FTerrainNormalPair>;
+    declare public vertexColors: C.FArray<GA.FColor>;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -205,6 +205,14 @@ abstract class FTerrainInfo extends AInfo {
         if (!texture) return 0;
 
         texture.loadSelf();
+
+        switch (texture.format) {
+            case ETextureFormat.TEXF_L8:
+            case ETextureFormat.TEXF_P8:
+            case ETextureFormat.TEXF_RGB8:
+                break;
+            default: return 0;
+        }
 
         if (layer !== 2) {
             x = x * texture.width / this.heightmapX;
@@ -393,14 +401,29 @@ abstract class FTerrainInfo extends AInfo {
     public getGlobalVertex(x: number, y: number) { return x + y * this.heightmapX; }
     protected heightmapToWorld(H: FVector) { return H.transformPointBy(this.toWorld); }
     protected getHeightmap(x: number, y: number) {
+
+        x = Math.min(x, this.heightmapX - 1);
+        y = Math.min(y, this.heightmapY - 1);
+
         const width = this.terrainMap.width;
+        const array = this.terrainMap.mipmaps[0].dataArray;
+
         switch (this.terrainMap.format) {
             case ETextureFormat.TEXF_G16:
-                return this.terrainMap.mipmaps[0].dataArray.getElem((x + y * width) * 2);
+                const offset = (x + y * width) * 2;     // our byte array is uint16
+                const bitA = array.getElem(offset);     // least significant bit
+                const bitB = array.getElem(offset + 1); // most significant bit
+
+                return (bitB << 8) + bitA;
             case ETextureFormat.TEXF_P8:
                 return 256 * this.terrainMap.mipmaps[0].dataArray.getElem(x + y * width);
+            case ETextureFormat.TEXF_RGB8:
+                // L2 implementation has more assembly compared to UE
+                break;
+            default: return 0;
         }
-        return 0;
+
+        throw new Error("not yet implemented");
     }
 
     public getEdgeTurnBitmap(x: number, y: number) {

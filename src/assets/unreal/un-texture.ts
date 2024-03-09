@@ -16,6 +16,11 @@ import FArray from "@l2js/core/src/unreal/un-array";
     0000100000 ( 32)
 */
 
+enum ETexClampMode {
+    TC_Wrap = 0x00,
+    TC_Clamp = 0x01,
+}
+
 abstract class UTexture extends UMaterial {
     declare public readonly palette: GA.UPlatte;
     declare public readonly internalTime: number[];
@@ -25,8 +30,11 @@ abstract class UTexture extends UMaterial {
     declare public readonly height: number;
     declare public readonly bitsW: number; // texture size log2 (number of bits in size value)
     declare public readonly bitsH: number;
-    declare public readonly wrapS: number;
-    declare public readonly wrapT: number;
+    declare public readonly wrapS: ETexClampMode;
+    declare public readonly wrapT: ETexClampMode;
+
+    declare public readonly clampedW: number; // clamped width
+    declare public readonly clampedH: number;
 
     declare public readonly maxColor: FColor;
     declare public readonly mipZero: FColor;
@@ -39,10 +47,6 @@ abstract class UTexture extends UMaterial {
     declare public readonly isTwoSided: boolean;
     declare public readonly isAlphaTexture: boolean;
     declare public readonly isMasked: boolean;
-
-    declare public readonly clampModeU: number;
-    declare public readonly clampModeV: number;
-
 
     declare protected lodSet: number;
 
@@ -60,11 +64,11 @@ abstract class UTexture extends UMaterial {
 
             "UBits": "bitsW",
             "VBits": "bitsH",
-            "UClamp": "wrapS",
-            "VClamp": "wrapT",
+            "UClamp": "clampedW",
+            "VClamp": "clampedH",
 
-            "UClampMode": "clampModeU",
-            "VClampMode": "clampModeV",
+            "UClampMode": "wrapS",
+            "VClampMode": "wrapT",
 
             "MaxColor": "maxColor",
 

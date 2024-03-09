@@ -258,6 +258,14 @@ async function startCore() {
 
     const env = await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine);
 
+    // const sound = await assetLoader.load(assetLoader.getPackage("MonSound3", "Sound"));
+    // const ants = sound.exports.filter(x=>x.objectName.toLowerCase().includes("antaras"))
+    
+    // ants.slice(1).forEach(s=>sound.fetchObject(s.index+1).loadSelf());
+    
+    // // const antWait = sound.fetchObject(4).loadSelf();
+
+    // debugger;
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);
     // // await fnObjectMain.onDecodeReady();
