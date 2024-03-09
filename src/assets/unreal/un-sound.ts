@@ -17,13 +17,13 @@ abstract class USound extends UObject {
 
         this.readHead = pkg.tell();
 
-        const wav = this.data.getTypedArray().slice();
-        const blob = new Blob([wav.buffer], { type: "application/octet-stream" });
-        const f = URL.createObjectURL(blob);
+        // const wav = this.data.getTypedArray().slice();
+        // const blob = new Blob([wav.buffer], { type: "audio/wav" });
+        // const f = URL.createObjectURL(blob);
 
-        console.log(f);
+        // console.log(exp.objectName, f);
 
-        debugger;
+        // // debugger;
     }
 }
 
