@@ -429,23 +429,41 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
-        
+
         const layers = info.layers, layerCount = layers.length;
         const layerIndices = new Array<number>(); // expected: 0, 1, 4, 5, 7
 
         for (let index = 0; index < layerCount; index++) {
-            if (!info.layers[index] || this.isSectorAll(index, 0))
+            const layer = info.layers[index]?.loadSelf();
+
+            if (!layer || !layer.map || !layer.alphaMap)
+                break;
+
+            if (this.isSectorAll(index, 0))
                 continue;
 
             for (let indexOther = index + 1; indexOther < layerCount; indexOther++) {
                 const other = info.layers[indexOther]?.loadSelf();
 
-                if (!other?.map?.isTransparent() && this.isSectorAll(indexOther, 255))
+                if (!other || !other.map || !other.alphaMap)
+                    break;
+
+                if (!other.map.isTransparent() && this.isSectorAll(indexOther, 255))
                     continue;
 
             }
 
             layerIndices.push(index);
+        }
+
+        const maxSimultaneousLayers = 3;    // this seems to be 3 for pretty much all modern devices in UE and L2
+        const passLayers = new Array<number>();
+
+        for(let i = 0, len = layerIndices.length; i < len; i++) {
+            const layer = info.layers[layerIndices[i]];
+            const layerTex = layer.map;
+
+            passLayers.push(i);
         }
 
         debugger;
