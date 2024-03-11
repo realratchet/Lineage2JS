@@ -400,6 +400,13 @@ abstract class UTerrainSector extends UObject {
         const uvs = new Float32Array(vertexCount * 2);
         const colors = new Float32Array(vertexCount * 4);
 
+        if (info.texModifyInfo.loadSelf().colorOp !== 1) {
+            debugger;
+            throw new Error("not implemented");
+        }
+
+        debugger;
+
         for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= this.quadsY; y++) {
             for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
@@ -459,7 +466,7 @@ abstract class UTerrainSector extends UObject {
         const maxSimultaneousLayers = 3;    // this seems to be 3 for pretty much all modern devices in UE and L2
         const passLayers = new Array<number>();
 
-        for(let i = 0, len = layerIndices.length; i < len; i++) {
+        for (let i = 0, len = layerIndices.length; i < len; i++) {
             const layer = info.layers[layerIndices[i]];
             const layerTex = layer.map;
 
