@@ -1,6 +1,6 @@
 import { APackage, BufferValue, } from "@l2js/core";
 import AInfo from "./un-info";
-import FArray, { FObjectArray } from "@l2js/core/src/unreal/un-array";
+import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 import FBox from "@client/assets/unreal/un-box";
 import FCoords from "@client/assets/unreal/un-coords";
@@ -17,6 +17,12 @@ import FPlane from "@client/assets/unreal/un-plane";
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
+enum ETerrainRenderMethod_T {
+    RM_WeightMap = 0,
+    RM_CombinedWeightMap = 1,
+    RM_AlphaMap = 2
+}
+
 class FTerrainNormalPair implements C.IConstructable {
     public normal1 = FVector.make();
     public normal2 = FVector.make();
@@ -30,19 +36,29 @@ class FTerrainNormalPair implements C.IConstructable {
 
 }
 
-abstract class FTerrainInfo extends AInfo {
+class FTerrainRenderCombination {
+    public readonly layers: number[];
+    public readonly method: ETerrainRenderMethod_T;
+
+    public constructor(layers: number[], method: ETerrainRenderMethod_T) {
+        this.layers = layers.slice();
+        this.method = method;
+    }
+}
+
+abstract class ATerrainInfo extends AInfo {
     declare public readonly terrainMap: GA.UTexture;
     declare public readonly terrainScale: GA.FVector;
     declare public readonly layers: GA.UTerrainLayer[];
 
     declare protected readonly decoLayers: C.FArray<GA.UDecoLayer>
     declare protected readonly showOnTerrain: number;
-    declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"uint32">;
-    declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"uint32">;
+    declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"int32">;
+    declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"int32">;
     declare protected readonly mapX: number;
     declare protected readonly mapY: number;
-    declare public readonly quadVisibilityBitmapOrig: C.FPrimitiveArray<"uint32">;
-    declare public readonly edgeTurnBitmapOrig: C.FPrimitiveArray<"uint32">;
+    declare public readonly quadVisibilityBitmapOrig: C.FPrimitiveArray<"int32">;
+    declare public readonly edgeTurnBitmapOrig: C.FPrimitiveArray<"int32">;
     declare protected readonly generatedSectorCounter: number;
     declare protected readonly numIntMap: number;
     declare protected readonly autoTimeGeneration: boolean;
@@ -54,6 +70,7 @@ abstract class FTerrainInfo extends AInfo {
     declare protected readonly disregardTerrainLighting: boolean;
     declare protected readonly randomYaw: boolean;
     declare protected readonly bForceRender: boolean;
+    declare protected renderCombinations: FTerrainRenderCombination[];
 
     public readonly isTerrainInfo = true;
 
@@ -61,17 +78,17 @@ abstract class FTerrainInfo extends AInfo {
     declare protected sectorsY: number;
     declare public toWorld: GA.FCoords;
     declare protected toHeightMap: GA.FCoords;
-    declare public readonly heightmapX: number;
-    declare public readonly heightmapY: number;
-    
+    declare public heightmapX: number;
+    declare public heightmapY: number;
+
     declare public boundingBox: GA.FBox;
     // public heightmapMin: number;
     // public heightmapMax: number;
-    
+
     declare protected readonly hasDynamicLight: boolean;
     declare protected readonly forcedRegion: number;
     declare protected readonly inverted: boolean;
-    
+
     declare public vertices: Array<FVector>;
     declare public faceNormals: Array<FTerrainNormalPair>;
     declare public vertexColors: C.FArray<GA.FColor>;
@@ -124,12 +141,15 @@ abstract class FTerrainInfo extends AInfo {
             "Sectors": "sectors",
 
             "DecoLayers": "decoLayers",
-            "QuadVisibilityBitmap": "quadVisibilityBitmap",
-            "EdgeTurnBitmap": "edgeTurnBitmap",
             "MapX": "mapX",
             "MapY": "mapY",
-            "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig",
+            
+            "QuadVisibilityBitmap": "quadVisibilityBitmap",         // non-seamless bitamps
+            "EdgeTurnBitmap": "edgeTurnBitmap",
+            
+            "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig", // seamless bitmaps
             "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
+
             "GeneratedSectorCounter": "generatedSectorCounter",
             "NumIntMap": "numIntMap",
             "bAutoTimeGeneration": "autoTimeGeneration",
@@ -197,6 +217,18 @@ abstract class FTerrainInfo extends AInfo {
     //     return super.readStruct(pkg, tag);
     // }
 
+    public getFromBitmap(bitmap: FPrimitiveArray<"int32">, x: number, y: number): boolean {
+        let bitIndex = x + y * this.heightmapX;
+
+        return (bitmap.getElem(bitIndex >> 5) & (1 << (bitIndex & 0x1F))) ? true : false;
+    }
+
+    public getQuadVisibilityBitmap(x: number, y: number): boolean { return this.getFromBitmap(this.quadVisibilityBitmap, x, y); }
+    public getQuadVisibilityBitmapOrig(x: number, y: number): boolean { return this.getFromBitmap(this.quadVisibilityBitmapOrig, x, y); }
+    public getEdgeTurnBitmap(x: number, y: number): boolean { return this.getFromBitmap(this.edgeTurnBitmap, x, y); }
+    public getEdgeTurnBitmapOrig(x: number, y: number): boolean { return this.getFromBitmap(this.edgeTurnBitmapOrig, x, y); }
+
+
     public getLayerAlpha(x: number, y: number, layer: number, alphaMap: GA.UTexture) {
         const texture = alphaMap
             ? alphaMap
@@ -235,7 +267,29 @@ abstract class FTerrainInfo extends AInfo {
         }
     }
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport<FTerrainInfo>) {
+    public getRenderCombination(layers: number[], method: ETerrainRenderMethod_T): number {
+        // TODO: this can be rewriten without labels
+        nextCombo: for (let i = 0, len = this.renderCombinations.length; i < len; i++) {
+            const combo = this.renderCombinations[i];
+            if (combo.method === method && combo.layers.length === layers.length) {
+                for (let j = 0, jLen = layers.length; j < jLen; j++) {
+                    if (layers[j] !== combo.layers[j]) {
+                        continue nextCombo;
+                    }
+                }
+
+                return i;
+            }
+        }
+
+        const newCombo = new FTerrainRenderCombination(layers, method);
+
+        this.renderCombinations.push(newCombo);
+
+        return this.renderCombinations.length - 1;
+    }
+
+    public doLoad(pkg: GA.UPackage, exp: C.UExport<ATerrainInfo>) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -250,6 +304,7 @@ abstract class FTerrainInfo extends AInfo {
 
         this.readHead = pkg.tell();
 
+        this.renderCombinations = [];
         this.boundingBox = FBox.make();
         this.toWorld = FCoords.make();
         this.toHeightMap = FCoords.make();
@@ -424,11 +479,6 @@ abstract class FTerrainInfo extends AInfo {
         }
 
         throw new Error("not yet implemented");
-    }
-
-    public getEdgeTurnBitmap(x: number, y: number) {
-        let BitIndex = x + y * this.heightmapX;
-        return (this.edgeTurnBitmap.getElem(BitIndex >> 5) & (1 << (BitIndex & 0x1f))) ? 1 : 0;
     }
 
     public getVertexNormal(x: number, y: number) {
@@ -617,5 +667,5 @@ abstract class FTerrainInfo extends AInfo {
     }
 }
 
-export default FTerrainInfo;
-export { FTerrainInfo };
+export default ATerrainInfo;
+export { ATerrainInfo, ETerrainRenderMethod_T };

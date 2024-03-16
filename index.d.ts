@@ -101,7 +101,7 @@ declare global {
                 export type AInfo = import("@unreal/un-info").AInfo;
                 export type FFogInfo = import("@unreal/un-fog-info").FFogInfo;
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
-                export type FTerrainInfo = import("@unreal/un-terrain-info").FTerrainInfo;
+                export type ATerrainInfo = import("@unreal/un-terrain-info").ATerrainInfo;
 
                 export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
                 export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;

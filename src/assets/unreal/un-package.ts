@@ -8,7 +8,7 @@ import UBrush from "./un-brush";
 import FColor from "./un-color";
 import ULevelInfo from "./un-level-info";
 import FZoneInfo from "./un-zone-info";
-import FTerrainInfo from "./un-terrain-info";
+import ATerrainInfo from "./un-terrain-info";
 import USkyZoneInfo from "./un-sky-zone-info";
 import UNSun from "./un-nsun";
 import UNMoon from "./un-nmoon";
@@ -152,6 +152,7 @@ class UCorePackage extends UPackage implements C.ICorePackage {
     public static readonly GL2StaticMeshLodCR = 4.0;
     public static readonly GL2PawnCR = 1.0;
     public static readonly GIsL2Projector = false;
+    public static readonly GIsL2Seamless = true;
     public static readonly GIsNative = true;
     public static readonly GL2ShowMyName = true;
     public static readonly GL2ShowNPCName = true;
@@ -297,7 +298,7 @@ class UNativePackage extends ANativePackage {
             case "LevelInfo": Constructor = ULevelInfo; break;
             case "ZoneInfo": Constructor = FZoneInfo; break;
             case "SkyZoneInfo": Constructor = USkyZoneInfo; break;
-            case "TerrainInfo": Constructor = FTerrainInfo; break;
+            case "TerrainInfo": Constructor = ATerrainInfo; break;
 
             case "NSun": Constructor = UNSun; break;
             case "NMoon": Constructor = UNMoon; break;
@@ -585,7 +586,7 @@ class UNativePackage extends ANativePackage {
     // //         case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
     // //         case "Sound": Constructor = USound; break;
     // //         case "Light": Constructor = ULight; break;
-    // //         case "TerrainInfo": Constructor = FTerrainInfo; break;
+    // //         case "TerrainInfo": Constructor = ATerrainInfo; break;
     // //         case "NMovableSunLight": Constructor = UNMovableSunLight; break;
     // //         case "StaticMeshActor": Constructor = UStaticMeshActor; break;
     // //         case "WaterVolume": Constructor = UWaterVolume; break;

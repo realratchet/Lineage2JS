@@ -155,7 +155,7 @@ abstract class ULevel extends ULevelBase {
     //     //     name: this.url.map,
     //     //     children: (await Promise.all([
     //     //         this.baseModel.getDecodeInfo(library),
-    //     //         "FTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["FTerrainInfo"].map((exp: FTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+    //     //         "ATerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["ATerrainInfo"].map((exp: ATerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
     //     //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
     //     //     ])).flat()
     //     // };

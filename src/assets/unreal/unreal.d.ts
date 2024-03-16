@@ -40,7 +40,7 @@
 // type ULight = import("./un-light").ULight;
 // type LightEffect_T = import("./un-light").LightEffect_T;
 // type LightType_T = import("./un-light").LightType_T;
-// type FTerrainInfo = import("./un-terrain-info").FTerrainInfo;
+// type ATerrainInfo = import("./un-terrain-info").ATerrainInfo;
 // type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
 // type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
 // type UWaterVolume = import("./un-water-volume").UWaterVolume;

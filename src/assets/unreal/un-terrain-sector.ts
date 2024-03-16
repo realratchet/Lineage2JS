@@ -5,6 +5,7 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
 import { indexToTime } from "@client/assets/unreal/un-l2env";
+import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -25,17 +26,31 @@ class FTerrainLightInfo implements C.IConstructable {
     }
 }
 
+class FTerrainSectorRenderPass {
+    public info: GA.ATerrainInfo;
+    public renderCombinationNum: number;
+
+    public indices: number[];
+    public numTriangles: number;
+    public numIndices: number;
+    public minIndex: number;
+    public maxIndex: number;
+}
+
 abstract class UTerrainSector extends UObject {
     declare public boundingBox: FBox;
     declare public offsetX: number;
     declare public offsetY: number;
-    declare public info: GA.FTerrainInfo;
+    declare public info: GA.ATerrainInfo;
     declare protected hasShadows: boolean;
     declare protected shadowCount: number;
 
     declare protected infoId: number;
     declare public quadsX: number;
     declare public quadsY: number;
+
+    declare public quadsXActual: number;
+    declare public quadsYActual: number;
 
     declare pkg: GA.UPackage;
 
@@ -47,8 +62,9 @@ abstract class UTerrainSector extends UObject {
 
     declare protected texInfo: FPrimitiveArray<"uint16">;
     declare protected someSectorVisibilityMask: Int16Array;
+    declare protected renderPasses: FTerrainSectorRenderPass[];
 
-    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.FTerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
@@ -358,6 +374,19 @@ abstract class UTerrainSector extends UObject {
 
         this.readHead = pkg.tell();
 
+        let quadsX = this.quadsX, quadsY = this.quadsY;
+
+        if (this.offsetX >= 240)
+            quadsX = 15;
+
+        if(this.offsetY >= 240)
+            quadsY = 15;
+        
+        this.quadsX = 15;
+        this.quadsY = 15;
+        this.quadsXActual = quadsX;
+        this.quadsYActual = quadsY;
+
         return this;
     }
 
@@ -404,8 +433,6 @@ abstract class UTerrainSector extends UObject {
             debugger;
             throw new Error("not implemented");
         }
-
-        debugger;
 
         for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= this.quadsY; y++) {
             for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
@@ -465,15 +492,62 @@ abstract class UTerrainSector extends UObject {
 
         const maxSimultaneousLayers = 3;    // this seems to be 3 for pretty much all modern devices in UE and L2
         const passLayers = new Array<number>();
+        this.renderPasses = [];
 
-        for (let i = 0, len = layerIndices.length; i < len; i++) {
-            const layer = info.layers[layerIndices[i]];
-            const layerTex = layer.map;
-
+        for (const i of layerIndices) {
             passLayers.push(i);
+
+            const pass = new FTerrainSectorRenderPass();
+
+            this.renderPasses.push(pass);
+            pass.renderCombinationNum = info.getRenderCombination(passLayers, ETerrainRenderMethod_T.RM_AlphaMap);
+
+            passLayers.length = 0;
         }
 
-        debugger;
+        for (let i = 0, len = this.renderPasses.length; i < len; i++) {
+            const pass = this.renderPasses[i];
+
+            pass.info = info;
+            pass.indices = [];
+            pass.numTriangles = 0;
+
+            this.triangulateLayer(i);
+        }
+    }
+
+    protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
+
+
+    protected triangulateLayer(passIndex: number) {
+        const v45 = 1 << passIndex;
+        const info = this.info;
+
+        for (let y = 0; y < this.quadsY; y++) {
+            for (let x = 0; x < this.quadsX; x++) {
+                // when non-seamless it would use "QuadVisibilityBitmap" instead
+
+                const isQuadVis = info.getQuadVisibilityBitmapOrig(x + this.offsetX, y + this.offsetY);
+
+                if (!isQuadVis) {
+                    throw new Error("not yet implemented");
+                    debugger;
+                }
+
+                const v1 = this.getLocalVertex(x, y);
+                const v2 = v1 + 1;
+                const v3 = this.getLocalVertex(x + 1, y + 1);
+                const v4 = x + 16 * y; // differs from ue
+
+                const isEdgeTurn = info.getEdgeTurnBitmapOrig(x + this.offsetX, y + this.offsetY);
+
+                if (isEdgeTurn) {
+
+                }
+
+                // if (this.offsetX === 240 && x === 15 || this.offsetY === 240 && /:)
+            }
+        }
     }
 
     protected isSectorAll(index: number, alphaValue: number) {
