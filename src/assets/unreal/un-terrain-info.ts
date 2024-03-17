@@ -70,7 +70,7 @@ abstract class ATerrainInfo extends AInfo {
     declare protected readonly disregardTerrainLighting: boolean;
     declare protected readonly randomYaw: boolean;
     declare protected readonly bForceRender: boolean;
-    declare protected renderCombinations: FTerrainRenderCombination[];
+    declare public renderCombinations: FTerrainRenderCombination[];
 
     public readonly isTerrainInfo = true;
 
@@ -143,10 +143,10 @@ abstract class ATerrainInfo extends AInfo {
             "DecoLayers": "decoLayers",
             "MapX": "mapX",
             "MapY": "mapY",
-            
+
             "QuadVisibilityBitmap": "quadVisibilityBitmap",         // non-seamless bitamps
             "EdgeTurnBitmap": "edgeTurnBitmap",
-            
+
             "QuadVisibilityBitmapOrig": "quadVisibilityBitmapOrig", // seamless bitmaps
             "EdgeTurnBitmapOrig": "edgeTurnBitmapOrig",
 
@@ -246,7 +246,7 @@ abstract class ATerrainInfo extends AInfo {
             default: return 0;
         }
 
-        if (layer !== 2) {
+        if (layer !== -2) {
             x = x * texture.width / this.heightmapX;
             y = y * texture.height / this.heightmapY;
         }
@@ -554,10 +554,18 @@ abstract class ATerrainInfo extends AInfo {
         this.vertices = vertices;
     }
 
+    public getSWMapXY(s: number, w: number): [number, number] {
+        // 1 / 32768 -> 0.000030517578125
+        const x = Math.floor((s + 360448.0) * 0.000030517578125 + 9.0);
+        const y = Math.floor((w + 294912.0) * 0.000030517578125 + 9.0);
+
+        return [x, y];
+    }
+
     protected updateTriangles(startX: number, startY: number, endX: number, endY: number) {
         //!! make this faster
-        for (let i = 0, len = this.sectors.length; i < len; i++) {
-            const sector = this.sectors[i].loadSelf();
+        for (const sector of this.sectors) {
+            sector.loadSelf();
 
             if (
                 sector.offsetX > endX ||
@@ -573,8 +581,6 @@ abstract class ATerrainInfo extends AInfo {
 
             sector.generateTriangles();
         }
-
-        debugger;
     }
 
     protected combineLayerWeights() { throw new Error("not yet implemented"); }
@@ -586,15 +592,18 @@ abstract class ATerrainInfo extends AInfo {
         let endX = this.heightmapX, endY = this.heightmapY;
 
         // debugger;
-        this.precomputeLayerWeights();
+        // this.precomputeLayerWeights(); -- not used in seamless terrain
         // debugger;
         this.calcLayerTexCoords();
         // debugger;
         this.updateVertices(startX, startY, endX, endY);
         // debugger;
         this.updateTriangles(startX, startY, endX, endY);
-        debugger;
-        this.combineLayerWeights();
+        // debugger;
+        // this.combineLayerWeights(); -- not used in seamless terrain
+        
+        const xy = this.getSWMapXY(this.location.x, this.location.y);
+        
         debugger;
     }
 

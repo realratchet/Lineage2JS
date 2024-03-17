@@ -379,11 +379,12 @@ abstract class UTerrainSector extends UObject {
         if (this.offsetX >= 240)
             quadsX = 15;
 
-        if(this.offsetY >= 240)
+        if (this.offsetY >= 240)
             quadsY = 15;
-        
-        this.quadsX = 15;
-        this.quadsY = 15;
+
+        // why does it set to 15 during serialization but during triangulization this is 16 again?
+        // this.quadsX = 15;
+        // this.quadsY = 15;
         this.quadsXActual = quadsX;
         this.quadsYActual = quadsY;
 
@@ -416,10 +417,8 @@ abstract class UTerrainSector extends UObject {
         return normal;
     }
 
-
-
     public generateTriangles() {
-        const info = this.info;
+        const info = this.info.loadSelf();
         const invSize = 1 / 4096;
         const hmx = info.heightmapX, hmy = info.heightmapY;
 
@@ -490,7 +489,6 @@ abstract class UTerrainSector extends UObject {
             layerIndices.push(index);
         }
 
-        const maxSimultaneousLayers = 3;    // this seems to be 3 for pretty much all modern devices in UE and L2
         const passLayers = new Array<number>();
         this.renderPasses = [];
 
@@ -513,15 +511,37 @@ abstract class UTerrainSector extends UObject {
             pass.numTriangles = 0;
 
             this.triangulateLayer(i);
+
+            pass.numIndices = pass.indices.length;
+
+            if (pass.numIndices > 0) {
+                pass.minIndex = Number.MAX_SAFE_INTEGER;
+                pass.maxIndex = 0;
+
+                for (let j = 0, numIndices = pass.numIndices; j < numIndices; j++) {
+                    pass.minIndex = Math.min(pass.indices[j], pass.minIndex);
+                    pass.maxIndex = Math.max(pass.indices[j], pass.maxIndex);
+                }
+            } else {
+                debugger;
+                // remove passess without triangles and adjust iterator
+                this.renderPasses.splice(i);
+
+                len = len - 1;
+                i = i - 1;
+            }
         }
+
+        // TODO: update decorators
     }
 
     protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
 
-
     protected triangulateLayer(passIndex: number) {
-        const v45 = 1 << passIndex;
         const info = this.info;
+        const pass = this.renderPasses[passIndex];
+        const indices = pass.indices;
+        const texInfo = this.texInfo;
 
         for (let y = 0; y < this.quadsY; y++) {
             for (let x = 0; x < this.quadsX; x++) {
@@ -530,24 +550,168 @@ abstract class UTerrainSector extends UObject {
                 const isQuadVis = info.getQuadVisibilityBitmapOrig(x + this.offsetX, y + this.offsetY);
 
                 if (!isQuadVis) {
-                    throw new Error("not yet implemented");
-                    debugger;
+                    continue;
                 }
 
                 const v1 = this.getLocalVertex(x, y);
                 const v2 = v1 + 1;
                 const v3 = this.getLocalVertex(x + 1, y + 1);
-                const v4 = x + 16 * y; // differs from ue
+                const v4 = v3 - 1;
+                const texOffset = x + 16 * y; // differs from ue
+
+
+                let trianglePassed = false;
 
                 const isEdgeTurn = info.getEdgeTurnBitmapOrig(x + this.offsetX, y + this.offsetY);
 
-                if (isEdgeTurn) {
-
+                if (this.offsetX === 240 && x === 15 || this.offsetY === 240 && y == 15) {
+                    if (passIndex === 0 || this.passShouldRenderTriangle(passIndex, x, y, 0, isEdgeTurn) || this.passShouldRenderTriangle(passIndex, x, y, 1, isEdgeTurn)) {
+                        trianglePassed = true;
+                    }
+                } else {
+                    if (passIndex === 0) {
+                        trianglePassed = true;
+                    } else {
+                        trianglePassed = texInfo.getElem(texOffset) !== 0;
+                    }
                 }
 
-                // if (this.offsetX === 240 && x === 15 || this.offsetY === 240 && /:)
+                if (!trianglePassed) continue;
+
+
+                if (isEdgeTurn)
+                    indices.push(/* tri1 */ v1, v4, v2, /* tri2 */ v4, v3, v2);
+                else
+                    indices.push(/* tri1 */ v1, v4, v3, /* tri2 */ v1, v3, v2);
+
+                pass.numTriangles = pass.numTriangles + 2;
             }
         }
+    }
+
+    protected passShouldRenderTriangle(passIndex: number, x: number, y: number, triIndex: number, isTurned: boolean): boolean {
+        // UE implementation looks the same, so just ported it directly
+        const info = this.info;
+        const layers = info.layers;
+        const pass = this.renderPasses[passIndex];
+        const comb = info.renderCombinations[pass.renderCombinationNum];
+
+        if (comb.method === ETerrainRenderMethod_T.RM_AlphaMap) {
+            let transparent = true;
+
+            // 1. Check if this triangle is completely transparent in all layers in this pass.
+            for (const layerIndex of comb.layers) {
+                if (this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 0)) continue;
+
+                transparent = false;
+                break;
+            }
+
+            if (transparent) return false;
+
+            for (let p = passIndex + 1, pCount = this.renderPasses.length; p < pCount; p++) {
+                const otherPass = this.renderPasses[p];
+                const otherComb = info.renderCombinations[otherPass.renderCombinationNum];
+
+                for (const layerIndex of otherComb.layers) {
+                    const layer = layers[layerIndex];
+                    if (!layer.map.isTransparent() && this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 255)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        } else {
+
+        }
+    }
+
+    protected isTriangleAll(layerIndex: number, x: number, y: number, triIndex: number, isTurned: boolean, alphaValue: number): boolean {
+        const info = this.info;
+        const alphaMap = info.layers[layerIndex].alphaMap;
+
+        if (alphaMap.width === info.heightmapX) {
+            // Special-case 1:1 alphamap:heightmap ratio for performance
+
+            const ox = x + this.offsetX;
+            const oy = y + this.offsetY;
+
+            if (isTurned) {
+                if (triIndex) {
+                    // 432
+                    if (info.getLayerAlpha(ox, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+                else {
+                    // 142
+                    if (info.getLayerAlpha(ox, oy, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+            }
+            else {
+                if (triIndex) {
+                    // 132
+                    if (info.getLayerAlpha(ox, oy, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+                else {
+                    // 143
+                    if (info.getLayerAlpha(ox, oy, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy + 1, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+            }
+        } else {
+            let ratio = alphaMap.width / info.heightmapX;
+
+            let minX = Math.floor(ratio * (x + this.offsetX));
+            let maxX = Math.ceil(ratio * (x + this.offsetX + 1));
+            let minY = Math.floor(ratio * (y + this.offsetY));
+            let range = maxX - minX;
+
+            if (isTurned) {
+                if (triIndex) {
+                    // 432
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = range; oy >= range - ox; oy--)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+                else {
+                    // 142
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = 0; oy <= range - ox; oy++)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+            }
+            else {
+                if (triIndex) {
+                    // 132
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = 0; oy <= ox; oy++)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+                else {
+                    // 143
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = range; oy >= ox; oy--)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     protected isSectorAll(index: number, alphaValue: number) {
