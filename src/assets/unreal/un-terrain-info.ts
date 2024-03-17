@@ -263,7 +263,7 @@ abstract class ATerrainInfo extends AInfo {
             case ETextureFormat.TEXF_L8: return data.getElem(offset);
             case ETextureFormat.TEXF_P8: return texture.palette.colors[data.getElem(offset)].r;
             case ETextureFormat.TEXF_RGB8: return data.getElem(offset * 4 + 3);
-            default: throw new Error("invalid");
+            default: debugger; throw new Error("invalid");
         }
     }
 
