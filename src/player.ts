@@ -1,4 +1,4 @@
-import { AxesHelper, Box3, Box3Helper, BoxBufferGeometry, BoxHelper, BufferGeometry, Color, EdgesGeometry, Float32BufferAttribute, Line, LineBasicMaterial, LineSegments, MathUtils, Matrix4, Mesh, MeshBasicMaterial, Plane, PlaneHelper, Quaternion, Raycaster, SphereBufferGeometry, Vector3, Vector4 } from "three";
+import { AxesHelper, Box3, Box3Helper, BoxGeometry, BoxHelper, BufferGeometry, Color, EdgesGeometry, Float32BufferAttribute, Line, LineBasicMaterial, LineSegments, MathUtils, Matrix4, Mesh, MeshBasicMaterial, Plane, PlaneHelper, Quaternion, Raycaster, SphereGeometry, Vector3, Vector4 } from "three";
 import { RAD2DEG } from "three/src/math/MathUtils";
 import BaseActor from "./base-actor";
 import RenderManager from "./rendering/render-manager";
@@ -123,7 +123,7 @@ class Player extends BaseActor implements ICollidable {
     public addPointHelper(point: Vector3, color: number = 0xff0000, time: number = 100) {
         const renderManager = this.getRenderManager();
 
-        const object = new Mesh(new SphereBufferGeometry(10), new MeshBasicMaterial({ color }))
+        const object = new Mesh(new SphereGeometry(10), new MeshBasicMaterial({ color }))
         object.position.copy(point);
         renderManager.scene.add(object);
         setTimeout(function () {

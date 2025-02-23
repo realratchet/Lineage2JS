@@ -604,7 +604,7 @@ abstract class ATerrainInfo extends AInfo {
         
         const xy = this.getSWMapXY(this.location.x, this.location.y);
         
-        debugger;
+        // debugger;
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {

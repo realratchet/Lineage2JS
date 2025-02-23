@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereBufferGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
 import decodeMaterial from "./material-decoder";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -141,7 +141,7 @@ function decodeStaticMeshWrapped(library: DecodeLibrary, info: IStaticMeshObject
 }
 
 function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
-    const geo = new SphereBufferGeometry(info.radius, 32, 32);
+    const geo = new SphereGeometry(info.radius, 32, 32);
     const mat = new MeshBasicMaterial({ color: new Color().fromArray(info.color), wireframe: true });
     const msh = new Mesh(geo, mat);
 
@@ -381,21 +381,21 @@ function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
     if (info.quaternion) bone.quaternion.fromArray(info.quaternion);
 
     // if (info.name.includes("R")) {
-    //     const geo = new SphereBufferGeometry(5);
+    //     const geo = new SphereGeometry(5);
     //     const mat = new MeshBasicMaterial({ color: 0xff0000, transparent: true, depthWrite: false, depthTest: false });
 
     //     const m = new Mesh(geo, mat);
 
     //     bone.add(m);
     // } /*else if (info.name.includes("L")) {
-    //     const geo = new SphereBufferGeometry(5);
+    //     const geo = new SphereGeometry(5);
     //     const mat = new MeshBasicMaterial({ color: 0x0000ff, transparent: true, depthWrite: false, depthTest: false });
 
     //     const m = new Mesh(geo, mat);
 
     //     bone.add(m);
     // } */ else {
-    //     const geo = new SphereBufferGeometry(5);
+    //     const geo = new SphereGeometry(5);
     //     const mat = new MeshBasicMaterial({ color: 0xff00ff, transparent: true, depthWrite: false, depthTest: false });
 
     //     const m = new Mesh(geo, mat);

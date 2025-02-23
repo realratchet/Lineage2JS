@@ -1,8 +1,8 @@
 import ParticleMaterial from "@client/materials/particle-material";
-import { Mesh, PlaneBufferGeometry } from "three";
+import { Mesh, PlaneGeometry } from "three";
 import BaseEmitter from "./base-emitter";
 
-const geometry = new PlaneBufferGeometry(1, 1);
+const geometry = new PlaneGeometry(1, 1);
 
 class SpriteEmitter extends BaseEmitter {
 

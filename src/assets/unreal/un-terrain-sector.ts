@@ -164,6 +164,8 @@ abstract class UTerrainSector extends UObject {
 
         //     // if()
 
+        // TODO: sample intensity
+
         //     debugger;
         // }
 

@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereBufferGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneBufferGeometry, AnimationMixer } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -72,12 +72,12 @@ class RenderManager {
         this.controls.fps = new PointerLockControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 5, 15);
         this.camera.lookAt(0, 0, 0);
-        this.scene.add(new Mesh(new BoxBufferGeometry()));
+        this.scene.add(new Mesh(new BoxGeometry()));
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
 
-        this.sun = new Mesh(new PlaneBufferGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
+        this.sun = new Mesh(new PlaneGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
         this.sunCam = new Camera();
 
         this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8 * 100, 0));

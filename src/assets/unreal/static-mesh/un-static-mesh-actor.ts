@@ -321,7 +321,7 @@ abstract class UStaticMeshActor extends UAActor {
 
         // debugger;
         // console.clear();
-        console.warn(this.exp.objectName)
+        // console.warn(this.exp.objectName)
 
         const mesh = this.mesh.loadSelf();
         const env = this.levelInfo.getL2Env();
