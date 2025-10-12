@@ -1,5 +1,5 @@
 import RAPIER, { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { Mesh } from "three";
+import { Intersection, Mesh, Raycaster } from "three";
 import type { ICollidable } from "./objects";
 
 class CollidingMesh extends Mesh implements ICollidable {

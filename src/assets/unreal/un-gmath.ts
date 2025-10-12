@@ -11,8 +11,8 @@ class GMathSingleton {
     public readonly NUM_SQRTS = 0x4000;     // Number of square roots in lookup table.
     public readonly ANGLE_MASK = ((1 << this.ANGLE_BITS) - 1) << (16 - this.ANGLE_BITS);
 
-    protected readonly TrigFLOAT: number[];
-    protected readonly SqrtFLOAT: number[];
+    public readonly TrigFLOAT: number[];
+    public readonly SqrtFLOAT: number[];
 
     public readonly worldMin: FVector;
     public readonly worldMax: FVector;

@@ -107,6 +107,10 @@ abstract class UTerrainSector extends UObject {
 
         const v = FVector.make();
 
+        let iii = 0;
+
+        normals.set(this.triangles.normals)
+
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
@@ -116,6 +120,22 @@ abstract class UTerrainSector extends UObject {
                 const idxVertOffset = idxOffset * 3;
 
                 const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+                // const [nx, nz, ny] = [
+                //     this.triangles.normals[0 + 3 * iii],
+                //     this.triangles.normals[1 + 3 * iii],
+                //     this.triangles.normals[2 + 3 * iii]
+                // ];
+                // const [ xxx, zzz, yyy ] = [
+                //     this.triangles.vertices[0 + 3 * iii],
+                //     this.triangles.vertices[1 + 3 * iii],
+                //     this.triangles.vertices[2 + 3 * iii]
+                // ]
+
+                // console.log(xxx-px,yyy-py,zzz-pz, "|",  x, y, "|", info.getGlobalVertex(x, y), "|", iii)
+
+                // iii++;
+
+                // debugger;
 
                 if (edgeTurns[offset >> 5] & (1 << (offset & 0x1f))) {
                     // 124, 423
@@ -159,15 +179,55 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
-        // for (let i = 0, len = this.lightInfos.length; i < len; i++) {
-        //     const lightInfo = this.lightInfos[i];
+        for (let i = 0, len = this.lightInfos.length; i < len; i++) {
+            const lightInfo = this.lightInfos[i];
 
-        //     // if()
+            if (!lightInfo) continue;
 
-        // TODO: sample intensity
+            if (!lightInfo || !lightInfo.light)
+                debugger;
 
-        //     debugger;
-        // }
+            if (this.lightInfos.length === 4)
+                debugger;
+
+            const lightActor = lightInfo.light?.loadSelf();
+
+            const dynLight = lightActor.getRenderInfo(env);
+
+            const color = dynLight.color;
+
+            const bitPtrIter = lightInfo.visibilityBitmap.iter();
+
+            let bitMask = 0x1;
+            let bitPtr = bitPtrIter.next().value;
+
+
+            for (let i = 0, len = vertexCount * 2; i < len; i += 3) {
+                if (bitPtr === 0) {
+                    bitMask = (bitMask << 1) % 0x100; // check for byte overflow
+
+                    if (!bitMask) {
+                        bitPtr = bitPtrIter.next().value;
+                        bitMask = 1;
+                    }
+                    
+                    continue
+                }
+
+                const v = FVector.make(positions[0], positions[2], positions[1]);
+                const n = FVector.make(normals[0], normals[2], normals[1]);
+
+                debugger;
+                throw new Error("not implementussy")
+            }
+
+            //     // if()
+
+            // TODO: sample intensity
+            normals
+
+            // debugger;
+        }
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -270,6 +330,8 @@ abstract class UTerrainSector extends UObject {
             }
         };
 
+        // debugger;
+
         library.materials[this.uuid] = {
             materialType: "terrainSegment",
             terrainMaterial: info.uuid,
@@ -339,6 +401,9 @@ abstract class UTerrainSector extends UObject {
 
         this.lightInfos = new FArray(FTerrainLightInfo);
         this.lightInfos.load(pkg);
+
+        // if(this.lightInfos.length === 4)
+        //     debugger;
 
         // if (this.lightInfos.length > 0) {
         //     debugger;
@@ -534,7 +599,16 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
+        this.triangles = {
+            this: this,
+            vertices,
+            normals,
+            uvs,
+            colors
+        }
+
         // TODO: update decorators
+
     }
 
     protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }

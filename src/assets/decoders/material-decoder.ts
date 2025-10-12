@@ -258,7 +258,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
 function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     // return new MeshBasicMaterial({ color: Math.floor(Math.random() * 0xffffff) })
 
-    if (!info) return null;
+    if (!info) return new MeshBasicMaterial({ color: 0xff00ff });
 
     switch (info.materialType) {
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);

@@ -1,12 +1,18 @@
 import GMath from "@client/assets/unreal/un-gmath";
 import { UObject } from "@l2js/core";
-import { RAD2DEG } from "three/src/math/MathUtils";
+import { DEG2RAD, RAD2DEG } from "three/src/math/MathUtils";
 
 const _PI = Math.PI;
 const _TWO_PI = 2 * _PI;
 const _TWO_TO_FIFTEEN = 2 ** 15;
 const _INV_TWO_TO_FIFTEEN = 1 / _TWO_TO_FIFTEEN;
 const _INV_TWO_TO_FIFTEEN_TIMES_PI = _INV_TWO_TO_FIFTEEN * _PI;
+
+enum RotName {
+    PITCH,							// looking up and down (0=Straight Ahead, +Up, -Down).
+    YAW,							// rotating around (running in circles), 0=East, +North, -South.
+    ROLL							// rotation about axis of screen, 0=Straight, +Clockwise, -CCW.
+}
 
 abstract class FRotator extends UObject {
     declare public readonly pitch: number;
@@ -35,6 +41,15 @@ abstract class FRotator extends UObject {
         const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const xAxis = (_TWO_PI - this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+
+        // const euler = new Array<number>(3);
+        // euler[RotName.YAW] = this.yaw * (180 / 32768.0) * DEG2RAD;
+        // euler[RotName.PITCH] = this.pitch * (180 / 32768.0) * DEG2RAD;
+        // euler[RotName.ROLL] = this.roll * (180 / 32768.0) * DEG2RAD;
+
+        // // debugger;
+
+        // return [...euler, "XYZ"];
 
         // const yAxis = Math.asin(GMath.sin(TrigFLOAT[this.yaw]));
         // const xAxis = Math.asin(GMath.sin(TrigFLOAT[this.roll]));
