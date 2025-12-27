@@ -394,7 +394,7 @@ async function startCore() {
         helpersZoneBounds: false,
         loadTerrain: true,
         loadBaseModel: true,
-        loadStaticModels: false,
+        loadStaticModels: true,
         loadEmitters: false,
         _loadStaticModelList: [
             // 1441,

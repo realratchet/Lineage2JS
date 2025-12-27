@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat, OneFactor, CustomBlending } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat, OneFactor, CustomBlending, RepeatWrapping } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -60,6 +60,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
 
                 Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
                 layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
+                layer.alphaMap.uniforms.map.texture.wrapS = RepeatWrapping;
+                layer.alphaMap.uniforms.map.texture.wrapT = RepeatWrapping;
                 layer.alphaMap.uniforms.map.texture.needsUpdate = true;
             } else {
                 layerCode.push(`${ws}layerMask = vec4(1.0);`);
@@ -76,6 +78,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layerCode.push("");
 
             layer.map.uniforms.map.texture.premultiplyAlpha = true;
+            layer.map.uniforms.map.texture.wrapS = RepeatWrapping;
+            layer.map.uniforms.map.texture.wrapT = RepeatWrapping;
             layer.map.uniforms.map.texture.needsUpdate = true;
 
             Object.assign(u.value.map, layer.map.uniforms.map);

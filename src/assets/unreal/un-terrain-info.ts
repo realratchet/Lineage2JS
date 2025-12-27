@@ -672,7 +672,7 @@ abstract class ATerrainInfo extends AInfo {
             );
         });
 
-        debugger;
+        // debugger;
 
         return this.uuid;
     }

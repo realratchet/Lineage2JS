@@ -6,6 +6,7 @@ import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
 import { indexToTime } from "@client/assets/unreal/un-l2env";
 import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
+import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -150,11 +151,10 @@ abstract class UTerrainSector extends UObject {
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
-                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
-
-                colors[idxVertOffset + 0] = ambient[0] * shadowMap;
-                colors[idxVertOffset + 1] = ambient[1] * shadowMap;
-                colors[idxVertOffset + 2] = ambient[2] * shadowMap;
+                // Initialize vertex colors to black (lighting will be applied later)
+                colors[idxVertOffset + 0] = 0;
+                colors[idxVertOffset + 1] = 0;
+                colors[idxVertOffset + 2] = 0;
 
                 // {
                 //     const hmx = x + this.offsetX;
@@ -187,8 +187,8 @@ abstract class UTerrainSector extends UObject {
             if (!lightInfo || !lightInfo.light)
                 debugger;
 
-            if (this.lightInfos.length === 4)
-                debugger;
+            // if (this.lightInfos.length === 4)
+            //     debugger;
 
             const lightActor = lightInfo.light?.loadSelf();
 
@@ -202,23 +202,56 @@ abstract class UTerrainSector extends UObject {
             let bitPtr = bitPtrIter.next().value;
 
 
-            for (let i = 0, len = vertexCount * 2; i < len; i += 3) {
-                if (bitPtr === 0) {
-                    bitMask = (bitMask << 1) % 0x100; // check for byte overflow
+            const DEBUG_LIGHTING_RED = true;
 
-                    if (!bitMask) {
-                        bitPtr = bitPtrIter.next().value;
-                        bitMask = 1;
-                    }
+            // Iterate through all vertices (17x17 grid)
+            for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
+                // Check visibility bitmap - only process if bit is set
+                if ((bitPtr & bitMask) !== 0) {
+                    const idxVertOffset = vertexIndex * 3;
+
+
                     
-                    continue
+                    if (DEBUG_LIGHTING_RED) {
+                        // Debug mode: Force lit areas to be bright red
+                        colors[idxVertOffset + 0] = 1.0; // Red
+                        colors[idxVertOffset + 1] = 0.0; // Green
+                        colors[idxVertOffset + 2] = 0.0; // Blue
+                    } else {
+                        // Normal lighting calculation
+                        // Get vertex position in world space (add center offset)
+                        const vx = positions[idxVertOffset + 0] + ox;
+                        const vy = positions[idxVertOffset + 1] + oy;
+                        const vz = positions[idxVertOffset + 2] + oz;
+
+                        // Get vertex normal
+                        const nx = normals[idxVertOffset + 0];
+                        const ny = normals[idxVertOffset + 1];
+                        const nz = normals[idxVertOffset + 2];
+
+                        const samplingPoint = FVector.make(vx, vy, vz);
+                        const samplingNormal = FVector.make(nx, ny, nz);
+
+                        // Sample light intensity at this vertex
+                        const intensity = dynLight.sampleIntensity(samplingPoint, samplingNormal);
+
+                        if (intensity > 0) {
+                            // Add light contribution to vertex color
+                            colors[idxVertOffset + 0] += color.x * intensity;
+                            colors[idxVertOffset + 1] += color.y * intensity;
+                            colors[idxVertOffset + 2] += color.z * intensity;
+                        }
+                    }
                 }
 
-                const v = FVector.make(positions[0], positions[2], positions[1]);
-                const n = FVector.make(normals[0], normals[2], normals[1]);
-
-                debugger;
-                throw new Error("not implementussy")
+                // Advance bitmap position
+                bitMask = (bitMask << 1) % 0x100; // check for byte overflow
+                if (!bitMask) {
+                    const nextResult = bitPtrIter.next();
+                    if (nextResult.done) break; // End of bitmap
+                    bitPtr = nextResult.value;
+                    bitMask = 1;
+                }
             }
 
             //     // if()
@@ -227,6 +260,26 @@ abstract class UTerrainSector extends UObject {
             normals
 
             // debugger;
+        }
+
+        // Apply shadow mapping and ambient light after all lighting calculations
+        for (let y = 0; y < 17; y++) {
+            for (let x = 0; x < 17; x++) {
+                const idxOffset = y * 17 + x;
+                const idxVertOffset = idxOffset * 3;
+
+                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
+
+                // Add ambient light contribution
+                colors[idxVertOffset + 0] += ambient[0] * shadowMap;
+                colors[idxVertOffset + 1] += ambient[1] * shadowMap;
+                colors[idxVertOffset + 2] += ambient[2] * shadowMap;
+
+                // Clamp colors to [0, 1]
+                colors[idxVertOffset + 0] = Math.max(0, Math.min(1, colors[idxVertOffset + 0]));
+                colors[idxVertOffset + 1] = Math.max(0, Math.min(1, colors[idxVertOffset + 1]));
+                colors[idxVertOffset + 2] = Math.max(0, Math.min(1, colors[idxVertOffset + 2]));
+            }
         }
 
         for (let y = 0; y < 16; y++) {
@@ -296,8 +349,20 @@ abstract class UTerrainSector extends UObject {
                     const hmy = y + this.offsetY;
                     const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    uvs[layerOffset + idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
-                    uvs[layerOffset + idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
+                    // Get world position for this vertex
+                    const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                    const worldPos = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+
+                    // Simple UV calculation - use normalized sector coordinates
+                    let u = hmx / 16.0; // 16x16 sector grid
+                    let uvV = hmy / 16.0;
+
+                    // Apply scaling and panning
+                    u = u * layer.scaleW + layer.panW;
+                    uvV = uvV * layer.scaleH + layer.panH;
+
+                    uvs[layerOffset + idxOffset + 0] = u;
+                    uvs[layerOffset + idxOffset + 1] = uvV;
                 }
             }
         }
@@ -310,8 +375,8 @@ abstract class UTerrainSector extends UObject {
                 const hmy = y + this.offsetY;
                 const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                uvs[layerOffset + idxOffset + 0] = hmx / 255;
-                uvs[layerOffset + idxOffset + 1] = hmy / 255;
+                uvs[layerOffset + idxOffset + 0] = hmx / info.heightmapX;
+                uvs[layerOffset + idxOffset + 1] = hmy / info.heightmapY;
             }
         }
 
