@@ -4,7 +4,7 @@ import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
-import { indexToTime } from "@client/assets/unreal/un-l2env";
+import { indexToTime, timeToIndex } from "@client/assets/unreal/un-l2env";
 import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
 import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 
@@ -62,7 +62,7 @@ abstract class UTerrainSector extends UObject {
     declare protected shadowMapTimes: number[];
 
     declare protected texInfo: FPrimitiveArray<"uint16">;
-    declare protected someSectorVisibilityMask: Int16Array;
+    declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
 
     public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
@@ -83,6 +83,9 @@ abstract class UTerrainSector extends UObject {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
+        // Generate triangulation data on demand
+        this.generateTriangles();
+
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
@@ -94,17 +97,8 @@ abstract class UTerrainSector extends UObject {
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
 
-        let validShadowmap: C.FPrimitiveArray<"uint8"> = null;
-        if (this.shadowCount > 0) {
-            let idx = 0;
-            do {
-                if (env.timeOfDay < this.shadowMapTimes[idx])
-                    break;
-                idx++;
-
-            } while (idx < this.shadowCount)
-            validShadowmap = this.shadowMaps[idx];
-        }
+        // Get appropriate shadow map for current time of day
+        const validShadowmap = this.getShadowMapForTime(env.timeOfDay);
 
         const v = FVector.make();
 
@@ -202,7 +196,7 @@ abstract class UTerrainSector extends UObject {
             let bitPtr = bitPtrIter.next().value;
 
 
-            const DEBUG_LIGHTING_RED = true;
+            const DEBUG_LIGHTING_RED = false;
 
             // Iterate through all vertices (17x17 grid)
             for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
@@ -491,6 +485,7 @@ abstract class UTerrainSector extends UObject {
                     this.shadowMaps[i] = new FPrimitiveArray(BufferValue.uint8).load(pkg);
                     this.shadowMapTimes[i] = i * 24 / this.shadowCount + 12 / this.shadowCount
                 }
+
             }
         }
 
@@ -503,6 +498,7 @@ abstract class UTerrainSector extends UObject {
 
         if (verLicense > 10)
             this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
+
 
         this.readHead = pkg.tell();
 
@@ -677,6 +673,18 @@ abstract class UTerrainSector extends UObject {
     }
 
     protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
+
+    // Get appropriate shadow map based on time of day
+    protected getShadowMapForTime(timeOfDay: number): FPrimitiveArray<"uint8"> {
+        if (!this.hasShadows || !this.shadowMaps || this.shadowMaps.length === 0) {
+            return null;
+        }
+
+        // Use generic time-to-index conversion (works with explicit times or evenly distributed slots)
+        const shadowIndex = timeToIndex(timeOfDay, this.shadowMapTimes);
+
+        return this.shadowMaps[shadowIndex];
+    }
 
     protected triangulateLayer(passIndex: number) {
         const info = this.info;

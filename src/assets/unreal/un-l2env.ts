@@ -127,30 +127,41 @@ abstract class UL2NTimeLight extends UObject {
 }
 
 
-function pickArrayIndices<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): [T, T, number] {
-    const nElements = array.length;
-    const nElementsMinusOne = nElements - 1;
+// Generic array index picking that works with explicit times or evenly distributed slots
+function pickArrayIndices<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): [T, T, number];
+function pickArrayIndices(timeOfDay: number, totalElements: number): [number, number, number];
+function pickArrayIndices<T extends IEnvTime>(timeOfDay: number, arrayOrCount: FArray<T> | number): [T | number, T | number, number] {
+    // Handle arrays with explicit time values
+    if (typeof arrayOrCount !== 'number') {
+        const array = arrayOrCount;
+        const nElements = array.length;
+        const nElementsMinusOne = nElements - 1;
 
-    let idxCurr = 0, idxNext = 1;
+        let idxCurr = 0, idxNext = 1;
 
-    if (nElementsMinusOne > 0) {
-        while (array[idxCurr].time > timeOfDay || array[idxNext].time <= timeOfDay) {
-            if (idxCurr >= nElementsMinusOne)
-                break;
+        if (nElementsMinusOne > 0) {
+            while (array[idxCurr].time > timeOfDay || array[idxNext].time <= timeOfDay) {
+                if (idxCurr >= nElementsMinusOne)
+                    break;
 
-            idxCurr = idxCurr + 1;
-            idxNext = idxNext + 1;
+                idxCurr = idxCurr + 1;
+                idxNext = idxNext + 1;
+            }
+        } else {
+            throw new Error("Array must have at least 2 elements for interpolation");
         }
-    } else {
-        debugger;
-        throw new Error("shouldn't happen");
+
+        const elemCurr = array[idxCurr], elemNext = array[idxNext];
+        const timeCurr = elemCurr.time, timeNext = elemNext.time;
+        const frac = (timeOfDay - timeCurr) / (timeNext - timeCurr);
+
+        return [elemCurr, elemNext, frac];
     }
 
-    const elemCurr = array[idxCurr], elemNext = array[idxNext];
-    const timeCurr = elemCurr.time, timeNext = elemNext.time;
-    const frac = (timeOfDay - timeCurr) / (timeNext - timeCurr);
-
-    return [elemCurr, elemNext, frac];
+    // Handle evenly distributed time slots
+    const totalElements = arrayOrCount;
+    const [currIdx, nextIdx, frac] = timeToIndicesLerp(timeOfDay, totalElements);
+    return [currIdx, nextIdx, frac];
 }
 
 function getBrightness(timeOfDay: number, array: FArray<FNTimeHSV>) {
@@ -266,7 +277,35 @@ function selectByTime<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): 
 }
 
 function indexToTime(index: number, totalElements: number) { return (24.0 / totalElements) * 0.5 + (index * 24.0) / totalElements; }
-function timeToIndex(timeOfDay: number, totalElements: number): number {
+// Generic time index picking that works with arrays that have explicit times or evenly distributed slots
+function timeToIndex(timeOfDay: number, totalElements: number): number;
+function timeToIndex<T extends IEnvTime>(timeOfDay: number, array: FArray<T>): number;
+function timeToIndex(timeOfDay: number, array: number[]): number;
+function timeToIndex<T extends IEnvTime>(timeOfDay: number, arrayOrCount: FArray<T> | number[] | number): number {
+    // Handle arrays with explicit time values (FArray<IEnvTime>)
+    if (typeof arrayOrCount !== 'number' && !Array.isArray(arrayOrCount)) {
+        const array = arrayOrCount;
+        for (let i = 0; i < array.length; i++) {
+            if (timeOfDay <= array[i].time) {
+                return i;
+            }
+        }
+        return array.length - 1; // Default to last element if time exceeds all entries
+    }
+
+    // Handle plain number arrays (like shadowMapTimes)
+    if (Array.isArray(arrayOrCount)) {
+        const times = arrayOrCount;
+        for (let i = 0; i < times.length; i++) {
+            if (timeOfDay <= times[i]) {
+                return i;
+            }
+        }
+        return times.length - 1; // Default to last element if time exceeds all entries
+    }
+
+    // Handle evenly distributed time slots (legacy behavior)
+    const totalElements = arrayOrCount;
     let index = totalElements - 1;
     let time: number;
 
@@ -300,7 +339,7 @@ function timeToIndicesLerp(timeOfDay: number, totalElements: number) {
 }
 
 export default UL2NEnvLight;
-export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndex, timeToIndicesLerp };
+export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndex, timeToIndicesLerp, pickArrayIndices };
 
 function getEnvType(fileContents: string) {
     let readOffset = findSection(fileContents, "EnvType");
