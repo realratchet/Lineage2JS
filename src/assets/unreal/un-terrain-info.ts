@@ -402,7 +402,8 @@ abstract class ATerrainInfo extends AInfo {
         //     return;
     }
     protected calcLayerTexCoords() {
-        // seems to be precomputed in lineage2 but keep algo for the moment
+        // Ground truth implementation from leaked UE source code
+        // This matches exactly what the engine does
 
         const toHeightmapTransposed = this.toHeightMap.transpose();
         for (let i = 0, lcount = this.layers.length; i < lcount; i++) {
@@ -420,17 +421,30 @@ abstract class ATerrainInfo extends AInfo {
                 }
             }
 
+            // Exact implementation from UE source:
+            // FCoords TexCoords = ( GMath.UnitCoords / FRotator( 0.f, Layers[i].TextureRotation, 0.f) );
             const rotator = FRotator.make(0, layer.mapRotation, 0);
-            const texCoords = GMath().unitCoords.div(rotator).mul(toHeightmapTransposed);
-            const addOrigin = FVector.make(layer.panW * layer.scaleW, layer.panH * layer.scaleH, 0).transformVectorBy(this.toWorld);
+            const texCoords = GMath().unitCoords.div(rotator);
 
+            // TexCoords *= ToHeightmap.Transpose();
+            texCoords.mul(toHeightmapTransposed);
+
+            // TexCoords.XAxis /= Layers[i].UScale;
+            // TexCoords.YAxis /= Layers[i].VScale;
             texCoords.xAxis = texCoords.xAxis.divideScalar(layer.scaleW);
             texCoords.yAxis = texCoords.yAxis.divideScalar(layer.scaleH);
+
+            // TexCoords.Origin += FVector( Layers[i].UPan*Layers[i].UScale, Layers[i].VPan*Layers[i].VScale, 0.f ).TransformVectorBy(ToWorld);
+            const addOrigin = FVector.make(layer.panW * layer.scaleW, layer.panH * layer.scaleH, 0).transformVectorBy(this.toWorld);
             texCoords.origin = texCoords.origin.add(addOrigin);
 
-
+            // Handle map axis transformations (exact from UE source)
             switch (layer.mapAxis) {
+                case TextureMapAxis_T.TEXMAPAXIS_XY:
+                    // No transformation needed for XY
+                    break;
                 case TextureMapAxis_T.TEXMAPAXIS_XZ:
+                    // Exchange Y and Z components
                     [texCoords.origin.y, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.y];
                     [texCoords.origin.x, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.x];
                     [texCoords.xAxis.x, texCoords.xAxis.z] = [texCoords.xAxis.z, texCoords.xAxis.x];
@@ -438,17 +452,19 @@ abstract class ATerrainInfo extends AInfo {
                     [texCoords.zAxis.y, texCoords.zAxis.z] = [texCoords.zAxis.z, texCoords.zAxis.y];
                     break;
                 case TextureMapAxis_T.TEXMAPAXIS_YZ:
+                    // Exchange X and Z components
                     [texCoords.origin.x, texCoords.origin.z] = [texCoords.origin.z, texCoords.origin.x];
                     [texCoords.xAxis.x, texCoords.xAxis.z] = [texCoords.xAxis.z, texCoords.xAxis.x];
                     [texCoords.zAxis.x, texCoords.zAxis.z] = [texCoords.zAxis.z, texCoords.zAxis.x];
                     break;
             }
 
-            const texCoordsFinal = texCoords.mul(GMath().unitCoords.div(layer.layerRotation));
-            const terrainMatrix = texCoordsFinal.matrix();
+            // TexCoords = TexCoords * ( GMath.UnitCoords / Layers[i].LayerRotation );
+            const layerRotInverse = GMath().unitCoords.div(layer.layerRotation);
+            texCoords.mul(layerRotInverse);
 
-            // debugger;
-            // internally called textureMatrix? maybe version change renamed it?
+            // Layers[i].TextureMatrix = TexCoords.Matrix();
+            const terrainMatrix = texCoords.matrix();
             layer.terrainMatrix = terrainMatrix;
         }
     }

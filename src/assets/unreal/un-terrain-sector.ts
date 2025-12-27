@@ -353,13 +353,13 @@ abstract class UTerrainSector extends UObject {
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
                     const worldPos = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
-                    // Simple UV calculation - use normalized sector coordinates
-                    let u = hmx / 16.0; // 16x16 sector grid
-                    let uvV = hmy / 16.0;
+                    // Use heightmap coordinates directly for UV calculation (matching L2 viewer approach)
+                    // This may be more accurate than using world coordinates
+                    const absHmx = hmx;
+                    const absHmy = hmy;
 
-                    // Apply scaling and panning
-                    u = u * layer.scaleW + layer.panW;
-                    uvV = uvV * layer.scaleH + layer.panH;
+                    let u = (absHmx / layer.scaleW) * (layer.scale.x / info.terrainScale.x) * 2.0 + layer.panW;
+                    let uvV = (absHmy / layer.scaleH) * (layer.scale.y / info.terrainScale.y) * 2.0 + layer.panH;
 
                     uvs[layerOffset + idxOffset + 0] = u;
                     uvs[layerOffset + idxOffset + 1] = uvV;
