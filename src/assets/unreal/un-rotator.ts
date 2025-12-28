@@ -1,6 +1,7 @@
 import GMath from "@client/assets/unreal/un-gmath";
 import { UObject } from "@l2js/core";
 import { DEG2RAD, RAD2DEG } from "three/src/math/MathUtils";
+import { Matrix4, Quaternion } from "three";
 
 const _PI = Math.PI;
 const _TWO_PI = 2 * _PI;
@@ -36,10 +37,11 @@ abstract class FRotator extends UObject {
     }
 
     public toVector() { return GMath().unitCoords.div(this).xAxis; }
+    public toArray() { return [this.pitch, this.yaw, this.roll]; }
 
     public getEulerElements(): GD.EulerArr {
         const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
-        const xAxis = (_TWO_PI - this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
+        const xAxis = (this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
 
         // const euler = new Array<number>(3);
@@ -59,7 +61,7 @@ abstract class FRotator extends UObject {
 
         // debugger;
 
-        return [xAxis, yAxis, zAxis, "XYZ"];
+        return [xAxis, yAxis, zAxis, "XZY"];
     }
 
     public toString(asEuler: boolean = false) {
@@ -100,6 +102,38 @@ abstract class FRotator extends UObject {
         // M[3][1] = 0;
         // M[3][2] = 0;
         // M[3][3] = 1;
+    }
+
+    public getQuaternion() {
+        const SR = GMath().sin(this.roll),
+            SP = GMath().sin(this.pitch),
+            SY = GMath().sin(this.yaw),
+            CR = GMath().cos(this.roll),
+            CP = GMath().cos(this.pitch),
+            CY = GMath().cos(this.yaw);
+
+        const LX = CP * CY;
+        const LY = CP * SY;
+        const LZ = SP;
+
+        const PX = SR * SP * CY - CR * SY;
+        const PY = SR * SP * SY + CR * CY;
+        const PZ = - SR * CP;
+
+        const YX = -(CR * SP * CY + SR * SY);
+        const YY = CY * SR - CR * SP * SY;
+        const YZ = CR * CP;
+
+        const m = new Matrix4();
+
+        m.set(
+            LX, YX, PX, 0,
+            LZ, YZ, PZ, 0,
+            LY, YY, PY, 0,
+            0, 0, 0, 1
+        );
+
+        return new Quaternion().setFromRotationMatrix(m);
     }
 }
 

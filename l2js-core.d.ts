@@ -1,5 +1,8 @@
 // @ts-nocheck
-export {};
+// export { UObject } from "@l2js/core";
+// export default UObject;
+
+
 
 declare module "@l2js/core" {
     abstract class UObject {
@@ -27,4 +30,7 @@ declare module "@l2js/core" {
         public static make<T extends UObject, K extends abstract new (...args: any[]) => T>(this: K, ...args: MakeParams<K>): InstanceType<K>;
         public static class<T extends UObject, K extends abstract new (...args: any[]) => T>(this: K): new (...args: MakeParams<K>) => InstanceType<K>;
     }
+
+    export default UObject;
+    export { UObject };
 }

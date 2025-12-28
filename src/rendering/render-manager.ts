@@ -131,9 +131,9 @@ class RenderManager {
         // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
-        // ti - should have terrain light
-        this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
-        this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
+        // // ti - should have terrain light
+        // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
+        // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);
@@ -167,8 +167,8 @@ class RenderManager {
         this.player.name = "Player";
         // this.player.visible = false;
         // this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
-        this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
-        // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
+        // this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
+        this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
         addResizeListeners(this);

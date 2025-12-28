@@ -424,7 +424,9 @@ async function startCore() {
             // 591,
             // 602 // 0x42
             // "StaticMeshActor613",
-            "StaticMeshActor9",
+            "StaticMeshActor9", // elven ruins colon thats flipped improperly
+            "StaticMeshActor1484", // elven ruins entrance
+            "StaticMeshActor338", // fallen elven ruins colon beneath the StaticMeshActor9
             // "StaticMeshActor6", // talking island church (3705 vertices)
             // 470,    // first object with scene lights near elven ruins
             // 1755, // light fixture with 3 lights near elven ruins
@@ -464,7 +466,7 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI

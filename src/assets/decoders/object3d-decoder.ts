@@ -69,7 +69,10 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
     if (info.name) object.name = info.name;
     if (info.position) object.position.fromArray(info.position);
     if (info.scale) object.scale.fromArray(info.scale);
-    if (info.rotation) object.rotation.fromArray(info.rotation);
+
+    if (info.quaternion) object.quaternion.fromArray(info.quaternion);
+    else if (info.rotation) object.rotation.fromArray(info.rotation);
+
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
     return object;

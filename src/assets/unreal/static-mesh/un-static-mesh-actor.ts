@@ -3,7 +3,6 @@ import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FMatrix from "@client/assets/unreal/un-matrix";
 import GMath from "@client/assets/unreal/un-gmath";
-import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
 import { indexToTime, timeToIndex, timeToIndicesLerp } from "@client/assets/unreal/un-l2env";
 import FBox from "@client/assets/unreal/un-box";
 abstract class FAccessory extends UObject {
@@ -388,7 +387,7 @@ abstract class UStaticMeshActor extends UAActor {
 
         let leaves: GA.FLeaf[];
 
-        
+
         // debugger;
 
         if (baseModel) {
@@ -637,15 +636,26 @@ abstract class UStaticMeshActor extends UAActor {
         //     colors[i + 2] = b / 255;
         // }
 
+
         const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-        const _position = this.location.getVectorElements();
+        // Align position to user's coordinate system (THREE.js compatible)
+        const _position = this.location.getVectorElements(); // [x, z, y] - already converted
+        const _scale = [this.scale.x * this.drawScale, this.scale.z * this.drawScale, this.scale.y * this.drawScale]; // [x, z, y] scale
+
+        // Already [x, z, y]
+
+        // Use the original Euler angle approach but pass it as rotation for backward compatibility
+        // The decoder will prioritize quaternion, but fall back to rotation
+
+        // console.log(this.objectName, this.prePivot.toArray(), this.location.toArray(), this.rotation?.toArray(), this.scale?.toArray());
+
         const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
             position: _position,
-            scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
-            rotation: this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"],
+            scale: _scale,
+            quaternion: this.rotation?.getQuaternion().toArray() || [0, 0, 0, 1],
             instance: {
                 mesh: meshInfo,
                 type: "StaticMeshInstance",
