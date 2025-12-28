@@ -1,7 +1,15 @@
 import FPlane from "@client/assets/unreal/un-plane";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
+import GMath from "@client/assets/unreal/un-gmath";
 import { UObject } from "@l2js/core";
 import FArray from "@l2js/core/src/unreal/un-array";
+
+// Environmental preset types for Seven Signs events
+const enum EEnvCycle {
+    Normal = 0,  // Standard day/night cycle (timeenv0.int)
+    Dusk = 1,    // Special dusk cycle ([SS]Dusk - timeenv1.int)
+    Dawn = 2     // Special dawn cycle ([SS]Dawn - timeenv2.int)
+};
 
 interface IEnvTime { time: number; }
 
@@ -68,9 +76,6 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
 }
 
 abstract class UL2NTimeLight extends UObject {
-    public readonly timeOfDay = 0.33;
-    // public readonly timeOfDay = 23;
-
     declare public lightTerrain: C.FArray<FNTimeHSV>;
     declare public lightActor: C.FArray<FNTimeHSV>;
     declare public lightStaticMesh: C.FArray<FNTimeHSV>;
@@ -86,10 +91,10 @@ abstract class UL2NTimeLight extends UObject {
     }
 
     public load(pkg: C.APackage): this;
-    public load(pkg: C.APackage, info: C.UExport<UObject>): this;
+    public load(pkg: C.APackage, info: C.UExport<C.UObject>): this;
     public load(pkg: C.APackage, info: C.PropertyTag): this;
     public load(pkg: GA.UPackage): this;
-    public load(pkg: GA.UPackage, info: C.UExport<UObject>): this;
+    public load(pkg: GA.UPackage, info: C.UExport<C.UObject>): this;
     public load(pkg: GA.UPackage, info: C.PropertyTag): this;
     public load(pkg: GA.UPackage, info?: any): this;
     public load(fileContents: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): this;
@@ -107,22 +112,6 @@ abstract class UL2NTimeLight extends UObject {
         this.lightBSP = loadHSV(fileContents, "HSVBSPLight", pkgNative, pkgEngine);
 
         return this;
-    }
-
-    public selectByTime<T extends IEnvTime>(array: FArray<T>) {
-        return selectByTime(this.timeOfDay, array);
-    }
-
-    public getColorPlaneStaticMeshSunLight(): FPlane {
-        throw new Error("not yet implemented")
-    }
-
-    public getBrightnessStaticMeshSunLight(): number {
-        return getBrightness(this.timeOfDay, this.lightStaticMesh);
-    }
-
-    public getBaseColorPlaneStaticMeshSunLight(): FPlane {
-        return getColorPlane(this.timeOfDay, this.lightStaticMesh);
     }
 }
 
@@ -199,7 +188,7 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
     declare public scaleSun: C.FArray<FNTimeScale>;
     declare public scaleMoon: C.FArray<FNTimeScale>;
 
-    declare public envType: 0 | 1 | 2;
+    declare public envType: EEnvCycle;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -243,25 +232,210 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         return this;
     }
 
-    public getAmbientPlaneTerrainLight(): FPlane {
-        return getColorPlane(this.timeOfDay, this.ambientTerrain);
-    }
-
-    public getAmbientPlaneStaticMeshSunLight(): FPlane {
-        return getColorPlane(this.timeOfDay, this.ambientStaticMesh);
-    }
-
     public toString(): string {
         let envName: "Normal" | "[SS]Dusk" | "[SS]Dawn";
 
         switch (this.envType) {
-            case 0: envName = "Normal"; break;
-            case 1: envName = "[SS]Dusk"; break;
-            case 2: envName = "[SS]Dawn"; break;
+            case EEnvCycle.Normal: envName = "Normal"; break;
+            case EEnvCycle.Dusk: envName = "[SS]Dusk"; break;
+            case EEnvCycle.Dawn: envName = "[SS]Dawn"; break;
             default: throw new Error(`Unknown sky type: ${this.envType}`);
         }
 
         return `UL2NEnvLight(EnvType=${envName})`;
+    }
+}
+
+//------------------------------------------------------------------------------
+// UL2NEnvManager - Singleton Environmental Manager
+//------------------------------------------------------------------------------
+
+/**
+ * UL2NEnvManager - Singleton environmental coordinator
+ * Manages environmental lighting, sky colors, and time-based effects
+ * Created as native C++ singleton during engine initialization
+ */
+class UL2NEnvManager {
+    // Environmental data (loaded from .int files)
+    declare protected currentEnvLight: UL2NEnvLight;
+
+    // Time management
+    declare protected timeOfDay: number;           // [0;24) hours (0 = midnight, 24 = next midnight)
+    declare protected currentEnvType: EEnvCycle;   // Normal, Dusk, or Dawn
+
+    // Performance settings
+    declare protected cacheIndex: number;          // Time acceleration (default: 1.0)
+
+    // Constructor (called during engine init or config loading)
+    public constructor(envLight: UL2NEnvLight, envType: EEnvCycle) {
+        // Initialize defaults
+        this.timeOfDay = 0.33;          // ~20 minutes after midnight
+        this.currentEnvType = envType;  // Normal cycle by default
+        this.cacheIndex = 1.0;          // Normal time progression
+
+        this.currentEnvLight = envLight;
+    }
+
+    // Time management
+    public setTimeOfDay(timeOfDay: number): void {
+        this.timeOfDay = Math.max(0.0, Math.min(24.0, timeOfDay));
+        this.updateEnvironmentalState();
+    }
+
+    public getTimeOfDay(): number {
+        return this.timeOfDay;
+    }
+
+    // Core environmental calculations
+    public getSkyBoxColor(): GD.ColorArr {
+        if (!this.currentEnvLight) {
+            return [0.5, 0.7, 1.0, 1.0]; // Default sky blue
+        }
+
+        // Get interpolated color from current environmental data
+        const colorPlane = this.currentEnvLight.getAmbientPlaneTerrainLight();
+        return colorPlane.getElements() as GD.ColorArr;
+    }
+
+    public getSunModifierInfo(): { brightness: number, color: GD.ColorArr } {
+        if (!this.currentEnvLight) {
+            return {
+                brightness: 1.0,
+                color: [1.0, 1.0, 0.9, 1.0] // Warm sunlight
+            };
+        }
+
+        return {
+            brightness: this.currentEnvLight.getBrightnessStaticMeshSunLight(),
+            color: this.currentEnvLight.getBaseColorPlaneStaticMeshSunLight().getElements() as GD.ColorArr
+        };
+    }
+
+    public getEnvColor(colorA: GD.ColorArr, colorB: GD.ColorArr, colorC: GD.ColorArr): GD.ColorArr {
+        // Three-point interpolation based on time and environmental state
+        // This would implement the GetEnvColor logic from MCP analysis
+        const time = this.timeOfDay;
+
+        // Simplified interpolation - in native code this is more complex
+        if (time < 0.25) {
+            // Night to dawn transition
+            return this.interpolateColors(colorA, colorB, time * 4);
+        } else if (time < 0.75) {
+            // Day
+            return colorB;
+        } else {
+            // Dusk to night transition
+            return this.interpolateColors(colorB, colorA, (time - 0.75) * 4);
+        }
+    }
+
+    // Update environmental state (called every frame)
+    public updateNTime(deltaTime: number): void {
+        // Update time progression (deltaTime in seconds, timeOfDay in hours)
+        this.timeOfDay += (deltaTime * this.cacheIndex) / 3600; // Convert seconds to hours
+        if (this.timeOfDay >= 24.0) {
+            this.timeOfDay = 0.0;
+        }
+
+        // Update environmental state based on time
+        this.updateEnvironmentalState();
+    }
+
+    protected updateEnvironmentalState(): void {
+        // Determine environmental period based on time (matches IDA disassembly)
+        // Note: hashNextBuffer removed as unused in current implementation
+        const period = this.timeOfDay < 6.0 ? 0 : // Night (0-6 AM)
+                      this.timeOfDay < 8.0 ? 1 : // Dawn (6-8 AM)
+                      this.timeOfDay < 22.0 ? 2 : // Day (8 AM-10 PM)
+                      3; // Dusk (10 PM-12 AM)
+
+        // Interpolation factors not currently used in this implementation
+    }
+
+    protected interpolateColors(colorA: GD.ColorArr, colorB: GD.ColorArr, factor: number): GD.ColorArr {
+        const result: GD.ColorArr = [0, 0, 0, 1];
+        for (let i = 0; i < 3; i++) {
+            result[i] = colorA[i] + (colorB[i] - colorA[i]) * factor;
+        }
+        return result;
+    }
+
+    // Sun/Moon positioning calculations (would use GMath in native engine)
+    // Note: Currently unused but provided for future rendering integration
+    public getSunPosition(): { azimuth: number, elevation: number } {
+        // Convert time of day to sun position using spherical coordinates
+        // In native engine, this would use GMath.sin/cos for performance
+        const gmath = GMath();
+
+        // Time of day = [0;24) hours, convert to GMath angle units
+        // 24 hours = 65536 GMath units (full circle)
+        // 1 hour = 65536/24 = 2730.666 GMath units
+        const timeAngle = Math.floor(this.timeOfDay * (65536 / 24));
+
+        // Sun elevation: higher at noon (timeOfDay = 0.5), lower at dawn/dusk
+        // Use GMath.sin for the elevation curve (performance optimization)
+        const elevationGMath = Math.floor(gmath.sin(timeAngle) * 16384); // ±90° range
+
+        // Azimuth: sun moves from east to west
+        // Start from east, move westward based on time
+        const azimuthGMath = (16384 - timeAngle) % 65536; // Wrap around full circle
+
+        return {
+            azimuth: azimuthGMath,
+            elevation: elevationGMath
+        };
+    }
+
+    public getMoonPosition(): { azimuth: number, elevation: number } {
+        // Moon is opposite to sun (simplified)
+        const sunPos = this.getSunPosition();
+
+        // Moon is roughly opposite to sun
+        const moonAzimuth = (sunPos.azimuth + 32768) % 65536; // +180 degrees
+        const moonElevation = -sunPos.elevation; // Below horizon when sun is up
+
+        return {
+            azimuth: moonAzimuth,
+            elevation: Math.max(moonElevation, -16384) // Don't go too far below horizon
+        };
+    }
+
+    // Get current environmental lighting data
+    public getCurrentEnvLight(): UL2NEnvLight {
+        if (!this.currentEnvLight) {
+            throw new Error("No environmental light set");
+        }
+
+        return this.currentEnvLight;
+    }
+
+    public selectByTime<T extends IEnvTime>(array: FArray<T>) {
+        return selectByTime(this.timeOfDay, array);
+    }
+
+    public getColorPlaneStaticMeshSunLight(): FPlane {
+        throw new Error("not yet implemented")
+    }
+
+    public getBrightnessStaticMeshSunLight(): number {
+        return getBrightness(this.timeOfDay, this.currentEnvLight.lightStaticMesh);
+    }
+
+    public getBaseColorPlaneStaticMeshSunLight(): FPlane {
+        return getColorPlane(this.timeOfDay, this.currentEnvLight.lightStaticMesh);
+    }
+
+    public getAmbientPlaneTerrainLight(): FPlane {
+        return getColorPlane(this.timeOfDay, this.currentEnvLight.ambientTerrain);
+    }
+
+    public getAmbientPlaneStaticMeshSunLight(): FPlane {
+        return getColorPlane(this.timeOfDay, this.currentEnvLight.ambientStaticMesh);
+    }
+
+    // Debug information
+    public toString(): string {
+        return `UL2NEnvManager(time=${this.timeOfDay.toFixed(1)}h, envType=${this.currentEnvType})`;
     }
 }
 
@@ -338,16 +512,16 @@ function timeToIndicesLerp(timeOfDay: number, totalElements: number) {
     return [currEnvIndex, nextEnvIndex, lerp];
 }
 
-export default UL2NEnvLight;
-export { UL2NEnvLight, UL2NTimeLight, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndex, timeToIndicesLerp, pickArrayIndices };
+export default UL2NEnvManager;
+export { UL2NEnvManager, UL2NEnvLight, UL2NTimeLight, EEnvCycle, FNTimeHSV, FNTimeColor, FNTimeScale, selectByTime, indexToTime, timeToIndex, timeToIndicesLerp, pickArrayIndices };
 
-function getEnvType(fileContents: string) {
+function getEnvType(fileContents: string): EEnvCycle {
     let readOffset = findSection(fileContents, "EnvType");
     let [nameMax, nameVal, _] = consumeNextValue(fileContents, readOffset);
 
     if (nameMax.toLowerCase() !== "envtype") throw new Error(`Invalid variable found '${nameMax}' expected 'NUM'`);
 
-    return parseInt(nameVal) as 0 | 1 | 2;
+    return parseInt(nameVal) as EEnvCycle;
 }
 
 function loadHSV(fileContents: string, sectionName: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): FArray<FNTimeHSV> {

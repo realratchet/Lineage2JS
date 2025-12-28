@@ -69,7 +69,8 @@ abstract class UTerrainSector extends UObject {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
-        const env = info.levelInfo.getL2Env();
+        const envManager = info.levelInfo.getL2Env();
+        const env = envManager.getCurrentEnvLight();
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
@@ -92,13 +93,13 @@ abstract class UTerrainSector extends UObject {
 
         const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
-        const ambient = env.getAmbientPlaneTerrainLight();
+        const ambient = envManager.getAmbientPlaneTerrainLight();
 
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
 
         // Get appropriate shadow map for current time of day
-        const validShadowmap = this.getShadowMapForTime(env.timeOfDay);
+        const validShadowmap = this.getShadowMapForTime(envManager.getTimeOfDay());
 
         const v = FVector.make();
 

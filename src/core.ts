@@ -184,7 +184,7 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
-async function _decodTimeEnvFile(path: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): Promise<any> {
+async function _decodTimeEnvFile(path: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): Promise<GA.UL2NEnvManager> {
     const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
 
     return envFile.load(pkgNative, pkgEngine);
@@ -250,7 +250,7 @@ async function startCore() {
 
 
     const pkgNative = assetLoader.getNativePackage();
-    const pkgEngine = await assetLoader.load(assetLoader.getEnginePackage());
+    const pkgEngine = await assetLoader.load<GA.UEnginePackage>(assetLoader.getEnginePackage());
 
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();

@@ -23,7 +23,7 @@ function getHSV(H: number, S: number, V: number): FPlane {
 
 class FDynamicLight {
     public readonly actor: ULight;
-    public readonly env: GA.UL2NEnvLight;
+    public readonly envManager: GA.UL2NEnvManager;
 
     public alpha: number;
     public color: FPlane;
@@ -32,10 +32,10 @@ class FDynamicLight {
     public radius: number;
     public dynamic: boolean;
 
-    public constructor(actor: ULight, env: GA.UL2NEnvLight) {
+    public constructor(actor: ULight, envManager: GA.UL2NEnvManager) {
         // console.log(actor.dumpLayout());
 
-        this.env = env;
+        this.envManager = envManager;
         this.actor = actor;
         this.alpha = 1;
         this.update();
@@ -43,7 +43,7 @@ class FDynamicLight {
 
     public update() {
         const actor = this.actor;
-        const env = this.env;
+        const envManager = this.envManager;
         const levelInfo = actor.levelInfo;
 
         let baseColor: FPlane;
@@ -51,8 +51,8 @@ class FDynamicLight {
 
         if (actor.isSunlightColor) {
             // baseColor = env.selectByTime(env.lightActor).toColorPlane();
-            baseColor = env.getBaseColorPlaneStaticMeshSunLight();
-            brightness = env.getBrightnessStaticMeshSunLight();
+            baseColor = envManager.getBaseColorPlaneStaticMeshSunLight();
+            brightness = envManager.getBrightnessStaticMeshSunLight();
         } else {
             baseColor = getHSV(actor.hue, actor.saturation, 255);
             brightness = actor.brightness;
@@ -270,7 +270,7 @@ abstract class ULight extends UAActor {
         });
     }
 
-    protected getRenderInfo(env: GA.UL2NEnvLight) { return new FDynamicLight(this, env); }
+    protected getRenderInfo(envManager: GA.UL2NEnvManager) { return new FDynamicLight(this, envManager); }
 
     protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();

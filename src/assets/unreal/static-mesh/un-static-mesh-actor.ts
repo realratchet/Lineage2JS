@@ -324,7 +324,9 @@ abstract class UStaticMeshActor extends UAActor {
         // console.warn(this.exp.objectName)
 
         const mesh = this.mesh.loadSelf();
-        const env = this.levelInfo.getL2Env();
+        const envManager = this.levelInfo.getL2Env();
+        const env = envManager.getCurrentEnvLight();
+
         const level = this.getLevel();
         const baseModel = level.getModel();
 
@@ -491,13 +493,13 @@ abstract class UStaticMeshActor extends UAActor {
             if (lightCount < 2)
                 debugger;
 
-            const [currEnvIndex, nextEnvIndex, lerp] = timeToIndicesLerp(env.timeOfDay, lightCount);
+            const [currEnvIndex, nextEnvIndex, lerp] = timeToIndicesLerp(envManager.getTimeOfDay(), lightCount);
             // const staticMeshLight = env.getBaseColorPlaneStaticMeshSunLight();
 
             // debugger;
 
             applyStaticMeshLightEnv(
-                env,
+                envManager,
                 vertexArrayLen,
                 instanceColors,
                 this.scaleGlow,
@@ -526,7 +528,7 @@ abstract class UStaticMeshActor extends UAActor {
         // }
 
         if (true && this.isSunAffected) {
-            const ambient = env.getAmbientPlaneStaticMeshSunLight();
+            const ambient = envManager.getAmbientPlaneStaticMeshSunLight();
 
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 instanceColors[i + 0] += ambient.x;
@@ -728,7 +730,7 @@ function fromColorPlane([r, g, b]: [number, number, number]) {
     return [_r, _g, _b];
 }
 
-function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: [number, any][]) {
+function applyStaticMeshLightEnv(envManager: GA.UL2NEnvManager, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: [number, any][]) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -749,7 +751,7 @@ function applyStaticMeshLightEnv(env: GA.UL2NEnvLight, vertexArrayLen: number, i
 
         if (!lightActor) continue;
 
-        const light = lightActor.getRenderInfo(env);
+        const light = lightActor.getRenderInfo(envManager);
 
         const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
         const bitPtrIter = lightArray.iter();
