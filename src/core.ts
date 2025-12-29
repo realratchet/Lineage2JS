@@ -260,9 +260,9 @@ async function startCore() {
 
     // const sound = await assetLoader.load(assetLoader.getPackage("MonSound3", "Sound"));
     // const ants = sound.exports.filter(x=>x.objectName.toLowerCase().includes("antaras"))
-    
+
     // ants.slice(1).forEach(s=>sound.fetchObject(s.index+1).loadSelf());
-    
+
     // // const antWait = sound.fetchObject(4).loadSelf();
 
     // debugger;
@@ -439,7 +439,7 @@ async function startCore() {
     } as GD.LoadSettings_T;
 
     // working (or mostly working)
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -466,7 +466,7 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
