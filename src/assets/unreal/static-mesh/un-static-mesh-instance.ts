@@ -135,13 +135,13 @@ abstract class UStaticMeshInstance extends UObject {
         return {
             color,
             lights: {
-                scene: [],
-                environment: null
-                // scene: this.sceneLights,
-                // environment: validEnvironment ? {
-                //     color: lightingColor,
-                //     ...validEnvironment
-                // } : null
+                // scene: [],
+                // environment: null
+                scene: this.sceneLights,
+                environment: validEnvironment ? {
+                    color: lightingColor,
+                    ...validEnvironment
+                } : null
             }
         };
 

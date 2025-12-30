@@ -131,6 +131,10 @@ class RenderManager {
         this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
+        // cruma colons
+        this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
+        this.controls.orbit.target.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
+
         // // ti - should have terrain light
         // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
         // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);

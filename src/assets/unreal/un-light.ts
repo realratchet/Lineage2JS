@@ -21,6 +21,19 @@ function getHSV(H: number, S: number, V: number): FPlane {
     // return FPlane.make(rgbComp.x, rgbComp.y, rgbComp.z, 1);
 }
 
+// Helper function to convert FColor to normalized FPlane (FVector with w=1)
+function colorToPlane(color: GA.FColor): FPlane {
+    const lengthSq = color.r * color.r + color.g * color.g + color.b * color.b;
+    if (lengthSq === 0) {
+        return FPlane.make(1, 1, 1, 1); // Default to white if zero-length
+    }
+    const length = Math.sqrt(lengthSq);
+    return FPlane.make(color.r / length, color.g / length, color.b / length, 1);
+}
+
+// Per-instance state tracking for LT_Strobe (replaces static variables)
+const strobeStateMap = new Map<GA.ULight, { lastUpdateTime: number, toggle: number }>();
+
 class FDynamicLight {
     public readonly actor: ULight;
     public readonly envManager: GA.UL2NEnvManager;
@@ -75,39 +88,92 @@ class FDynamicLight {
             else intensity = Rand;
         }
         else if (actor.type === LightType_T.LT_Strobe) {
-            throw new Error("not implemented");
-            //         static float LastUpdateTime = 0; static int Toggle = 0;
-            // if (LastUpdateTime != Actor -> Level -> TimeSeconds) {
-            //     LastUpdateTime = Actor -> Level -> TimeSeconds;
-            //     Toggle ^= 1;
-            // }
-            // if (Toggle) Intensity = 0.0f;
-            //         else Intensity = 1.0f;
+            // Strobe light - toggles on/off each second
+            let state = strobeStateMap.get(actor);
+            if (!state) {
+                state = { lastUpdateTime: levelInfo.timeSeconds, toggle: 0 };
+                strobeStateMap.set(actor, state);
+            }
+            
+            if (state.lastUpdateTime !== levelInfo.timeSeconds) {
+                state.lastUpdateTime = levelInfo.timeSeconds;
+                state.toggle ^= 1;
+            }
+            
+            intensity = state.toggle ? 0.0 : 1.0;
+        }
+        else if (actor.type === LightType_T.LT_BackdropLight) {
+            // Backdrop light - typically steady, similar to LT_Steady
+            intensity = 1;
         }
         else if (actor.type == LightType_T.LT_SubtlePulse) {
-            // throw new Error("not implemented");
             intensity = 0.9 + 0.09 * GMath().sin(Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(actor.period), 1) + (actor.phase << 8)));
-            //     else if (Actor .type === LightType_T.LT_TexturePaletteOnce) {
-            // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
-            //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(appFloor(255.0f * Actor -> LifeFraction()));
-            //     BaseColor = FVector(C.R, C.G, C.B).SafeNormal();
-            //     Intensity = C.FBrightness() * 2.8;
-            // }
+        }
+        else if (actor.type === LightType_T.LT_TexturePaletteOnce) {
+            // Texture palette once - uses first skin's palette based on LifeFraction
+            // Note: LifeFraction is not available in TypeScript, using time-based fallback
+            if (actor.skins && actor.skins.length > 0) {
+                const firstSkin = (actor.skins as any)[0]?.loadSelf() as GA.UTexture;
+                if (firstSkin && firstSkin.palette) {
+                    const palette = firstSkin.palette.loadSelf();
+                    // Fallback: use time-based index since LifeFraction is not available
+                    // In original: appFloor(255.0f * Actor -> LifeFraction())
+                    const timeBasedIndex = Math.floor((levelInfo.timeSeconds * 255) % 256);
+                    const paletteColor = palette.colors.getElem(timeBasedIndex);
+                    baseColor = colorToPlane(paletteColor);
+                    intensity = paletteColor.getBrightness() * 2.8;
+                } else {
+                    intensity = 1; // Fallback if no palette
+                }
+            } else {
+                intensity = 1; // Fallback if no skins
+            }
         }
         else if (actor.type === LightType_T.LT_TexturePaletteLoop) {
-            throw new Error("not implemented");
-            // if (Actor -> Skins.Num() && Cast<UTexture>(Actor -> Skins(0)) && Cast<UTexture>(Actor -> Skins(0)) -> Palette) {
-            //             FLOAT Time = Actor -> Level -> TimeSeconds * 35 / Max((int)Actor -> LightPeriod, 1) + Actor -> LightPhase;
-            //             FColor C = Cast<UTexture>(Actor -> Skins(0)) -> Palette -> Colors(((int)(Time * 256) & 255) % 255);
-            //     BaseColor = FVector(C.R, C.G, C.B).UnsafeNormal();
-            //     Intensity = C.FBrightness() * 2.8f;
-            // }
-
-            // Dynamic = 1;
+            // Texture palette loop - cycles through palette colors based on time
+            if (actor.skins && actor.skins.length > 0) {
+                const firstSkin = (actor.skins as any)[0]?.loadSelf() as GA.UTexture;
+                if (firstSkin && firstSkin.palette) {
+                    const palette = firstSkin.palette.loadSelf();
+                    // Time = Actor -> Level -> TimeSeconds * 35 / Max((int)Actor -> LightPeriod, 1) + Actor -> LightPhase
+                    const time = (levelInfo.timeSeconds * 35) / Math.max(Math.floor(actor.period), 1) + actor.phase;
+                    // Colors(((int)(Time * 256) & 255) % 255)
+                    const paletteIndex = ((Math.floor(time * 256) & 255) % 255);
+                    const paletteColor = palette.colors.getElem(paletteIndex);
+                    baseColor = colorToPlane(paletteColor);
+                    intensity = paletteColor.getBrightness() * 2.8;
+                    // Note: Dynamic = 1 is set below
+                } else {
+                    intensity = 1; // Fallback if no palette
+                }
+            } else {
+                intensity = 1; // Fallback if no skins
+            }
         }
         else if (actor.type === LightType_T.LT_FadeOut) {
-            throw new Error("not implemented");
-            // Intensity = Math.min(1. 1.5 * (1 - Actor. LifeFraction()));
+            // Fade out - intensity decreases based on LifeFraction
+            // Note: LifeFraction is not available in TypeScript, using constant fallback
+            // Original: Math.min(1.0, 1.5 * (1 - Actor.LifeFraction()))
+            // Since LifeFraction is not available, use steady intensity as fallback
+            intensity = 1.0; // Fallback: steady intensity
+            // TODO: Implement when LifeFraction is available
+        }
+        else if (actor.type === LightType_T.LT_Fade) {
+            // Fade light type - similar to FadeOut but different curve
+            // Note: Implementation details not available in commented code
+            // Using steady intensity as fallback
+            intensity = 1.0; // Fallback: steady intensity
+            // TODO: Implement when fade curve details are available
+        }
+        else {
+            // Default case for any unhandled light types - use steady intensity
+            console.warn(`Unhandled light type: ${actor.type} for light ${actor.objectName}, defaulting to intensity = 1`);
+            intensity = 1;
+        }
+
+        // Ensure intensity is defined before using it
+        if (intensity === undefined) {
+            intensity = 1; // Fallback to steady intensity
         }
 
         this.color = baseColor.multiplyScalar((brightness / 255) * intensity * levelInfo.brightness);
@@ -127,7 +193,8 @@ class FDynamicLight {
 
         this.alpha = 1;
 
-        this.dynamic = actor.isDynamic;
+        // Set dynamic flag: true if actor is dynamic OR if using texture palette loop
+        this.dynamic = actor.isDynamic || (actor.type === LightType_T.LT_TexturePaletteLoop);
     }
 
     public sampleIntensity(SamplePosition: FVector, SampleNormal: FVector): number {
@@ -171,15 +238,19 @@ class FDynamicLight {
             else return 0;
         } else if (Actor.effect == LightEffect_T.LE_Spotlight || Actor.effect === LightEffect_T.LE_StaticSpot) {
             // Spot light.
-            const LightVector = Position.sub(SamplePosition);
-            const DistanceSquared = LightVector.lengthSq();
+            const dx = Position.x - SamplePosition.x;
+            const dy = Position.y - SamplePosition.y;
+            const dz = Position.z - SamplePosition.z;
+            const DistanceSquared = dx * dx + dy * dy + dz * dz;
             const Distance = Math.sqrt(DistanceSquared);
-            const BaseAttenuation = UnrealAttenuation(Distance, Radius, LightVector, SampleNormal);
+            const BaseAttenuation = UnrealAttenuation(Distance, Radius, dx, dy, dz, SampleNormal.x, SampleNormal.y, SampleNormal.z);
 
             if (BaseAttenuation > 0) {
-                const Sine = 1.0 - Actor.cone / 256.0, RSine = 1.0 / (1.0 - Sine);
-                const SineRSine = Sine * RSine, SineSq = Sine * Sine;
-                const VDotV = -LightVector.dot(Direction);
+                const Sine = 1.0 - Actor.cone / 256.0;
+                const RSine = 1.0 / (1.0 - Sine);
+                const SineRSine = Sine * RSine;
+                const SineSq = Sine * Sine;
+                const VDotV = -(dx * Direction.x + dy * Direction.y + dz * Direction.z);
 
                 if (VDotV > 0.0 && (VDotV ** 2) > SineSq * DistanceSquared)
                     return Math.pow(VDotV * RSine / Distance - SineRSine, 2) * BaseAttenuation;
@@ -188,19 +259,22 @@ class FDynamicLight {
             return 0;
         } else {
             // Point light.
+            const dx = Position.x - SamplePosition.x;
+            const dy = Position.y - SamplePosition.y;
+            const dz = Position.z - SamplePosition.z;
+            const Distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            const LightVector = Position.sub(SamplePosition);
-
-            return UnrealAttenuation(Math.sqrt(LightVector.lengthSq()), Radius, LightVector, SampleNormal);
+            return UnrealAttenuation(Distance, Radius, dx, dy, dz, SampleNormal.x, SampleNormal.y, SampleNormal.z);
         }
     }
 }
 
-function UnrealAttenuation(Distance: number, Radius: number, LightVector: FVector, Normal: FVector) {
-    if ((LightVector.dot(Normal)) > 0 && Distance <= Radius) {
-        const A = Distance / Radius,					// Unreal's lighting model.
-            B = (2 * A * A * A - 3 * A * A + 1),
-            C = Math.abs((LightVector.dot(Normal)) / Radius);
+function UnrealAttenuation(Distance: number, Radius: number, dx: number, dy: number, dz: number, nx: number, ny: number, nz: number) {
+    const dot = dx * nx + dy * ny + dz * nz;
+    if (dot > 0 && Distance <= Radius) {
+        const A = Distance / Radius;					// Unreal's lighting model.
+        const B = (2 * A * A * A - 3 * A * A + 1);
+        const C = Math.abs(dot / Radius);
 
         return B / A * C * 2;
     }

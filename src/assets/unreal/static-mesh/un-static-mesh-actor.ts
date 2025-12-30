@@ -264,6 +264,8 @@ abstract class UStaticMeshActor extends UAActor {
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {
+        return this._getDecodeInfoNew(library);
+
         // if (this.objectName === "Exp_StaticMeshActor140" || this.objectName === "Exp_StaticMeshActor141")
         //     debugger;
 
@@ -691,6 +693,217 @@ abstract class UStaticMeshActor extends UAActor {
         // debugger;
 
         return this.uuid;
+    }
+
+    public _getDecodeInfoNew(library: GD.DecodeLibrary): string {
+        // Implementation based on UStaticMesh::Illuminate (UnStaticMesh.cpp:673-830)
+        
+        // Load mesh info early - needed for export regardless of early exit
+        const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
+        const meshInfo = mesh.getDecodeInfo(library, null);
+
+        this.instance?.loadSelf().setActor(this);
+        
+        // Check if actor is static or mover without dynamic lighting
+        // Note: In TypeScript, we don't have AMover type, so we'll check physics instead
+        const isStatic = this.physics === EPhysics_T.PHYS_None;
+        const isMoverWithoutDynamicLight = false; // TODO: Check if mover has bDynamicLightMover
+        
+        if (!isStatic && !isMoverWithoutDynamicLight) {
+            // For non-static actors, export but skip lighting calculation
+            this._exportActorToLibrary(library, meshInfo);
+            return this.uuid;
+        }
+
+        // Skip if hidden in editor
+        if (this.isHiddenInEditor) {
+            // Still export actor even if hidden
+            this._exportActorToLibrary(library, meshInfo);
+            return this.uuid;
+        }
+
+        const level = this.getLevel();
+        const baseModel = level.getModel();
+        const localToWorld = this.localToWorld();
+        
+        // Calculate bounding box for leaves (needed for ambient lighting)
+        const predictedBox = mesh.getRenderBoundingBox(this).transformBy(localToWorld);
+        
+        // Get leaves for ambient lighting calculation
+        let leaves: GA.FLeaf[] = [];
+        if (baseModel) {
+            leaves = baseModel.boxLeaves(predictedBox);
+        }
+
+        // Get instance colors and prepare for lighting application
+        // Note: The instance already has pre-computed visibility bits for lights!
+        const attributes = library.geometries[meshInfo.geometry].attributes;
+        const vertexArrayLen = attributes.positions.length;
+        
+        // Get base instance colors - this already has pre-computed visibility bits!
+        const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
+            color: new Float32Array(vertexArrayLen).fill(0),
+            lights: { scene: [], ambient: [] }
+        });
+        const instanceColors = instance.color;
+        
+        // Use pre-computed scene lights from instance instead of recalculating visibility bits
+        // This is MUCH faster - visibility bits are already computed and stored in instance.lights.scene
+
+        // Apply ambient lighting (same as getDecodeInfo)
+        const envManager = this.levelInfo.getL2Env();
+        const ambActor = this.getAmbientLightingActor();
+        const zone = this.getZone();
+        const ambVector = zone.ambientVector;
+        
+        let ambGlow: number;
+        if (ambActor.ambientGlow === 255) {
+            ambGlow = 1.0; // Full brightness for unlit
+        } else {
+            ambGlow = ambActor.ambientGlow / 255;
+        }
+        
+        const ambGlowVec = FVector.make(ambGlow, ambGlow, ambGlow);
+        const ambColor = ambVector.add(ambGlowVec);
+        
+        if (this.isUnlit) {
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                instanceColors[i + 0] += 0.5;
+                instanceColors[i + 1] += 0.5;
+                instanceColors[i + 2] += 0.5;
+            }
+        } else {
+            let ambientVector = FVector.make();
+            for (let leaf of leaves) {
+                const iZone = leaf.iZone;
+                const zoneInfo = baseModel.getZoneActor(iZone).loadSelf();
+                const zoneAmbientVector = zoneInfo.ambientVector;
+                
+                ambientVector.x = Math.max(ambientVector.x, zoneAmbientVector.x);
+                ambientVector.y = Math.max(ambientVector.y, zoneAmbientVector.y);
+                ambientVector.z = Math.max(ambientVector.z, zoneAmbientVector.z);
+            }
+            
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                instanceColors[i + 0] += ambColor.x * 0.5;
+                instanceColors[i + 1] += ambColor.y * 0.5;
+                instanceColors[i + 2] += ambColor.z * 0.5;
+            }
+        }
+
+        // Apply scene lights using PRE-COMPUTED visibility bits from instance
+        // This is the key optimization - visibility bits are already calculated and stored!
+        // Use the optimized helper function that uses pre-computed visibility bits
+        applyStaticMeshLight(envManager.getCurrentEnvLight(), vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene);
+
+        // Process Lineage2-specific environment lights (sunlight lights)
+        // These use pre-computed visibility bits from instance.environmentLights
+        if (this.instance && this.instance.environmentLights.length > 0) {
+            const lightCount = this.instance.environmentLights.length;
+            
+            if (lightCount >= 2) {
+                const [currEnvIndex, nextEnvIndex, lerp] = timeToIndicesLerp(envManager.getTimeOfDay(), lightCount);
+                
+                // Use the optimized helper function that uses pre-computed visibility bits
+                applyStaticMeshLightEnv(
+                    envManager,
+                    vertexArrayLen,
+                    instanceColors,
+                    this.scaleGlow,
+                    localToWorld,
+                    attributes,
+                    [
+                        [lerp, this.instance.environmentLights[currEnvIndex].getDecodeInfo(library)],
+                        [lerp - 1, this.instance.environmentLights[nextEnvIndex].getDecodeInfo(library)]
+                    ],
+                );
+            }
+        }
+
+        // Apply sunlight ambient if sun-affected
+        if (this.isSunAffected) {
+            const ambient = envManager.getAmbientPlaneStaticMeshSunLight();
+            
+            for (let i = 0; i < vertexArrayLen; i += 3) {
+                instanceColors[i + 0] += ambient.x;
+                instanceColors[i + 1] += ambient.y;
+                instanceColors[i + 2] += ambient.z;
+            }
+        }
+
+        // Final clamp after all lighting calculations
+        // Note: Values > 1.0 are valid for HDR color space, but we clamp to [0, 1] for non-HDR output
+        for (let i = 0; i < vertexArrayLen; i += 3) {
+            instanceColors[i + 0] = Math.max(0, Math.min(1, instanceColors[i + 0]));
+            instanceColors[i + 1] = Math.max(0, Math.min(1, instanceColors[i + 1]));
+            instanceColors[i + 2] = Math.max(0, Math.min(1, instanceColors[i + 2]));
+        }
+
+        // Export actor to library with calculated per-vertex colors
+        this._exportActorToLibrary(library, meshInfo, instanceColors);
+
+        return this.uuid;
+    }
+
+    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors?: Float32Array): void {
+        // Export actor to library (same as getDecodeInfo)
+        this.instance?.loadSelf().setActor(this);
+        
+        // Use provided instance colors or get from instance
+        const geometryInfo = library.geometries[meshInfo.geometry];
+        if (!geometryInfo) {
+            console.warn(`Geometry info not found for meshInfo.geometry: ${meshInfo.geometry}, actor: ${this.objectName}`);
+            return;
+        }
+        
+        const attributes = geometryInfo.attributes;
+        if (!instanceColors) {
+            const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
+                color: new Float32Array(attributes.positions.length).fill(0),
+                lights: { scene: [], ambient: [] }
+            });
+            instanceColors = instance.color;
+        }
+        
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
+        // Align position to user's coordinate system (THREE.js compatible)
+        const _position = this.location.getVectorElements(); // [x, z, y] - already converted
+        const _scale = [this.scale.x * this.drawScale, this.scale.z * this.drawScale, this.scale.y * this.drawScale]; // [x, z, y] scale
+
+        const actorInfo = {
+            uuid: this.uuid,
+            type: "StaticMeshActor",
+            name: this.objectName,
+            position: _position,
+            scale: _scale,
+            quaternion: this.rotation?.getQuaternion().toArray() || [0, 0, 0, 1],
+            instance: {
+                mesh: meshInfo,
+                type: "StaticMeshInstance",
+                uuid: this.instance ? this.instance.uuid : null,
+                name: this.instance ? this.instance.objectName : null,
+                attributes: { colors: instanceColors }
+            } as GD.IStaticMeshInstanceDecodeInfo
+        } as GD.IStaticMeshActorDecodeInfo;
+
+        zoneInfo.children.push(actorInfo);
+
+        library.geometryInstances[meshInfo.geometry]++;
+
+        if (geometryInfo.bounds?.box) {
+            const { min, max } = geometryInfo.bounds.box;
+            const _min = min.map((v, i) => v + _position[i]);
+            const _max = max.map((v, i) => v + _position[i]);
+
+            zoneInfo.bounds.isValid = true;
+
+            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
+                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+                    for (let i = 0; i < 3; i++)
+                        arr[i] = fn(arr[i], _min[i], _max[i]);
+                }
+            );
+        }
     }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
