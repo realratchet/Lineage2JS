@@ -42,7 +42,7 @@ class FBSPNode implements C.IConstructable {
 
     public getChildren() { return [this.iBack, this.iFront, this.iPlane]; }
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         this.plane = FPlane.make();
         this.exclusiveSphereBound = FPlane.make();
         this.inclusiveSphereBound = FPlane.make();

@@ -83,7 +83,7 @@ class UPackage extends APackage {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 
-    // public addDependencies(pkg: GA.UPackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
+    // public addDependencies(pkg: C.APackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
     //     const pkgCore = pkg.loader.getCorePackage();
     //     const pkgNative = pkg.loader.getNativePackage();
 

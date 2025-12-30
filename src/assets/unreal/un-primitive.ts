@@ -16,14 +16,14 @@ abstract class UPrimitive extends UObject {
         ];
     }
 
-    protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
+    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
 
         this.boundingBox = FBox.make();
         this.boundingSphere = FPlane.make();
     }
 
-    protected doLoad(pkg: GA.UPackage, exp: C.UExport) {
+    protected doLoad(pkg: C.APackage, exp: C.UExport) {
         // (UObject.prototype as any).doLoad.call(this, pkg, exp);
         super.doLoad(pkg, exp);
 

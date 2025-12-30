@@ -12,7 +12,7 @@ class FStaticMeshLightInfo implements C.IConstructable {
 
     public light: ULight;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const int32 = new BufferValue(BufferValue.int32);
 
@@ -135,11 +135,13 @@ abstract class UStaticMeshInstance extends UObject {
         return {
             color,
             lights: {
-                scene: this.sceneLights,
-                environment: validEnvironment ? {
-                    color: lightingColor,
-                    ...validEnvironment
-                } : null
+                scene: [],
+                environment: null
+                // scene: this.sceneLights,
+                // environment: validEnvironment ? {
+                //     color: lightingColor,
+                //     ...validEnvironment
+                // } : null
             }
         };
 
@@ -150,7 +152,7 @@ abstract class UStaticMeshInstance extends UObject {
         // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }
 
-    protected doLoad(pkg: GA.UPackage, exp: C.UExport): this {
+    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
         const compat32 = new BufferValue(BufferValue.compat32);

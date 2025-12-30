@@ -289,7 +289,7 @@ abstract class ATerrainInfo extends AInfo {
         return this.renderCombinations.length - 1;
     }
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport<ATerrainInfo>) {
+    public doLoad(pkg: C.APackage, exp: C.UExport<ATerrainInfo>) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -601,7 +601,7 @@ abstract class ATerrainInfo extends AInfo {
 
     protected combineLayerWeights() { throw new Error("not yet implemented"); }
 
-    public postLoad(pkg: GA.UPackage, exp: C.UExport<C.UObject>) {
+    public postLoad(pkg: C.APackage, exp: C.UExport<C.UObject>) {
         super.postLoad(pkg, exp);
 
         let startX = 0, startY = 0;

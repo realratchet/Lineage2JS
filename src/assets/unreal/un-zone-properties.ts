@@ -7,7 +7,7 @@ class FZoneProperties implements C.IConstructable {
     public zoneActorId: number;
     public zoneActor: GA.FZoneInfo;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const uint64 = new BufferValue(BufferValue.uint64);
         const float = new BufferValue(BufferValue.float);
 

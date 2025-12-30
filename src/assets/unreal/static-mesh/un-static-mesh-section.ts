@@ -8,7 +8,7 @@ class FStaticMeshSection implements C.IConstructable {
     declare public fE: number;              // ALMOST always equals to f10
     declare public numFaces: number;        // number of faces in section
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const uint32 = new BufferValue(BufferValue.uint32);
         const uint16 = new BufferValue(BufferValue.uint16);
 

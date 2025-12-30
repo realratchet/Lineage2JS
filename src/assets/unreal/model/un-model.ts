@@ -48,7 +48,7 @@ abstract class UModel extends UPrimitive {
     public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; }
     public getLevelInfo() { return this.levelInfo; }
 
-    protected preLoad(pkg: GA.UPackage, exp: C.UExport): void {
+    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
 
         this.vectors = new FArray(FVector.class());
@@ -67,7 +67,7 @@ abstract class UModel extends UPrimitive {
         this.lights = new FObjectArray();
     }
 
-    protected doLoad(pkg: GA.UPackage, exp: C.UExport): this {
+    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();

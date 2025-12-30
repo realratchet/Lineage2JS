@@ -7,7 +7,7 @@ abstract class UTextBuffer extends UObject {
     public top: number;
     public string = new FString();
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport): this {
+    public doLoad(pkg: C.APackage, exp: C.UExport): this {
         const uint32 = new BufferValue(BufferValue.uint32);
 
         super.doLoad(pkg, exp);

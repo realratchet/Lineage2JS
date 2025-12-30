@@ -6,7 +6,7 @@ abstract class UPlatte extends UObject {
     public colors: FArray<GA.FColor>
     // public readonly skipRemaining = true;
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
         this.colors = new FArray(FColor.class()).load(pkg);

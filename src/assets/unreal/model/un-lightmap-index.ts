@@ -11,7 +11,7 @@ class FSubStructure implements C.IConstructable {
     public unkInt0: number;
     public unkIntArr1: number[];
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
@@ -44,7 +44,7 @@ class FLightmapIndex implements C.IConstructable {
     public unkSubstructure = new FArray(FSubStructure);
     public unkInt0: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         // pkg.addDependencies(
         //     pkg,
         //     ["Struct", "Matrix"],

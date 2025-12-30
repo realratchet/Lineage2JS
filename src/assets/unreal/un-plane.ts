@@ -1,5 +1,5 @@
 import FVector from "@client/assets/unreal/un-vector";
-import  UObject from "@l2js/core";
+import UObject from "@l2js/core";
 
 abstract class FPlane extends UObject {
     declare public ["constructor"]: typeof FPlane;

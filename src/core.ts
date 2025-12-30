@@ -8,7 +8,7 @@ import UDataFile from "./assets/unreal/datafile/un-datafile";
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | GA.UPackage, settings: GD.LoadSettings_T) {
+async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, settings: GD.LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
     pkg = await assetLoader.load(pkg);
@@ -24,14 +24,14 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
     return decodePackage(decodeLibrary);
 }
 
-async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage, pkgTex: string | UPackage) {
+async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, pkgTex: string | C.APackage) {
 
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
     pkg = await assetLoader.load(pkg);
 
 
-    async function getTextures(pkg: string | GA.UPackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
+    async function getTextures(pkg: string | C.APackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
         if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Texture");
 
         pkg = await assetLoader.load(pkg);
@@ -132,7 +132,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     //     });
 }
 
-async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage) {
+async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage) {
 
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
@@ -184,7 +184,7 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
-async function _decodTimeEnvFile(path: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): Promise<GA.UL2NEnvManager> {
+async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<GA.UL2NEnvManager> {
     const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
 
     return envFile.load(pkgNative, pkgEngine);
@@ -250,7 +250,7 @@ async function startCore() {
 
 
     const pkgNative = assetLoader.getNativePackage();
-    const pkgEngine = await assetLoader.load<GA.UEnginePackage>(assetLoader.getEnginePackage());
+    const pkgEngine = await assetLoader.load<C.AEnginePackage>(assetLoader.getEnginePackage());
 
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
@@ -392,11 +392,11 @@ async function startCore() {
     const loadSettings = {
         env: env,
         helpersZoneBounds: false,
-        loadTerrain: true,
-        loadBaseModel: true,
+        loadTerrain: false,
+        loadBaseModel: false,
         loadStaticModels: true,
         loadEmitters: false,
-        _loadStaticModelList: [
+        loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -424,10 +424,10 @@ async function startCore() {
             // 591,
             // 602 // 0x42
             // "StaticMeshActor613",
-            "StaticMeshActor9", // elven ruins colon thats flipped improperly
-            "StaticMeshActor1484", // elven ruins entrance
-            "StaticMeshActor338", // fallen elven ruins colon beneath the StaticMeshActor9
-            // "StaticMeshActor6", // talking island church (3705 vertices)
+            // "StaticMeshActor9", // elven ruins colon thats flipped improperly
+            // "StaticMeshActor1484", // elven ruins entrance
+            // "StaticMeshActor338", // fallen elven ruins colon beneath the StaticMeshActor9
+            // // "StaticMeshActor6", // talking island church (3705 vertices)
             // 470,    // first object with scene lights near elven ruins
             // 1755, // light fixture with 3 lights near elven ruins
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures
@@ -435,6 +435,7 @@ async function startCore() {
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
             // ...["StaticMeshActor475"] // talking island village broken rock
             // ...["StaticMeshActor684"] // cruma light
+            "StaticMeshActor1893" // cruma: broken floating platform light
         ]
     } as GD.LoadSettings_T;
 

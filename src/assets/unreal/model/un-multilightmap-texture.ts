@@ -15,7 +15,7 @@ class FStaticLightmapTexture implements C.IConstructable {
 
     public readonly uuid = generateUUID();
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const uint8 = new BufferValue(BufferValue.uint8);
         const int32 = new BufferValue(BufferValue.int32);
 
@@ -95,7 +95,7 @@ class FLightmapTexture implements C.IConstructable {
     public unkInt0: number;
     public staticLightmap = new FStaticLightmapTexture();
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
@@ -117,7 +117,7 @@ class FMultiLightmapTexture implements C.IConstructable {
     public textures = new FArray(FLightmapTexture);
     public iLightmaps = new FPrimitiveArray(BufferValue.int32);
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         this.textures.load(pkg);
         this.iLightmaps.load(pkg);
 

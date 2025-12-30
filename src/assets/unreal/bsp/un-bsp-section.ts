@@ -11,7 +11,7 @@ class FBSPSection implements C.IConstructable {
     public unkInt2: number;
     public unkInt3: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const int32 = new BufferValue(BufferValue.int32);
         const compat = new BufferValue(BufferValue.compat32);
 
@@ -35,7 +35,7 @@ class FBSPVertex implements C.IConstructable {
     public unkArr0: number[];
     public unkArr1: number[];
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
 
         const ver = pkg.header.getArchiveFileVersion();
         const f = new BufferValue(BufferValue.float);

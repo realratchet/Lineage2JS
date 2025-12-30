@@ -93,11 +93,11 @@ abstract class UL2NTimeLight extends UObject {
     public load(pkg: C.APackage): this;
     public load(pkg: C.APackage, info: C.UExport<C.UObject>): this;
     public load(pkg: C.APackage, info: C.PropertyTag): this;
-    public load(pkg: GA.UPackage): this;
-    public load(pkg: GA.UPackage, info: C.UExport<C.UObject>): this;
-    public load(pkg: GA.UPackage, info: C.PropertyTag): this;
-    public load(pkg: GA.UPackage, info?: any): this;
-    public load(fileContents: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): this;
+    public load(pkg: C.APackage): this;
+    public load(pkg: C.APackage, info: C.UExport<C.UObject>): this;
+    public load(pkg: C.APackage, info: C.PropertyTag): this;
+    public load(pkg: C.APackage, info?: any): this;
+    public load(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this;
 
     public load(fileContents: any, pkgNative?: any, pkgEngine?: any): this {
         if (typeof fileContents === "string")
@@ -105,7 +105,7 @@ abstract class UL2NTimeLight extends UObject {
         else return super.load(fileContents, pkgNative);
     }
 
-    protected loadFromText(fileContents: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): this {
+    protected loadFromText(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this {
         this.lightActor = loadHSV(fileContents, "HSVActorLight", pkgNative, pkgEngine);
         this.lightStaticMesh = loadHSV(fileContents, "HSVStaticMeshLight", pkgNative, pkgEngine);
         this.lightTerrain = loadHSV(fileContents, "HSVTerrainLight", pkgNative, pkgEngine);
@@ -210,7 +210,7 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         });
     }
 
-    protected loadFromText(fileContents: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): this {
+    protected loadFromText(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this {
         super.loadFromText(fileContents, pkgNative, pkgEngine);
 
         this.envType = getEnvType(fileContents);
@@ -293,7 +293,7 @@ class UL2NEnvManager {
         }
 
         // Get interpolated color from current environmental data
-        const colorPlane = this.currentEnvLight.getAmbientPlaneTerrainLight();
+        const colorPlane = this.getAmbientPlaneTerrainLight();
         return colorPlane.getElements() as GD.ColorArr;
     }
 
@@ -306,8 +306,8 @@ class UL2NEnvManager {
         }
 
         return {
-            brightness: this.currentEnvLight.getBrightnessStaticMeshSunLight(),
-            color: this.currentEnvLight.getBaseColorPlaneStaticMeshSunLight().getElements() as GD.ColorArr
+            brightness: this.getBrightnessStaticMeshSunLight(),
+            color: this.getBaseColorPlaneStaticMeshSunLight().getElements() as GD.ColorArr
         };
     }
 
@@ -524,7 +524,7 @@ function getEnvType(fileContents: string): EEnvCycle {
     return parseInt(nameVal) as EEnvCycle;
 }
 
-function loadHSV(fileContents: string, sectionName: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): FArray<FNTimeHSV> {
+function loadHSV(fileContents: string, sectionName: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): FArray<FNTimeHSV> {
     let readOffset = findSection(fileContents, sectionName);
     let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
 
@@ -555,7 +555,7 @@ function loadHSV(fileContents: string, sectionName: string, pkgNative: GA.UNativ
     return array;
 }
 
-function loadScale(fileContents: string, sectionName: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): FArray<FNTimeScale> {
+function loadScale(fileContents: string, sectionName: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): FArray<FNTimeScale> {
     let readOffset = findSection(fileContents, sectionName);
     let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
 
@@ -586,7 +586,7 @@ function loadScale(fileContents: string, sectionName: string, pkgNative: GA.UNat
     return array;
 }
 
-function loadRGB(fileContents: string, sectionName: string, pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): FArray<FNTimeColor> {
+function loadRGB(fileContents: string, sectionName: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): FArray<FNTimeColor> {
     let readOffset = findSection(fileContents, sectionName);
     let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
 

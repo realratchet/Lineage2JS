@@ -5,7 +5,7 @@ import UL2NEnvManager, { UL2NEnvLight, EEnvCycle } from "@client/assets/unreal/u
 class UConfigTimeEnv extends BaseConfigFile {
     declare ["constructor"]: typeof UConfigTimeEnv
 
-    public load(pkgNative: GA.UNativePackage, pkgEngine: GA.UEnginePackage): UL2NEnvManager {
+    public load(pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): UL2NEnvManager {
         const uClass = pkgEngine.fetchObjectByType<C.UClass<UL2NEnvLight>>("Class", "L2NEnvLight").loadSelf();
         const L2NEnvLight = uClass.buildClass(pkgNative);
 

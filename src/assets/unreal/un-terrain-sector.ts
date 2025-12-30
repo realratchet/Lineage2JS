@@ -13,7 +13,7 @@ class FTerrainLightInfo implements C.IConstructable {
     public light: GA.ULight;
     public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
 
         const compat32 = new BufferValue(BufferValue.compat32);
 
@@ -53,7 +53,7 @@ abstract class UTerrainSector extends UObject {
     declare public quadsXActual: number;
     declare public quadsYActual: number;
 
-    declare pkg: GA.UPackage;
+    declare pkg: C.APackage;
 
     // likely mesh lights?
     declare protected lightInfos: FArray<FTerrainLightInfo>;
@@ -415,7 +415,7 @@ abstract class UTerrainSector extends UObject {
         };
     }
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 

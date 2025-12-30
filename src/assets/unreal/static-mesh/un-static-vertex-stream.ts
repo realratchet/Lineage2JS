@@ -6,7 +6,7 @@ class FStaticMeshVertexStream implements C.IConstructable {
     declare public vert: FArray<FStaticMeshVertex>;
     declare public revision: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         this.vert = new FArray(FStaticMeshVertex);
 
         this.vert.load(pkg);
@@ -21,7 +21,7 @@ class FStaticMeshVertex implements C.IConstructable {
     declare public position: FVector;
     declare public normal: FVector;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         this.position = FVector.make();
         this.normal = FVector.make();
 

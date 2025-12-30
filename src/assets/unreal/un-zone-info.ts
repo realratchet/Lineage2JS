@@ -14,7 +14,7 @@ abstract class FZoneInfo extends AInfo/* implements IInfo*/ {
     declare public readonly killZType: number;
     declare public readonly isSoftKillZ: boolean;
 
-    declare public readonly terrains: C.FArray<C.FNumber<"compat32">>;
+    declare public readonly terrains: C.FObjectArray<GA.ATerrainInfo>;
 
     declare public readonly ambientHue: number;
     declare public readonly ambientSaturation: number;

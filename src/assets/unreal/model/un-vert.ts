@@ -4,7 +4,7 @@ class FVert implements C.IConstructable {
     public pVertex: number;
     public side: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.pVertex = pkg.read(compat32).value as number;

@@ -6,7 +6,7 @@ class FLeaf implements C.IConstructable {
     public iVolumetric: number;
     public visibleZones: bigint;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
         const uint64 = new BufferValue(BufferValue.uint64);
 

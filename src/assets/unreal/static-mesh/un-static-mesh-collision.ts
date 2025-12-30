@@ -6,7 +6,7 @@ class FStaticMeshCollisionNode implements C.IConstructable {
     declare public vertices: number[]; // vertex
     declare public bounds: FBox;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.bounds = FBox.make();
@@ -22,7 +22,7 @@ class FStaticMeshCollisionTriangle implements C.IConstructable {
     declare public matrix: FMatrix;     // looks like 4 planes? some matrix?
     declare public vertices: number[];  // vertex
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const compat32 = new BufferValue(BufferValue.compat32);
 
         this.matrix = FMatrix.make();

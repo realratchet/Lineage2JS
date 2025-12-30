@@ -1,5 +1,7 @@
 export { };
 
+type ExtendsUObject<T> = T & C.UObject;
+
 declare global {
     namespace L2JS {
         namespace Client {
@@ -35,7 +37,8 @@ declare global {
                 export type FRangeVector = import("@unreal/un-range").FRangeVector;
 
                 export type UPlatte = import("@unreal/un-palette").UPlatte;
-                export type UTexture = import("@unreal/un-texture").UTexture;
+                export type UTexture = ExtendsUObject<import("@unreal/un-texture").UTexture>;
+
                 export type UTextureModifyInfo = import("@unreal/un-texture-modify-info").UTextureModifyInfo;
                 export type FStaticLightmapTexture = import("@unreal/model/un-multilightmap-texture").FStaticLightmapTexture;
 

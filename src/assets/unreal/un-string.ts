@@ -1,12 +1,11 @@
 import FConstructable from "./un-constructable";
-import UPackage from "./un-package";
-import { PropertyTag } from "./un-property-tag";
+
 import { BufferValue } from "@l2js/core";
 
 class FString extends FConstructable {
     public value: string;
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
+    public load(pkg: C.APackage, tag?: C.PropertyTag): this {
 
         const bufLen = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
         const buf = pkg.read(BufferValue.allocBytes(bufLen)).value as DataView;

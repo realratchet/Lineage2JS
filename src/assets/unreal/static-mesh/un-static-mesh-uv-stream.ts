@@ -7,7 +7,7 @@ class FStaticMeshUVStream implements C.IConstructable {
     declare public f10: number;
     declare public f1C: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const i = new BufferValue(BufferValue.int32);
 
         this.data = new FArray(FMeshUVFloat);
@@ -24,7 +24,7 @@ class FMeshUVFloat implements C.IConstructable {
     declare public u: number;
     declare public v: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const f = new BufferValue(BufferValue.float);
 
         this.u = pkg.read(f).value as number;

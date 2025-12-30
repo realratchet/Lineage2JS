@@ -39,7 +39,7 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
 
     declare protected collisionModelId: number;
-    declare protected collisionModel: UModel;
+    declare protected collisionModel: GA.UModel;
 
     declare protected unkInt_5x0: number;
     declare protected unkInd_5x0: number;
@@ -91,7 +91,7 @@ abstract class UStaticMesh extends UPrimitive {
         });
     }
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
 
         // debugger;
 
@@ -126,7 +126,7 @@ abstract class UStaticMesh extends UPrimitive {
         this.wireframeIndexBuffer.load(pkg);
 
         this.collisionModelId = pkg.read(compat32).value;
-        this.collisionModel = pkg.fetchObject<UModel>(this.collisionModelId);
+        this.collisionModel = pkg.fetchObject<GA.UModel>(this.collisionModelId);
 
         if (this.collisionModelId !== 0)
             debugger;

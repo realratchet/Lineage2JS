@@ -6,7 +6,7 @@ class FStaticMeshTriangleSub implements C.IConstructable {
     declare public f1: number[];
     declare public f2: number[];
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
 
         const float = new BufferValue(BufferValue.float);
 
@@ -29,7 +29,7 @@ class FStaticMeshTriangle implements C.IConstructable {
     declare public unkInt0: number;                  // material section I think
     declare public unkInt1: number;                  // always pow2, flags?
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: C.APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const uint32 = new BufferValue(BufferValue.uint32);
         const uint8 = new BufferValue(BufferValue.uint8);

@@ -431,7 +431,7 @@ abstract class UStaticMeshActor extends UAActor {
 
                 for (let leaf of leaves) {
                     const iZone = leaf.iZone;
-                    const zoneInfo = baseModel.getZoneActor(iZone);
+                    const zoneInfo = baseModel.getZoneActor(iZone).loadSelf();
                     const zoneAmbientVector = zoneInfo.ambientVector;
 
                     ambientVector.x = Math.max(ambientVector.x, zoneAmbientVector.x);
@@ -693,7 +693,7 @@ abstract class UStaticMeshActor extends UAActor {
         return this.uuid;
     }
 
-    public doLoad(pkg: GA.UPackage, exp: C.UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
