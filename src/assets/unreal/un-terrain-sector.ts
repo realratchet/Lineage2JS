@@ -216,13 +216,13 @@ abstract class UTerrainSector extends UObject {
                         // Normal lighting calculation
                         // Get vertex position in world space (add center offset)
                         const vx = positions[idxVertOffset + 0] + ox;
-                        const vy = positions[idxVertOffset + 1] + oy;
-                        const vz = positions[idxVertOffset + 2] + oz;
+                        const vz = positions[idxVertOffset + 1] + oy;
+                        const vy = positions[idxVertOffset + 2] + oz;
 
                         // Get vertex normal
                         const nx = normals[idxVertOffset + 0];
-                        const ny = normals[idxVertOffset + 1];
-                        const nz = normals[idxVertOffset + 2];
+                        const nz = normals[idxVertOffset + 1];
+                        const ny = normals[idxVertOffset + 2];
 
                         const samplingPoint = FVector.make(vx, vy, vz);
                         const samplingNormal = FVector.make(nx, ny, nz);
