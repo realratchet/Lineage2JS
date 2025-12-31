@@ -63,32 +63,38 @@ class FDynamicLight {
         let brightness: number
 
         if (actor.isSunlightColor) {
-            // baseColor = env.selectByTime(env.lightActor).toColorPlane();
+            // Resolved call: UL2NEnvManager::GetBaseColorPlane_HSVActorSunLight(float, FPlane&)
+            // Resolved call: UL2NEnvManager::GetBrightness_HSVActorSunLight(float)
+            // In IDA: These are called through OrcBabo vtable when isSunlightColor is true
             baseColor = envManager.getBaseColorPlaneStaticMeshSunLight();
             brightness = envManager.getBrightnessStaticMeshSunLight();
         } else {
+            // Standard HSV color calculation using actor properties
             baseColor = getHSV(actor.hue, actor.saturation, 255);
             brightness = actor.brightness;
         }
 
-        let intensity: number;
+        let intensity: number = 0.0;
 
-        if (actor.type === LightType_T.LT_Steady) intensity = 1;
+        if (actor.type === LightType_T.LT_Steady)
+            intensity = 1.0;
         else if (actor.type === LightType_T.LT_Pulse)
             intensity = 0.6 + 0.39 * GMath().sin(Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(actor.period), 1) + (actor.phase << 8)));
         else if (actor.type === LightType_T.LT_Blink) {
             if ((Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / (actor.period + 1) + (actor.phase << 8))) & 1)
-                intensity = 0;
-            else intensity = 1;
+                intensity = 0.0;
+            else
+                intensity = 1.0;
         }
         else if (actor.type === LightType_T.LT_Flicker) {
             const Rand = Math.random();
 
-            if (Rand < 0.5) intensity = 0;
-            else intensity = Rand;
+            if (Rand < 0.5)
+                intensity = 0.0;
+            else
+                intensity = Rand;
         }
         else if (actor.type === LightType_T.LT_Strobe) {
-            // Strobe light - toggles on/off each second
             let state = strobeStateMap.get(actor);
             if (!state) {
                 state = { lastUpdateTime: levelInfo.timeSeconds, toggle: 0 };
@@ -100,80 +106,58 @@ class FDynamicLight {
                 state.toggle ^= 1;
             }
             
-            intensity = state.toggle ? 0.0 : 1.0;
+            if (state.toggle) intensity = 0.0;
+            else intensity = 1.0;
         }
-        else if (actor.type === LightType_T.LT_BackdropLight) {
-            // Backdrop light - typically steady, similar to LT_Steady
-            intensity = 1;
-        }
-        else if (actor.type == LightType_T.LT_SubtlePulse) {
+        else if (actor.type === LightType_T.LT_SubtlePulse)
             intensity = 0.9 + 0.09 * GMath().sin(Math.floor((actor.levelInfo.timeSeconds * 35 * 65536) / Math.max(Math.floor(actor.period), 1) + (actor.phase << 8)));
-        }
         else if (actor.type === LightType_T.LT_TexturePaletteOnce) {
-            // Texture palette once - uses first skin's palette based on LifeFraction
-            // Note: LifeFraction is not available in TypeScript, using time-based fallback
-            if (actor.skins && actor.skins.length > 0) {
-                const firstSkin = (actor.skins as any)[0]?.loadSelf() as GA.UTexture;
-                if (firstSkin && firstSkin.palette) {
-                    const palette = firstSkin.palette.loadSelf();
-                    // Fallback: use time-based index since LifeFraction is not available
-                    // In original: appFloor(255.0f * Actor -> LifeFraction())
-                    const timeBasedIndex = Math.floor((levelInfo.timeSeconds * 255) % 256);
-                    const paletteColor = palette.colors.getElem(timeBasedIndex);
-                    baseColor = colorToPlane(paletteColor);
-                    intensity = paletteColor.getBrightness() * 2.8;
-                } else {
-                    intensity = 1; // Fallback if no palette
-                }
-            } else {
-                intensity = 1; // Fallback if no skins
-            }
+            debugger; // LT_TexturePaletteOnce - requires LifeFraction
+            // Note: LifeFraction is not available in TypeScript
+            // In C++: if( Actor->Skins.Num() && Cast<UTexture>(Actor->Skins(0)) && Cast<UTexture>(Actor->Skins(0))->Palette )
+            //   { FColor C = Cast<UTexture>(Actor->Skins(0))->Palette->Colors(appFloor(255.0f * Actor->LifeFraction()));
+            //     BaseColor = FVector( C.R, C.G, C.B ).SafeNormal();
+            //     Intensity = C.FBrightness() * 2.8f; }
+            // Without LifeFraction, this case cannot be implemented correctly
         }
         else if (actor.type === LightType_T.LT_TexturePaletteLoop) {
-            // Texture palette loop - cycles through palette colors based on time
             if (actor.skins && actor.skins.length > 0) {
                 const firstSkin = (actor.skins as any)[0]?.loadSelf() as GA.UTexture;
                 if (firstSkin && firstSkin.palette) {
                     const palette = firstSkin.palette.loadSelf();
-                    // Time = Actor -> Level -> TimeSeconds * 35 / Max((int)Actor -> LightPeriod, 1) + Actor -> LightPhase
                     const time = (levelInfo.timeSeconds * 35) / Math.max(Math.floor(actor.period), 1) + actor.phase;
-                    // Colors(((int)(Time * 256) & 255) % 255)
                     const paletteIndex = ((Math.floor(time * 256) & 255) % 255);
                     const paletteColor = palette.colors.getElem(paletteIndex);
                     baseColor = colorToPlane(paletteColor);
                     intensity = paletteColor.getBrightness() * 2.8;
-                    // Note: Dynamic = 1 is set below
-                } else {
-                    intensity = 1; // Fallback if no palette
                 }
-            } else {
-                intensity = 1; // Fallback if no skins
             }
+            // Note: In IDA decompilation, case 9 sets Direction.X = 1, then Dynamic is set later
+            // This matches C++ behavior where Dynamic = 1 is set inside the LT_TexturePaletteLoop block
+            this.dynamic = true;
         }
         else if (actor.type === LightType_T.LT_FadeOut) {
-            // Fade out - intensity decreases based on LifeFraction
-            // Note: LifeFraction is not available in TypeScript, using constant fallback
-            // Original: Math.min(1.0, 1.5 * (1 - Actor.LifeFraction()))
-            // Since LifeFraction is not available, use steady intensity as fallback
-            intensity = 1.0; // Fallback: steady intensity
-            // TODO: Implement when LifeFraction is available
+            debugger;
+            // LT_FadeOut - requires LifeFraction
+            // Note: LifeFraction is not available in TypeScript
+            // In IDA (case 10): 
+            //   v22 = (1.0f - AActor::LifeFraction(v19)) * 1.5f;
+            //   v80 = v22;
+            //   sub_5CBEBA(1.0, v80); // sub_5CBEBA -> sub_7473C0 -> Min(1.0, v22)
+            // In C++: Intensity = ::Min(1.f,1.5f*(1.f - Actor->LifeFraction()));
+            // Without LifeFraction, this case cannot be implemented correctly
         }
         else if (actor.type === LightType_T.LT_Fade) {
-            // Fade light type - similar to FadeOut but different curve
-            // Note: Implementation details not available in commented code
-            // Using steady intensity as fallback
-            intensity = 1.0; // Fallback: steady intensity
-            // TODO: Implement when fade curve details are available
-        }
-        else {
-            // Default case for any unhandled light types - use steady intensity
-            console.warn(`Unhandled light type: ${actor.type} for light ${actor.objectName}, defaulting to intensity = 1`);
-            intensity = 1;
-        }
-
-        // Ensure intensity is defined before using it
-        if (intensity === undefined) {
-            intensity = 1; // Fallback to steady intensity
+            debugger;
+            // LT_Fade - obfuscated implementation
+            // Note: In IDA decompilation (case 11):
+            //   v41 = *(_DWORD *)((char *)&unk_4595FFF + 207228133); // Some global value
+            //   if (v41)
+            //     *(float *)&v19[1].Outer = *(float *)&v19[1].ObjectFlags * *(float *)(v41 + 588) + *(float *)&v19[1].Outer;
+            //   v22 = *(float *)&this->Actor[1].Outer;
+            //   sub_5CBEBA(1.0, v22); // Min(1.0, v22) - clamps intensity to 1.0
+            // Uses Actor[1].Outer (unclear what this represents) and calls Min(1.0, v22)
+            // Without understanding what Outer represents, this case cannot be implemented correctly
         }
 
         this.color = baseColor.multiplyScalar((brightness / 255) * intensity * levelInfo.brightness);
@@ -191,10 +175,11 @@ class FDynamicLight {
             this.radius = actor.worldLightRadius();
         }
 
-        this.alpha = 1;
+        this.alpha = 1.0;
 
-        // Set dynamic flag: true if actor is dynamic OR if using texture palette loop
-        this.dynamic = actor.isDynamic || (actor.type === LightType_T.LT_TexturePaletteLoop);
+        this.dynamic = actor.isDynamic;
+        // Note: Changed is not implemented in TypeScript
+        // In C++: Changed = !Actor->bDynamicLight && (Actor->bLightChanged || Actor->bDeleteMe);
     }
 
     public sampleIntensity(SamplePosition: FVector, SampleNormal: FVector): number {
@@ -272,7 +257,7 @@ class FDynamicLight {
 function UnrealAttenuation(Distance: number, Radius: number, dx: number, dy: number, dz: number, nx: number, ny: number, nz: number) {
     const dot = dx * nx + dy * ny + dz * nz;
     if (dot > 0 && Distance <= Radius) {
-        const A = Distance / Radius;					// Unreal's lighting model.
+        const A = Distance / Radius;                    // Unreal's lighting model.
         const B = (2 * A * A * A - 3 * A * A + 1);
         const C = Math.abs(dot / Radius);
 

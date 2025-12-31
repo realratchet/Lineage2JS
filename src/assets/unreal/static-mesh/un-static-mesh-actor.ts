@@ -1117,7 +1117,7 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
                 //     debugger;
                 // }
 
-                const intensity = scaleGlow * 0.5 * light.sampleIntensity(samplingPoint, samplingNormal) * scaleGlow;
+                const intensity = scaleGlow * light.sampleIntensity(samplingPoint, samplingNormal);
 
                 r = light.color.x * intensity;
                 g = light.color.y * intensity;
