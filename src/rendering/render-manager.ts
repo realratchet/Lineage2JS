@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -35,6 +35,11 @@ class RenderManager {
     public readonly raycaster = new Raycaster();
     public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
+
+    public bspHelperCamera: PerspectiveCamera | null = null;
+    public bspHelperCameraHelper: CameraHelper | null = null;
+    public bspHelperActive: boolean = false;
+    public frustumCullingEnabled: boolean = true;
 
     protected shiftTimeDown: number;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
@@ -116,8 +121,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // // tower outside
-        // this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-        // this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+        this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
+        this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
@@ -128,8 +133,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
         // talking island
-        this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
-        this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
+        // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
+        // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -211,6 +216,23 @@ class RenderManager {
     }
 
     public onHandleKeyDown(event: KeyboardEvent) {
+        // Handle F1 separately to prevent browser help (must be before switch)
+        if (event.key === "F1" || event.code === "F1") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.toggleBSPHelperCamera();
+            return;
+        }
+        
+        // Handle F2 to toggle frustum culling
+        if (event.key === "F2" || event.code === "F2") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.frustumCullingEnabled = !this.frustumCullingEnabled;
+            console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
+            return;
+        }
+        
         switch (event.key.toLowerCase()) {
             case "1":
                 this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
@@ -385,6 +407,45 @@ class RenderManager {
     protected _updateObjects(currentTime: number, deltaTime: number) {
         const globalTime = currentTime / 600;
 
+        // Update helper camera: copy from main camera if inactive, otherwise keep frozen
+        if (this.bspHelperCamera) {
+            if (!this.bspHelperActive) {
+                // Helper is inactive: copy main camera properties for culling
+                this.bspHelperCamera.position.copy(this.camera.position);
+                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.updateMatrixWorld(true);
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = false;
+                }
+            } else {
+                // Helper is active: keep frozen, make helper visible
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = true;
+                }
+            }
+            // Update helper visual indicator
+            if (this.bspHelperCameraHelper) {
+                this.bspHelperCameraHelper.update();
+            }
+        }
+
+        // NEW: Update BSP section visibility based on camera position (UE2-style culling)
+        // Use helper camera position only when active (frozen), otherwise use main camera
+        const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
+        const bspCullingPosition = bspCullingCamera.position;
+        
+        // Update frustum for BSP culling
+        this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
+        
+        this.scene.traverse((object: THREE.Object3D) => {
+            if ((object as SectorObject).isSectorObject) {
+                const sector = object as SectorObject;
+                if (sector.updateVisibleBSPSections && sector.bspSections) {
+                    sector.updateVisibleBSPSections(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
+                }
+            }
+        });
+
         this.scene.traverse((object: THREE.Object3D) => {
 
             if ((object as ZoneObject).isZoneObject) {
@@ -460,8 +521,8 @@ class RenderManager {
                 Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2))
             ) : 1);
 
-            if (this.dirKeys.shift)
-                console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
+            // if (this.dirKeys.shift)
+            //     console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
 
             if (this.dirKeys.left) sidewaysVelocity -= 1;
             if (this.dirKeys.right) sidewaysVelocity += 1;
@@ -588,6 +649,49 @@ class RenderManager {
         this.sectorBounds.push(new Box3().setFromObject(sector));
 
         this.objectGroup.add(sector);
+    }
+
+    /**
+     * Toggle BSP helper camera for debugging visibility culling.
+     * Press F1 to toggle between active/inactive states:
+     * - Inactive (default): Helper camera follows main camera, helper invisible
+     * - Active: Helper camera frozen at last position, helper visible for debugging
+     */
+    public toggleBSPHelperCamera() {
+        if (!this.bspHelperCamera) {
+            // Create helper camera if it doesn't exist
+            this.bspHelperCamera = new PerspectiveCamera(75, this.camera.aspect, 0.1, DEFAULT_FAR);
+            this.bspHelperCamera.position.copy(this.camera.position);
+            this.bspHelperCamera.rotation.copy(this.camera.rotation);
+            this.bspHelperCamera.updateMatrixWorld(true);
+            
+            // Create visual helper to see where the camera is
+            this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
+            this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
+            this.bspHelperCameraHelper.visible = false; // Hidden by default (inactive state)
+            this.scene.add(this.bspHelperCameraHelper);
+            
+            this.bspHelperActive = false;
+        } else {
+            // Toggle active/inactive state
+            this.bspHelperActive = !this.bspHelperActive;
+            
+            if (this.bspHelperActive) {
+                // Freeze at current position and show helper
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = true;
+                }
+            } else {
+                // Resume following main camera and hide helper
+                this.bspHelperCamera.position.copy(this.camera.position);
+                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.updateMatrixWorld(true);
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = false;
+                }
+            }
+        }
+        this.needsUpdate = true;
     }
 }
 

@@ -165,6 +165,90 @@ declare global {
                     children: IBaseObjectOrInstanceDecodeInfo[],
                     fog?: IZoneFogInfo
                 }
+
+                // BSP Types
+                export interface IBSPNodeCollisionInfo_T {
+                    flags: number[],
+                    bounds: IBoxDecodeInfo
+                }
+
+                export interface IBSPNodeDecodeInfo_T {
+                    children: [number, number],
+                    plane: Vector4Arr,
+                    leaves: [number, number],
+                    zones: [number, number],
+                    collision?: IBSPNodeCollisionInfo_T,
+                    zoneMask?: bigint,  // NEW: pre-computed zone mask for subtree culling
+                    sectionIndex?: number,  // NEW: which section this node belongs to
+                    surfFlags?: number,  // NEW: surface flags (for portal detection)
+                    iPlane?: number  // NEW: index to next coplanar node (UE2 line 1472-1473)
+                }
+
+                export interface IBSPLeafDecodeInfo_T {
+                    zone: number,
+                    permiating: number,
+                    volumetric: number,
+                    visibleZones: bigint
+                }
+
+                export interface IBSPZoneDecodeInfo_T {
+                    connectivity: bigint,
+                    visibility: bigint,
+                    zoneInfo: IBaseZoneDecodeInfo
+                }
+
+                // NEW: BSP Section (material + lightmap combination)
+                export interface IBSPSectionDecodeInfo_T {
+                    uuid: string,
+                    priority: "opaque" | "transparent",
+                    material: string,  // material UUID
+                    lightmap: string | null,  // lightmap UUID (null if no lightmap)
+                    geometry: string,  // geometry UUID
+                    nodeIndices: number[]  // nodes in this section
+                }
+
+                // Material and Geometry Types
+                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
+                
+                export interface IBaseMaterialDecodeInfo {
+                    name?: string,
+                    materialType: DecodableMaterial_T,
+                    color?: boolean
+                }
+
+                export interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "lightmapped",
+                    material: string,
+                    lightmap: string | null
+                }
+
+                export interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "group",
+                    materials: string[]
+                }
+
+                export type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
+
+                export interface IGeometryDecodeInfo {
+                    attributes: {
+                        positions?: Float32Array;
+                        normals?: Float32Array;
+                        colors?: Float32Array,
+                        colorsInstance?: Float32Array,
+                        uvs?: Float32Array | Float32Array[];
+                        uvs2?: Float32Array | Float32Array[];
+                        skinIndex?: Uint8Array;
+                        skinWeight?: Float32Array;
+                    };
+                    indices?: IndexLikeArray;
+                    colliderIndices?: Uint32Array;
+                    groups?: ArrGeometryGroup[],
+                    bounds?: IBoxDecodeInfo
+                }
+
+                export interface IMaterialModifier {
+                    type: "Lighting"
+                }
             }
         }
     }

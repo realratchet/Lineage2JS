@@ -242,6 +242,28 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     return object;
 }
 
+function decodeBSPSection(library: DecodeLibrary, sectionInfo: GD.IBSPSectionDecodeInfo_T, sectionIndex: number): THREE.Mesh {
+    const geometryInfo = library.geometries[sectionInfo.geometry];
+    if (!geometryInfo) {
+        throw new Error(`Geometry not found for section ${sectionInfo.uuid}`);
+    }
+
+    const geometry = fetchGeometry(geometryInfo);
+    const materialInfo = library.materials[sectionInfo.material];
+    if (!materialInfo) {
+        throw new Error(`Material not found for section ${sectionInfo.uuid}`);
+    }
+
+    const materials = decodeMaterial(library, materialInfo);
+    const mesh = new Mesh(geometry, materials);
+    
+    mesh.name = `BSPSection_${sectionInfo.priority}_${sectionInfo.uuid}`;
+    mesh.userData.sectionIndex = sectionIndex;
+    mesh.userData.priority = sectionInfo.priority;
+    
+    return mesh;
+}
+
 function decodeSector(library: DecodeLibrary) {
     const sector = new SectorObject();
 
@@ -252,6 +274,58 @@ function decodeSector(library: DecodeLibrary) {
     library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
+
+    // NEW: Render BSP sections (UE2-style section-based rendering)
+    if (library.bspSections && library.bspSections.length > 0) {
+        const bspGroup = new Group();
+        bspGroup.name = "BSP_Sections";
+        
+        // Store BSP rendering data in sector for dynamic visibility updates
+        sector.bspSections = library.bspSections;
+        sector.nodeToSection = library.nodeToSection;
+        sector.nodeZoneMasks = library.nodeZoneMasks;
+        sector.bspGroup = bspGroup;
+        // Store library reference for updateVisibleBSPSections
+        (sector as any).decodeLibrary = library;
+        
+        // Separate opaque and transparent sections for proper rendering order
+        const opaqueSections: GD.IBSPSectionDecodeInfo_T[] = [];
+        const transparentSections: GD.IBSPSectionDecodeInfo_T[] = [];
+        
+        library.bspSections.forEach(section => {
+            if (section.priority === "opaque") {
+                opaqueSections.push(section);
+            } else {
+                transparentSections.push(section);
+            }
+        });
+        
+        // Add opaque sections first (initially all visible, will be culled dynamically)
+        opaqueSections.forEach(section => {
+            try {
+                const sectionIndex = library.bspSections.indexOf(section);
+                const mesh = decodeBSPSection(library, section, sectionIndex);
+                mesh.visible = true; // Will be updated by updateVisibleBSPSections
+                bspGroup.add(mesh);
+            } catch (e) {
+                console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
+            }
+        });
+        
+        // Add transparent sections after opaque
+        transparentSections.forEach(section => {
+            try {
+                const sectionIndex = library.bspSections.indexOf(section);
+                const mesh = decodeBSPSection(library, section, sectionIndex);
+                mesh.visible = true; // Will be updated by updateVisibleBSPSections
+                bspGroup.add(mesh);
+            } catch (e) {
+                console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
+            }
+        });
+        
+        sector.add(bspGroup);
+    }
 
     if (library.sun) {
         const spriteUuid = library.sun.sprites[0];
