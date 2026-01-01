@@ -1,6 +1,6 @@
 import AInfo from "./un-info";
 
-abstract class FZoneInfo extends AInfo/* implements IInfo*/ {
+abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly isFogZone: boolean;
     declare public readonly hasTerrain: boolean;
 
@@ -89,7 +89,7 @@ abstract class FZoneInfo extends AInfo/* implements IInfo*/ {
 
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.IZoneDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Zone",

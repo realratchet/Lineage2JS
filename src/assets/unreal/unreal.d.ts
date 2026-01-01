@@ -246,14 +246,10 @@
 
 // type SupportedImports_T = "Level" | "Texture" | "Shader" | "ColorModifier" | "Sound" | "Effect" | "Animation" | "Script";
 
-// type DecodableObject_T = "Group" | "Level" | "TerrainInfo" | "TerrainSegment" | "StaticMeshActor" | "StaticMesh" | "Model" | "Light" | "Edges" | "SkinnedMesh" | "Bone" | "Emitter";
 
 
 
-// interface IBaseObjectOrInstanceDecodeInfo {
-//     uuid: string,
-//     type: DecodableObject_T | "StaticMeshInstance"
-// }
+
 
 // interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
 //     actorName: string;
@@ -267,52 +263,6 @@
 //     materials?: string;
 //     skeleton: IBoneDecodeInfo[];
 //     animations: Record<string, IKeyframeDecodeInfo_T[]>
-// }
-
-// interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
-
-// interface IBaseZoneDecodeInfo {
-//     type: "Sector" | "Zone" | "Sky",
-//     uuid: string,
-//     name?: string,
-//     bounds: IBoxDecodeInfo,
-//     children: IBaseObjectOrInstanceDecodeInfo[],
-//     fog?: IZoneFogInfo
-// }
-
-// interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
-// interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
-// interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
-
-// interface IStaticMeshInstanceDecodeInfo {
-//     uuid?: string,
-//     name?: string,
-//     type: "StaticMeshInstance",
-//     mesh: IStaticMeshObjectDecodeInfo,
-//     attributes?: {
-//         colors?: Float32Array
-//     }
-// }
-
-// interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
-//     type: DecodableObject_T,
-//     name?: string,
-//     position?: Vector3Arr,
-//     rotation?: EulerArr,
-//     scale?: Vector3Arr,
-//     siblings?: IBaseObjectOrInstanceDecodeInfo[],
-//     children?: IBaseObjectOrInstanceDecodeInfo[]
-// }
-
-// type IBoundsDecodeInfo = {
-//     sphere?: {
-//         center: Vector3Arr;
-//         radius: number;
-//     };
-//     box?: {
-//         min: Vector3Arr;
-//         max: Vector3Arr;
-//     };
 // }
 
 // type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
@@ -388,13 +338,6 @@
 
 // type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
-// interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
-
-// interface IZoneFogInfo {
-//     start: number,
-//     end: number,
-//     color: ColorArr
-// }
 
 // type LoadSettings_T = {
 //     loadTerrain?: boolean,

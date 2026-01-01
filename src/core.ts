@@ -25,7 +25,6 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 }
 
 async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, pkgTex: string | C.APackage) {
-
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
     pkg = await assetLoader.load(pkg);
@@ -392,9 +391,9 @@ async function startCore() {
     const loadSettings = {
         env: env,
         helpersZoneBounds: false,
-        loadTerrain: true,
+        loadTerrain: false,
         loadBaseModel: true,
-        loadStaticModels: true,
+        loadStaticModels: false,
         loadEmitters: false,
         _loadStaticModelList: [
             // 1441,

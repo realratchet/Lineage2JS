@@ -31,5 +31,5 @@ declare module "@l2js/core" {
     }
 
     export default UObject;
-    export { UObject, UStruct };
+    export { UObject };
 }

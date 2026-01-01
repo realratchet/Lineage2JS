@@ -509,7 +509,7 @@ class RenderManager {
         this.player.position.lerp(desiredPosition, 0.1);
 
         this._updateObjects(currentTime, deltaTime);
-        this._updateSun();
+        // this._updateSun();
 
         this.renderer.clear();
     }

@@ -238,6 +238,11 @@ abstract class UModel extends UPrimitive {
 
         this.getZoneDecodeInfo(library, uLevelInfo);
 
+        library.leafActors.length = library.bspLeaves.length;
+        for (let i = 0; i < library.bspLeaves.length; i++) {
+            library.leafActors[i] = [];
+        }
+
         const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {

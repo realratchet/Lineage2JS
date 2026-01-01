@@ -1,6 +1,7 @@
 import ULevelInfo from "@client/assets/unreal/un-level-info";
 import FURL from "./un-url";
 import { UObject, BufferValue } from "@l2js/core";
+import { FIndexArray, FObjectArray } from "@l2js/core/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
@@ -9,8 +10,8 @@ const NUM_LEVEL_TEXT_BLOCKS = 16;
 abstract class ULevelBase extends UObject {
     public readonly url: FURL = new FURL();
 
-    protected ambientActorIds: Array<number>;
-    protected actorIds: Array<number>;
+    protected ambientActors: FObjectArray<GA.AActor>;
+    protected actors: FObjectArray<GA.AActor>;
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const int32 = new BufferValue(BufferValue.int32);
@@ -26,20 +27,15 @@ abstract class ULevelBase extends UObject {
             dbNum = pkg.read(int32).value;
             dbMax = pkg.read(int32).value;
 
-            this.ambientActorIds = new Array<number>(dbNum);
-
-            for (let i = 0; i < dbNum; i++)
-                this.ambientActorIds[i] = pkg.read(compat32).value;
+            this.ambientActors = FObjectArray.loadOfSize(dbNum, pkg);
 
             dbNum = pkg.read(int32).value;
             dbMax = pkg.read(int32).value;
 
-            this.actorIds = new Array<number>(dbNum);
-
-            for (let i = 0; i < dbNum; i++)
-                this.actorIds[i] = pkg.read(compat32).value;
+            this.actors = FObjectArray.loadOfSize(dbNum, pkg);
         } else {
             debugger
+            throw new Error("not implemented");
         }
 
         this.url.load(pkg);
@@ -51,7 +47,7 @@ abstract class ULevel extends ULevelBase {
     public levelInfoId: number;
 
     protected baseModel: GA.UModel;
-    protected levelInfo: GA.ULevelInfo;
+    public levelInfo: GA.ULevelInfo;
 
     public get timeSeconds() { return 0; };
 
@@ -68,7 +64,6 @@ abstract class ULevel extends ULevelBase {
     public getModel() { return this.baseModel; }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
-        const int32 = new BufferValue(BufferValue.int32);
         const compat32 = new BufferValue(BufferValue.compat32);
         const float = new BufferValue(BufferValue.float);
 
@@ -99,28 +94,17 @@ abstract class ULevel extends ULevelBase {
             debugger;
         }
 
-        this.levelInfoId = this.actorIds[0];
+        this.levelInfo = this.actors[0] as GA.ULevelInfo;
+        this.levelInfo.setLevel(this);
 
         if (LOAD_SUB_OBJECTS) {
             this.baseModel = pkg.fetchObject<GA.UModel>(this.baseModelId);
 
             if (LOAD_SOUNDS) {
-                for (const objectId of this.ambientActorIds) {
-                    const object = pkg.fetchObject(objectId);
-
-                    if (object)
-                        this.objectList.push(object);
-                }
+                this.objectList.splice(0, this.ambientActors.length);
             }
 
-            for (const objectId of this.actorIds) {
-                const object = pkg.fetchObject(objectId);
-
-                if (object)
-                    this.objectList.push(object);
-            }
-
-            this.levelInfo = pkg.fetchObject<GA.ULevelInfo>(this.actorIds[0]);
+            this.objectList.splice(0, this.actors.length);
 
             console.assert(this.levelInfo.constructor.friendlyName === "LevelInfo");
         }

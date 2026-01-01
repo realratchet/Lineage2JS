@@ -16,11 +16,12 @@ class DecodeLibrary {
     public readonly geometryInstances: Record<string, number> = {};               // a dictionary containing all geometray instance decode info
     public readonly materials: Record<string, GD.IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
     public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
+    public readonly leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][] = [];
 
     public failed: any[] = [];
     public failedLoad: any[] = [];
     public failedDecode: any[] = [];
-    public sun: GD.ISunDecodeInfo_T;
+    // public sun: GD.ISunDecodeInfo_T;
 
     public static async fromPackage(pkg: C.APackage, {
         env,
@@ -36,20 +37,18 @@ class DecodeLibrary {
         const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
-        const uLevelInfo = pkg.fetchObject<GA.ULevelInfo>(expGroups["LevelInfo"][0].index + 1).loadSelf();
+        
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
+        const uLevelInfo = uLevel.levelInfo.loadSelf();
 
         uLevelInfo.setL2Env(env);
-        uLevelInfo.setLevel(uLevel);
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
 
-        const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
+        // const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 
-        // debugger;
-
-        decodeLibrary.sun = sun.getDecodeInfo(decodeLibrary);
+        // decodeLibrary.sun = sun.getDecodeInfo(decodeLibrary);
 
         // debugger;
 

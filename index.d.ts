@@ -123,6 +123,48 @@ declare global {
                     loadEmitters?: boolean,
                     helpersZoneBounds?: boolean
                 };
+
+                export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
+    
+                export interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
+
+                export interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
+                export interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
+                export interface ISectorDecodeInfo extends IBaseZoneDecodeInfo { type: "Sector" }
+
+                export interface IZoneFogInfo {
+                    start: number,
+                    end: number,
+                    color: ColorArr
+                }
+
+                export type DecodableObject_T =
+                    | "Group"
+                    | "Level"
+                    | "TerrainInfo"
+                    | "TerrainSegment"
+                    | "StaticMeshActor"
+                    | "StaticMesh"
+                    | "Model"
+                    | "Light"
+                    | "Edges"
+                    | "SkinnedMesh"
+                    | "Bone"
+                    | "Emitter";
+
+                export interface IBaseObjectOrInstanceDecodeInfo {
+                    uuid: string,
+                    type: DecodableObject_T | "StaticMeshInstance"
+                }
+
+                export interface IBaseZoneDecodeInfo {
+                    type: "Sector" | "Zone" | "Sky",
+                    uuid: string,
+                    name?: string,
+                    bounds: IBoxDecodeInfo,
+                    children: IBaseObjectOrInstanceDecodeInfo[],
+                    fog?: IZoneFogInfo
+                }
             }
         }
     }

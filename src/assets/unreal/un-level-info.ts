@@ -1,6 +1,6 @@
 import FZoneInfo from "./un-zone-info";
 
-abstract class ULevelInfo extends FZoneInfo/* implements IInfo*/ {
+abstract class ULevelInfo extends FZoneInfo implements GD.IInfo {
     declare protected l2env: GA.UL2NEnvManager;
     declare protected level: GA.ULevel;
 
@@ -10,13 +10,18 @@ abstract class ULevelInfo extends FZoneInfo/* implements IInfo*/ {
     public setLevel(level: GA.ULevel) { this.level = level; }
     public getLevel() { return this.level; }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISectorDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
         return {
-            uuid: this.uuid,
             type: "Sector",
-            bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+            uuid: this.uuid,
             name: this.objectName,
-            children: []
+            bounds: {
+                isValid: false,
+                min: [Infinity, Infinity, Infinity],
+                max: [-Infinity, -Infinity, -Infinity]
+            },
+            children: [],
+            fog: null
         };
     }
 }
