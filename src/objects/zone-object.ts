@@ -59,7 +59,9 @@ class SectorObject extends Object3D {
     public nodeZoneMasks?: bigint[];
     public bspGroup?: THREE.Group;
     
-    // Internal state for zone change tracking
+    // Internal state for zone/leaf change tracking
+    private _lastLoggedZone: number | null = null;
+    private _lastLoggedLeaf: number | null = null;
 
     constructor() {
         super();
@@ -454,6 +456,22 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
             currentZone = this.findPositionZone(cameraPosition);
         }
         
+        // Log zone/leaf changes (only when they actually change)
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+        
+        if (zoneChanged || leafChanged) {
+            if (zoneChanged) {
+                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
+                this._lastLoggedZone = currentZone;
+            }
+            if (leafChanged) {
+                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
+                this._lastLoggedLeaf = leafIndex;
+            }
+        }
         
         // Traverse BSP to find visible nodes (with optional frustum culling)
         const { visibleNodes, finalZoneMask } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled);
@@ -489,6 +507,17 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
                 }
             }
         });
+        
+        // Log visibility stats when zone changes
+        if (zoneChanged && currentZone !== null && currentZone >= 0) {
+            const finalActiveZones: number[] = [];
+            for (let i = 0; i < 64; i++) {
+                if (finalZoneMask & (1n << BigInt(i))) {
+                    finalActiveZones.push(i);
+                }
+            }
+            console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
+        }
         
 
     }
