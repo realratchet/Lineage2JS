@@ -150,7 +150,7 @@ abstract class UModel extends UPrimitive {
 
     public getZoneActor(iZone: number) { return this.zones[iZone].zoneActor ?? this.levelInfo; }
 
-    protected boxLeavesRecursive(iNode: number, origin: GA.FVector, extent: GA.FVector, outLeaves?: number[]): number[] {
+    public boxLeavesRecursive(iNode: number, origin: GA.FVector, extent: GA.FVector, outLeaves?: number[]): number[] {
         outLeaves = outLeaves ?? [];
         nodeCache.length = this.bspNodes.length;
 
@@ -271,7 +271,7 @@ abstract class UModel extends UPrimitive {
             const zoneMask = node.zoneMask;
             library.nodeZoneMasks[nodeIndex] = zoneMask;
             nodeInfo.zoneMask = zoneMask;
-            
+
 
             library.bspNodes.push(nodeInfo);
 
@@ -317,13 +317,13 @@ abstract class UModel extends UPrimitive {
             // Get material UUID
             const materialUuid = surf.material.loadSelf().getDecodeInfo(library);
             const lightmapTextureIndex = lightmapIndex ? lightmapIndex.iLightmapTexture : -1;
-            
+
             // UE2 groups sections by: Material + PolyFlags + iLightMapTexture
             // PolyFlags used: PF_Unlit | PF_Selected | PF_TwoSided (from UnModel.cpp line 1000)
             // PF_Unlit = 0x00400000 (from UnObj.h line 254)
             const PF_Unlit = 0x00400000;
             const sectionPolyFlags = surf.flags & (PF_Unlit | PolyFlags_T.PF_Selected | PolyFlags_T.PF_TwoSided);
-            
+
             // Create section key matching UE2's exact criteria
             const sectionKey = `${materialUuid}/${sectionPolyFlags}/${lightmapTextureIndex}`;
 
@@ -363,7 +363,7 @@ abstract class UModel extends UPrimitive {
         // Create sections from sectionMap (UE2-style: material + lightmap only, NOT split by zone)
         const createSection = (priority: PriorityGroups_T, sectionKey: string, sectionData: ObjectsForSection_T): number => {
             const { material, lightmap, totalVertices, nodes } = sectionData;
-            
+
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
@@ -380,7 +380,7 @@ abstract class UModel extends UPrimitive {
                 const textureX: FVector = this.vectors.getElem(surf.vTextureU);
                 const textureY: FVector = this.vectors.getElem(surf.vTextureV);
                 const tangentZ: FVector = this.vectors.getElem(surf.vNormal);
-                
+
                 const fcount = node.numVertices - 2;
                 const findex = dstVertices; // Starting vertex index for this node
 
@@ -429,7 +429,7 @@ abstract class UModel extends UPrimitive {
                         indices.push(findex, findex + i + 1, findex + i + 2);
                     }
                 }
-                
+
                 // Store node index for this section
                 // UE2 line 1024: Node.iSection = Section - &Sections(0);
                 // Only nodes with NumVertices > 0 get section indices
@@ -490,6 +490,8 @@ abstract class UModel extends UPrimitive {
                 createSection(priority, sectionKey, sectionData);
             }
         }
+
+        debugger;
 
         // Return empty array for now (sections are stored in library.bspSections)
         // This maintains compatibility with existing code that expects a return value

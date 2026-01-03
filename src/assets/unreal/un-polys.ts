@@ -11,9 +11,9 @@ enum PolyFlags_T {
     PF_TwoSided = 0x00000100,       // Poly is visible from both sides.
     PF_Unk1 = 0x00002000,           // pf on bounding bsp, invisible
     PF_Unk2 = 0x00008000,           // pf on bounding bsp
-    PF_Unk3 = 0x00400000,           // pf on bounding bsp
+    PF_Unlit = 0x00400000,           // pf on bounding bsp
     PF_Portal = 0x04000000,         // Portal between iZones.
-    PF_Unk4 = 0x08000000,           // pf on Ant Nest's invisible bsp
+    PF_AntiPortal = 0x08000000,           // pf on Ant Nest's invisible bsp
     PF_Mirrored = 0x20000000,       // Mirrored BSP surface.
 
     // Editor flags.

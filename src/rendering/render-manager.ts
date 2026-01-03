@@ -10,7 +10,7 @@ import Stats from "./stats";
 const stats = new (Stats as any)(0);
 
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-// document.body.appendChild(stats.dom);
+document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -223,7 +223,7 @@ class RenderManager {
             this.toggleBSPHelperCamera();
             return;
         }
-        
+
         // Handle F2 to toggle frustum culling
         if (event.key === "F2" || event.code === "F2") {
             event.preventDefault();
@@ -232,7 +232,7 @@ class RenderManager {
             console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
             return;
         }
-        
+
         switch (event.key.toLowerCase()) {
             case "1":
                 this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
@@ -342,7 +342,7 @@ class RenderManager {
                 this.player.goTo(collidable.point);
 
             console.log(intersection);
-        } catch (e) { 
+        } catch (e) {
             console.error(e);
         }
     }
@@ -433,15 +433,18 @@ class RenderManager {
         // Use helper camera position only when active (frozen), otherwise use main camera
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const bspCullingPosition = bspCullingCamera.position;
-        
+
         // Update frustum for BSP culling
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
-        
+
         this.scene.traverse((object: THREE.Object3D) => {
             if ((object as SectorObject).isSectorObject) {
                 const sector = object as SectorObject;
                 if (sector.updateVisibleBSPSections && sector.bspSections) {
                     sector.updateVisibleBSPSections(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
+                }
+                if (sector.updateVisibleStaticMeshActors) {
+                    sector.updateVisibleStaticMeshActors(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
                 }
             }
         });
@@ -664,18 +667,18 @@ class RenderManager {
             this.bspHelperCamera.position.copy(this.camera.position);
             this.bspHelperCamera.rotation.copy(this.camera.rotation);
             this.bspHelperCamera.updateMatrixWorld(true);
-            
+
             // Create visual helper to see where the camera is
             this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
             this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
             this.bspHelperCameraHelper.visible = false; // Hidden by default (inactive state)
             this.scene.add(this.bspHelperCameraHelper);
-            
+
             this.bspHelperActive = false;
         } else {
             // Toggle active/inactive state
             this.bspHelperActive = !this.bspHelperActive;
-            
+
             if (this.bspHelperActive) {
                 // Freeze at current position and show helper
                 if (this.bspHelperCameraHelper) {

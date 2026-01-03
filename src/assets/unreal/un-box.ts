@@ -50,11 +50,11 @@ abstract class FBox extends UObject {
         if (this.isValid) {
             const minx = Math.min(this.min.x, other.x);
             const miny = Math.min(this.min.y, other.y);
-            const minz = Math.min(this.max.y, other.z);
+            const minz = Math.min(this.min.z, other.z);
 
             const maxx = Math.max(this.max.x, other.x);
             const maxy = Math.max(this.max.y, other.y);
-            const maxz = Math.max(this.max.y, other.z);
+            const maxz = Math.max(this.max.z, other.z);
 
             const min = FVector.make(minx, miny, minz);
             const max = FVector.make(maxx, maxy, maxz);
@@ -89,7 +89,7 @@ abstract class FBox extends UObject {
 
     public getDecodeInfo(): GD.IBoxDecodeInfo {
         return {
-            isValid: this.isValid,
+            isValid: !!this.isValid,
             min: this.min.getVectorElements(),
             max: this.max.getVectorElements()
         };

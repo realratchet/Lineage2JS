@@ -256,11 +256,11 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: GD.IBSPSectionDec
 
     const materials = decodeMaterial(library, materialInfo);
     const mesh = new Mesh(geometry, materials);
-    
+
     mesh.name = `BSPSection_${sectionInfo.priority}_${sectionInfo.uuid}`;
     mesh.userData.sectionIndex = sectionIndex;
     mesh.userData.priority = sectionInfo.priority;
-    
+
     return mesh;
 }
 
@@ -279,7 +279,7 @@ function decodeSector(library: DecodeLibrary) {
     if (library.bspSections && library.bspSections.length > 0) {
         const bspGroup = new Group();
         bspGroup.name = "BSP_Sections";
-        
+
         // Store BSP rendering data in sector for dynamic visibility updates
         sector.bspSections = library.bspSections;
         sector.nodeToSection = library.nodeToSection;
@@ -287,11 +287,11 @@ function decodeSector(library: DecodeLibrary) {
         sector.bspGroup = bspGroup;
         // Store library reference for updateVisibleBSPSections
         (sector as any).decodeLibrary = library;
-        
+
         // Separate opaque and transparent sections for proper rendering order
         const opaqueSections: GD.IBSPSectionDecodeInfo_T[] = [];
         const transparentSections: GD.IBSPSectionDecodeInfo_T[] = [];
-        
+
         library.bspSections.forEach(section => {
             if (section.priority === "opaque") {
                 opaqueSections.push(section);
@@ -299,7 +299,7 @@ function decodeSector(library: DecodeLibrary) {
                 transparentSections.push(section);
             }
         });
-        
+
         // Add opaque sections first (initially all visible, will be culled dynamically)
         opaqueSections.forEach(section => {
             try {
@@ -311,7 +311,7 @@ function decodeSector(library: DecodeLibrary) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
         });
-        
+
         // Add transparent sections after opaque
         transparentSections.forEach(section => {
             try {
@@ -323,9 +323,35 @@ function decodeSector(library: DecodeLibrary) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
         });
-        
+
         sector.add(bspGroup);
     }
+
+    // ACCURATE UE2: Decode static mesh actors from leaf association
+    const staticMeshGroup = new Group();
+    staticMeshGroup.name = "StaticMeshActors";
+    const uniqueActors = new Map<string, GD.IBaseObjectOrInstanceDecodeInfo>();
+
+    library.leafActors.forEach((leaf: GD.IBaseObjectOrInstanceDecodeInfo[]) => {
+        leaf.forEach((actor: GD.IBaseObjectOrInstanceDecodeInfo) => {
+            if (actor.type === "StaticMeshActor") {
+                uniqueActors.set(actor.uuid, actor);
+            }
+        });
+    });
+
+    uniqueActors.forEach(actor => {
+        try {
+            const object = decodeObject3D(library, actor);
+            staticMeshGroup.add(object);
+            sector.staticMeshMap.set(actor.uuid, object);
+        } catch (e) {
+            console.warn(`Failed to decode static mesh actor ${actor.uuid}:`, e);
+        }
+    });
+
+    sector.add(staticMeshGroup);
+    sector.staticMeshGroup = staticMeshGroup;
 
     if (library.sun) {
         const spriteUuid = library.sun.sprites[0];

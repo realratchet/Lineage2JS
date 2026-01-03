@@ -269,38 +269,38 @@ abstract class UStaticMeshActor extends UAActor {
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {
         // Implementation based on UStaticMesh::Illuminate (UnStaticMesh.cpp:673-830)
-        
+
         // Load mesh info early - needed for export regardless of early exit
         const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
         const meshInfo = mesh.getDecodeInfo(library, null);
 
+        const level = this.getLevel();
+        const baseModel = level.getModel();
+        const localToWorld = this.localToWorld();
+
+        // Calculate bounding box for leaves (needed for export and lighting)
+        const predictedBox = mesh.getRenderBoundingBox(this).transformBy(localToWorld);
+
         this.instance?.loadSelf().setActor(this);
-        
+
         // Check if actor is static or mover without dynamic lighting
         // Note: In TypeScript, we don't have AMover type, so we'll check physics instead
         const isStatic = this.physics === EPhysics_T.PHYS_None;
         const isMoverWithoutDynamicLight = false; // TODO: Check if mover has bDynamicLightMover
-        
+
         if (!isStatic && !isMoverWithoutDynamicLight) {
             // For non-static actors, export but skip lighting calculation
-            this._exportActorToLibrary(library, meshInfo);
+            this._exportActorToLibrary(library, meshInfo, null, predictedBox);
             return this.uuid;
         }
 
         // Skip if hidden in editor
         if (this.isHiddenInEditor) {
             // Still export actor even if hidden
-            this._exportActorToLibrary(library, meshInfo);
+            this._exportActorToLibrary(library, meshInfo, null, predictedBox);
             return this.uuid;
         }
 
-        const level = this.getLevel();
-        const baseModel = level.getModel();
-        const localToWorld = this.localToWorld();
-        
-        // Calculate bounding box for leaves (needed for ambient lighting)
-        const predictedBox = mesh.getRenderBoundingBox(this).transformBy(localToWorld);
-        
         // Get leaves for ambient lighting calculation
         let leaves: GA.FLeaf[] = [];
         if (baseModel) {
@@ -311,14 +311,14 @@ abstract class UStaticMeshActor extends UAActor {
         // Note: The instance already has pre-computed visibility bits for lights!
         const attributes = library.geometries[meshInfo.geometry].attributes;
         const vertexArrayLen = attributes.positions.length;
-        
+
         // Get base instance colors - this already has pre-computed visibility bits!
         const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
             color: new Float32Array(vertexArrayLen).fill(0),
             lights: { scene: [], ambient: [] }
         });
         const instanceColors = instance.color;
-        
+
         // Use pre-computed scene lights from instance instead of recalculating visibility bits
         // This is MUCH faster - visibility bits are already computed and stored in instance.lights.scene
 
@@ -327,17 +327,17 @@ abstract class UStaticMeshActor extends UAActor {
         const ambActor = this.getAmbientLightingActor();
         const zone = this.getZone();
         const ambVector = zone.ambientVector;
-        
+
         let ambGlow: number;
         if (ambActor.ambientGlow === 255) {
             ambGlow = 1.0; // Full brightness for unlit
         } else {
             ambGlow = ambActor.ambientGlow / 255;
         }
-        
+
         const ambGlowVec = FVector.make(ambGlow, ambGlow, ambGlow);
         const ambColor = ambVector.add(ambGlowVec);
-        
+
         if (this.isUnlit) {
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 instanceColors[i + 0] += 0.5;
@@ -350,12 +350,12 @@ abstract class UStaticMeshActor extends UAActor {
                 const iZone = leaf.iZone;
                 const zoneInfo = baseModel.getZoneActor(iZone).loadSelf();
                 const zoneAmbientVector = zoneInfo.ambientVector;
-                
+
                 ambientVector.x = Math.max(ambientVector.x, zoneAmbientVector.x);
                 ambientVector.y = Math.max(ambientVector.y, zoneAmbientVector.y);
                 ambientVector.z = Math.max(ambientVector.z, zoneAmbientVector.z);
             }
-            
+
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 instanceColors[i + 0] += ambColor.x * 0.5;
                 instanceColors[i + 1] += ambColor.y * 0.5;
@@ -372,10 +372,10 @@ abstract class UStaticMeshActor extends UAActor {
         // These use pre-computed visibility bits from instance.environmentLights
         if (this.instance && this.instance.environmentLights.length > 0) {
             const lightCount = this.instance.environmentLights.length;
-            
+
             if (lightCount >= 2) {
                 const [currEnvIndex, nextEnvIndex, lerp] = timeToIndicesLerp(envManager.getTimeOfDay(), lightCount);
-                
+
                 // Use the optimized helper function that uses pre-computed visibility bits
                 applyStaticMeshLightEnv(
                     envManager,
@@ -395,7 +395,7 @@ abstract class UStaticMeshActor extends UAActor {
         // Apply sunlight ambient if sun-affected
         if (this.isSunAffected) {
             const ambient = envManager.getAmbientPlaneStaticMeshSunLight();
-            
+
             for (let i = 0; i < vertexArrayLen; i += 3) {
                 instanceColors[i + 0] += ambient.x;
                 instanceColors[i + 1] += ambient.y;
@@ -412,22 +412,22 @@ abstract class UStaticMeshActor extends UAActor {
         }
 
         // Export actor to library with calculated per-vertex colors
-        this._exportActorToLibrary(library, meshInfo, instanceColors);
+        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox);
 
         return this.uuid;
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors?: Float32Array): void {
-        // Export actor to library (same as getDecodeInfo)
+    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox): void {
+        // Export actor to library (UE2 style: associated with leaves)
         this.instance?.loadSelf().setActor(this);
-        
+
         // Use provided instance colors or get from instance
         const geometryInfo = library.geometries[meshInfo.geometry];
         if (!geometryInfo) {
             console.warn(`Geometry info not found for meshInfo.geometry: ${meshInfo.geometry}, actor: ${this.objectName}`);
             return;
         }
-        
+
         const attributes = geometryInfo.attributes;
         if (!instanceColors) {
             const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
@@ -436,8 +436,15 @@ abstract class UStaticMeshActor extends UAActor {
             });
             instanceColors = instance.color;
         }
-        
-        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
+
+        const level = this.getLevel();
+        const baseModel = level.getModel();
+        const zone = this.getZone();
+        const bspZoneIndex = library.bspZoneIndexMap[zone.uuid];
+        const zoneInfo = library.bspZones[bspZoneIndex].zoneInfo;
+
+        // debugger;
+
         // Align position to user's coordinate system (THREE.js compatible)
         const _position = this.location.getVectorElements(); // [x, z, y] - already converted
         const _scale = [this.scale.x * this.drawScale, this.scale.z * this.drawScale, this.scale.y * this.drawScale]; // [x, z, y] scale
@@ -455,10 +462,43 @@ abstract class UStaticMeshActor extends UAActor {
                 uuid: this.instance ? this.instance.uuid : null,
                 name: this.instance ? this.instance.objectName : null,
                 attributes: { colors: instanceColors }
-            } as GD.IStaticMeshInstanceDecodeInfo
+            } as GD.IStaticMeshInstanceDecodeInfo,
+            bounds: {
+                min: [predictedBox.min.x, predictedBox.min.z, predictedBox.min.y],
+                max: [predictedBox.max.x, predictedBox.max.z, predictedBox.max.y]
+            }
         } as GD.IStaticMeshActorDecodeInfo;
 
-        zoneInfo.children.push(actorInfo);
+        // ACCURATE UE2: Inflate bounding box slightly (5%) to prevent aggressive popping at view edges
+        const extent = predictedBox.getExtents();
+        const margin = extent.multiplyScalar(0.05);
+        const inflatedBox = FBox.make(predictedBox.min.sub(margin), predictedBox.max.add(margin), 1);
+
+        // Update actorInfo with inflated bounds
+        actorInfo.bounds = {
+            min: [inflatedBox.min.x, inflatedBox.min.z, inflatedBox.min.y],
+            max: [inflatedBox.max.x, inflatedBox.max.z, inflatedBox.max.y]
+        };
+
+        // ACCURATE UE2: Associate actor with all intersected leaves using the inflated box
+        let actorZoneMask = 0n;
+        if (baseModel) {
+            const origin = inflatedBox.getCenter();
+            const inflatedExtent = inflatedBox.getExtents();
+            const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+
+            for (const leafIndex of leafIndices) {
+                if (library.leafActors[leafIndex]) {
+                    library.leafActors[leafIndex].push(actorInfo);
+                }
+                const leaf = library.bspLeaves[leafIndex];
+                if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+                    actorZoneMask |= (1n << BigInt(leaf.zone));
+                }
+            }
+        }
+
+        (actorInfo as any).zoneMask = actorZoneMask;
 
         library.geometryInstances[meshInfo.geometry]++;
 
@@ -476,9 +516,6 @@ abstract class UStaticMeshActor extends UAActor {
                 }
             );
         }
-
-        if(this.leaves)
-            debugger;
     }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {

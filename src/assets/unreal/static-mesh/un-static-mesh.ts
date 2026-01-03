@@ -482,6 +482,10 @@ abstract class UStaticMesh extends UPrimitive {
             color: [1, 0, 1]
         } as GD.IEdgesObjectDecodeInfo;
     }
+
+    public getRenderBoundingBox(owner?: GA.AActor): GA.FBox {
+        return this.boundingBox;
+    }
 }
 
 export default UStaticMesh;
