@@ -74,8 +74,8 @@ class FBSPNode implements C.IConstructable {
             this.inclusiveSphereBound.load(pkg);
         }
 
-        this.iZone[0] = pkg.read(compat32).value;
-        this.iZone[1] = pkg.read(compat32).value;
+        this.iZone[0] = pkg.read(uint8).value;
+        this.iZone[1] = pkg.read(uint8).value;
 
         this.numVertices = pkg.read(uint8).value;
 
@@ -103,12 +103,15 @@ class FBSPNode implements C.IConstructable {
     public getBSPDecodeInfo(surfFlags: number): GD.IBSPNodeDecodeInfo_T {
         return {
             children: [this.iFront, this.iBack],
-            // plane: this.plane.toArray() as Vector4Arr,
             plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,
             leaves: [this.iLeaf[0], this.iLeaf[1]],
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
-            iPlane: this.iPlane
+            iPlane: this.iPlane,
+            spheres: {
+                exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.z, this.exclusiveSphereBound.y, this.exclusiveSphereBound.w],
+                inclusive: [this.inclusiveSphereBound.x, this.inclusiveSphereBound.z, this.inclusiveSphereBound.y, this.inclusiveSphereBound.w]
+            }
         };
     }
 }

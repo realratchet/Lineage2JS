@@ -1,4 +1,4 @@
-import { Box3, Color, Fog, Object3D, Sphere, Vector4, Mesh, Vector3 } from "three";
+import { Box3, Color, Fog, Object3D, Sphere, Vector4, Mesh } from "three";
 
 const tmpColor = new Color();
 const tmpVec4 = new Vector4();
@@ -52,13 +52,13 @@ class SectorObject extends Object3D {
     public bspLeaves: BSPLeafData[];
     public index: THREE.Vector2;
     public sunTexture: any; // MapData_T - texture with size info
-    
+
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];
     public nodeToSection?: number[];
     public nodeZoneMasks?: bigint[];
     public bspGroup?: THREE.Group;
-    
+
     // Internal state for zone/leaf change tracking
     private _lastLoggedZone: number | null = null;
     private _lastLoggedLeaf: number | null = null;
@@ -85,22 +85,21 @@ class SectorObject extends Object3D {
 
         let nodeIndex = 0;
         let node: BSPNodeData;
+        let side = 0;
 
         while (true) {
             node = this.bspNodes[nodeIndex];
             const plane = node.plane;
-            const side = findZonePosition.dot(plane);
+            side = findZonePosition.dot(plane);
 
             if (node.front >= 0 && side >= 0) nodeIndex = node.front;
-            else if (node.back >= 0 && side <= 0) nodeIndex = node.back;
+            else if (node.back >= 0 && side < 0) nodeIndex = node.back;
             else {
                 break;
             }
         }
 
-        const foundZone = node.zones[1];
-
-
+        const foundZone = side >= 0 ? node.zones[1] : node.zones[0];
 
         return foundZone;
     }
@@ -127,12 +126,12 @@ class SectorObject extends Object3D {
                 nodeIndex = node.back;
             } else {
                 // We've reached a leaf node
-                const candidateLeaf = side >= 0 ? node.leaves[0] : node.leaves[1];
+                const candidateLeaf = side >= 0 ? node.leaves[1] : node.leaves[0];
                 if (candidateLeaf >= 0 && candidateLeaf < this.bspLeaves.length) {
                     return candidateLeaf;
                 } else {
                     // Try the other leaf as fallback
-                    const fallbackLeaf = side >= 0 ? node.leaves[1] : node.leaves[0];
+                    const fallbackLeaf = side >= 0 ? node.leaves[0] : node.leaves[1];
                     if (fallbackLeaf >= 0 && fallbackLeaf < this.bspLeaves.length) {
                         return fallbackLeaf;
                     }
@@ -172,12 +171,12 @@ class SectorObject extends Object3D {
                 nodeIndex = node.back;
             } else {
                 // We've reached a leaf node
-                const candidateLeaf = side >= 0 ? node.leaves[0] : node.leaves[1];
+                const candidateLeaf = side >= 0 ? node.leaves[1] : node.leaves[0];
                 if (candidateLeaf >= 0 && candidateLeaf < this.bspLeaves.length) {
                     leafIndex = candidateLeaf;
                 } else {
                     // Try the other leaf as fallback
-                    const fallbackLeaf = side >= 0 ? node.leaves[1] : node.leaves[0];
+                    const fallbackLeaf = side >= 0 ? node.leaves[0] : node.leaves[1];
                     if (fallbackLeaf >= 0 && fallbackLeaf < this.bspLeaves.length) {
                         leafIndex = fallbackLeaf;
                     }
@@ -192,7 +191,7 @@ class SectorObject extends Object3D {
             if (cameraZone === null || cameraZone < 0) {
                 return (1n << 64n) - 1n; // All zones if we can't determine
             }
-            
+
             // Use connectivity as fallback when PVS is unavailable
             let fallbackMask = 1n << BigInt(cameraZone);
             if (this.bspZones && cameraZone >= 0 && cameraZone < this.bspZones.length) {
@@ -203,14 +202,14 @@ class SectorObject extends Object3D {
                     fallbackMask |= (1n << BigInt(cameraZone));
                 }
             }
-            
+
             return fallbackMask;
         }
 
         // Use the leaf's visibleZones bitmask (PVS data)
         const leaf = this.bspLeaves[leafIndex];
         const cameraZone = leaf.zone;
-        
+
         // Check if PVS is valid and use it if available
         let activeZoneMask: bigint;
         const pvsMask = leaf.visibleZones;
@@ -227,9 +226,9 @@ class SectorObject extends Object3D {
                 activeZoneMask = 1n;
             }
         }
-        
+
         // Note: Portals will dynamically add more zones during BSP traversal (see traverseBSP)
-        
+
         return activeZoneMask;
     }
 
@@ -247,19 +246,19 @@ class SectorObject extends Object3D {
         visibleNodes: Set<number>
     ): void {
         if (nodeIndex < 0 || nodeIndex >= this.bspNodes.length) return;
-        
+
         const node = this.bspNodes[nodeIndex];
         const cameraPos = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
         const planeDot = cameraPos.dot(node.plane);
         const isFront = planeDot >= 0;
-        
-        
+
+
         // Process portal expansion (same as PASS_Plane)
         const PF_Portal = 0x04000000;
         const nodeZone0 = node.zones[0];
         const nodeZone1 = node.zones[1];
         const hasPortalFlag = node.surfFlags !== undefined && (node.surfFlags & PF_Portal) !== 0;
-        
+
         if (hasViewZone && hasPortalFlag && nodeZone0 >= 0 && nodeZone1 >= 0 && nodeZone0 !== nodeZone1) {
             const oppositeZone = isFront ? nodeZone0 : nodeZone1;
             if (oppositeZone >= 0 && oppositeZone < 64) {
@@ -269,22 +268,18 @@ class SectorObject extends Object3D {
                 }
             }
         }
-        
+
         // Frustum culling
         let isInFrustum = true;
-        if (frustumCullingEnabled && node.collision && node.collision.bounds) {
-            const bounds = node.collision.bounds;
-            const center = bounds.getCenter(new Vector3());
-            const radius = bounds.getSize(new Vector3()).length() * 0.5;
-            const sphere = new Sphere(center, radius);
-            isInFrustum = cameraFrustum.intersectsSphere(sphere);
+        if (frustumCullingEnabled) {
+            isInFrustum = cameraFrustum.intersectsSphere(node.exclusiveSphereBound);
         }
-        
+
         // Add to visible nodes if it has a section
         if (isInFrustum && this.nodeToSection && this.nodeToSection[nodeIndex] !== undefined && this.nodeToSection[nodeIndex] >= 0) {
             visibleNodes.add(nodeIndex);
         }
-        
+
         // Recursively process coplanar nodes (UE2 line 1473)
         if (node.iPlane >= 0) {
             this.processCoplanarNode(node.iPlane, cameraPosition, currentZoneMask, cameraFrustum, frustumCullingEnabled, hasViewZone, visibleNodes);
@@ -302,33 +297,33 @@ class SectorObject extends Object3D {
 
         const visibleNodes = new Set<number>();
         const cameraPos = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
-        
+
         // Track active zone mask (will be updated when portals are encountered)
         let currentZoneMask = activeZoneMask;
-        
+
         // Get camera zone (ViewZone equivalent) for zone mask culling check
         const cameraZone = this.findPositionZone(cameraPosition);
         const hasViewZone = cameraZone !== null && cameraZone >= 0;
-        
+
         // Root node should always be traversed (it's the entry point to the tree)
         // Zone mask culling will apply to child nodes, but root must be checked
-        
+
         let portalCount = 0;
         let culledCount = 0;
         const portalsEncountered: Array<{ nodeIndex: number; zones: [number, number]; oppositeZone: number }> = [];
-        
+
         // Stack-based BSP traversal (matching UE2's approach)
         const nodeStack: { nodeIndex: number; pass: "front" | "plane" }[] = [];
-        
-        
-        
+
+
+
         // Start from root node
         nodeStack.push({ nodeIndex: 0, pass: "front" });
 
         while (nodeStack.length > 0) {
             const { nodeIndex, pass } = nodeStack.pop()!;
             const node = this.bspNodes[nodeIndex];
-            
+
 
             if (pass === "front") {
                 // Zone mask rejection (skip entire subtree if not visible)
@@ -336,7 +331,7 @@ class SectorObject extends Object3D {
                 // This means: if ViewZone exists AND node's ZoneMask doesn't overlap with ActiveZoneMask, skip subtree
                 // Note: Root node (0) should always be traversed
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
-                
+
                 // UE2 exact logic: if(SceneNode->ViewZone && !(Node.ZoneMask & RenderState.ActiveZoneMask))
                 if (nodeIndex !== 0 && hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
                     const hasOverlap = !!(nodeZoneMask & currentZoneMask);
@@ -369,7 +364,7 @@ class SectorObject extends Object3D {
                 // Recalculate which side of the plane the camera is on
                 const planeDot = cameraPos.dot(node.plane);
                 const isFront = planeDot >= 0;
-                
+
                 // UE2 portal check (line 1177): ViewZone && Surf.PolyFlags & PF_Portal
                 // Portal processing (line 1187): Node.iZone[0] != Node.iZone[1]
                 // Opposite zone (line 1192, 1274): Node.iZone[1 - IsFront]
@@ -377,7 +372,7 @@ class SectorObject extends Object3D {
                 const nodeZone0 = node.zones[0];
                 const nodeZone1 = node.zones[1];
                 const hasPortalFlag = node.surfFlags !== undefined && (node.surfFlags & PF_Portal) !== 0;
-                
+
                 // UE2 line 1177: Portal check requires ViewZone AND PF_Portal flag
                 // UE2 line 1187: Portal processing requires Node.iZone[0] != Node.iZone[1]
                 if (hasViewZone && hasPortalFlag && nodeZone0 >= 0 && nodeZone1 >= 0 && nodeZone0 !== nodeZone1) {
@@ -386,11 +381,11 @@ class SectorObject extends Object3D {
                     // If IsFront = 1 (true), opposite is Node.iZone[0]
                     // If IsFront = 0 (false), opposite is Node.iZone[1]
                     const oppositeZone = isFront ? nodeZone0 : nodeZone1;
-                    
+
                     if (oppositeZone >= 0 && oppositeZone < 64) {
                         const oppositeZoneMask = 1n << BigInt(oppositeZone);
                         const wasAlreadyInMask = !!(currentZoneMask & oppositeZoneMask);
-                        
+
                         // UE2 line 1276-1279: Add zone unconditionally if not already in mask
                         if (!wasAlreadyInMask) {
                             currentZoneMask |= oppositeZoneMask;
@@ -398,40 +393,35 @@ class SectorObject extends Object3D {
                         }
                     }
                 }
-                
+
                 // Frustum culling: Check if node is visible in frustum (matching UE2's RenderState.Zones[ZoneIndex].Visible)
                 // UE2 line 1102: RenderState.Zones[RenderState.SceneNode->ViewZone ? Node.iZone[IsFront] : 0].Visible(Node.ExclusiveSphereBound)
-                // Use collision bounds if available, otherwise skip frustum check (node will be visible)
+                // Use precomputed sphere boundary for frustum check
                 let isInFrustum = true;
-                if (frustumCullingEnabled && node.collision && node.collision.bounds) {
-                    // Convert Box3 to Sphere for frustum check (UE2 uses ExclusiveSphereBound)
-                    const bounds = node.collision.bounds;
-                    const center = bounds.getCenter(new Vector3());
-                    const radius = bounds.getSize(new Vector3()).length() * 0.5;
-                    const sphere = new Sphere(center, radius);
-                    isInFrustum = cameraFrustum.intersectsSphere(sphere);
+                if (frustumCullingEnabled) {
+                    isInFrustum = cameraFrustum.intersectsSphere(node.exclusiveSphereBound);
                 }
-                
-                        // UE2 line 1366: Only add nodes if Node.iSection != INDEX_NONE (has geometry)
-                        // Zone mask culling already happened on PASS_Front, so if we reach here, the node's zone mask overlaps with active zones
-                        // We just need to check frustum culling and that the node has a section
-                        if (isInFrustum && this.nodeToSection && this.nodeToSection[nodeIndex] !== undefined && this.nodeToSection[nodeIndex] >= 0) {
-                            visibleNodes.add(nodeIndex);
-                        }
-                
-                  // UE2 line 1472-1473: Process coplanar nodes recursively (nodes on the same plane)
-                  // ProcessNode calls ProcessNode recursively for coplanar nodes, not via stack
-                  // This ensures coplanar nodes are processed immediately during PASS_Plane (after portals expand)
-                  if (node.iPlane >= 0) {
-                      // Recursively process coplanar node (matching UE2's ProcessNode recursion)
-                      // This processes the coplanar node immediately during PASS_Plane, after portals have expanded
-                      this.processCoplanarNode(node.iPlane, cameraPosition, currentZoneMask, cameraFrustum, frustumCullingEnabled, hasViewZone, visibleNodes);
-                  }
-                
+
+                // UE2 line 1366: Only add nodes if Node.iSection != INDEX_NONE (has geometry)
+                // Zone mask culling already happened on PASS_Front, so if we reach here, the node's zone mask overlaps with active zones
+                // We just need to check frustum culling and that the node has a section
+                if (isInFrustum && this.nodeToSection && this.nodeToSection[nodeIndex] !== undefined && this.nodeToSection[nodeIndex] >= 0) {
+                    visibleNodes.add(nodeIndex);
+                }
+
+                // UE2 line 1472-1473: Process coplanar nodes recursively (nodes on the same plane)
+                // ProcessNode calls ProcessNode recursively for coplanar nodes, not via stack
+                // This ensures coplanar nodes are processed immediately during PASS_Plane (after portals expand)
+                if (node.iPlane >= 0) {
+                    // Recursively process coplanar node (matching UE2's ProcessNode recursion)
+                    // This processes the coplanar node immediately during PASS_Plane, after portals have expanded
+                    this.processCoplanarNode(node.iPlane, cameraPosition, currentZoneMask, cameraFrustum, frustumCullingEnabled, hasViewZone, visibleNodes);
+                }
+
             }
         }
 
-        
+
         return { visibleNodes, finalZoneMask: currentZoneMask };
     }
 
@@ -439,12 +429,12 @@ class SectorObject extends Object3D {
      * Update visible BSP sections based on camera position.
      * Only sections containing visible nodes will be rendered.
      */
-public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
+    public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
         if (!this.bspGroup || !this.bspSections || !this.nodeToSection) return;
 
         // Find active zone mask and camera zone (from leaf for reliability)
         const activeZoneMask = this.getActiveZoneMask(cameraPosition);
-        
+
         // Get camera zone from leaf (more reliable than findPositionZone)
         let currentZone: number | null = null;
         const leafIndex = this.findPositionLeaf(cameraPosition);
@@ -455,11 +445,11 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
         if (currentZone === null || currentZone < 0) {
             currentZone = this.findPositionZone(cameraPosition);
         }
-        
+
         // Log zone/leaf changes (only when they actually change)
         const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
         const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
-        
+
         if (zoneChanged || leafChanged) {
             if (zoneChanged) {
                 const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
@@ -472,11 +462,11 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
                 this._lastLoggedLeaf = leafIndex;
             }
         }
-        
+
         // Traverse BSP to find visible nodes (with optional frustum culling)
         const { visibleNodes, finalZoneMask } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled);
-        
-        
+
+
         // Find which sections contain visible nodes (UE2-style: sections can span multiple zones)
         // UE2: If ANY node in a section is visible, the entire section is rendered
         // This is because sections are batched draw calls - all nodes in a section are drawn together
@@ -487,8 +477,8 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
                 visibleSections.add(sectionIndex);
             }
         });
-        
-        
+
+
 
         // Update mesh visibility
         let visibleMeshCount = 0;
@@ -507,7 +497,7 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
                 }
             }
         });
-        
+
         // Log visibility stats when zone changes
         if (zoneChanged && currentZone !== null && currentZone >= 0) {
             const finalActiveZones: number[] = [];
@@ -518,7 +508,7 @@ public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: TH
             }
             console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
         }
-        
+
 
     }
 }
@@ -568,10 +558,12 @@ class BSPNodeData {
     public readonly zones: [number, number] = [0, 0];
     public surfFlags?: number;
     public collision?: ICollisionInfo;
+    public exclusiveSphereBound = new Sphere();
+    public inclusiveSphereBound = new Sphere();
 
     protected constructor() { }
 
-    public static fromInfo(info: GD.IBSPNodeDecodeInfo_T) {
+    public static fromInfo(info: any) {
         const node = new BSPNodeData();
 
         [node.front, node.back] = info.children;
@@ -586,6 +578,14 @@ class BSPNodeData {
         node.zones[1] = info.zones[1];
 
         node.surfFlags = info.surfFlags;
+
+        if (info.spheres) {
+            node.exclusiveSphereBound.center.set(info.spheres.exclusive[0], info.spheres.exclusive[1], info.spheres.exclusive[2]);
+            node.exclusiveSphereBound.radius = info.spheres.exclusive[3];
+
+            node.inclusiveSphereBound.center.set(info.spheres.inclusive[0], info.spheres.inclusive[1], info.spheres.inclusive[2]);
+            node.inclusiveSphereBound.radius = info.spheres.inclusive[3];
+        }
 
         if ("collision" in info) {
             const bounds = new Box3();
