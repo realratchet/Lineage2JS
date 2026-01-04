@@ -181,7 +181,11 @@ declare global {
                     zoneMask?: bigint,  // NEW: pre-computed zone mask for subtree culling
                     sectionIndex?: number,  // NEW: which section this node belongs to
                     surfFlags?: number,  // NEW: surface flags (for portal detection)
-                    iPlane?: number  // NEW: index to next coplanar node (UE2 line 1472-1473)
+                    iPlane?: number,  // NEW: index to next coplanar node (UE2 line 1472-1473)
+                    spheres?: {  // NEW: bounding spheres for frustum culling
+                        exclusive: Vector4Arr,
+                        inclusive: Vector4Arr
+                    }
                 }
 
                 export interface IBSPLeafDecodeInfo_T {

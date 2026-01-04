@@ -3,6 +3,9 @@ import { Box3, Color, Fog, Object3D, Sphere, Vector4, Mesh } from "three";
 const tmpColor = new Color();
 const tmpVec4 = new Vector4();
 
+// Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
+const MAX_RECURSION_DEPTH = 4;
+
 interface IStaticMeshActorDecodeInfo {
     uuid: string;
     type: "StaticMeshActor";
@@ -158,7 +161,7 @@ class SectorObject extends Object3D {
 
     /**
      * Find camera leaf and build active zone mask.
-     * Uses the leaf's visibleZones (PVS) to include all potentially visible zones.
+     * Uses connectivity to constrain PVS - only zones that are both visible (PVS) AND connected are included.
      * Returns the active zone mask bitmask.
      */
     public getActiveZoneMask(cameraPosition: THREE.Vector3): bigint {
@@ -198,49 +201,55 @@ class SectorObject extends Object3D {
             }
         }
 
-        if (leafIndex === null || leafIndex < 0 || leafIndex >= this.bspLeaves.length) {
-            // Fallback: use camera zone and connectivity
-            const cameraZone = this.findPositionZone(cameraPosition);
-            if (cameraZone === null || cameraZone < 0) {
-                return (1n << 64n) - 1n; // All zones if we can't determine
-            }
+        // Get camera zone
+        const cameraZone = leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length
+            ? this.bspLeaves[leafIndex].zone
+            : this.findPositionZone(cameraPosition);
 
-            // Use connectivity as fallback when PVS is unavailable
-            let fallbackMask = 1n << BigInt(cameraZone);
-            if (this.bspZones && cameraZone >= 0 && cameraZone < this.bspZones.length) {
-                const zoneData = this.bspZones[cameraZone];
-                if (zoneData && zoneData.connectivity) {
-                    fallbackMask = zoneData.connectivity;
-                    // Always include the camera zone
-                    fallbackMask |= (1n << BigInt(cameraZone));
-                }
-            }
-
-            return fallbackMask;
+        if (cameraZone === null || cameraZone < 0) {
+            return (1n << 64n) - 1n; // All zones if we can't determine
         }
 
-        // Use the leaf's visibleZones bitmask (PVS data)
-        const leaf = this.bspLeaves[leafIndex];
-        const cameraZone = leaf.zone;
+        // Start with just the camera zone (like UE2)
+        let activeZoneMask = 1n << BigInt(cameraZone);
 
-        // Check if PVS is valid and use it if available
-        let activeZoneMask: bigint;
-        const pvsMask = leaf.visibleZones;
-
-        // If PVS is valid (not all zones or zero), use it as initial active zone mask
-        // This is crucial for proper culling - PVS tells us which zones are potentially visible from this leaf
-        if (pvsMask && pvsMask !== 0n && pvsMask !== (1n << 64n) - 1n) {
-            activeZoneMask = pvsMask;
-        } else {
-            // Fallback to camera zone only
-            if (cameraZone >= 0 && cameraZone < 64) {
-                activeZoneMask = 1n << BigInt(cameraZone);
-            } else {
-                activeZoneMask = 1n;
+        // Get connectivity for camera zone to constrain visibility
+        let cameraConnectivity: bigint | null = null;
+        if (this.bspZones && cameraZone >= 0 && cameraZone < this.bspZones.length) {
+            const zoneData = this.bspZones[cameraZone];
+            if (zoneData && zoneData.connectivity) {
+                cameraConnectivity = zoneData.connectivity;
             }
+        }
+
+        // If we have PVS data, intersect it with connectivity to ensure only connected zones are included
+        if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
+            const leaf = this.bspLeaves[leafIndex];
+            const pvsMask = leaf.visibleZones;
+
+            // If PVS is valid (not all zones or zero), intersect with connectivity
+            if (pvsMask && pvsMask !== 0n && pvsMask !== (1n << 64n) - 1n) {
+                if (cameraConnectivity !== null) {
+                    // Only include zones that are both in PVS AND connected
+                    activeZoneMask = pvsMask & cameraConnectivity;
+                } else {
+                    // No connectivity data, use PVS as-is
+                    activeZoneMask = pvsMask;
+                }
+                // Always ensure camera zone is included
+                activeZoneMask |= (1n << BigInt(cameraZone));
+            } else if (cameraConnectivity !== null) {
+                // PVS invalid, use connectivity as fallback
+                activeZoneMask = cameraConnectivity;
+            }
+            // Otherwise activeZoneMask stays as just camera zone
+        } else if (cameraConnectivity !== null) {
+            // No leaf found, use connectivity as fallback
+            activeZoneMask = cameraConnectivity;
         }
 
         // Note: Portals will dynamically add more zones during BSP traversal (see traverseBSP)
+        // Portal expansion is also constrained to connectivity
 
         return activeZoneMask;
     }
@@ -260,18 +269,20 @@ class SectorObject extends Object3D {
      * - Collects visible nodes (for geometry sections)
      * - Collects visible leaves (for actors)
      * - Updates Zone Mask dynamically based on Portals
+     * - Limits portal recursion depth to MAX_RECURSION_DEPTH (matches UE2)
      */
     public traverseUnifiedBSP(
         cameraPosition: THREE.Vector3,
         activeZoneMask: bigint,
         cameraFrustum: THREE.Frustum,
-        frustumCullingEnabled: boolean = true
-    ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint } {
+        frustumCullingEnabled: boolean = true,
+        recursionDepth: number = 0
+    ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
 
         if (this.bspNodes.length === 0 || !this.nodeZoneMasks) {
-            return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask };
+            return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
         }
 
         const cameraPos = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
@@ -279,6 +290,17 @@ class SectorObject extends Object3D {
 
         const cameraZone = this.findPositionZone(cameraPosition);
         const hasViewZone = cameraZone !== null && cameraZone >= 0;
+
+        // Track which zones were added at which recursion depth (for portal limiting)
+        const zoneDepthMap = new Map<number, number>();
+        // Track which zones were added through portals (not in initial mask)
+        const zonesAddedThroughPortals = new Set<number>();
+        // Initialize with starting zones at depth 0
+        for (let i = 0; i < 64; i++) {
+            if (currentZoneMask & (1n << BigInt(i))) {
+                zoneDepthMap.set(i, recursionDepth);
+            }
+        }
 
         // Stack-based traversal
         // Order we want to PROCESS: Near -> Plane -> Far
@@ -293,7 +315,7 @@ class SectorObject extends Object3D {
             if (pass === "front") {
                 // 1. Zone Mask Culling (skip subtree if not visible)
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
-                if (nodeIndex !== 0 && hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
+                if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
                     if (!(nodeZoneMask & currentZoneMask)) {
                         continue; // Cull this subtree
                     }
@@ -314,11 +336,12 @@ class SectorObject extends Object3D {
                 if (farChild >= 0) {
                     nodeStack.push({ nodeIndex: farChild, pass: "front" });
                 } else {
-                    // Check Far Leaf
+                    // Add leaf as candidate - will be filtered at end based on finalZoneMask
+                    // We can't check zone mask here because portals update the mask during traversal
                     if (farLeafIndex >= 0 && farLeafIndex < (this.bspLeaves?.length || 0)) {
                         const leaf = this.bspLeaves[farLeafIndex];
-                        // Strict check: Only add leaf if its zone is currently active
-                        if (leaf && leaf.zone >= 0 && ((1n << BigInt(leaf.zone)) & currentZoneMask)) {
+                        // Add as candidate - filtering happens at end based on finalZoneMask
+                        if (leaf && leaf.zone >= 0) {
                             visibleLeaves.add(farLeafIndex);
                         }
                     }
@@ -331,11 +354,12 @@ class SectorObject extends Object3D {
                 if (nearChild >= 0) {
                     nodeStack.push({ nodeIndex: nearChild, pass: "front" });
                 } else {
-                    // Check Near Leaf
+                    // Add leaf as candidate - will be filtered at end based on finalZoneMask
+                    // We can't check zone mask here because portals update the mask during traversal
                     if (nearLeafIndex >= 0 && nearLeafIndex < (this.bspLeaves?.length || 0)) {
                         const leaf = this.bspLeaves[nearLeafIndex];
-                        // Strict check: Only add leaf if its zone is currently active
-                        if (leaf && leaf.zone >= 0 && ((1n << BigInt(leaf.zone)) & currentZoneMask)) {
+                        // Add as candidate - filtering happens at end based on finalZoneMask
+                        if (leaf && leaf.zone >= 0) {
                             visibleLeaves.add(nearLeafIndex);
                         }
                     }
@@ -357,31 +381,79 @@ class SectorObject extends Object3D {
                     const hasPortalFlag = currentNode.surfFlags !== undefined && (currentNode.surfFlags & PF_Portal) !== 0;
 
                     if (hasViewZone && hasPortalFlag && nodeZone0 >= 0 && nodeZone1 >= 0 && nodeZone0 !== nodeZone1) {
-                        const portalVisible = !frustumCullingEnabled || cameraFrustum.intersectsSphere(currentNode.exclusiveSphereBound);
+                        // Determine side for this specific node (coplanar nodes share plane, so same dot sign usually)
+                        // But standard says use the node's own plane slightly? No, they are coplanar.
+                        // However, we just need to know which zone is "opposite".
+                        // For portal nodes, usually the "Front" or "Back" zone logic applies.
+                        // In traverseBSP we re-calculated dot.
+                        const planeDot = cameraPos.dot(currentNode.plane);
+                        const isFront = planeDot >= 0;
 
-                        if (portalVisible) {
-                            // Determine side for this specific node (coplanar nodes share plane, so same dot sign usually)
-                            // But standard says use the node's own plane slightly? No, they are coplanar.
-                            // However, we just need to know which zone is "opposite".
-                            // For portal nodes, usually the "Front" or "Back" zone logic applies.
-                            // In traverseBSP we re-calculated dot.
-                            const planeDot = cameraPos.dot(currentNode.plane);
-                            const isFront = planeDot >= 0;
+                        const currentZone = isFront ? nodeZone1 : nodeZone0; // Zone we're currently in
+                        const oppositeZone = isFront ? nodeZone0 : nodeZone1; // [0]=Back, [1]=Front ?? 
+                        // Wait, in previous code: oppositeZone = isFront ? nodeZone0 : nodeZone1;
+                        // If isFront, we are in Front. Portal connects Front and Back.
+                        // Opposite should be Back zone. 
+                        // zones[0] is Back zone? zones[1] is Front zone?
+                        // Checked findPositionZone: side >= 0 ? node.zones[1] : node.zones[0].
+                        // So zones[1] IS FRONT. zones[0] IS BACK.
+                        // If we are in Front (isFront=true), opposite is Back (zones[0]).
+                        // So `isFront ? nodeZone0 : nodeZone1` is CORRECT.
 
-                            const oppositeZone = isFront ? nodeZone0 : nodeZone1; // [0]=Back, [1]=Front ?? 
-                            // Wait, in previous code: oppositeZone = isFront ? nodeZone0 : nodeZone1;
-                            // If isFront, we are in Front. Portal connects Front and Back.
-                            // Opposite should be Back zone. 
-                            // zones[0] is Back zone? zones[1] is Front zone?
-                            // Checked findPositionZone: side >= 0 ? node.zones[1] : node.zones[0].
-                            // So zones[1] IS FRONT. zones[0] IS BACK.
-                            // If we are in Front (isFront=true), opposite is Back (zones[0]).
-                            // So `isFront ? nodeZone0 : nodeZone1` is CORRECT.
+                        // CRITICAL: Only process portal if its current zone is in the active zone mask
+                        // This ensures portals are only considered when their zone is actually visible
+                        const currentZoneBit = 1n << BigInt(currentZone);
+                        const isCurrentZoneActive = !!(currentZoneBit & currentZoneMask);
 
-                            if (oppositeZone >= 0 && oppositeZone < 64) {
-                                currentZoneMask |= (1n << BigInt(oppositeZone));
+                        // UE2 portal recursion limit: Recursion < MAX_RECURSION_DEPTH - 1
+                        // This means we can see through portals up to depth 3 (0-indexed: 0, 1, 2, 3)
+                        // Total of 4 levels: initial zone (0) + 3 portal hops (1, 2, 3)
+                        const portalVisible = isCurrentZoneActive && (!frustumCullingEnabled || cameraFrustum.intersectsSphere(currentNode.exclusiveSphereBound));
+
+                        if (portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
+                                // Check if opposite zone is already in the mask (avoid redundant work)
+                                const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
+                                
+                                if (!alreadyAdded) {
+                                    // Find the minimum depth of zones currently visible through this portal
+                                    // The new zone will be at depth + 1
+                                    let minSourceDepth = recursionDepth;
+                                    let isConnected = false;
+                                    
+                                    if (this.bspZones) {
+                                        // Check if opposite zone is connected to any currently active zone
+                                        // Only expand if the zone is connected (via connectivity)
+                                        for (let i = 0; i < 64; i++) {
+                                            if (currentZoneMask & (1n << BigInt(i))) {
+                                                const zoneDepth = zoneDepthMap.get(i) ?? recursionDepth;
+                                                minSourceDepth = Math.min(minSourceDepth, zoneDepth);
+                                                
+                                                const zoneData = this.bspZones[i];
+                                                if (zoneData && zoneData.connectivity && (zoneData.connectivity & (1n << BigInt(oppositeZone)))) {
+                                                    isConnected = true;
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // No connectivity data available, allow expansion (conservative)
+                                        isConnected = true;
+                                    }
+                                    
+                                    if (isConnected) {
+                                        // Calculate new recursion depth for the portal expansion
+                                        const newDepth = minSourceDepth + 1;
+                                        
+                                        // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
+                                        // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
+                                        if (newDepth < MAX_RECURSION_DEPTH) {
+                                            currentZoneMask |= (1n << BigInt(oppositeZone));
+                                            zoneDepthMap.set(oppositeZone, newDepth);
+                                            // Track that this zone was added through a portal
+                                            zonesAddedThroughPortals.add(oppositeZone);
+                                        }
+                                    }
+                                }
                             }
-                        }
                     }
 
                     // Frustum Culling & Visibility
@@ -400,7 +472,32 @@ class SectorObject extends Object3D {
             }
         }
 
-        return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask };
+        // CRITICAL FIX: Filter visibleLeaves to only include leaves whose zones are in the final zone mask.
+        // Additionally, for zones added through portals, we need to ensure the portal is still visible.
+        // This ensures that leaves behind portals that became invisible are properly culled.
+        // In UE2, this check happens during ProcessLeaf via RenderState.Zones[iZone].Visible(),
+        // but we need to do it here since we collect leaves during traversal.
+        const filteredVisibleLeaves = new Set<number>();
+        for (const leafIndex of visibleLeaves) {
+            if (leafIndex >= 0 && leafIndex < (this.bspLeaves?.length || 0)) {
+                const leaf = this.bspLeaves[leafIndex];
+                if (leaf && leaf.zone >= 0) {
+                    const leafZoneBit = 1n << BigInt(leaf.zone);
+                    const isZoneInMask = !!(leafZoneBit & currentZoneMask);
+                    
+                    // Only include leaf if its zone is in the final zone mask
+                    // If the zone was added through a portal, it's already been validated as visible
+                    // (zonesAddedThroughPortals only contains zones added through visible portals)
+                    if (isZoneInMask) {
+                        // Zone is in mask - check if it was added through a portal
+                        // If it was, it's already validated. If not, it's the camera zone (always visible)
+                        filteredVisibleLeaves.add(leafIndex);
+                    }
+                }
+            }
+        }
+
+        return { visibleNodes, visibleLeaves: filteredVisibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
     }
 
 

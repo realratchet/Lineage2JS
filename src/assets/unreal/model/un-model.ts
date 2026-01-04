@@ -491,7 +491,7 @@ abstract class UModel extends UPrimitive {
             }
         }
 
-        debugger;
+        // debugger;
 
         // Return empty array for now (sections are stored in library.bspSections)
         // This maintains compatibility with existing code that expects a return value

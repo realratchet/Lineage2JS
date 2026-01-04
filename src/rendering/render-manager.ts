@@ -6,6 +6,7 @@ import Player from "@client/player";
 import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
+import Visualizer from "./visualizer";
 
 const stats = new (Stats as any)(0);
 
@@ -40,6 +41,7 @@ class RenderManager {
     public bspHelperCameraHelper: CameraHelper | null = null;
     public bspHelperActive: boolean = false;
     public frustumCullingEnabled: boolean = true;
+    public readonly visualizer: Visualizer;
 
     protected shiftTimeDown: number;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
@@ -81,6 +83,9 @@ class RenderManager {
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+
+        // Create visualizer system
+        this.visualizer = new Visualizer(this.scene);
 
         this.sun = new Mesh(new PlaneGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
         this.sunCam = new Camera();
@@ -230,6 +235,46 @@ class RenderManager {
             event.stopPropagation();
             this.frustumCullingEnabled = !this.frustumCullingEnabled;
             console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
+            return;
+        }
+
+        // Handle F3 to toggle visualizer
+        if (event.key === "F3" || event.code === "F3") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.visualizer.toggle();
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            
+            if (this.visualizer.getMode() === 1) { // Portals
+                this.visualizer.updatePortals(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 2) { // Zones
+                this.visualizer.updateZones(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+            return;
+        }
+
+        // Handle F4 to cycle visualizer modes
+        if (event.key === "F4" || event.code === "F4") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.visualizer.nextMode();
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            
+            if (this.visualizer.getMode() === 1) { // Portals
+                this.visualizer.updatePortals(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 2) { // Zones
+                this.visualizer.updateZones(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
             return;
         }
 
@@ -607,6 +652,22 @@ class RenderManager {
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
+        // Update visualizer based on camera position (use bspHelperCamera if active)
+        if (this.visualizer.isEnabled()) {
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            
+            if (this.visualizer.getMode() === 1) { // Portals
+                this.visualizer.updatePortals(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 2) { // Zones
+                this.visualizer.updateZones(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+        }
+
         // this.renderer.render(this.sun, this.camera);
         this.renderer.render(this.scene, this.camera);
     }
@@ -652,6 +713,22 @@ class RenderManager {
         this.sectorBounds.push(new Box3().setFromObject(sector));
 
         this.objectGroup.add(sector);
+
+        // Update visualizer if enabled
+        if (this.visualizer.isEnabled()) {
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            
+            if (this.visualizer.getMode() === 1) { // Portals
+                this.visualizer.updatePortals(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 2) { // Zones
+                this.visualizer.updateZones(this.sectors, cameraPos);
+            } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+        }
     }
 
     /**

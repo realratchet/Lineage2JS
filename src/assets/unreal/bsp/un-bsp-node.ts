@@ -101,9 +101,12 @@ class FBSPNode implements C.IConstructable {
     }
 
     public getBSPDecodeInfo(surfFlags: number): GD.IBSPNodeDecodeInfo_T {
+        // we convert from UE2 to Three.js coordinate system for zone-object bsp traversal
         return {
             children: [this.iFront, this.iBack],
-            plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,
+            // plane: [this.plane.x, this.plane.z, -this.plane.y, -this.plane.w] as GD.Vector4Arr,  // rotation just not sure if correct portal normal (rotate around Y axis)
+            // plane: [-this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,   // rotation just not sure if correct portal normal (rotate around X axis)
+            plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,    // (old) just swizzling, likely invalid rotation
             leaves: [this.iLeaf[0], this.iLeaf[1]],
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
