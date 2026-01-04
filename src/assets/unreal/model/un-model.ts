@@ -14,6 +14,7 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FIndexArray, FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
+import { dumpBspTreeArtifacts } from "@client/utils/bsp-dump";
 
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -261,6 +262,10 @@ abstract class UModel extends UPrimitive {
         // zoneMask represents "all zones at or below this node" (computed by UE2 editor)
         // We should use the stored zoneMask instead of computing it ourselves
 
+        // Optional debug dump (raw UE2 vs post-swizzle) for offline analysis.
+        const shouldDumpBsp = !!(library as any).debugDumpBsp;
+        const rawBspNodes: any[] = shouldDumpBsp ? [] : null;
+
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
@@ -272,6 +277,41 @@ abstract class UModel extends UPrimitive {
             library.nodeZoneMasks[nodeIndex] = zoneMask;
             nodeInfo.zoneMask = zoneMask;
 
+            if (shouldDumpBsp) {
+                // "Raw" means the values directly as loaded from UE2 packages (no coordinate swizzle, no child re-mapping).
+                rawBspNodes.push({
+                    index: nodeIndex,
+                    // Children / topology
+                    iBack: node.iBack,
+                    iFront: node.iFront,
+                    iPlane: node.iPlane,
+                    // Zones/Leaves
+                    iZone: [node.iZone[0], node.iZone[1]],
+                    iLeaf: [node.iLeaf[0], node.iLeaf[1]],
+                    // Geometry/surface
+                    iSurf: node.iSurf,
+                    iVertPool: node.iVertPool,
+                    numVertices: node.numVertices,
+                    flags: node.flags,
+                    // Masks & bounds
+                    zoneMask: node.zoneMask?.toString?.() ?? String(node.zoneMask),
+                    plane: [node.plane.x, node.plane.y, node.plane.z, node.plane.w],
+                    exclusiveSphereBound: [
+                        node.exclusiveSphereBound.x,
+                        node.exclusiveSphereBound.y,
+                        node.exclusiveSphereBound.z,
+                        node.exclusiveSphereBound.w
+                    ],
+                    inclusiveSphereBound: [
+                        node.inclusiveSphereBound.x,
+                        node.inclusiveSphereBound.y,
+                        node.inclusiveSphereBound.z,
+                        node.inclusiveSphereBound.w
+                    ],
+                    // Surf flags (includes PF_Portal)
+                    surfFlags: surf.flags
+                });
+            }
 
             library.bspNodes.push(nodeInfo);
 
@@ -489,6 +529,51 @@ abstract class UModel extends UPrimitive {
             for (const [sectionKey, sectionData] of prioritySections.entries()) {
                 createSection(priority, sectionKey, sectionData);
             }
+        }
+
+        if (shouldDumpBsp) {
+            const prefix = (library as any).debugDumpBspPrefix || (library as any).name || "bsp-tree";
+            const ts = Date.now();
+            const baseName = `${prefix}-${ts}`;
+
+            // Build a JSON-safe snapshot of post-swizzle nodes (what traversal/renderer sees).
+            const swizzledNodes = (library.bspNodes as any[]).map((n, index) => ({
+                index,
+                ...n,
+                zoneMask: n?.zoneMask !== undefined ? (typeof n.zoneMask === "bigint" ? n.zoneMask.toString() : String(n.zoneMask)) : undefined
+            }));
+
+            const leaves = (library.bspLeaves as any[]).map((l, index) => ({
+                index,
+                ...l,
+                visibleZones: l?.visibleZones !== undefined ? (typeof l.visibleZones === "bigint" ? l.visibleZones.toString() : String(l.visibleZones)) : undefined
+            }));
+
+            const zones = (library.bspZones as any[]).map((z, index) => ({
+                index,
+                ...z,
+                connectivity: z?.connectivity !== undefined ? (typeof z.connectivity === "bigint" ? z.connectivity.toString() : String(z.connectivity)) : undefined,
+                visibility: z?.visibility !== undefined ? (typeof z.visibility === "bigint" ? z.visibility.toString() : String(z.visibility)) : undefined
+            }));
+
+            dumpBspTreeArtifacts({
+                baseName,
+                raw: {
+                    meta: { name: (library as any).name, timestamp: ts, version: "raw-ue2" },
+                    nodes: rawBspNodes,
+                    leaves,
+                    zones
+                },
+                swizzled: {
+                    meta: { name: (library as any).name, timestamp: ts, version: "three-swizzled" },
+                    nodes: swizzledNodes,
+                    leaves,
+                    zones
+                }
+            });
+
+            // Avoid repeated downloads if decode is invoked multiple times in one session.
+            (library as any).debugDumpBsp = false;
         }
 
         // debugger;

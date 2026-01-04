@@ -6,6 +6,11 @@ const tmpVec4 = new Vector4();
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
+export type BSPTraversalEvent =
+    | { kind: "visit"; nodeIndex: number; pass: "front" | "plane"; zoneMask: bigint }
+    | { kind: "process"; nodeIndex: number; inFrustum: boolean; zoneMask: bigint }
+    | { kind: "portal_add"; nodeIndex: number; fromZone: number; toZone: number; depth: number; zoneMaskBefore: bigint; zoneMaskAfter: bigint };
+
 interface IStaticMeshActorDecodeInfo {
     uuid: string;
     type: "StaticMeshActor";
@@ -210,8 +215,9 @@ class SectorObject extends Object3D {
             return (1n << 64n) - 1n; // All zones if we can't determine
         }
 
-        // Start with just the camera zone (like UE2)
-        let activeZoneMask = 1n << BigInt(cameraZone);
+        // Start with just the camera zone (matches UE2 behavior when PVS isn't usable)
+        const cameraZoneBit = 1n << BigInt(cameraZone);
+        let activeZoneMask = cameraZoneBit;
 
         // Get connectivity for camera zone to constrain visibility
         let cameraConnectivity: bigint | null = null;
@@ -222,7 +228,9 @@ class SectorObject extends Object3D {
             }
         }
 
-        // If we have PVS data, intersect it with connectivity to ensure only connected zones are included
+        // If we have PVS data, intersect it with connectivity to ensure only connected zones are included.
+        // IMPORTANT: If PVS is "invalid" (all zones or zero), DO NOT fall back to connectivity as visibility.
+        // Connectivity describes potential reachability, not what is currently visible through portals.
         if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
             const leaf = this.bspLeaves[leafIndex];
             const pvsMask = leaf.visibleZones;
@@ -237,15 +245,8 @@ class SectorObject extends Object3D {
                     activeZoneMask = pvsMask;
                 }
                 // Always ensure camera zone is included
-                activeZoneMask |= (1n << BigInt(cameraZone));
-            } else if (cameraConnectivity !== null) {
-                // PVS invalid, use connectivity as fallback
-                activeZoneMask = cameraConnectivity;
+                activeZoneMask |= cameraZoneBit;
             }
-            // Otherwise activeZoneMask stays as just camera zone
-        } else if (cameraConnectivity !== null) {
-            // No leaf found, use connectivity as fallback
-            activeZoneMask = cameraConnectivity;
         }
 
         // Note: Portals will dynamically add more zones during BSP traversal (see traverseBSP)
@@ -276,7 +277,8 @@ class SectorObject extends Object3D {
         activeZoneMask: bigint,
         cameraFrustum: THREE.Frustum,
         frustumCullingEnabled: boolean = true,
-        recursionDepth: number = 0
+        recursionDepth: number = 0,
+        onEvent?: (event: BSPTraversalEvent) => void
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
@@ -313,6 +315,12 @@ class SectorObject extends Object3D {
             const node = this.bspNodes[nodeIndex];
 
             if (pass === "front") {
+                onEvent?.({
+                    kind: "visit",
+                    nodeIndex,
+                    pass,
+                    zoneMask: currentZoneMask
+                });
                 // 1. Zone Mask Culling (skip subtree if not visible)
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
@@ -366,6 +374,12 @@ class SectorObject extends Object3D {
                 }
 
             } else { // pass === "plane"
+                onEvent?.({
+                    kind: "visit",
+                    nodeIndex,
+                    pass,
+                    zoneMask: currentZoneMask
+                });
                 // Process Node and its Coplanar chain
                 let current: number = nodeIndex;
 
@@ -408,48 +422,63 @@ class SectorObject extends Object3D {
                         // UE2 portal recursion limit: Recursion < MAX_RECURSION_DEPTH - 1
                         // This means we can see through portals up to depth 3 (0-indexed: 0, 1, 2, 3)
                         // Total of 4 levels: initial zone (0) + 3 portal hops (1, 2, 3)
-                        const portalVisible = isCurrentZoneActive && (!frustumCullingEnabled || cameraFrustum.intersectsSphere(currentNode.exclusiveSphereBound));
+                        
+                        // Distance-based portal culling: don't expand through portals that are too far away
+                        // This prevents performance issues when hub zones (like zone 2) connect to many distant zones
+                        // Portal sphere radius is typically 200-400 units, so 5000 units is a reasonable limit
+                        const PORTAL_MAX_DISTANCE = 5000;
+                        const portalSphere = currentNode.exclusiveSphereBound;
+                        const portalDistance = cameraPosition.distanceTo(portalSphere.center);
+                        const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
+                        
+                        const portalVisible = isCurrentZoneActive && 
+                            isPortalInRange &&
+                            (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
                         if (portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
                                 // Check if opposite zone is already in the mask (avoid redundant work)
                                 const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
                                 
                                 if (!alreadyAdded) {
-                                    // Find the minimum depth of zones currently visible through this portal
-                                    // The new zone will be at depth + 1
-                                    let minSourceDepth = recursionDepth;
-                                    let isConnected = false;
-                                    
-                                    if (this.bspZones) {
-                                        // Check if opposite zone is connected to any currently active zone
-                                        // Only expand if the zone is connected (via connectivity)
-                                        for (let i = 0; i < 64; i++) {
-                                            if (currentZoneMask & (1n << BigInt(i))) {
-                                                const zoneDepth = zoneDepthMap.get(i) ?? recursionDepth;
-                                                minSourceDepth = Math.min(minSourceDepth, zoneDepth);
-                                                
-                                                const zoneData = this.bspZones[i];
-                                                if (zoneData && zoneData.connectivity && (zoneData.connectivity & (1n << BigInt(oppositeZone)))) {
-                                                    isConnected = true;
-                                                }
-                                            }
+                                    // UE2-style: the recursion depth for the new zone is based on the depth of the
+                                    // *current* zone, not the minimum depth of any active zone.
+                                    //
+                                    // IMPORTANT: The previous logic took the minimum depth across all active zones.
+                                    // Since the camera zone is always depth 0, that effectively made every portal hop
+                                    // look like depth 1 and allowed multi-portal chains to expand without increasing depth.
+                                    const sourceDepth = zoneDepthMap.get(currentZone) ?? recursionDepth;
+
+                                    // Connectivity is defined per-zone. Only allow expansion if the current zone
+                                    // is connected to the opposite zone.
+                                    let isConnected = true;
+                                    if (this.bspZones && currentZone >= 0 && currentZone < this.bspZones.length) {
+                                        const zoneData = this.bspZones[currentZone];
+                                        if (zoneData && zoneData.connectivity) {
+                                            isConnected = !!(zoneData.connectivity & (1n << BigInt(oppositeZone)));
                                         }
-                                    } else {
-                                        // No connectivity data available, allow expansion (conservative)
-                                        isConnected = true;
                                     }
                                     
                                     if (isConnected) {
                                         // Calculate new recursion depth for the portal expansion
-                                        const newDepth = minSourceDepth + 1;
+                                        const newDepth = sourceDepth + 1;
                                         
                                         // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
                                         // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
                                         if (newDepth < MAX_RECURSION_DEPTH) {
+                                            const beforeMask = currentZoneMask;
                                             currentZoneMask |= (1n << BigInt(oppositeZone));
                                             zoneDepthMap.set(oppositeZone, newDepth);
                                             // Track that this zone was added through a portal
                                             zonesAddedThroughPortals.add(oppositeZone);
+                                            onEvent?.({
+                                                kind: "portal_add",
+                                                nodeIndex: current,
+                                                fromZone: currentZone,
+                                                toZone: oppositeZone,
+                                                depth: newDepth,
+                                                zoneMaskBefore: beforeMask,
+                                                zoneMaskAfter: currentZoneMask
+                                            });
                                         }
                                     }
                                 }
@@ -465,6 +494,13 @@ class SectorObject extends Object3D {
                     if (isInFrustum && this.nodeToSection && this.nodeToSection[current] !== undefined && this.nodeToSection[current] >= 0) {
                         visibleNodes.add(current);
                     }
+
+                    onEvent?.({
+                        kind: "process",
+                        nodeIndex: current,
+                        inFrustum: isInFrustum,
+                        zoneMask: currentZoneMask
+                    });
 
                     // Next coplanar node
                     current = currentNode.iPlane;

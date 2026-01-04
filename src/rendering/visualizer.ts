@@ -1,13 +1,30 @@
 import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry } from "three";
 
 type SectorObject = import("../objects/zone-object").SectorObject;
+type BSPTraversalEvent = import("../objects/zone-object").BSPTraversalEvent;
 
 export enum VisualizerMode {
     None = 0,
     Portals = 1,
     Zones = 2,
     Leaves = 3,
+    Traversal = 4,
     // Future modes can be added here
+}
+
+export enum LeafVisualizerDetail {
+    /**
+     * Automatically switches to a decluttered view when there are lots of leaves visible.
+     */
+    Auto = 0,
+    /**
+     * Draw one box per visible leaf (can get very noisy).
+     */
+    PerLeaf = 1,
+    /**
+     * Aggregate/union visible leaf bounds per zone (much cleaner).
+     */
+    PerZone = 2,
 }
 
 class Visualizer {
@@ -17,6 +34,9 @@ class Visualizer {
     private portalVisualizations: Object3D[] = [];
     private zoneVisualizations: Object3D[] = [];
     private leafVisualizations: Object3D[] = [];
+    private traversalVisualizations: Object3D[] = [];
+    private leafDetail: LeafVisualizerDetail = LeafVisualizerDetail.Auto;
+    private readonly leafAutoAggregateThreshold: number = 200;
 
     constructor(scene: Object3D) {
         this.group = new Group();
@@ -62,6 +82,19 @@ class Visualizer {
         console.log(`Visualizer mode: ${VisualizerMode[this.mode]}`);
     }
 
+    public nextLeafDetail(): void {
+        // Only meaningful while Leaves mode is active, but harmless otherwise.
+        const details: LeafVisualizerDetail[] = [
+            LeafVisualizerDetail.Auto,
+            LeafVisualizerDetail.PerLeaf,
+            LeafVisualizerDetail.PerZone,
+        ];
+
+        const idx = details.indexOf(this.leafDetail);
+        this.leafDetail = details[(idx + 1) % details.length];
+        console.log(`Leaf visualizer detail: ${LeafVisualizerDetail[this.leafDetail]}`);
+    }
+
     private updateVisibility(): void {
         this.group.visible = this.enabled && this.mode !== VisualizerMode.None;
     }
@@ -83,6 +116,9 @@ class Visualizer {
                 break;
             case VisualizerMode.Leaves:
                 // Leaves will be added via updateLeaves()
+                break;
+            case VisualizerMode.Traversal:
+                // Traversal will be added via updateTraversal()
                 break;
         }
     }
@@ -503,6 +539,12 @@ class Visualizer {
                 // Use the zonesAddedThroughPortals directly from traversal (more accurate)
                 const portalAddedZones = zonesAddedThroughPortals;
 
+                // Decide which detail mode to use for this frame (Auto can switch when noisy)
+                const effectiveLeafDetail =
+                    this.leafDetail === LeafVisualizerDetail.Auto
+                        ? (visibleLeaves.size >= this.leafAutoAggregateThreshold ? LeafVisualizerDetail.PerZone : LeafVisualizerDetail.PerLeaf)
+                        : this.leafDetail;
+
                 // For each visible leaf, find the highest level (minimum depth) node that references it
                 // Map: leafIndex -> { nodeIndex, depth }
                 const leafToNodeMap = new Map<number, { nodeIndex: number; depth: number }>();
@@ -525,44 +567,39 @@ class Visualizer {
                     }
                 }
                 
-                // Second pass: visualize each leaf using its highest level node
-                let nodesWithValidBounds = 0;
+                // Second pass: compute bounds per leaf (from its highest-level node), then either
+                // visualize per-leaf or aggregate/union per-zone for decluttering.
+                const leafBoxes = new Map<number, { box: Box3; zone: number; depth: number; isPortalLeaf: boolean }>();
+
                 for (const [leafIndex, { nodeIndex, depth }] of leafToNodeMap) {
                     const node = sector.bspNodes[nodeIndex];
                     const leaf = sector.bspLeaves[leafIndex];
-                    
-                    // Determine if this leaf is visible through portals or directly
-                    const isPortalLeaf = leaf && leaf.zone >= 0 && portalAddedZones.has(leaf.zone);
-                    const baseColor = isPortalLeaf ? portalLeafColor : directLeafColor;
-                    
-                    // Darken color based on depth level
-                    const leafColor = this.darkenColorByDepth(baseColor, depth, maxDepth);
-                    
+
+                    const zone = leaf?.zone ?? -1;
+                    const isPortalLeaf = zone >= 0 && portalAddedZones.has(zone);
+
                     let box: Box3 | null = null;
-                    
+
                     // Try to get bounds from node's collision bounds first (most accurate)
                     if (node.collision && node.collision.bounds) {
                         const collisionBox = node.collision.bounds;
-                        // Check if box is valid (has non-zero size)
-                        if (collisionBox.min && collisionBox.max && 
+                        if (collisionBox.min && collisionBox.max &&
                             collisionBox.max.x > collisionBox.min.x &&
                             collisionBox.max.y > collisionBox.min.y &&
                             collisionBox.max.z > collisionBox.min.z) {
                             box = collisionBox.clone();
                         }
                     }
-                    
+
                     // Fallback to sphere bounds if collision bounds not available
-                    // Try exclusive sphere first (more reliable for leaf nodes)
                     if (!box) {
                         const exclusiveSphere = node.exclusiveSphereBound;
-                        if (exclusiveSphere.radius > 0 && !isNaN(exclusiveSphere.radius) && exclusiveSphere.center && 
+                        if (exclusiveSphere.radius > 0 && !isNaN(exclusiveSphere.radius) && exclusiveSphere.center &&
                             !isNaN(exclusiveSphere.center.x) && !isNaN(exclusiveSphere.center.y) && !isNaN(exclusiveSphere.center.z)) {
                             box = new Box3();
-                            const size = Math.max(exclusiveSphere.radius * 2, 100); // Minimum size of 100 units
+                            const size = Math.max(exclusiveSphere.radius * 2, 100);
                             box.setFromCenterAndSize(exclusiveSphere.center, new Vector3(size, size, size));
                         } else {
-                            // Try inclusive sphere as fallback
                             const inclusiveSphere = node.inclusiveSphereBound;
                             if (inclusiveSphere.radius > 0 && !isNaN(inclusiveSphere.radius) && inclusiveSphere.center &&
                                 !isNaN(inclusiveSphere.center.x) && !isNaN(inclusiveSphere.center.y) && !isNaN(inclusiveSphere.center.z)) {
@@ -572,33 +609,200 @@ class Visualizer {
                             }
                         }
                     }
-                    
-                    if (!box) {
-                        continue; // Skip if we can't get valid bounds
+
+                    if (!box) continue;
+                    leafBoxes.set(leafIndex, { box, zone, depth, isPortalLeaf });
+                }
+
+                if (effectiveLeafDetail === LeafVisualizerDetail.PerLeaf) {
+                    for (const [leafIndex, info] of leafBoxes) {
+                        const baseColor = info.isPortalLeaf ? portalLeafColor : directLeafColor;
+                        const leafColor = this.darkenColorByDepth(baseColor, info.depth, maxDepth);
+
+                        const boxHelper = new Box3Helper(info.box, leafColor);
+                        const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
+                        if (boxMaterial) {
+                            (boxMaterial as any).linewidth = 2;
+                            boxMaterial.transparent = true;
+                            boxMaterial.depthTest = false;
+                            boxMaterial.depthWrite = false;
+                        }
+                        boxHelper.renderOrder = 1000;
+                        boxHelper.userData.leafIndex = leafIndex;
+                        boxHelper.userData.zone = info.zone;
+                        boxHelper.userData.depth = info.depth;
+                        this.leafVisualizations.push(boxHelper);
+                        this.group.add(boxHelper);
+                    }
+                } else {
+                    // Aggregate per zone: union all visible leaf bounds for each zone.
+                    const zoneUnion = new Map<number, { box: Box3; minDepth: number; anyPortalLeaf: boolean; leafCount: number }>();
+
+                    for (const [, info] of leafBoxes) {
+                        if (info.zone < 0 || info.zone >= 64) continue;
+                        const existing = zoneUnion.get(info.zone);
+                        if (!existing) {
+                            zoneUnion.set(info.zone, {
+                                box: info.box.clone(),
+                                minDepth: info.depth,
+                                anyPortalLeaf: info.isPortalLeaf,
+                                leafCount: 1,
+                            });
+                        } else {
+                            existing.box.union(info.box);
+                            existing.minDepth = Math.min(existing.minDepth, info.depth);
+                            existing.anyPortalLeaf = existing.anyPortalLeaf || info.isPortalLeaf;
+                            existing.leafCount++;
+                        }
                     }
 
-                    nodesWithValidBounds++;
-                    
-                    // Create box helper with appropriate color
-                    const boxHelper = new Box3Helper(box, leafColor);
-                    const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
-                    if (boxMaterial) {
-                        (boxMaterial as any).linewidth = 2;
-                        boxMaterial.transparent = true;
-                        boxMaterial.depthTest = false;
-                        boxMaterial.depthWrite = false;
+                    for (const [zone, agg] of zoneUnion) {
+                        const baseColor = agg.anyPortalLeaf ? portalLeafColor : directLeafColor;
+                        const zoneColor = this.darkenColorByDepth(baseColor, agg.minDepth, maxDepth);
+
+                        const boxHelper = new Box3Helper(agg.box, zoneColor);
+                        const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
+                        if (boxMaterial) {
+                            (boxMaterial as any).linewidth = 2;
+                            boxMaterial.transparent = true;
+                            boxMaterial.depthTest = false;
+                            boxMaterial.depthWrite = false;
+                        }
+                        boxHelper.renderOrder = 1000;
+                        boxHelper.userData.zone = zone;
+                        boxHelper.userData.leafCount = agg.leafCount;
+                        boxHelper.userData.depth = agg.minDepth;
+                        boxHelper.userData.aggregated = true;
+                        this.leafVisualizations.push(boxHelper);
+                        this.group.add(boxHelper);
                     }
-                    boxHelper.renderOrder = 1000;
-                    boxHelper.userData.leafIndex = leafIndex;
-                    boxHelper.userData.zone = leaf?.zone;
-                    boxHelper.userData.depth = depth;
-                    this.leafVisualizations.push(boxHelper);
-                    this.group.add(boxHelper);
                 }
                 
                 // Debug: log results (only on first visualization or when issues occur)
                 // Removed per-frame logging to avoid console spam
             }
+        }
+    }
+
+    /**
+     * Visualize the exact traversal order of `SectorObject.traverseUnifiedBSP()` as a path:
+     * - A blue->red gradient indicates the order nodes were processed (PASS_Plane / coplanar chain).
+     * - Yellow markers indicate portal expansions (zone mask additions).
+     *
+     * This is meant to be an “x-ray” debugging view of the traversal, not a prettified leaf display.
+     */
+    public updateTraversal(
+        sectors: Map<number, Map<number, SectorObject>>,
+        cameraPosition?: Vector3,
+        cameraFrustum?: THREE.Frustum,
+        frustumCullingEnabled: boolean = true
+    ): void {
+        if (!this.enabled || this.mode !== VisualizerMode.Traversal) return;
+
+        this.clearTraversalVisualizations();
+        if (!cameraPosition) return;
+
+        // Keep perf predictable: visualize the first sector in the map (most debugging sessions load 1 sector).
+        let sectorToViz: SectorObject | null = null;
+        for (const [, sectorYMap] of sectors) {
+            for (const [, sector] of sectorYMap) {
+                sectorToViz = sector;
+                break;
+            }
+            if (sectorToViz) break;
+        }
+        if (!sectorToViz?.bspNodes || !sectorToViz?.bspLeaves || !sectorToViz?.nodeZoneMasks) return;
+
+        const frustum = cameraFrustum || new Frustum();
+        const initialZoneMask = sectorToViz.getActiveZoneMask(cameraPosition);
+
+        const events: BSPTraversalEvent[] = [];
+        const MAX_EVENTS = 8000;
+
+        sectorToViz.traverseUnifiedBSP(
+            cameraPosition,
+            initialZoneMask,
+            frustum,
+            frustumCullingEnabled,
+            0,
+            (e) => {
+                if (events.length < MAX_EVENTS) events.push(e);
+            }
+        );
+
+        if (events.length === 0) return;
+
+        const processedCenters: Vector3[] = [];
+        const portalAddNodeIndices: number[] = [];
+
+        for (const e of events) {
+            if (e.kind === "process") {
+                const n = sectorToViz.bspNodes[e.nodeIndex];
+                if (n?.exclusiveSphereBound?.center) processedCenters.push(n.exclusiveSphereBound.center.clone());
+            } else if (e.kind === "portal_add") {
+                portalAddNodeIndices.push(e.nodeIndex);
+            }
+        }
+
+        if (processedCenters.length >= 2) {
+            const geometry = new BufferGeometry().setFromPoints(processedCenters);
+            const material = new LineBasicMaterial({
+                color: 0x2244ff,
+                transparent: true,
+                opacity: 0.6,
+                depthTest: false,
+                depthWrite: false
+            });
+            const line = new Line(geometry, material);
+            line.renderOrder = 1000;
+            this.traversalVisualizations.push(line);
+            this.group.add(line);
+        }
+
+        // Gradient markers along the path.
+        const baseBlue = new Color(0x0055ff);
+        const baseRed = new Color(0xff2200);
+        const tmp = new Color();
+        const markerGeo = new BoxGeometry(18, 18, 18);
+
+        // Avoid spawning an extreme number of meshes in huge views; downsample markers if needed.
+        const MAX_MARKERS = 1500;
+        const step = processedCenters.length > MAX_MARKERS ? Math.ceil(processedCenters.length / MAX_MARKERS) : 1;
+
+        const count = processedCenters.length;
+        for (let i = 0; i < count; i += step) {
+            const t = count <= 1 ? 0 : i / (count - 1);
+            tmp.copy(baseBlue).lerp(baseRed, t);
+            const m = new Mesh(markerGeo, new MeshBasicMaterial({
+                color: tmp,
+                transparent: true,
+                opacity: 0.25,
+                depthTest: false,
+                depthWrite: false
+            }));
+            m.position.copy(processedCenters[i]);
+            m.renderOrder = 1000;
+            this.traversalVisualizations.push(m);
+            this.group.add(m);
+        }
+
+        // Portal expansion markers (yellow).
+        const portalGeo = new BoxGeometry(34, 34, 34);
+        for (const nodeIndex of portalAddNodeIndices) {
+            const n = sectorToViz.bspNodes[nodeIndex];
+            if (!n?.exclusiveSphereBound?.center) continue;
+            const m = new Mesh(portalGeo, new MeshBasicMaterial({
+                color: 0xffcc00,
+                transparent: true,
+                opacity: 0.55,
+                depthTest: false,
+                depthWrite: false
+            }));
+            m.position.copy(n.exclusiveSphereBound.center);
+            m.renderOrder = 1001;
+            m.userData.nodeIndex = nodeIndex;
+            this.traversalVisualizations.push(m);
+            this.group.add(m);
         }
     }
 
@@ -618,10 +822,31 @@ class Visualizer {
         this.leafVisualizations = [];
     }
 
+    private clearTraversalVisualizations(): void {
+        this.traversalVisualizations.forEach(viz => {
+            this.group.remove(viz);
+            if (viz instanceof Mesh) {
+                viz.geometry.dispose();
+                const material = Array.isArray(viz.material) ? viz.material[0] : viz.material;
+                if (material instanceof MeshBasicMaterial) {
+                    material.dispose();
+                }
+            } else if (viz instanceof Line) {
+                viz.geometry.dispose();
+                const material = viz.material;
+                if (material instanceof LineBasicMaterial) {
+                    material.dispose();
+                }
+            }
+        });
+        this.traversalVisualizations = [];
+    }
+
     private clearVisualizations(): void {
         this.clearPortalVisualizations();
         this.clearZoneVisualizations();
         this.clearLeafVisualizations();
+        this.clearTraversalVisualizations();
     }
 
     public getMode(): VisualizerMode {

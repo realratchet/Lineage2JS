@@ -254,6 +254,8 @@ class RenderManager {
                 this.visualizer.updateZones(this.sectors, cameraPos);
             } else if (this.visualizer.getMode() === 3) { // Leaves
                 this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            } else if (this.visualizer.getMode() === 4) { // Traversal
+                this.visualizer.updateTraversal(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
             return;
         }
@@ -273,6 +275,25 @@ class RenderManager {
             } else if (this.visualizer.getMode() === 2) { // Zones
                 this.visualizer.updateZones(this.sectors, cameraPos);
             } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            } else if (this.visualizer.getMode() === 4) { // Traversal
+                this.visualizer.updateTraversal(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+            return;
+        }
+
+        // Handle F5 to cycle leaf visualizer detail (Auto / PerLeaf / PerZone)
+        if (event.key === "F5" || event.code === "F5") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.visualizer.nextLeafDetail();
+
+            // If we're currently in Leaves mode and visualizer is enabled, refresh the visualization immediately.
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            if (this.visualizer.getMode() === 3 && this.visualizer.isEnabled()) {
                 this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
             return;
@@ -665,6 +686,8 @@ class RenderManager {
                 this.visualizer.updateZones(this.sectors, cameraPos);
             } else if (this.visualizer.getMode() === 3) { // Leaves
                 this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            } else if (this.visualizer.getMode() === 4) { // Traversal
+                this.visualizer.updateTraversal(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
         }
 
@@ -727,6 +750,8 @@ class RenderManager {
                 this.visualizer.updateZones(this.sectors, cameraPos);
             } else if (this.visualizer.getMode() === 3) { // Leaves
                 this.visualizer.updateLeaves(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            } else if (this.visualizer.getMode() === 4) { // Traversal
+                this.visualizer.updateTraversal(this.sectors, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
         }
     }

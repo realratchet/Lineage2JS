@@ -121,7 +121,17 @@ declare global {
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
-                    helpersZoneBounds?: boolean
+                    helpersZoneBounds?: boolean,
+                    /**
+                     * Debug: dump BSP tree to downloadable JSON files.
+                     * Produces 2 files: raw UE2 values and post-swizzle ("three") values.
+                     */
+                    debugDumpBsp?: boolean,
+                    /**
+                     * Optional filename prefix for BSP dump artifacts.
+                     * Defaults to the map name.
+                     */
+                    debugDumpBspPrefix?: string
                 };
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }

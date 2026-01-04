@@ -393,8 +393,13 @@ async function startCore() {
         helpersZoneBounds: false,
         loadTerrain: false,
         loadBaseModel: true,
-        loadStaticModels: false,
+        loadStaticModels: true,
         loadEmitters: false,
+        // Debug: set true to download 2 BSP JSON dumps (raw UE2 + post-swizzle) on the next decode.
+        // Auto-resets to false after dumping to avoid repeated downloads during the same session.
+        debugDumpBsp: false,
+        // Optional filename prefix; defaults to the map name when omitted/null.
+        debugDumpBspPrefix: null,
         _loadStaticModelList: [
             // 1441,
             // 1770,
