@@ -1,14 +1,12 @@
 import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry } from "three";
 
 type SectorObject = import("../objects/zone-object").SectorObject;
-type BSPTraversalEvent = import("../objects/zone-object").BSPTraversalEvent;
 
 export enum VisualizerMode {
     None = 0,
     Portals = 1,
     Zones = 2,
     Leaves = 3,
-    Traversal = 4,
     // Future modes can be added here
 }
 
@@ -31,10 +29,14 @@ class Visualizer {
     private readonly group: Group;
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
+
+    public setMode(mode: VisualizerMode): void {
+        this.mode = mode;
+        this.updateVisualizations();
+    }
     private portalVisualizations: Object3D[] = [];
     private zoneVisualizations: Object3D[] = [];
     private leafVisualizations: Object3D[] = [];
-    private traversalVisualizations: Object3D[] = [];
     private leafDetail: LeafVisualizerDetail = LeafVisualizerDetail.Auto;
     private readonly leafAutoAggregateThreshold: number = 200;
 
@@ -117,9 +119,6 @@ class Visualizer {
             case VisualizerMode.Leaves:
                 // Leaves will be added via updateLeaves()
                 break;
-            case VisualizerMode.Traversal:
-                // Traversal will be added via updateTraversal()
-                break;
         }
     }
 
@@ -139,6 +138,15 @@ class Visualizer {
             for (const [, sector] of sectorYMap) {
                 if (!sector.bspNodes || !sector.nodeZoneMasks) {
                     continue;
+                }
+
+                // Only show helpers for sectors where camera is inside
+                if (cameraPosition) {
+                    const cameraLeaf = sector.findPositionLeaf(cameraPosition);
+                    const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+                    if (!isCameraInSector) {
+                        continue; // Skip sectors where camera is outside
+                    }
                 }
 
                 // Get active zone mask for this sector if camera position is provided
@@ -266,6 +274,15 @@ class Visualizer {
             for (const [, sector] of sectorYMap) {
                 if (!sector.bspNodes || !sector.bspLeaves || !sector.bspZones) {
                     continue;
+                }
+
+                // Only show helpers for sectors where camera is inside
+                if (cameraPosition) {
+                    const cameraLeaf = sector.findPositionLeaf(cameraPosition);
+                    const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+                    if (!isCameraInSector) {
+                        continue; // Skip sectors where camera is outside
+                    }
                 }
 
                 // Get active zone mask for visibility determination
@@ -521,6 +538,15 @@ class Visualizer {
                     continue;
                 }
 
+                // Only show helpers for sectors where camera is inside
+                if (cameraPosition) {
+                    const cameraLeaf = sector.findPositionLeaf(cameraPosition);
+                    const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+                    if (!isCameraInSector) {
+                        continue; // Skip sectors where camera is outside
+                    }
+                }
+
                 // Calculate node depths for this sector
                 const nodeDepths = this.calculateNodeDepths(sector.bspNodes);
                 const maxDepth = nodeDepths.size > 0 ? Math.max(...Array.from(nodeDepths.values())) : 0;
@@ -530,7 +556,7 @@ class Visualizer {
                 const frustum = cameraFrustum || new Frustum();
                 
                 // Traverse BSP to get visible leaves and zones added through portals
-                const { visibleLeaves, zonesAddedThroughPortals } = sector.traverseUnifiedBSP(cameraPosition, initialZoneMask, frustum, frustumCullingEnabled);
+                const { visibleLeaves, zonesAddedThroughPortals } = sector.traverseBSP(cameraPosition, initialZoneMask, frustum, frustumCullingEnabled);
 
                 if (visibleLeaves.size === 0) {
                     continue; // No visible leaves in this sector
@@ -684,128 +710,6 @@ class Visualizer {
         }
     }
 
-    /**
-     * Visualize the exact traversal order of `SectorObject.traverseUnifiedBSP()` as a path:
-     * - A blue->red gradient indicates the order nodes were processed (PASS_Plane / coplanar chain).
-     * - Yellow markers indicate portal expansions (zone mask additions).
-     *
-     * This is meant to be an “x-ray” debugging view of the traversal, not a prettified leaf display.
-     */
-    public updateTraversal(
-        sectors: Map<number, Map<number, SectorObject>>,
-        cameraPosition?: Vector3,
-        cameraFrustum?: THREE.Frustum,
-        frustumCullingEnabled: boolean = true
-    ): void {
-        if (!this.enabled || this.mode !== VisualizerMode.Traversal) return;
-
-        this.clearTraversalVisualizations();
-        if (!cameraPosition) return;
-
-        // Keep perf predictable: visualize the first sector in the map (most debugging sessions load 1 sector).
-        let sectorToViz: SectorObject | null = null;
-        for (const [, sectorYMap] of sectors) {
-            for (const [, sector] of sectorYMap) {
-                sectorToViz = sector;
-                break;
-            }
-            if (sectorToViz) break;
-        }
-        if (!sectorToViz?.bspNodes || !sectorToViz?.bspLeaves || !sectorToViz?.nodeZoneMasks) return;
-
-        const frustum = cameraFrustum || new Frustum();
-        const initialZoneMask = sectorToViz.getActiveZoneMask(cameraPosition);
-
-        const events: BSPTraversalEvent[] = [];
-        const MAX_EVENTS = 8000;
-
-        sectorToViz.traverseUnifiedBSP(
-            cameraPosition,
-            initialZoneMask,
-            frustum,
-            frustumCullingEnabled,
-            0,
-            (e) => {
-                if (events.length < MAX_EVENTS) events.push(e);
-            }
-        );
-
-        if (events.length === 0) return;
-
-        const processedCenters: Vector3[] = [];
-        const portalAddNodeIndices: number[] = [];
-
-        for (const e of events) {
-            if (e.kind === "process") {
-                const n = sectorToViz.bspNodes[e.nodeIndex];
-                if (n?.exclusiveSphereBound?.center) processedCenters.push(n.exclusiveSphereBound.center.clone());
-            } else if (e.kind === "portal_add") {
-                portalAddNodeIndices.push(e.nodeIndex);
-            }
-        }
-
-        if (processedCenters.length >= 2) {
-            const geometry = new BufferGeometry().setFromPoints(processedCenters);
-            const material = new LineBasicMaterial({
-                color: 0x2244ff,
-                transparent: true,
-                opacity: 0.6,
-                depthTest: false,
-                depthWrite: false
-            });
-            const line = new Line(geometry, material);
-            line.renderOrder = 1000;
-            this.traversalVisualizations.push(line);
-            this.group.add(line);
-        }
-
-        // Gradient markers along the path.
-        const baseBlue = new Color(0x0055ff);
-        const baseRed = new Color(0xff2200);
-        const tmp = new Color();
-        const markerGeo = new BoxGeometry(18, 18, 18);
-
-        // Avoid spawning an extreme number of meshes in huge views; downsample markers if needed.
-        const MAX_MARKERS = 1500;
-        const step = processedCenters.length > MAX_MARKERS ? Math.ceil(processedCenters.length / MAX_MARKERS) : 1;
-
-        const count = processedCenters.length;
-        for (let i = 0; i < count; i += step) {
-            const t = count <= 1 ? 0 : i / (count - 1);
-            tmp.copy(baseBlue).lerp(baseRed, t);
-            const m = new Mesh(markerGeo, new MeshBasicMaterial({
-                color: tmp,
-                transparent: true,
-                opacity: 0.25,
-                depthTest: false,
-                depthWrite: false
-            }));
-            m.position.copy(processedCenters[i]);
-            m.renderOrder = 1000;
-            this.traversalVisualizations.push(m);
-            this.group.add(m);
-        }
-
-        // Portal expansion markers (yellow).
-        const portalGeo = new BoxGeometry(34, 34, 34);
-        for (const nodeIndex of portalAddNodeIndices) {
-            const n = sectorToViz.bspNodes[nodeIndex];
-            if (!n?.exclusiveSphereBound?.center) continue;
-            const m = new Mesh(portalGeo, new MeshBasicMaterial({
-                color: 0xffcc00,
-                transparent: true,
-                opacity: 0.55,
-                depthTest: false,
-                depthWrite: false
-            }));
-            m.position.copy(n.exclusiveSphereBound.center);
-            m.renderOrder = 1001;
-            m.userData.nodeIndex = nodeIndex;
-            this.traversalVisualizations.push(m);
-            this.group.add(m);
-        }
-    }
-
     private clearLeafVisualizations(): void {
         this.leafVisualizations.forEach(viz => {
             this.group.remove(viz);
@@ -822,31 +726,10 @@ class Visualizer {
         this.leafVisualizations = [];
     }
 
-    private clearTraversalVisualizations(): void {
-        this.traversalVisualizations.forEach(viz => {
-            this.group.remove(viz);
-            if (viz instanceof Mesh) {
-                viz.geometry.dispose();
-                const material = Array.isArray(viz.material) ? viz.material[0] : viz.material;
-                if (material instanceof MeshBasicMaterial) {
-                    material.dispose();
-                }
-            } else if (viz instanceof Line) {
-                viz.geometry.dispose();
-                const material = viz.material;
-                if (material instanceof LineBasicMaterial) {
-                    material.dispose();
-                }
-            }
-        });
-        this.traversalVisualizations = [];
-    }
-
     private clearVisualizations(): void {
         this.clearPortalVisualizations();
         this.clearZoneVisualizations();
         this.clearLeafVisualizations();
-        this.clearTraversalVisualizations();
     }
 
     public getMode(): VisualizerMode {
@@ -855,6 +738,10 @@ class Visualizer {
 
     public isEnabled(): boolean {
         return this.enabled;
+    }
+
+    public getGroup(): Group {
+        return this.group;
     }
 }
 

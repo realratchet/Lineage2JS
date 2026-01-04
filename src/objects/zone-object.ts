@@ -6,10 +6,6 @@ const tmpVec4 = new Vector4();
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
-export type BSPTraversalEvent =
-    | { kind: "visit"; nodeIndex: number; pass: "front" | "plane"; zoneMask: bigint }
-    | { kind: "process"; nodeIndex: number; inFrustum: boolean; zoneMask: bigint }
-    | { kind: "portal_add"; nodeIndex: number; fromZone: number; toZone: number; depth: number; zoneMaskBefore: bigint; zoneMaskAfter: bigint };
 
 interface IStaticMeshActorDecodeInfo {
     uuid: string;
@@ -128,7 +124,7 @@ class SectorObject extends Object3D {
     /**
      * Find the leaf index for a given position (used for PVS lookup)
      */
-    private findPositionLeaf(position: THREE.Vector3): number | null {
+    public findPositionLeaf(position: THREE.Vector3): number | null {
         if (this.bspNodes.length === 0) return null;
 
         const findZonePosition = tmpVec4.set(position.x, position.y, position.z, -1);
@@ -271,19 +267,39 @@ class SectorObject extends Object3D {
      * - Collects visible leaves (for actors)
      * - Updates Zone Mask dynamically based on Portals
      * - Limits portal recursion depth to MAX_RECURSION_DEPTH (matches UE2)
+     * 
+     * @param leafOnlyMode If true, only render leaf 1 (no portal expansion, no traversal)
      */
-    public traverseUnifiedBSP(
+    public traverseBSP(
         cameraPosition: THREE.Vector3,
         activeZoneMask: bigint,
         cameraFrustum: THREE.Frustum,
         frustumCullingEnabled: boolean = true,
         recursionDepth: number = 0,
-        onEvent?: (event: BSPTraversalEvent) => void
+        leafOnlyMode: boolean = false
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
 
         if (this.bspNodes.length === 0 || !this.nodeZoneMasks) {
+            return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
+        }
+
+        // Leaf-only mode: only render leaf 1 (no portal expansion, no traversal)
+        if (leafOnlyMode) {
+            if (this.bspLeaves && this.bspLeaves.length > 1) {
+                const leaf1 = this.bspLeaves[1];
+                if (leaf1 && leaf1.zone >= 0) {
+                    visibleLeaves.add(1);
+                    // Find nodes that reference leaf 1 for geometry visibility
+                    for (let nodeIndex = 0; nodeIndex < this.bspNodes.length; nodeIndex++) {
+                        const node = this.bspNodes[nodeIndex];
+                        if ((node.leaves[0] === 1 || node.leaves[1] === 1) && this.nodeToSection && this.nodeToSection[nodeIndex] !== undefined && this.nodeToSection[nodeIndex] >= 0) {
+                            visibleNodes.add(nodeIndex);
+                        }
+                    }
+                }
+            }
             return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
         }
 
@@ -315,12 +331,6 @@ class SectorObject extends Object3D {
             const node = this.bspNodes[nodeIndex];
 
             if (pass === "front") {
-                onEvent?.({
-                    kind: "visit",
-                    nodeIndex,
-                    pass,
-                    zoneMask: currentZoneMask
-                });
                 // 1. Zone Mask Culling (skip subtree if not visible)
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
@@ -412,12 +422,6 @@ class SectorObject extends Object3D {
                 }
 
             } else { // pass === "plane"
-                onEvent?.({
-                    kind: "visit",
-                    nodeIndex,
-                    pass,
-                    zoneMask: currentZoneMask
-                });
                 // Process Node and its Coplanar chain
                 let current: number = nodeIndex;
 
@@ -473,7 +477,10 @@ class SectorObject extends Object3D {
                             isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
-                        if (portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
+                        // Skip portal expansion in leaf-only mode
+                        if (leafOnlyMode) {
+                            // Don't expand portals when camera is outside sector
+                        } else if (portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
                                 // Check if opposite zone is already in the mask (avoid redundant work)
                                 const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
                                 
@@ -503,20 +510,10 @@ class SectorObject extends Object3D {
                                         // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
                                         // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
                                         if (newDepth < MAX_RECURSION_DEPTH) {
-                                            const beforeMask = currentZoneMask;
                                             currentZoneMask |= (1n << BigInt(oppositeZone));
                                             zoneDepthMap.set(oppositeZone, newDepth);
                                             // Track that this zone was added through a portal
                                             zonesAddedThroughPortals.add(oppositeZone);
-                                            onEvent?.({
-                                                kind: "portal_add",
-                                                nodeIndex: current,
-                                                fromZone: currentZone,
-                                                toZone: oppositeZone,
-                                                depth: newDepth,
-                                                zoneMaskBefore: beforeMask,
-                                                zoneMaskAfter: currentZoneMask
-                                            });
                                         }
                                     }
                                 }
@@ -532,13 +529,6 @@ class SectorObject extends Object3D {
                     if (isInFrustum && this.nodeToSection && this.nodeToSection[current] !== undefined && this.nodeToSection[current] >= 0) {
                         visibleNodes.add(current);
                     }
-
-                    onEvent?.({
-                        kind: "process",
-                        nodeIndex: current,
-                        inFrustum: isInFrustum,
-                        zoneMask: currentZoneMask
-                    });
 
                     // Next coplanar node
                     current = currentNode.iPlane;
@@ -583,8 +573,18 @@ class SectorObject extends Object3D {
     public updateVisibleBSPSections(cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
         if (!this.bspGroup || !this.bspSections || !this.nodeToSection) return;
 
+        // Check if camera is within this sector (by finding valid leaf)
+        const cameraLeaf = this.findPositionLeaf(cameraPosition);
+        const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+        
+        // Hide helpers when camera is outside sector
+        this.helpers.visible = isCameraInSector;
+        
+        // If camera is outside sector, only render leaf 1 (no portal expansion)
+        const leafOnlyMode = !isCameraInSector;
+
         // Find active zone mask and camera zone (from leaf for reliability)
-        const activeZoneMask = this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition); // Zone 1 bitmask if leaf-only
 
         // Get camera zone from leaf (more reliable than findPositionZone)
         let currentZone: number | null = null;
@@ -616,7 +616,7 @@ class SectorObject extends Object3D {
 
         // Traverse BSP to find visible nodes (with optional frustum culling)
         // Traverse BSP to find visible nodes (with optional frustum culling)
-        const { visibleNodes, finalZoneMask } = this.traverseUnifiedBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled);
+        const { visibleNodes, finalZoneMask } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
 
 
         // Find which sections contain visible nodes (UE2-style: sections can span multiple zones)
@@ -669,11 +669,20 @@ class SectorObject extends Object3D {
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
         if (!library || !this.staticMeshGroup || this.staticMeshMap.size === 0) return;
 
-        const activeZoneMask = this.getActiveZoneMask(cameraPosition);
+        // Check if camera is within this sector (by finding valid leaf)
+        const cameraLeaf = this.findPositionLeaf(cameraPosition);
+        const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+        
+        // Hide helpers when camera is outside sector
+        this.helpers.visible = isCameraInSector;
+        
+        // If camera is outside sector, only render leaf 1 (no portal expansion)
+        const leafOnlyMode = !isCameraInSector;
+        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition); // Zone 1 bitmask if leaf-only
 
         // CONSERVATIVE UE2: Use specific actor traversal with portal frustum checks
         // CONSERVATIVE UE2: Use specific actor traversal with portal frustum checks
-        const { finalZoneMask, visibleLeaves } = this.traverseUnifiedBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled);
+        const { finalZoneMask, visibleLeaves } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
 
         const visibleActorUuids = new Set<string>();
         const actorBox = new Box3();

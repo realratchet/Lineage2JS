@@ -313,7 +313,7 @@ abstract class UStaticMeshActor extends UAActor {
             name: this.objectName,
             position: _position,
             scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
-            quaternion: this.rotation?.getQuaternion() || [0, 0, 0, 1],
+            quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
             instance: {
                 mesh: meshInfo,
                 type: "StaticMeshInstance",

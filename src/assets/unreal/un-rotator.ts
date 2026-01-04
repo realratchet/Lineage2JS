@@ -105,7 +105,7 @@ abstract class FRotator extends UObject {
         // M[3][3] = 1;
     }
 
-    public getQuaternion(): GD.QuaternionArr {
+    public getQuaternionElements(): GD.QuaternionArr {
         const SR = GMath().sin(this.roll),
             SP = GMath().sin(this.pitch),
             SY = GMath().sin(this.yaw),
@@ -133,8 +133,6 @@ abstract class FRotator extends UObject {
         const m10 = LZ, m11 = YZ, m12 = PZ;
         const m20 = LY, m21 = YY, m22 = PY;
 
-        // Convert rotation matrix to quaternion
-        // Using the trace method for numerical stability
         const trace = m00 + m11 + m22;
         let x, y, z, w;
 
