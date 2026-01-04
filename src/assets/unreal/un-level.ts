@@ -1,7 +1,6 @@
-import ULevelInfo from "@client/assets/unreal/un-level-info";
 import FURL from "./un-url";
 import { UObject, BufferValue } from "@l2js/core";
-import { FIndexArray, FObjectArray } from "@l2js/core/unreal/un-array";
+import { FObjectArray } from "@l2js/core/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
@@ -15,7 +14,6 @@ abstract class ULevelBase extends UObject {
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
 
         super.doLoad(pkg, exp);
 

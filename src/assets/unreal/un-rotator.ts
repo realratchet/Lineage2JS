@@ -1,8 +1,9 @@
 import GMath from "@client/assets/unreal/un-gmath";
+import FQuaternion from "@client/assets/unreal/un-quaternion";
 import { UObject } from "@l2js/core";
-import { DEG2RAD, RAD2DEG } from "three/src/math/MathUtils";
-import { Matrix4, Quaternion } from "three";
 
+
+const RAD2DEG = 180 / Math.PI;
 const _PI = Math.PI;
 const _TWO_PI = 2 * _PI;
 const _TWO_TO_FIFTEEN = 2 ** 15;
@@ -104,7 +105,7 @@ abstract class FRotator extends UObject {
         // M[3][3] = 1;
     }
 
-    public getQuaternion() {
+    public getQuaternion(): GD.QuaternionArr {
         const SR = GMath().sin(this.roll),
             SP = GMath().sin(this.pitch),
             SY = GMath().sin(this.yaw),
@@ -124,16 +125,46 @@ abstract class FRotator extends UObject {
         const YY = CY * SR - CR * SP * SY;
         const YZ = CR * CP;
 
-        const m = new Matrix4();
+        // Matrix elements arranged as:
+        // m00 = LX, m01 = YX, m02 = PX
+        // m10 = LZ, m11 = YZ, m12 = PZ
+        // m20 = LY, m21 = YY, m22 = PY
+        const m00 = LX, m01 = YX, m02 = PX;
+        const m10 = LZ, m11 = YZ, m12 = PZ;
+        const m20 = LY, m21 = YY, m22 = PY;
 
-        m.set(
-            LX, YX, PX, 0,
-            LZ, YZ, PZ, 0,
-            LY, YY, PY, 0,
-            0, 0, 0, 1
-        );
+        // Convert rotation matrix to quaternion
+        // Using the trace method for numerical stability
+        const trace = m00 + m11 + m22;
+        let x, y, z, w;
 
-        return new Quaternion().setFromRotationMatrix(m);
+        if (trace > 0) {
+            const s = Math.sqrt(trace + 1.0) * 2; // s = 4 * qw
+            w = 0.25 * s;
+            x = (m21 - m12) / s;
+            y = (m02 - m20) / s;
+            z = (m10 - m01) / s;
+        } else if ((m00 > m11) && (m00 > m22)) {
+            const s = Math.sqrt(1.0 + m00 - m11 - m22) * 2; // s = 4 * qx
+            w = (m21 - m12) / s;
+            x = 0.25 * s;
+            y = (m01 + m10) / s;
+            z = (m02 + m20) / s;
+        } else if (m11 > m22) {
+            const s = Math.sqrt(1.0 + m11 - m00 - m22) * 2; // s = 4 * qy
+            w = (m02 - m20) / s;
+            x = (m01 + m10) / s;
+            y = 0.25 * s;
+            z = (m12 + m21) / s;
+        } else {
+            const s = Math.sqrt(1.0 + m22 - m00 - m11) * 2; // s = 4 * qz
+            w = (m10 - m01) / s;
+            x = (m02 + m20) / s;
+            y = (m12 + m21) / s;
+            z = 0.25 * s;
+        }
+
+        return [x, y, z, w];
     }
 }
 

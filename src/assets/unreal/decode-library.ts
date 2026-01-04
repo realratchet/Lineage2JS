@@ -6,9 +6,6 @@ class DecodeLibrary {
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
     public helpersZoneBounds = false;
-    // Debug switches
-    public debugDumpBsp = false;
-    public debugDumpBspPrefix: string | null = null;
     public readonly bspNodes: GD.IBSPNodeDecodeInfo_T[] = [];
     public readonly bspColliders: GD.IBoxDecodeInfo[] = [];
     public readonly bspLeaves: GD.IBSPLeafDecodeInfo_T[] = [];
@@ -19,6 +16,7 @@ class DecodeLibrary {
     public readonly bspSectionIndexMap: Map<string, number> = new Map(); // key: "materialUuid/lightmapUuid" -> sectionIndex
     public readonly nodeToSection: number[] = []; // nodeIndex -> sectionIndex
     public readonly nodeZoneMasks: bigint[] = []; // nodeIndex -> zoneMask for subtree culling
+    public readonly bspRenderBounds: GD.IBoxDecodeInfo[] = []; // iRenderBound -> bounding box (swizzled to Three.js coordinates)
     // public readonly zones: Record<string, IBaseZoneDecodeInfo> = {};              // a dictionary containing all zone decode info
     public readonly geometries: Record<string, GD.IGeometryDecodeInfo> = {};         // a dictionary containing all geometry decode info
     public readonly geometryInstances: Record<string, number> = {};               // a dictionary containing all geometray instance decode info
@@ -39,8 +37,6 @@ class DecodeLibrary {
         loadTerrain = true,
         helpersZoneBounds = false,
         loadEmitters = true,
-        debugDumpBsp = false,
-        debugDumpBspPrefix = null
     }: GD.LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
@@ -55,8 +51,6 @@ class DecodeLibrary {
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
-        decodeLibrary.debugDumpBsp = !!debugDumpBsp;
-        decodeLibrary.debugDumpBspPrefix = debugDumpBspPrefix;
 
         // const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 

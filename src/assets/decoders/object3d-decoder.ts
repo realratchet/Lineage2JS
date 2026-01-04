@@ -7,9 +7,9 @@ import CollidingMesh from "@client/objects/colliding-mesh";
 import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 
-const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
+const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
-function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): IndexTypedArrayAttribute {
+function getAttributeForTypedArray(IndexArrayConstructor: GD.IndexTypedArray): GD.IndexTypedArrayAttribute {
     switch (IndexArrayConstructor) {
         case Uint8Array: return Uint8BufferAttribute;
         case Uint16Array: return Uint16BufferAttribute;
@@ -18,7 +18,7 @@ function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): Inde
     }
 }
 
-function fetchGeometry(info: IGeometryDecodeInfo) {
+function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     if (cacheGeometries.has(info)) return cacheGeometries.get(info);
 
     const arrUvs = info.attributes.uvs instanceof Array ? info.attributes.uvs : [info.attributes.uvs];
@@ -64,7 +64,7 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     return geometry;
 }
 
-function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
+function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
 
     if (info.name) object.name = info.name;
     if (info.position) object.position.fromArray(info.position);
@@ -79,7 +79,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
 }
 
 
-function decodeEmitterObject(library: DecodeLibrary, info: IBaseObjectDecodeInfo) {
+function decodeEmitterObject(library: GD.DecodeLibrary, info: IBaseObjectDecodeInfo) {
     const object = decodeSimpleObject(library, Object3D, info);
 
     object.add(new AxesHelper(100));
@@ -88,7 +88,7 @@ function decodeEmitterObject(library: DecodeLibrary, info: IBaseObjectDecodeInfo
 }
 
 
-function decodeSimpleObject(library: DecodeLibrary, Constructor: (typeof Object3D | typeof Group), info: IBaseObjectDecodeInfo) {
+function decodeSimpleObject(library: GD.DecodeLibrary, Constructor: (typeof Object3D | typeof Group), info: IBaseObjectDecodeInfo) {
     const object = new Constructor();
 
     applySimpleProperties(library, object, info);
@@ -96,7 +96,7 @@ function decodeSimpleObject(library: DecodeLibrary, Constructor: (typeof Object3
     return object;
 }
 
-function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THREE.Line {
+function decodeEdges(library: GD.DecodeLibrary, info: IEdgesObjectDecodeInfo): THREE.Line {
     const ignoreDepth = "ignoreDepth" in info ? info.ignoreDepth : false;
     const material = new LineBasicMaterial({
         color: info.color ? new Color().fromArray(info.color) : 0xffff00,
@@ -112,7 +112,7 @@ function decodeEdges(library: DecodeLibrary, info: IEdgesObjectDecodeInfo): THRE
     return mesh;
 }
 
-function decodeStaticMeshData(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
+function decodeStaticMeshData(library: GD.DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
@@ -130,7 +130,7 @@ function decodeStaticMeshData(library: DecodeLibrary, info: IStaticMeshObjectDec
     return { geometry, materials };
 }
 
-function decodeStaticMeshWrapped(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Object3D {
+function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: IStaticMeshObjectDecodeInfo): THREE.Object3D {
     const obj = new Object3D();
     const { geometry, materials } = decodeStaticMeshData(library, info);
     const mesh = new Mesh(geometry, materials);
@@ -143,7 +143,7 @@ function decodeStaticMeshWrapped(library: DecodeLibrary, info: IStaticMeshObject
     return obj;
 }
 
-function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
+function decodeLight(library: GD.DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh {
     const geo = new SphereGeometry(info.radius, 32, 32);
     const mat = new MeshBasicMaterial({ color: new Color().fromArray(info.color), wireframe: true });
     const msh = new Mesh(geo, mat);
@@ -155,7 +155,7 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo): THREE.Mesh
     return msh;
 }
 
-function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDecodeInfo): CollidingMesh {
+function decodeStaticMeshActor(library: GD.DecodeLibrary, info: IStaticMeshActorDecodeInfo): CollidingMesh {
     const instanceInfo = info.instance;
     const { geometry, materials, collider } = decodeStaticMeshInstance(library, instanceInfo);
 
@@ -196,7 +196,7 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     return object;
 }
 
-function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInstanceDecodeInfo) {
+function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMeshInstanceDecodeInfo) {
 
     const geometryUuid = info.mesh.geometry;
     const infoGeo = {
@@ -229,7 +229,7 @@ function decodeStaticMeshInstance(library: DecodeLibrary, info: IStaticMeshInsta
     return { geometry, materials, collider };
 }
 
-function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
+function decodeZoneObject(library: GD.DecodeLibrary, info: IBaseZoneDecodeInfo) {
     const object = new ZoneObject();
 
     if (info.name) object.name = info.name;
@@ -242,7 +242,7 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     return object;
 }
 
-function decodeBSPSection(library: DecodeLibrary, sectionInfo: GD.IBSPSectionDecodeInfo_T, sectionIndex: number): THREE.Mesh {
+function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSectionDecodeInfo_T, sectionIndex: number): THREE.Mesh {
     const geometryInfo = library.geometries[sectionInfo.geometry];
     if (!geometryInfo) {
         throw new Error(`Geometry not found for section ${sectionInfo.uuid}`);
@@ -264,7 +264,7 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: GD.IBSPSectionDec
     return mesh;
 }
 
-function decodeSector(library: DecodeLibrary) {
+function decodeSector(library: GD.DecodeLibrary) {
     const sector = new SectorObject();
 
     sector.name = library.name;
@@ -420,7 +420,7 @@ function decodeSector(library: DecodeLibrary) {
     return sector;
 }
 
-function decodePackage(library: DecodeLibrary) {
+function decodePackage(library: GD.DecodeLibrary) {
     const sector = decodeSector(library);
 
     if (library.helpersZoneBounds) {
@@ -446,7 +446,7 @@ function decodePackage(library: DecodeLibrary) {
     return sector;
 }
 
-function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDecodeInfo) {
+function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObjectDecodeInfo) {
     const infoGeo = library.geometries[info.geometry];
     const { geometry, materials } = decodeStaticMeshData(library, info);
 
@@ -474,7 +474,7 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     return terrain;
 }
 
-function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
+function decodeBone(library: GD.DecodeLibrary, info: GD.IBoneDecodeInfo): Bone {
     const bone = new Bone();
 
     bone.name = info.name;
@@ -509,7 +509,7 @@ function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
     return bone;
 }
 
-function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
+function decodeBones(library: GD.DecodeLibrary, infos: GD.IBoneDecodeInfo[]): Bone[] {
     const boneCount = infos.length;
     const bones = new Array(boneCount) as Bone[];
 
@@ -525,7 +525,7 @@ function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
     return bones;
 }
 
-function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[]) {
+function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[]) {
     const tracks = info.map(info => {
         let KeyframeTrackConstructor: typeof KeyframeTrack;
 
@@ -542,7 +542,7 @@ function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDe
     return clip;
 }
 
-function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo) {
+function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjectDecodeInfo) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
     const infoMats = library.materials[info.materials];
 
@@ -568,7 +568,7 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
     return mesh;
 }
 
-function decodeEmitterConfig(info: IEmitterDecodeInfo) {
+function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
     return {
         acceleration: info.acceleration,
         lifetime: info.lifetime,
@@ -593,16 +593,16 @@ function decodeEmitterConfig(info: IEmitterDecodeInfo) {
     };
 }
 
-function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo) {
-    const infoGeo = library.geometries[info.mesh.geometry] as IGeometryDecodeInfo;
+function decodeMeshEmitter(library: GD.DecodeLibrary, info: GD.IMeshEmitterDecodeInfo) {
+    const infoGeo = library.geometries[info.mesh.geometry] as GD.IGeometryDecodeInfo;
 
-    const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
+    const geometry = fetchGeometry(infoGeo as GD.IGeometryDecodeInfo);
     const materials = decodeMaterial(library, {
         materialType: "particle",
         material: info.mesh.materials,
         opacity: info.opacity,
         blendingMode: info.blendingMode
-    } as IParticleMaterialDecodeInfo) || new MeshBasicMaterial({ color: 0xff00ff });
+    } as GD.IParticleMaterialDecodeInfo) || new MeshBasicMaterial({ color: 0xff00ff });
 
     const emitter = new MeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials }));
 
@@ -612,13 +612,13 @@ function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo)
 }
 
 
-function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
+function decodeSpriteEmitter(library: GD.DecodeLibrary, info: GD.ISpriteEmitterDecodeInfo) {
     const material = decodeMaterial(library, {
         materialType: "particle",
         material: info.texture,
         opacity: info.opacity,
         blendingMode: info.blendingMode
-    } as IParticleMaterialDecodeInfo) as any as ParticleMaterialInitSettings_T;
+    } as GD.IParticleMaterialDecodeInfo) as any as GD.ParticleMaterialInitSettings_T;
 
     if (!isFinite(info.maxParticles))
         debugger;
@@ -632,21 +632,21 @@ function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeI
     return emitter;
 }
 
-function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
+function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":
-        case "TerrainInfo": return decodeSimpleObject(library, Object3D, info as IBaseObjectDecodeInfo);
-        case "Emitter": return decodeEmitterObject(library, info as IBaseObjectDecodeInfo);
-        case "StaticMeshActor": return decodeStaticMeshActor(library, info as IStaticMeshActorDecodeInfo);
-        case "Light": return decodeLight(library, info as ILightDecodeInfo);
-        case "TerrainSegment": return decodeTerrainSegment(library, info as IStaticMeshObjectDecodeInfo);
+        case "TerrainInfo": return decodeSimpleObject(library, Object3D, info as GD.IBaseObjectDecodeInfo);
+        case "Emitter": return decodeEmitterObject(library, info as GD.IBaseObjectDecodeInfo);
+        case "StaticMeshActor": return decodeStaticMeshActor(library, info as GD.IStaticMeshActorDecodeInfo);
+        case "Light": return decodeLight(library, info as GD.ILightDecodeInfo);
+        case "TerrainSegment": return decodeTerrainSegment(library, info as GD.IStaticMeshObjectDecodeInfo);
         case "Model":
-        case "StaticMesh": return decodeStaticMeshWrapped(library, info as IStaticMeshObjectDecodeInfo);
-        case "Edges": return decodeEdges(library, info as IEdgesObjectDecodeInfo);
+        case "StaticMesh": return decodeStaticMeshWrapped(library, info as GD.IStaticMeshObjectDecodeInfo);
+        case "Edges": return decodeEdges(library, info as GD.IEdgesObjectDecodeInfo);
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
-        case "SpriteEmitter": return decodeSpriteEmitter(library, info as ISpriteEmitterDecodeInfo);
-        case "MeshEmitter": return decodeMeshEmitter(library, info as IMeshEmitterDecodeInfo);
+        case "SpriteEmitter": return decodeSpriteEmitter(library, info as GD.ISpriteEmitterDecodeInfo);
+        case "MeshEmitter": return decodeMeshEmitter(library, info as GD.IMeshEmitterDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

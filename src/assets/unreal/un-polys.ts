@@ -147,7 +147,7 @@ abstract class FPoly extends UObject {
     // // }
 }
 
-class UPolys extends UObject {
+abstract class UPolys extends UObject {
     // protected polyList: FPoly[];
 
     // protected doLoad(pkg: UPackage, exp: UExport): this {

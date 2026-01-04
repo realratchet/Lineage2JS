@@ -1,6 +1,7 @@
-export { };
+import * as THREE from "three";
 
 type ExtendsUObject<T> = T & C.UObject;
+
 
 declare global {
     namespace L2JS {
@@ -103,6 +104,9 @@ declare global {
             }
 
             namespace Decoding {
+                export type IndexTypedArray = Uint8ArrayConstructor | Uint16ArrayConstructor | Uint32ArrayConstructor;
+                export type IndexTypedArrayAttribute = typeof THREE.Uint8BufferAttribute | typeof THREE.Uint16BufferAttribute | typeof THREE.Uint32BufferAttribute;
+
                 export type Vector2Arr = [number, number];
                 export type Vector4Arr = [number, number, number, number];
                 export type QuaternionArr = Vector4Arr;
@@ -122,16 +126,6 @@ declare global {
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
                     helpersZoneBounds?: boolean,
-                    /**
-                     * Debug: dump BSP tree to downloadable JSON files.
-                     * Produces 2 files: raw UE2 values and post-swizzle ("three") values.
-                     */
-                    debugDumpBsp?: boolean,
-                    /**
-                     * Optional filename prefix for BSP dump artifacts.
-                     * Defaults to the map name.
-                     */
-                    debugDumpBspPrefix?: string
                 };
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
@@ -167,6 +161,40 @@ declare global {
                     type: DecodableObject_T | "StaticMeshInstance"
                 }
 
+                export interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
+                    type: DecodableObject_T,
+                    name?: string,
+                    position?: Vector3Arr,
+                    rotation?: EulerArr,
+                    quaternion?: QuaternionArr,
+                    scale?: Vector3Arr,
+                    siblings?: IBaseObjectOrInstanceDecodeInfo[],
+                    children?: IBaseObjectOrInstanceDecodeInfo[]
+                }
+
+                export interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
+                    actorName: string;
+                    type: "StaticMeshActor",
+                    instance: IStaticMeshInstanceDecodeInfo,
+                    bounds: IBoxDecodeInfo
+                }
+
+                export interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "StaticMesh",
+                    geometry: string,
+                    materials?: string
+                }
+
+                export interface IStaticMeshInstanceDecodeInfo {
+                    uuid?: string,
+                    name?: string,
+                    type: "StaticMeshInstance",
+                    mesh: IStaticMeshObjectDecodeInfo,
+                    attributes?: {
+                        colors?: Float32Array
+                    }
+                }
+
                 export interface IBaseZoneDecodeInfo {
                     type: "Sector" | "Zone" | "Sky",
                     uuid: string,
@@ -187,15 +215,16 @@ declare global {
                     plane: Vector4Arr,
                     leaves: [number, number],
                     zones: [number, number],
-                    collision?: IBSPNodeCollisionInfo_T,
-                    zoneMask?: bigint,  // NEW: pre-computed zone mask for subtree culling
-                    sectionIndex?: number,  // NEW: which section this node belongs to
-                    surfFlags?: number,  // NEW: surface flags (for portal detection)
-                    iPlane?: number,  // NEW: index to next coplanar node (UE2 line 1472-1473)
-                    spheres?: {  // NEW: bounding spheres for frustum culling
+                    surfFlags: number,
+                    iPlane: number,
+                    iRenderBound: number,
+                    spheres: {
                         exclusive: Vector4Arr,
                         inclusive: Vector4Arr
-                    }
+                    },
+                    sectionIndex: number,
+                    collision: IBSPNodeCollisionInfo_T,
+                    zoneMask: bigint
                 }
 
                 export interface IBSPLeafDecodeInfo_T {

@@ -1,4 +1,4 @@
-import { Box3, Color, Fog, Object3D, Sphere, Vector4, Mesh } from "three";
+import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh } from "three";
 
 const tmpColor = new Color();
 const tmpVec4 = new Vector4();
@@ -329,7 +329,45 @@ class SectorObject extends Object3D {
                     }
                 }
 
-                // 2. Determine side
+                // 2. Bounding Box Portal Visibility Check (UE2: UnRenderVisibility.cpp lines 1800-1819)
+                // If node has a render bound, check if it's visible through portals
+                // UE2: Model->Bounds(Node.iRenderBound) - bounds are precomputed and stored in Model
+                // We access precomputed bounds from library.bspRenderBounds (populated from this.bounds in un-model.ts)
+                const library = (this as any).decodeLibrary as GD.DecodeLibrary;
+                if (hasViewZone && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
+                    const renderBound = library.bspRenderBounds[node.iRenderBound];
+                    if (renderBound && renderBound.isValid) {
+                        // UE2: Check if bounding box is visible through portals for any active zone
+                        // UE2 logic: (Node.ZoneMask & ZoneBit) && RenderState.Zones[Zone->Element].Visible(BoundingBox)
+                        let boxVisible = false;
+                        for (let zoneIndex = 0; zoneIndex < 64; zoneIndex++) {
+                            const zoneBit = 1n << BigInt(zoneIndex);
+                            if (currentZoneMask & zoneBit) {
+                                // Check if this zone is in the node's zone mask (UE2: Node.ZoneMask & ZoneBit)
+                                if (nodeZoneMask && (nodeZoneMask & zoneBit)) {
+                                    // UE2: RenderState.Zones[Zone->Element].Visible(BoundingBox)
+                                    // This checks if bounding box intersects portal volumes for this zone
+                                    // For now, use frustum check as proxy (TODO: implement proper portal volume checks)
+                                    // Create Box3 from precomputed bounds (bounds are already swizzled to Three.js coords)
+                                    const box = new Box3(
+                                        new Vector3(...renderBound.min),
+                                        new Vector3(...renderBound.max)
+                                    );
+                                    if (!frustumCullingEnabled || cameraFrustum.intersectsBox(box)) {
+                                        boxVisible = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!boxVisible) {
+                            continue; // Cull this subtree - bounding box not visible through portals (matches UE2)
+                        }
+                    }
+                }
+
+                // 3. Determine side
                 const planeDot = cameraPos.dot(node.plane);
                 const isFront = planeDot >= 0;
 
@@ -721,6 +759,7 @@ class BSPNodeData {
     public readonly leaves: [number, number] = [0, 0];
     public readonly zones: [number, number] = [0, 0];
     public surfFlags?: number;
+    public iRenderBound?: number; // Index to render bounding box (INDEX_NONE = -1 means no bound)
     public collision?: ICollisionInfo;
     public exclusiveSphereBound = new Sphere();
     public inclusiveSphereBound = new Sphere();
@@ -742,6 +781,7 @@ class BSPNodeData {
         node.zones[1] = info.zones[1];
 
         node.surfFlags = info.surfFlags;
+        node.iRenderBound = info.iRenderBound !== undefined ? info.iRenderBound : undefined;
 
         if (info.spheres) {
             node.exclusiveSphereBound.center.set(info.spheres.exclusive[0], info.spheres.exclusive[1], info.spheres.exclusive[2]);

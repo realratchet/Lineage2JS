@@ -3,7 +3,7 @@ import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import { indexToTime, timeToIndicesLerp } from "@client/assets/unreal/un-l2env";
+import { indexToTime } from "@client/assets/unreal/un-l2env";
 
 class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
@@ -18,43 +18,6 @@ class FStaticMeshLightInfo implements C.IConstructable {
 
         this.lightIndex = pkg.read(compat32).value;
         this.vertexFlags.load(pkg);
-
-        // if (this.vertexFlags.getElemCount() === 23) {
-        //     const arr = [88, 17, 156, 11, 45, 38, 201, 61, 16, 246, 16, 63, 6, 0, 0, 0, 160, 16, 224, 13, 0, 52, 249];
-        //     const same = new Array(arr.length);
-        //     let isAllSame = true;
-
-        //     for (let i = 0, len = arr.length; i < len; i++) {
-        //         const isSame = arr[i] === this.vertexFlags.getElem(i);
-        //         same[i] = isSame;
-        //         isAllSame = isAllSame && isSame;
-        //     }
-
-        //     if (isAllSame)
-        //         debugger;
-
-        //     const mostlySame = (same.reduce((acc, v) => acc = acc + v, 0) / (this.vertexFlags.getElemCount() - 1)) > 0.9
-
-        //     if (mostlySame)
-        //         debugger
-
-        //     debugger;
-        // }
-
-        // if (this.vertexFlags.getElemCount() === 9) {
-        //     const arr = [127, 236, 127, 34, 102, 167, 7, 12, 0];
-        //     const same = new Array(arr.len);
-        //     let isAllSame = true;
-
-        //     for (let i = 0, len = arr.length; i < len; i++) {
-        //         const isSame = arr[i] === this.vertexFlags.getElem(i);
-        //         same[i] = isSame;
-        //         isAllSame = isAllSame && isSame;
-        //     }
-
-        //     if (isAllSame)
-        //         debugger;
-        // }
 
         this.applied = pkg.read(int32).value !== 0;
 

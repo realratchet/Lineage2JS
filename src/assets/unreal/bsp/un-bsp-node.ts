@@ -100,8 +100,7 @@ class FBSPNode implements C.IConstructable {
         return this;
     }
 
-    public getBSPDecodeInfo(surfFlags: number): GD.IBSPNodeDecodeInfo_T {
-        // we convert from UE2 to Three.js coordinate system for zone-object bsp traversal
+    public getBSPDecodeInfo(surfFlags: number): Omit<GD.IBSPNodeDecodeInfo_T, "sectionIndex" | "collision" | "zoneMask"> {
         return {
             children: [this.iFront, this.iBack],
             // plane: [this.plane.x, this.plane.z, -this.plane.y, -this.plane.w] as GD.Vector4Arr,  // rotation just not sure if correct portal normal (rotate around Y axis)
@@ -111,6 +110,7 @@ class FBSPNode implements C.IConstructable {
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
             iPlane: this.iPlane,
+            iRenderBound: this.iRenderBound !== -1 ? this.iRenderBound : undefined, // INDEX_NONE = -1
             spheres: {
                 exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.z, this.exclusiveSphereBound.y, this.exclusiveSphereBound.w],
                 inclusive: [this.inclusiveSphereBound.x, this.inclusiveSphereBound.z, this.inclusiveSphereBound.y, this.inclusiveSphereBound.w]

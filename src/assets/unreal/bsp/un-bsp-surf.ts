@@ -1,5 +1,5 @@
 import { FPlane } from "../un-plane";
-import { BufferValue, UObject } from "@l2js/core";
+import { BufferValue } from "@l2js/core";
 import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 import { PolyFlags_T } from "../un-polys";
 
