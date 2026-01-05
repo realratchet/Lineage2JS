@@ -72,25 +72,28 @@ abstract class FMatrix extends UObject {
     protected mul(other: FMatrix): FMatrix {
         const result = FMatrix.make();
 
-        result[0][0] = this[0][0] * other[0][0] + this[0][1] * other[1][0] + this[0][2] * other[2][0] + this[0][3] * other[3][0];
-        result[0][1] = this[0][0] * other[0][1] + this[0][1] * other[1][1] + this[0][2] * other[2][1] + this[0][3] * other[3][1];
-        result[0][2] = this[0][0] * other[0][2] + this[0][1] * other[1][2] + this[0][2] * other[2][2] + this[0][3] * other[3][2];
-        result[0][3] = this[0][0] * other[0][3] + this[0][1] * other[1][3] + this[0][2] * other[2][3] + this[0][3] * other[3][3];
+        const tX = this.planeX, tY = this.planeY, tZ = this.planeZ, tW = this.planeW;
+        const oX = other.planeX, oY = other.planeY, oZ = other.planeZ, oW = other.planeW;
 
-        result[1][0] = this[1][0] * other[0][0] + this[1][1] * other[1][0] + this[1][2] * other[2][0] + this[1][3] * other[3][0];
-        result[1][1] = this[1][0] * other[0][1] + this[1][1] * other[1][1] + this[1][2] * other[2][1] + this[1][3] * other[3][1];
-        result[1][2] = this[1][0] * other[0][2] + this[1][1] * other[1][2] + this[1][2] * other[2][2] + this[1][3] * other[3][2];
-        result[1][3] = this[1][0] * other[0][3] + this[1][1] * other[1][3] + this[1][2] * other[2][3] + this[1][3] * other[3][3];
+        result.planeX.x = tX.x * oX.x + tX.y * oY.x + tX.z * oZ.x + tX.w * oW.x;
+        result.planeX.y = tX.x * oX.y + tX.y * oY.y + tX.z * oZ.y + tX.w * oW.y;
+        result.planeX.z = tX.x * oX.z + tX.y * oY.z + tX.z * oZ.z + tX.w * oW.z;
+        result.planeX.w = tX.x * oX.w + tX.y * oY.w + tX.z * oZ.w + tX.w * oW.w;
 
-        result[2][0] = this[2][0] * other[0][0] + this[2][1] * other[1][0] + this[2][2] * other[2][0] + this[2][3] * other[3][0];
-        result[2][1] = this[2][0] * other[0][1] + this[2][1] * other[1][1] + this[2][2] * other[2][1] + this[2][3] * other[3][1];
-        result[2][2] = this[2][0] * other[0][2] + this[2][1] * other[1][2] + this[2][2] * other[2][2] + this[2][3] * other[3][2];
-        result[2][3] = this[2][0] * other[0][3] + this[2][1] * other[1][3] + this[2][2] * other[2][3] + this[2][3] * other[3][3];
+        result.planeY.x = tY.x * oX.x + tY.y * oY.x + tY.z * oZ.x + tY.w * oW.x;
+        result.planeY.y = tY.x * oX.y + tY.y * oY.y + tY.z * oZ.y + tY.w * oW.y;
+        result.planeY.z = tY.x * oX.z + tY.y * oY.z + tY.z * oZ.z + tY.w * oW.z;
+        result.planeY.w = tY.x * oX.w + tY.y * oY.w + tY.z * oZ.w + tY.w * oW.w;
 
-        result[3][0] = this[3][0] * other[0][0] + this[3][1] * other[1][0] + this[3][2] * other[2][0] + this[3][3] * other[3][0];
-        result[3][1] = this[3][0] * other[0][1] + this[3][1] * other[1][1] + this[3][2] * other[2][1] + this[3][3] * other[3][1];
-        result[3][2] = this[3][0] * other[0][2] + this[3][1] * other[1][2] + this[3][2] * other[2][2] + this[3][3] * other[3][2];
-        result[3][3] = this[3][0] * other[0][3] + this[3][1] * other[1][3] + this[3][2] * other[2][3] + this[3][3] * other[3][3];
+        result.planeZ.x = tZ.x * oX.x + tZ.y * oY.x + tZ.z * oZ.x + tZ.w * oW.x;
+        result.planeZ.y = tZ.x * oX.y + tZ.y * oY.y + tZ.z * oZ.y + tZ.w * oW.y;
+        result.planeZ.z = tZ.x * oX.z + tZ.y * oY.z + tZ.z * oZ.z + tZ.w * oW.z;
+        result.planeZ.w = tZ.x * oX.w + tZ.y * oY.w + tZ.z * oZ.w + tZ.w * oW.w;
+
+        result.planeW.x = tW.x * oX.x + tW.y * oY.x + tW.z * oZ.x + tW.w * oW.x;
+        result.planeW.y = tW.x * oX.y + tW.y * oY.y + tW.z * oZ.y + tW.w * oW.y;
+        result.planeW.z = tW.x * oX.z + tW.y * oY.z + tW.z * oZ.z + tW.w * oW.z;
+        result.planeW.w = tW.x * oX.w + tW.y * oY.w + tW.z * oZ.w + tW.w * oW.w;
 
         return result;
     }
@@ -98,10 +101,12 @@ abstract class FMatrix extends UObject {
     public transformPlane(plane: FPlane): FPlane {
         const result = FPlane.make();
 
-        result.x = plane.x * this[0][0] + plane.y * this[1][0] + plane.z * this[2][0] + plane.w * this[3][0];
-        result.y = plane.x * this[0][1] + plane.y * this[1][1] + plane.z * this[2][1] + plane.w * this[3][1];
-        result.z = plane.x * this[0][2] + plane.y * this[1][2] + plane.z * this[2][2] + plane.w * this[3][2];
-        result.w = plane.x * this[0][3] + plane.y * this[1][3] + plane.z * this[2][3] + plane.w * this[3][3];
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
+
+        result.x = plane.x * pX.x + plane.y * pY.x + plane.z * pZ.x + plane.w * pW.x;
+        result.y = plane.x * pX.y + plane.y * pY.y + plane.z * pZ.y + plane.w * pW.y;
+        result.z = plane.x * pX.z + plane.y * pY.z + plane.z * pZ.z + plane.w * pW.z;
+        result.w = plane.x * pX.w + plane.y * pY.w + plane.z * pZ.w + plane.w * pW.w;
 
         return result;
     }
@@ -122,47 +127,50 @@ abstract class FMatrix extends UObject {
 
     public transpose(): FMatrix {
         const result = FMatrix.make();
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
 
-        result[0][0] = this[0][0];
-        result[0][1] = this[1][0];
-        result[0][2] = this[2][0];
-        result[0][3] = this[3][0];
+        result.planeX.x = pX.x;
+        result.planeX.y = pY.x;
+        result.planeX.z = pZ.x;
+        result.planeX.w = pW.x;
 
-        result[1][0] = this[0][1];
-        result[1][1] = this[1][1];
-        result[1][2] = this[2][1];
-        result[1][3] = this[3][1];
+        result.planeY.x = pX.y;
+        result.planeY.y = pY.y;
+        result.planeY.z = pZ.y;
+        result.planeY.w = pW.y;
 
-        result[2][0] = this[0][2];
-        result[2][1] = this[1][2];
-        result[2][2] = this[2][2];
-        result[2][3] = this[3][2];
+        result.planeZ.x = pX.z;
+        result.planeZ.y = pY.z;
+        result.planeZ.z = pZ.z;
+        result.planeZ.w = pW.z;
 
-        result[3][0] = this[0][3];
-        result[3][1] = this[1][3];
-        result[3][2] = this[2][3];
-        result[3][3] = this[3][3];
+        result.planeW.x = pX.w;
+        result.planeW.y = pY.w;
+        result.planeW.z = pZ.w;
+        result.planeW.w = pW.w;
 
         return result;
     }
 
     public det(): number {
-        return this[0][0] * (
-            this[1][1] * (this[2][2] * this[3][3] - this[2][3] * this[3][2]) -
-            this[2][1] * (this[1][2] * this[3][3] - this[1][3] * this[3][2]) +
-            this[3][1] * (this[1][2] * this[2][3] - this[1][3] * this[2][2])
-        ) - this[1][0] * (
-            this[0][1] * (this[2][2] * this[3][3] - this[2][3] * this[3][2]) -
-            this[2][1] * (this[0][2] * this[3][3] - this[0][3] * this[3][2]) +
-            this[3][1] * (this[0][2] * this[2][3] - this[0][3] * this[2][2])
-        ) + this[2][0] * (
-            this[0][1] * (this[1][2] * this[3][3] - this[1][3] * this[3][2]) -
-            this[1][1] * (this[0][2] * this[3][3] - this[0][3] * this[3][2]) +
-            this[3][1] * (this[0][2] * this[1][3] - this[0][3] * this[1][2])
-        ) - this[3][0] * (
-            this[0][1] * (this[1][2] * this[2][3] - this[1][3] * this[2][2]) -
-            this[1][1] * (this[0][2] * this[2][3] - this[0][3] * this[2][2]) +
-            this[2][1] * (this[0][2] * this[1][3] - this[0][3] * this[1][2])
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
+
+        return pX.x * (
+            pY.y * (pZ.z * pW.w - pZ.w * pW.z) -
+            pZ.y * (pY.z * pW.w - pY.w * pW.z) +
+            pW.y * (pY.z * pZ.w - pY.w * pZ.z)
+        ) - pY.x * (
+            pX.y * (pZ.z * pW.w - pZ.w * pW.z) -
+            pZ.y * (pX.z * pW.w - pX.w * pW.z) +
+            pW.y * (pX.z * pZ.w - pX.w * pZ.z)
+        ) + pZ.x * (
+            pX.y * (pY.z * pW.w - pY.w * pW.z) -
+            pY.y * (pX.z * pW.w - pX.w * pW.z) +
+            pW.y * (pX.z * pY.w - pX.w * pY.z)
+        ) - pW.x * (
+            pX.y * (pY.z * pZ.w - pY.w * pZ.z) -
+            pY.y * (pX.z * pZ.w - pX.w * pZ.z) +
+            pZ.y * (pX.z * pY.w - pX.w * pY.z)
         );
     }
 
@@ -178,7 +186,7 @@ abstract class FMatrix extends UObject {
     }
 
     public inverse(): FMatrix {
-
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
         const Det = this.det();
 
         if (Math.abs(Det) < eps) return FMatrix.ident();
@@ -186,97 +194,97 @@ abstract class FMatrix extends UObject {
         const Result = FMatrix.make();
         const RDet = 1.0 / Det;
 
-        Result[0][0] = RDet * (
-            this[1][1] * (this[2][2] * this[3][3] - this[2][3] * this[3][2]) -
-            this[2][1] * (this[1][2] * this[3][3] - this[1][3] * this[3][2]) +
-            this[3][1] * (this[1][2] * this[2][3] - this[1][3] * this[2][2])
+        Result.planeX.x = RDet * (
+            pY.y * (pZ.z * pW.w - pZ.w * pW.z) -
+            pZ.y * (pY.z * pW.w - pY.w * pW.z) +
+            pW.y * (pY.z * pZ.w - pY.w * pZ.z)
         );
 
-        Result[0][1] = -RDet * (
-            this[0][1] * (this[2][2] * this[3][3] - this[2][3] * this[3][2]) -
-            this[2][1] * (this[0][2] * this[3][3] - this[0][3] * this[3][2]) +
-            this[3][1] * (this[0][2] * this[2][3] - this[0][3] * this[2][2])
+        Result.planeX.y = -RDet * (
+            pX.y * (pZ.z * pW.w - pZ.w * pW.z) -
+            pZ.y * (pX.z * pW.w - pX.w * pW.z) +
+            pW.y * (pX.z * pZ.w - pX.w * pZ.z)
         );
 
-        Result[0][2] = RDet * (
-            this[0][1] * (this[1][2] * this[3][3] - this[1][3] * this[3][2]) -
-            this[1][1] * (this[0][2] * this[3][3] - this[0][3] * this[3][2]) +
-            this[3][1] * (this[0][2] * this[1][3] - this[0][3] * this[1][2])
+        Result.planeX.z = RDet * (
+            pX.y * (pY.z * pW.w - pY.w * pW.z) -
+            pY.y * (pX.z * pW.w - pX.w * pW.z) +
+            pW.y * (pX.z * pY.w - pX.w * pY.z)
         );
 
-        Result[0][3] = -RDet * (
-            this[0][1] * (this[1][2] * this[2][3] - this[1][3] * this[2][2]) -
-            this[1][1] * (this[0][2] * this[2][3] - this[0][3] * this[2][2]) +
-            this[2][1] * (this[0][2] * this[1][3] - this[0][3] * this[1][2])
+        Result.planeX.w = -RDet * (
+            pX.y * (pY.z * pZ.w - pY.w * pZ.z) -
+            pY.y * (pX.z * pZ.w - pX.w * pZ.z) +
+            pZ.y * (pX.z * pY.w - pX.w * pY.z)
         );
 
-        Result[1][0] = -RDet * (
-            this[1][0] * (this[2][2] * this[3][3] - this[2][3] * this[3][2]) -
-            this[2][0] * (this[1][2] * this[3][3] - this[1][3] * this[3][2]) +
-            this[3][0] * (this[1][2] * this[2][3] - this[1][3] * this[2][2])
+        Result.planeY.x = -RDet * (
+            pY.x * (pZ.z * pW.w - pZ.w * pW.z) -
+            pZ.x * (pY.z * pW.w - pY.w * pW.z) +
+            pW.x * (pY.z * pZ.w - pY.w * pZ.z)
         );
-        Result[1][1] = RDet * (
-            this[0][0] * (this[2][2] * this[3][3] - this[2][3] * this[3][2]) -
-            this[2][0] * (this[0][2] * this[3][3] - this[0][3] * this[3][2]) +
-            this[3][0] * (this[0][2] * this[2][3] - this[0][3] * this[2][2])
-        );
-
-        Result[1][2] = -RDet * (
-            this[0][0] * (this[1][2] * this[3][3] - this[1][3] * this[3][2]) -
-            this[1][0] * (this[0][2] * this[3][3] - this[0][3] * this[3][2]) +
-            this[3][0] * (this[0][2] * this[1][3] - this[0][3] * this[1][2])
+        Result.planeY.y = RDet * (
+            pX.x * (pZ.z * pW.w - pZ.w * pW.z) -
+            pZ.x * (pX.z * pW.w - pX.w * pW.z) +
+            pW.x * (pX.z * pZ.w - pX.w * pZ.z)
         );
 
-        Result[1][3] = RDet * (
-            this[0][0] * (this[1][2] * this[2][3] - this[1][3] * this[2][2]) -
-            this[1][0] * (this[0][2] * this[2][3] - this[0][3] * this[2][2]) +
-            this[2][0] * (this[0][2] * this[1][3] - this[0][3] * this[1][2])
+        Result.planeY.z = -RDet * (
+            pX.x * (pY.z * pW.w - pY.w * pW.z) -
+            pY.x * (pX.z * pW.w - pX.w * pW.z) +
+            pW.x * (pX.z * pY.w - pX.w * pY.z)
         );
 
-        Result[2][0] = RDet * (
-            this[1][0] * (this[2][1] * this[3][3] - this[2][3] * this[3][1]) -
-            this[2][0] * (this[1][1] * this[3][3] - this[1][3] * this[3][1]) +
-            this[3][0] * (this[1][1] * this[2][3] - this[1][3] * this[2][1])
-        );
-        Result[2][1] = -RDet * (
-            this[0][0] * (this[2][1] * this[3][3] - this[2][3] * this[3][1]) -
-            this[2][0] * (this[0][1] * this[3][3] - this[0][3] * this[3][1]) +
-            this[3][0] * (this[0][1] * this[2][3] - this[0][3] * this[2][1])
+        Result.planeY.w = RDet * (
+            pX.x * (pY.z * pZ.w - pY.w * pZ.z) -
+            pY.x * (pX.z * pZ.w - pX.w * pZ.z) +
+            pZ.x * (pX.z * pY.w - pX.w * pY.z)
         );
 
-        Result[2][2] = RDet * (
-            this[0][0] * (this[1][1] * this[3][3] - this[1][3] * this[3][1]) -
-            this[1][0] * (this[0][1] * this[3][3] - this[0][3] * this[3][1]) +
-            this[3][0] * (this[0][1] * this[1][3] - this[0][3] * this[1][1])
+        Result.planeZ.x = RDet * (
+            pY.x * (pZ.y * pW.w - pZ.w * pW.y) -
+            pZ.x * (pY.y * pW.w - pY.w * pW.y) +
+            pW.x * (pY.y * pZ.w - pY.w * pZ.y)
+        );
+        Result.planeZ.y = -RDet * (
+            pX.x * (pZ.y * pW.w - pZ.w * pW.y) -
+            pZ.x * (pX.y * pW.w - pX.w * pW.y) +
+            pW.x * (pX.y * pZ.w - pX.w * pZ.y)
         );
 
-        Result[2][3] = -RDet * (
-            this[0][0] * (this[1][1] * this[2][3] - this[1][3] * this[2][1]) -
-            this[1][0] * (this[0][1] * this[2][3] - this[0][3] * this[2][1]) +
-            this[2][0] * (this[0][1] * this[1][3] - this[0][3] * this[1][1])
+        Result.planeZ.z = RDet * (
+            pX.x * (pY.y * pW.w - pY.w * pW.y) -
+            pY.x * (pX.y * pW.w - pX.w * pW.y) +
+            pW.x * (pX.y * pY.w - pX.w * pY.y)
         );
 
-        Result[3][0] = -RDet * (
-            this[1][0] * (this[2][1] * this[3][2] - this[2][2] * this[3][1]) -
-            this[2][0] * (this[1][1] * this[3][2] - this[1][2] * this[3][1]) +
-            this[3][0] * (this[1][1] * this[2][2] - this[1][2] * this[2][1])
-        );
-        Result[3][1] = RDet * (
-            this[0][0] * (this[2][1] * this[3][2] - this[2][2] * this[3][1]) -
-            this[2][0] * (this[0][1] * this[3][2] - this[0][2] * this[3][1]) +
-            this[3][0] * (this[0][1] * this[2][2] - this[0][2] * this[2][1])
+        Result.planeZ.w = -RDet * (
+            pX.x * (pY.y * pZ.w - pY.w * pZ.y) -
+            pY.x * (pX.y * pZ.w - pX.w * pZ.y) +
+            pZ.x * (pX.y * pY.w - pX.w * pY.y)
         );
 
-        Result[3][2] = -RDet * (
-            this[0][0] * (this[1][1] * this[3][2] - this[1][2] * this[3][1]) -
-            this[1][0] * (this[0][1] * this[3][2] - this[0][2] * this[3][1]) +
-            this[3][0] * (this[0][1] * this[1][2] - this[0][2] * this[1][1])
+        Result.planeW.x = -RDet * (
+            pY.x * (pZ.y * pW.z - pZ.z * pW.y) -
+            pZ.x * (pY.y * pW.z - pY.z * pW.y) +
+            pW.x * (pY.y * pZ.z - pY.z * pZ.y)
+        );
+        Result.planeW.y = RDet * (
+            pX.x * (pZ.y * pW.z - pZ.z * pW.y) -
+            pZ.x * (pX.y * pW.z - pX.z * pW.y) +
+            pW.x * (pX.y * pZ.z - pX.z * pZ.y)
         );
 
-        Result[3][3] = RDet * (
-            this[0][0] * (this[1][1] * this[2][2] - this[1][2] * this[2][1]) -
-            this[1][0] * (this[0][1] * this[2][2] - this[0][2] * this[2][1]) +
-            this[2][0] * (this[0][1] * this[1][2] - this[0][2] * this[1][1])
+        Result.planeW.z = -RDet * (
+            pX.x * (pY.y * pW.z - pY.z * pW.y) -
+            pY.x * (pX.y * pW.z - pX.z * pW.y) +
+            pW.x * (pX.y * pY.z - pX.z * pY.y)
+        );
+
+        Result.planeW.w = RDet * (
+            pX.x * (pY.y * pZ.z - pY.z * pZ.y) -
+            pY.x * (pX.y * pZ.z - pX.z * pZ.y) +
+            pZ.x * (pX.y * pY.z - pY.y * pX.z)
         );
 
         return Result;
@@ -284,59 +292,64 @@ abstract class FMatrix extends UObject {
 
     public transposeAdjoint(): FMatrix {
         const ta = FMatrix.make();
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ;
 
-        ta[0][0] = this[1][1] * this[2][2] - this[1][2] * this[2][1];
-        ta[0][1] = this[1][2] * this[2][0] - this[1][0] * this[2][2];
-        ta[0][2] = this[1][0] * this[2][1] - this[1][1] * this[2][0];
-        ta[0][3] = 0;
+        ta.planeX.x = pY.y * pZ.z - pY.z * pZ.y;
+        ta.planeX.y = pY.z * pZ.x - pY.x * pZ.z;
+        ta.planeX.z = pY.x * pZ.y - pY.y * pZ.x;
+        ta.planeX.w = 0;
 
-        ta[1][0] = this[2][1] * this[0][2] - this[2][2] * this[0][1];
-        ta[1][1] = this[2][2] * this[0][0] - this[2][0] * this[0][2];
-        ta[1][2] = this[2][0] * this[0][1] - this[2][1] * this[0][0];
-        ta[1][3] = 0;
+        ta.planeY.x = pZ.y * pX.z - pZ.z * pX.y;
+        ta.planeY.y = pZ.z * pX.x - pZ.x * pX.z;
+        ta.planeY.z = pZ.x * pX.y - pZ.y * pX.x;
+        ta.planeY.w = 0;
 
-        ta[2][0] = this[0][1] * this[1][2] - this[0][2] * this[1][1];
-        ta[2][1] = this[0][2] * this[1][0] - this[0][0] * this[1][2];
-        ta[2][2] = this[0][0] * this[1][1] - this[0][1] * this[1][0];
-        ta[2][3] = 0;
+        ta.planeZ.x = pX.y * pY.z - pX.z * pY.y;
+        ta.planeZ.y = pX.z * pY.x - pX.x * pY.z;
+        ta.planeZ.z = pX.x * pY.y - pX.y * pY.x;
+        ta.planeZ.w = 0;
 
-        ta[3][0] = 0;
-        ta[3][1] = 0;
-        ta[3][2] = 0;
-        ta[3][3] = 1;
+        ta.planeW.x = 0;
+        ta.planeW.y = 0;
+        ta.planeW.z = 0;
+        ta.planeW.w = 1;
 
         return ta;
     }
 
     // Remove any scaling from this matrix (ie magnitude of each row is 1)
     public removeScaling(): FMatrix {
-        let sqSum = 0, scale = 0;
-        const result = this.nativeClone<FMatrix>() as any as number[][];
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ;
 
-
-        // For each row, find magnitude, and if its non-zero re-scale so its unit length.
-        for (let i = 0; i < 3; i++) {
-            sqSum = ((result[i][0] * result[i][0])) + (result[i][1] * result[i][1]) + (result[i][2] * result[i][2]);
-
-            if (sqSum > eps) {
-                scale = 1 / Math.sqrt(sqSum);
-
-                result[i][0] *= scale;
-                result[i][1] *= scale;
-                result[i][2] *= scale;
-            }
+        let sqSum = pX.x * pX.x + pX.y * pX.y + pX.z * pX.z;
+        if (sqSum > eps) {
+            const scale = 1 / Math.sqrt(sqSum);
+            pX.x *= scale; pX.y *= scale; pX.z *= scale;
         }
 
-        return this as any as FMatrix;
+        sqSum = pY.x * pY.x + pY.y * pY.y + pY.z * pY.z;
+        if (sqSum > eps) {
+            const scale = 1 / Math.sqrt(sqSum);
+            pY.x *= scale; pY.y *= scale; pY.z *= scale;
+        }
+
+        sqSum = pZ.x * pZ.x + pZ.y * pZ.y + pZ.z * pZ.z;
+        if (sqSum > eps) {
+            const scale = 1 / Math.sqrt(sqSum);
+            pZ.x *= scale; pZ.y *= scale; pZ.z *= scale;
+        }
+
+        return this;
     }
 
     public coords(): FCoords {
         const result = FCoords.make();
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
 
-        result.xAxis.set(this[0][0], this[1][0], this[2][0]);
-        result.yAxis.set(this[0][1], this[1][1], this[2][1]);
-        result.zAxis.set(this[0][2], this[1][2], this[2][2]);
-        result.origin.set(this[3][0], this[3][1], this[3][2]);
+        result.xAxis.set(pX.x, pY.x, pZ.x);
+        result.yAxis.set(pX.y, pY.y, pZ.y);
+        result.zAxis.set(pX.z, pY.z, pZ.z);
+        result.origin.set(pW.x, pW.y, pW.z);
 
         return result;
     }
@@ -362,25 +375,25 @@ abstract class FMatrix extends UObject {
 
         const M = FMatrix.make();
 
-        M[0][0] = CP * CY;
-        M[0][1] = CP * SY;
-        M[0][2] = SP;
-        M[0][3] = 0;
+        M.planeX.x = CP * CY;
+        M.planeX.y = CP * SY;
+        M.planeX.z = SP;
+        M.planeX.w = 0;
 
-        M[1][0] = SR * SP * CY - CR * SY;
-        M[1][1] = SR * SP * SY + CR * CY;
-        M[1][2] = - SR * CP;
-        M[1][3] = 0;
+        M.planeY.x = SR * SP * CY - CR * SY;
+        M.planeY.y = SR * SP * SY + CR * CY;
+        M.planeY.z = - SR * CP;
+        M.planeY.w = 0;
 
-        M[2][0] = -(CR * SP * CY + SR * SY);
-        M[2][1] = CY * SR - CR * SP * SY;
-        M[2][2] = CR * CP;
-        M[2][3] = 0;
+        M.planeZ.x = -(CR * SP * CY + SR * SY);
+        M.planeZ.y = CY * SR - CR * SP * SY;
+        M.planeZ.z = CR * CP;
+        M.planeZ.w = 0;
 
-        M[3][0] = 0;
-        M[3][1] = 0;
-        M[3][2] = 0;
-        M[3][3] = 1;
+        M.planeW.x = 0;
+        M.planeW.y = 0;
+        M.planeW.z = 0;
+        M.planeW.w = 1;
 
         return M;
     }
@@ -388,32 +401,30 @@ abstract class FMatrix extends UObject {
     public static fromQuaternion(quat: GA.FQuaternion) {
         const M = FMatrix.make();
 
-        let wx, wy, wz, xx, yy, yz, xy, xz, zz, x2, y2, z2;
+        const x2 = quat.x + quat.x, y2 = quat.y + quat.y, z2 = quat.z + quat.z;
+        const xx = quat.x * x2, xy = quat.x * y2, xz = quat.x * z2;
+        const yy = quat.y * y2, yz = quat.y * z2, zz = quat.z * z2;
+        const wx = quat.w * x2, wy = quat.w * y2, wz = quat.w * z2;
 
-        x2 = quat.x + quat.x; y2 = quat.y + quat.y; z2 = quat.z + quat.z;
-        xx = quat.x * x2; xy = quat.x * y2; xz = quat.x * z2;
-        yy = quat.y * y2; yz = quat.y * z2; zz = quat.z * z2;
-        wx = quat.w * x2; wy = quat.w * y2; wz = quat.w * z2;
+        M.planeX.x = 1 - (yy + zz);
+        M.planeY.x = xy - wz;
+        M.planeZ.x = xz + wy;
+        M.planeW.x = 0;
 
-        M[0][0] = 1 - (yy + zz);
-        M[1][0] = xy - wz;
-        M[2][0] = xz + wy;
-        M[3][0] = 0;
+        M.planeX.y = xy + wz;
+        M.planeY.y = 1 - (xx + zz);
+        M.planeZ.y = yz - wx;
+        M.planeW.y = 0;
 
-        M[0][1] = xy + wz;
-        M[1][1] = 1 - (xx + zz);
-        M[2][1] = yz - wx;
-        M[3][1] = 0;
+        M.planeX.z = xz - wy;
+        M.planeY.z = yz + wx;
+        M.planeZ.z = 1 - (xx + yy);
+        M.planeW.z = 0;
 
-        M[0][2] = xz - wy;
-        M[1][2] = yz + wx;
-        M[2][2] = 1 - (xx + yy);
-        M[3][2] = 0;
-
-        M[0][3] = 0;
-        M[1][3] = 0;
-        M[2][3] = 0;
-        M[3][3] = 1;
+        M.planeX.w = 0;
+        M.planeY.w = 0;
+        M.planeZ.w = 0;
+        M.planeW.w = 1;
 
         return M;
     }
@@ -431,15 +442,12 @@ abstract class FMatrix extends UObject {
 
     public toArray(): [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number] {
         const arr = new Array<number>(16) as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
 
-        for (let y = 0; y < 4; y++) {
-            const row = this[y as 0 | 1 | 2 | 3];
-            for (let x = 0; x < 4; x++) {
-                const v = row[x as 0 | 1 | 2 | 3]
-
-                arr[x * 4 + y] = v;
-            }
-        }
+        arr[0] = pX.x; arr[1] = pY.x; arr[2] = pZ.x; arr[3] = pW.x;
+        arr[4] = pX.y; arr[5] = pY.y; arr[6] = pZ.y; arr[7] = pW.y;
+        arr[8] = pX.z; arr[9] = pY.z; arr[10] = pZ.z; arr[11] = pW.z;
+        arr[12] = pX.w; arr[13] = pY.w; arr[14] = pZ.w; arr[15] = pW.w;
 
         return arr;
     }
