@@ -1,32 +1,43 @@
-import FVector from "../un-vector";
 import { BufferValue } from "@l2js/core";
-import FArray from "@l2js/core/src/unreal/un-array";
+
+const int32 = new BufferValue(BufferValue.int32);
+const compat = new BufferValue(BufferValue.compat32);
 
 class FStaticMeshVertexStream implements C.IConstructable {
-    declare public vert: FArray<FStaticMeshVertex>;
-    declare public revision: number;
+    declare private data: DataView;
+    declare private elementCount: number;
+    declare private revision: number;
 
-    public load(pkg: C.APackage): this {
-        this.vert = new FArray(FStaticMeshVertex);
+    public getElemCount() { return this.elementCount };
 
-        this.vert.load(pkg);
+    public getElem(index: number): [number, number, number, number, number, number] {
+        const off = index * 24;
 
-        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
-
-        return this;
+        return [
+            this.data.getFloat32(off + 0, true),
+            this.data.getFloat32(off + 4, true),
+            this.data.getFloat32(off + 8, true),
+            this.data.getFloat32(off + 12, true),
+            this.data.getFloat32(off + 16, true),
+            this.data.getFloat32(off + 20, true)
+        ];
     }
-}
-
-class FStaticMeshVertex implements C.IConstructable {
-    declare public position: FVector;
-    declare public normal: FVector;
 
     public load(pkg: C.APackage): this {
-        this.position = FVector.make();
-        this.normal = FVector.make();
+        const size = pkg.read(compat).value as number;
 
-        this.position.load(pkg);
-        this.normal.load(pkg);
+        this.data = pkg.read(size * 24).value;
+        /**
+         * position[0].x, position[0].y, position[0].z, (float: 4 bytes x 3)
+         * normal[0].x, position[0].y, position[0].z, (float: 4 bytes x 3)
+         * ...
+         * position[n].x, position[n].y, position[n].z,
+         * normal[n].x, position[n].y, position[n].z
+         */
+
+        this.elementCount = size;
+
+        this.revision = pkg.read(int32).value as number;
 
         return this;
     }

@@ -1,34 +1,29 @@
 import { BufferValue } from "@l2js/core";
-import FArray from "@l2js/core/src/unreal/un-array";
+
+const int32 = new BufferValue(BufferValue.int32);
+const compat = new BufferValue(BufferValue.compat32);
 
 class FStaticMeshUVStream implements C.IConstructable {
-    declare public data: FArray<FMeshUVFloat>;
+    declare private data: DataView;
+    declare private f10: number;
+    declare private f1C: number; // most likely revision as it's always the last one in stream
 
-    declare public f10: number;
-    declare public f1C: number;
+    public getUV(index: number): [number, number] {
+        const off = index << 3;
 
-    public load(pkg: C.APackage): this {
-        const i = new BufferValue(BufferValue.int32);
-
-        this.data = new FArray(FMeshUVFloat);
-        this.data.load(pkg);
-
-        this.f10 = pkg.read(i).value as number;
-        this.f1C = pkg.read(i).value as number;
-
-        return this;
+        return [
+            this.data.getFloat32(off, true), this.data.getFloat32(off + 4, true)
+        ];
     }
-}
 
-class FMeshUVFloat implements C.IConstructable {
-    declare public u: number;
-    declare public v: number;
 
     public load(pkg: C.APackage): this {
-        const f = new BufferValue(BufferValue.float);
+        const size = pkg.read(compat).value as number;
 
-        this.u = pkg.read(f).value as number;
-        this.v = pkg.read(f).value as number;
+        this.data = pkg.read(size * 4 * 2).value;
+
+        this.f10 = pkg.read(int32).value as number;
+        this.f1C = pkg.read(int32).value as number;
 
         return this;
     }

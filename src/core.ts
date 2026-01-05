@@ -7,6 +7,8 @@ import DecodeLibrary from "./assets/unreal/decode-library";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
+// import { ensureWasmInitialized } from "@l2js/core";
+
 
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, settings: GD.LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
@@ -190,6 +192,10 @@ async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgE
 }
 
 async function startCore() {
+    // await ensureWasmInitialized();
+
+    const startTime = performance.now();
+
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
@@ -439,7 +445,7 @@ async function startCore() {
     } as GD.LoadSettings_T;
 
     // working (or mostly working)
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -466,8 +472,8 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
@@ -479,7 +485,7 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "skylevel", loadSettings));  // skylevel
 
-    console.info("System has loaded!");
+    console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 
     // debugger;
 

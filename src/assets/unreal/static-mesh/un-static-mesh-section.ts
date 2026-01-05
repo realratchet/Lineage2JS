@@ -1,5 +1,8 @@
 import { BufferValue } from "@l2js/core";
 
+const uint32 = new BufferValue(BufferValue.uint32);
+const uint16 = new BufferValue(BufferValue.uint16);
+
 class FStaticMeshSection implements C.IConstructable {
     declare public f4: number;              // always 0 ??
     declare public firstIndex: number;      // first index
@@ -9,8 +12,7 @@ class FStaticMeshSection implements C.IConstructable {
     declare public numFaces: number;        // number of faces in section
 
     public load(pkg: C.APackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const uint16 = new BufferValue(BufferValue.uint16);
+
 
         this.f4 = pkg.read(uint32).value;
         this.firstIndex = pkg.read(uint16).value;

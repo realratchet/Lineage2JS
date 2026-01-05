@@ -295,7 +295,7 @@ abstract class UStaticMesh extends UPrimitive {
 
         // 24 x 117 = 2808 | (24 x 39 = 936)
 
-        const countVerts = this.vertexStream.vert.getElemCount();
+        const countVerts = this.vertexStream.getElemCount();
         const countIndices = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
 
@@ -313,53 +313,18 @@ abstract class UStaticMesh extends UPrimitive {
         // if (countVerts === 0x42)
         //     debugger;
 
-        const _colors = [
-            /*0000000*/ 0x3c, 0x59, 0xff, 0x31, 0x4a, 0x6f, 0xff, 0x3d, 0x4e, 0x6f, 0xff, 0x3e, 0x36, 0x51, 0xff, 0x2c,
-            /*0000010*/ 0x00, 0x00, 0xff, 0x00, 0x45, 0x67, 0xff, 0x39, 0x4e, 0x72, 0xff, 0x3e, 0x00, 0x00, 0xff, 0x00,
-            /*0000020*/ 0x0c, 0x12, 0xff, 0x0a, 0x0a, 0x10, 0xff, 0x08, 0x0c, 0x12, 0xff, 0x0a, 0x0f, 0x16, 0xff, 0x0c,
-            /*0000030*/ 0x00, 0x00, 0xff, 0x00, 0x08, 0x0c, 0xff, 0x06, 0x0a, 0x10, 0xff, 0x08, 0x00, 0x00, 0xff, 0x00,
-            /*0000040*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x00, 0x00, 0xff, 0x00,
-            /*0000050*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x42, 0xff, 0x23, 0x27, 0x3a, 0xff, 0x20, 0x2c, 0x43, 0xff, 0x24,
-            /*0000060*/ 0x12, 0x1b, 0xff, 0x0f, 0x1e, 0x2b, 0xff, 0x18, 0x3a, 0x47, 0xff, 0x29, 0x08, 0x0c, 0xff, 0x06,
-            /*0000070*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
-            /*0000080*/ 0x44, 0x64, 0xff, 0x37, 0x41, 0x5c, 0xff, 0x33, 0x52, 0x71, 0xff, 0x40, 0x48, 0x6b, 0xff, 0x3b,
-            /*0000090*/ 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x0e, 0x15, 0xff, 0x0b, 0x09, 0x0e, 0xff, 0x08,
-            /*00000a0*/ 0x00, 0x00, 0xff, 0x00, 0x2b, 0x40, 0xff, 0x23, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
-            /*00000b0*/ 0x00, 0x00, 0xff, 0x00, 0x4e, 0x6f, 0xff, 0x3e, 0x4a, 0x6f, 0xff, 0x3d, 0x00, 0x00, 0xff, 0x00,
-            /*00000c0*/ 0x00, 0x00, 0xff, 0x00, 0x0f, 0x16, 0xff, 0x0c, 0x0c, 0x12, 0xff, 0x0a, 0x00, 0x00, 0xff, 0x00,
-            /*00000d0*/ 0x00, 0x00, 0xff, 0x00, 0x2c, 0x43, 0xff, 0x24, 0x2c, 0x43, 0xff, 0x24
-        ];
-
-        const _colors2 = [
-            89, 60, 49, 255, 111, 74, 61, 255, 111, 78, 62, 255, 81, 54, 44, 255,
-            0, 0, 0, 255, 103, 69, 57, 255, 114, 78, 62, 255, 0, 0, 0, 255,
-            18, 12, 10, 255, 16, 10, 8, 255, 18, 12, 10, 255, 22, 15, 12, 255,
-            0, 0, 0, 255, 12, 8, 6, 255, 16, 10, 8, 255, 0, 0, 0, 255,
-            0, 0, 0, 255, 0, 0, 0, 255, 67, 44, 36, 255, 0, 0, 0, 255,
-            0, 0, 0, 255, 66, 44, 35, 255, 58, 39, 32, 255, 67, 44, 36, 255,
-            27, 18, 15, 255, 43, 30, 24, 255, 71, 58, 41, 255, 12, 8, 6, 255,
-            0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-            100, 68, 55, 255, 92, 65, 51, 255, 113, 82, 64, 255, 107, 72, 59, 255,
-            0, 0, 0, 255, 0, 0, 0, 255, 21, 14, 11, 255, 14, 9, 8, 255,
-            0, 0, 0, 255, 64, 43, 35, 255, 0, 0, 0, 255, 0, 0, 0, 255,
-            0, 0, 0, 255, 111, 78, 62, 255, 111, 74, 61, 255, 0, 0, 0, 255,
-            0, 0, 0, 255, 22, 15, 12, 255, 18, 12, 10, 255, 0, 0, 0, 255,
-            0, 0, 0, 255, 67, 44, 36, 255, 67, 44, 36, 255
-        ];
-
-
         for (let i = 0; i < countVerts; i++) {
-            const { position, normal } = this.vertexStream.vert.getElem(i);
-            const { u, v } = this.uvStream.getElem(0).data.getElem(i);
-            const color = this.colorStream.color.getElem(i);
+            const [px, py, pz, nx, ny, nz] = this.vertexStream.getElem(i);
+            const [u, v] = this.uvStream.getElem(0).getUV(i);
+            // const color = this.colorStream.getColor(i);
 
-            positions[i * 3 + 0] = position.x;
-            positions[i * 3 + 1] = position.z;
-            positions[i * 3 + 2] = position.y;
+            positions[i * 3 + 0] = px;
+            positions[i * 3 + 1] = pz;
+            positions[i * 3 + 2] = py;
 
-            normals[i * 3 + 0] = normal.x;
-            normals[i * 3 + 1] = normal.z;
-            normals[i * 3 + 2] = normal.y;
+            normals[i * 3 + 0] = nx;
+            normals[i * 3 + 1] = nz;
+            normals[i * 3 + 2] = ny;
 
             // colors[i * 3 + 0] = _colors[i * 4 + 1] / 255;
             // colors[i * 3 + 1] = _colors[i * 4 + 0] / 255;
@@ -441,7 +406,7 @@ abstract class UStaticMesh extends UPrimitive {
         };
     }
 
-    protected getDecodeTrisInfo(library: GA.DecodeLibrary): GD.IBaseObjectDecodeInfo {
+    protected getDecodeTrisInfo(library: GD.DecodeLibrary): GD.IBaseObjectDecodeInfo {
         const trisCount = this.staticMeshTris.length;
         const trisGeometryUuid = generateUUID();
         const TypedIndicesArray = getTypedArrayConstructor(trisCount);
@@ -451,10 +416,10 @@ abstract class UStaticMesh extends UPrimitive {
         for (let i = 0, len = trisCount; i < len; i++) {
             const indOffset = i * 4;
             const vIndOffset = i * 3, vertOffset = vIndOffset * 3;
-            const { v0, v1, v2 } = this.staticMeshTris.getElem(i);
+            const [ v0, v1, v2 ] = this.staticMeshTris.getElem(i).getVertices();
 
             [v0, v1, v2].forEach((v, j) => {
-                const { x, y, z } = v;
+                const [ x, y, z ] = v;
                 const offset = vertOffset + j * 3;
 
                 trisPositions[offset + 0] = x;
