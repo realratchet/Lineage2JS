@@ -489,8 +489,8 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
                 vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
                 normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
 
-                const samplingPoint = localToWorld.transformVector(vertex);
-                const samplingNormal = localToWorld.transformNormal(normal).normalized();
+                const samplingPoint = localToWorld.transformVector(vertex, vertex);
+                const samplingNormal = localToWorld.transformNormal(normal, normal).normalized();
 
                 const intensity = scaleGlow * light.sampleIntensity(samplingPoint, samplingNormal);
 

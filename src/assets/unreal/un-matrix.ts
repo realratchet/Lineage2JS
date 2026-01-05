@@ -120,18 +120,26 @@ abstract class FMatrix extends UObject {
         return result;
     }
 
-    public transformVector(vec: FVector): FVector {
-        const inPlane = FPlane.make(vec.x, vec.y, vec.z, 1);
-        const outPlane = this.transformPlane(inPlane);
+    public transformVector(vec: FVector, target = FVector.make()): FVector {
+        const x = vec.x, y = vec.y, z = vec.z;
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ, pW = this.planeW;
 
-        return FVector.make(outPlane.x, outPlane.y, outPlane.z);
+        const rx = x * pX.x + y * pY.x + z * pZ.x + pW.x;
+        const ry = x * pX.y + y * pY.y + z * pZ.y + pW.y;
+        const rz = x * pX.z + y * pY.z + z * pZ.z + pW.z;
+
+        return target.set(rx, ry, rz);
     }
 
-    public transformNormal(vec: FVector): FVector {
-        const inPlane = FPlane.make(vec.x, vec.y, vec.z, 0);
-        const outPlane = this.transformPlane(inPlane);
+    public transformNormal(vec: FVector, target = FVector.make()): FVector {
+        const x = vec.x, y = vec.y, z = vec.z;
+        const pX = this.planeX, pY = this.planeY, pZ = this.planeZ;
 
-        return FVector.make(outPlane.x, outPlane.y, outPlane.z);
+        const rx = x * pX.x + y * pY.x + z * pZ.x;
+        const ry = x * pX.y + y * pY.y + z * pZ.y;
+        const rz = x * pX.z + y * pY.z + z * pZ.z;
+
+        return target.set(rx, ry, rz);
     }
 
     public transpose(): FMatrix {
