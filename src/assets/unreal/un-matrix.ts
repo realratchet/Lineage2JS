@@ -12,6 +12,15 @@ abstract class FMatrix extends UObject {
     declare public readonly planeZ: GA.FPlane;
     declare public readonly planeW: GA.FPlane;
 
+    public constructor() {
+        super();
+
+        this.planeX = FPlane.make();
+        this.planeY = FPlane.make();
+        this.planeZ = FPlane.make();
+        this.planeW = FPlane.make();
+    }
+
     public get 0() { return this.planeX; }
     public get 1() { return this.planeY; }
     public get 2() { return this.planeZ; }
@@ -177,10 +186,10 @@ abstract class FMatrix extends UObject {
     public static ident() {
         const M = FMatrix.make();
 
-        M[0][0] = 1; M[0][1] = 0; M[0][2] = 0; M[0][3] = 0;
-        M[1][0] = 0; M[1][1] = 1; M[1][2] = 0; M[1][3] = 0;
-        M[2][0] = 0; M[2][1] = 0; M[2][2] = 1; M[2][3] = 0;
-        M[3][0] = 0; M[3][1] = 0; M[3][2] = 0; M[3][3] = 1;
+        M.planeX.set(1, 0, 0, 0);
+        M.planeY.set(0, 1, 0, 0);
+        M.planeZ.set(0, 0, 1, 0);
+        M.planeW.set(0, 0, 0, 1);
 
         return M;
     }

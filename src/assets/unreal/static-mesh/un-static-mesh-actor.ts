@@ -133,25 +133,25 @@ abstract class UStaticMeshActor extends UAActor {
             DY = this.scale.y * this.drawScale,
             DZ = this.scale.z * this.drawScale;
 
-        result[0][0] = CP * CY * DX;
-        result[0][1] = CP * DX * SY;
-        result[0][2] = DX * SP;
-        result[0][3] = 0;
+        result.planeX.x = CP * CY * DX;
+        result.planeX.y = CP * DX * SY;
+        result.planeX.z = DX * SP;
+        result.planeX.w = 0;
 
-        result[1][0] = DY * (CY * SP * SR - CR * SY);
-        result[1][1] = DY * (CR * CY + SP * SR * SY);
-        result[1][2] = -CP * DY * SR;
-        result[1][3] = 0;
+        result.planeY.x = DY * (CY * SP * SR - CR * SY);
+        result.planeY.y = DY * (CR * CY + SP * SR * SY);
+        result.planeY.z = -CP * DY * SR;
+        result.planeY.w = 0;
 
-        result[2][0] = -DZ * (CR * CY * SP + SR * SY);
-        result[2][1] = DZ * (CY * SR - CR * SP * SY);
-        result[2][2] = CP * CR * DZ;
-        result[2][3] = 0;
+        result.planeZ.x = -DZ * (CR * CY * SP + SR * SY);
+        result.planeZ.y = DZ * (CY * SR - CR * SP * SY);
+        result.planeZ.z = CP * CR * DZ;
+        result.planeZ.w = 0;
 
-        result[3][0] = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
-        result[3][1] = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
-        result[3][2] = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
-        result[3][3] = 1;
+        result.planeW.x = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
+        result.planeW.y = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
+        result.planeW.z = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
+        result.planeW.w = 1;
 
         return result;
     }

@@ -18,11 +18,20 @@ Object.assign(UObject, {
     }
 });
 
-Object.assign(UObject.prototype, {
-    uuid: undefined,
+Object.defineProperty(UObject.prototype, "uuid", {
+    get() {
+        if (this._uuid !== undefined) return this._uuid;
+        return this._uuid = generateUUID();
+    },
+    set(v: string) { this._uuid = v; },
+    configurable: true,
+    enumerable: true
+});
 
+Object.assign(UObject.prototype, {
+    _uuid: undefined,
     getDecodeInfo() { debugger; throw new Error(`'${this.constructor.name}' must implemented 'getDecodeInfo' method!`) },
-    onSuperConstructed() { this.uuid = generateUUID(); },
+    onSuperConstructed() { },
     dumpLayout() {
         const layout = (this.constructor as any).inheritedProps as Record<string, string[]>;
         const layoutStrings = [`Layout of '${(this as any).objectName}':`];
