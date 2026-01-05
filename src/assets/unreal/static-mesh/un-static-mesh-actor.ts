@@ -448,7 +448,7 @@ function applyStaticMeshLightEnv(envManager: GA.UL2NEnvManager, vertexArrayLen: 
     }
 }
 
-function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: any[]) {
+function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: any[]) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -468,7 +468,7 @@ function applyStaticMeshLight(env: GA.UL2NEnvLight, vertexArrayLen: number, inst
         if (!lightInfo || !lightInfo.light)
             debugger;
 
-        const lightActor = lightInfo.light?.loadSelf();
+        const lightActor: GA.ULight = lightInfo.light?.loadSelf();
 
         if (!lightActor) continue;
 

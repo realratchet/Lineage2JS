@@ -329,7 +329,7 @@ abstract class ULight extends UAActor {
         });
     }
 
-    protected getRenderInfo(envManager: GA.UL2NEnvManager) { return new FDynamicLight(this, envManager); }
+    public getRenderInfo(envManager: GA.UL2NEnvManager) { return new FDynamicLight(this, envManager); }
 
     protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();

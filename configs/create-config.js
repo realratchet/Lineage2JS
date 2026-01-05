@@ -115,7 +115,9 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 plugins: [
                     ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
-                    "@babel/plugin-proposal-class-properties"
+                    ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                    ["@babel/plugin-proposal-private-methods", { "loose": true }],
+                    ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
                 ]
             }
         }, {
@@ -141,7 +143,9 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                         plugins: [
                             ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                             "@babel/transform-runtime",
-                            "@babel/plugin-proposal-class-properties"
+                            ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                            ["@babel/plugin-proposal-private-methods", { "loose": true }],
+                            ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
                         ]
                     }
                 }]
