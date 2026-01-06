@@ -457,12 +457,35 @@ abstract class BaseEmitter extends Object3D {
         // debugger;
 
         // Handle Skeletal mesh spawning.
-        let NumBones = Math.round(this.meshVertsAndNormals.length / 2);
-        if (this.useSkeletalLocationAs.valueOf() !== PTSU_None && NumBones) {
-            __break__();
-            Particle.BoneIndex = clamp(Math.trunc(this.RelativeBoneIndexRange.rand() * NumBones), 0, NumBones - 1);
-            Particle.OldMeshLocation.copy(this.meshVertsAndNormals[Particle.BoneIndex * 2].clone().multiply(this.skeletalScale));
-            Particle.position.add(Particle.OldMeshLocation);
+        // Replicate C++ logic from UnParticleEmitter.cpp:226-232
+        // C++: INT NumBones = MeshVertsAndNormals.Num();
+        // Note: MeshVertsAndNormals contains [bone0_vertex, bone0_normal, bone1_vertex, bone1_normal, ...]
+        // So array length = actual_bone_count * 2, but C++ uses total array length as NumBones
+        // Only execute if skeletal mesh actor is set and meshVertsAndNormals is populated
+        if (this.useSkeletalLocationAs && this.useSkeletalLocationAs.valueOf() !== PTSU_None && 
+            this.meshVertsAndNormals && this.meshVertsAndNormals.length > 0 && 
+            this.RelativeBoneIndexRange && this.skeletalScale) {
+            const NumBones = this.meshVertsAndNormals.length;
+            // C++: Particle.BoneIndex = Clamp<INT>(RelativeBoneIndexRange.GetRand() * NumBones, 0.f, NumBones - 1);
+            // RelativeBoneIndexRange.GetRand() returns value in range [min, max]
+            // For TypeScript, if RelativeBoneIndexRange is [min, max] tuple, use: min + (max - min) * Math.random()
+            const rangeMin = Array.isArray(this.RelativeBoneIndexRange) ? this.RelativeBoneIndexRange[0] : 0;
+            const rangeMax = Array.isArray(this.RelativeBoneIndexRange) ? this.RelativeBoneIndexRange[1] : 1;
+            const randValue = rangeMin + (rangeMax - rangeMin) * Math.random();
+            const boneIndexFloat = randValue * NumBones;
+            Particle.BoneIndex = clamp(Math.trunc(boneIndexFloat), 0, NumBones - 1);
+            
+            // C++: Particle.OldMeshLocation = MeshVertsAndNormals( Particle.BoneIndex ) * SkeletalScale;
+            // C++ accesses array directly by BoneIndex - but we need to ensure we get vertex (even index)
+            // Since vertices are at even indices (0, 2, 4, ...) and normals at odd (1, 3, 5, ...)
+            const vertexIndex = Particle.BoneIndex & ~1; // Round down to nearest even number
+            if (vertexIndex < this.meshVertsAndNormals.length) {
+                const scaleVec = Array.isArray(this.skeletalScale) 
+                    ? new Vector3().fromArray(this.skeletalScale) 
+                    : this.skeletalScale;
+                Particle.OldMeshLocation.copy(this.meshVertsAndNormals[vertexIndex].clone().multiply(scaleVec));
+                Particle.position.add(Particle.OldMeshLocation);
+            }
         }
 
 
