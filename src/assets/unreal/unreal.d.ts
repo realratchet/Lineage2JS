@@ -360,6 +360,5 @@
 //     type: "Vector" | "Quaternion"
 // }
 
-// type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
-// type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+
 

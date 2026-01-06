@@ -1,8 +1,9 @@
+import { FObjectArray } from "@l2js/core/unreal/un-array";
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
 
 abstract class UEmitter extends UAActor {
-    // protected emitters = new FObjectArray<UParticleEmitter>();
+    declare protected emitters: FObjectArray<UParticleEmitter>;
 
     // protected _autoDestroy: any;
     // protected _autoReset: any;
@@ -51,58 +52,58 @@ abstract class UEmitter extends UAActor {
     // protected _shakeTime: any;
     // protected _eQ_InitialDelay: any;
 
-    // public getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "Emitters": "emitters",
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Emitters": "emitters",
 
-    //         "AutoDestroy": "_autoDestroy",
-    //         "AutoReset": "_autoReset",
-    //         "DisableFogging": "_disableFogging",
-    //         "GlobalOffsetRange": "_globalOffsetRange",
-    //         "TimeTillResetRange": "_timeTillResetRange",
-    //         "AutoReplay": "_autoReplay",
-    //         "SpeedRate": "_speedRate",
-    //         "bRotEmitter": "_bRotEmitter",
-    //         "RotPerSecond": "_rotPerSecond",
-    //         "FixedBoundingBox": "_fixedBoundingBox",
-    //         "FixedBoundingBoxExpand": "_fixedBoundingBoxExpand",
-    //         "SpawnSound": "_spawnSound",
-    //         "SoundRadius": "_soundRadius",
-    //         "SoundVolume": "_soundVolume",
-    //         "Initialized": "_initialized",
-    //         "BoundingBox": "_boundingBox",
-    //         "EmitterRadius": "_emitterRadius",
-    //         "EmitterHeight": "_emitterHeight",
-    //         "ActorForcesEnabled": "_actorForcesEnabled",
-    //         "GlobalOffset": "_globalOffset",
-    //         "TimeTillReset": "_timeTillReset",
-    //         "UseParticleProjectors": "_useParticleProjectors",
-    //         "ParticleMaterial": "_particleMaterial",
-    //         "DeleteParticleEmitters": "_deleteParticleEmitters",
-    //         "FixedLifeTime": "_fixedLifeTime",
-    //         "FirstSpawnParticle": "_firstSpawnParticle",
-    //         "TrailerPrePivot": "_trailerPrePivot",
-    //         "bUseLight": "_bUseLight",
-    //         "LightType": "_lightType",
-    //         "LightEffect": "_lightEffect",
-    //         "LightBrightness": "_lightBrightness",
-    //         "LightRadius": "_lightRadius",
-    //         "LightHue": "_lightHue",
-    //         "LightSaturation": "_lightSaturation",
-    //         "EmitterLightingType": "_emitterLightingType",
-    //         "pEmitterLight": "_pEmitterLight",
-    //         "EL_LifeSpan": "_eL_LifeSpan",
-    //         "EL_InitialDelay": "_eL_InitialDelay",
-    //         "bUseQuake": "_bUseQuake",
-    //         "ShakeType": "_shakeType",
-    //         "ShakeIntensity": "_shakeIntensity",
-    //         "ShakeVector": "_shakeVector",
-    //         "ShakeRange": "_shakeRange",
-    //         "ShakeCount": "_shakeCount",
-    //         "ShakeTime": "_shakeTime",
-    //         "EQ_InitialDelay": "_eQ_InitialDelay",
-    //     });
-    // }
+            // "AutoDestroy": "_autoDestroy",
+            // "AutoReset": "_autoReset",
+            // "DisableFogging": "_disableFogging",
+            // "GlobalOffsetRange": "_globalOffsetRange",
+            // "TimeTillResetRange": "_timeTillResetRange",
+            // "AutoReplay": "_autoReplay",
+            // "SpeedRate": "_speedRate",
+            // "bRotEmitter": "_bRotEmitter",
+            // "RotPerSecond": "_rotPerSecond",
+            // "FixedBoundingBox": "_fixedBoundingBox",
+            // "FixedBoundingBoxExpand": "_fixedBoundingBoxExpand",
+            // "SpawnSound": "_spawnSound",
+            // "SoundRadius": "_soundRadius",
+            // "SoundVolume": "_soundVolume",
+            // "Initialized": "_initialized",
+            // "BoundingBox": "_boundingBox",
+            // "EmitterRadius": "_emitterRadius",
+            // "EmitterHeight": "_emitterHeight",
+            // "ActorForcesEnabled": "_actorForcesEnabled",
+            // "GlobalOffset": "_globalOffset",
+            // "TimeTillReset": "_timeTillReset",
+            // "UseParticleProjectors": "_useParticleProjectors",
+            // "ParticleMaterial": "_particleMaterial",
+            // "DeleteParticleEmitters": "_deleteParticleEmitters",
+            // "FixedLifeTime": "_fixedLifeTime",
+            // "FirstSpawnParticle": "_firstSpawnParticle",
+            // "TrailerPrePivot": "_trailerPrePivot",
+            // "bUseLight": "_bUseLight",
+            // "LightType": "_lightType",
+            // "LightEffect": "_lightEffect",
+            // "LightBrightness": "_lightBrightness",
+            // "LightRadius": "_lightRadius",
+            // "LightHue": "_lightHue",
+            // "LightSaturation": "_lightSaturation",
+            // "EmitterLightingType": "_emitterLightingType",
+            // "pEmitterLight": "_pEmitterLight",
+            // "EL_LifeSpan": "_eL_LifeSpan",
+            // "EL_InitialDelay": "_eL_InitialDelay",
+            // "bUseQuake": "_bUseQuake",
+            // "ShakeType": "_shakeType",
+            // "ShakeIntensity": "_shakeIntensity",
+            // "ShakeVector": "_shakeVector",
+            // "ShakeRange": "_shakeRange",
+            // "ShakeCount": "_shakeCount",
+            // "ShakeTime": "_shakeTime",
+            // "EQ_InitialDelay": "_eQ_InitialDelay",
+        });
+    }
 
     // _setProperties = [];
 
@@ -121,36 +122,60 @@ abstract class UEmitter extends UAActor {
     //     return super.setProperty(tag, value);
     // }
 
-    // public getDecodeInfo(library: DecodeLibrary) {
-    //     // debugger;
+    public getDecodeInfo(library: GD.DecodeLibrary) {
 
-    //     const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as IBaseObjectOrInstanceDecodeInfo[];
+        const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as GD.IBaseObjectOrInstanceDecodeInfo[];
+        // if (this.emitters.length > 0)
+        //     debugger;
 
-    //     // this.rotation.pitch = 0;
-    //     // this.rotation.yaw = 0;
-    //     // this.rotation.roll = 0;
+        //     // this.rotation.pitch = 0;
+        //     // this.rotation.yaw = 0;
+        //     // this.rotation.roll = 0;
 
-    //     // debugger;
+        //     // debugger;
 
-    //     // if (this.objectName === "Exp_Emitter7")
-    //     //     debugger;
+        //     // if (this.objectName === "Exp_Emitter7")
+        //     //     debugger;
 
-    //     const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-    //     const _position = this.location.getVectorElements();
-    //     const actorInfo = {
-    //         uuid: this.uuid,
-    //         type: "Emitter",
-    //         name: this.objectName,
-    //         position: _position,
-    //         scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
-    //         rotation: this.rotation.getEulerElements(),
-    //         children: emittersInfo.filter(x => x)
-    //     } as IBaseObjectDecodeInfo;
+        const level = this.getLevel();
+        const baseModel = level.getModel();
+        const zone = this.getZone();
+        const bspZoneIndex = library.bspZoneIndexMap[zone.uuid];
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
 
-    //     zoneInfo.children.push(actorInfo);
+        // const actorInfo = {
+        //     uuid: this.uuid,
+        //     type: "Emitter",
+        //     name: this.objectName,
+        //     position: _position,
+        //     scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
+        //     quaternion: this.rotation.getQuaternionElements(),
+        //     children: emittersInfo.filter(x => x)
+        // } as GD.IBaseObjectDecodeInfo;
 
-    //     return this.uuid;
-    // }
+        // if (baseModel) {
+        //     const origin = inflatedBox.getCenter();
+        //     const inflatedExtent = inflatedBox.getExtents();
+        //     const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+
+        //     for (const leafIndex of leafIndices) {
+        //         if (library.leafActors[leafIndex]) {
+        //             library.leafActors[leafIndex].push(actorInfo);
+        //         }
+        //         const leaf = library.bspLeaves[leafIndex];
+        //         if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+        //             actorZoneMask |= (1n << BigInt(leaf.zone));
+        //         }
+        //     }
+        // }
+
+        // const _position = this.location.getVectorElements();
+
+
+        // zoneInfo.children.push(actorInfo);
+
+        return this.uuid;
+    }
 }
 
 export default UEmitter;

@@ -99,10 +99,10 @@ abstract class ULevel extends ULevelBase {
             this.baseModel = pkg.fetchObject<GA.UModel>(this.baseModelId);
 
             if (LOAD_SOUNDS) {
-                this.objectList.splice(0, this.ambientActors.length);
+                this.objectList = this.objectList.concat(this.ambientActors);
             }
 
-            this.objectList.splice(0, this.actors.length);
+            this.objectList = this.objectList.concat(this.actors);
 
             console.assert(this.levelInfo.constructor.friendlyName === "LevelInfo");
         }

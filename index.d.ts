@@ -78,6 +78,8 @@ declare global {
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
                 export type ATerrainInfo = import("@unreal/un-terrain-info").ATerrainInfo;
 
+                export type UEmitter = import("@unreal/un-emitter").UEmitter;
+
                 export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
                 export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;
                 export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
@@ -129,7 +131,7 @@ declare global {
                 };
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
-    
+
                 export interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
 
                 export interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
@@ -252,7 +254,7 @@ declare global {
 
                 // Material and Geometry Types
                 export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
-                
+
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
                     materialType: DecodableMaterial_T,
@@ -292,6 +294,39 @@ declare global {
                 export interface IMaterialModifier {
                     type: "Lighting"
                 }
+
+                export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
+                export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+
+                export type EmitterConfig_T = {
+                    blendingMode: ParticleBlendModes_T,
+                    maxParticles: number,
+                    opacity: number,
+                    lifetime: [number, number],
+                    acceleration: GD.Vector3Arr,
+                    particlesPerSecond: number,
+                    fadeIn: Fade_T
+                    fadeOut: Fade_T,
+                    colorMultiplierRange: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    initial: {
+                        particlesPerSecond: number,
+                        angularVelocity: { min: GD.Vector3Arr, max: GD.Vector3Arr }
+                        velocity: { min: GD.Vector3Arr, max: GD.Vector3Arr }
+                        position: { min: GD.Vector3Arr, max: GD.Vector3Arr }
+                        scale: { min: GD.Vector3Arr, max: GD.Vector3Arr }
+                    },
+                    changesOverLifetime: {
+                        scale: {
+                            values: [number, number][],
+                            repeats: number
+                        }
+                    }
+                };
+
+                export type Fade_T = {
+                    time: number,
+                    color: ColorArr
+                };
             }
         }
     }

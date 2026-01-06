@@ -400,7 +400,7 @@ async function startCore() {
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: false,
+        loadEmitters: true,
         _loadStaticModelList: [
             // 1441,
             // 1770,

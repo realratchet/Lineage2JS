@@ -1,415 +1,406 @@
 import { BufferValue } from "@l2js/core";
 import UObject from "@l2js/core";
-import { UPlane } from "../un-plane";
+import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
 import FVector from "../un-vector";
+import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
 
 abstract class UParticleEmitter extends UObject {
-    // protected actor: UEmitter;
+    declare protected actor: GA.UEmitter;
 
-    // // Acceleration
-    // protected acceleration = new FVector(); // Vector which determines the acceleration of the particles in any of the three planes
+    // Acceleration
+    declare protected acceleration: FVector; // Vector which determines the acceleration of the particles in any of the three planes
 
-    // // Collision
-    // protected collisionPlanes = new FArray(UPlane); // Can be used to specify planes in the Unreal world the particle will collide with. The planes will be used for collision when UseCollisionPlanes is True.
-    // protected dampingFactorRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1)); // Damping applied to the particle's velocity when it collides with something.
-    // protected extentMultiplier = new FVector(1, 1, 1); // A multiplier for the particles' size for collision calculations.
-    // protected maxCollisions = new FRange(); // Maximum number of collisions before the particle is destroyed. This property will only be used when UseMaxCollisions is True.
-    // protected spawnAmount = 0; // The number of sub-particles spawned when the particles collide with something.
-    // protected spawnedVelocityScaleRange = new FRangeVector(); // The velocity of the spawned sub-particles.
-    // protected spawnFromOtherEmitter: number = -1; // The ParticleEmitter within the same Emitter actor used for the sub-particles.
-    // protected isUsingCollision: boolean = false; // Whether the particles should use collision. If False, they will fall through static meshes, BSP, etc.
-    // protected isUsingCollisionPlanes: boolean = false; // Whether the particles should collide with the CollisionPlanes.
-    // protected isUsingMaxCollisions: boolean = false; // Whether the particles should be destroyed when they reach their maximum number of collisons.
-    // protected isUsingSpawnedVelocityScale: boolean = false; // Whether to use SpawnedVelocityScaleRange for collision sub-particles.
+    // Collision
+    declare protected collisionPlanes: FArray<UPlane>; // Can be used to specify planes in the Unreal world the particle will collide with. The planes will be used for collision when UseCollisionPlanes is True.
+    declare protected dampingFactorRange: FRangeVector; // Damping applied to the particle's velocity when it collides with something.
+    declare protected extentMultiplier: FVector; // A multiplier for the particles' size for collision calculations.
+    declare protected maxCollisions: FRange; // Maximum number of collisions before the particle is destroyed. This property will only be used when UseMaxCollisions is True.
+    declare protected spawnAmount: number; // The number of sub-particles spawned when the particles collide with something.
+    declare protected spawnedVelocityScaleRange: FRangeVector; // The velocity of the spawned sub-particles.
+    declare protected spawnFromOtherEmitter: number; // The ParticleEmitter within the same Emitter actor used for the sub-particles.
+    declare protected isUsingCollision: boolean; // Whether the particles should use collision. If False, they will fall through static meshes, BSP, etc.
+    declare protected isUsingCollisionPlanes: boolean; // Whether the particles should collide with the CollisionPlanes.
+    declare protected isUsingMaxCollisions: boolean; // Whether the particles should be destroyed when they reach their maximum number of collisons.
+    declare protected isUsingSpawnedVelocityScale: boolean; // Whether to use SpawnedVelocityScaleRange for collision sub-particles.
 
-    // // Color
-    // protected colorMultiplierRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1)); // Used to randomize the color of the particles. X corresponds to red, Y corresponds to Green and Z corresponds to blue. A value of 1 preserves the color of the original textures. To make everything darker, for example, set 0.5 for all values.
-    // protected colorScale = new FArray(UParticleColorScale); // Used to change the color of a particle over time. You set both a color you want it to be, and the relative time at which you want it to be that color. It will fade from whatever color it is to the color you want it to be over the interval you specify. The time is relative, so 0.5 would be half the particles lifespan.
-    // protected colorScaleRepeats = 0; // How many times to repeat the color scales. Example, if you have a color scale that changes it to black at 0.5 time(half its lifespan), with color repeats it will be black by the time its half way done living. With one repeat, it will be black at 1/4 of its lifespan, normal at 1/2, and black again at 3/4ths of its lifespan.
-    // protected isUsingColorScale: boolean = false; // Must be true for ColorScales and ColorScaleRepeats to have any effect on the particles.
+    // Color
+    declare protected colorMultiplierRange: FRangeVector; // Used to randomize the color of the particles. X corresponds to red, Y corresponds to Green and Z corresponds to blue. A value of 1 preserves the color of the original textures. To make everything darker, for example, set 0.5 for all values.
+    declare protected colorScale: FArray<UParticleColorScale>; // Used to change the color of a particle over time. You set both a color you want it to be, and the relative time at which you want it to be that color. It will fade from whatever color it is to the color you want it to be over the interval you specify. The time is relative, so 0.5 would be half the particles lifespan.
+    declare protected colorScaleRepeats: number; // How many times to repeat the color scales. Example, if you have a color scale that changes it to black at 0.5 time(half its lifespan), with color repeats it will be black by the time its half way done living. With one repeat, it will be black at 1/4 of its lifespan, normal at 1/2, and black again at 3/4ths of its lifespan.
+    declare protected isUsingColorScale: boolean; // Must be true for ColorScales and ColorScaleRepeats to have any effect on the particles.
 
-    // // Fading
-    // protected isFadingIn: boolean = false; // If true, it will fade the particle in
-    // protected fadeInEndTime: number = 0; // If FadeIn is true, this is the time at which the particle will have completly faded in and is 100% visible. This is NOT relative. 0.5 is 1/2 a second, not 1/2 of the particles lifespan.
-    // protected fadeInFactor = new UPlane(1, 1, 1, 1); // Specifies how much each component of the particle colors should be faded. 1 means start at 0 while e.g. 0.5 means start at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
-    // protected isFadingOut: boolean = false; // If true, the particle will fade out.
-    // protected fadeOutFactor = new UPlane(1, 1, 1, 1); // If Fadeout is true, this is the absolute time at which the particle will start fading out. Fading out overrules fading in, so if a particle is not yet faded in and starts fading out, it will start at full color values.
-    // protected fadeOutStartTime = new UPlane(); // Specifies how much each component of the particle colors should be faded. 1 means end at 0 while e.g. 0.5 means end at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
+    // Fading
+    declare protected isFadingIn: boolean; // If true, it will fade the particle in
+    declare protected fadeInEndTime: number; // If FadeIn is true, this is the time at which the particle will have completly faded in and is 100% visible. This is NOT relative. 0.5 is 1/2 a second, not 1/2 of the particles lifespan.
+    declare protected fadeInFactor: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means start at 0 while e.g. 0.5 means start at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
+    declare protected isFadingOut: boolean; // If true, the particle will fade out.
+    declare protected fadeOutFactor: UPlane; // If Fadeout is true, this is the absolute time at which the particle will start fading out. Fading out overrules fading in, so if a particle is not yet faded in and starts fading out, it will start at full color values.
+    declare protected fadeOutStartTime: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means end at 0 while e.g. 0.5 means end at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
 
-    // // Forces
-    // protected isUsingActorForces: boolean = false; /* Whether the particles can be affected by Actor forces.
-    //                                           Note: Setting this to True can cause a huge performance hit and will only work when physics details are set high enough. */
+    // Forces
+    declare protected isUsingActorForces: boolean; /* Whether the particles can be affected by Actor forces.
+                                              Note: Setting this to True can cause a huge performance hit and will only work when physics details are set high enough. */
 
-    // // General
-    // protected coordinateSystem: EParticleCoordinateSystem_T = EParticleCoordinateSystem_T.PTCS_Relative; // Determines how the settings in the location section are calculated.
-    // protected effectAxis: EParticleEffectAxis_T = 0;
-    // protected maxParticles: number = 10; // Maximum number of particles that this ParticleEmitter can have at a time.
-    // protected isResettingAfterChange: boolean; // Determines if this emitter reset after a change has been made to its properties. It currently has no effect. (emitter resets no matter what if you make a change)
+    // General
+    declare protected coordinateSystem: EParticleCoordinateSystem_T; // Determines how the settings in the location section are calculated.
+    declare protected effectAxis: EParticleEffectAxis_T;
+    declare protected maxParticles: number; // Maximum number of particles that this ParticleEmitter can have at a time.
+    declare protected isResettingAfterChange: boolean; // Determines if this emitter reset after a change has been made to its properties. It currently has no effect. (emitter resets no matter what if you make a change)
 
-    // // Local
-    // protected isAutoDestroyed: boolean = false; // Determines if this emitter will destroy itself once all particles are gone.
-    // protected isAutoReset: boolean = false; // Determines if this emitter will reset itself after a specified amount of time.
-    // protected autoResetTimeRange: number = 0; // The time delay for auto-resets.
-    // protected isDisabled: boolean = false; // If true, this emitter wont emit anything. Typically used along with TriggerDisabled=true to create a trigger-toggled emitter that starts inactive and only begins emitting once the trigger Event occurs. Also used during testing to disable certain emitters within an emitter system.
-    // protected isFoggingDisabled: boolean = false; // Determines if particles are affected by distance fog.
-    // protected isRespawningDeadParticles: boolean = true; // Determines if dead particles (i.e. particles that have exceeded their lifespan or maximum collisions) should be respawned.
+    // Local
+    declare protected isAutoDestroyed: boolean; // Determines if this emitter will destroy itself once all particles are gone.
+    declare protected isAutoReset: boolean; // Determines if this emitter will reset itself after a specified amount of time.
+    declare protected autoResetTimeRange: number; // The time delay for auto-resets.
+    declare protected isDisabled: boolean; // If true, this emitter wont emit anything. Typically used along with TriggerDisabled=true to create a trigger-toggled emitter that starts inactive and only begins emitting once the trigger Event occurs. Also used during testing to disable certain emitters within an emitter system.
+    declare protected isFoggingDisabled: boolean; // Determines if particles are affected by distance fog.
+    declare protected isRespawningDeadParticles: boolean; // Determines if dead particles (i.e. particles that have exceeded their lifespan or maximum collisions) should be respawned.
 
-    // // Location
-    // protected addLocationFromOtherEmitter: number = -1;
-    // protected sphereRadiusRange = new FRange();
-    // protected startLocationOffset: FVector = new FVector();
-    // protected startLocationPolarRange = new FRangeVector();
-    // protected startLocationRange = new FRangeVector();
-    // protected startLocationShape = EParticleStartLocationShape_T.PTLS_Box;
+    // Location
+    declare protected addLocationFromOtherEmitter: number;
+    declare protected sphereRadiusRange: FRange;
+    declare protected startLocationOffset: FVector;
+    declare protected startLocationPolarRange: FRangeVector;
+    declare protected startLocationRange: FRangeVector;
+    declare protected startLocationShape: EParticleStartLocationShape_T;
 
-    // // Mass
-    // protected startMassRange: FRange = new FRange(1, 1);
+    // Mass
+    declare protected startMassRange: FRange;
 
-    // // Mesh
-    // protected meshNormal: FVector = new FVector(0, 0, 1);
-    // protected meshNormalThresholdRange: FRange;
-    // protected meshScaleRange: FRangeVector = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1)); // This determines the size scale of an emitted mesh, similar to DrawScale3D for actors. It takes each axis independantly, so setting a good range can result in a lot of different shapes on the same mesh.
-    // protected meshSpawning: EParticleMeshSpawning_T = 0;
-    // protected meshSpawningStaticMesh: UStaticMesh = null; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
-    // protected isSpawningTowardsNormal: boolean = false;
-    // protected isUniformMeshScale: boolean = false; // If this is true, the settings in meshscalerange are no longer used for each axis independantly. Instead, the mesh will be scaled along all axis using the x values.
-    // protected isUniformVelocityScale: boolean = false;
-    // protected isUsingColorFromMesh: boolean = false;
-    // protected isVelocityFromMesh: boolean = false;
-    // protected velocityScaleRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1));
+    // Mesh
+    declare protected meshNormal: FVector;
+    declare protected meshNormalThresholdRange: FRange;
+    declare protected meshScaleRange: FRangeVector; // This determines the size scale of an emitted mesh, similar to DrawScale3D for actors. It takes each axis independantly, so setting a good range can result in a lot of different shapes on the same mesh.
+    declare protected meshSpawning: EParticleMeshSpawning_T;
+    declare protected meshSpawningStaticMesh: GA.UStaticMesh; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
+    declare protected isSpawningTowardsNormal: boolean;
+    declare protected isUniformMeshScale: boolean; // If this is true, the settings in meshscalerange are no longer used for each axis independantly. Instead, the mesh will be scaled along all axis using the x values.
+    declare protected isUniformVelocityScale: boolean;
+    declare protected isUsingColorFromMesh: boolean;
+    declare protected isVelocityFromMesh: boolean;
+    declare protected velocityScaleRange: FRangeVector;
 
-    // // Rendering
-    // protected isAcceptingProjectors: boolean = false;
-    // protected alphaRef: number = 0;
-    // protected isAlphaTest: boolean = true;
-    // protected isDepthTesting: boolean = true;
-    // protected isDepthWriting: boolean = true;
+    // Rendering
+    declare protected isAcceptingProjectors: boolean;
+    declare protected alphaRef: number;
+    declare protected isAlphaTest: boolean;
+    declare protected isDepthTesting: boolean;
+    declare protected isDepthWriting: boolean;
 
-    // /* Revolution
-    //    Note: Revolution moves all particles around a central point or area. This might be useful for vortex-like particle effects. */
-    // protected isUsingRevolution: boolean = false; // If true, the particles will orbit a center point.
-    // protected isUsingRevolutionScale: boolean = false; // Whether the RevolutionScale settings should be used.
-    // protected revolutionCenterOffsetRange = new FRangeVector(); // The range of where the center of revolution for this particle will be
-    // protected revolutionScale = new FArray(UParticleRevolutionScale);
-    // protected revolutionScaleRepeats = 0;
-    // protected revolutionsPerSecondRange = new FRangeVector(); // Determines how many times the particle will orbit the center per second, it takes each axis independantly.
+    /* Revolution
+       Note: Revolution moves all particles around a central point or area. This might be useful for vortex-like particle effects. */
+    declare protected isUsingRevolution: boolean; // If true, the particles will orbit a center point.
+    declare protected isUsingRevolutionScale: boolean; // Whether the RevolutionScale settings should be used.
+    declare protected revolutionCenterOffsetRange: FRangeVector; // The range of where the center of revolution for this particle will be
+    declare protected revolutionScale: FArray<UParticleRevolutionScale>;
+    declare protected revolutionScaleRepeats: number;
+    declare protected revolutionsPerSecondRange: FRangeVector; // Determines how many times the particle will orbit the center per second, it takes each axis independantly.
 
-    // // Rotation
-    // protected isDampingRotation: boolean = false; // Whether collision should affect a particle's rotation.
-    // protected rotationDampingFactorRange = new FRangeVector(); // How collision affects the particle's rotation.
-    // protected rotationNormal = new FVector(); // The normal used when UseRotationFrom is set to PTRS_Normal.
-    // protected rotationOffset = new FRotator();
-    // protected clockwiseSpinChance = new FVector(0.5, 0.5, 0.5); // The chance that particles will spin clockwise. 0 will make all particles spin counterclockwise, 0.7 will give a 70% chance that particles spin clockwise and a 30% chance for spinning counterclockwise.
-    // protected isSpinning: boolean = false; // Whether particles should spin.
-    // protected spinsPerSecondRange = new FRangeVector(); // The range that determines how fast the particles will spin. X, Y and Z correspond to Pitch, Yaw and Roll.
-    // protected startSpinRange = new FRangeVector(); // Specifies the initial rotation of the particles. Again, X, Y and Z correspond to Pitch, Yaw and Roll.
-    // protected rotationSource: EParticleRotationSource_T = 0; // What to base the rotation on.
+    // Rotation
+    declare protected isDampingRotation: boolean; // Whether collision should affect a particle's rotation.
+    declare protected rotationDampingFactorRange: FRangeVector; // How collision affects the particle's rotation.
+    declare protected rotationNormal: FVector; // The normal used when UseRotationFrom is set to PTRS_Normal.
+    declare protected rotationOffset: FRotator;
+    declare protected clockwiseSpinChance: FVector; // The chance that particles will spin clockwise. 0 will make all particles spin counterclockwise, 0.7 will give a 70% chance that particles spin clockwise and a 30% chance for spinning counterclockwise.
+    declare protected isSpinning: boolean; // Whether particles should spin.
+    declare protected spinsPerSecondRange: FRangeVector; // The range that determines how fast the particles will spin. X, Y and Z correspond to Pitch, Yaw and Roll.
+    declare protected startSpinRange: FRangeVector; // Specifies the initial rotation of the particles. Again, X, Y and Z correspond to Pitch, Yaw and Roll.
+    declare protected rotationSource: EParticleRotationSource_T; // What to base the rotation on.
 
-    // // Size
-    // protected sizeScale = new FArray(UParticleTimeScale);
-    // protected sizeScaleRepeats: number = 0;
-    // protected startSizeRange = new FRangeVector(new FRange(100, 100), new FRange(100, 100), new FRange(100, 100));
-    // protected isUniformScale: boolean = false;
-    // protected isScaleSizeRegular: boolean = true;
-    // protected isUsingSizeScale: boolean = false;
+    // Size
+    declare protected sizeScale: FArray<UParticleTimeScale>;
+    declare protected sizeScaleRepeats: number;
+    declare protected startSizeRange: FRangeVector;
+    declare protected isUniformScale: boolean;
+    declare protected isScaleSizeRegular: boolean;
+    declare protected isUsingSizeScale: boolean;
 
-    // // Skeletal mesh
-    // protected relativeBoneIndexRange = new FRange(0, 1);
-    // protected skeletalMeshActor: UAActor = null;
-    // protected skeletalScale = new FVector(1, 1, 1);
-    // protected useSkeletalLocationAs: ESkelLocationUpdate_T = 0;
+    // Skeletal mesh
+    declare protected relativeBoneIndexRange: FRange;
+    declare protected skeletalMeshActor: GA.AActor;
+    declare protected skeletalScale: FVector;
+    declare protected useSkeletalLocationAs: ESkelLocationUpdate_T;
 
-    // // Sound
-    // protected collisionSound: EParticleCollisionSound_T = 0;
-    // protected collisionSoundIndex = new FRange();
-    // protected collisionSoundProbability = new FRange();
-    // protected sounds = new FArray(UParticleSound);
-    // protected spawningSound: EParticleCollisionSound_T = 0;
-    // protected spawningSoundIndex = new FRange();
-    // protected spawningSoundProbability = new FRange();
+    // Sound
+    declare protected collisionSound: EParticleCollisionSound_T;
+    declare protected collisionSoundIndex: FRange;
+    declare protected collisionSoundProbability: FRange;
+    declare protected sounds: FArray<UParticleSound>;
+    declare protected spawningSound: EParticleCollisionSound_T;
+    declare protected spawningSoundIndex: FRange;
+    declare protected spawningSoundProbability: FRange;
 
-    // // Spawning
-    // protected isAutomaticInitialSpawning: boolean = true; // Automatically determines a particle spawn rate based on the particle lifetime and the maximum number of particles allowed so that the maximum number of particles is reached exactly when the first particle's lifetime is up. ParticlesPerSecond must be 0 for this to work.
-    // protected initialParticlesPerSecond: number = 0; // The initial particle spawn rate until the point when the maximum number of particles is reached.
-    // protected particlesPerSecond: number = 0; // The particle spawn rate after the initial warmup phase reached the maximum number of particles.
+    // Spawning
+    declare protected isAutomaticInitialSpawning: boolean; // Automatically determines a particle spawn rate based on the particle lifetime and the maximum number of particles allowed so that the maximum number of particles is reached exactly when the first particle's lifetime is up. ParticlesPerSecond must be 0 for this to work.
+    declare protected initialParticlesPerSecond: number; // The initial particle spawn rate until the point when the maximum number of particles is reached.
+    declare protected particlesPerSecond: number; // The particle spawn rate after the initial warmup phase reached the maximum number of particles.
 
-    // // Texture
-    // protected isBlendBetweenSubdivisions: boolean = false;
-    // protected drawStyle = EParticleDrawStyle_T.PTDS_Translucent;
-    // protected subdivEnd = 0;
-    // protected subdivisionScale: FPrimitiveArray<"float"> = new FPrimitiveArray(BufferValue.float);
-    // protected subdivStart = 0;
-    // protected texture: UTexture = null;
-    // protected texSubdivU = 0;
-    // protected texSubdivV = 0;
-    // protected isUsingRandomSubdiv: boolean = false;
-    // protected isUsingSubdivisionScale: boolean = false;
+    // Texture
+    declare protected isBlendBetweenSubdivisions: boolean;
+    declare protected drawStyle: EParticleDrawStyle_T;
+    declare protected subdivEnd: number;
+    declare protected subdivisionScale: FPrimitiveArray<"float">;
+    declare protected subdivStart: number;
+    declare protected texture: GA.UTexture;
+    declare protected texSubdivU: number;
+    declare protected texSubdivV: number;
+    declare protected isUsingRandomSubdiv: boolean;
+    declare protected isUsingSubdivisionScale: boolean;
 
-    // // Tick
-    // protected minSquaredVelocity = 0; // The minimum velocity a particle may have before it gets inactive. This is essential for colliding particles that are supposed to stay idle on ground. The number should be in squared uu/s, ie if you want to set it to 50 uu/s, enter 2500 (50*50) instead.
-    // protected secondsBeforeInactive = 1; // The amount of time that has to pass when the emitter is out of view before particle calculation is paused. Set this to 0.0 to disable the pausing effect, e.g. for Emitter-based weapon effects like explosions, tracers, sparks, etc.
+    // Tick
+    declare protected minSquaredVelocity: number; // The minimum velocity a particle may have before it gets inactive. This is essential for colliding particles that are supposed to stay idle on ground. The number should be in squared uu/s, ie if you want to set it to 50 uu/s, enter 2500 (50*50) instead.
+    declare protected secondsBeforeInactive: number; // The amount of time that has to pass when the emitter is out of view before particle calculation is paused. Set this to 0.0 to disable the pausing effect, e.g. for Emitter-based weapon effects like explosions, tracers, sparks, etc.
 
-    // // Time
-    // protected initialTimeRange = new FRange(); // Determines how long before this emitter will become active
-    // protected initialDelayRange = new FRange(); // The initial particle age. For obvious reasons this should be lower than LifetimeRange. You might be able to create interesting effects in combination with the various scales parameters if you have a particle with e.g. LifetimeRange 4 seconds and InitialTimeRange 3 seconds. Effectively the particle will have 1 second left, but it already starts at 75% of its entire lifetime.
-    // protected lifetimeRange = new FRange(4, 4); // Determines the lifespan of the particles that this emitter emits.
+    // Time
+    declare protected initialTimeRange: FRange; // Determines how long before this emitter will become active
+    declare protected initialDelayRange: FRange; // The initial particle age. For obvious reasons this should be lower than LifetimeRange. You might be able to create interesting effects in combination with the various scales parameters if you have a particle with e.g. LifetimeRange 4 seconds and InitialTimeRange 3 seconds. Effectively the particle will have 1 second left, but it already starts at 75% of its entire lifetime.
+    declare protected lifetimeRange: FRange; // Determines the lifespan of the particles that this emitter emits.
 
-    // // Trigger
-    // protected isResetOnTrigger: boolean = false; // Whether this ParticleEmitter should be reset when it's triggered. When the ParticleEmitter is reset, all its particles are removed and it starts spawning according to its initial spawn parameters. (initial delay, initial particles per second, etc.)
-    // protected spawnOnTriggerPPS = 0;
-    // protected spawnOnTriggerRange = new FRange(); // When triggered, this ParticleEmitter should spawn SpawnOnTriggerRange.Min to SpawnOnTriggerRange.Max particles, with a spawn rate of SpawnOnTriggerPPS particles per second.
-    // protected isTriggerDisabled: boolean = false; // If true allows the emitter to be toggled on/off by the Event named in the Emitter system's Event>Tag. As the Tag belongs to the entire emitter system sub-emitters can only respond to the one Event, albeit in different ways. By default the initial status of emitters is active, and will be toggled off upon first firing of the Event, but setting Local>bDisabled=true will disable emitter at start and wait for Event to turn on. Always set this to false if you want to use the other trigger options or if you don't want the ParticleEmitter's regular particle spawning to be affected by triggering.
+    // Trigger
+    declare protected isResetOnTrigger: boolean; // Whether this ParticleEmitter should be reset when it's triggered. When the ParticleEmitter is reset, all its particles are removed and it starts spawning according to its initial spawn parameters. (initial delay, initial particles per second, etc.)
+    declare protected spawnOnTriggerPPS: number;
+    declare protected spawnOnTriggerRange: FRange; // When triggered, this ParticleEmitter should spawn SpawnOnTriggerRange.Min to SpawnOnTriggerRange.Max particles, with a spawn rate of SpawnOnTriggerPPS particles per second.
+    declare protected isTriggerDisabled: boolean; // If true allows the emitter to be toggled on/off by the Event named in the Emitter system's Event>Tag. As the Tag belongs to the entire emitter system sub-emitters can only respond to the one Event, albeit in different ways. By default the initial status of emitters is active, and will be toggled off upon first firing of the Event, but setting Local>bDisabled=true will disable emitter at start and wait for Event to turn on. Always set this to false if you want to use the other trigger options or if you don't want the ParticleEmitter's regular particle spawning to be affected by triggering.
 
-    // // Velocity
-    // protected addVelocityFromOtherEmitter = -1;
-    // protected addVelocityMultiplierRange = new FRangeVector(new FRange(1, 1), new FRange(1, 1), new FRange(1, 1));
-    // protected getVelocityDirectionFrom = EParticleVelocityDirection_T.PTVD_None;
-    // protected maxAbsVelocity: FVector = new FVector(10000.000000, 10000.000000, 10000.000000);
-    // protected startVelocityRadialRange = new FRange();
-    // protected startVelocityRange = new FRangeVector();
-    // protected isUsingVelocityScale: boolean = false;
-    // protected velocityLossRange = new FRangeVector();
-    // protected velocityScale = new FArray(UParticleVelocityScale);
-    // protected velocityScaleRepeats: number = 0;
-    // protected rotateVelocityLossRange: boolean = false;
+    // Velocity
+    declare protected addVelocityFromOtherEmitter: number;
+    declare protected addVelocityMultiplierRange: FRangeVector;
+    declare protected getVelocityDirectionFrom: EParticleVelocityDirection_T;
+    declare protected maxAbsVelocity: FVector;
+    declare protected startVelocityRadialRange: FRange;
+    declare protected startVelocityRange: FRangeVector;
+    declare protected isUsingVelocityScale: boolean;
+    declare protected velocityLossRange: FRangeVector;
+    declare protected velocityScale: FArray<UParticleVelocityScale>;
+    declare protected velocityScaleRepeats: number;
+    declare protected rotateVelocityLossRange: boolean;
 
-    // /* Warmup
-    //    Note: Warmup precalculates particle spawning and movement so when the emitter first comes into sight it looks like it has been running for some time already. */
-    // protected relativeWarmupTime: number = 0; // The time to precalculate, relative to the particle lifetime. 1.0 is the time corresponding to one particle's entire lifetime.
-    // protected warmupTicksPerSecond: number = 0; // How many ticks per second to precalculate during warmup. Higher values can look better, but very high values might also freeze the game for a split-second while the emitter warms up when it comes into view for the first time.
+    /* Warmup
+       Note: Warmup precalculates particle spawning and movement so when the emitter first comes into sight it looks like it has been running for some time already. */
+    declare protected relativeWarmupTime: number; // The time to precalculate, relative to the particle lifetime. 1.0 is the time corresponding to one particle's entire lifetime.
+    declare protected warmupTicksPerSecond: number; // How many ticks per second to precalculate during warmup. Higher values can look better, but very high values might also freeze the game for a split-second while the emitter warms up when it comes into view for the first time.
 
+    declare protected opacity: number;
 
-    // protected opacity: number = 1;
+    declare protected _independentSprayAccel: any;
 
-    // protected _independentSprayAccel: any;
+    declare protected _forcedLifeTime: any;
+    declare protected _forcedFade: any;
+    declare protected _forcedMaxParticles: any;
 
-    // protected _forcedLifeTime: any;
-    // protected _forcedFade: any;
-    // protected _forcedMaxParticles: any;
+    declare protected _owner: any;
+    declare protected _initialized: any;
+    declare protected _inactive: any;
+    declare protected _inactiveTime: any;
+    declare protected _particles: any;
+    declare protected _particleIndex: any;
+    declare protected _activeParticles: any;
+    declare protected _ppsFraction: number;
+    declare protected _boundingBox: any;
+    declare protected _realExtentMultiplier: any;
+    declare protected _realDisableFogging: any;
+    declare protected _allParticlesDead: any;
+    declare protected _warmedUp: any;
+    declare protected _otherIndex: any;
+    declare protected _initialDelay: any;
+    declare protected _globalOffset: any;
+    declare protected _timeTillReset: any;
+    declare protected _pS2Data: any;
+    declare protected _maxActiveParticles: any;
+    declare protected _currentCollisionSoundIndex: any;
+    declare protected _currentSpawningSoundIndex: any;
+    declare protected _currentMeshSpawningIndex: any;
+    declare protected _maxSizeScale: any;
+    declare protected _killPending: boolean;
+    declare protected _deferredParticles: number;
+    declare protected _realMeshNormal: any;
+    declare protected meshVertsAndNormals: FArray<FVector>;
+    declare protected _currentSpawnOnTrigger: number;
+    declare protected _bOwnerTracking: any;
+    declare protected _curLifeTime: any;
+    declare protected _bNotifyPreDestroy: any;
 
-    // protected _owner: any;
-    // protected _initialized: any;
-    // protected _inactive: any;
-    // protected _inactiveTime: any;
-    // protected _particles: any;
-    // protected _particleIndex: any;
-    // protected _activeParticles: any;
-    // protected _ppsFraction: number;
-    // protected _boundingBox: any;
-    // protected _realExtentMultiplier: any;
-    // protected _realDisableFogging: any;
-    // protected _allParticlesDead: any;
-    // protected _warmedUp: any;
-    // protected _otherIndex: any;
-    // protected _initialDelay: any;
-    // protected _globalOffset: any;
-    // protected _timeTillReset: any;
-    // protected _pS2Data: any;
-    // protected _maxActiveParticles: any;
-    // protected _currentCollisionSoundIndex: any;
-    // protected _currentSpawningSoundIndex: any;
-    // protected _currentMeshSpawningIndex: any;
-    // protected _maxSizeScale: any;
-    // protected _killPending: any = false;
-    // protected _deferredParticles: number;
-    // protected _realMeshNormal: any;
-    // protected meshVertsAndNormals = new FArray(FVector);
-    // protected _currentSpawnOnTrigger: number = 0;
-    // protected _bOwnerTracking: any;
-    // protected _curLifeTime: any;
-    // protected _bNotifyPreDestroy: any;
+    declare protected _refraction: any;
 
-    // protected _refraction: any;
+    declare protected addVelocityFromOwner: boolean;
+    declare protected scaleSizeXByVelocity: boolean;
+    declare protected scaleSizeYByVelocity: boolean;
+    declare protected scaleSizeZByVelocity: boolean;
+    declare protected scaleSizeByVelocityMultiplier: FVector;
+    declare protected determineVelocityByLocationDifference: boolean;
+    declare protected useAbsoluteTimeForSizeScale: boolean;
 
+    public setActor(actor: GA.UEmitter) { this.actor = actor; return this; }
 
-
-
-
-
-
-
-    // protected addVelocityFromOwner: boolean = false;
-    // protected scaleSizeXByVelocity: boolean = false;
-    // protected scaleSizeYByVelocity: boolean = false;
-    // protected scaleSizeZByVelocity: boolean = false;
-    // protected scaleSizeByVelocityMultiplier: FVector = new FVector(1, 1, 1);
-    // protected determineVelocityByLocationDifference: boolean = false;
-    // protected useAbsoluteTimeForSizeScale: boolean = false;
-
-    // public setActor(actor: UEmitter) { this.actor = actor; return this; }
-
-    // public getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "MaxParticles": "maxParticles",
-    //         "DrawStyle": "drawStyle",
-    //         "FadeOut": "isFadingOut",
-    //         "SpinParticles": "isSpinning",
-    //         "Opacity": "opacity",
-    //         "StartSizeRange": "startSizeRange",
-    //         "StartSpinRange": "startSpinRange",
-    //         "UniformSize": "isUniformScale",
-    //         "ParticlesPerSecond": "particlesPerSecond",
-    //         "InitialParticlesPerSecond": "initialParticlesPerSecond",
-    //         "ColorMultiplierRange": "colorMultiplierRange",
-    //         "AutomaticInitialSpawning": "isAutomaticInitialSpawning",
-    //         "LifetimeRange": "lifetimeRange",
-    //         "TextureUSubdivisions": "texSubdivU",
-    //         "TextureVSubdivisions": "texSubdivV",
-    //         "SubdivisionStart": "subdivStart",
-    //         "SubdivisionEnd": "subdivEnd",
-    //         "ColorScale": "colorScale",
-    //         "SizeScale": "sizeScale",
-    //         "UseRegularSizeScale": "isScaleSizeRegular",
-    //         "SpinCCWorCW": "clockwiseSpinChance",
-    //         "SpinsPerSecondRange": "spinsPerSecondRange",
-    //         "Acceleration": "acceleration",
-    //         "ColorScaleRepeats": "colorScaleRepeats",
-    //         "UseColorScale": "isUsingColorScale",
-    //         "FadeIn": "isFadingIn",
-    //         "FadeInFactor": "fadeInFactor",
-    //         "FadeInEndTime": "fadeInEndTime",
-    //         "FadeOutFactor": "fadeOutFactor",
-    //         "FadeOutStartTime": "fadeOutStartTime",
-    //         "UseActorForces": "isUsingActorForces",
-    //         "CoordinateSystem": "coordinateSystem",
-    //         "EffectAxis": "effectAxis",
-    //         "ResetAfterChange": "isResettingAfterChange",
-    //         "AutoDestroy": "isAutoDestroyed",
-    //         "AutoReset": "isAutoReset",
-    //         "AutoResetTimeRange": "autoResetTimeRange",
-    //         "Disabled": "isDisabled",
-    //         "DisableFogging": "isFoggingDisabled",
-    //         "RespawnDeadParticles": "isRespawningDeadParticles",
-    //         "StartMassRange": "startMassRange",
-    //         "MeshNormal": "meshNormal",
-    //         "MeshNormalThresholdRange": "meshNormalThresholdRange",
-    //         "MeshScaleRange": "meshScaleRange",
-    //         "MeshSpawning": "meshSpawning",
-    //         "MeshSpawningStaticMesh": "meshSpawningStaticMesh",
-    //         "SpawnOnlyInDirectionOfNormal": "isSpawningTowardsNormal",
-    //         "UniformMeshScale": "isUniformMeshScale",
-    //         "UniformVelocityScale": "isUniformVelocityScale",
-    //         "UseColorFromMesh": "isUsingColorFromMesh",
-    //         "VelocityFromMesh": "isVelocityFromMesh",
-    //         "VelocityScaleRange": "velocityScaleRange",
-    //         "AcceptsProjectors": "isAcceptingProjectors",
-    //         "AlphaRef": "alphaRef",
-    //         "AlphaTest": "isAlphaTest",
-    //         "ZTest": "isDepthTesting",
-    //         "ZWrite": "isDepthWriting",
-    //         "UseRevolution": "isUsingRevolution",
-    //         "RevolutionCenterOffsetRange": "revolutionCenterOffsetRange",
-    //         "RevolutionsPerSecondRange": "revolutionsPerSecondRange",
-    //         "UseRevolutionScale": "isUsingRevolutionScale",
-    //         "RevolutionScale": "revolutionScale",
-    //         "RevolutionScaleRepeats": "revolutionScaleRepeats",
-    //         "DampRotation": "isDampingRotation",
-    //         "RotationDampingFactorRange": "rotationDampingFactorRange",
-    //         "RotationNormal": "rotationNormal",
-    //         "RotationOffset": "rotationOffset",
-    //         "UseRotationFrom": "rotationSource",
-    //         "SizeScaleRepeats": "sizeScaleRepeats",
-    //         "UseSizeScale": "isUsingSizeScale",
-    //         "RelativeBoneIndexRange": "relativeBoneIndexRange",
-    //         "SkeletalMeshActor": "skeletalMeshActor",
-    //         "SkeletalScale": "skeletalScale",
-    //         "UseSkeletalLocationAs": "useSkeletalLocationAs",
-    //         "CollisionSound": "collisionSound",
-    //         "CollisionSoundIndex": "collisionSoundIndex",
-    //         "CollisionSoundProbability": "collisionSoundProbability",
-    //         "Sounds": "sounds",
-    //         "SpawningSound": "spawningSound",
-    //         "SpawningSoundIndex": "spawningSoundIndex",
-    //         "SpawningSoundProbability": "spawningSoundProbability",
-    //         "BlendBetweenSubdivisions": "isBlendBetweenSubdivisions",
-    //         "UseSubdivisionScale": "isUsingSubdivisionScale",
-    //         "SubdivisionScale": "_subdivisionScale",
-    //         "Texture": "texture",
-    //         "UseRandomSubdivision": "isUsingRandomSubdiv",
-    //         "MinSquaredVelocity": "minSquaredVelocity",
-    //         "SecondsBeforeInactive": "secondsBeforeInactive",
-    //         "InitialTimeRange": "initialTimeRange",
-    //         "InitialDelayRange": "initialDelayRange",
-    //         "ResetOnTrigger": "isResetOnTrigger",
-    //         "SpawnOnTriggerPPS": "spawnOnTriggerPPS",
-    //         "SpawnOnTriggerRange": "spawnOnTriggerRange",
-    //         "TriggerDisabled": "isTriggerDisabled",
-    //         "AddVelocityFromOtherEmitter": "addVelocityFromOtherEmitter",
-    //         "AddVelocityMultiplierRange": "addVelocityMultiplierRange",
-    //         "GetVelocityDirectionFrom": "getVelocityDirectionFrom",
-    //         "MaxAbsVelocity": "maxAbsVelocity",
-    //         "StartVelocityRadialRange": "startVelocityRadialRange",
-    //         "StartVelocityRange": "startVelocityRange",
-    //         "UseVelocityScale": "isUsingVelocityScale",
-    //         "VelocityLossRange": "velocityLossRange",
-    //         "VelocityScale": "velocityScale",
-    //         "VelocityScaleRepeats": "velocityScaleRepeats",
-    //         "RelativeWarmupTime": "relativeWarmupTime",
-    //         "WarmupTicksPerSecond": "warmupTicksPerSecond",
-    //         "CollisionPlanes": "collisionPlanes",
-    //         "DampingFactorRange": "dampingFactorRange",
-    //         "ExtentMultiplier": "extentMultiplier",
-    //         "MaxCollisions": "maxCollisions",
-    //         "SpawnAmount": "spawnAmount",
-    //         "SpawnedVelocityScaleRange": "spawnedVelocityScaleRange",
-    //         "SpawnFromOtherEmitter": "spawnFromOtherEmitter",
-    //         "UseCollision": "isUsingCollision",
-    //         "UseCollisionPlanes": "isUsingCollisionPlanes",
-    //         "UseMaxCollisions": "isUsingMaxCollisions",
-    //         "UseSpawnedVelocityScale": "isUsingSpawnedVelocityScale",
-    //         "AddLocationFromOtherEmitter": "addLocationFromOtherEmitter",
-    //         "SphereRadiusRange": "sphereRadiusRange",
-    //         "StartLocationOffset": "startLocationOffset",
-    //         "StartLocationPolarRange": "startLocationPolarRange",
-    //         "StartLocationRange": "startLocationRange",
-    //         "StartLocationShape": "startLocationShape",
-    //         "RotateVelocityLossRange": "rotateVelocityLossRange",
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "MaxParticles": "maxParticles",
+            "DrawStyle": "drawStyle",
+            "FadeOut": "isFadingOut",
+            "SpinParticles": "isSpinning",
+            "Opacity": "opacity",
+            "StartSizeRange": "startSizeRange",
+            "StartSpinRange": "startSpinRange",
+            "UniformSize": "isUniformScale",
+            "ParticlesPerSecond": "particlesPerSecond",
+            "InitialParticlesPerSecond": "initialParticlesPerSecond",
+            "ColorMultiplierRange": "colorMultiplierRange",
+            "AutomaticInitialSpawning": "isAutomaticInitialSpawning",
+            "LifetimeRange": "lifetimeRange",
+            "TextureUSubdivisions": "texSubdivU",
+            "TextureVSubdivisions": "texSubdivV",
+            "SubdivisionStart": "subdivStart",
+            "SubdivisionEnd": "subdivEnd",
+            "ColorScale": "colorScale",
+            "SizeScale": "sizeScale",
+            "UseRegularSizeScale": "isScaleSizeRegular",
+            "SpinCCWorCW": "clockwiseSpinChance",
+            "SpinsPerSecondRange": "spinsPerSecondRange",
+            "Acceleration": "acceleration",
+            "ColorScaleRepeats": "colorScaleRepeats",
+            "UseColorScale": "isUsingColorScale",
+            "FadeIn": "isFadingIn",
+            "FadeInFactor": "fadeInFactor",
+            "FadeInEndTime": "fadeInEndTime",
+            "FadeOutFactor": "fadeOutFactor",
+            "FadeOutStartTime": "fadeOutStartTime",
+            "UseActorForces": "isUsingActorForces",
+            "CoordinateSystem": "coordinateSystem",
+            "EffectAxis": "effectAxis",
+            "ResetAfterChange": "isResettingAfterChange",
+            "AutoDestroy": "isAutoDestroyed",
+            "AutoReset": "isAutoReset",
+            "AutoResetTimeRange": "autoResetTimeRange",
+            "Disabled": "isDisabled",
+            "DisableFogging": "isFoggingDisabled",
+            "RespawnDeadParticles": "isRespawningDeadParticles",
+            "StartMassRange": "startMassRange",
+            "MeshNormal": "meshNormal",
+            "MeshNormalThresholdRange": "meshNormalThresholdRange",
+            "MeshScaleRange": "meshScaleRange",
+            "MeshSpawning": "meshSpawning",
+            "MeshSpawningStaticMesh": "meshSpawningStaticMesh",
+            "SpawnOnlyInDirectionOfNormal": "isSpawningTowardsNormal",
+            "UniformMeshScale": "isUniformMeshScale",
+            "UniformVelocityScale": "isUniformVelocityScale",
+            "UseColorFromMesh": "isUsingColorFromMesh",
+            "VelocityFromMesh": "isVelocityFromMesh",
+            "VelocityScaleRange": "velocityScaleRange",
+            "AcceptsProjectors": "isAcceptingProjectors",
+            "AlphaRef": "alphaRef",
+            "AlphaTest": "isAlphaTest",
+            "ZTest": "isDepthTesting",
+            "ZWrite": "isDepthWriting",
+            "UseRevolution": "isUsingRevolution",
+            "RevolutionCenterOffsetRange": "revolutionCenterOffsetRange",
+            "RevolutionsPerSecondRange": "revolutionsPerSecondRange",
+            "UseRevolutionScale": "isUsingRevolutionScale",
+            "RevolutionScale": "revolutionScale",
+            "RevolutionScaleRepeats": "revolutionScaleRepeats",
+            "DampRotation": "isDampingRotation",
+            "RotationDampingFactorRange": "rotationDampingFactorRange",
+            "RotationNormal": "rotationNormal",
+            "RotationOffset": "rotationOffset",
+            "UseRotationFrom": "rotationSource",
+            "SizeScaleRepeats": "sizeScaleRepeats",
+            "UseSizeScale": "isUsingSizeScale",
+            "RelativeBoneIndexRange": "relativeBoneIndexRange",
+            "SkeletalMeshActor": "skeletalMeshActor",
+            "SkeletalScale": "skeletalScale",
+            "UseSkeletalLocationAs": "useSkeletalLocationAs",
+            "CollisionSound": "collisionSound",
+            "CollisionSoundIndex": "collisionSoundIndex",
+            "CollisionSoundProbability": "collisionSoundProbability",
+            "Sounds": "sounds",
+            "SpawningSound": "spawningSound",
+            "SpawningSoundIndex": "spawningSoundIndex",
+            "SpawningSoundProbability": "spawningSoundProbability",
+            "BlendBetweenSubdivisions": "isBlendBetweenSubdivisions",
+            "UseSubdivisionScale": "isUsingSubdivisionScale",
+            "SubdivisionScale": "_subdivisionScale",
+            "Texture": "texture",
+            "UseRandomSubdivision": "isUsingRandomSubdiv",
+            "MinSquaredVelocity": "minSquaredVelocity",
+            "SecondsBeforeInactive": "secondsBeforeInactive",
+            "InitialTimeRange": "initialTimeRange",
+            "InitialDelayRange": "initialDelayRange",
+            "ResetOnTrigger": "isResetOnTrigger",
+            "SpawnOnTriggerPPS": "spawnOnTriggerPPS",
+            "SpawnOnTriggerRange": "spawnOnTriggerRange",
+            "TriggerDisabled": "isTriggerDisabled",
+            "AddVelocityFromOtherEmitter": "addVelocityFromOtherEmitter",
+            "AddVelocityMultiplierRange": "addVelocityMultiplierRange",
+            "GetVelocityDirectionFrom": "getVelocityDirectionFrom",
+            "MaxAbsVelocity": "maxAbsVelocity",
+            "StartVelocityRadialRange": "startVelocityRadialRange",
+            "StartVelocityRange": "startVelocityRange",
+            "UseVelocityScale": "isUsingVelocityScale",
+            "VelocityLossRange": "velocityLossRange",
+            "VelocityScale": "velocityScale",
+            "VelocityScaleRepeats": "velocityScaleRepeats",
+            "RelativeWarmupTime": "relativeWarmupTime",
+            "WarmupTicksPerSecond": "warmupTicksPerSecond",
+            "CollisionPlanes": "collisionPlanes",
+            "DampingFactorRange": "dampingFactorRange",
+            "ExtentMultiplier": "extentMultiplier",
+            "MaxCollisions": "maxCollisions",
+            "SpawnAmount": "spawnAmount",
+            "SpawnedVelocityScaleRange": "spawnedVelocityScaleRange",
+            "SpawnFromOtherEmitter": "spawnFromOtherEmitter",
+            "UseCollision": "isUsingCollision",
+            "UseCollisionPlanes": "isUsingCollisionPlanes",
+            "UseMaxCollisions": "isUsingMaxCollisions",
+            "UseSpawnedVelocityScale": "isUsingSpawnedVelocityScale",
+            "AddLocationFromOtherEmitter": "addLocationFromOtherEmitter",
+            "SphereRadiusRange": "sphereRadiusRange",
+            "StartLocationOffset": "startLocationOffset",
+            "StartLocationPolarRange": "startLocationPolarRange",
+            "StartLocationRange": "startLocationRange",
+            "StartLocationShape": "startLocationShape",
+            "RotateVelocityLossRange": "rotateVelocityLossRange",
 
 
-    //         "IndependentSprayAccel": "_independentSprayAccel",
-    //         "ForcedLifeTime": "_forcedLifeTime",
-    //         "ForcedFade": "_forcedFade",
-    //         "ForcedMaxParticles": "_forcedMaxParticles",
+            "IndependentSprayAccel": "_independentSprayAccel",
+            "ForcedLifeTime": "_forcedLifeTime",
+            "ForcedFade": "_forcedFade",
+            "ForcedMaxParticles": "_forcedMaxParticles",
 
-    //         "Owner": "_owner",
-    //         "Initialized": "_initialized",
-    //         "Inactive": "_inactive",
-    //         "InactiveTime": "_inactiveTime",
-    //         "Particles": "_particles",
-    //         "ParticleIndex": "_particleIndex",
-    //         "ActiveParticles": "_activeParticles",
-    //         "PPSFraction": "_ppsFraction",
-    //         "BoundingBox": "_boundingBox",
-    //         "RealExtentMultiplier": "_realExtentMultiplier",
-    //         "RealDisableFogging": "_realDisableFogging",
-    //         "AllParticlesDead": "_allParticlesDead",
-    //         "WarmedUp": "_warmedUp",
-    //         "OtherIndex": "_otherIndex",
-    //         "InitialDelay": "_initialDelay",
-    //         "GlobalOffset": "_globalOffset",
-    //         "TimeTillReset": "_timeTillReset",
-    //         "PS2Data": "_pS2Data",
-    //         "MaxActiveParticles": "_maxActiveParticles",
-    //         "CurrentCollisionSoundIndex": "_currentCollisionSoundIndex",
-    //         "CurrentSpawningSoundIndex": "_currentSpawningSoundIndex",
-    //         "CurrentMeshSpawningIndex": "_currentMeshSpawningIndex",
-    //         "MaxSizeScale": "_maxSizeScale",
-    //         "KillPending": "_killPending",
-    //         "DeferredParticles": "_deferredParticles",
-    //         "RealMeshNormal": "_realMeshNormal",
-    //         "MeshVertsAndNormals": "meshVertsAndNormals",
-    //         "CurrentSpawnOnTrigger": "_currentSpawnOnTrigger",
-    //         "bOwnerTracking": "_bOwnerTracking",
-    //         "CurLifeTime": "_curLifeTime",
-    //         "bNotifyPreDestroy": "_bNotifyPreDestroy",
+            "Owner": "_owner",
+            "Initialized": "_initialized",
+            "Inactive": "_inactive",
+            "InactiveTime": "_inactiveTime",
+            "Particles": "_particles",
+            "ParticleIndex": "_particleIndex",
+            "ActiveParticles": "_activeParticles",
+            "PPSFraction": "_ppsFraction",
+            "BoundingBox": "_boundingBox",
+            "RealExtentMultiplier": "_realExtentMultiplier",
+            "RealDisableFogging": "_realDisableFogging",
+            "AllParticlesDead": "_allParticlesDead",
+            "WarmedUp": "_warmedUp",
+            "OtherIndex": "_otherIndex",
+            "InitialDelay": "_initialDelay",
+            "GlobalOffset": "_globalOffset",
+            "TimeTillReset": "_timeTillReset",
+            "PS2Data": "_pS2Data",
+            "MaxActiveParticles": "_maxActiveParticles",
+            "CurrentCollisionSoundIndex": "_currentCollisionSoundIndex",
+            "CurrentSpawningSoundIndex": "_currentSpawningSoundIndex",
+            "CurrentMeshSpawningIndex": "_currentMeshSpawningIndex",
+            "MaxSizeScale": "_maxSizeScale",
+            "KillPending": "_killPending",
+            "DeferredParticles": "_deferredParticles",
+            "RealMeshNormal": "_realMeshNormal",
+            "MeshVertsAndNormals": "meshVertsAndNormals",
+            "CurrentSpawnOnTrigger": "_currentSpawnOnTrigger",
+            "bOwnerTracking": "_bOwnerTracking",
+            "CurLifeTime": "_curLifeTime",
+            "bNotifyPreDestroy": "_bNotifyPreDestroy",
 
-    //         "Refraction": "_refraction",
-
-
-    //     });
-    // }
+            "Refraction": "_refraction",
+        });
+    }
 
     // _setProperties = [];
 
@@ -425,62 +416,62 @@ abstract class UParticleEmitter extends UObject {
     //     return super.setProperty(tag, value);
     // }
 
-    // public getDecodeInfo(library: DecodeLibrary) {
-    //     if (this._particles && this._particles.length > 0)
-    //         debugger;
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.EmitterConfig_T {
+        if (this._particles && this._particles.length > 0)
+            debugger;
 
-    //     // if (this.isFadingIn || this.isFadingOut)
-    //     //     debugger;
+        // if (this.isFadingIn || this.isFadingOut)
+        //     debugger;
 
-    //     // debugger;
-    //     // console.log(this);
+        // debugger;
+        // console.log(this);
 
-    //     if (this.sizeScale?.length === 1)
-    //         debugger;
+        if (this.sizeScale?.length === 1)
+            debugger;
 
-    //     return {
-    //         name: this.objectName,
-    //         maxParticles: this.maxParticles,
-    //         opacity: this.opacity,
-    //         lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
-    //         fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as ColorArr } : null,
-    //         fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as ColorArr } : null,
-    //         uniformScale: this.isUniformScale,
-    //         acceleration: this.acceleration?.getVectorElements(),
-    //         warmupTime: this.relativeWarmupTime,
-    //         initial: {
-    //             particlesPerSecond: this.isAutomaticInitialSpawning ? this.maxParticles / this.lifetimeRange.mid() : this.initialParticlesPerSecond,
-    //             scale: this.startSizeRange.loadSelf().getDecodeInfo(library),
-    //             angularVelocity: this.startSpinRange?.loadSelf().getDecodeInfo(library),
-    //             velocity: this.startVelocityRange?.loadSelf().getDecodeInfo(library),
-    //             location: this.startLocationRange?.loadSelf().getDecodeInfo(library)
-    //         },
-    //         colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
-    //         particlesPerSecond: this.particlesPerSecond,
-    //         angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
-    //         blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
-    //         changesOverLifetime: {
-    //             scale: this.isUsingSizeScale && this.sizeScale.length > 1 ? {
-    //                 values: this.sizeScale.map(s => s.getDecodeInfo(library)),
-    //                 repeats: this.sizeScaleRepeats
-    //             } : null
-    //         },
-    //         /**
-    //          * 
-    //          * 
-    //          * 
-    //          * 
-    //          */
-    //         allSettings: this
-    //     };
-    // }
+        return {
+            name: this.objectName,
+            maxParticles: this.maxParticles,
+            opacity: this.opacity,
+            lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
+            fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.ColorArr } : null,
+            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as GD.ColorArr } : null,
+            uniformScale: this.isUniformScale,
+            acceleration: this.acceleration?.getVectorElements(),
+            warmupTime: this.relativeWarmupTime,
+            initial: {
+                particlesPerSecond: this.isAutomaticInitialSpawning ? this.maxParticles / this.lifetimeRange.mid() : this.initialParticlesPerSecond,
+                scale: this.startSizeRange.loadSelf().getDecodeInfo(library),
+                angularVelocity: this.startSpinRange?.loadSelf().getDecodeInfo(library),
+                velocity: this.startVelocityRange?.loadSelf().getDecodeInfo(library),
+                location: this.startLocationRange?.loadSelf().getDecodeInfo(library)
+            },
+            colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
+            particlesPerSecond: this.particlesPerSecond,
+            angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
+            blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
+            changesOverLifetime: {
+                scale: this.isUsingSizeScale && this.sizeScale.length > 1 ? {
+                    values: this.sizeScale.map(s => s.getDecodeInfo(library)),
+                    repeats: this.sizeScaleRepeats
+                } : null
+            },
+            /**
+             * 
+             * 
+             * 
+             * 
+             */
+            allSettings: this
+        };
+    }
 }
 
-class UParticleRevolutionScale extends UObject {
+abstract class UParticleRevolutionScale extends UObject {
 
 };
 
-class UParticleTimeScale extends UObject {
+abstract class UParticleTimeScale extends UObject {
 
     // public relSize: number;
     // public relTime: number;
@@ -497,19 +488,19 @@ class UParticleTimeScale extends UObject {
     // public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
 };
 
-class UParticleVelocityScale extends UObject {
+abstract class UParticleVelocityScale extends UObject {
 
 };
 
-class UParticleSound extends UObject {
+abstract class UParticleSound extends UObject {
 
 };
 
-class UParticle extends UObject {
+abstract class UParticle extends UObject {
 
 };
 
-class UParticleColorScale extends UObject {
+abstract class UParticleColorScale extends UObject {
 
 };
 
@@ -587,4 +578,4 @@ const blendingNames = {
     [EParticleDrawStyle_T.PTDS_AlphaModulate_MightNotFogCorrectly]: "alphaModulate",
     [EParticleDrawStyle_T.PTDS_Darken]: "darken",
     [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
-} as Record<EParticleDrawStyle_T, ParticleBlendModes_T>;
+} as Record<EParticleDrawStyle_T, GD.ParticleBlendModes_T>;

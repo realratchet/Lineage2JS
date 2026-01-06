@@ -50,6 +50,7 @@ import USound from "@client/assets/unreal/un-sound";
 import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
 import UMover from "@client/assets/unreal/un-mover";
 import * as NEnv from "@client/assets/unreal/un-l2env";
+import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
 
 type CoreStructs_T =
@@ -278,6 +279,8 @@ class UNativePackage extends ANativePackage {
             case "AccessoryType":
                 Constructor = UObject;
                 break;
+
+            case "ParticleColorScale": Constructor = PEmitter.UParticleColorScale; break;
 
             default:
                 debugger;

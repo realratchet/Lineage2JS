@@ -11,7 +11,6 @@ class DecodeLibrary {
     public readonly bspLeaves: GD.IBSPLeafDecodeInfo_T[] = [];
     public readonly bspZones: GD.IBSPZoneDecodeInfo_T[] = [];
     public readonly bspZoneIndexMap: Record<string, number> = {};
-    // NEW: Section-based BSP rendering (UE2-style)
     public readonly bspSections: GD.IBSPSectionDecodeInfo_T[] = [];
     public readonly bspSectionIndexMap: Map<string, number> = new Map(); // key: "materialUuid/lightmapUuid" -> sectionIndex
     public readonly nodeToSection: number[] = []; // nodeIndex -> sectionIndex
