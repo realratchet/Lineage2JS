@@ -308,19 +308,19 @@ abstract class BaseEmitter extends Object3D {
     protected startLocationPolarRange: any;
 
     protected meshSpawning: any;
-    protected MeshSpawningStaticMesh: THREE.Mesh;
+    protected meshSpawningStaticMesh: THREE.Mesh;
 
     protected CurrentMeshSpawningIndex: number;
-    protected SpawnOnlyInDirectionOfNormal: boolean;
+    protected isSpawningTowardsNormal: boolean;
 
     protected RealMeshNormal: any;
     protected MeshNormalThresholdRange: Range_T;
 
-    protected MeshScaleRange: Range3_T;
+    protected meshScaleRange: Range3_T;
     protected UniformMeshScale: boolean;
 
     protected isVelocityFromMesh: boolean;
-    protected VelocityScaleRange: Range3_T;
+    protected velocityScaleRange: Range3_T;
     protected UniformVelocityScale: boolean;
 
     protected isUsingColorFromMesh: boolean;
@@ -412,18 +412,18 @@ abstract class BaseEmitter extends Object3D {
 
         // Handle spawning from mesh.
         Particle.ColorMultiplier.set(1, 1, 1);
-        if ((this.meshSpawning.valueOf() !== PTMS_None) && this.MeshSpawningStaticMesh) {
+        if ((this.meshSpawning.valueOf() !== PTMS_None) && this.meshSpawningStaticMesh) {
             __break__();
-            let MaxIndex = this.MeshSpawningStaticMesh.geometry.getAttribute("position").count;
+            let MaxIndex = this.meshSpawningStaticMesh.geometry.getAttribute("position").count;
             if (MaxIndex > 0) {
                 let VertexIndex = (this.meshSpawning == PTMS_Linear) ? this.CurrentMeshSpawningIndex++ : (Math.trunc(Math.random() * MaxIndex));
                 VertexIndex %= MaxIndex;
                 VertexIndex = clamp(VertexIndex, 0, MaxIndex);
 
-                let attrPositions = this.MeshSpawningStaticMesh.geometry.getAttribute("position");
-                let attrNormals = this.MeshSpawningStaticMesh.geometry.getAttribute("normal");
+                let attrPositions = this.meshSpawningStaticMesh.geometry.getAttribute("position");
+                let attrNormals = this.meshSpawningStaticMesh.geometry.getAttribute("normal");
 
-                if (this.SpawnOnlyInDirectionOfNormal) {
+                if (this.isSpawningTowardsNormal) {
 
                     let Normal = new Vector3().fromBufferAttribute(attrNormals, VertexIndex);
                     if ((Normal.dot(this.RealMeshNormal)) < (1 - 2 * this.MeshNormalThresholdRange.GetRand())) {
@@ -433,18 +433,18 @@ abstract class BaseEmitter extends Object3D {
                 }
 
 
-                let LocationScale = this.MeshScaleRange.GetRand();
+                let LocationScale = this.meshScaleRange.GetRand();
                 let Location = new Vector3().fromBufferAttribute(attrPositions, VertexIndex);
                 Particle.position.add(this.UniformMeshScale ? Location.multiplyScalar(LocationScale.X) : Location.multiply(LocationScale));
 
                 if (this.isVelocityFromMesh) {
-                    let VelocityScale = this.VelocityScaleRange.GetRand();
+                    let VelocityScale = this.velocityScaleRange.GetRand();
                     let Velocity = new Vector3().fromBufferAttribute(attrNormals, VertexIndex);
                     Particle.Velocity.add(this.UniformVelocityScale ? Velocity.multiplyScalar(VelocityScale.X) : Velocity.multiply(VelocityScale));
                 }
 
                 if (this.isUsingColorFromMesh) {
-                    let attrColors = this.MeshSpawningStaticMesh.geometry.getAttribute("color");
+                    let attrColors = this.meshSpawningStaticMesh.geometry.getAttribute("color");
 
                     let Color = new Vector3().fromBufferAttribute(attrColors, VertexIndex);
                     Particle.ColorMultiplier.x = Color.x;

@@ -1,6 +1,8 @@
 import { FObjectArray } from "@l2js/core/unreal/un-array";
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
+import FBox from "./un-box";
+import FVector from "./un-vector";
 
 abstract class UEmitter extends UAActor {
     declare protected emitters: FObjectArray<UParticleEmitter>;
@@ -139,40 +141,60 @@ abstract class UEmitter extends UAActor {
 
         const level = this.getLevel();
         const baseModel = level.getModel();
+        const localToWorld = this.localToWorld();
         const zone = this.getZone();
-        const bspZoneIndex = library.bspZoneIndexMap[zone.uuid];
-        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
+        const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
 
-        // const actorInfo = {
-        //     uuid: this.uuid,
-        //     type: "Emitter",
-        //     name: this.objectName,
-        //     position: _position,
-        //     scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
-        //     quaternion: this.rotation.getQuaternionElements(),
-        //     children: emittersInfo.filter(x => x)
-        // } as GD.IBaseObjectDecodeInfo;
+        const _position = this.location.getVectorElements();
 
-        // if (baseModel) {
-        //     const origin = inflatedBox.getCenter();
-        //     const inflatedExtent = inflatedBox.getExtents();
-        //     const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+        const actorInfo = {
+            uuid: this.uuid,
+            type: "Emitter",
+            name: this.objectName,
+            position: _position,
+            scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
+            quaternion: this.rotation.getQuaternionElements(),
+            children: emittersInfo.filter(x => x)
+        } as GD.IBaseObjectDecodeInfo;
 
-        //     for (const leafIndex of leafIndices) {
-        //         if (library.leafActors[leafIndex]) {
-        //             library.leafActors[leafIndex].push(actorInfo);
-        //         }
-        //         const leaf = library.bspLeaves[leafIndex];
-        //         if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
-        //             actorZoneMask |= (1n << BigInt(leaf.zone));
-        //         }
-        //     }
-        // }
+        // Calculate bounding box for emitter
+        // Estimate bounding box based on emitter properties or use default size
+        // The C++ code accumulates bounding boxes from particle emitters, but for static decoding
+        // we estimate based on collision radius/height or a reasonable default
+        const defaultRadius = this.collisionRadius || 100;
+        const defaultHeight = this.collisionHeight || 100;
+        const extents = FVector.make(defaultRadius, defaultRadius, defaultHeight);
+        const localBox = FBox.make(extents.negate(), extents, 1);
+        
+        // Transform bounding box to world space
+        const predictedBox = localBox.transformBy(localToWorld);
+        
+        // Create inflated box with margin (similar to static mesh actor)
+        const extent = predictedBox.getExtents();
+        const margin = extent.multiplyScalar(0.05);
+        const inflatedBox = FBox.make(predictedBox.min.sub(margin), predictedBox.max.add(margin), 1);
 
-        // const _position = this.location.getVectorElements();
+        // debugger;
 
+        let actorZoneMask = 0n;
 
-        // zoneInfo.children.push(actorInfo);
+        if (baseModel) {
+            const origin = inflatedBox.getCenter();
+            const inflatedExtent = inflatedBox.getExtents();
+            const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+
+            for (const leafIndex of leafIndices) {
+                if (library.leafActors[leafIndex]) {
+                    library.leafActors[leafIndex].push(actorInfo);
+                }
+                const leaf = library.bspLeaves[leafIndex];
+                if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+                    actorZoneMask |= (1n << BigInt(leaf.zone));
+                }
+            }
+        }
+
+        zoneInfo.children.push(actorInfo);
 
         return this.uuid;
     }

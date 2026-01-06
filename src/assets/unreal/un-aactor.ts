@@ -1,5 +1,7 @@
 // import FVector from "./un-vector";
 // import FRotator from "./un-rotator";
+import GMath from "@client/assets/unreal/un-gmath";
+import FMatrix from "@client/assets/unreal/un-matrix";
 import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
@@ -74,6 +76,50 @@ abstract class UAActor extends UObject {
 
     protected getAmbientLightingActor(): UAActor {
         return this.isUsingLightingFromBase && this.base ? this.base.getAmbientLightingActor() : this;
+    }
+
+    public localToWorld(): FMatrix {
+        const result = FMatrix.make();
+        const gm = GMath();
+        const SR = gm.sin(this.rotation.roll),
+            SP = gm.sin(this.rotation.pitch),
+            SY = gm.sin(this.rotation.yaw),
+            CR = gm.cos(this.rotation.roll),
+            CP = gm.cos(this.rotation.pitch),
+            CY = gm.cos(this.rotation.yaw);
+
+        const LX = this.location.x,
+            LY = this.location.y,
+            LZ = this.location.z,
+            PX = this.prePivot.x,
+            PY = this.prePivot.y,
+            PZ = this.prePivot.z;
+
+        const DX = this.scale.x * this.drawScale,
+            DY = this.scale.y * this.drawScale,
+            DZ = this.scale.z * this.drawScale;
+
+        result.planeX.x = CP * CY * DX;
+        result.planeX.y = CP * DX * SY;
+        result.planeX.z = DX * SP;
+        result.planeX.w = 0;
+
+        result.planeY.x = DY * (CY * SP * SR - CR * SY);
+        result.planeY.y = DY * (CR * CY + SP * SR * SY);
+        result.planeY.z = -CP * DY * SR;
+        result.planeY.w = 0;
+
+        result.planeZ.x = -DZ * (CR * CY * SP + SR * SY);
+        result.planeZ.y = DZ * (CY * SR - CR * SP * SY);
+        result.planeZ.z = CP * CR * DZ;
+        result.planeZ.w = 0;
+
+        result.planeW.x = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
+        result.planeW.y = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
+        result.planeW.z = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
+        result.planeW.w = 1;
+
+        return result;
     }
 
     protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
