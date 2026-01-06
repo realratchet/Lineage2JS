@@ -12,3 +12,4 @@ asset-list.json
 layouts/*
 docker/*
 *.pyc
+py_scripts/*
