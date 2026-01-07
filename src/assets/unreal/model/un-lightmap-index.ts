@@ -3,9 +3,6 @@ import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 
-const int32 = new BufferValue(BufferValue.int32);
-const compat = new BufferValue(BufferValue.compat32);
-
 class FSubStructure implements C.IConstructable {
     public lightIndex: number;
     public lightExp: C.UExport;
@@ -16,14 +13,14 @@ class FSubStructure implements C.IConstructable {
     public unkIntArr1: number[];
 
     public load(pkg: C.APackage): this {
-        this.lightIndex = pkg.read(compat).value;
+        this.lightIndex = pkg.read("compat32");
         this.lightExp = pkg.exports[this.lightIndex - 1];
 
         this.bitmap = this.bitmap.load(pkg);
 
-        this.unkIntArr0 = new Array(2).fill(1).map(_ => pkg.read(int32).value);
-        this.unkInt0 = pkg.read(int32).value;
-        this.unkIntArr1 = new Array(4).fill(1).map(_ => pkg.read(int32).value);
+        this.unkIntArr0 = new Array(2).fill(1).map(_ => pkg.read("int32"));
+        this.unkInt0 = pkg.read("int32");
+        this.unkIntArr1 = new Array(4).fill(1).map(_ => pkg.read("int32"));
 
         return this;
     }
@@ -57,13 +54,13 @@ class FLightmapIndex implements C.IConstructable {
 
         this.uvMatrix = FMatrix.make();
 
-        this.iLightmapTexture = pkg.read(compat).value;
-        this.surfaceIndex = pkg.read(compat).value;
-        this.unkIndex0 = pkg.read(compat).value;
-        this.offsetX = pkg.read(compat).value;
-        this.offsetY = pkg.read(compat).value;
-        this.sizeX = pkg.read(compat).value;
-        this.sizeY = pkg.read(compat).value;
+        this.iLightmapTexture = pkg.read("compat32");
+        this.surfaceIndex = pkg.read("compat32");
+        this.unkIndex0 = pkg.read("compat32");
+        this.offsetX = pkg.read("compat32");
+        this.offsetY = pkg.read("compat32");
+        this.sizeX = pkg.read("compat32");
+        this.sizeY = pkg.read("compat32");
 
         // 18430.568359375 110065 -9380 27.42898941040039 0 0 0 64 0
 
@@ -77,8 +74,8 @@ class FLightmapIndex implements C.IConstructable {
         }
 
         this.unkSubstructure.load(pkg); // these might be individual lights?
-        this.levelId = pkg.read(compat).value;
-        this.unkInt0 = pkg.read(int32).value;
+        this.levelId = pkg.read("compat32");
+        this.unkInt0 = pkg.read("int32");
 
         return this;
     }

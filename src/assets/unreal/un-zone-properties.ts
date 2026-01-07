@@ -8,13 +8,10 @@ class FZoneProperties implements C.IConstructable {
     public zoneActor: GA.FZoneInfo;
 
     public load(pkg: C.APackage): this {
-        const uint64 = new BufferValue(BufferValue.uint64);
-        const float = new BufferValue(BufferValue.float);
-
-        this.zoneActorId = pkg.read(new BufferValue(BufferValue.compat32)).value;
-        this.connectivity = pkg.read(uint64).value
-        this.visibility = pkg.read(uint64).value
-        this.lastRenderTime = pkg.read(float).value;
+        this.zoneActorId = pkg.read("compat32");
+        this.connectivity = pkg.read("uint64");
+        this.visibility = pkg.read("uint64");
+        this.lastRenderTime = pkg.read("float");
 
         if (this.zoneActorId > 0)  // Lineage2 breaks the rule that ULevelInfo must be first export
             this.zoneActor = pkg.fetchObject<GA.FZoneInfo>(this.zoneActorId).loadSelf();

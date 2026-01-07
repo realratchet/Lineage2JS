@@ -5,13 +5,11 @@ abstract class USphere extends FPlane {
     // public radius: number;
 
     // public load(pkg: UPackage): this {
-    //     const f = new BufferValue(BufferValue.float);
-
     //     ["x", "y", "z"].forEach((ax: "x" | "y" | "z") => {
-    //         this.center[ax] = pkg.read(f).value as number;
+    //         this.center[ax] = pkg.read("float");
     //     });
 
-    //     this.radius = pkg.read(f).value as number;
+    //     this.radius = pkg.read("float");
 
     //     return this;
     // }

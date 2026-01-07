@@ -100,7 +100,7 @@ abstract class UTexture extends UMaterial {
         let someFlag = 0;
 
         if (verArchive >= 123 && verLicense >= 16) {
-            someFlag = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
+            someFlag = pkg.read("uint32");
 
             if (someFlag !== 0)
                 debugger;

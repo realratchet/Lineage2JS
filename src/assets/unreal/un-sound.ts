@@ -9,8 +9,7 @@ abstract class USound extends UObject {
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
-        const compat = new BufferValue(BufferValue.compat32);
-        const nameIndex = pkg.read(compat).value;
+        const nameIndex = pkg.read("compat32");
         
         this.fileType = pkg.nameTable[nameIndex].name;
         this.data.load(pkg);

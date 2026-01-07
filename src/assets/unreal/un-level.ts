@@ -13,8 +13,6 @@ abstract class ULevelBase extends UObject {
     protected actors: FObjectArray<GA.AActor>;
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
-        const int32 = new BufferValue(BufferValue.int32);
-
         super.doLoad(pkg, exp);
 
         const verLicense = pkg.header.getLicenseeVersion();
@@ -22,13 +20,13 @@ abstract class ULevelBase extends UObject {
         if (verLicense >= 23) {
             let dbNum = 0, dbMax = 0;
 
-            dbNum = pkg.read(int32).value;
-            dbMax = pkg.read(int32).value;
+            dbNum = pkg.read("int32");
+            dbMax = pkg.read("int32");
 
             this.ambientActors = FObjectArray.loadOfSize(dbNum, pkg);
 
-            dbNum = pkg.read(int32).value;
-            dbMax = pkg.read(int32).value;
+            dbNum = pkg.read("int32");
+            dbMax = pkg.read("int32");
 
             this.actors = FObjectArray.loadOfSize(dbNum, pkg);
         } else {
@@ -62,29 +60,26 @@ abstract class ULevel extends ULevelBase {
     public getModel() { return this.baseModel; }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const float = new BufferValue(BufferValue.float);
-
         super.doLoad(pkg, exp);
 
         const verArchive = pkg.header.getArchiveFileVersion();
 
-        this.baseModelId = pkg.read(compat32).value;
+        this.baseModelId = pkg.read("compat32");
 
         if (verArchive < 98) {
             debugger;
         }
 
-        this.approxTime = pkg.read(float).value;
+        this.approxTime = pkg.read("float");
 
-        this.firstDeletedId = pkg.read(compat32).value
+        this.firstDeletedId = pkg.read("compat32");
         const textBlockIds = new Array<number>(NUM_LEVEL_TEXT_BLOCKS);
 
         for (let i = 0; i < NUM_LEVEL_TEXT_BLOCKS; i++)
-            textBlockIds[i] = pkg.read(compat32).value;
+            textBlockIds[i] = pkg.read("compat32");
 
         if (verArchive > 62) {
-            const travelInfoPairsCount = pkg.read(compat32).value;
+            const travelInfoPairsCount = pkg.read("compat32");
 
             if (travelInfoPairsCount !== 0)
                 debugger;

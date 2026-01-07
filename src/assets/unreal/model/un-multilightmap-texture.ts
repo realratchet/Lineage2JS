@@ -16,16 +16,13 @@ class FStaticLightmapTexture implements C.IConstructable {
     public readonly uuid = generateUUID();
 
     public load(pkg: C.APackage): this {
-        const uint8 = new BufferValue(BufferValue.uint8);
-        const int32 = new BufferValue(BufferValue.int32);
-
         this.data.load(pkg);
         this.dataHalfRes.load(pkg);
 
-        this.format = pkg.read(uint8).value as number;
-        this.width = pkg.read(int32).value as number;
-        this.height = pkg.read(int32).value as number;
-        this.unkInt0 = pkg.read(int32).value as number;
+        this.format = pkg.read("uint8");
+        this.width = pkg.read("int32");
+        this.height = pkg.read("int32");
+        this.unkInt0 = pkg.read("int32");
 
         return this;
     }
@@ -96,16 +93,13 @@ class FLightmapTexture implements C.IConstructable {
     public staticLightmap = new FStaticLightmapTexture();
 
     public load(pkg: C.APackage): this {
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat = new BufferValue(BufferValue.compat32);
-
-        this.levelIndex = pkg.read(compat).value as number;
+        this.levelIndex = pkg.read("compat32");
         this.levelExp = pkg.exports[this.levelIndex - 1];
 
         this.iLightmaps = this.iLightmaps.load(pkg);
 
-        this.internalTime = new Array(2).fill(1).map(_ => pkg.read(int32).value as number);
-        this.unkInt0 = pkg.read(int32).value as number
+        this.internalTime = new Array(2).fill(1).map(_ => pkg.read("int32"));
+        this.unkInt0 = pkg.read("int32")
 
         this.staticLightmap.load(pkg);
 

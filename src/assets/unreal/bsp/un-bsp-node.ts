@@ -2,11 +2,6 @@ import { BufferValue } from "@l2js/core";
 import { FPlane } from "../un-plane";
 import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 
-const uint64 = new BufferValue(BufferValue.uint64);
-const int32 = new BufferValue(BufferValue.int32);
-const compat32 = new BufferValue(BufferValue.compat32);
-const uint8 = new BufferValue(BufferValue.uint8);
-
 // Flags associated with a Bsp node.
 enum BspNodeFlags_T {
     // Flags.
@@ -56,31 +51,31 @@ class FBSPNode implements C.IConstructable {
 
         this.plane.load(pkg);
 
-        this.zoneMask = pkg.read(uint64).value;
-        this.flags = pkg.read(uint8).value;
+        this.zoneMask = pkg.read("uint64");
+        this.flags = pkg.read("uint8");
         this.bspNodeFlags = flagBitsToDict(this.flags, BspNodeFlags_T);
-        this.iVertPool = pkg.read(compat32).value;
-        this.iSurf = pkg.read(compat32).value;
+        this.iVertPool = pkg.read("compat32");
+        this.iSurf = pkg.read("compat32");
 
-        this.iBack = pkg.read(compat32).value;
-        this.iFront = pkg.read(compat32).value;
-        this.iPlane = pkg.read(compat32).value;
+        this.iBack = pkg.read("compat32");
+        this.iFront = pkg.read("compat32");
+        this.iPlane = pkg.read("compat32");
 
-        this.iCollisionBound = pkg.read(compat32).value;
-        this.iRenderBound = pkg.read(compat32).value;
+        this.iCollisionBound = pkg.read("compat32");
+        this.iRenderBound = pkg.read("compat32");
 
         if (verArchive >= 70) {
             this.exclusiveSphereBound.load(pkg);
             this.inclusiveSphereBound.load(pkg);
         }
 
-        this.iZone[0] = pkg.read(uint8).value;
-        this.iZone[1] = pkg.read(uint8).value;
+        this.iZone[0] = pkg.read("uint8");
+        this.iZone[1] = pkg.read("uint8");
 
-        this.numVertices = pkg.read(uint8).value;
+        this.numVertices = pkg.read("uint8");
 
-        this.iLeaf[0] = pkg.read(int32).value;
-        this.iLeaf[1] = pkg.read(int32).value;
+        this.iLeaf[0] = pkg.read("int32");
+        this.iLeaf[1] = pkg.read("int32");
 
         if (verArchive < 92) {
             debugger;
@@ -92,9 +87,9 @@ class FBSPNode implements C.IConstructable {
             debugger;
             throw new Error("not yet implemented");
         } else {
-            this.iSection = pkg.read(int32).value;
-            this.iFirstVertex = pkg.read(int32).value;
-            this.iLightmapIndex = pkg.read(int32).value;
+            this.iSection = pkg.read("int32");
+            this.iFirstVertex = pkg.read("int32");
+            this.iLightmapIndex = pkg.read("int32");
         }
 
         return this;

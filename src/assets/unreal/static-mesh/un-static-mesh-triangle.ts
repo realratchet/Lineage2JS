@@ -1,20 +1,14 @@
 import { BufferValue } from "@l2js/core";
 
-const uint32 = new BufferValue(BufferValue.uint32);
-const uint8 = new BufferValue(BufferValue.uint8);
-const float = new BufferValue(BufferValue.float);
-
 class FStaticMeshTriangleSub implements C.IConstructable {
     declare public f0: number[];
     declare public f1: number[];
     declare public f2: number[];
 
     public load(pkg: C.APackage): this {
-
-
-        this.f0 = new Array(2).fill(1).map(_ => pkg.read(float).value);
-        this.f1 = new Array(2).fill(1).map(_ => pkg.read(float).value);
-        this.f2 = new Array(2).fill(1).map(_ => pkg.read(float).value);
+        this.f0 = new Array(2).fill(1).map(_ => pkg.read("float"));
+        this.f1 = new Array(2).fill(1).map(_ => pkg.read("float"));
+        this.f2 = new Array(2).fill(1).map(_ => pkg.read("float"));
 
         return this;
     }
@@ -59,18 +53,18 @@ class FStaticMeshTriangle implements C.IConstructable {
 
             this.data = pkg.read(3 * 3 * 4).value;
 
-            const count = pkg.read(uint32).value;
+            const count = pkg.read("uint32");
 
             this.unkSubs = new Array(count).fill(1).map(_ => new FStaticMeshTriangleSub().load(pkg));
-            this.unkBytes = new Array(12).fill(1).map(_ => pkg.read(uint8).value);
+            this.unkBytes = new Array(12).fill(1).map(_ => pkg.read("uint8"));
 
             if (verArchive < 0x70) {
                 console.warn("Not supported yet");
                 debugger;
             }
 
-            this.unkInt0 = pkg.read(uint32).value;
-            this.unkInt1 = pkg.read(uint32).value;
+            this.unkInt0 = pkg.read("uint32");
+            this.unkInt1 = pkg.read("uint32");
         }
 
         return this;

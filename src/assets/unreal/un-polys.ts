@@ -46,11 +46,7 @@ abstract class FPoly extends UObject {
     // public panV: number;
 
     // public load(pkg: UPackage): this {
-    //     const uint32 = new BufferValue(BufferValue.uint32);
-    //     const compat = new BufferValue(BufferValue.compat32);
-    //     const int16 = new BufferValue(BufferValue.int16);
-
-    //     const vcount = pkg.read(compat).value;
+    //     const vcount = pkg.read("compat32");
 
     //     debugger;
 
@@ -66,18 +62,18 @@ abstract class FPoly extends UObject {
     //     for (let i = 0; i < vcount; i++)
     //         this.vertices[i] = new FVector().load(pkg);
 
-    //     this.flags = pkg.read(uint32).value;
+    //     this.flags = pkg.read("uint32");
 
-    //     const actorId = pkg.read(compat).value;
-    //     const textureId = pkg.read(compat).value;
-    //     const nameId = pkg.read(compat).value;
+    //     const actorId = pkg.read("compat32");
+    //     const textureId = pkg.read("compat32");
+    //     const nameId = pkg.read("compat32");
 
     //     this.name = pkg.nameTable[nameId].name as string;
-    //     this.link = pkg.read(compat).value;
-    //     this.brushPoly = pkg.read(compat).value;
+    //     this.link = pkg.read("compat32");
+    //     this.brushPoly = pkg.read("compat32");
 
-    //     this.panU = pkg.read(int16).value;
-    //     this.panV = pkg.read(int16).value;
+    //     this.panU = pkg.read("int16");
+    //     this.panV = pkg.read("int16");
 
     //     pkg.seek(4);
 
@@ -159,10 +155,8 @@ abstract class UPolys extends UObject {
 
     //     // super.load(pkg, exp);
 
-    //     const int32 = new BufferValue(BufferValue.int32);
-
-    //     const dbNum = pkg.read(int32).value;
-    //     const dbMax = pkg.read(int32).value;
+    //     const dbNum = pkg.read("int32");
+    //     const dbMax = pkg.read("int32");
 
     //     // console.log(`offset: ${pkg.tell() - startOffset}, left: ${exp.size - (pkg.tell() - startOffset)}`);
 

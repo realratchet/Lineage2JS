@@ -1,8 +1,5 @@
 import { BufferValue } from "@l2js/core";
 
-const int32 = new BufferValue(BufferValue.int32);
-const compat = new BufferValue(BufferValue.compat32);
-
 class FStaticMeshUVStream implements C.IConstructable {
     declare private data: DataView;
     declare private f10: number;
@@ -18,12 +15,12 @@ class FStaticMeshUVStream implements C.IConstructable {
 
 
     public load(pkg: C.APackage): this {
-        const size = pkg.read(compat).value as number;
+        const size = pkg.read("compat32");
 
         this.data = pkg.read(size * 4 * 2).value;
 
-        this.f10 = pkg.read(int32).value as number;
-        this.f1C = pkg.read(int32).value as number;
+        this.f10 = pkg.read("int32");
+        this.f1C = pkg.read("int32");
 
         return this;
     }

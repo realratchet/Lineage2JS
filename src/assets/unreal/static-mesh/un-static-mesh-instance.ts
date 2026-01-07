@@ -5,8 +5,6 @@ import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import { indexToTime } from "@client/assets/unreal/un-l2env";
 
-const compat32 = new BufferValue(BufferValue.compat32);
-const int32 = new BufferValue(BufferValue.int32);
 
 class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
@@ -16,10 +14,10 @@ class FStaticMeshLightInfo implements C.IConstructable {
     public light: ULight;
 
     public load(pkg: C.APackage): this {
-        this.lightIndex = pkg.read(compat32).value;
+        this.lightIndex = pkg.read("compat32");
         this.vertexFlags.load(pkg);
 
-        this.applied = pkg.read(int32).value !== 0;
+        this.applied = pkg.read("int32") !== 0;
 
         this.light = pkg.fetchObject<ULight>(this.lightIndex);
 
@@ -67,7 +65,8 @@ abstract class UStaticMeshInstance extends UObject {
         }
 
         let validEnvironment: FStaticMeshLightInfo = null;
-        let startIndex: number, finishIndex: number;
+        let startIndex: number;
+        let finishIndex: number;
         // let startTime: number, finishTime: number;
 
         let lightingColor: GD.ColorArr;
@@ -136,7 +135,7 @@ abstract class UStaticMeshInstance extends UObject {
 
         if (0x6D < verArchive) this.sceneLights.load(pkg);
         if (0x03 < verLicense) this.environmentLights.load(pkg);
-        if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read(compat32).value as number);
+        if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read("compat32"));
 
         this.readHead = pkg.tell();
 

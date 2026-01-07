@@ -293,9 +293,6 @@ abstract class ATerrainInfo extends AInfo {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
-        const int32 = new BufferValue(BufferValue.int32);
-        const float = new BufferValue(BufferValue.float);
-
         // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
         // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
@@ -322,8 +319,8 @@ abstract class ATerrainInfo extends AInfo {
 
             pkg.seek(this.readHead, "set");
 
-            this.sectorsX = pkg.read(int32).value;
-            this.sectorsY = pkg.read(int32).value;
+            this.sectorsX = pkg.read("int32");
+            this.sectorsY = pkg.read("int32");
         } else {
             console.warn("Unsupported yet");
             debugger;
@@ -342,8 +339,8 @@ abstract class ATerrainInfo extends AInfo {
             debugger;
         }
 
-        this.heightmapX = pkg.read(int32).value;
-        this.heightmapY = pkg.read(int32).value;
+        this.heightmapX = pkg.read("int32");
+        this.heightmapY = pkg.read("int32");
 
         if (verArchive > 74 && verArchive < 82) {
             console.warn("Unsupported yet");

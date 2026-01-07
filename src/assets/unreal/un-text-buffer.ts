@@ -2,8 +2,6 @@ import UObject from "@l2js/core";
 import { BufferValue } from "@l2js/core";
 import FString from "@l2js/core/unreal/un-string";
 
-const uint32 = new BufferValue(BufferValue.uint32);
-
 abstract class UTextBuffer extends UObject {
     declare public pos: number;
     declare public top: number;
@@ -12,8 +10,8 @@ abstract class UTextBuffer extends UObject {
     public doLoad(pkg: C.APackage, exp: C.UExport): this {
         super.doLoad(pkg, exp);
 
-        this.pos = pkg.read(uint32).value;
-        this.top = pkg.read(uint32).value;
+        this.pos = pkg.read("uint32");
+        this.top = pkg.read("uint32");
 
         this.string = new FString().load(pkg);
 

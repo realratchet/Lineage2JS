@@ -102,9 +102,6 @@ abstract class UStaticMesh extends UPrimitive {
         if (verArchive < 85) (UObject as any).prototype.doLoad.call(this, pkg, exp);
         else (UPrimitive as any).prototype.doLoad.call(this, pkg, exp);
 
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const int32 = new BufferValue(BufferValue.int32);
-
         this.sections = new FArray(FStaticMeshSection);
         this.vertexStream = new FStaticMeshVertexStream();
         this.colorStream = new FRawColorStream();
@@ -125,7 +122,7 @@ abstract class UStaticMesh extends UPrimitive {
         this.indexStream.load(pkg);
         this.wireframeIndexBuffer.load(pkg);
 
-        this.collisionModelId = pkg.read(compat32).value;
+        this.collisionModelId = pkg.read("compat32");
         this.collisionModel = pkg.fetchObject<GA.UModel>(this.collisionModelId);
 
         if (this.collisionModelId !== 0)
@@ -183,26 +180,26 @@ abstract class UStaticMesh extends UPrimitive {
         }
 
         if (5 < verLicense) {
-            this.unkInt_5x0 = pkg.read(int32).value;
-            this.unkInd_5x0 = pkg.read(compat32).value;
-            this.unkInd_5x1 = pkg.read(compat32).value;
-            this.unkInt_5x1 = pkg.read(int32).value;
-            this.unkInt_5x2 = pkg.read(int32).value;
+            this.unkInt_5x0 = pkg.read("int32");
+            this.unkInd_5x0 = pkg.read("compat32");
+            this.unkInd_5x1 = pkg.read("compat32");
+            this.unkInt_5x1 = pkg.read("int32");
+            this.unkInt_5x2 = pkg.read("int32");
         }
 
         if (6 < verLicense) {
-            this.unkInt_6x0 = pkg.read(int32).value;
-            this.unkInt_6x1 = pkg.read(int32).value;
+            this.unkInt_6x0 = pkg.read("int32");
+            this.unkInt_6x1 = pkg.read("int32");
         }
 
-        if (11 < verLicense) this.unkInt_Ax0 = pkg.read(int32).value;
-        if (12 < verLicense) this.unkInt_Cx0 = pkg.read(int32).value;
+        if (11 < verLicense) this.unkInt_Ax0 = pkg.read("int32");
+        if (12 < verLicense) this.unkInt_Cx0 = pkg.read("int32");
         if (13 < verLicense) {
-            this.unkInt_Dx0 = pkg.read(int32).value;
-            this.unkInt_Dx1 = pkg.read(int32).value;
+            this.unkInt_Dx0 = pkg.read("int32");
+            this.unkInt_Dx1 = pkg.read("int32");
         }
 
-        if (14 < verLicense) this.unkInt_Ex0 = pkg.read(int32).value;
+        if (14 < verLicense) this.unkInt_Ex0 = pkg.read("int32");
 
         if (verArchive < 92) {
             console.warn("Not supported yet");
@@ -225,10 +222,10 @@ abstract class UStaticMesh extends UPrimitive {
             this.skipRemaining = true;
             if (triggerDebuggerOnUnsupported) debugger;
             return;
-        } else this.internalVersion = pkg.read(int32).value;
+        } else this.internalVersion = pkg.read("int32");
 
-        if (99 < verArchive) this.kPhysicsProps = pkg.read(compat32).value;
-        if (119 < verArchive) this.authenticationKey = pkg.read(int32).value;
+        if (99 < verArchive) this.kPhysicsProps = pkg.read("compat32");
+        if (119 < verArchive) this.authenticationKey = pkg.read("int32");
 
         this.readHead = pkg.tell();
 

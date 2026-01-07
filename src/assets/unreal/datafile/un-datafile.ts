@@ -25,8 +25,7 @@ class UDataFile extends UEncodedFile {
         if (signature !== 0x69004c)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
 
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const rowCount = readable.read(uint32).value;
+        const rowCount = readable.read("uint32");
         const schema = schemas.SCHEMA_NPCGRP_DAT;
         const rows = [] as Record<string, any>[];
 

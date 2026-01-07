@@ -3,11 +3,6 @@ import { BufferValue } from "@l2js/core";
 import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 import { PolyFlags_T } from "../un-polys";
 
-const float = new BufferValue(BufferValue.float);
-const uint32 = new BufferValue(BufferValue.uint32);
-const int32 = new BufferValue(BufferValue.int32);
-const compat32 = new BufferValue(BufferValue.compat32);
-
 class FBSPSurf implements C.IConstructable {
     public material: GA.UShader;
 
@@ -30,25 +25,25 @@ class FBSPSurf implements C.IConstructable {
     public load(pkg: C.APackage): this {
         this.plane = FPlane.make();
 
-        const materialId = pkg.read(compat32).value;
+        const materialId = pkg.read("compat32");
 
-        this.flags = pkg.read(uint32).value;
+        this.flags = pkg.read("uint32");
         this.polyFlags = flagBitsToDict(this.flags, PolyFlags_T);
 
-        this.pBase = pkg.read(compat32).value;
-        this.vNormal = pkg.read(compat32).value;
-        this.vTextureU = pkg.read(compat32).value;
-        this.vTextureV = pkg.read(compat32).value;
+        this.pBase = pkg.read("compat32");
+        this.vNormal = pkg.read("compat32");
+        this.vTextureU = pkg.read("compat32");
+        this.vTextureV = pkg.read("compat32");
 
-        this.iBrushPoly = pkg.read(compat32).value;
+        this.iBrushPoly = pkg.read("compat32");
 
-        const ownerId = pkg.read(compat32).value;
+        const ownerId = pkg.read("compat32");
 
         this.plane.load(pkg);
 
-        this.lightMapScale = pkg.read(float).value;
+        this.lightMapScale = pkg.read("float");
 
-        this.unkInt32 = pkg.read(int32).value;
+        this.unkInt32 = pkg.read("int32");
 
         const offset = pkg.tell();
 

@@ -12,15 +12,14 @@ class FURL implements C.IConstructable {
 
     public load(pkg: C.APackage): this {
         const char = new BufferValue(BufferValue.char);
-        const int32 = new BufferValue(BufferValue.int32);
 
         this.protocol = pkg.read(char).value;
         this.host = pkg.read(char).value;
         this.map = pkg.read(char).value;
         this.portal = pkg.read(char).value;
         this.options = new FStringArray().load(pkg);
-        this.port = pkg.read(int32).value;
-        this.isValid = pkg.read(int32).value === 1;
+        this.port = pkg.read("int32");
+        this.isValid = pkg.read("int32") === 1;
 
         return this;
     }

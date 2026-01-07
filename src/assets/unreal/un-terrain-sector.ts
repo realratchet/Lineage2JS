@@ -14,10 +14,7 @@ class FTerrainLightInfo implements C.IConstructable {
     public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
     public load(pkg: C.APackage): this {
-
-        const compat32 = new BufferValue(BufferValue.compat32);
-
-        this.lightIndex = pkg.read(compat32).value;
+        this.lightIndex = pkg.read("compat32");
 
         if (this.lightIndex !== 0) this.light = pkg.fetchObject(this.lightIndex);
 
@@ -428,25 +425,22 @@ abstract class UTerrainSector extends UObject {
             throw new Error("not implemented");
         }
 
-        this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value;
+        this.infoId = pkg.read("compat32");
         this.info = pkg.fetchObject(this.infoId);
-
-        const int16 = new BufferValue(BufferValue.int16);
-        const int32 = new BufferValue(BufferValue.int32);
 
         // pkg.dump(1, true, false);
 
-        this.quadsX = pkg.read(int32).value;
-        this.quadsY = pkg.read(int32).value;
+        this.quadsX = pkg.read("int32");
+        this.quadsY = pkg.read("int32");
 
         // console.log(this.unkNum0, this.unkNum1)
 
-        // this.unkNum2 = pkg.read(uint16).value as number;
+        // this.unkNum2 = pkg.read("uint16");
 
         // debugger;
 
-        this.offsetX = pkg.read(int32).value;
-        this.offsetY = pkg.read(int32).value;
+        this.offsetX = pkg.read("int32");
+        this.offsetY = pkg.read("int32");
 
         // console.log(this.offsetX, this.offsetY);
 
@@ -470,7 +464,7 @@ abstract class UTerrainSector extends UObject {
         // }
 
         if (verLicense >= 4) {
-            const hasShadows = pkg.read(int32).value;
+            const hasShadows = pkg.read("int32");
 
             this.hasShadows = hasShadows !== 0;
 
@@ -478,7 +472,7 @@ abstract class UTerrainSector extends UObject {
                 debugger;
 
             if (this.hasShadows && this.info) {
-                this.shadowCount = pkg.read(int32).value;
+                this.shadowCount = pkg.read("int32");
                 this.shadowMaps = new Array<FPrimitiveArray<"uint8">>(this.shadowCount);
                 this.shadowMapTimes = new Array<number>(this.shadowCount);
 
@@ -493,7 +487,7 @@ abstract class UTerrainSector extends UObject {
         this.someSectorVisibilityMask = new Int16Array(32);
         if (verLicense >= 8) {
             for (let i = 0; i < 32; i++) {
-                this.someSectorVisibilityMask[i] = pkg.read(int16).value;
+                this.someSectorVisibilityMask[i] = pkg.read("int16");
             }
         } else this.someSectorVisibilityMask.fill(-1);
 

@@ -12,17 +12,14 @@ class FBSPSection implements C.IConstructable {
     public unkInt3: number;
 
     public load(pkg: C.APackage): this {
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat = new BufferValue(BufferValue.compat32);
-
         this.bspVertices.load(pkg);
-        this.unkInt0 = pkg.read(int32).value as number;
+        this.unkInt0 = pkg.read("int32");
 
-        this.textureId = pkg.read(compat).value as number;
+        this.textureId = pkg.read("compat32");
 
-        this.unkInt1 = pkg.read(int32).value as number;
-        this.unkInt2 = pkg.read(int32).value as number;
-        this.unkInt3 = pkg.read(int32).value as number;
+        this.unkInt1 = pkg.read("int32");
+        this.unkInt2 = pkg.read("int32");
+        this.unkInt3 = pkg.read("int32");
 
 
         this.texture = pkg.fetchObject<GA.UTexture>(this.textureId);
@@ -38,12 +35,11 @@ class FBSPVertex implements C.IConstructable {
     public load(pkg: C.APackage): this {
 
         const ver = pkg.header.getArchiveFileVersion();
-        const f = new BufferValue(BufferValue.float);
 
-        this.unkArr0 = new Array(7).fill(1).map(_ => pkg.read(f).value as number);
+        this.unkArr0 = new Array(7).fill(1).map(_ => pkg.read("float"));
 
         if (0x6c < ver)
-            this.unkArr1 = new Array(3).fill(1).map(_ => pkg.read(f).value as number);
+            this.unkArr1 = new Array(3).fill(1).map(_ => pkg.read("float"));
 
         return this;
     }

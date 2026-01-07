@@ -5,12 +5,6 @@ import UMesh from "./un-mesh";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 
-const uint32 = new BufferValue(BufferValue.uint32);
-const uint16 = new BufferValue(BufferValue.uint16);
-const float = new BufferValue(BufferValue.float);
-const compat = new BufferValue(BufferValue.compat32);
-
-
 class FUnknownStruct1 implements C.IConstructable {
     public a: number;
     public b: number;
@@ -20,10 +14,10 @@ class FUnknownStruct1 implements C.IConstructable {
     public load(pkg: GA.UPackage): this {
 
 
-        this.a = pkg.read(uint16).value;
-        this.b = pkg.read(uint16).value;
-        this.c = pkg.read(uint16).value;
-        this.d = pkg.read(uint16).value;
+        this.a = pkg.read("uint16");
+        this.b = pkg.read("uint16");
+        this.c = pkg.read("uint16");
+        this.d = pkg.read("uint16");
 
         return this;
     }
@@ -36,9 +30,9 @@ class FUnknownStruct2 implements C.IConstructable {
     public unkInt32_1: number;
 
     public load(pkg: C.APackage): this {
-        this.unkInt16 = pkg.read(uint16).value;
-        this.unkInt32_0 = pkg.read(uint32).value;
-        this.unkInt32_1 = pkg.read(uint32).value;
+        this.unkInt16 = pkg.read("uint16");
+        this.unkInt32_0 = pkg.read("uint32");
+        this.unkInt32_1 = pkg.read("uint32");
 
         return this;
     }
@@ -49,8 +43,8 @@ class FUnknownStruct3 implements C.IConstructable {
     public unkInt32_1: number;
 
     public load(pkg: C.APackage): this {
-        this.unkInt32_0 = pkg.read(uint32).value;
-        this.unkInt32_1 = pkg.read(uint32).value;
+        this.unkInt32_0 = pkg.read("uint32");
+        this.unkInt32_1 = pkg.read("uint32");
 
         return this;
     }
@@ -77,8 +71,8 @@ abstract class ULodMesh extends UMesh {
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
-        this.version = pkg.read(uint32).value;
-        this.vertexCount = pkg.read(uint32).value;
+        this.version = pkg.read("uint32");
+        this.vertexCount = pkg.read("uint32");
 
         this.unkArr0.load(pkg);
 
@@ -88,7 +82,7 @@ abstract class ULodMesh extends UMesh {
 
         this.lodMeshMaterials.load(pkg);
 
-        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(float).value);
+        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read("float"));
 
         if (this.version < 2) {
             debugger;
@@ -100,10 +94,10 @@ abstract class ULodMesh extends UMesh {
         this.unkArr5.load(pkg);
         this.unkArr6.load(pkg);
 
-        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(float).value);
+        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read("float"));
 
         if (this.version >= 3) {
-            const maybeHasImpostor = pkg.read(uint32).value;
+            const maybeHasImpostor = pkg.read("uint32");
 
             if (maybeHasImpostor !== 0 && maybeHasImpostor !== 1) {
                 debugger;
@@ -114,11 +108,11 @@ abstract class ULodMesh extends UMesh {
         }
 
         if (this.version >= 4) {
-            this.skinTesselationFactor = pkg.read(uint32).value;
+            this.skinTesselationFactor = pkg.read("uint32");
         }
 
         if (this.version >= 5) {
-            this.unkVar2 = pkg.read(uint32).value;
+            this.unkVar2 = pkg.read("uint32");
         }
     }
 }
@@ -140,15 +134,15 @@ class MeshImpostor implements C.IConstructable {
     public material: GA.UMaterial;
 
     public load(pkg: C.APackage): this {
-        this.materialId = pkg.read(compat).value;
+        this.materialId = pkg.read("compat32");
 
         this.location = FVector.make().load(pkg);
         this.rotation = FRotator.make().load(pkg);
         this.scale = FVector.make().load(pkg);
         this.color = FColor.make().load(pkg);
-        this.spaceMode = pkg.read(uint32).value;
-        this.drawMode = pkg.read(uint32).value;
-        this.lightMode = pkg.read(uint32).value;
+        this.spaceMode = pkg.read("uint32");
+        this.drawMode = pkg.read("uint32");
+        this.lightMode = pkg.read("uint32");
 
         this.material = pkg.fetchObject<GA.UMaterial>(this.materialId);
 

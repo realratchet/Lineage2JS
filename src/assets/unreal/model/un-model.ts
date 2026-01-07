@@ -75,9 +75,6 @@ abstract class UModel extends UPrimitive {
         // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
         // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
 
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
-
         pkg.seek(this.readHead, "set");
 
         super.doLoad(pkg, exp);
@@ -88,9 +85,9 @@ abstract class UModel extends UPrimitive {
         this.bspSurfs.load(pkg);    // 0x98
         this.vertices.load(pkg);    // 0x68
 
-        this.numSharedSides = pkg.read(int32).value;  // 0x124
+        this.numSharedSides = pkg.read("int32");  // 0x124
 
-        const numZones = pkg.read(int32).value;       // 0x128
+        const numZones = pkg.read("int32");       // 0x128
 
         console.assert(numZones <= MAX_ZONES);
 
@@ -100,7 +97,7 @@ abstract class UModel extends UPrimitive {
             this.zones[i] = new FZoneProperties().load(pkg);
 
         this.readHead = pkg.tell();
-        const polysId = pkg.read(compat32).value;
+        const polysId = pkg.read("compat32");
         const polyExp = pkg.exports[polysId - 1];
         const className = pkg.getPackageName(polyExp.idClass)
 
@@ -124,8 +121,8 @@ abstract class UModel extends UPrimitive {
 
         this.readHead = pkg.tell();
 
-        this.isRootOutside = pkg.read(int32).value != 0;
-        this.isLinked = pkg.read(int32).value != 0;
+        this.isRootOutside = pkg.read("int32") != 0;
+        this.isLinked = pkg.read("int32") != 0;
 
         this.readHead = pkg.tell();
 
