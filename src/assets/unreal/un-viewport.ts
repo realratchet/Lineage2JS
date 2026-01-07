@@ -1,7 +1,8 @@
 import UPlayer from "./un-player";
 
-class UViewport extends UPlayer {
+abstract class UViewport extends UPlayer {
 
 }
 
 export default UViewport;
+export { UViewport };

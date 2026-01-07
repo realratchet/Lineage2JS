@@ -124,8 +124,7 @@ function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MeshSt
 }
 
 function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
-    debugger;
-    throw new Error("Does this ever happen?");
+    return new MeshBasicMaterial({ color: 0xff00ff }) as any;
 }
 
 function decodeGroup(library: DecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
@@ -218,7 +217,20 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
 
     function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): any {
         return {
+            name: info.name,
+            type: "texture",
             map: decodeParameter(library, info),
+            blendingMode,
+            opacity
+        };
+    }
+
+    function decodeSprite(library: DecodeLibrary, info: IAnimatedSpriteDecodeInfo): any {
+        return {
+            name: info.name,
+            type: "sprite",
+            sprites: info.sprites.map(v => decodeParameter(library, v)),
+            framerate: info.framerate,
             blendingMode,
             opacity
         };
@@ -227,6 +239,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
     function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
         switch (info.materialType) {
             case "texture": return decodeTexture(library, info as ITextureDecodeInfo);
+            case "sprite": return decodeSprite(library, info as IAnimatedSpriteDecodeInfo);
             default: throw new Error(`Unknown decodable type: ${info.materialType}`);
         }
     }
@@ -243,7 +256,10 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
 }
 
 function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
-    if (!info) return null;
+    // return new MeshBasicMaterial({ color: Math.floor(Math.random() * 0xffffff) })
+
+    if (!info) return new MeshBasicMaterial({ color: 0xff00ff });
+
     switch (info.materialType) {
         case "group": return decodeGroup(library, info as IMaterialGroupDecodeInfo);
         case "shader": return decodeShader(library, info as IShaderDecodeInfo);
@@ -257,6 +273,8 @@ function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): 
         case "particle": return decodeParticleMaterial(library, info as IParticleMaterialDecodeInfo);
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
+
+
 }
 
 export default decodeMaterial;

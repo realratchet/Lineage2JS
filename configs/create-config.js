@@ -113,33 +113,42 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                     ]
                 ],
                 plugins: [
+                    ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
-                    "@babel/plugin-proposal-class-properties"
+                    ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                    ["@babel/plugin-proposal-private-methods", { "loose": true }],
+                    ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
                 ]
             }
         }, {
             test: /\.(js|jsx|ts|tsx)$/,
             exclude: /(node_modules|submodules)/,
-            loader: "babel-loader",
-            options: {
-                presets: [
-                    ["@babel/preset-env", {
-                        targets: { browsers: ["chrome >= 80"] }
-                    }],
-                    [
-                        "@babel/preset-typescript", {
-                            allowNamespaces: true,
-                            targets: {
-                                browsers: ["chrome >= 80"]
-                            }
-                        }
-                    ]
-                ],
-                plugins: [
-                    "@babel/transform-runtime",
-                    "@babel/plugin-proposal-class-properties"
-                ]
-            }
+            use: [
+                {
+                    loader: "babel-loader",
+                    options: {
+                        presets: [
+                            ["@babel/preset-env", {
+                                targets: { browsers: ["chrome >= 80"] }
+                            }],
+                            [
+                                "@babel/preset-typescript", {
+                                    allowNamespaces: true,
+                                    targets: {
+                                        browsers: ["chrome >= 80"]
+                                    }
+                                }
+                            ]
+                        ],
+                        plugins: [
+                            ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
+                            "@babel/transform-runtime",
+                            ["@babel/plugin-proposal-class-properties", { "loose": true }],
+                            ["@babel/plugin-proposal-private-methods", { "loose": true }],
+                            ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
+                        ]
+                    }
+                }]
         });
 
         return {
@@ -181,7 +190,8 @@ module.exports.createConfigBundle = createModuleConfig({
         extensions: [".tsx", ".ts", ".js"],
         alias: {
             "@client": path.resolve(__dirname, "../src"),
-            "@unreal": path.resolve(__dirname, "../src/assets/unreal")
+            "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
+            "@l2js/core": "@l2js/core/src"
         }
     },
     entry: "../src/index.ts"

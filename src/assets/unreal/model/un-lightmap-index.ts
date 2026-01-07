@@ -1,35 +1,33 @@
-import FConstructable from "../un-constructable";
-import FArray, { FPrimitiveArray } from "../un-array";
-import BufferValue from "@client/assets/buffer-value";
-import { FMatrix } from "../un-matrix";
+import FMatrix from "@client/assets/unreal/un-matrix";
+import { BufferValue } from "@l2js/core";
+import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-class FSubStructure extends FConstructable {
+
+class FSubStructure implements C.IConstructable {
     public lightIndex: number;
-    public lightExp: import("../un-export").UExport;
+    public lightExp: C.UExport;
     public bitmap = new FPrimitiveArray(BufferValue.uint8);
 
     public unkIntArr0: number[];
     public unkInt0: number;
     public unkIntArr1: number[];
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat = new BufferValue(BufferValue.compat32);
-
-        this.lightIndex = pkg.read(compat).value as number;
+    public load(pkg: C.APackage): this {
+        this.lightIndex = pkg.read("compat32");
         this.lightExp = pkg.exports[this.lightIndex - 1];
 
-        this.bitmap = this.bitmap.load(pkg, tag).getTypedArray();
+        this.bitmap = this.bitmap.load(pkg);
 
-        this.unkIntArr0 = new Array(2).fill(1).map(_ => pkg.read(int32).value as number);
-        this.unkInt0 = pkg.read(int32).value as number;
-        this.unkIntArr1 = new Array(4).fill(1).map(_ => pkg.read(int32).value as number);
+        this.unkIntArr0 = new Array(2).fill(1).map(_ => pkg.read("int32"));
+        this.unkInt0 = pkg.read("int32");
+        this.unkIntArr1 = new Array(4).fill(1).map(_ => pkg.read("int32"));
 
         return this;
     }
 }
 
-class FLightmapIndex extends FConstructable {
+
+class FLightmapIndex implements C.IConstructable {
     public iLightmapTexture: number;
     public surfaceIndex: number;
     public unkIndex0: number;
@@ -38,36 +36,37 @@ class FLightmapIndex extends FConstructable {
     public sizeX: number;
     public sizeY: number;
 
-    public uvMatrix = new FMatrix();
+    public uvMatrix: GA.FMatrix;
     public unkFloatGroup0: number[];
 
     public levelId: number;
     public unkSubstructure = new FArray(FSubStructure);
     public unkInt0: number;
 
-    public load(pkg: UPackage, tag: PropertyTag): this {
-        const float = new BufferValue(BufferValue.float);
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat = new BufferValue(BufferValue.compat32);
+    public unkArrAsFloats: Array<number> = new Array(9);
+    public unkArrAsInts: Array<number> = new Array(9);
 
-        ([
-            this.iLightmapTexture,
-            this.surfaceIndex,
-            this.unkIndex0,
-            this.offsetX,
-            this.offsetY,
-            this.sizeX,
-            this.sizeY
-        ] = new Array(7).fill(1).map(_ => pkg.read(compat).value as number));
+    public load(pkg: C.APackage): this {
+        // pkg.addDependencies(
+        //     pkg,
+        //     ["Struct", "Matrix"],
+        // );
+
+        this.uvMatrix = FMatrix.make();
+
+        this.iLightmapTexture = pkg.read("compat32");
+        this.surfaceIndex = pkg.read("compat32");
+        this.unkIndex0 = pkg.read("compat32");
+        this.offsetX = pkg.read("compat32");
+        this.offsetY = pkg.read("compat32");
+        this.sizeX = pkg.read("compat32");
+        this.sizeY = pkg.read("compat32");
 
         // 18430.568359375 110065 -9380 27.42898941040039 0 0 0 64 0
 
         this.uvMatrix.load(pkg);
 
-        const unkArray = pkg.read(BufferValue.allocBytes(9 * 4)) as BufferValue;
-
-        this.unkArrAsFloats = new Array(9);
-        this.unkArrAsInts = new Array(9);
+        const unkArray = pkg.read(BufferValue.allocBytes(9 * 4));
 
         for (let i = 0; i < 9; i++) {
             this.unkArrAsFloats[i] = (unkArray.value as DataView).getFloat32(i * 4, unkArray.endianess === "little");
@@ -75,8 +74,8 @@ class FLightmapIndex extends FConstructable {
         }
 
         this.unkSubstructure.load(pkg); // these might be individual lights?
-        this.levelId = pkg.read(compat).value as number;
-        this.unkInt0 = pkg.read(int32).value as number;
+        this.levelId = pkg.read("compat32");
+        this.unkInt0 = pkg.read("int32");
 
         return this;
     }

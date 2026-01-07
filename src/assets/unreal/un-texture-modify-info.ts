@@ -1,35 +1,16 @@
-import UObject from "./un-object";
+import UObject from "@l2js/core";
 
-enum AlphaOperation_T {
-    AO_Use_Mask,
-    AO_Multiply,
-    AO_Add,
-    AO_Use_Alpha_From_Material1,
-    AO_Use_Alpha_From_Material2,
-};
+abstract class UTextureModifyInfo extends UObject {
+    declare public readonly useModify: boolean;
+    declare public readonly doubleSide: boolean;
+    declare public readonly alphaBlend: boolean;
+    declare public readonly dummy: boolean;
+    declare public readonly color: GA.FColor;
+    declare public readonly alphaOp: number;
+    declare public readonly colorOp: number;
 
-enum ColorOperation_T {
-    CO_Use_Color_From_Material1,
-    CO_Use_Color_From_Material2,
-    CO_Multiply,
-    CO_Add,
-    CO_Subtract,
-    CO_AlphaBlend_With_Mask,
-    CO_Add_With_Mask_Modulation,
-    CO_Use_Color_From_Mask,
-};
-
-class UTextureModifyInfo extends UObject {
-    protected useModify: boolean;
-    protected doubleSide: boolean;
-    protected alphaBlend: boolean;
-    protected dummy: boolean;
-    protected color: FColor;
-    protected alphaOp: AlphaOperation_T;
-    protected colorOp: ColorOperation_T;
-
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
+    protected getPropertyMap(): Record<string, string> {
+        return {
             "bUseModify": "useModify",
             "bTwoSide": "doubleSide",
             "bAlphaBlend": "alphaBlend",
@@ -37,7 +18,7 @@ class UTextureModifyInfo extends UObject {
             "Color": "color",
             "AlphaOp": "alphaOp",
             "ColorOp": "colorOp"
-        });
+        };
     }
 }
 

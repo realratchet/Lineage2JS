@@ -1,34 +1,24 @@
-import FArray from "../un-array";
-import BufferValue from "../../buffer-value";
-import FConstructable from "../un-constructable";
+class FStaticMeshUVStream implements C.IConstructable {
+    declare private data: DataView;
+    declare private f10: number;
+    declare private f1C: number; // most likely revision as it's always the last one in stream
 
-class FStaticMeshUVStream extends FConstructable {
-    public readonly data: FArray<FMeshUVFloat> = new FArray(FMeshUVFloat as any);
+    public getUV(index: number): [number, number] {
+        const off = index << 3;
 
-    public f10: number;
-    public f1C: number;
-
-    public load(pkg: UPackage): this {
-        const i = new BufferValue(BufferValue.int32);
-
-        this.data.load(pkg);
-
-        this.f10 = pkg.read(i).value as number;
-        this.f1C = pkg.read(i).value as number;
-
-        return this;
+        return [
+            this.data.getFloat32(off, true), this.data.getFloat32(off + 4, true)
+        ];
     }
-}
 
-class FMeshUVFloat extends FConstructable {
-    public u: number;
-    public v: number;
 
-    public load(pkg: UPackage): this {
-        const f = new BufferValue(BufferValue.float);
+    public load(pkg: C.APackage): this {
+        const size = pkg.read("compat32");
 
-        this.u = pkg.read(f).value as number;
-        this.v = pkg.read(f).value as number;
+        this.data = pkg.read(size * 4 * 2);
+
+        this.f10 = pkg.read("int32");
+        this.f1C = pkg.read("int32");
 
         return this;
     }

@@ -1,11 +1,11 @@
 import { Vector3 } from "three";
+import { LightEffect_T } from "./un-light";
 
-function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): FColor {
+function sampleLightColor(light: any, sampPosition /* param_1 */: GA.FVector, sampNormal /* param_2 */: GA.FVector): GA.FColor {
     return null;
 }
 
-function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
-
+function sampleLightIntensity(light: GD.ILightRenderInfo, sampPosition /* param_1 */: GA.FVector, sampNormal /* param_2 */: GA.FVector): number {
     let lightEffect: LightEffect_T; // char
     let fVar2: number; // float
     let fVar3: number; // float10
@@ -23,17 +23,17 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
     let fStack16: number; // float
     let fStack12: number; // float
 
-    lightEffect = light.effect;
+    lightEffect = light.lightEffect;
 
-    // debugger;
+    debugger;
 
-    if (lightEffect === 0x13) {
+    if (lightEffect === LightEffect_T.LE_Sunlight) {
         const dotProduct = sampNormal.x * light.direction.x + sampNormal.z * light.direction.z + sampNormal.y * light.direction.y;
 
         if (dotProduct < 0.0) {
             return dotProduct * -2.0;
         }
-    } else if (lightEffect === 0x11) {
+    } else if (lightEffect === LightEffect_T.LE_Cylinder) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
         //   dt_pos.z = (this->likelyPosition).z - position.z;
@@ -49,7 +49,7 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //   }
 
         debugger;
-    } else if (lightEffect === 0xd) {
+    } else if (lightEffect === LightEffect_T.LE_NonIncidence) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
         //   dt_pos.z = (this->likelyPosition).z - position.z;
@@ -63,7 +63,7 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //   }
 
         debugger;
-    } else if (lightEffect === 0x14) {
+    } else if (lightEffect === LightEffect_T.LE_QuadraticNonIncidence) {
         //   dt_pos.x = (this->likelyPosition).x - position.x;
         //   dt_pos.y = (this->likelyPosition).y - position.y;
         //   dt_pos.z = (this->likelyPosition).z - position.z;
@@ -77,7 +77,7 @@ function sampleLightIntensity(light: ILightRenderInfo, sampPosition /* param_1 *
         //   }
 
         debugger;
-    } else if ((lightEffect !== 0xc) && (lightEffect !== 0x8)) {
+    } else if ((lightEffect !== LightEffect_T.LE_Spotlight) && (lightEffect !== LightEffect_T.LE_StaticSpot)) {
         const dt = new Vector3().copy(light.position).sub(sampPosition);
         const radius = light.radius;
         const len = dt.length();

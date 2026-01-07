@@ -2,7 +2,8 @@
     "name": "lineage-js",
     "version": "1.0.0",
     "description": "",
-    "main": "index.ts",
+    "main": "index.js",
+    "typings": "index.d.ts",
     "scripts": {
         "start": "node_modules/.bin/webpack serve --config configs/development.config.js --port 8080 --host 0.0.0.0",
         "build-dev": "rm -rf bin/ && node_modules/.bin/webpack --config configs/development.config.js"
@@ -37,6 +38,8 @@
     },
     "dependencies": {
         "@dimforge/rapier3d": "^0.9.0",
+        "@l2js/core": "git+ssh://git@github.com:realratchet/l2js-core.git#stable",
+        "chokidar": "^5.0.0",
         "dat.gui": "^0.7.9",
         "gmp-wasm": "^1.1.0",
         "node-forge": "^1.3.1",

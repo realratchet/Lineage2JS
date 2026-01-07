@@ -1,8 +1,7 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 
-function findPattern(pkg: UPackage, pattern: number[]) {
+function findPattern(pkg: C.APackage, pattern: number[]) {
     const prevOffset = pkg.tell();
-    const uint8 = new BufferValue(BufferValue.uint8);
 
     let index = -1, patternMatch = 0, maxPattern = 0;
 
@@ -14,7 +13,7 @@ function findPattern(pkg: UPackage, pattern: number[]) {
         while (patternMatch !== pattern.length) {
 
             const preIndex = pkg.tell();
-            const v = pkg.read(uint8).value as number;
+            const v = pkg.read("uint8");
 
             if (v === pattern[patternMatch]) {
                 if (patternMatch === 0) index = preIndex;

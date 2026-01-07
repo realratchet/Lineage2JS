@@ -1,9 +1,9 @@
 interface IDatContainerType {
     isContainerType: boolean;
-    read(pkg: UEncodedFile): any[];
+    read(pkg: C.UEncodedFile): any[];
 }
 
 interface ISchemaValue {
-    type: ValidTypes_T<any> | IDatContainerType,
+    type: C.ValidTypes_T<any> | IDatContainerType,
     name: string
 }

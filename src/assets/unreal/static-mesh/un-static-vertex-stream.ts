@@ -1,28 +1,38 @@
-import FArray from "../un-array";
-import FVector from "../un-vector";
-import BufferValue from "../../buffer-value";
-import FConstructable from "../un-constructable";
+class FStaticMeshVertexStream implements C.IConstructable {
+    declare private data: DataView;
+    declare private elementCount: number;
+    declare private revision: number;
 
-class FStaticMeshVertexStream extends FConstructable {
-    public readonly vert: FArray<FStaticMeshVertex> = new FArray(FStaticMeshVertex);
-    public revision: number;
+    public getElemCount() { return this.elementCount };
 
-    public load(pkg: UPackage): this {
-        this.vert.load(pkg);
+    public getElem(index: number): [number, number, number, number, number, number] {
+        const off = index * 24;
 
-        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
-
-        return this;
+        return [
+            this.data.getFloat32(off + 0, true),
+            this.data.getFloat32(off + 4, true),
+            this.data.getFloat32(off + 8, true),
+            this.data.getFloat32(off + 12, true),
+            this.data.getFloat32(off + 16, true),
+            this.data.getFloat32(off + 20, true)
+        ];
     }
-}
 
-class FStaticMeshVertex extends FConstructable {
-    public readonly position = new FVector();
-    public readonly normal = new FVector();
+    public load(pkg: C.APackage): this {
+        const size = pkg.read("compat32");
 
-    public load(pkg: UPackage): this {
-        this.position.load(pkg);
-        this.normal.load(pkg);
+        this.data = pkg.read(size * 24);
+        /**
+         * position[0].x, position[0].y, position[0].z, (float: 4 bytes x 3)
+         * normal[0].x, position[0].y, position[0].z, (float: 4 bytes x 3)
+         * ...
+         * position[n].x, position[n].y, position[n].z,
+         * normal[n].x, position[n].y, position[n].z
+         */
+
+        this.elementCount = size;
+
+        this.revision = pkg.read("int32");
 
         return this;
     }

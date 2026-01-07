@@ -1,15 +1,13 @@
-import FArray from "./un-array";
-import FColor from "./un-color";
-import UInfo from "./un-info";
+import AInfo from "./un-info";
 
-class UFogInfo extends UInfo {
-    protected affectRange: URange;
-    protected fogRange1: URange;
-    protected fogRange2: URange;
-    protected fogRange3: URange;
-    protected fogRange4: URange;
-    protected fogRange5: URange;
-    protected colors: FArray<FColor> = new FArray(FColor);
+abstract class FFogInfo extends AInfo {
+    declare protected readonly affectRange: GA.FRange;
+    declare protected readonly fogRange1: GA.FRange;
+    declare protected readonly fogRange2: GA.FRange;
+    declare protected readonly fogRange3: GA.FRange;
+    declare protected readonly fogRange4: GA.FRange;
+    declare protected readonly fogRange5: GA.FRange;
+    declare protected readonly colors: C.FArray<GA.FColor>;
 
     public readonly careUnread = false;
 
@@ -26,5 +24,5 @@ class UFogInfo extends UInfo {
     }
 }
 
-export default UFogInfo;
-export { UFogInfo };
+export default FFogInfo;
+export { FFogInfo };

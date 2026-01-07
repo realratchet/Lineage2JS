@@ -1,6 +1,6 @@
 import UPrimitive from "./un-primitive";
 
-class UConvexVolume extends UPrimitive {
+abstract class UConvexVolume extends UPrimitive {
 
 }
 

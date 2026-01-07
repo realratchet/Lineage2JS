@@ -1,63 +1,73 @@
-import UObject from "./un-object";
+import UObject from "@l2js/core";
 import FBox from "./un-box";
-import BufferValue from "../buffer-value";
-import FArray, { FPrimitiveArray } from "./un-array";
+import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import { selectByTime, terrainAmbient } from "./un-time-list";
-import FVector from "./un-vector";
-import timeOfDay, { indexToTime } from "./un-time-of-day-helper";
-import FConstructable from "./un-constructable";
+import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FVector from "@client/assets/unreal/un-vector";
+import { indexToTime, timeToIndex } from "@client/assets/unreal/un-l2env";
+import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
+import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 
-class FTerrainLightInfo extends FConstructable {
+class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
-    public someData = new FPrimitiveArray(BufferValue.uint8);
+    public light: GA.ULight;
+    public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
+        this.lightIndex = pkg.read("compat32");
 
-        const compat32 = new BufferValue(BufferValue.compat32);
+        if (this.lightIndex !== 0) this.light = pkg.fetchObject(this.lightIndex);
 
-        this.lightIndex = pkg.read(compat32).value as number;
-        this.someData.load(pkg);
+        this.visibilityBitmap.load(pkg);
 
         return this;
     }
 }
 
-class UTerrainSector extends UObject {
-    public readonly boundingBox: FBox = new FBox();
-    protected offsetX: number;
-    protected offsetY: number;
-    public info: UTerrainInfo;
-    protected cellNum: number;
-    protected sectorWidth: number;
+class FTerrainSectorRenderPass {
+    public info: GA.ATerrainInfo;
+    public renderCombinationNum: number;
 
-    protected infoId: number;
-    protected unkNum0: number;
-    protected unkNum1: number;
-    protected unkNum2: number;
+    public indices: number[];
+    public numTriangles: number;
+    public numIndices: number;
+    public minIndex: number;
+    public maxIndex: number;
+}
 
-    protected unkBuf0: any;
+abstract class UTerrainSector extends UObject {
+    declare public boundingBox: FBox;
+    declare public offsetX: number;
+    declare public offsetY: number;
+    declare public info: GA.ATerrainInfo;
+    declare protected hasShadows: boolean;
+    declare protected shadowCount: number;
+
+    declare protected infoId: number;
+    declare public quadsX: number;
+    declare public quadsY: number;
+
+    declare public quadsXActual: number;
+    declare public quadsYActual: number;
+
+    declare pkg: C.APackage;
 
     // likely mesh lights?
-    protected likelySegmentLights = new FArray(FTerrainLightInfo);
+    declare protected lightInfos: FArray<FTerrainLightInfo>;
 
-    protected shadowMaps = [
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8),
-        new FPrimitiveArray(BufferValue.uint8)
-    ];
+    declare protected shadowMaps: FPrimitiveArray<"uint8">[];
+    declare protected shadowMapTimes: number[];
 
-    protected texInfo: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
-    protected unk64Bytes: Int32Array;
+    declare protected texInfo: FPrimitiveArray<"uint16">;
+    declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
+    declare protected renderPasses: FTerrainSectorRenderPass[];
 
-    public getDecodeInfo(library: DecodeLibrary, info: UTerrainInfo, { data, info: iTerrainMap }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
+
+        const envManager = info.levelInfo.getL2Env();
+        const env = envManager.getCurrentEnvLight();
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
@@ -71,29 +81,28 @@ class UTerrainSector extends UObject {
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
 
+        // Generate triangulation data on demand
+        this.generateTriangles();
+
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
-        const positions = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
+        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
-        const ambient = selectByTime(timeOfDay, terrainAmbient).getColor();
+        const ambient = envManager.getAmbientPlaneTerrainLight();
 
-        const trueBoundingBox = new FBox();
-        const tmpVector = new FVector();
+        const trueBoundingBox = FBox.make();
+        const tmpVector = FVector.make();
 
-        let validShadowmap: FPrimitiveArray = null;
-        for (let i = 0, len = this.shadowMaps.length; i < len; i++) {
-            const timeForIndex = indexToTime(i, len);
+        // Get appropriate shadow map for current time of day
+        const validShadowmap = this.getShadowMapForTime(envManager.getTimeOfDay());
 
-            if (timeForIndex > timeOfDay && this.shadowMaps[i].getElemCount() >= vertexCount) {
-                validShadowmap = this.shadowMaps[i];
-                break;
-            }
-        }
+        const v = FVector.make();
 
-        const v = new FVector();
+        let iii = 0;
 
+        normals.set(this.triangles.normals)
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -103,7 +112,30 @@ class UTerrainSector extends UObject {
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
 
-                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.terrainCoords);
+                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+                // const [nx, nz, ny] = [
+                //     this.triangles.normals[0 + 3 * iii],
+                //     this.triangles.normals[1 + 3 * iii],
+                //     this.triangles.normals[2 + 3 * iii]
+                // ];
+                // const [ xxx, zzz, yyy ] = [
+                //     this.triangles.vertices[0 + 3 * iii],
+                //     this.triangles.vertices[1 + 3 * iii],
+                //     this.triangles.vertices[2 + 3 * iii]
+                // ]
+
+                // console.log(xxx-px,yyy-py,zzz-pz, "|",  x, y, "|", info.getGlobalVertex(x, y), "|", iii)
+
+                // iii++;
+
+                // debugger;
+
+                if (edgeTurns[offset >> 5] & (1 << (offset & 0x1f))) {
+                    // 124, 423
+                } else {
+                    // 123, 134
+                }
+
 
                 positions[idxVertOffset + 0] = px - ox;
                 positions[idxVertOffset + 1] = py - oy;
@@ -111,11 +143,10 @@ class UTerrainSector extends UObject {
 
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
-                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
-
-                colors[idxVertOffset + 0] = ambient[0] * shadowMap;
-                colors[idxVertOffset + 1] = ambient[1] * shadowMap;
-                colors[idxVertOffset + 2] = ambient[2] * shadowMap;
+                // Initialize vertex colors to black (lighting will be applied later)
+                colors[idxVertOffset + 0] = 0;
+                colors[idxVertOffset + 1] = 0;
+                colors[idxVertOffset + 2] = 0;
 
                 // {
                 //     const hmx = x + this.offsetX;
@@ -140,6 +171,108 @@ class UTerrainSector extends UObject {
             }
         }
 
+        for (let i = 0, len = this.lightInfos.length; i < len; i++) {
+            const lightInfo = this.lightInfos[i];
+
+            if (!lightInfo) continue;
+
+            if (!lightInfo || !lightInfo.light)
+                debugger;
+
+            // if (this.lightInfos.length === 4)
+            //     debugger;
+
+            const lightActor = lightInfo.light?.loadSelf();
+
+            const dynLight = lightActor.getRenderInfo(env);
+
+            const color = dynLight.color;
+
+            const bitPtrIter = lightInfo.visibilityBitmap.iter();
+
+            let bitMask = 0x1;
+            let bitPtr = bitPtrIter.next().value;
+
+
+            const DEBUG_LIGHTING_RED = false;
+
+            // Iterate through all vertices (17x17 grid)
+            for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
+                // Check visibility bitmap - only process if bit is set
+                if ((bitPtr & bitMask) !== 0) {
+                    const idxVertOffset = vertexIndex * 3;
+
+
+                    
+                    if (DEBUG_LIGHTING_RED) {
+                        // Debug mode: Force lit areas to be bright red
+                        colors[idxVertOffset + 0] = 1.0; // Red
+                        colors[idxVertOffset + 1] = 0.0; // Green
+                        colors[idxVertOffset + 2] = 0.0; // Blue
+                    } else {
+                        // Normal lighting calculation
+                        // Get vertex position in world space (add center offset)
+                        const vx = positions[idxVertOffset + 0] + ox;
+                        const vz = positions[idxVertOffset + 1] + oy;
+                        const vy = positions[idxVertOffset + 2] + oz;
+
+                        // Get vertex normal
+                        const nx = normals[idxVertOffset + 0];
+                        const nz = normals[idxVertOffset + 1];
+                        const ny = normals[idxVertOffset + 2];
+
+                        const samplingPoint = FVector.make(vx, vy, vz);
+                        const samplingNormal = FVector.make(nx, ny, nz);
+
+                        // Sample light intensity at this vertex
+                        const intensity = dynLight.sampleIntensity(samplingPoint, samplingNormal);
+
+                        if (intensity > 0) {
+                            // Add light contribution to vertex color
+                            colors[idxVertOffset + 0] += color.x * intensity;
+                            colors[idxVertOffset + 1] += color.y * intensity;
+                            colors[idxVertOffset + 2] += color.z * intensity;
+                        }
+                    }
+                }
+
+                // Advance bitmap position
+                bitMask = (bitMask << 1) % 0x100; // check for byte overflow
+                if (!bitMask) {
+                    const nextResult = bitPtrIter.next();
+                    if (nextResult.done) break; // End of bitmap
+                    bitPtr = nextResult.value;
+                    bitMask = 1;
+                }
+            }
+
+            //     // if()
+
+            // TODO: sample intensity
+            normals
+
+            // debugger;
+        }
+
+        // Apply shadow mapping and ambient light after all lighting calculations
+        for (let y = 0; y < 17; y++) {
+            for (let x = 0; x < 17; x++) {
+                const idxOffset = y * 17 + x;
+                const idxVertOffset = idxOffset * 3;
+
+                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
+
+                // Add ambient light contribution
+                colors[idxVertOffset + 0] += ambient[0] * shadowMap;
+                colors[idxVertOffset + 1] += ambient[1] * shadowMap;
+                colors[idxVertOffset + 2] += ambient[2] * shadowMap;
+
+                // Clamp colors to [0, 1]
+                colors[idxVertOffset + 0] = Math.max(0, Math.min(1, colors[idxVertOffset + 0]));
+                colors[idxVertOffset + 1] = Math.max(0, Math.min(1, colors[idxVertOffset + 1]));
+                colors[idxVertOffset + 2] = Math.max(0, Math.min(1, colors[idxVertOffset + 2]));
+            }
+        }
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -208,8 +341,20 @@ class UTerrainSector extends UObject {
                     const hmy = y + this.offsetY;
                     const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    uvs[layerOffset + idxOffset + 0] = hmx / layer.scaleW * (layer.scale.x / info.terrainScale.x) * 2.0;
-                    uvs[layerOffset + idxOffset + 1] = hmy / layer.scaleH * (layer.scale.z / info.terrainScale.z) * 2.0;
+                    // Get world position for this vertex
+                    const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+                    const worldPos = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+
+                    // Use heightmap coordinates directly for UV calculation (matching L2 viewer approach)
+                    // This may be more accurate than using world coordinates
+                    const absHmx = hmx;
+                    const absHmy = hmy;
+
+                    let u = (absHmx / layer.scaleW) * (layer.scale.x / info.terrainScale.x) * 2.0 + layer.panW;
+                    let uvV = (absHmy / layer.scaleH) * (layer.scale.y / info.terrainScale.y) * 2.0 + layer.panH;
+
+                    uvs[layerOffset + idxOffset + 0] = u;
+                    uvs[layerOffset + idxOffset + 1] = uvV;
                 }
             }
         }
@@ -222,8 +367,8 @@ class UTerrainSector extends UObject {
                 const hmy = y + this.offsetY;
                 const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                uvs[layerOffset + idxOffset + 0] = hmx / 255;
-                uvs[layerOffset + idxOffset + 1] = hmy / 255;
+                uvs[layerOffset + idxOffset + 0] = hmx / info.heightmapX;
+                uvs[layerOffset + idxOffset + 1] = hmy / info.heightmapY;
             }
         }
 
@@ -236,11 +381,13 @@ class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getVectorElements() as Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getVectorElements() as Vector3Arr
+                    min: this.boundingBox.min.sub(center).getVectorElements() as GD.Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getVectorElements() as GD.Vector3Arr
                 } : null
             }
         };
+
+        // debugger;
 
         library.materials[this.uuid] = {
             materialType: "terrainSegment",
@@ -252,8 +399,8 @@ class UTerrainSector extends UObject {
                 width: 17 * 17,
                 height: layerCount + 1,
                 format: "rg"
-            } as IDataTextureDecodeInfo
-        } as IMaterialTerrainSegmentDecodeInfo;
+            } as GD.IDataTextureDecodeInfo
+        } as GD.IMaterialTerrainSegmentDecodeInfo;
 
         return {
             uuid: this.uuid,
@@ -265,107 +412,489 @@ class UTerrainSector extends UObject {
         };
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
-        // debugger;
+        this.boundingBox = FBox.make();
 
-        this.setReadPointers(exp);
-        pkg.seek(this.readHead, "set");
+        super.doLoad(pkg, exp);
 
-        // if (verArchive <= 0x5E) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
+        if (verArchive < 94) {
+            debugger;
+            throw new Error("not implemented");
+        }
 
-        // if (verArchive >= 0x75) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verArchive < 0x59) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verArchive < 0x75) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verLicense >= 4) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verLicense < 8) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // } else {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // if (verLicense < 10) {
-        //     console.warn("Unsupported yet");
-        //     debugger;
-        // }
-
-        // debugger;
-
-        // pkg.dump(1, true, false);
-        pkg.seek(1);
-
-        this.infoId = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-
-        // const uint16 = new BufferValue(BufferValue.uint16);
-        // const int32 = new BufferValue(BufferValue.int32);
-        const uint32 = new BufferValue(BufferValue.uint32);
+        this.infoId = pkg.read("compat32");
+        this.info = pkg.fetchObject(this.infoId);
 
         // pkg.dump(1, true, false);
 
-        this.unkNum0 = pkg.read(uint32).value as number;
-        this.unkNum1 = pkg.read(uint32).value as number;
+        this.quadsX = pkg.read("int32");
+        this.quadsY = pkg.read("int32");
 
         // console.log(this.unkNum0, this.unkNum1)
 
-        // this.unkNum2 = pkg.read(uint16).value as number;
+        // this.unkNum2 = pkg.read("uint16");
 
         // debugger;
 
-        this.offsetX = pkg.read(uint32).value as number;
-        this.offsetY = pkg.read(uint32).value as number;
+        this.offsetX = pkg.read("int32");
+        this.offsetY = pkg.read("int32");
 
         // console.log(this.offsetX, this.offsetY);
 
         // debugger;
 
-        this.boundingBox.load(pkg);
+        if (verArchive >= 117)
+            this.boundingBox.load(pkg);
+        else {
+            debugger;
+            throw new Error("not implemented");
+        }
 
-        // debugger;
-        this.likelySegmentLights.load(pkg);
+        this.lightInfos = new FArray(FTerrainLightInfo);
+        this.lightInfos.load(pkg);
 
+        // if(this.lightInfos.length === 4)
+        //     debugger;
 
-        this.cellNum = pkg.read(uint32).value as number;
-        this.sectorWidth = pkg.read(uint32).value as number;
+        // if (this.lightInfos.length > 0) {
+        //     debugger;
+        // }
+
+        if (verLicense >= 4) {
+            const hasShadows = pkg.read("int32");
+
+            this.hasShadows = hasShadows !== 0;
+
+            if (hasShadows !== 0 && hasShadows !== 1)
+                debugger;
+
+            if (this.hasShadows && this.info) {
+                this.shadowCount = pkg.read("int32");
+                this.shadowMaps = new Array<FPrimitiveArray<"uint8">>(this.shadowCount);
+                this.shadowMapTimes = new Array<number>(this.shadowCount);
+
+                for (let i = 0; i < this.shadowCount; i++) {
+                    this.shadowMaps[i] = new FPrimitiveArray(BufferValue.uint8).load(pkg);
+                    this.shadowMapTimes[i] = i * 24 / this.shadowCount + 12 / this.shadowCount
+                }
+
+            }
+        }
+
+        this.someSectorVisibilityMask = new Int16Array(32);
+        if (verLicense >= 8) {
+            for (let i = 0; i < 32; i++) {
+                this.someSectorVisibilityMask[i] = pkg.read("int16");
+            }
+        } else this.someSectorVisibilityMask.fill(-1);
+
+        if (verLicense > 10)
+            this.texInfo = new FPrimitiveArray(BufferValue.uint16).load(pkg);
+
 
         this.readHead = pkg.tell();
 
-        this.shadowMaps.forEach(sm => sm.load(pkg));
+        let quadsX = this.quadsX, quadsY = this.quadsY;
 
-        this.unk64Bytes = new Int32Array(pkg.read(BufferValue.allocBytes(64)).bytes.buffer);
+        if (this.offsetX >= 240)
+            quadsX = 15;
 
+        if (this.offsetY >= 240)
+            quadsY = 15;
 
-        this.texInfo.load(pkg);
-
-        this.readHead = pkg.tell();
+        // why does it set to 15 during serialization but during triangulization this is 16 again?
+        // this.quadsX = 15;
+        // this.quadsY = 15;
+        this.quadsXActual = quadsX;
+        this.quadsYActual = quadsY;
 
         return this;
     }
+
+    protected getVertex(x: number, y: number): FVector {
+        const info = this.info;
+        const vertices = info.vertices;
+        const offset = info.getGlobalVertex(x, y);
+
+        return vertices[offset];
+    }
+
+    protected getVertexColor(x: number, y: number): GA.FColor {
+        const info = this.info;
+        const colors = info.vertexColors;
+        const offset = info.getGlobalVertex(x, y);
+
+        return colors[offset];
+    }
+
+    protected getVertexNormal(x: number, y: number): FVector {
+        const info = this.info;
+        const ox = this.offsetX, oy = this.offsetY;
+        const tx = (ox === 240 && x === 16) ? 15 : x;
+        const ty = (oy === 240 && y === 16) ? 15 : y;
+        const normal = info.getVertexNormal(ox + tx, oy + ty);
+
+        return normal;
+    }
+
+    public generateTriangles() {
+        const info = this.info.loadSelf();
+        const invSize = 1 / 4096;
+        const hmx = info.heightmapX, hmy = info.heightmapY;
+
+        const vertexCount = (this.quadsX + 1) * (this.quadsY + 1);
+        const vertices = new Float32Array(vertexCount * 3);
+        const normals = new Float32Array(vertexCount * 3);
+        const uvs = new Float32Array(vertexCount * 2);
+        const colors = new Float32Array(vertexCount * 4);
+
+        if (info.texModifyInfo.loadSelf().colorOp !== 1) {
+            debugger;
+            throw new Error("not implemented");
+        }
+
+        for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= this.quadsY; y++) {
+            for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
+                const vertex = this.getVertex(x, y);
+                const normal = this.getVertexNormal(x, y);
+                const color = this.getVertexColor(x, y);
+
+                const ix = this.offsetX + x, iy = this.offsetY + y;
+                const hix = ix + 0.5, hiy = iy + 0.5;
+                const u = hix / hmx - (ix >= 240 ? (ix - 240) * invSize : 0);
+                const v = hiy / hmy - (iy >= 240 ? (iy - 240) * invSize : 0);
+
+                vertices[it3 + 0] = vertex.x;
+                vertices[it3 + 1] = vertex.y;
+                vertices[it3 + 2] = vertex.z;
+
+                normals[it3 + 0] = normal.x;
+                normals[it3 + 1] = normal.y;
+                normals[it3 + 2] = normal.z;
+
+                colors[it4 + 0] = color.r / 255;
+                colors[it4 + 1] = color.g / 255;
+                colors[it4 + 2] = color.b / 255;
+                colors[it4 + 3] = color.a / 255;
+
+                uvs[it2 + 0] = u;
+                uvs[it2 + 1] = v;
+            }
+        }
+
+
+        const layers = info.layers, layerCount = layers.length;
+        const layerIndices = new Array<number>(); // expected: 0, 1, 4, 5, 7
+
+        for (let index = 0; index < layerCount; index++) {
+            const layer = info.layers[index]?.loadSelf();
+
+            if (!layer || !layer.map || !layer.alphaMap)
+                break;
+
+            if (this.isSectorAll(index, 0))
+                continue;
+
+            for (let indexOther = index + 1; indexOther < layerCount; indexOther++) {
+                const other = info.layers[indexOther]?.loadSelf();
+
+                if (!other || !other.map || !other.alphaMap)
+                    break;
+
+                if (!other.map.isTransparent() && this.isSectorAll(indexOther, 255))
+                    continue;
+
+            }
+
+            layerIndices.push(index);
+        }
+
+        const passLayers = new Array<number>();
+        this.renderPasses = [];
+
+        for (const i of layerIndices) {
+            passLayers.push(i);
+
+            const pass = new FTerrainSectorRenderPass();
+
+            this.renderPasses.push(pass);
+            pass.renderCombinationNum = info.getRenderCombination(passLayers, ETerrainRenderMethod_T.RM_AlphaMap);
+
+            passLayers.length = 0;
+        }
+
+        for (let i = 0, len = this.renderPasses.length; i < len; i++) {
+            const pass = this.renderPasses[i];
+
+            pass.info = info;
+            pass.indices = [];
+            pass.numTriangles = 0;
+
+            this.triangulateLayer(i);
+
+            pass.numIndices = pass.indices.length;
+
+            if (pass.numIndices > 0) {
+                pass.minIndex = Number.MAX_SAFE_INTEGER;
+                pass.maxIndex = 0;
+
+                for (let j = 0, numIndices = pass.numIndices; j < numIndices; j++) {
+                    pass.minIndex = Math.min(pass.indices[j], pass.minIndex);
+                    pass.maxIndex = Math.max(pass.indices[j], pass.maxIndex);
+                }
+            } else {
+                debugger;
+                // remove passess without triangles and adjust iterator
+                this.renderPasses.splice(i);
+
+                len = len - 1;
+                i = i - 1;
+            }
+        }
+
+        this.triangles = {
+            this: this,
+            vertices,
+            normals,
+            uvs,
+            colors
+        }
+
+        // TODO: update decorators
+
+    }
+
+    protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
+
+    // Get appropriate shadow map based on time of day
+    protected getShadowMapForTime(timeOfDay: number): FPrimitiveArray<"uint8"> {
+        if (!this.hasShadows || !this.shadowMaps || this.shadowMaps.length === 0) {
+            return null;
+        }
+
+        // Use generic time-to-index conversion (works with explicit times or evenly distributed slots)
+        const shadowIndex = timeToIndex(timeOfDay, this.shadowMapTimes);
+
+        return this.shadowMaps[shadowIndex];
+    }
+
+    protected triangulateLayer(passIndex: number) {
+        const info = this.info;
+        const pass = this.renderPasses[passIndex];
+        const indices = pass.indices;
+        const texInfo = this.texInfo;
+
+        for (let y = 0; y < this.quadsY; y++) {
+            for (let x = 0; x < this.quadsX; x++) {
+                // when non-seamless it would use "QuadVisibilityBitmap" instead
+
+                const isQuadVis = info.getQuadVisibilityBitmapOrig(x + this.offsetX, y + this.offsetY);
+
+                if (!isQuadVis) {
+                    continue;
+                }
+
+                const v1 = this.getLocalVertex(x, y);
+                const v2 = v1 + 1;
+                const v3 = this.getLocalVertex(x + 1, y + 1);
+                const v4 = v3 - 1;
+                const texOffset = x + 16 * y; // differs from ue
+
+
+                let trianglePassed = false;
+
+                const isEdgeTurn = info.getEdgeTurnBitmapOrig(x + this.offsetX, y + this.offsetY);
+
+                if (this.offsetX === 240 && x === 15 || this.offsetY === 240 && y == 15) {
+                    if (passIndex === 0 || this.passShouldRenderTriangle(passIndex, x, y, 0, isEdgeTurn) || this.passShouldRenderTriangle(passIndex, x, y, 1, isEdgeTurn)) {
+                        trianglePassed = true;
+                    }
+                } else {
+                    if (passIndex === 0) {
+                        trianglePassed = true;
+                    } else {
+                        trianglePassed = texInfo.getElem(texOffset) !== 0;
+                    }
+                }
+
+                if (!trianglePassed) continue;
+
+
+                if (isEdgeTurn)
+                    indices.push(/* tri1 */ v1, v4, v2, /* tri2 */ v4, v3, v2);
+                else
+                    indices.push(/* tri1 */ v1, v4, v3, /* tri2 */ v1, v3, v2);
+
+                pass.numTriangles = pass.numTriangles + 2;
+            }
+        }
+    }
+
+    protected passShouldRenderTriangle(passIndex: number, x: number, y: number, triIndex: number, isTurned: boolean): boolean {
+        // UE implementation looks the same, so just ported it directly
+        const info = this.info;
+        const layers = info.layers;
+        const pass = this.renderPasses[passIndex];
+        const comb = info.renderCombinations[pass.renderCombinationNum];
+
+        if (comb.method === ETerrainRenderMethod_T.RM_AlphaMap) {
+            let transparent = true;
+
+            // 1. Check if this triangle is completely transparent in all layers in this pass.
+            for (const layerIndex of comb.layers) {
+                if (this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 0)) continue;
+
+                transparent = false;
+                break;
+            }
+
+            if (transparent) return false;
+
+            for (let p = passIndex + 1, pCount = this.renderPasses.length; p < pCount; p++) {
+                const otherPass = this.renderPasses[p];
+                const otherComb = info.renderCombinations[otherPass.renderCombinationNum];
+
+                for (const layerIndex of otherComb.layers) {
+                    const layer = layers[layerIndex];
+                    if (!layer.map.isTransparent() && this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 255)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        } else {
+
+        }
+    }
+
+    protected isTriangleAll(layerIndex: number, x: number, y: number, triIndex: number, isTurned: boolean, alphaValue: number): boolean {
+        const info = this.info;
+        const alphaMap = info.layers[layerIndex].alphaMap;
+
+        if (alphaMap.width === info.heightmapX) {
+            // Special-case 1:1 alphamap:heightmap ratio for performance
+
+            const ox = x + this.offsetX;
+            const oy = y + this.offsetY;
+
+            if (isTurned) {
+                if (triIndex) {
+                    // 432
+                    if (info.getLayerAlpha(ox, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+                else {
+                    // 142
+                    if (info.getLayerAlpha(ox, oy, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+            }
+            else {
+                if (triIndex) {
+                    // 132
+                    if (info.getLayerAlpha(ox, oy, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+                else {
+                    // 143
+                    if (info.getLayerAlpha(ox, oy, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox, oy + 1, -2, alphaMap) !== alphaValue ||
+                        info.getLayerAlpha(ox + 1, oy + 1, -2, alphaMap) !== alphaValue)
+                        return false;
+                }
+            }
+        } else {
+            let ratio = alphaMap.width / info.heightmapX;
+
+            let minX = Math.floor(ratio * (x + this.offsetX));
+            let maxX = Math.ceil(ratio * (x + this.offsetX + 1));
+            let minY = Math.floor(ratio * (y + this.offsetY));
+            let range = maxX - minX;
+
+            if (isTurned) {
+                if (triIndex) {
+                    // 432
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = range; oy >= range - ox; oy--)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+                else {
+                    // 142
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = 0; oy <= range - ox; oy++)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+            }
+            else {
+                if (triIndex) {
+                    // 132
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = 0; oy <= ox; oy++)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+                else {
+                    // 143
+                    for (let ox = 0; ox <= range; ox++)
+                        for (let oy = range; oy >= ox; oy--)
+                            if (info.getLayerAlpha(ox + minX, oy + minY, -2, alphaMap) !== alphaValue)
+                                return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    protected isSectorAll(index: number, alphaValue: number) {
+        const info = this.info;
+        const layer = info.layers[index]?.loadSelf();
+
+        if (!layer) return false;
+
+        const sectorFlag = this.someSectorVisibilityMask[index];
+
+        if (sectorFlag !== -1)
+            return alphaValue === sectorFlag;
+
+        // there's some stuff here related to edges
+
+        const alphaMap = layer.alphaMap;
+
+        if (!alphaMap) return false;
+
+        const ratio = (alphaMap.width || 0) / info.heightmapX;
+
+        const minx = Math.floor(ratio * this.offsetX), maxx = Math.ceil(ratio * (this.offsetX + this.quadsX));
+        const miny = Math.floor(ratio * this.offsetY), maxy = Math.ceil(ratio * (this.offsetY + this.quadsY));
+
+        for (let x = minx; x < maxx; x++) {
+            for (let y = miny; y < maxy; y++) {
+                const layerAlphaValue = info.getLayerAlpha(x, y, -2, alphaMap);
+
+                if (layerAlphaValue !== alphaValue)
+                    return false;
+            }
+        }
+
+        return true;
+    }
 }
+
 
 export default UTerrainSector;
 export { UTerrainSector };
 
-type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo };
+type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo, edgeTurns: Int32Array };

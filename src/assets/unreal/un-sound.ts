@@ -1,9 +1,29 @@
-import UObject from "./un-object";
+import UObject, { BufferValue } from "@l2js/core";
+import { FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 
-class USound extends UObject {
-    protected static getConstructorName() { return "Sound"; }
+abstract class USound extends UObject {
+    protected fileType: string;
+    protected likelihood: number;
+    protected data = new FPrimitiveArrayLazy(BufferValue.uint8);
 
-    public readonly careUnread: boolean = false;
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
+        super.doLoad(pkg, exp);
+
+        const nameIndex = pkg.read("compat32");
+        
+        this.fileType = pkg.nameTable[nameIndex].name;
+        this.data.load(pkg);
+
+        this.readHead = pkg.tell();
+
+        // const wav = this.data.getTypedArray().slice();
+        // const blob = new Blob([wav.buffer], { type: "audio/wav" });
+        // const f = URL.createObjectURL(blob);
+
+        // console.log(exp.objectName, f);
+
+        // // debugger;
+    }
 }
 
 export default USound;

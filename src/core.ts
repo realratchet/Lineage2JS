@@ -1,36 +1,21 @@
 import * as dat from "dat.gui";
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
-// import UTerrainInfo from "./assets/unreal/un-terrain-info";
-// import UTerrainSector from "./assets/unreal/un-terrain-sector";
-// import UTexture from "./assets/unreal/un-texture";
-// import UStaticMesh from "./assets/unreal/static-mesh/un-static-mesh";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
-import BufferValue from "./assets/buffer-value";
-// import UStaticMeshInstance from "./assets/unreal/static-mesh/un-static-mesh-instance";
-// import UModel from "./assets/unreal/model/un-model";
-// import UExport from "./assets/unreal/un-export";
-// import UBrush from "./assets/unreal/un-brush";
-// import ULevel from "./assets/unreal/un-level";
-// import UStaticMeshActor from "./assets/unreal/static-mesh/un-static-mesh-actor";
-import decodeTexture from "./assets/decoders/texture-decoder";
-import decodeMaterial from "./assets/decoders/material-decoder";
-import MeshStaticMaterial from "./materials/mesh-static-material/mesh-static-material";
 import decodeObject3D, { decodePackage } from "./assets/decoders/object3d-decoder";
-import ULight from "./assets/unreal/un-light";
-import findPattern from "./utils/pattern-finder";
 import DecodeLibrary from "./assets/unreal/decode-library";
-import UEncodedFile from "@unreal/un-encoded-file";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
-import { generateUUID } from "three/src/math/MathUtils";
-import UFunction from "./assets/unreal/un-function";
-import UClassRegistry from "./assets/unreal/scripts/un-class-registry";
-import UEmitter from "./assets/unreal/un-emitter";
+import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
+import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
+// import { ensureWasmInitialized } from "@l2js/core";
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage | UPackage, settings: LoadSettings_T) {
+
+async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, settings: GD.LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
-    const decodeLibrary = await DecodeLibrary.fromPackage(await assetLoader.load(pkg), settings);
+    pkg = await assetLoader.load(pkg);
+
+    const decodeLibrary = await DecodeLibrary.fromPackage(pkg, settings);
 
     // debugger;
 
@@ -41,23 +26,22 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
     return decodePackage(decodeLibrary);
 }
 
-async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage, pkgTex: string | UPackage) {
-
+async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, pkgTex: string | C.APackage) {
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
     pkg = await assetLoader.load(pkg);
 
 
-    async function getTextures(pkg: string | UPackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
+    async function getTextures(pkg: string | C.APackage, decodeLibrary: DecodeLibrary, texNames: string[]) {
         if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Texture");
 
         pkg = await assetLoader.load(pkg);
 
         // debugger;
 
-        const texExps = texNames.map(v => (pkg as UPackage).exports.find(x => x.objectName === v));
+        const texExps = texNames.map(v => (pkg as GA.UPackage).exports.find(x => x.objectName === v));
 
-        const textures = await Promise.all(texExps.map(exp => (pkg as UPackage).fetchObject<UShader>(exp.index + 1)));
+        const textures = await Promise.all(texExps.map(exp => (pkg as GA.UPackage).fetchObject<GA.UShader>(exp.index + 1)));
 
         const infos = await Promise.all(textures.map(mesh => mesh.getDecodeInfo(decodeLibrary)));
 
@@ -92,9 +76,9 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     ];
 
 
-    const bodyPartExps = bodypartMeshNames.map(v => (pkg as UPackage).exportGroups.SkeletalMesh.find(x => x.export.objectName === v));
+    const bodyPartExps = bodypartMeshNames.map(v => (pkg as GA.UPackage).exportGroups.SkeletalMesh.find(x => x.export.objectName === v));
 
-    const bodypartMeshes = await Promise.all(bodyPartExps.map(exp => (pkg as UPackage).fetchObject<USkeletalMesh>(exp.index + 1)));
+    const bodypartMeshes = await Promise.all(bodyPartExps.map(exp => (pkg as GA.UPackage).fetchObject<GA.USkeletalMesh>(exp.index + 1)));
 
     const decodeLibrary = new DecodeLibrary();
 
@@ -105,7 +89,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     const bodypartInfos = await Promise.all(bodypartMeshes.map(mesh => mesh.getDecodeInfo(decodeLibrary)));
 
     bodypartMeshes.forEach(({ uuid }, index) => {
-        const material = decodeLibrary.materials[uuid] as IMaterialGroupDecodeInfo;
+        const material = decodeLibrary.materials[uuid] as GD.IMaterialGroupDecodeInfo;
 
         material.materials = [textures[index]];
     });
@@ -149,7 +133,7 @@ async function _decodeCharacter(renderManager: RenderManager, assetLoader: Asset
     //     });
 }
 
-async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | UPackage) {
+async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage) {
 
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
 
@@ -163,7 +147,7 @@ async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLo
 
     const meshIndex = antaras.index + 1;
 
-    const mesh = await pkg.fetchObject<USkeletalMesh>(meshIndex);
+    const mesh = await pkg.fetchObject<GA.USkeletalMesh>(meshIndex);
 
     const decodeLibrary = new DecodeLibrary();
 
@@ -201,7 +185,18 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
+async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<GA.UL2NEnvManager> {
+    const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
+
+    return envFile.load(pkgNative, pkgEngine);
+}
+
 async function startCore() {
+    // await ensureWasmInitialized();
+
+    const startTime = performance.now();
+
+    // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const renderManager = new RenderManager(viewport);
 
@@ -217,7 +212,7 @@ async function startCore() {
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
 
-    const pkgCore = await assetLoader.load(assetLoader.getPackage("core", "Script"));
+    const pkgCore = await assetLoader.load(assetLoader.getCorePackage());
 
     // debugger;
 
@@ -259,10 +254,23 @@ async function startCore() {
     // debugger;
 
 
-    const pkgEngine = await assetLoader.load(assetLoader.getPackage("engine", "Script"));
+    const pkgNative = assetLoader.getNativePackage();
+    const pkgEngine = await assetLoader.load<C.AEnginePackage>(assetLoader.getEnginePackage());
+
+    pkgCore.loadNativeClasses();
+    // pkgEngine.loadNativeClasses();
+
+
+    const env = await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine);
+
+    // const sound = await assetLoader.load(assetLoader.getPackage("MonSound3", "Sound"));
+    // const ants = sound.exports.filter(x=>x.objectName.toLowerCase().includes("antaras"))
+
+    // ants.slice(1).forEach(s=>sound.fetchObject(s.index+1).loadSelf());
+
+    // // const antWait = sound.fetchObject(4).loadSelf();
 
     // debugger;
-
 
     // // const fnObjectMain = await pkgCore.fetchObject(741);
     // // await fnObjectMain.onDecodeReady();
@@ -387,6 +395,7 @@ async function startCore() {
     // debugger;
 
     const loadSettings = {
+        env: env,
         helpersZoneBounds: false,
         loadTerrain: true,
         loadBaseModel: true,
@@ -409,19 +418,31 @@ async function startCore() {
             // 555,// elven ruins colon
             // 47, // rock with ambient light
             // 2369,
-            // 2011, // ceiling fixture that's too red
+            // 2011, // cruma: ceiling fixture that's too red
+            // "StaticMeshActor2028", "StaticMeshActor2030", "StaticMeshActor2119", "StaticMeshActor1792", // cruma: why is this black
             // 2774, // necropolis entrance
-            // 4718, // cruma base
+            //4718, // cruma base
             // 4609, // transparency issue
             // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
             // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
             // 610, // light fixture with 2 lights near elven ruins
+            // 591,
+            // 602 // 0x42
+            // "StaticMeshActor613",
+            // "StaticMeshActor9", // elven ruins colon thats flipped improperly
+            // "StaticMeshActor1484", // elven ruins entrance
+            // "StaticMeshActor338", // fallen elven ruins colon beneath the StaticMeshActor9
+            // // "StaticMeshActor6", // talking island church (3705 vertices)
+            // 470,    // first object with scene lights near elven ruins
             // 1755, // light fixture with 3 lights near elven ruins
             // ...[608, 610, 1755, 1781] // elven ruins light fixtures
 
-            ...[/*2092,*/ /*3052*/, 2517], // talking island collision
+            // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
+            // ...["StaticMeshActor475"] // talking island village broken rock
+            "StaticMeshActor684", // cruma light
+            // "StaticMeshActor1893" // cruma: broken floating platform light
         ]
-    } as LoadSettings_T;
+    } as GD.LoadSettings_T;
 
     // working (or mostly working)
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
@@ -436,6 +457,12 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_21", loadSettings));  // death pass
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_22", loadSettings));  // giran castle
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_20", loadSettings));  // iris lake
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_19", loadSettings));  // elven village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "25_21", loadSettings));  // antharas lair
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "24_17", loadSettings));  // blazing swamp
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_18", loadSettings));  // dark elf village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "24_18", loadSettings));  // aden castle town
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_20", loadSettings));  // hunters village
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
@@ -454,7 +481,10 @@ async function startCore() {
     // crashing
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
 
-    console.info("System has loaded!");
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "skylevel", loadSettings));  // skylevel
+
+    console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 
     // debugger;
 

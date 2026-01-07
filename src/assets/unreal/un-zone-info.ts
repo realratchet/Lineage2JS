@@ -1,48 +1,49 @@
-import FArray from "./un-array";
-import FNumber from "./un-number";
-import BufferValue from "../buffer-value";
-import UInfo from "./un-info";
+import AInfo from "./un-info";
 
-class UZoneInfo extends UInfo implements IInfo {
-    protected isFogZone: boolean;
-    protected hasTerrain: boolean;
+abstract class FZoneInfo extends AInfo implements GD.IInfo {
+    declare public readonly isFogZone: boolean;
+    declare public readonly hasTerrain: boolean;
 
-    protected useFogColorClear: boolean;
+    declare public readonly useFogColorClear: boolean;
 
-    public ambientBrightness: number;
-    public ambientVector: FVector;
+    declare public readonly brightness: number;
+    declare public readonly ambientBrightness: number;
+    declare public readonly ambientVector: GA.FVector;
 
-    protected killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
-    protected killZType: number;
-    protected isSoftKillZ: boolean;
+    declare public readonly killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
+    declare public readonly killZType: number;
+    declare public readonly isSoftKillZ: boolean;
 
-    protected terrains: FArray<FNumber> = new FArray(FNumber.forType(BufferValue.compat32) as any);
+    declare public readonly terrains: C.FObjectArray<GA.ATerrainInfo>;
 
-    protected ambientHue: number;
-    protected ambientSaturation: number;
+    declare public readonly ambientHue: number;
+    declare public readonly ambientSaturation: number;
 
-    protected zoneTag: string;
+    declare public readonly zoneTag: string;
 
-    protected lensFlare = new Set();
-    protected lensFlareOffset = new Set();
-    protected lensFlareScale = new Set();
+    declare public readonly lensFlare: any[];
+    declare public readonly lensFlareOffset: any[];
+    declare public readonly lensFlareScale: any[];
 
-    protected panSpeedU: number;
-    protected panSpeedV: number;
+    declare public readonly  panSpeedU: number;
+    declare public readonly  panSpeedV: number;
 
-    protected skyZone: any;
-    protected locationName: any;
-    protected distanceFogBlendTime: any;
-    protected environmentMap: any;
-    protected zoneEffect: any;
-    protected isLonelyZone: boolean;
-    protected manualExcludes: any;
+    declare public readonly  skyZone: any;
+    declare public readonly  locationName: any;
+    declare public readonly  distanceFogBlendTime: any;
+    declare public readonly  environmentMap: any;
+    declare public readonly  zoneEffect: any;
+    declare public readonly  isLonelyZone: boolean;
+    declare public readonly  manualExcludes: any;
+
+    declare public readonly  timeSeconds: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "bFogZone": "isFogZone",
             "bTerrainZone": "hasTerrain",
             "Terrains": "terrains",
+            "Brightness": "brightness",
             "AmbientBrightness": "ambientBrightness",
             "AmbientVector": "ambientVector",
             "KillZ": "killZ",
@@ -69,24 +70,26 @@ class UZoneInfo extends UInfo implements IInfo {
             "ZoneEffect": "zoneEffect",
             "bLonelyZone": "isLonelyZone",
             "ManualExcludes": "manualExcludes",
+
+            "TimeSeconds": "timeSeconds"
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport<UZoneInfo>) {
-        pkg.seek(this.readHead, "set");
+    // public doLoad(pkg: UPackage, exp: UExport<FZoneInfo>) {
+    //     pkg.seek(this.readHead, "set");
 
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
+    //     const verArchive = pkg.header.getArchiveFileVersion();
+    //     const verLicense = pkg.header.getLicenseeVersion();
 
-        super.doLoad(pkg, exp);
+    //     super.doLoad(pkg, exp);
 
-        this.readHead = pkg.tell();
+    //     this.readHead = pkg.tell();
 
-        const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
+    //     const leftoverBytes = new Uint8Array(pkg.read(BufferValue.allocBytes(this.bytesUnread)).bytes.buffer);
 
-    }
+    // }
 
-    public getDecodeInfo(library: DecodeLibrary): IZoneDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Zone",
@@ -96,11 +99,11 @@ class UZoneInfo extends UInfo implements IInfo {
             fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
                 start: this.distanceFogStart,
                 end: this.distanceFogEnd,
-                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
+                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as GD.ColorArr
             }
         };
     }
 }
 
-export default UZoneInfo;
-export { UZoneInfo };
+export default FZoneInfo;
+export { FZoneInfo };

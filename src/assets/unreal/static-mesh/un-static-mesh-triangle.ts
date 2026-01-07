@@ -1,61 +1,68 @@
-import FVector from "../un-vector";
-import BufferValue from "../../buffer-value";
-import FConstructable from "../un-constructable";
+class FStaticMeshTriangleSub implements C.IConstructable {
+    declare public f0: number[];
+    declare public f1: number[];
+    declare public f2: number[];
 
-class FStaticMeshTriangleSub extends FConstructable {
-    public f0: number[];
-    public f1: number[];
-    public f2: number[];
-
-    public load(pkg: UPackage): this {
-
-        const float = new BufferValue(BufferValue.float);
-
-        this.f0 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
-        this.f1 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
-        this.f2 = new Array(2).fill(1).map(_ => pkg.read(float).value as number);
+    public load(pkg: C.APackage): this {
+        this.f0 = new Array(2).fill(1).map(_ => pkg.read("float"));
+        this.f1 = new Array(2).fill(1).map(_ => pkg.read("float"));
+        this.f2 = new Array(2).fill(1).map(_ => pkg.read("float"));
 
         return this;
     }
 }
 
-class FStaticMeshTriangle extends FConstructable {
-    public v0 = new FVector();
-    public v1 = new FVector();
-    public v2 = new FVector();
+class FStaticMeshTriangle implements C.IConstructable {
+    declare private data: DataView;
 
-    public unkSubs: FStaticMeshTriangleSub[]; // uvs?
-    public unkBytes: number[];                // color [[r, g, b, a] x 3]
+    declare public unkSubs: FStaticMeshTriangleSub[]; // uvs?
+    declare public unkBytes: number[];                // color [[r, g, b, a] x 3]
 
-    public unkInt0: number;                  // material section I think
-    public unkInt1: number;                  // always pow2, flags?
+    declare public unkInt0: number;                  // material section I think
+    declare public unkInt1: number;                  // always pow2, flags?
 
-    public load(pkg: UPackage): this {
+    public getVertices(): [[number, number, number], [number, number, number], [number, number, number]] {
+        return [
+            [
+                this.data.getFloat32(0, true),
+                this.data.getFloat32(4, true),
+                this.data.getFloat32(8, true),
+            ],
+            [
+                this.data.getFloat32(12, true),
+                this.data.getFloat32(16, true),
+                this.data.getFloat32(20, true),
+            ],
+            [
+                this.data.getFloat32(24, true),
+                this.data.getFloat32(28, true),
+                this.data.getFloat32(32, true),
+            ]
+        ]
+    }
+
+    public load(pkg: C.APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const uint8 = new BufferValue(BufferValue.uint8);
 
         if (verArchive < 0x6f) {
             console.warn("Not supported yet");
             debugger;
         } else {
 
-            this.v0.load(pkg);
-            this.v1.load(pkg);
-            this.v2.load(pkg);
+            this.data = pkg.read(3 * 3 * 4);
 
-            const count = pkg.read(uint32).value as number;
+            const count = pkg.read("uint32");
 
             this.unkSubs = new Array(count).fill(1).map(_ => new FStaticMeshTriangleSub().load(pkg));
-            this.unkBytes = new Array(12).fill(1).map(_ => pkg.read(uint8).value as number);
+            this.unkBytes = new Array(12).fill(1).map(_ => pkg.read("uint8"));
 
             if (verArchive < 0x70) {
                 console.warn("Not supported yet");
                 debugger;
             }
 
-            this.unkInt0 = pkg.read(uint32).value as number;
-            this.unkInt1 = pkg.read(uint32).value as number;
+            this.unkInt0 = pkg.read("uint32");
+            this.unkInt1 = pkg.read("uint32");
         }
 
         return this;

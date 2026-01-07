@@ -1,63 +1,56 @@
-import BufferValue from "../buffer-value";
-import FArray, { FPrimitiveArray } from "./un-array";
+import { BufferValue } from "@l2js/core";
+import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/unreal/un-array";
 import FColor from "./un-color";
-import FConstructable from "./un-constructable";
 import UMesh from "./un-mesh";
-import FNumber from "./un-number";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 
-class FUnknownStruct1 extends FConstructable {
+class FUnknownStruct1 implements C.IConstructable {
     public a: number;
     public b: number;
     public c: number;
     public d: number;
 
-    public load(pkg: UPackage): this {
-        const uint16 = new BufferValue(BufferValue.uint16);
+    public load(pkg: GA.UPackage): this {
 
-        this.a = pkg.read(uint16).value as number;
-        this.b = pkg.read(uint16).value as number;
-        this.c = pkg.read(uint16).value as number;
-        this.d = pkg.read(uint16).value as number;
+
+        this.a = pkg.read("uint16");
+        this.b = pkg.read("uint16");
+        this.c = pkg.read("uint16");
+        this.d = pkg.read("uint16");
 
         return this;
     }
 
 }
 
-class FUnknownStruct2 extends FConstructable {
+class FUnknownStruct2 implements C.IConstructable {
     public unkInt16: number;
     public unkInt32_0: number;
     public unkInt32_1: number;
 
-    public load(pkg: UPackage): this {
-        const uint16 = new BufferValue(BufferValue.uint16);
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.unkInt16 = pkg.read(uint16).value as number;
-        this.unkInt32_0 = pkg.read(uint32).value as number;
-        this.unkInt32_1 = pkg.read(uint32).value as number;
+    public load(pkg: C.APackage): this {
+        this.unkInt16 = pkg.read("uint16");
+        this.unkInt32_0 = pkg.read("uint32");
+        this.unkInt32_1 = pkg.read("uint32");
 
         return this;
     }
 }
 
-class FUnknownStruct3 extends FConstructable {
+class FUnknownStruct3 implements C.IConstructable {
     public unkInt32_0: number;
     public unkInt32_1: number;
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.unkInt32_0 = pkg.read(uint32).value as number;
-        this.unkInt32_1 = pkg.read(uint32).value as number;
+    public load(pkg: C.APackage): this {
+        this.unkInt32_0 = pkg.read("uint32");
+        this.unkInt32_1 = pkg.read("uint32");
 
         return this;
     }
 }
 
-class ULodMesh extends UMesh {
+abstract class ULodMesh extends UMesh {
     protected version: number;
     protected vertexCount: number;
     protected unkArr0 = new FPrimitiveArray(BufferValue.uint32);
@@ -73,19 +66,13 @@ class ULodMesh extends UMesh {
     protected skinTesselationFactor: number;
     protected unkVar2: number;
     protected impostor = new MeshImpostor();
-    protected lodMeshMaterials: UMaterial[];
+    protected lodMeshMaterials = new FObjectArray<GA.UMaterial>();
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);
 
-        const int32 = new BufferValue(BufferValue.int32);
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const compat = new BufferValue(BufferValue.compat32);
-        const uint8 = new BufferValue(BufferValue.uint8);
-        const float = new BufferValue(BufferValue.float);
-
-        this.version = pkg.read(uint32).value as number;
-        this.vertexCount = pkg.read(uint32).value as number;
+        this.version = pkg.read("uint32");
+        this.vertexCount = pkg.read("uint32");
 
         this.unkArr0.load(pkg);
 
@@ -93,9 +80,9 @@ class ULodMesh extends UMesh {
             debugger;
         }
 
-        const lodMeshMaterialsIds = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg);
+        this.lodMeshMaterials.load(pkg);
 
-        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read(float).value as number);
+        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read("float"));
 
         if (this.version < 2) {
             debugger;
@@ -107,10 +94,10 @@ class ULodMesh extends UMesh {
         this.unkArr5.load(pkg);
         this.unkArr6.load(pkg);
 
-        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read(float).value as number);
+        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read("float"));
 
         if (this.version >= 3) {
-            const maybeHasImpostor = pkg.read(uint32).value as number;
+            const maybeHasImpostor = pkg.read("uint32");
 
             if (maybeHasImpostor !== 0 && maybeHasImpostor !== 1) {
                 debugger;
@@ -121,29 +108,21 @@ class ULodMesh extends UMesh {
         }
 
         if (this.version >= 4) {
-            this.skinTesselationFactor = pkg.read(uint32).value as number;
+            this.skinTesselationFactor = pkg.read("uint32");
         }
 
         if (this.version >= 5) {
-            this.unkVar2 = pkg.read(uint32).value as number;
+            this.unkVar2 = pkg.read("uint32");
         }
-
-        this.promisesLoading.push(new Promise<void>(async resolve => {
-            this.lodMeshMaterials = await Promise.all(
-                lodMeshMaterialsIds.map(async (index: FNumber) => {
-                    return await pkg.fetchObject<UMaterial>(index.value);
-                })
-            );
-
-            resolve();
-        }));
     }
 }
 
 export default ULodMesh;
 export { ULodMesh };
 
-class MeshImpostor extends FConstructable {
+
+
+class MeshImpostor implements C.IConstructable {
     public location: FVector;
     public rotation: FRotator;
     public scale: FVector;
@@ -152,29 +131,20 @@ class MeshImpostor extends FConstructable {
     public drawMode: number;
     public lightMode: number;
     public materialId: number;
-    public material: UMaterial;
+    public material: GA.UMaterial;
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const compat = new BufferValue(BufferValue.compat32);
+    public load(pkg: C.APackage): this {
+        this.materialId = pkg.read("compat32");
 
-        this.materialId = pkg.read(compat).value as number;
+        this.location = FVector.make().load(pkg);
+        this.rotation = FRotator.make().load(pkg);
+        this.scale = FVector.make().load(pkg);
+        this.color = FColor.make().load(pkg);
+        this.spaceMode = pkg.read("uint32");
+        this.drawMode = pkg.read("uint32");
+        this.lightMode = pkg.read("uint32");
 
-        this.location = new FVector().load(pkg);
-        this.rotation = new FRotator().load(pkg);
-        this.scale = new FVector().load(pkg);
-        this.color = new FColor().load(pkg);
-        this.spaceMode = pkg.read(uint32).value as number;
-        this.drawMode = pkg.read(uint32).value as number;
-        this.lightMode = pkg.read(uint32).value as number;
-
-        if (this.materialId !== 0) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                this.material = await pkg.fetchObject<UMaterial>(this.materialId);
-
-                resolve();
-            }));
-        }
+        this.material = pkg.fetchObject<GA.UMaterial>(this.materialId);
 
         return this;
     }

@@ -1,17 +1,17 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxBufferGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereBufferGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneBufferGeometry, AnimationMixer } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
-import timeOfDay from "@client/assets/unreal/un-time-of-day-helper";
 import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
+import Visualizer, { VisualizerMode } from "./visualizer";
 
 const stats = new (Stats as any)(0);
 
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-// document.body.appendChild(stats.dom);
+document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
@@ -37,6 +37,12 @@ class RenderManager {
     public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
 
+    public bspHelperCamera: PerspectiveCamera | null = null;
+    public bspHelperCameraHelper: CameraHelper | null = null;
+    public bspHelperActive: boolean = false;
+    public frustumCullingEnabled: boolean = true;
+    public readonly visualizer: Visualizer;
+
     protected shiftTimeDown: number;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
@@ -52,6 +58,10 @@ class RenderManager {
     protected readonly sunCam: THREE.Camera;
 
     public readonly physicsWorld: RAPIER.World;
+
+    protected activeSector = 0;
+    protected sectorBounds = new Array<THREE.Box3>();
+    protected currentSectorIndex: THREE.Vector2 | null = null;
 
     constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
@@ -70,12 +80,15 @@ class RenderManager {
         this.controls.fps = new PointerLockControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 5, 15);
         this.camera.lookAt(0, 0, 0);
-        this.scene.add(new Mesh(new BoxBufferGeometry()));
+        this.scene.add(new Mesh(new BoxGeometry()));
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
 
-        this.sun = new Mesh(new PlaneBufferGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
+        // Create visualizer system (will be recreated when sector changes)
+        this.visualizer = new Visualizer(this.scene);
+
+        this.sun = new Mesh(new PlaneGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
         this.sunCam = new Camera();
 
         this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8 * 100, 0));
@@ -102,15 +115,19 @@ class RenderManager {
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
 
-        // // elven ruins colon
-        // this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
-        // this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
+        // elven ruins colon
+        this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
+        this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
+
+        // // elven ruins light fixture with two lights
+        // this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
+        // this.controls.orbit.target.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
 
         // // // tower ceiling fixture (too red)
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
-        // tower outside
+        // // tower outside
         this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
         this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
 
@@ -122,17 +139,29 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // // talking island
+        // talking island
         // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
+
+        // // cruma colons
+        // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
+        // this.controls.orbit.target.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
+
+        // // ti - should have terrain light
+        // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
+        // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);
         // this.controls.orbit.target.set(0, 0, 0);
 
-        // look player
+        // // look player
         // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
         // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
+
+        // // ti church
+        // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
+        // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -154,11 +183,18 @@ class RenderManager {
         this.player.name = "Player";
         // this.player.visible = false;
         // this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
-        this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
-        // this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
+        // this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
+        this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
         addResizeListeners(this);
+    }
+
+    public debugPrintCamera() {
+        console.log([
+            `this.camera.position.set(${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z});`,
+            `this.controls.orbit.target.set(${this.controls.orbit.target.x}, ${this.controls.orbit.target.y}, ${this.controls.orbit.target.z});`
+        ].join("\n"));
     }
 
     public onPointerControlsLocked() {
@@ -187,6 +223,112 @@ class RenderManager {
     }
 
     public onHandleKeyDown(event: KeyboardEvent) {
+        // Handle F1 separately to prevent browser help (must be before switch)
+        if (event.key === "F1" || event.code === "F1") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.toggleBSPHelperCamera();
+            return;
+        }
+
+        // Handle F2 to toggle frustum culling
+        if (event.key === "F2" || event.code === "F2") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.frustumCullingEnabled = !this.frustumCullingEnabled;
+            console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
+            return;
+        }
+
+        // Handle F3 to toggle visualizer
+        if (event.key === "F3" || event.code === "F3") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.visualizer.toggle();
+            const currentSector = this.getSector(this.camera.position);
+            if (currentSector && this.visualizer.isEnabled()) {
+                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                    : this.frustum;
+                
+                // Create a map with only the current sector
+                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+                if (currentSector.index) {
+                    const sectorXMap = new Map<number, SectorObject>();
+                    sectorXMap.set(currentSector.index.y, currentSector);
+                    currentSectorMap.set(currentSector.index.x, sectorXMap);
+                }
+                
+                if (this.visualizer.getMode() === 1) { // Portals
+                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
+                } else if (this.visualizer.getMode() === 2) { // Zones
+                    this.visualizer.updateZones(currentSectorMap, cameraPos);
+                } else if (this.visualizer.getMode() === 3) { // Leaves
+                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+                }
+            }
+            return;
+        }
+
+        // Handle F4 to cycle visualizer modes
+        if (event.key === "F4" || event.code === "F4") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.visualizer.nextMode();
+            const currentSector = this.getSector(this.camera.position);
+            if (currentSector && this.visualizer.isEnabled()) {
+                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                    : this.frustum;
+                
+                // Create a map with only the current sector
+                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+                if (currentSector.index) {
+                    const sectorXMap = new Map<number, SectorObject>();
+                    sectorXMap.set(currentSector.index.y, currentSector);
+                    currentSectorMap.set(currentSector.index.x, sectorXMap);
+                }
+                
+                if (this.visualizer.getMode() === 1) { // Portals
+                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
+                } else if (this.visualizer.getMode() === 2) { // Zones
+                    this.visualizer.updateZones(currentSectorMap, cameraPos);
+                } else if (this.visualizer.getMode() === 3) { // Leaves
+                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+                }
+            }
+            return;
+        }
+
+        // Handle F5 to cycle leaf visualizer detail (Auto / PerLeaf / PerZone)
+        if (event.key === "F5" || event.code === "F5") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.visualizer.nextLeafDetail();
+
+            // If we're currently in Leaves mode and visualizer is enabled, refresh the visualization immediately.
+            const currentSector = this.getSector(this.camera.position);
+            if (currentSector && this.visualizer.getMode() === 3 && this.visualizer.isEnabled()) {
+                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
+                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                    : this.frustum;
+                
+                // Create a map with only the current sector
+                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+                if (currentSector.index) {
+                    const sectorXMap = new Map<number, SectorObject>();
+                    sectorXMap.set(currentSector.index.y, currentSector);
+                    currentSectorMap.set(currentSector.index.x, sectorXMap);
+                }
+                
+                this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+            return;
+        }
+
         switch (event.key.toLowerCase()) {
             case "1":
                 this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
@@ -218,6 +360,12 @@ class RenderManager {
                 this.controls.orbit.target.set(18965.828211115713, -6064.126549127763, 106770.89206042158);
                 this.controls.orbit.update();
                 break;
+            case "+":
+                this.nextSector();
+                break;
+            case "-":
+                this.prevSector();
+                break;
             case "w": if (!this.isOrbitControls) this.dirKeys.up = true; break;
             case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
             case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
@@ -227,6 +375,28 @@ class RenderManager {
                 this.dirKeys.shift = true;
             } break;
         }
+    }
+
+    protected setSector(index: number) {
+        const sector = this.sectorBounds[index];
+
+        this.camera.position.copy(sector.max);
+        this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
+        this.controls.orbit.update();
+
+        this.activeSector = index;
+    }
+
+    protected nextSector() {
+        if (this.sectorBounds.length <= 0) return;
+
+        this.setSector((this.activeSector + 1) % this.sectorBounds.length);
+    }
+
+    protected prevSector() {
+        if (this.sectorBounds.length <= 0) return;
+
+        this.setSector(this.activeSector === 0 ? (this.sectorBounds.length - 1) : (this.activeSector - 1))
     }
 
     public onHandleKeyUp(event: KeyboardEvent) {
@@ -268,7 +438,9 @@ class RenderManager {
                 this.player.goTo(collidable.point);
 
             console.log(intersection);
-        } catch (e) { }
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {
@@ -280,7 +452,7 @@ class RenderManager {
         this.lastSize.set(width, height);
     }
 
-    protected async onHandleResize(): Promise<void> {
+    protected onHandleResize(): void {
         const oldStyle = this.getDomElement().style.display;
         this.getDomElement().style.display = "none";
         const { width, height } = this.viewport.getBoundingClientRect();
@@ -331,6 +503,48 @@ class RenderManager {
     protected _updateObjects(currentTime: number, deltaTime: number) {
         const globalTime = currentTime / 600;
 
+        // Update helper camera: copy from main camera if inactive, otherwise keep frozen
+        if (this.bspHelperCamera) {
+            if (!this.bspHelperActive) {
+                // Helper is inactive: copy main camera properties for culling
+                this.bspHelperCamera.position.copy(this.camera.position);
+                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.updateMatrixWorld(true);
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = false;
+                }
+            } else {
+                // Helper is active: keep frozen, make helper visible
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = true;
+                }
+            }
+            // Update helper visual indicator
+            if (this.bspHelperCameraHelper) {
+                this.bspHelperCameraHelper.update();
+            }
+        }
+
+        // NEW: Update BSP section visibility based on camera position (UE2-style culling)
+        // Use helper camera position only when active (frozen), otherwise use main camera
+        const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
+        const bspCullingPosition = bspCullingCamera.position;
+
+        // Update frustum for BSP culling
+        this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
+
+        this.scene.traverse((object: THREE.Object3D) => {
+            if ((object as SectorObject).isSectorObject) {
+                const sector = object as SectorObject;
+                if (sector.updateVisibleBSPSections && sector.bspSections) {
+                    sector.updateVisibleBSPSections(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
+                }
+                if (sector.updateVisibleStaticMeshActors) {
+                    sector.updateVisibleStaticMeshActors(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
+                }
+            }
+        });
+
         this.scene.traverse((object: THREE.Object3D) => {
 
             if ((object as ZoneObject).isZoneObject) {
@@ -364,7 +578,7 @@ class RenderManager {
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
-            fog = zone.fog;
+            fog = zone?.fog ?? null;
         }
 
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
@@ -406,8 +620,8 @@ class RenderManager {
                 Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2))
             ) : 1);
 
-            if (this.dirKeys.shift)
-                console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
+            // if (this.dirKeys.shift)
+            //     console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
 
             if (this.dirKeys.left) sidewaysVelocity -= 1;
             if (this.dirKeys.right) sidewaysVelocity += 1;
@@ -455,7 +669,7 @@ class RenderManager {
         this.player.position.lerp(desiredPosition, 0.1);
 
         this._updateObjects(currentTime, deltaTime);
-        this._updateSun();
+        // this._updateSun();
 
         this.renderer.clear();
     }
@@ -489,6 +703,64 @@ class RenderManager {
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
+        // Check for sector change and recreate visualizer if needed
+        const currentSector = this.getSector(this.camera.position);
+        if (currentSector) {
+            const sectorIndex = currentSector.index;
+            if (this.currentSectorIndex === null || 
+                !sectorIndex.equals(this.currentSectorIndex)) {
+                // Sector changed - recreate visualizer
+                const wasEnabled = this.visualizer.isEnabled();
+                const currentMode = this.visualizer.getMode();
+                
+                // Remove old visualizer
+                this.scene.remove(this.visualizer.getGroup());
+                
+                // Create new visualizer
+                (this as any).visualizer = new Visualizer(this.scene);
+                
+                // Restore state
+                this.visualizer.setMode(currentMode);
+                if (wasEnabled && !this.visualizer.isEnabled()) {
+                    this.visualizer.toggle();
+                } else if (!wasEnabled && this.visualizer.isEnabled()) {
+                    this.visualizer.toggle();
+                }
+                
+                this.currentSectorIndex = sectorIndex.clone();
+            }
+        } else {
+            // No sector - clear tracking
+            if (this.currentSectorIndex !== null) {
+                this.currentSectorIndex = null;
+            }
+        }
+
+        // Update visualizer based on camera position (use bspHelperCamera if active)
+        // Only visualize the current sector
+        if (this.visualizer.isEnabled() && currentSector) {
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            
+            // Create a map with only the current sector
+            const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+            if (currentSector.index) {
+                const sectorXMap = new Map<number, SectorObject>();
+                sectorXMap.set(currentSector.index.y, currentSector);
+                currentSectorMap.set(currentSector.index.x, sectorXMap);
+            }
+            
+            if (this.visualizer.getMode() === 1) { // Portals
+                this.visualizer.updatePortals(currentSectorMap, cameraPos);
+            } else if (this.visualizer.getMode() === 2) { // Zones
+                this.visualizer.updateZones(currentSectorMap, cameraPos);
+            } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+        }
+
         // this.renderer.render(this.sun, this.camera);
         this.renderer.render(this.scene, this.camera);
     }
@@ -531,7 +803,77 @@ class RenderManager {
             this.sectors.get(sector.index.x).set(sector.index.y, sector);
         }
 
+        this.sectorBounds.push(new Box3().setFromObject(sector));
+
         this.objectGroup.add(sector);
+
+        // Update visualizer if enabled (only show current sector)
+        const currentSector = this.getSector(this.camera.position);
+        if (currentSector && this.visualizer.isEnabled()) {
+            const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                : this.frustum;
+            
+            // Create a map with only the current sector
+            const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+            if (currentSector.index) {
+                const sectorXMap = new Map<number, SectorObject>();
+                sectorXMap.set(currentSector.index.y, currentSector);
+                currentSectorMap.set(currentSector.index.x, sectorXMap);
+            }
+            
+            if (this.visualizer.getMode() === 1) { // Portals
+                this.visualizer.updatePortals(currentSectorMap, cameraPos);
+            } else if (this.visualizer.getMode() === 2) { // Zones
+                this.visualizer.updateZones(currentSectorMap, cameraPos);
+            } else if (this.visualizer.getMode() === 3) { // Leaves
+                this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            }
+        }
+    }
+
+    /**
+     * Toggle BSP helper camera for debugging visibility culling.
+     * Press F1 to toggle between active/inactive states:
+     * - Inactive (default): Helper camera follows main camera, helper invisible
+     * - Active: Helper camera frozen at last position, helper visible for debugging
+     */
+    public toggleBSPHelperCamera() {
+        if (!this.bspHelperCamera) {
+            // Create helper camera if it doesn't exist
+            this.bspHelperCamera = new PerspectiveCamera(75, this.camera.aspect, 0.1, DEFAULT_FAR);
+            this.bspHelperCamera.position.copy(this.camera.position);
+            this.bspHelperCamera.rotation.copy(this.camera.rotation);
+            this.bspHelperCamera.updateMatrixWorld(true);
+
+            // Create visual helper to see where the camera is
+            this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
+            this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
+            this.bspHelperCameraHelper.visible = false; // Hidden by default (inactive state)
+            this.scene.add(this.bspHelperCameraHelper);
+
+            this.bspHelperActive = false;
+        } else {
+            // Toggle active/inactive state
+            this.bspHelperActive = !this.bspHelperActive;
+
+            if (this.bspHelperActive) {
+                // Freeze at current position and show helper
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = true;
+                }
+            } else {
+                // Resume following main camera and hide helper
+                this.bspHelperCamera.position.copy(this.camera.position);
+                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.updateMatrixWorld(true);
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = false;
+                }
+            }
+        }
+        this.needsUpdate = true;
     }
 }
 

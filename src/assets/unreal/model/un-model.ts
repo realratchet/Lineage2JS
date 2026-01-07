@@ -1,62 +1,79 @@
 import UPrimitive from "../un-primitive";
-import FArray, { FPrimitiveArray } from "../un-array";
 import FVert from "./un-vert";
-import FVector from "../un-vector";
 import FBSPNode from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
-import UPolys, { PolyFlags_T } from "../un-polys";
-import BufferValue from "../../buffer-value";
+import { PolyFlags_T } from "../un-polys";
+import { BufferValue } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
-import FBox from "../un-box";
-import FNumber from "../un-number";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import { FPlane } from "../un-plane";
+import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FVector from "../un-vector";
+import FBox from "@client/assets/unreal/un-box";
 
-type UPackage = import("../un-package").UPackage;
-type UExport = import("../un-export").UExport;
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 
-class UModel extends UPrimitive {
-    protected vectors = new FArray(FVector);
-    protected points = new FArray(FVector);
-    protected vertices = new FArray(FVert);
-    protected bspNodes = new FArray(FBSPNode);
-    protected bspSurfs = new FArray(FBSPSurf);
-    protected bspSection = new FArray(FBSPSection);
-    protected lightmaps = new FArray(FLightmapIndex);
-    protected multiLightmaps = new FArray(FMultiLightmapTexture);
-    protected numSharedSides: number;
-    protected polys: UPolys = null;
-    protected zones: FZoneProperties[] = [];
-    protected bounds = new FArray(FBox);
-    protected leafHulls: FPrimitiveArray<"int32"> = new FPrimitiveArray(BufferValue.int32);
-    protected leaves = new FArray(FLeaf)
-    protected rootOutside: boolean;
-    protected linked: boolean;
+const nodeCache = new Array<number>();
 
-    protected unkArr0: number[];
-    protected unkInt0: number;
-    protected unkInt1: number;
+abstract class UModel extends UPrimitive {
+    protected levelInfo: GA.ULevelInfo
 
-    protected doLoad(pkg: UPackage, exp: UExport): this {
+    declare protected vectors: C.FArray<GA.FVector>;
+    declare protected points: C.FArray<GA.FVector>;
+    declare protected vertices: C.FArray<FVert>;
+    declare protected bspNodes: C.FArray<FBSPNode>;
+    declare protected bspSurfs: C.FArray<FBSPSurf>;
+    declare protected bspSection: C.FArray<FBSPSection>;
+    declare protected lightmaps: C.FArray<FLightmapIndex>;
+    declare protected multiLightmaps: C.FArray<FMultiLightmapTexture>;
+    declare protected numSharedSides: number;
+    declare protected polys: GA.UPolys;
+    declare protected zones: FZoneProperties[];
+    declare protected bounds: FArray<GA.FBox>;
+    declare protected leafHulls: FPrimitiveArray<"int32">;
+    declare protected leaves: FArray<FLeaf>
+    declare protected isRootOutside: boolean;
+    declare protected isLinked: boolean;
 
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
+    declare protected lights: FObjectArray;
+
+    public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; }
+    public getLevelInfo() { return this.levelInfo; }
+
+    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
+        super.preLoad(pkg, exp);
+
+        this.vectors = new FArray(FVector.class());
+        this.points = new FArray(FVector.class());
+        this.vertices = new FArray(FVert);
+        this.bspNodes = new FArray(FBSPNode);
+        this.bspSurfs = new FArray(FBSPSurf);
+        this.bspSection = new FArray(FBSPSection);
+        this.lightmaps = new FArray(FLightmapIndex);
+        this.multiLightmaps = new FArray(FMultiLightmapTexture);
+        this.polys = null;
+        this.zones = [];
+        this.bounds = new FArray(FBox.class());
+        this.leafHulls = new FPrimitiveArray(BufferValue.int32);
+        this.leaves = new FArray(FLeaf);
+        this.lights = new FObjectArray();
+    }
+
+    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
+
+        // const verArchive = pkg.header.getArchiveFileVersion();
+        // const verLicense = pkg.header.getLicenseeVersion();
 
         // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
         // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");
-
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
 
         pkg.seek(this.readHead, "set");
 
@@ -68,9 +85,9 @@ class UModel extends UPrimitive {
         this.bspSurfs.load(pkg);    // 0x98
         this.vertices.load(pkg);    // 0x68
 
-        this.numSharedSides = pkg.read(int32).value as number;  // 0x124
+        this.numSharedSides = pkg.read("int32");  // 0x124
 
-        const numZones = pkg.read(int32).value as number;       // 0x128
+        const numZones = pkg.read("int32");       // 0x128
 
         console.assert(numZones <= MAX_ZONES);
 
@@ -80,10 +97,9 @@ class UModel extends UPrimitive {
             this.zones[i] = new FZoneProperties().load(pkg);
 
         this.readHead = pkg.tell();
-        const polysId = pkg.read(compat32).value as number;
-
+        const polysId = pkg.read("compat32");
         const polyExp = pkg.exports[polysId - 1];
-        const className = pkg.getPackageName(polyExp.idClass as number)
+        const className = pkg.getPackageName(polyExp.idClass)
 
         console.assert(className === "Polys");
 
@@ -98,12 +114,15 @@ class UModel extends UPrimitive {
         this.leafHulls.load(pkg);
         this.leaves.load(pkg);
 
-        this.unkArr0 = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(x => x.value);
+        this.lights.load(pkg);
+
+        // if (this.lights.length !== 0)
+        //     debugger;
 
         this.readHead = pkg.tell();
 
-        this.unkInt0 = pkg.read(int32).value as number;
-        this.unkInt1 = pkg.read(int32).value as number;
+        this.isRootOutside = pkg.read("int32") != 0;
+        this.isLinked = pkg.read("int32") != 0;
 
         this.readHead = pkg.tell();
 
@@ -121,13 +140,85 @@ class UModel extends UPrimitive {
         // if (this.lightmaps.length > 0)
         //     debugger;
 
+        // debugger;
+
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): string[][] {
+    public getZoneActor(iZone: number) { return this.zones[iZone].zoneActor ?? this.levelInfo; }
 
-        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
+    public boxLeavesRecursive(iNode: number, origin: GA.FVector, extent: GA.FVector, outLeaves?: number[]): number[] {
+        outLeaves = outLeaves ?? [];
+        nodeCache.length = this.bspNodes.length;
 
+        const iNodes = nodeCache;
+
+        let index = 0;
+
+        iNodes[0] = iNode;
+
+        const min = Math.min(Math.min(extent.x, extent.y), extent.z);
+        const max = Math.max(Math.max(extent.x, extent.y), extent.z);
+
+        if (min * 2 > max) {
+            const pushOut = extent.length();
+            while (index >= 0) {
+                iNode = iNodes[index--];
+
+                const node = this.bspNodes[iNode];
+                const distance = node.plane.dot(origin);
+
+                if (distance < pushOut) {
+                    if (node.iBack !== -1)
+                        iNodes[++index] = node.iBack;
+                    else if (node.iLeaf[0] !== -1)
+                        outLeaves.push(node.iLeaf[0]);
+                }
+
+                if (-distance < pushOut) {
+                    if (node.iFront !== -1)
+                        iNodes[++index] = node.iFront;
+                    else if (node.iLeaf[1] !== -1)
+                        outLeaves.push(node.iLeaf[1]);
+                }
+            }
+        } else {
+            while (index >= 0) {
+                iNode = iNodes[index--];
+
+                const node = this.bspNodes[iNode];
+                const pushOut = boxPushOut(node.plane, extent);
+                const distance = node.plane.dot(origin);
+
+                if (distance < pushOut) {
+                    if (node.iBack !== -1)
+                        iNodes[++index] = node.iBack;
+                    else if (node.iLeaf[0] !== -1)
+                        outLeaves.push(node.iLeaf[0]);
+                }
+
+                if (-distance < pushOut) {
+                    if (node.iFront !== -1)
+                        iNodes[++index] = node.iFront;
+                    else if (node.iLeaf[1] !== -1)
+                        outLeaves.push(node.iLeaf[1]);
+                }
+            }
+        }
+
+        return outLeaves;
+    }
+
+    public boxLeaves(box: GA.FBox): GA.FLeaf[] {
+        if (this.bspNodes.length === 0) return [];
+
+        const origin = box.getCenter();
+        const extent = box.getExtents();
+
+        return this.boxLeavesRecursive(0, origin, extent).map(i => this.leaves[i]);
+    }
+
+    public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): void {
         this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
         this.zones.forEach((zone: FZoneProperties, index: number) => {
             const bspZone = zone.getDecodeInfo(library, uLevelInfo);
@@ -136,13 +227,37 @@ class UModel extends UPrimitive {
 
             library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
         });
+    }
 
-        const objectMap = new Map<PriorityGroups_T, ObjectsForPriority_T>();
+    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): string[][] {
+
+        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
+
+        this.getZoneDecodeInfo(library, uLevelInfo);
+
+        library.leafActors.length = library.bspLeaves.length;
+        library.nodeToSection.length = this.bspNodes.length;
+        library.nodeZoneMasks.length = this.bspNodes.length;
+        library.bspRenderBounds.length = this.bounds.length;
+
+        for (let i = 0; i < library.bspLeaves.length; i++)
+            library.leafActors[i] = [];
+
+        for (let i = 0; i < this.bspNodes.length; i++)
+            library.nodeToSection[i] = -1;
+
+        for (let i = 0; i < this.bounds.length; i++)
+            library.bspRenderBounds[i] = this.bounds[i]?.getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
+
+
+        const sectionMap = new Map<PriorityGroups_T, Map<string, ObjectsForSection_T>>();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
-            const nodeInfo = node.getBSPDecodeInfo();
+            const nodeInfo = node.getBSPDecodeInfo(surf.flags) as GD.IBSPNodeDecodeInfo_T;
+
+            nodeInfo.zoneMask = library.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
             library.bspNodes.push(nodeInfo);
 
@@ -181,53 +296,42 @@ class UModel extends UPrimitive {
                 library.bspColliders.push(nodeInfo.collision.bounds);
             }
 
-            // if (node.iCollisionBound >= 0 && node.iLeaf[0] === -1 && node.iLeaf[1] === -1 && nodeIndex === 1211) {
-            //     const hulls = this.leafHulls.getTypedArray() as Int32Array;
-            //     const hullIndexList = hulls.slice(node.iCollisionBound);
-
-            //     let hullPlanesCount = 0;
-            //     while (hullIndexList[hullPlanesCount] >= 0)
-            //         hullIndexList[hullPlanesCount++];
-
-            //     // reinterpret as floats
-            //     const initialVector = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 1 + 6)).buffer);
-            //     const hullFlags = hullIndexList.slice(0, hullPlanesCount);
-
-            //     nodeInfo.collision = {
-            //         flags: [...hullFlags],
-            //         bounds: {
-            //             isValid: true,
-            //             min: [initialVector[0], initialVector[2], initialVector[1]],
-            //             max: [initialVector[3], initialVector[5], initialVector[4]]
-            //         }
-            //     };
-            // }
-
-            // continue;
-
-            // debugger;
-
-            const zone = surf.actor.loadSelf().getZone();
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
-            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
-            const priority: PriorityGroups_T = surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
+            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as GA.FStaticLightmapTexture : null;
+            const priority: PriorityGroups_T = /*false &&*/ surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
-            if (!objectMap.has(priority)) objectMap.set(priority, new Map());
+            // Get material UUID
+            const materialUuid = surf.material.loadSelf().getDecodeInfo(library);
+            const lightmapTextureIndex = lightmapIndex ? lightmapIndex.iLightmapTexture : -1;
 
-            const gPriority = objectMap.get(priority);
+            // UE2 groups sections by: Material + PolyFlags + iLightMapTexture
+            // PolyFlags used: PF_Unlit | PF_Selected | PF_TwoSided (from UnModel.cpp line 1000)
+            // PF_Unlit = 0x00400000 (from UnObj.h line 254)
+            const PF_Unlit = 0x00400000;
+            const sectionPolyFlags = surf.flags & (PF_Unlit | PolyFlags_T.PF_Selected | PolyFlags_T.PF_TwoSided);
 
-            if (!gPriority.has(zone)) gPriority.set(zone, { totalVertices: 0, objects: new Map() });
+            // Create section key matching UE2's exact criteria
+            const sectionKey = `${materialUuid}/${sectionPolyFlags}/${lightmapTextureIndex}`;
 
-            const gZone = gPriority.get(zone);
+            if (!sectionMap.has(priority)) sectionMap.set(priority, new Map());
+            const prioritySections = sectionMap.get(priority);
 
-            if (!gZone.objects.has(surf.material)) gZone.objects.set(surf.material, new Map());
+            if (!prioritySections.has(sectionKey)) {
+                prioritySections.set(sectionKey, {
+                    material: materialUuid,
+                    lightmap: lightmap ? lightmap.uuid : null,
+                    polyFlags: sectionPolyFlags,
+                    lightmapTextureIndex: lightmapTextureIndex,
+                    totalVertices: 0,
+                    nodes: []
+                });
+            }
 
-            const gSurf = gZone.objects.get(surf.material);
-
-            if (!gSurf.has(lightmap)) gSurf.set(lightmap, { numVertices: 0, nodes: [] });
-
-            const gData = gSurf.get(lightmap);
+            // UE2 line 1003: Only nodes with NumVertices > 0 get added to sections
             const vcount = node.numVertices;
+            if (vcount <= 0) continue; // Skip nodes without vertices (splitter nodes)
+
+            const section = prioritySections.get(sectionKey);
 
             const light: LightmapInfo = !lightmap ? null : {
                 uuid: lightmap.uuid,
@@ -237,192 +341,172 @@ class UModel extends UPrimitive {
                 matrix: lightmapIndex.uvMatrix
             };
 
-            node.iVertexIndex = gData.numVertices;
-            gData.numVertices += vcount;
-            gZone.totalVertices += vcount;
-
-            gData.nodes.push({ node, surf, light });
+            node.iVertexIndex = section.totalVertices;
+            section.totalVertices += vcount;
+            section.nodes.push({ node, surf, light });
         }
 
-        const createZoneInfo = (priority: PriorityGroups_T, zone: UZoneInfo, { totalVertices, objects: objectMap }: ObjectsForZone_T): string => {
-            const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
+        // Create sections from sectionMap (UE2-style: material + lightmap only, NOT split by zone)
+        const createSection = (priority: PriorityGroups_T, sectionKey: string, sectionData: ObjectsForSection_T): number => {
+            const { material, lightmap, totalVertices, nodes } = sectionData;
+
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
 
-            const materials: string[] = [];
             const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
-            const indices: number[] = [], groups: ArrGeometryGroup[] = [];
+            const indices: number[] = [];
+            const nodeIndices: number[] = [];
 
             let dstVertices = 0;
-            let groupOffset = 0, vertexOffset = 0, materialIndex = 0;
 
-            if (totalVertices > 0) {
-                for (let material of objectMap.keys()) {
-                    const gSurf = objectMap.get(material);
+            // Process all nodes in this section (UE2: sections can span multiple zones)
+            for (const { node, surf, light } of nodes) {
+                const textureBase: FVector = this.points.getElem(surf.pBase);
+                const textureX: FVector = this.vectors.getElem(surf.vTextureU);
+                const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+                const tangentZ: FVector = this.vectors.getElem(surf.vNormal);
 
-                    for (let staticLightmap of gSurf.keys()) {
-                        const materialUuid = material.loadSelf().getDecodeInfo(library);
+                const fcount = node.numVertices - 2;
+                const findex = dstVertices; // Starting vertex index for this node
 
-                        if (staticLightmap) {
-                            const lightmappedMaterialUuid = generateUUID();
+                // Process vertices first (so we know the correct vertex count)
+                for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
+                    const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
+                    const position: FVector = this.points.getElem(vert.pVertex);
 
-                            library.materials[lightmappedMaterialUuid] = {
-                                materialType: "lightmapped",
-                                material: materialUuid,
-                                lightmap: staticLightmap?.uuid || null,
-                            } as IBaseMaterialDecodeInfo;
+                    const texB = position.sub(textureBase);
+                    const texU = texB.dot(textureX) / TEXEL_SCALE;
+                    const texV = texB.dot(textureY) / TEXEL_SCALE;
 
-                            materials.push(lightmappedMaterialUuid);
-                        } else {
-                            materials.push(materialUuid);
-                        }
+                    const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
 
-                        const { numVertices, nodes } = gSurf.get(staticLightmap);
-                        const startGroupOffset = groupOffset;
+                    positions[vOffset + 0] = position.x;
+                    positions[vOffset + 1] = position.z;
+                    positions[vOffset + 2] = position.y;
 
-                        for (let { node, surf, light } of nodes) {
-                            const textureBase: FVector = this.points.getElem(surf.pBase);
-                            const textureX: FVector = this.vectors.getElem(surf.vTextureU);
-                            const textureY: FVector = this.vectors.getElem(surf.vTextureV);
+                    normals[vOffset + 0] = tangentZ.x;
+                    normals[vOffset + 1] = tangentZ.z;
+                    normals[vOffset + 2] = tangentZ.y;
 
-                            // // Use the texture coordinates and normal to create an orthonormal tangent basis.
-                            // const tangentX: FVector = textureX;
-                            // const tangentY: FVector = textureY;
-                            const tangentZ: FVector = this.vectors.getElem(surf.vNormal); // tangentZ is normal?
-                            const fcount = node.numVertices - 2;
-                            const findex = vertexOffset + node.iVertexIndex;
+                    uvs[uOffset + 0] = texU;
+                    uvs[uOffset + 1] = texV;
 
-                            // createOrthonormalBasis(tangentX, tangentY, tangentZ);
-
-                            for (let i = 0; i < fcount; i++) {
-                                indices.push(findex, findex + i + 2, findex + i + 1)
-                            }
-
-                            groupOffset = groupOffset + fcount;
-
-                            if (surf.flags & PolyFlags_T.PF_TwoSided) {
-                                for (let i = 0; i < fcount; i++) {
-                                    indices.push(findex, findex + i + 1, findex + i + 2)
-                                }
-
-                                groupOffset = groupOffset + fcount;
-                            }
-
- 
-                            for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
-                                const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-                                const position: FVector = this.points.getElem(vert.pVertex);
-
-                                const texB = position.sub(textureBase);
-                                const texU = texB.dot(textureX) / TEXEL_SCALE;
-                                const texV = texB.dot(textureY) / TEXEL_SCALE;
-
-                                const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
-
-                                positions[vOffset + 0] = position.x;
-                                positions[vOffset + 1] = position.z;
-                                positions[vOffset + 2] = position.y;
-
-                                zoneInfo.bounds.isValid = true;
-                                [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                                    ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
-                                        for (let i = 0; i < 3; i++)
-                                            arr[i] = fn(arr[i], positions[vOffset + i]);
-                                    }
-                                );
-
-                                normals[vOffset + 0] = tangentZ.x;
-                                normals[vOffset + 1] = tangentZ.z;
-                                normals[vOffset + 2] = tangentZ.y;
-
-                                uvs[uOffset + 0] = texU;
-                                uvs[uOffset + 1] = texV;
-
-                                if (light) {
-                                    const posLightmapped = position.applyMatrix4(light.matrix);
-                                    const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
-
-                                    const { width, height } = light.resolution;
-
-                                    const lmU = light ? light.offset.x / width + u * (light.size.width / width) : 0;
-                                    const lmV = light ? light.offset.y / height + v * (light.size.height / height) : 0;
-
-                                    uvs2[uOffset + 0] = lmU;
-                                    uvs2[uOffset + 1] = lmV;
-                                }
-
-                                // // DestVertex->ShadowTexCoord = Vert.ShadowTexCoord;
-                                // tangentX.toArray(tangentsX, dstVertices * 3);
-                                // tangentZ.toArray(tangentsZ, dstVertices * 4);
-
-                                // // store the sign of the determinant in TangentZ.W
-                                // tangentsZ[dstVertices * 4 + 3] = getBasisDeterminantSign(tangentX, tangentY, tangentZ);
-
-                                dstVertices++;
-                            }
-                        }
-
-
-                        vertexOffset = vertexOffset + numVertices;
-
-                        groups.push([startGroupOffset * 3, (groupOffset - startGroupOffset) * 3, materialIndex++]);
+                    if (light) {
+                        const posLightmapped = position.applyMatrix4(light.matrix);
+                        const u = posLightmapped.x / light.size.width, v = posLightmapped.y / light.size.height;
+                        const { width, height } = light.resolution;
+                        const lmU = light.offset.x / width + u * (light.size.width / width);
+                        const lmV = light.offset.y / height + v * (light.size.height / height);
+                        uvs2[uOffset + 0] = lmU;
+                        uvs2[uOffset + 1] = lmV;
                     }
+
+                    dstVertices++;
+                }
+
+                // Create triangles after vertices are processed
+                for (let i = 0; i < fcount; i++) {
+                    indices.push(findex, findex + i + 2, findex + i + 1);
+                }
+
+                if (surf.flags & PolyFlags_T.PF_TwoSided) {
+                    for (let i = 0; i < fcount; i++) {
+                        indices.push(findex, findex + i + 1, findex + i + 2);
+                    }
+                }
+
+                // Store node index for this section
+                // UE2 line 1024: Node.iSection = Section - &Sections(0);
+                // Only nodes with NumVertices > 0 get section indices
+                const nodeIndex = this.bspNodes.indexOf(node);
+                if (nodeIndex >= 0 && node.numVertices > 0) {
+                    nodeIndices.push(nodeIndex);
+                    const sectionIndex = library.bspSections.length;
+                    library.nodeToSection[nodeIndex] = sectionIndex;
+                    library.bspNodes[nodeIndex].sectionIndex = sectionIndex;
                 }
             }
 
-            const uuid = generateUUID();
-            const materialUuid = `${priority}/${zone.uuid}/${this.uuid}`;
-            const geometryUuid = `${priority}/${zone.uuid}/${this.uuid}`;
+            // Create material (lightmapped or regular)
+            let finalMaterialUuid: string;
+            if (lightmap) {
+                finalMaterialUuid = generateUUID();
+                library.materials[finalMaterialUuid] = {
+                    materialType: "lightmapped",
+                    material: material,
+                    lightmap: lightmap,
+                } as GD.IBaseMaterialDecodeInfo;
+            } else {
+                finalMaterialUuid = material;
+            }
 
-            library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+            // Create geometry for this section
+            const geometryUuid = generateUUID();
             library.geometries[geometryUuid] = {
-                groups,
+                groups: [[0, indices.length, 0]],
                 indices: new TypedIndicesArray(indices),
                 attributes: {
                     normals,
                     positions,
-                    uvs: [uvs, uvs2]
+                    uvs: lightmap ? [uvs, uvs2] : [uvs]
                 }
             };
 
-            // debugger;
-
-            zoneInfo.children.push({
-                uuid,
-                type: "Model",
-                name: `Sub_${priority}_${this.objectName}_${zone.objectName}`,
+            // Create section info (UE2-style: material + lightmap only, no zone splitting)
+            const sectionInfo: GD.IBSPSectionDecodeInfo_T = {
+                uuid: generateUUID(),
+                priority,
+                material: finalMaterialUuid,
+                lightmap: lightmap,
                 geometry: geometryUuid,
-                materials: materialUuid,
-            } as IStaticMeshObjectDecodeInfo);
+                nodeIndices
+            };
 
-            return uuid;
+            const sectionIndex = library.bspSections.length;
+            library.bspSections.push(sectionInfo);
+            library.bspSectionIndexMap.set(sectionKey, sectionIndex);
+
+            return sectionIndex;
         };
 
-        const createPriorityGroup = ([priority, priorityMap]: [PriorityGroups_T, ObjectsForPriority_T]): string[] => {
-            return [...priorityMap.entries()].map(([zone, objects]) => createZoneInfo(priority, zone, objects));
-        };
+        // Process all sections
+        for (const [priority, prioritySections] of sectionMap.entries()) {
+            for (const [sectionKey, sectionData] of prioritySections.entries()) {
+                createSection(priority, sectionKey, sectionData);
+            }
+        }
 
-        return [...objectMap.entries()].map(createPriorityGroup);
+
+        return [];
     }
 }
 
 export default UModel;
 export { UModel };
 
+function boxPushOut(normal: GA.FVector | GA.FPlane, size: GA.FVector) {
+    return Math.abs(normal.x * size.x) + Math.abs(normal.y * size.y) + Math.abs(normal.z * size.z);
+}
+
 type PriorityGroups_T = "opaque" | "transparent";
-type ObjectsForPriority_T = Map<UZoneInfo, ObjectsForZone_T>;
-type ObjectsForZone_T = { totalVertices: number, objects: Map<UMaterial, ObjectsForMaterial_T> };
-type ObjectsForMaterial_T = Map<FStaticLightmapTexture, ObjectsForLightmap_T>;
-type ObjectsForLightmap_T = { numVertices: number, nodes: NodeInfo_T[] };
-type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo };
+// NEW: Section-based organization (replaces zone-based)
+type ObjectsForSection_T = {
+    material: string,  // material UUID
+    lightmap: string | null,  // lightmap UUID
+    polyFlags: number,  // PolyFlags (PF_Unlit | PF_Selected | PF_TwoSided)
+    lightmapTextureIndex: number,  // iLightMapTexture index
+    totalVertices: number,
+    nodes: NodeInfo_T[]
+};
+type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo | null };
 
 type LightmapInfo = {
     uuid: string,
     offset: { x: number; y: number; },
     resolution: { width: number; height: number; },
     size: { width: number; height: number; },
-    matrix: FMatrix
+    matrix: GA.FMatrix
 };
 
 // function createOrthonormalBasis(inXAxis: FVector, inYAxis: FVector, inZAxis: FVector) {

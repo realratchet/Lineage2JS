@@ -1,65 +1,62 @@
-import FColor from "./un-color";
-import UObject from "./un-object"
-import BufferValue from "../buffer-value";
-import { FPrimitiveArray } from "./un-array";
+import UObject from "@l2js/core";
+import DecodeLibrary from "./decode-library";
 
 abstract class UBaseMaterial extends UObject {
-    public readonly skipRemaining = true;
-    public abstract getDecodeInfo(library: DecodeLibrary): string;
+    // public readonly skipRemaining = true;
+    // public abstract getDecodeInfo(library: DecodeLibrary): string;
 
-    protected _fallbackMaterial: any;
-    protected _useFallback: any;
-    protected _validated: any;
-    protected _reserved: any;
-    protected _lastUpdateTime: any;
-    protected _renderInterface: any;
-    protected _detail: any;
+    // protected _fallbackMaterial: any;
+    // protected _useFallback: any;
+    // protected _validated: any;
+    // protected _reserved: any;
+    // protected _lastUpdateTime: any;
+    // protected _renderInterface: any;
+    // protected _detail: any;
 
-    protected detailScale: number;
-    protected defaultMaterial: typeof this;
+    // protected detailScale: number;
+    // protected defaultMaterial: typeof this;
 
-    protected depthWrite: boolean = true;
-    protected depthTest: boolean = true;
-    protected isTreatingDoubleSided: boolean = false;
+    declare protected depthWrite: boolean;
+    declare protected depthTest: boolean;
+    // protected isTreatingDoubleSided: boolean = false;
 
-    protected material: UBaseMaterial;
+    declare protected material: UBaseMaterial;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
-            "FallbackMaterial": "_fallbackMaterial",
-            "UseFallback": "_useFallback",
-            "Validated": "_validated",
-            "Reserved": "_reserved",
-            "__LastUpdateTime": "_lastUpdateTime",
-            "RenderInterface": "_renderInterface",
-            "DefaultMaterial": "defaultMaterial",
-            "DetailScale": "detailScale",
-            "Detail": "_detail",
+            //         "FallbackMaterial": "_fallbackMaterial",
+            //         "UseFallback": "_useFallback",
+            //         "Validated": "_validated",
+            //         "Reserved": "_reserved",
+            //         "__LastUpdateTime": "_lastUpdateTime",
+            //         "RenderInterface": "_renderInterface",
+            //         "DefaultMaterial": "defaultMaterial",
+            //         "DetailScale": "detailScale",
+            //         "Detail": "_detail",
 
             "ZWrite": "depthWrite",
             "ZTest": "depthTest",
-            "TreatAsTwoSided": "isTreatingDoubleSided",
+            //         "TreatAsTwoSided": "isTreatingDoubleSided",
 
             "Material": "material"
         });
     }
 }
 
-abstract class UBaseModifier extends UBaseMaterial { 
-    protected texCoordSource: number;
-    protected texCoordCount: number;
-    protected texCoordProjected: number;
-    
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "TexCoordSource": "texCoordSource",
-            "TexCoordCount": "texCoordCount",
-            "TexCoordProjected": "texCoordProjected",
-        });
-    }
+abstract class UBaseModifier extends UBaseMaterial {
+    // protected texCoordSource: number;
+    // protected texCoordCount: number;
+    // protected texCoordProjected: number;
+
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         "TexCoordSource": "texCoordSource",
+    //         "TexCoordCount": "texCoordCount",
+    //         "TexCoordProjected": "texCoordProjected",
+    //     });
+    // }
 }
-abstract class UMaterial extends UBaseMaterial {
-}
+abstract class UMaterial extends UBaseMaterial { }
 
 enum OutputBlending_T {
     OB_Normal,
@@ -111,8 +108,8 @@ enum TexRotationType_T {
     }
  */
 
-class UTexEnvMap extends UBaseModifier {
-    protected type: number;
+abstract class UTexEnvMap extends UBaseModifier {
+    declare public readonly type: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -125,20 +122,26 @@ class UTexEnvMap extends UBaseModifier {
     }
 }
 
-class UFinalBlend extends UBaseModifier {
-    protected frameBufferBlending: number;
-    protected doubleSide: boolean;
-    protected alphaTest: boolean;
-    protected alphaRef: number;
-
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "FrameBufferBlending": "frameBufferBlending",
-            "TwoSided": "doubleSide",
-            "AlphaTest": "alphaTest",
-            "AlphaRef": "alphaRef",
-        });
+abstract class UCombiner extends UBaseModifier {
+    public getDecodeInfo(library: DecodeLibrary): string {
+        return null;
     }
+}
+
+abstract class UFinalBlend extends UBaseModifier {
+    // protected frameBufferBlending: number;
+    // protected doubleSide: boolean;
+    // protected alphaTest: boolean;
+    // protected alphaRef: number;
+
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         "FrameBufferBlending": "frameBufferBlending",
+    //         "TwoSided": "doubleSide",
+    //         "AlphaTest": "alphaTest",
+    //         "AlphaRef": "alphaRef",
+    //     });
+    // }
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
@@ -152,31 +155,32 @@ class UFinalBlend extends UBaseModifier {
     }
 }
 
-class UShader extends UMaterial {
-    protected diffuse: UMaterial = null;
-    protected opacity: UMaterial = null;
-    protected doubleSide: boolean = false;
-    protected specular: UMaterial = null;
-    protected specularMask: UMaterial = null;
-    protected outputBlending: OutputBlending_T = OutputBlending_T.OB_Normal;
+abstract class UShader extends UMaterial {
+    declare protected diffuse: UMaterial;
+    declare protected opacity: UMaterial;
+    declare protected doubleSide: boolean;
+    declare protected specular: UMaterial;
+    declare protected specularMask: UMaterial;
+    declare protected outputBlending: OutputBlending_T;
 
-    protected transparent: boolean = false;
-    protected alphaTest: number = 0;
-    protected isPerformingLightingOnSpecularPass: boolean = false;
-    protected selfIllumination: UMaterial = null;
-    protected selfIlluminationMask: UMaterial = null;
-    protected unkBytes: BufferValue<"buffer">;
+    declare protected transparent: boolean;
+    declare protected alphaTest: number;
+    declare protected selfIllumination: UMaterial;
+    declare protected selfIlluminationMask: UMaterial;
 
-    protected _wireframe: any;
-    protected _modulateStaticLighting2X: any;
+    // protected isPerformingLightingOnSpecularPass: boolean = false;
+    // protected unkBytes: BufferValue<"buffer">;
 
-    protected postLoad(pkg: UPackage): void {
-        this.readHead = pkg.tell();
+    // protected _wireframe: any;
+    // protected _modulateStaticLighting2X: any;
 
-        this.unkBytes = pkg.read(BufferValue.allocBytes(this.readTail - this.readHead)) as any;
+    // protected postLoad(pkg: UPackage): void {
+    //     this.readHead = pkg.tell();
 
-        this.readHead = pkg.tell();
-    }
+    //     this.unkBytes = pkg.read(BufferValue.allocBytes(this.readTail - this.readHead)) as any;
+
+    //     this.readHead = pkg.tell();
+    // }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -187,37 +191,38 @@ class UShader extends UMaterial {
             "SpecularityMask": "specularMask",
             "OutputBlending": "outputBlending",
 
-
-            "AlphaTest": "transparent",
             "SelfIllumination": "selfIllumination",
             "SelfIlluminationMask": "selfIlluminationMask",
-            "AlphaRef": "alphaTest",
-            "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
 
-            "Wireframe": "_wireframe",
-            "ModulateStaticLighting2X": "_modulateStaticLighting2X"
+            "AlphaTest": "transparent",
+            "AlphaRef": "alphaTest",
+
+            // "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
+            // "Wireframe": "_wireframe",
+            // "ModulateStaticLighting2X": "_modulateStaticLighting2X"
         });
     }
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
-        library.materials[this.uuid] = null;
+        // if (this.transparent)
+        //     debugger;
 
-        // await this.onDecodeReady();
+        library.materials[this.uuid] = null;
 
         const diffuse = this.diffuse?.loadSelf().getDecodeInfo(library) || null;
         const opacity = this.opacity?.loadSelf().getDecodeInfo(library) || null;
         const specular = this.specular?.loadSelf().getDecodeInfo(library) || null;
         const specularMask = this.specularMask?.loadSelf().getDecodeInfo(library) || null;
         const depthWrite = this.depthWrite;
-        const doubleSide = this.doubleSide
+        const doubleSide = this.doubleSide;
         const transparent = this.transparent;
         const alphaTest = this.alphaTest / 255;
 
-        let blendingMode: SupportedBlendingTypes_T;
+        let blendingMode: GA.SupportedBlendingTypes_T;
 
-        switch (this.outputBlending) {
+        switch (this.outputBlending.valueOf()) {
             case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
             case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
             case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;
@@ -242,16 +247,16 @@ class UShader extends UMaterial {
             transparent,
             alphaTest,
             visible: true,
-        } as IShaderDecodeInfo;
+        } as GD.IShaderDecodeInfo;
 
         return this.uuid;
     }
 }
 
-class UFadeColor extends UBaseModifier {
-    public color1: FColor = new FColor();
-    public color2: FColor = new FColor();
-    public period: number = 0;
+abstract class UFadeColor extends UBaseModifier {
+    declare public readonly color1: GA.FColor;
+    declare public readonly color2: GA.FColor;
+    declare public readonly period: number;
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
@@ -266,7 +271,7 @@ class UFadeColor extends UBaseModifier {
                 color2: [this.color2.r / 255, this.color2.b / 255, this.color2.b / 255],
                 period: this.period
             }
-        } as IFadeColorDecodeInfo;
+        } as GD.IFadeColorDecodeInfo;
 
         return this.uuid;
     }
@@ -280,49 +285,49 @@ class UFadeColor extends UBaseModifier {
     }
 }
 
-class UColorModifier extends UBaseMaterial {
-    protected color: FColor;
-    protected doubleSide: boolean;
-    protected alphaBlend: boolean;
+abstract class UColorModifier extends UBaseMaterial {
+    // protected color: FColor;
+    // protected doubleSide: boolean;
+    // protected alphaBlend: boolean;
 
-    // public async decodeMaterial(): Promise<THREE.Material> {
-    //     const material = await this.material?.decodeMaterial() as THREE.ShaderMaterial;
+    // // public async decodeMaterial(): Promise<THREE.Material> {
+    // //     const material = await this.material?.decodeMaterial() as THREE.ShaderMaterial;
 
-    //     material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
-    //     material.uniforms.opacity.value = this.color.a / 255;
+    // //     material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
+    // //     material.uniforms.opacity.value = this.color.a / 255;
 
-    //     if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
+    // //     if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
 
-    //     return material;
+    // //     return material;
+    // // }
+
+    // public getDecodeInfo(library: DecodeLibrary): string {
+    //     if (this.uuid in library.materials) return this.material.uuid;
+
+    //     library.materials[this.uuid] = null;
+
+    //     debugger;
+
+    //     this.material.loadSelf().getDecodeInfo(library);
+
+    //     return this.material.uuid;
     // }
 
-    public getDecodeInfo(library: DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.material.uuid;
-
-        library.materials[this.uuid] = null;
-
-        debugger;
-
-        this.material.loadSelf().getDecodeInfo(library);
-
-        return this.material.uuid;
-    }
-
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "Color": "color",
-            "RenderTwoSided": "doubleSide",
-            "AlphaBlend": "alphaBlend"
-        });
-    }
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         "Color": "color",
+    //         "RenderTwoSided": "doubleSide",
+    //         "AlphaBlend": "alphaBlend"
+    //     });
+    // }
 }
 
-class UTexRotator extends UBaseModifier {
-    protected matrix: UMatrix;
-    protected type: TexRotationType_T;
-    protected rotation: FRotator;
-    protected offsetU: number;
-    protected offsetV: number;
+abstract class UTexRotator extends UBaseModifier {
+    declare public readonly matrix: GA.FMatrix;
+    declare public readonly type: TexRotationType_T;
+    declare public readonly rotation: GA.FRotator;
+    declare public readonly offsetU: number;
+    declare public readonly offsetV: number;
 
     // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
@@ -370,23 +375,23 @@ class UTexRotator extends UBaseModifier {
 
 
 
-class UTexOscillator extends UBaseModifier {
-    protected matrix: UMatrix;
-    protected rateU: number;
-    protected rateV: number;
-    protected phaseU: number;
-    protected phaseV: number;
-    protected amplitudeU: number;
-    protected amplitudeV: number;
-    protected typeU: number;
-    protected typeV: number;
-    protected offsetU: number;
-    protected offsetV: number;
-    protected currentUJitter: number;
-    protected currentVJitter: number;
+abstract class UTexOscillator extends UBaseModifier {
+    // protected matrix: FMatrix;
+    // protected rateU: number;
+    // protected rateV: number;
+    // protected phaseU: number;
+    // protected phaseV: number;
+    // protected amplitudeU: number;
+    // protected amplitudeV: number;
+    // protected typeU: number;
+    // protected typeV: number;
+    // protected offsetU: number;
+    // protected offsetV: number;
+    // protected currentUJitter: number;
+    // protected currentVJitter: number;
 
-    protected _lastSu: any;
-    protected _lastSV: any;
+    // protected _lastSu: any;
+    // protected _lastSV: any;
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
@@ -398,33 +403,46 @@ class UTexOscillator extends UBaseModifier {
         return this.material.uuid;
     }
 
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "M": "matrix",
-            "UOscillationRate": "rateU",
-            "VOscillationRate": "rateV",
-            "UOscillationPhase": "phaseU",
-            "VOscillationPhase": "phaseV",
-            "UOscillationAmplitude": "amplitudeU",
-            "VOscillationAmplitude": "amplitudeV",
-            "UOscillationType": "typeU",
-            "VOscillationType": "typeV",
-            "UOffset": "offsetU",
-            "VOffset": "offsetV",
-            "LastSu": "_lastSu",
-            "LastSv": "_lastSV",
-            "CurrentUJitter": "currentUJitter",
-            "CurrentVJitter": "currentVJitter"
-        });
-    }
+    // protected getPropertyMap() {
+    //     return Object.assign({}, super.getPropertyMap(), {
+    //         "M": "matrix",
+    //         "UOscillationRate": "rateU",
+    //         "VOscillationRate": "rateV",
+    //         "UOscillationPhase": "phaseU",
+    //         "VOscillationPhase": "phaseV",
+    //         "UOscillationAmplitude": "amplitudeU",
+    //         "VOscillationAmplitude": "amplitudeV",
+    //         "UOscillationType": "typeU",
+    //         "VOscillationType": "typeV",
+    //         "UOffset": "offsetU",
+    //         "VOffset": "offsetV",
+    //         "LastSu": "_lastSu",
+    //         "LastSv": "_lastSV",
+    //         "CurrentUJitter": "currentUJitter",
+    //         "CurrentVJitter": "currentVJitter"
+    //     });
+    // }
 }
 
-class UTexPanner extends UBaseModifier {
-    protected rate: number;
-    protected z: number;
-    protected matrix: UMatrix;
-    protected internalTime = new FPrimitiveArray(BufferValue.int32);
-    protected direction: FRotator;
+abstract class UTexCoordSource extends UBaseModifier {
+    // public getDecodeInfo(library: DecodeLibrary): string {
+    //     if (this.uuid in library.materials) return this.material.uuid;
+
+    //     library.materials[this.uuid] = null;
+
+
+    //     this.material.loadSelf().getDecodeInfo(library);
+
+    //     return this.material.uuid;
+    // }
+}
+
+abstract class UTexPanner extends UBaseModifier {
+    declare public readonly rate: number;
+    declare public readonly z: number;
+    declare public readonly matrix: GA.FMatrix;
+    declare public readonly internalTime: C.FPrimitiveArray<"int32">;
+    declare public readonly direction: GA.FRotator;
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
@@ -439,7 +457,7 @@ class UTexPanner extends UBaseModifier {
                 map: this.material?.loadSelf().getDecodeInfo(library) || null,
                 rate: this.rate
             }
-        } as ITexPannerDecodeInfo;
+        } as GD.ITexPannerDecodeInfo;
 
         return this.material.uuid;
     }
@@ -455,10 +473,18 @@ class UTexPanner extends UBaseModifier {
     }
 }
 
-class FStaticMeshMaterial extends UBaseMaterial {
-    protected noDynamicShadowCast: boolean;
-    protected collisionForShadow: boolean;
-    protected enableCollision: boolean;
+abstract class UStaticMeshMaterial extends UBaseMaterial {
+    declare protected noDynamicShadowCast: boolean;
+    declare protected collisionForShadow: boolean;
+    declare protected enableCollision: boolean;
+
+    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+        return [
+            ["EnableCollision", "BoolProperty"],
+            ["EnableCollisionforShadow", "BoolProperty"],
+            ["bNoDynamicShadowCast", "BoolProperty"]
+        ];
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -467,6 +493,13 @@ class FStaticMeshMaterial extends UBaseMaterial {
             "EnableCollision": "enableCollision",
         });
     }
+
+
+    // protected doLoad(pkg: unknown, exp: unknown): void {
+    //     debugger;
+    //     super.doLoad(pkg as any, exp as any);
+    //     debugger;
+    // }
 
     public getDecodeInfo(library: DecodeLibrary): string {
 
@@ -482,4 +515,4 @@ class FStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, FStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap };
+export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UCombiner };

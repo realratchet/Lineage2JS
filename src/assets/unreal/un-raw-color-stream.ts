@@ -1,16 +1,27 @@
-import FConstructable from "./un-constructable";
-import FArray from "./un-array";
-import FColor from "./un-color";
-import BufferValue from "../buffer-value";
+class FRawColorStream implements C.IConstructable {
+    declare private elementCount: number;
+    declare private data: DataView;
+    declare private revision: number;
 
-class FRawColorStream extends FConstructable {
-    public color: FArray<FColor> = new FArray(FColor);
-    public revision: number;
+    public getColor(index: number): [number, number, number, number] {
+        const off = index << 2;
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
-        this.color.load(pkg, tag);
-        this.revision = pkg.read(new BufferValue(BufferValue.int32)).value as number;
-        
+        return [
+            this.data.getUint8(off),
+            this.data.getUint8(off + 1),
+            this.data.getUint8(off + 2),
+            this.data.getUint8(off + 3)
+        ];
+    }
+
+    public getElemCount() { return this.elementCount };
+
+    public load(pkg: C.APackage): this {
+        this.elementCount = pkg.read("compat32");
+        this.data = pkg.read(this.elementCount * 4);
+
+        this.revision = pkg.read("int32");
+
         return this;
     }
 

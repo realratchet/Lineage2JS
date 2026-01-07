@@ -1,19 +1,16 @@
-import FConstructable from "../un-constructable";
-import BufferValue from "../../buffer-value";
+import { BufferValue, } from "@l2js/core";
 
-class FVert extends FConstructable {
+class FVert implements C.IConstructable {
     public pVertex: number;
     public side: number;
 
-    public load(pkg: UPackage): this {
-        const compat32 = new BufferValue(BufferValue.compat32);
+    public load(pkg: C.APackage): this {
 
-        this.pVertex = pkg.read(compat32).value as number;
-        this.side = pkg.read(compat32).value as number;
+        this.pVertex = pkg.read("compat32");
+        this.side = pkg.read("compat32");
 
         return this;
     }
-
 }
 
 export default FVert;

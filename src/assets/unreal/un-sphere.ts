@@ -1,23 +1,18 @@
-import FConstructable from "./un-constructable";
-import BufferValue from "../buffer-value";
-import FVector from "./un-vector";
+import FPlane from "@client/assets/unreal/un-plane";
 
-class USphere extends FConstructable {
-    public center: FVector = new FVector();
-    public radius: number;
+abstract class USphere extends FPlane {
+    // public center: FVector = new FVector();
+    // public radius: number;
 
-    public load(pkg: UPackage): this {
-        const f = new BufferValue(BufferValue.float);
+    // public load(pkg: UPackage): this {
+    //     ["x", "y", "z"].forEach((ax: "x" | "y" | "z") => {
+    //         this.center[ax] = pkg.read("float");
+    //     });
 
-        ["x", "y", "z"].forEach((ax: "x" | "y" | "z") => {
-            this.center[ax] = pkg.read(f).value as number;
-        });
+    //     this.radius = pkg.read("float");
 
-        this.radius = pkg.read(f).value as number;
-
-        return this;
-    }
-
+    //     return this;
+    // }
 }
 
 export default USphere;

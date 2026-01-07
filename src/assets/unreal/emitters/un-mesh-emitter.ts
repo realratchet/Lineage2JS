@@ -1,7 +1,7 @@
 import UParticleEmitter from "./un-particle-emitter"
 
-class UMeshEmitter extends UParticleEmitter {
-    protected mesh: UStaticMesh;
+abstract class UMeshEmitter extends UParticleEmitter {
+    declare protected mesh: GA.UStaticMesh;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -9,7 +9,7 @@ class UMeshEmitter extends UParticleEmitter {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary) {
+    public getDecodeInfo(library: GD.DecodeLibrary) {
         return Object.assign(super.getDecodeInfo(library), {
             type: "MeshEmitter",
             mesh: this.mesh.loadSelf().getDecodeInfo(library)

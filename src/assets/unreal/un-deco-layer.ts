@@ -1,27 +1,25 @@
-import UObject from "./un-object";
+import UObject from "@l2js/core";
 
-class UDecoLayer extends UObject {
-    public readonly careUnread: boolean = false;
-
-    protected showOnTerrain: number;
-    protected scaleMap: UTexture;
-    protected densityMap: UTexture;
-    protected colorMap: UTexture;
-    public staticMesh: UStaticMesh;
-    protected scaleMultiplier: URangeVector;
-    protected ambientSoundType: number[];
-    protected size: number;
-    protected fadeoutRadius: URange;
-    protected densityMultiplier: URange;
-    protected maxPerQuad: number;
-    protected seed: number;
-    protected alignToTerrain: number;
-    protected drawOrder: number;
-    protected isShowOnInvisibleTerrain: number;
-    protected dirLighting: number;
-    protected disregardTerrainLighting: number;
-    protected randomYaw: number;
-    protected isForcingRender: number;
+abstract class UDecoLayer extends UObject {
+    declare protected readonly showOnTerrain: number;
+    declare protected readonly scaleMap: GA.UTexture;
+    declare protected readonly densityMap: GA.UTexture;
+    declare protected readonly colorMap: GA.UTexture;
+    declare public readonly staticMesh: GA.UStaticMesh;
+    declare protected readonly scaleMultiplier: GA.FRangeVector;
+    declare protected readonly ambientSoundType: number[];
+    declare protected readonly size: number;
+    declare protected readonly fadeoutRadius: GA.FRange;
+    declare protected readonly densityMultiplier: GA.FRange;
+    declare protected readonly maxPerQuad: number;
+    declare protected readonly seed: number;
+    declare protected readonly alignToTerrain: number;
+    declare protected readonly drawOrder: number;
+    declare protected readonly isShowOnInvisibleTerrain: number;
+    declare protected readonly dirLighting: number;
+    declare protected readonly disregardTerrainLighting: number;
+    declare protected readonly randomYaw: number;
+    declare protected readonly isForcingRender: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

@@ -1,24 +1,21 @@
-import BufferValue from "../../buffer-value";
-import FConstructable from "../un-constructable";
+import { BufferValue } from "@l2js/core";
 
-class FStaticMeshSection extends FConstructable {
-    public f4: number;              // always 0 ??
-    public firstIndex: number;      // first index
-    public firstVertex: number;     // first used vertex
-    public lastVertex: number;      // last used vertex
-    public fE: number;              // ALMOST always equals to f10
-    public numFaces: number;        // number of faces in section
+class FStaticMeshSection implements C.IConstructable {
+    declare public f4: number;              // always 0 ??
+    declare public firstIndex: number;      // first index
+    declare public firstVertex: number;     // first used vertex
+    declare public lastVertex: number;      // last used vertex
+    declare public fE: number;              // ALMOST always equals to f10
+    declare public numFaces: number;        // number of faces in section
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const uint16 = new BufferValue(BufferValue.uint16);
+    public load(pkg: C.APackage): this {
 
-        this.f4 = pkg.read(uint32).value as number;
-        this.firstIndex = pkg.read(uint16).value as number;
-        this.firstVertex = pkg.read(uint16).value as number;
-        this.lastVertex = pkg.read(uint16).value as number;
-        this.fE = pkg.read(uint16).value as number;
-        this.numFaces = pkg.read(uint16).value as number;
+        this.f4 = pkg.read("uint32");
+        this.firstIndex = pkg.read("uint16");
+        this.firstVertex = pkg.read("uint16");
+        this.lastVertex = pkg.read("uint16");
+        this.fE = pkg.read("uint16");
+        this.numFaces = pkg.read("uint16");
 
         return this;
     }

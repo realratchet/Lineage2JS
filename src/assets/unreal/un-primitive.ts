@@ -1,18 +1,40 @@
-import UObject from "./un-object";
-import FArray from "./un-array";
-import { FStaticMeshMaterial } from "./un-material";
-import FBox from "./un-box";
-import USphere from "./un-sphere";
-import UExport from "./un-export";
-import UPackage from "./un-package";
+import FBox from "@client/assets/unreal/un-box";
+import FPlane from "@client/assets/unreal/un-plane";
+import FVector from "@client/assets/unreal/un-vector";
+import UObject from "@l2js/core";
 
-class UPrimitive extends UObject {
-    protected static getConstructorName() { return "Primitive"; }
+abstract class UPrimitive extends UObject {
+    declare protected boundingBox: GA.FBox;
+    declare protected boundingSphere: GA.FPlane;
+    declare protected readonly materials: C.FArray<GA.UStaticMeshMaterial>;
+    declare protected readonly swayObject: boolean;
 
-    protected materials: FArray<FStaticMeshMaterial> = new FArray(FStaticMeshMaterial);
-    protected swayObject: boolean;
-    protected boundingBox: FBox = new FBox();
-    protected boundingSphere: USphere = new USphere();
+    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+        return [
+            ["Materials", "ArrayProperty", ["Class", "StaticMeshMaterial"]],
+            ["bSwayObject", "BoolProperty"]
+        ];
+    }
+
+    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
+        super.preLoad(pkg, exp);
+
+        this.boundingBox = FBox.make();
+        this.boundingSphere = FPlane.make();
+    }
+
+    protected doLoad(pkg: C.APackage, exp: C.UExport) {
+        // (UObject.prototype as any).doLoad.call(this, pkg, exp);
+        super.doLoad(pkg, exp);
+
+        this.boundingBox = FBox.make();
+        this.boundingSphere = FPlane.make();
+
+        this.boundingBox.load(pkg);
+        this.boundingSphere.load(pkg);
+
+        this.readHead = pkg.tell();
+    }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -21,26 +43,28 @@ class UPrimitive extends UObject {
         });
     }
 
-    protected doLoad(pkg: UPackage, exp: UExport) {
-        super.doLoad(pkg, exp);
-
-        this.boundingBox.load(pkg);
-        this.boundingSphere.load(pkg);
-
-        this.readHead = pkg.tell();
-    }
-
-    public decodeBoundsInfo(): IBoundsDecodeInfo {
+    public decodeBoundsInfo(): GD.IBoundsDecodeInfo {
         return {
             sphere: {
-                center: [this.boundingSphere.center.x, this.boundingSphere.center.z, this.boundingSphere.center.y],
-                radius: this.boundingSphere.radius
+                center: [this.boundingSphere.x, this.boundingSphere.z, this.boundingSphere.y],
+                radius: this.boundingSphere.w
             },
             box: this.boundingBox.isValid ? {
                 min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
                 max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
             } : null
         };
+    }
+
+    public getRenderBoundingBox(owner?: GA.AActor): FBox {
+        if (owner) {
+            const extents = FVector.make(owner.collisionRadius + 1, owner.collisionRadius + 1, owner.collisionHeight + 1);
+            const box = FBox.make(extents.negate(), extents, 1);
+
+            return box;
+        }
+
+        return this.boundingBox;
     }
 }
 

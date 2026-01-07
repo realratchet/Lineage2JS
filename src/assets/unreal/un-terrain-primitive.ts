@@ -1,6 +1,6 @@
 import UPrimitive from "./un-primitive";
 
-class UTerrainPrimitive extends UPrimitive {
+abstract class UTerrainPrimitive extends UPrimitive {
 
 }
 

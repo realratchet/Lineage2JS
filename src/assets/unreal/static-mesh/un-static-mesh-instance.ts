@@ -1,57 +1,62 @@
-import UObject from "../un-object";
-import BufferValue from "../../buffer-value";
-import FConstructable from "../un-constructable";
+import UObject from "@l2js/core";
+import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
-import FArray, { FPrimitiveArray } from "../un-array";
-import { selectByTime, staticMeshLight } from "../un-time-list";
 import ULight from "../un-light";
-import timeOfDay, { indexToTime } from "../un-time-of-day-helper";
+import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { indexToTime } from "@client/assets/unreal/un-l2env";
 
-class FAssignedLight extends FConstructable {
+
+class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
-    public unkInt0: number;
+    public applied: boolean;
 
     public light: ULight;
 
-    public load(pkg: UPackage): this {
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const int32 = new BufferValue(BufferValue.int32);
-
-        this.lightIndex = pkg.read(compat32).value as number;
+    public load(pkg: C.APackage): this {
+        this.lightIndex = pkg.read("compat32");
         this.vertexFlags.load(pkg);
-        this.unkInt0 = pkg.read(int32).value as number;
+
+        this.applied = pkg.read("int32") !== 0;
 
         this.light = pkg.fetchObject<ULight>(this.lightIndex);
 
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary): any {
+    public toString(..._: any) {
+        return `FStaticMeshLightInfo(light=${this.light.toString()})`;
+    }
+
+    public getDecodeInfo(library: GD.DecodeLibrary): any {
         return {
-            vertexFlags: this.vertexFlags.getTypedArray(),
+            vertexFlags: this.vertexFlags,
             ...(this.light.loadSelf().getDecodeInfo(library))
         };
     }
 }
 
-class UStaticMeshInstance extends UObject {
-    protected colorStream = new FRawColorStream();
+abstract class UStaticMeshInstance extends UObject {
+    declare public colorStream: FRawColorStream;
+    declare public sceneLights: FArray<FStaticMeshLightInfo>;
+    declare public environmentLights: FArray<FStaticMeshLightInfo>;
 
-    protected sceneLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
-    protected environmentLights: FArray<FAssignedLight> = new FArray(FAssignedLight as any);
+    declare public unkArrIndex: number[];
 
-    protected unkArrIndex: number[];
+    declare protected actor: GA.UStaticMeshActor;
 
-    protected actor: UStaticMeshActor;
+    public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
 
-    public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
 
-    public getDecodeInfo(library: DecodeLibrary): any {
-        const color = new Float32Array(this.colorStream.color.length * 3);
 
-        for (let i = 0, len = this.colorStream.color.length; i < len; i++) {
-            const { r, g, b } = this.colorStream.color[i] as FColor;
+    public getDecodeInfo(library: GD.DecodeLibrary): any {
+        const len = this.colorStream.getElemCount();
+        const color = new Float32Array(len * 3);
+        const envManager = this.actor.levelInfo.getL2Env();
+        const env = envManager.getCurrentEnvLight();
+
+        for (let i = 0; i < len; i++) {
+            const [r, g, b] = this.colorStream.getColor(i);
             const offset = i * 3;
 
             color[offset + 0] = r / 255;
@@ -59,22 +64,24 @@ class UStaticMeshInstance extends UObject {
             color[offset + 2] = b / 255;
         }
 
-        let validEnvironment: FAssignedLight = null;
-        let startIndex: number, finishIndex: number;
+        let validEnvironment: FStaticMeshLightInfo = null;
+        let startIndex: number;
+        let finishIndex: number;
         // let startTime: number, finishTime: number;
 
-        let lightingColor: [number, number, number];
+        let lightingColor: GD.ColorArr;
 
         for (let i = 0, len = this.environmentLights.length; i < len; i++) {
             const timeForIndex = indexToTime(i, len);
 
-            if (timeForIndex > timeOfDay) {
+            if (timeForIndex > envManager.getTimeOfDay()) {
                 validEnvironment = this.environmentLights[i];
                 startIndex = i;
                 finishIndex = i + 1;
                 // startTime = timeForIndex;
                 // finishTime = indexToTime(finishIndex, len);
-                lightingColor = selectByTime(timeOfDay, staticMeshLight).getColor();
+                const light = envManager.selectByTime(env.lightStaticMesh);
+                lightingColor = light ? light.getColor() : [1, 1, 1, 1];
 
                 break;
             }
@@ -92,10 +99,12 @@ class UStaticMeshInstance extends UObject {
         return {
             color,
             lights: {
-                scene: this.sceneLights.map(l => l.getDecodeInfo(library)),
+                // scene: [],
+                // environment: null
+                scene: this.sceneLights,
                 environment: validEnvironment ? {
                     color: lightingColor,
-                    ...validEnvironment.getDecodeInfo(library)
+                    ...validEnvironment
                 } : null
             }
         };
@@ -107,10 +116,13 @@ class UStaticMeshInstance extends UObject {
         // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }
 
-    protected doLoad(pkg: UPackage, exp: UExport): this {
+    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
-        const compat32 = new BufferValue(BufferValue.compat32);
+
+        this.colorStream = new FRawColorStream();
+        this.sceneLights = new FArray(FStaticMeshLightInfo);
+        this.environmentLights = new FArray(FStaticMeshLightInfo);
 
         super.doLoad(pkg, exp);
 
@@ -123,7 +135,7 @@ class UStaticMeshInstance extends UObject {
 
         if (0x6D < verArchive) this.sceneLights.load(pkg);
         if (0x03 < verLicense) this.environmentLights.load(pkg);
-        if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read(compat32).value as number);
+        if (0x0B < verLicense) this.unkArrIndex = new Array(2).fill(1).map(_ => pkg.read("compat32"));
 
         this.readHead = pkg.tell();
 

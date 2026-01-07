@@ -1,130 +1,142 @@
-import UObject from "./un-object";
-import BufferValue from "../buffer-value";
 import FURL from "./un-url";
-import { FPrimitiveArray } from "./un-array";
+import { UObject, BufferValue } from "@l2js/core";
+import { FObjectArray } from "@l2js/core/unreal/un-array";
 
 const LOAD_SUB_OBJECTS = true;
+const LOAD_SOUNDS = false;
+const NUM_LEVEL_TEXT_BLOCKS = 16;
 
-class ULevel extends UObject {
-    protected objectList: UObject[] = [];
+abstract class ULevelBase extends UObject {
     public readonly url: FURL = new FURL();
-    protected reachSpecs: FPrimitiveArray = new FPrimitiveArray(BufferValue.uint32);
-    public baseModelId: number;
-    protected baseModel: UModel;
 
-    protected unkBytes = BufferValue.allocBytes(3);
-    protected unkInt0: number;
+    protected ambientActors: FObjectArray<GA.AActor>;
+    protected actors: FObjectArray<GA.AActor>;
 
-    public doLoad(pkg: UPackage, exp: UExport) {
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
+        super.doLoad(pkg, exp);
 
-        this.setReadPointers(exp);
-
-        pkg.seek(this.readHead, "set");
-
-        this.readNamedProps(pkg);
-
-        const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
-        let dbNum: number;
-        let dbMax: number;
-        let ambientSoundIds: number[] = [];
-        let objectIds: number[];
+        if (verLicense >= 23) {
+            let dbNum = 0, dbMax = 0;
 
-        if (0x16 < verLicense) {
-            dbNum = pkg.read(int32).value as number;
-            dbMax = pkg.read(int32).value as number;
+            dbNum = pkg.read("int32");
+            dbMax = pkg.read("int32");
 
-            ambientSoundIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
+            this.ambientActors = FObjectArray.loadOfSize(dbNum, pkg);
+
+            dbNum = pkg.read("int32");
+            dbMax = pkg.read("int32");
+
+            this.actors = FObjectArray.loadOfSize(dbNum, pkg);
+        } else {
+            debugger
+            throw new Error("not implemented");
         }
-
-        this.readHead = pkg.tell();
-
-        dbNum = pkg.read(int32).value as number;
-        dbMax = pkg.read(int32).value as number;
-
-        objectIds = new Array(dbMax).fill(1).map(_ => pkg.read(compat32).value as number).filter(v => v !== 0);
 
         this.url.load(pkg);
+    }
+}
 
-        this.unkInt0 = pkg.read(int32).value as number;
-        pkg.read(this.unkBytes);
+abstract class ULevel extends ULevelBase {
+    public baseModelId: number;
+    public levelInfoId: number;
 
-        this.readHead = pkg.tell();
+    protected baseModel: GA.UModel;
+    public levelInfo: GA.ULevelInfo;
 
-        this.reachSpecs.load(pkg);
+    public get timeSeconds() { return 0; };
 
-        // debugger;
+    protected info: GA.ULevelInfo;
 
-        this.readHead = pkg.tell();
+    protected approxTime: number;
+    protected firstDeletedId: number;
 
-        this.baseModelId = pkg.read(compat32).value as number;
-        this.readHead = pkg.tell();
+    protected objectList: UObject[] = [];
 
-        if (LOAD_SUB_OBJECTS) {
-            this.baseModel = pkg.fetchObject<UModel>(this.baseModelId);
+    public getInfo() { return this.info; }
+    public setInfo(info: GA.ULevelInfo) { this.info = info; }
 
-            for (let objectId of ambientSoundIds) {
-                const object = pkg.fetchObject(objectId);
+    public getModel() { return this.baseModel; }
 
-                if (object)
-                    this.objectList.push(object);
-            }
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
+        super.doLoad(pkg, exp);
 
-            for (let objectId of objectIds) {
-                const object = pkg.fetchObject(objectId);
+        const verArchive = pkg.header.getArchiveFileVersion();
 
-                if (object)
-                    this.objectList.push(object);
-            }
+        this.baseModelId = pkg.read("compat32");
+
+        if (verArchive < 98) {
+            debugger;
         }
 
-        pkg.seek(this.readHead, "set");
+        this.approxTime = pkg.read("float");
 
-        // const startBytes = pkg.tell();
-        // const unk1 = pkg.read(new BufferValue(BufferValue.float)).value;
-        // // console.log(pkg.tell() - startBytes);
-        // // const unk2 = pkg.read(compat32).value;
-        // // console.log(pkg.tell() - startBytes);
+        this.firstDeletedId = pkg.read("compat32");
+        const textBlockIds = new Array<number>(NUM_LEVEL_TEXT_BLOCKS);
 
+        for (let i = 0; i < NUM_LEVEL_TEXT_BLOCKS; i++)
+            textBlockIds[i] = pkg.read("compat32");
 
-        // // pkg.dump(2);
+        if (verArchive > 62) {
+            const travelInfoPairsCount = pkg.read("compat32");
 
-        // debugger;
+            if (travelInfoPairsCount !== 0)
+                debugger;
+        } else if (verArchive >= 61) {
+            debugger;
+        }
+
+        this.levelInfo = this.actors[0] as GA.ULevelInfo;
+        this.levelInfo.setLevel(this);
+
+        if (LOAD_SUB_OBJECTS) {
+            this.baseModel = pkg.fetchObject<GA.UModel>(this.baseModelId);
+
+            if (LOAD_SOUNDS) {
+                this.objectList = this.objectList.concat(this.ambientActors);
+            }
+
+            this.objectList = this.objectList.concat(this.actors);
+
+            console.assert(this.levelInfo.constructor.friendlyName === "LevelInfo");
+        }
 
         this.readHead = this.readTail;
+
+        console.assert(this.bytesUnread === 0);
 
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
-        const groupedObjectList = this.objectList.reduce((accum, obj) => {
+    // public getDecodeInfo(library: DecodeLibrary): IBaseObjectDecodeInfo {
+    //     const groupedObjectList = this.objectList.reduce((accum, obj) => {
 
-            const constrName = (obj.constructor as any).isDynamicClass ? (obj.constructor as any).getConstructorName() : obj.constructor.name;
+    //         const constrName = (obj.constructor as any).isDynamicClass
+    //             ? (obj.constructor as any).getConstructorName()
+    //             : obj.constructor.name;
 
-            accum[constrName] = accum[constrName] || [];
-            accum[constrName].push(obj);
+    //         accum[constrName] = accum[constrName] || [];
+    //         accum[constrName].push(obj);
 
-            return accum;
-        }, {} as Record<string, UObject[]>);
+    //         return accum;
+    //     }, {} as Record<string, UObject[]>);
 
-        for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
-            emitter.loadSelf().getDecodeInfo(library);
+    //     for (const emitter of (groupedObjectList.Emitter as UEmitter[]))
+    //         emitter.loadSelf().getDecodeInfo(library);
 
-        // debugger;
+    //     // debugger;
 
-        // return {
-        //     type: "Level",
-        //     name: this.url.map,
-        //     children: (await Promise.all([
-        //         this.baseModel.getDecodeInfo(library),
-        //         "UTerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["UTerrainInfo"].map((exp: UTerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
-        //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
-        //     ])).flat()
-        // };
-    }
+    //     // return {
+    //     //     type: "Level",
+    //     //     name: this.url.map,
+    //     //     children: (await Promise.all([
+    //     //         this.baseModel.getDecodeInfo(library),
+    //     //         "ATerrainInfo" in groupedObjectList ? Promise.all(groupedObjectList["ATerrainInfo"].map((exp: ATerrainInfo) => exp.getDecodeInfo(library))) : Promise.resolve([]),
+    //     //         "UStaticMeshActor" in groupedObjectList ? Promise.all(groupedObjectList["UStaticMeshActor"].map((exp: UStaticMeshActor) => exp.getDecodeInfo(library))) : Promise.resolve([])
+    //     //     ])).flat()
+    //     // };
+    // }
 }
 
 export default ULevel;

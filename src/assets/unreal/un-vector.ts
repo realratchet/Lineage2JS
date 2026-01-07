@@ -1,23 +1,23 @@
-import FConstructable from "./un-constructable";
-import BufferValue from "../buffer-value";
+import { UObject } from "@l2js/core";
 
-class FVector extends FConstructable {
-    public x: number = 0;
-    public y: number = 0;
-    public z: number = 0;
+abstract class FVector extends UObject {
+    // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
-    public load(pkg: UPackage): this {
-        const f = new BufferValue(BufferValue.float);
+    declare public x: number;
+    declare public y: number;
+    declare public z: number;
 
-        for (let ax of ["x", "y", "z"])
-            this[ax as "x" | "y" | "z"] = pkg.read(f).value as number;
-
-        return this;
+    protected getPropertyMap() {
+        return {
+            "X": "x",
+            "Y": "y",
+            "Z": "z"
+        };
     }
+
 
     public constructor(x = 0, y = 0, z = 0) {
         super();
-
         this.set(x, y, z);
     }
 
@@ -29,15 +29,27 @@ class FVector extends FConstructable {
         return this;
     }
 
-    public getElements(): Vector3Arr { return [this.x, this.y, this.z]; }
+    public getElements(): GD.Vector3Arr { return [this.x, this.y, this.z]; }
+
+    public addScalar(scalar: number) {
+        return FVector.make(
+            this.x + scalar,
+            this.y + scalar,
+            this.z + scalar
+        );
+    }
+
+    public subScalar(scalar: number) {
+        return this.addScalar(-scalar);
+    }
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }
     public multiplyScalar(scalar: number) {
-        return new FVector(this.x * scalar, this.y * scalar, this.z * scalar);
+        return FVector.make(this.x * scalar, this.y * scalar, this.z * scalar);
     }
 
     public add(other: FVector) {
-        return new FVector(
+        return FVector.make(
             this.x + other.x,
             this.y + other.y,
             this.z + other.z
@@ -45,7 +57,7 @@ class FVector extends FConstructable {
     }
 
     public sub(other: FVector) {
-        return new FVector(
+        return FVector.make(
             this.x - other.x,
             this.y - other.y,
             this.z - other.z
@@ -53,7 +65,7 @@ class FVector extends FConstructable {
     }
 
     public mul(other: FVector) {
-        return new FVector(
+        return FVector.make(
             this.x * other.x,
             this.y * other.y,
             this.z * other.z
@@ -61,7 +73,7 @@ class FVector extends FConstructable {
     }
 
     public div(other: FVector) {
-        return new FVector(
+        return FVector.make(
             this.x / other.x,
             this.y / other.y,
             this.z / other.z
@@ -92,7 +104,7 @@ class FVector extends FConstructable {
         const y = az * bx - ax * bz;
         const z = ax * by - ay * bx;
 
-        return new FVector(x, y, z);
+        return FVector.make(x, y, z);
     }
 
     /**
@@ -121,22 +133,28 @@ class FVector extends FConstructable {
     }
 
     normalized() {
-        const len = this.length();
+        const lenSq = this.lengthSq();
 
-        return new FVector(
-            this.x / len,
-            this.y / len,
-            this.z / len
+        if (lenSq < 1e-8)
+            return FVector.make();
+
+        const len = Math.sqrt(lenSq);
+        const scale = 1 / len;
+
+        return FVector.make(
+            this.x * scale,
+            this.y * scale,
+            this.z * scale
         );
     }
 
     public negate() { return this.multiplyScalar(-1); }
 
-    getVectorElements(): Vector3Arr {
+    getVectorElements(): GD.Vector3Arr {
         return [this.x, this.z, this.y];
     }
 
-    applyRotator(rotator: FRotator, negate: boolean): FVector {
+    applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
 
         let [x, y, z, order] = rotator.getEulerElements();
 
@@ -204,7 +222,6 @@ class FVector extends FConstructable {
     }
 
     applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
-
         const x = this.x, y = this.y, z = this.z;
 
         // calculate quat * vector
@@ -220,14 +237,13 @@ class FVector extends FConstructable {
         const ny = iy * qw + iw * - qy + iz * - qx - ix * - qz;
         const nz = iz * qw + iw * - qz + ix * - qy - iy * - qx;
 
-        return new FVector(nx, ny, nz);
+        return FVector.make(nx, ny, nz);
     }
 
 
-    applyMatrix4(m: FMatrix) {
-
+    applyMatrix4(m: GA.FMatrix) {
         const x = this.x, y = this.y, z = this.z;
-        const e = m.elements;
+        const e = m.getElements4x4();
 
         const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
 
@@ -235,12 +251,22 @@ class FVector extends FConstructable {
         const ny = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
         const nz = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
 
-        return new FVector(nx, ny, nz);
+        return FVector.make(nx, ny, nz);
     }
 
-    transformBy(coord: FCoords) {
+    public transformPointBy(coord: GA.FCoords): FVector {
+        const temp = this.sub(coord.origin);
+
+        return FVector.make(temp.dot(coord.xAxis), temp.dot(coord.yAxis), temp.dot(coord.zAxis));
+    }
+
+    public transformVectorBy(coord: GA.FCoords): FVector {
+        return FVector.make(this.dot(coord.xAxis), this.dot(coord.yAxis), this.dot(coord.zAxis));
+    }
+
+    transformBy(coord: GA.FCoords) {
         const inVector = this;
-        const outVector = new FVector();
+        const outVector = FVector.make();
 
         let fVar1: number;
         let fVar2: number;
@@ -270,13 +296,14 @@ class FVector extends FConstructable {
         return outVector;
     }
 
-    public clone() { return new FVector(this.x, this.y, this.z); }
+    public clone(): FVector { return FVector.make(this.x, this.y, this.z); }
 
     public nequals(other: FVector) { return this.x !== other.x || this.y !== other.y || this.z !== other.z; }
     public equals(other: FVector) { return !this.nequals(other); }
 
-    public toString() {return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})`}
+    public toString() { return `Vector=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)})` }
 }
+
 
 export default FVector;
 export { FVector };

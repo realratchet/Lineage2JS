@@ -1,38 +1,57 @@
-import UObject from "./un-object";
-import { FColor } from "./un-color";
-import { URange, URangeVector } from "./un-range";
-import UPointRegion from "./un-point-region";
-import UTextureModifyInfo from "./un-texture-modify-info";
-import FScale from "./un-scale";
-import UMatrix from "./un-matrix";
-import { UPlane } from "./un-plane";
-import FVector from "./un-vector";
-import FRotator from "./un-rotator";
-import UExport from "./un-export";
+import { UObject } from "@l2js/core";
+import { generateUUID } from "three/src/math/MathUtils";
+
+Object.assign(UObject, {
+    ALLOW_EDITING: false,
+    onClassCreated(this: typeof UObject, cls: new (...args: any) => UObject) {
+        if (this === UObject) {
+            console.warn(`Cannot register '${cls.name}' because it's directly inheriting 'UObject'.`)
+            return;
+        }
+
+        // console.log(this.name, "->", cls.name);
+
+        const baseClass = this as any;
+
+        baseClass["make"] = function (...args: any) { return new cls(...args); }
+        baseClass["class"] = function () { return cls; }
+    }
+});
+
+Object.defineProperty(UObject.prototype, "uuid", {
+    get() {
+        if (this._uuid !== undefined) return this._uuid;
+        return this._uuid = generateUUID();
+    },
+    set(v: string) { this._uuid = v; },
+    configurable: true,
+    enumerable: true
+});
 
 Object.assign(UObject.prototype, {
-    readStruct(pkg: UPackage, tag: PropertyTag): any {
-        if (!tag)
-            debugger;
+    _uuid: undefined,
+    getDecodeInfo() { debugger; throw new Error(`'${this.constructor.name}' must implemented 'getDecodeInfo' method!`) },
+    onSuperConstructed() { },
+    dumpLayout() {
+        const layout = (this.constructor as any).inheritedProps as Record<string, string[]>;
+        const layoutStrings = [`Layout of '${(this as any).objectName}':`];
+        const pdict = (this as any).propertyDict as Record<string, any>;
 
-        const exp = new UExport();
+        for (const [base, properties] of Object.entries(layout).reverse()) {
+            layoutStrings.push("--------------------------------------");
+            layoutStrings.push(`    '${base}' properties:`);
 
-        exp.objectName = `${tag.name}[Struct]`;
-        exp.offset = pkg.tell();
-        exp.size = tag.dataSize;
-
-        switch (tag.structName as StructTypes_T) {
-            case "Color": return new FColor().load(pkg);
-            case "Plane": return new UPlane().load(pkg, exp);
-            case "Scale": return new FScale().load(pkg);
-            case "Vector": return new FVector().load(pkg);
-            case "Rotator": return new FRotator().load(pkg);
-            case "Matrix": return new UMatrix().load(pkg, exp);
-            case "PointRegion": return new UPointRegion().load(pkg, exp);
-            case "TextureModifyinfo": return new UTextureModifyInfo().load(pkg, exp);
-            case "RangeVector": return new URangeVector().load(pkg, exp);
-            case "Range": return new URange().load(pkg, exp);
-            default: throw new Error(`Unsupported struct type: ${tag.structName}`);
+            if (properties.length > 0) {
+                for (const propName of properties) {
+                    const paddingRequired = Math.max(25 - propName.length, 0);
+                    const padding = new Array(paddingRequired).fill(" ").join("");
+                    layoutStrings.push(`        '${propName}'${padding}:= ${pdict.get(propName)}`);
+                }
+            } else layoutStrings.push(`        * no properties *`);
         }
+
+        const layoutString = layoutStrings.join("\n");
+
+        return layoutString;
     }
 });

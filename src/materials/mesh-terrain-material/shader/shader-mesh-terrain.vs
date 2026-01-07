@@ -129,11 +129,10 @@ void main() {
 
     #ifdef USE_UV_TEXTURE
         float u = float(gl_VertexID) / (uvs.size.x - 1.0);
-        float fCountUv = uvs.size.y - 1.0;
-        
+
         #pragma unroll_loop_start
         for(int i = 0; i < UV_COUNT; i++) {
-            float v = float(i) / fCountUv;
+            float v = (float(i) + 0.5) / float(uvs.size.y);
 
             vUv[i] = (uvTransform * vec3(texture2D(uvs.texture, vec2(u, v)).xy, 1.0)).xy;
         }

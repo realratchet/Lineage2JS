@@ -1,7 +1,9 @@
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2, DataTexture, PixelFormat, RGBAFormat, RGFormat, FloatType, UVMapping, RedFormat, RGBFormat } from "three";
+import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, LinearMipmapLinearFilter, NearestMipmapLinearFilter, NearestMipmapNearestFilter, LinearMipmapNearestFilter, NearestFilter, Vector2, DataTexture, PixelFormat, RGBAFormat, RGFormat, FloatType, UVMapping, RedFormat, Wrapping } from "three";
 
 function getClamping(mode: number): THREE.Wrapping {
+    return RepeatWrapping;
+    
     switch (mode) {
         case 1024: return RepeatWrapping;
         case 512: return RepeatWrapping;
@@ -19,10 +21,12 @@ function getFormat(type: DataTextureFormats_T) {
     if (typeof type !== "string")
         return RGBAFormat;
 
+    // const RGBFormat = 1022;
+
     switch (type) {
         case "r": return RedFormat;
         case "rg": return RGFormat;
-        case "rgb": return RGBFormat;
+        case "rgb": return RGBAFormat;
         case "rgba": return RGBAFormat;
         default: throw new Error(`Unsupported texture format: ${type}`);
     }
@@ -109,11 +113,13 @@ function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapDat
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
     }
 
-    if (info.wrapS) texture.wrapS = getClamping(info.wrapS);
-    if (info.wrapT) texture.wrapT = getClamping(info.wrapT);
+    texture.wrapS = info.wrapS ? getClamping(info.wrapS) : RepeatWrapping;
+    texture.wrapT = info.wrapT ? getClamping(info.wrapT) : RepeatWrapping;
 
     if (info.name) texture.name = info.name;
     if (library.anisotropy >= 0) texture.anisotropy = library.anisotropy;
+
+    // debugger;
 
     return { texture, size: new Vector2(texture.image.width, texture.image.height) };
 }

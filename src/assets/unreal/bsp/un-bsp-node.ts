@@ -1,9 +1,6 @@
-import FConstructable from "../un-constructable";
-import UPackage from "../un-package";
-import { PropertyTag } from "../un-property-tag";
-import BufferValue from "../../buffer-value";
+import { BufferValue } from "@l2js/core";
 import { FPlane } from "../un-plane";
-import FVector from "../un-vector";
+import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 
 // Flags associated with a Bsp node.
 enum BspNodeFlags_T {
@@ -16,92 +13,105 @@ enum BspNodeFlags_T {
     NF_IsBack = 0x80,           // Guaranteed back.
 };
 
-class FBSPNode extends FConstructable {
-    public readonly plane = new FPlane();    // 16 byte plane the node falls into (X, Y, Z, W).
-    public zoneMask: number;                 // 8  byte mask for all zones at or below this node (up to 64).
-    public iVertPool: number;                // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
-    public iSurf: number;                    // 4  byte index to surface information.
+class FBSPNode implements C.IConstructable {
+    public plane: GA.FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
+    public zoneMask: bigint;                // 8  byte mask for all zones at or below this node (up to 64).
+    public iVertPool: number;               // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
+    public iSurf: number;                   // 4  byte index to surface information.
 
-    public iBack: number;                    // 4  byte index to node in front (in direction of Normal).
-    public iFront: number;                   // 4  byte index to node in back  (opposite direction as Normal).
-    public iPlane: number;                   // 4  byte index to next coplanar poly in coplanar list.
+    public iBack: number;                            // 4  byte index to node in front (in direction of Normal).
+    public iFront: number;                           // 4  byte index to node in back  (opposite direction as Normal).
+    public iPlane: number;                           // 4  byte index to next coplanar poly in coplanar list.
 
-    public iCollisionBound: number;          // 4  byte collision bound.
-    public iRenderBound: number;             // 4  byte rendering bound.
-    public readonly iZone: number[] = new Array(2);   // 2  byte visibility zone in 1=front, 0=back.
-    public numVertices: number;              // 1  byte number of vertices in node.
-    public flags: BspNodeFlags_T;            // 1  byte node flags.
-    public readonly iLeaf: number[] = new Array(2);   // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
+    public iCollisionBound: number;                 // 4  byte collision bound.
+    public iRenderBound: number;                    // 4  byte rendering bound.
+    public readonly iZone: number[] = new Array(2); // 2  byte visibility zone in 1=front, 0=back.
+    public numVertices: number;                     // 1  byte number of vertices in node.
+    public flags: number;                           // 1  byte node flags.
+    public bspNodeFlags: C.FlagDict<keyof typeof BspNodeFlags_T>;
+    public readonly iLeaf: number[] = new Array(2); // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
     public iVertexIndex: number;
     public iLightmapIndex: number;
 
-    public unkInt0: number;                  // 4 bytes, static between same surface nodes
-    public unkInt1: number;                  // 4 bytes, change between same surface nodes
+    public iSection: number;                        // 4 bytes, static between same surface nodes
+    public iFirstVertex: number;                    // 4 bytes, change between same surface nodes
 
-    public plane2 = new FPlane();                 // 12 bytes, origin of the bsp surface node
-    public unkFloat: number;
-    public unkBytes = BufferValue.allocBytes(16) // 16 bytes, usually 0?
+    declare exclusiveSphereBound: FPlane;           // 16 Bounding sphere excluding child nodes.
+    declare inclusiveSphereBound: FPlane;           // 16 Bounding sphere excluding child nodes.
 
-    public load(pkg: UPackage, tag?: PropertyTag): this {
-        const uint64 = new BufferValue(BufferValue.uint64);
-        const float = new BufferValue(BufferValue.float);
-        const int32 = new BufferValue(BufferValue.int32);
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const uint8 = new BufferValue(BufferValue.uint8);
+    public getChildren() { return [this.iBack, this.iFront, this.iPlane]; }
+
+    public load(pkg: C.APackage): this {
+        const verArchive = pkg.header.getArchiveFileVersion();
+
+        this.plane = FPlane.make();
+        this.exclusiveSphereBound = FPlane.make();
+        this.inclusiveSphereBound = FPlane.make();
 
         this.plane.load(pkg);
 
-        this.zoneMask = pkg.read(uint64).value as number;
-        this.flags = pkg.read(uint8).value as number;
-        this.iVertPool = pkg.read(compat32).value as number;
-        this.iSurf = pkg.read(compat32).value as number;
+        this.zoneMask = pkg.read("uint64");
+        this.flags = pkg.read("uint8");
+        this.bspNodeFlags = flagBitsToDict(this.flags, BspNodeFlags_T);
+        this.iVertPool = pkg.read("compat32");
+        this.iSurf = pkg.read("compat32");
 
-        this.iBack = pkg.read(compat32).value as number;
-        this.iFront = pkg.read(compat32).value as number;
-        this.iPlane = pkg.read(compat32).value as number;
+        this.iBack = pkg.read("compat32");
+        this.iFront = pkg.read("compat32");
+        this.iPlane = pkg.read("compat32");
 
-        this.iCollisionBound = pkg.read(compat32).value as number;
-        this.iRenderBound = pkg.read(compat32).value as number;
+        this.iCollisionBound = pkg.read("compat32");
+        this.iRenderBound = pkg.read("compat32");
 
-        this.plane2.load(pkg);
+        if (verArchive >= 70) {
+            this.exclusiveSphereBound.load(pkg);
+            this.inclusiveSphereBound.load(pkg);
+        }
 
-        pkg.read(this.unkBytes);
+        this.iZone[0] = pkg.read("uint8");
+        this.iZone[1] = pkg.read("uint8");
 
-        // const unkId = pkg.read(uint32).value as number;
-        // const unkConnZones = pkg.read(uint64).value as number;
-        // const unkVisZones = pkg.read(uint64).value as number;
+        this.numVertices = pkg.read("uint8");
 
-        this.iZone[0] = pkg.read(compat32).value as number;
-        this.iZone[1] = pkg.read(compat32).value as number;
+        this.iLeaf[0] = pkg.read("int32");
+        this.iLeaf[1] = pkg.read("int32");
 
-        this.numVertices = pkg.read(uint8).value as number;
-
-        this.iLeaf[0] = pkg.read(int32).value as number;
-        this.iLeaf[1] = pkg.read(int32).value as number;
-
-        this.unkInt0 = pkg.read(uint32).value as number;
-        this.unkInt1 = pkg.read(uint32).value as number;
-
-        this.iLightmapIndex = pkg.read(int32).value as number;
-    
-
-        // debugger;
+        if (verArchive < 92) {
+            debugger;
+            throw new Error("not yet implemented");
+        } else if (verArchive < 93) {
+            debugger;
+            throw new Error("not yet implemented");
+        } else if (verArchive < 101) {
+            debugger;
+            throw new Error("not yet implemented");
+        } else {
+            this.iSection = pkg.read("int32");
+            this.iFirstVertex = pkg.read("int32");
+            this.iLightmapIndex = pkg.read("int32");
+        }
 
         return this;
     }
 
-    public getBSPDecodeInfo(): IBSPNodeDecodeInfo_T {
+    public getBSPDecodeInfo(surfFlags: number): Omit<GD.IBSPNodeDecodeInfo_T, "sectionIndex" | "collision" | "zoneMask"> {
         return {
             children: [this.iFront, this.iBack],
-            // plane: this.plane.toArray() as Vector4Arr,
-            plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as Vector4Arr,
+            // plane: [this.plane.x, this.plane.z, -this.plane.y, -this.plane.w] as GD.Vector4Arr,  // rotation just not sure if correct portal normal (rotate around Y axis)
+            // plane: [-this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,   // rotation just not sure if correct portal normal (rotate around X axis)
+            plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,    // (old) just swizzling, likely invalid rotation
             leaves: [this.iLeaf[0], this.iLeaf[1]],
-            zones: [this.iZone[0], this.iZone[1]]
+            zones: [this.iZone[0], this.iZone[1]],
+            surfFlags,
+            iPlane: this.iPlane,
+            iRenderBound: this.iRenderBound !== -1 ? this.iRenderBound : undefined, // INDEX_NONE = -1
+            spheres: {
+                exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.z, this.exclusiveSphereBound.y, this.exclusiveSphereBound.w],
+                inclusive: [this.inclusiveSphereBound.x, this.inclusiveSphereBound.z, this.inclusiveSphereBound.y, this.inclusiveSphereBound.w]
+            }
         };
     }
-
 }
 
 export default FBSPNode;

@@ -1,10 +1,10 @@
-import UObject from "./un-object";
+import UObject from "@l2js/core";
 
-class ULevelSummary extends UObject { 
-    protected title: string;
-    protected author: string;
-    protected levelEnterText: string;
-    protected idealPlayerCount: number;
+abstract class ULevelSummary extends UObject { 
+    declare public readonly title: string;
+    declare public readonly author: string;
+    declare public readonly levelEnterText: string;
+    declare public readonly idealPlayerCount: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

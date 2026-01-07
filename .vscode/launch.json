@@ -5,6 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         // {
+        //     "name": "Launch Program",
+        //     "program": "${workspaceFolder}/node_modules/webpack/bin/webpack.js",
+        //     "request": "launch",
+        //     "skipFiles": [
+        //         "<node_internals>/**"
+        //     ],
+        //     "type": "node",
+        //     "args": [
+        //         // "--colors",
+        //         "--config",
+        //         "configs/development.config.js"
+        //     ]
+        // },
+        // {
         //     "name": "(gdb) Launch",
         //     "type": "cppdbg",
         //     "request": "launch",
@@ -112,7 +126,8 @@
             "webRoot": "${workspaceFolder}",
             "sourceMapPathOverrides": {
                 "webpack:///../*": "${workspaceFolder}/*",
-            }
+            },
+            "pauseForSourceMap": true
         }
     ]
 }

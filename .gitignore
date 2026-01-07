@@ -9,3 +9,7 @@ cpp/ue_viewer/
 cpp/l2_editor/
 *.log
 asset-list.json
+layouts/*
+docker/*
+*.pyc
+py_scripts/*

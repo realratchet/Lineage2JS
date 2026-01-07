@@ -1,16 +1,11 @@
-import { v5 as seededUuid } from "uuid";
-import FArray, { FPrimitiveArray } from "./un-array";
 import { FMipmap } from "./un-mipmap";
 import decompressDDS from "../dds/dds-decode";
-import UObject from "./un-object";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
-import BufferValue from "../buffer-value";
-import StringSet from "@client/utils/string-set";
+import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import FVector from "./un-vector";
-import { generateUUID } from "three/src/math/MathUtils";
 import UMaterial from "./un-material";
+import FArray from "@l2js/core/src/unreal/un-array";
 
 /*
 
@@ -21,64 +16,45 @@ import UMaterial from "./un-material";
     0000100000 ( 32)
 */
 
-class UTexture extends UMaterial {
-    protected palette: UPlatte;
-    protected internalTime: number[] = new Array(2);
-    protected format: ETextureFormat = ETextureFormat.TEXF_RGBA8;
+enum ETexClampMode {
+    TC_Wrap = 0x00,
+    TC_Clamp = 0x01,
+}
 
-    public width: number;
-    public height: number;
-    protected bitsW: number; // texture size log2 (number of bits in size value)
-    protected bitsH: number;
-    protected wrapS: number;
-    protected wrapT: number;
+abstract class UTexture extends UMaterial {
+    declare public readonly palette: GA.UPlatte;
+    declare public readonly internalTime: number[];
+    declare public readonly format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;
 
-    protected maxColor: FColor;
-    protected mipZero: FColor;
+    declare public readonly width: number;
+    declare public readonly height: number;
+    declare public readonly bitsW: number; // texture size log2 (number of bits in size value)
+    declare public readonly bitsH: number;
+    declare public readonly wrapS: ETexClampMode;
+    declare public readonly wrapT: ETexClampMode;
 
-    protected minFrameRate: number;
-    protected maxFrameRate: number;
-    protected totalFrameNum: number;
-    protected animNext: UTexture;
+    declare public readonly clampedW: number; // clamped width
+    declare public readonly clampedH: number;
 
-    protected isTwoSided: boolean;
-    protected isAlphaTexture: boolean;
-    protected isMasked: boolean;
+    declare public readonly maxColor: FColor;
+    declare public readonly mipZero: FColor;
 
-    protected clampModeU: number;
-    protected clampModeV: number;
+    declare public readonly minFrameRate: number;
+    declare public readonly maxFrameRate: number;
+    declare public readonly totalFrameNum: number;
+    declare public readonly animNext: UTexture;
 
+    declare public readonly isTwoSided: boolean;
+    declare public readonly isAlphaTexture: boolean;
+    declare public readonly isMasked: boolean;
 
-    protected lodSet: number;
+    declare protected lodSet: number;
 
-    public readonly mipmaps: FArray<FMipmap> = new FArray(FMipmap);
-    public readonly _mips: FPrimitiveArray<"uint32">;
-
-    protected _lossDetail: any;
-
-    protected _detailTexture: any;
-    protected _environmentMap: any;
-    protected _envMapTransformType: any;
-    protected _specular: any;
-    protected _bHighColorQuality: any;
-    protected _bHighTextureQuality: any;
-    protected _bRealtime: any;
-    protected _bParametric: any;
-    protected _bRealtimeChanged: any;
-    protected _bHasComp: any;
-    protected _normalLOD: any;
-    protected _minLOD: any;
-    protected _maxLOD: any;
-    protected _animCurrent: any;
-    protected _primeCount: any;
-    protected _primeCurrent: any;
-    protected _accumulator: any;
-    protected _compFormat: any;
+    public readonly mipmaps = new FArray(FMipmap);
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Palette": "palette",
-            "Mips": "_mipmaps",
 
             "Format": "format",
             "InternalTime": "internalTime",
@@ -88,11 +64,11 @@ class UTexture extends UMaterial {
 
             "UBits": "bitsW",
             "VBits": "bitsH",
-            "UClamp": "wrapS",
-            "VClamp": "wrapT",
+            "UClamp": "clampedW",
+            "VClamp": "clampedH",
 
-            "UClampMode": "clampModeU",
-            "VClampMode": "clampModeV",
+            "UClampMode": "wrapS",
+            "VClampMode": "wrapT",
 
             "MaxColor": "maxColor",
 
@@ -107,39 +83,16 @@ class UTexture extends UMaterial {
             "bAlphaTexture": "isAlphaTexture",
             "bMasked": "isMasked",
 
-
             "LODSet": "lodSet",
-
-
-            "LossDetail": "_lossDetail",
-
-            "DetailTexture": "_detailTexture",
-            "EnvironmentMap": "_environmentMap",
-            "EnvMapTransformType": "_envMapTransformType",
-            "Specular": "_specular",
-            "bHighColorQuality": "_bHighColorQuality",
-            "bHighTextureQuality": "_bHighTextureQuality",
-            "bRealtime": "_bRealtime",
-            "bParametric": "_bParametric",
-            "bRealtimeChanged": "_bRealtimeChanged",
-            "bHasComp": "_bHasComp",
-            "NormalLOD": "_normalLOD",
-            "MinLOD": "_minLOD",
-            "MaxLOD": "_maxLOD",
-            "AnimCurrent": "_animCurrent",
-            "PrimeCount": "_primeCount",
-            "PrimeCurrent": "_primeCurrent",
-            "Accumulator": "_accumulator",
-            "CompFormat": "_compFormat"
         });
     }
 
-    public doLoad(pkg: UPackage, exp: UExport) {    // 2785
+    public isTransparent() { return this.isAlphaTexture || this.isMasked; }
+
+    public doLoad(pkg: C.APackage, exp: C.UExport) {    // 2785
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
-
-        // debugger;
 
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
@@ -147,7 +100,7 @@ class UTexture extends UMaterial {
         let someFlag = 0;
 
         if (verArchive >= 123 && verLicense >= 16) {
-            someFlag = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
+            someFlag = pkg.read("uint32");
 
             if (someFlag !== 0)
                 debugger;
@@ -166,16 +119,14 @@ class UTexture extends UMaterial {
 
         console.assert(this.readTail === this.readHead);
 
+        // debugger;
+
         return this;
     }
 
-    public postLoad(pkg: UPackage, exp: UExport) {
-        this.readHead = pkg.tell();
-    }
-
     protected getTexturePixelFormat(): ETexturePixelFormat {
-        switch (this.format) {
-            // case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
+        switch (this.format.valueOf()) {
+            case ETextureFormat.TEXF_P8: return ETexturePixelFormat.TPF_P8;
             case ETextureFormat.TEXF_DXT1: return ETexturePixelFormat.TPF_DXT1;
             // case ETextureFormat.TEXF_RGB8: return ETexturePixelFormat.TPF_RGB8;
             case ETextureFormat.TEXF_RGBA8: return ETexturePixelFormat.TPF_BGRA8;
@@ -190,15 +141,15 @@ class UTexture extends UMaterial {
         }
     }
 
-    protected decodeTexture(library: DecodeLibrary) {
+    protected decodeTexture(library: GD.DecodeLibrary) {
         const totalMipCount = this.mipmaps.length;
 
         if (totalMipCount === 0) return null;
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
 
-        const firstMipmap = this.mipmaps[0] as FMipmap;
-        const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] as FMipmap : firstMipmap;
+        const firstMipmap = this.mipmaps[0];
+        const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] : firstMipmap;
         const insertMipmap = loadMipmaps ? lastMipmap.sizeW !== 1 || lastMipmap.sizeH !== 1 : false;
         const levelsToInsert = loadMipmaps ? Math.log2(Math.max(lastMipmap.sizeW, lastMipmap.sizeH)) : 0;
 
@@ -282,7 +233,7 @@ class UTexture extends UMaterial {
 
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         let decodedBuffer: ArrayBuffer;
-        let textureType: DecodableTexture_T;
+        let textureType: GD.DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -297,10 +248,24 @@ class UTexture extends UMaterial {
                 decodedBuffer = data.buffer;
                 break;
             case ETexturePixelFormat.TPF_BGRA8:
-            case ETexturePixelFormat.TPF_RGBA8: {
+            case ETexturePixelFormat.TPF_RGBA8:
+            case ETexturePixelFormat.TPF_P8: {
                 textureType = "rgba";
                 if (!this.palette) {
                     decodedBuffer = data.buffer;
+
+                    if (format === ETexturePixelFormat.TPF_BGRA8) {
+                        const view = new Uint8Array(decodedBuffer);
+
+                        for (let i = 0, len = view.length; i < len; i += 4) {
+                            const r = view[i], b = view[i + 2];
+
+                            view[i] = b;
+                            view[i + 2] = r;
+                        }
+
+                        decodedBuffer = view.buffer;
+                    }
                 } else {
                     const buff = new Uint8Array(imSize * 4);
 
@@ -308,10 +273,17 @@ class UTexture extends UMaterial {
                         const c = this.palette.loadSelf().colors.getElem(data[i]);
                         const ii = i * 4;
 
-                        buff[ii + 0] = c.r;
-                        buff[ii + 1] = c.g;
-                        buff[ii + 2] = c.b;
-                        buff[ii + 3] = c.a;
+                        if (format === ETexturePixelFormat.TPF_BGRA8) {
+                            buff[ii + 0] = c.b;
+                            buff[ii + 1] = c.g;
+                            buff[ii + 2] = c.r;
+                            buff[ii + 3] = c.a;
+                        } else {
+                            buff[ii + 0] = c.r;
+                            buff[ii + 1] = c.g;
+                            buff[ii + 2] = c.b;
+                            buff[ii + 3] = c.a;
+                        }
                     }
 
                     decodedBuffer = buff.buffer;
@@ -330,16 +302,16 @@ class UTexture extends UMaterial {
             wrapS: this.wrapS,
             wrapT: this.wrapT,
             useMipmaps: mipCount > 0
-        } as ITextureDecodeInfo;
+        } as GD.ITextureDecodeInfo;
     }
 
-    public getDecodeInfo(library: DecodeLibrary): string {
+    public getDecodeInfo(library: GD.DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
 
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
-            const sprites: ITextureDecodeInfo[] = [];
+            const sprites: GD.ITextureDecodeInfo[] = [];
 
             let tex: UTexture = this;
 
@@ -353,15 +325,13 @@ class UTexture extends UMaterial {
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate
-            } as IAnimatedSpriteDecodeInfo;
+            } as GD.IAnimatedSpriteDecodeInfo;
         } else {
             library.materials[this.uuid] = this.decodeTexture(library);
         }
 
         return this.uuid;
     }
-
-    public toString() { return `Texture=${this.objectName}`; }
 }
 
 export default UTexture;

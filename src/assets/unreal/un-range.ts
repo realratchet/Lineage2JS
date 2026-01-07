@@ -1,15 +1,9 @@
-import UObject from "./un-object";
+import FVector from "@client/assets/unreal/un-vector";
+import UObject from "@l2js/core";
 
-class URange extends UObject {
-    protected min: number = 0;
-    protected max: number = 0;
-
-    constructor(min: number, max: number) {
-        super();
-
-        this.min = min;
-        this.max = max;
-    }
+abstract class FRange extends UObject {
+    declare protected min: number;
+    declare protected max: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -18,32 +12,23 @@ class URange extends UObject {
         });
     }
 
-    // public load(pkg: UPackage, tag: PropertyTag): this {
-    //     this.readHead = pkg.tell();
-    //     this.readTail = this.readHead + tag.dataSize;
+    public set(min: number, max: number) {
+        this.min = min;
+        this.max = max;
+    }
 
-    //     this.readNamedProps(pkg);
-
-    //     return this;
-    // }
-
-    public getDecodeInfo(library: DecodeLibrary): Range_T { return [this.min, this.max]; }
+    public getDecodeInfo(library: GD.DecodeLibrary): Range_T { return [this.min, this.max]; }
 
     public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
+
+    public mid() { return (this.max + this.min) / 2; }
+    public rand() { return this.max + (this.min - this.max) * Math.random(); }
 }
 
-class URangeVector extends UObject {
-    protected x: URange;
-    protected y: URange;
-    protected z: URange;
-
-    constructor(x: URange, y: URange, z: URange) {
-        super();
-
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
+abstract class FRangeVector extends UObject {
+    declare protected x: FRange;
+    declare protected y: FRange;
+    declare protected z: FRange;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -53,7 +38,7 @@ class URangeVector extends UObject {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): RangeVector_T {
+    public getDecodeInfo(library: GD.DecodeLibrary): RangeVector_T {
         const [minx, maxx] = this.x.getDecodeInfo(library)
         const [miny, maxy] = this.y.getDecodeInfo(library)
         const [minz, maxz] = this.z.getDecodeInfo(library)
@@ -65,10 +50,12 @@ class URangeVector extends UObject {
     }
 
     public toString() { return `RangeVector=(x=${this.x}, y=${this.y}, z=${this.z})`; }
+
+    public rand() { return FVector.make(this.x.rand(), this.y.rand(), this.z.rand()); }
 }
 
-export default URange;
-export { URange, URangeVector };
+export default FRange;
+export { FRange, FRangeVector };
 
 type Range_T = [number, number];
-type RangeVector_T = { min: Vector3Arr, max: Vector3Arr };
+type RangeVector_T = { min: GD.Vector3Arr, max: GD.Vector3Arr };

@@ -1,14 +1,13 @@
-import BufferValue from "../buffer-value";
-import FConstructable from "./un-constructable";
 import FVector from "./un-vector";
+import { UObject } from "@l2js/core";
 
-class FQuaternion extends FConstructable {
-    public x: number;
-    public y: number;
-    public z: number;
-    public w: number;
+abstract class FQuaternion extends UObject {
+    declare public x: number;
+    declare public y: number;
+    declare public z: number;
+    declare public w: number;
 
-    constructor(x = 0, y = 0, z = 0, w = 1) {
+    public constructor(x = 0, y = 0, z = 0, w = 1) {
         super();
 
         this.x = x;
@@ -17,22 +16,21 @@ class FQuaternion extends FConstructable {
         this.w = w;
     }
 
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-
-        this.x = pkg.read(float).value as number;
-        this.y = pkg.read(float).value as number;
-        this.z = pkg.read(float).value as number;
-        this.w = pkg.read(float).value as number;
-
-        return this;
+    protected getPropertyMap() {
+        return {
+            "X": "x",
+            "Y": "y",
+            "Z": "z",
+            "W": "w"
+        };
     }
 
-    public toQuatElements(): QuaternionArr { return [this.x, this.y, this.z, this.w]; }
 
-    public conjugate() { return new FQuaternion(-this.x, -this.y, -this.z, this.w); }
+    public toQuatElements(): GD.QuaternionArr { return [this.x, this.y, this.z, this.w]; }
 
-    public clone() { return new FQuaternion(this.x, this.y, this.z, this.w); }
+    public conjugate() { return FQuaternion.make(-this.x, -this.y, -this.z, this.w); }
+
+    public clone() { return FQuaternion.make(this.x, this.y, this.z, this.w); }
 
     public toAxis() {
         const axis = new FAxis();
@@ -70,12 +68,12 @@ class FQuaternion extends FConstructable {
 }
 
 class FAxis {
-    public x = new FVector();
-    public y = new FVector();
-    public z = new FVector();
+    public x = FVector.make();
+    public y = FVector.make();
+    public z = FVector.make();
 
     public transformVector(src: FVector) {
-        const dst = new FVector();
+        const dst = FVector.make();
 
         dst.x = src.dot(this.x);
         dst.y = src.dot(this.y);
@@ -94,7 +92,7 @@ class FAxis {
         return out;
     }
 
-    untransformVector(src: FVector): FVector {
+    public untransformVector(src: FVector): FVector {
         let tmp = this.x.multiplyScalar(src.x);
 
         tmp = this.y.multiplyScalar(src.y).add(tmp);

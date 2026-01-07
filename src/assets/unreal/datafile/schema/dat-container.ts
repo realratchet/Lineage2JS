@@ -1,17 +1,14 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 
 class UTF16ContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    read(pkg: UEncodedFile): string[] {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const count = pkg.read(uint32).value as number;
-
-        const utf16 = new BufferValue(BufferValue.utf16);
+    public read(pkg: C.UEncodedFile): string[] {
+        const count = pkg.read("uint32");
         const elements = new Array<string>(count);
 
         for (let i = 0; i < count; i++)
-            elements[i] = pkg.read(utf16).value as string;
+            elements[i] = pkg.read("utf16");
 
         return elements;
     }
@@ -22,12 +19,12 @@ class NumberContainerType implements IDatContainerType {
 
     protected dtype: BufferValue<any>;
 
-    constructor(dtype: ValidTypes_T<any>) {
+    constructor(dtype: C.ValidTypes_T<any>) {
         this.dtype = new BufferValue(dtype);
     }
 
-    read(pkg: UEncodedFile): number[] {
-        const count = pkg.read(new BufferValue(BufferValue.uint8)).value as number;
+    public read(pkg: C.UEncodedFile): number[] {
+        const count = pkg.read("uint8");
 
         if (count === 0) return [];
 

@@ -1,4 +1,4 @@
-import BufferValue from "@client/assets/buffer-value";
+import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
 import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
@@ -9,16 +9,15 @@ import FNumber from "../un-number";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
+import { FIndexArray } from "@l2js/core/unreal/un-array";
 
 class FWeightIndex extends FConstructable {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     public startBoneInf: number;
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-
+    public load(pkg: C.APackage): this {
         this.boneInfIndices.load(pkg);
-        this.startBoneInf = pkg.read(uint32).value as number;
+        this.startBoneInf = pkg.read("uint32");
 
         return this;
     }
@@ -28,29 +27,25 @@ class FBoneInfluence extends FConstructable {
     public boneWeight: number;
     public boneIndex: number;
 
-    public load(pkg: UPackage): this {
-        const uint16 = new BufferValue(BufferValue.uint16);
-
-        this.boneWeight = pkg.read(uint16).value as number;
-        this.boneIndex = pkg.read(uint16).value as number;
+    public load(pkg: C.APackage): this {
+        this.boneWeight = pkg.read("uint16");
+        this.boneIndex = pkg.read("uint16");
 
         return this;
     }
 }
 
 class FJointPos extends FConstructable {
-    public rotation = new FQuaternion();
-    public position = new FVector();
-    public scale = new FVector();
+    public rotation: FQuaternion;
+    public position: FVector;
+    public scale: FVector;
     public length: number;
 
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-
-        this.rotation.load(pkg);
-        this.position.load(pkg);
-        this.length = pkg.read(float).value as number;
-        this.scale.load(pkg);
+    public load(pkg: C.APackage): this {
+        this.rotation = FQuaternion.make().load(pkg);
+        this.position = FVector.make().load(pkg);
+        this.length = pkg.read("float");
+        this.scale = FVector.make().load(pkg);
 
         this.scale.set(1, 1, 1);
 
@@ -66,19 +61,16 @@ class FMeshBone extends FConstructable {
     public numChildren: number;
     public parentIndex: number;
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const compat = new BufferValue(BufferValue.compat32);
-
-        const nameIndex = pkg.read(compat).value as number;
+    public load(pkg: C.APackage): this {
+        const nameIndex = pkg.read("compat32");
         this.boneName = pkg.nameTable[nameIndex].name as string;
 
-        this.flags = pkg.read(uint32).value as number;
+        this.flags = pkg.read("uint32");
 
         this.bonePos.load(pkg);
 
-        this.numChildren = pkg.read(uint32).value as number;
-        this.parentIndex = pkg.read(uint32).value as number;
+        this.numChildren = pkg.read("uint32");
+        this.parentIndex = pkg.read("uint32");
 
         return this;
     }
@@ -91,21 +83,21 @@ class FMeshNorm extends FConstructable {
 
     public v: number;
 
-    public load(pkg: UPackage): this {
-        this.v = pkg.read(new BufferValue(BufferValue.uint32)).value as number;
+    public load(pkg: C.APackage): this {
+        this.v = pkg.read("uint32");
 
         return this;
     }
 }
 
 class FSkinPoint extends FConstructable {
-    public point = new FVector();
-    public normal = new FMeshNorm();
+    public point: FVector;
+    public normal: FMeshNorm;
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
 
-        this.point.load(pkg);
-        this.normal.load(pkg);
+        this.point = FVector.make().load(pkg);
+        this.normal = new FMeshNorm().load(pkg);
 
         return this;
     }
@@ -122,41 +114,37 @@ class FSkelMeshSection extends FConstructable {
     public firstFace: number;
     public numFaces: number;
 
-    public load(pkg: UPackage): this {
-        const int16 = new BufferValue(BufferValue.int16);
+    public load(pkg: C.APackage): this {
+        this.materialIndex = pkg.read("int16");
 
-        this.materialIndex = pkg.read(int16).value as number;
+        this.minStreamIndex = pkg.read("int16");
 
-        this.minStreamIndex = pkg.read(int16).value as number;
+        this.minWedgeIndex = pkg.read("int16");
+        this.maxWedgeIndex = pkg.read("int16");
 
-        this.minWedgeIndex = pkg.read(int16).value as number;
-        this.maxWedgeIndex = pkg.read(int16).value as number;
+        this.numStreamIndices = pkg.read("int16");
 
-        this.numStreamIndices = pkg.read(int16).value as number;
-
-        this.boneIndex = pkg.read(int16).value as number;
-        this.fE = pkg.read(int16).value as number;
-        this.firstFace = pkg.read(int16).value as number;
-        this.numFaces = pkg.read(int16).value as number;
+        this.boneIndex = pkg.read("int16");
+        this.fE = pkg.read("int16");
+        this.firstFace = pkg.read("int16");
+        this.numFaces = pkg.read("int16");
 
         return this;
     }
 }
 
 class FAnimMeshVertex extends FConstructable {
-    public position = new FVector();
-    public normal = new FVector();
+    public position: FVector;
+    public normal: FVector;
     public texU: number;
     public texV: number;
 
-    public load(pkg: UPackage): this {
+    public load(pkg: C.APackage): this {
 
-        const float = new BufferValue(BufferValue.float);
-
-        this.position.load(pkg);
-        this.normal.load(pkg);
-        this.texU = pkg.read(float).value as number;
-        this.texV = pkg.read(float).value as number;
+        this.position = FVector.make().load(pkg);
+        this.normal = FVector.make().load(pkg);
+        this.texU = pkg.read("float");
+        this.texV = pkg.read("float");
 
         return this;
     }
@@ -168,13 +156,10 @@ class FSkinVertexStream extends FConstructable {
     public unkVar1: number;
     public vertices = new FArray(FAnimMeshVertex);
 
-    public load(pkg: UPackage): this {
-
-        const uint32 = new BufferValue(BufferValue.uint32);
-
-        this.revision = pkg.read(uint32).value as number;
-        this.unkVar0 = pkg.read(uint32).value as number;
-        this.unkVar1 = pkg.read(uint32).value as number;
+    public load(pkg: C.APackage): this {
+        this.revision = pkg.read("uint32");
+        this.unkVar0 = pkg.read("uint32");
+        this.unkVar1 = pkg.read("uint32");
         this.vertices.load(pkg);
 
         return this;
@@ -185,14 +170,12 @@ class FTriangleLOD extends FConstructable {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
 
-    public load(pkg: UPackage): this {
-        const uint16 = new BufferValue(BufferValue.uint16);
+    public load(pkg: C.APackage): this {
+        this.indices[0] = pkg.read("uint16");
+        this.indices[1] = pkg.read("uint16");
+        this.indices[2] = pkg.read("uint16");
 
-        this.indices[0] = pkg.read(uint16).value as number;
-        this.indices[1] = pkg.read(uint16).value as number;
-        this.indices[2] = pkg.read(uint16).value as number;
-
-        this.materialIndex = pkg.read(uint16).value as number;
+        this.materialIndex = pkg.read("uint16");
 
         return this;
     }
@@ -216,15 +199,10 @@ class FStaticModelLOD extends FConstructable {
     public unkVar0: number;
     public unkVar1: number;
 
-    public load(pkg: UPackage): this {
-
-        const int32 = new BufferValue(BufferValue.int32);
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const float = new BufferValue(BufferValue.float);
-
+    public load(pkg: C.APackage): this {
         this.skinningData.load(pkg);
         this.skinPoints.load(pkg);
-        this.numSoftWedges = pkg.read(int32).value as number;
+        this.numSoftWedges = pkg.read("int32");
         this.softSections.load(pkg);
         this.rigidSections.load(pkg);
 
@@ -237,14 +215,14 @@ class FStaticModelLOD extends FConstructable {
         this.faces.load(pkg);
         this.points.load(pkg);
 
-        this.lodHysteresis = pkg.read(float).value as number;
-        this.numSharedVertices = pkg.read(uint32).value as number
-        this.lodMaxInfluences = pkg.read(uint32).value as number
-        this.unkVar0 = pkg.read(uint32).value as number
-        this.unkVar1 = pkg.read(uint32).value as number
+        this.lodHysteresis = pkg.read("float");
+        this.numSharedVertices = pkg.read("uint32");
+        this.lodMaxInfluences = pkg.read("uint32");
+        this.unkVar0 = pkg.read("uint32");
+        this.unkVar1 = pkg.read("uint32");
 
 
-        const useNewWedges = pkg.read(uint32).value as number
+        const useNewWedges = pkg.read("uint32");
 
         if (useNewWedges !== 0)
             debugger;
@@ -258,13 +236,10 @@ class FMeshWedge extends FConstructable {
     public texU: number;
     public texV: number;
 
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-        const uint16 = new BufferValue(BufferValue.uint16);
-
-        this.iVertex = pkg.read(uint16).value as number;
-        this.texU = pkg.read(float).value as number;
-        this.texV = pkg.read(float).value as number;
+    public load(pkg: C.APackage): this {
+        this.iVertex = pkg.read("uint16");
+        this.texU = pkg.read("float");
+        this.texV = pkg.read("float");
 
         return this;
     }
@@ -276,18 +251,14 @@ class FTriangle extends FConstructable {
     public materialIndex2: number;
     public smoothingGroups: number;
 
-    public load(pkg: UPackage): this {
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const uint16 = new BufferValue(BufferValue.uint16);
-        const uint8 = new BufferValue(BufferValue.uint8);
+    public load(pkg: C.APackage): this {
+        this.indices[0] = pkg.read("uint16");
+        this.indices[1] = pkg.read("uint16");
+        this.indices[2] = pkg.read("uint16");
 
-        this.indices[0] = pkg.read(uint16).value as number;
-        this.indices[1] = pkg.read(uint16).value as number;
-        this.indices[2] = pkg.read(uint16).value as number;
-
-        this.materialIndex = pkg.read(uint8).value as number;
-        this.materialIndex2 = pkg.read(uint8).value as number;
-        this.smoothingGroups = pkg.read(uint32).value as number;
+        this.materialIndex = pkg.read("uint8");
+        this.materialIndex2 = pkg.read("uint8");
+        this.smoothingGroups = pkg.read("uint32");
 
         return this;
     }
@@ -298,24 +269,21 @@ class FVertexInfluence extends FConstructable {
     public iPoint: number;
     public iBone: number;
 
-    public load(pkg: UPackage): this {
-        const float = new BufferValue(BufferValue.float);
-        const uint16 = new BufferValue(BufferValue.uint16);
-
-        this.weight = pkg.read(float).value as number;
-        this.iPoint = pkg.read(uint16).value as number;
-        this.iBone = pkg.read(uint16).value as number;
+    public load(pkg: C.APackage): this {
+        this.weight = pkg.read("float");
+        this.iPoint = pkg.read("uint16");
+        this.iBone = pkg.read("uint16");
 
         return this;
     }
 }
 
-class USkeletalMesh extends ULodMesh {
+abstract class USkeletalMesh extends ULodMesh {
 
     protected points2 = new FArray(FVector);
     protected refSkeleton = new FArray(FMeshBone);
     protected animationId: number;
-    protected animation: UMeshAnimation;
+    protected animation: GA.UMeshAnimation;
     protected skeletalDepth: number;
     protected weightIndices = new FArray(FWeightIndex);
     protected boneInluences = new FArray(FBoneInfluence);
@@ -334,38 +302,30 @@ class USkeletalMesh extends ULodMesh {
     protected sk_unkArr11 = new FPrimitiveArray(BufferValue.uint32);
     protected sk_unkVar2: number;
 
-    public doLoad(pkg: UPackage, exp: UExport) {
+    public doLoad(pkg: C.APackage, exp: C.UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         super.doLoad(pkg, exp);
 
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const compat = new BufferValue(BufferValue.compat32);
-
         this.points2.load(pkg);
         this.refSkeleton.load(pkg);
 
-        this.animationId = pkg.read(compat).value as number;
+        this.animationId = pkg.read("compat32");
 
-        if (this.animationId !== 0) {
-            this.promisesLoading.push(new Promise<void>(async resolve => {
-                this.animation = await pkg.fetchObject<UMeshAnimation>(this.animationId);
+        if (this.animationId !== 0)
+            this.animation = pkg.fetchObject<GA.UMeshAnimation>(this.animationId);
 
-                resolve();
-            }));
-        }
-
-        this.skeletalDepth = pkg.read(uint32).value as number;
+        this.skeletalDepth = pkg.read("uint32");
         this.weightIndices.load(pkg);
         this.boneInluences.load(pkg);
-        this.attachAliases = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name as string);
-        this.attachBoneNames = new FArray(FNumber.forType(BufferValue.compat32) as any).load(pkg).map(v => pkg.nameTable[v.value].name as string);
+        this.attachAliases = new FIndexArray().load(pkg).map(v => pkg.nameTable[v.value].name as string);
+        this.attachBoneNames = new FIndexArray().load(pkg).map(v => pkg.nameTable[v.value].name as string);
         this.attachCoords.load(pkg);
 
         if (this.version >= 2) {
             this.lodModels.load(pkg);
-            this.sk_unkIndex1 = pkg.read(compat).value as number;
+            this.sk_unkIndex1 = pkg.read("compat32");
 
             if (this.sk_unkIndex1 !== 0)
                 debugger;
@@ -378,14 +338,14 @@ class USkeletalMesh extends ULodMesh {
             this.sk_unkArr10.load(pkg);
 
             if (verArchive >= 118 && verLicense >= 3)
-                this.sk_unkVar1 = pkg.read(uint32).value as number;
+                this.sk_unkVar1 = pkg.read("uint32");
 
             if (verArchive >= 123 && verLicense >= 18) {
                 this.sk_unkArr11.load(pkg);
             }
 
             if (verArchive >= 120) {
-                this.sk_unkVar2 = pkg.read(uint32).value as number;
+                this.sk_unkVar2 = pkg.read("uint32");
             }
 
             this.readHead = pkg.tell();
@@ -397,16 +357,14 @@ class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public async getDecodeInfo(library: DecodeLibrary): Promise<ISkinnedMeshObjectDecodeInfo> {
-        await this.onDecodeReady();
-
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISkinnedMeshObjectDecodeInfo {
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
             type: "SkinnedMesh",
             name: this.objectName,
             geometry: this.uuid,
             materials: this.uuid
-        } as ISkinnedMeshObjectDecodeInfo;
+        } as GD.ISkinnedMeshObjectDecodeInfo;
 
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
@@ -416,7 +374,7 @@ class USkeletalMesh extends ULodMesh {
         const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
 
-        const materials = await Promise.all(this.lodMeshMaterials.map((mat: FStaticMeshMaterial) => mat?.getDecodeInfo(library) || null));
+        const materials = await Promise.all(this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => mat?.getDecodeInfo(library) || null));
 
         library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
         library.geometries[this.uuid] = {

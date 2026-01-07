@@ -1,28 +1,31 @@
-import UObject from "./un-object";
+import UObject from "@l2js/core";
 
-class UTerrainLayer extends UObject {
-    public map: UTexture = null;
-    public alphaMap: UTexture = null;
-    public scaleW: number;
-    public scaleH: number;
-    protected panW: number;
-    protected panH: number;
-    protected mapAxis: number;
-    protected mapRotation: number;
-    protected layerRotation: FRotator;
-    protected terrainMatrix: UMatrix;
-    protected zPlane: FPlane;
-    protected wPlane: FPlane;
-    protected level: number[];
-    protected friction: number;
-    protected restitution: number;
-    protected weightMap: UTexture;
-    public scale: FVector;
-    protected toWorld = new Set();
-    protected toMaskmap = new Set();
-    protected useAlpha: boolean;
-    protected unkNum0: number;
-    protected z: number;
+enum TextureMapAxis_T {
+    TEXMAPAXIS_XY = 0,
+    TEXMAPAXIS_XZ = 1,
+    TEXMAPAXIS_YZ = 2,
+    TEXMAPAXIS_MAX = 3,
+};
+
+abstract class UTerrainLayer extends UObject {
+    declare public readonly map: GA.UTexture;
+    declare public readonly alphaMap: GA.UTexture;
+    declare public readonly scaleW: number;
+    declare public readonly scaleH: number;
+    declare public readonly panW: number;
+    declare public readonly panH: number;
+    declare public readonly mapAxis: TextureMapAxis_T;
+    declare public readonly mapRotation: number;
+    declare public readonly layerRotation: GA.FRotator;
+    declare public readonly terrainMatrix: GA.FMatrix;
+    declare public readonly level: number[];
+    declare public readonly friction: number;
+    declare public readonly restitution: number;
+    declare public readonly weightMap: GA.UTexture;
+    declare public readonly scale: GA.FVector;
+    declare public readonly toWorld: any;
+    declare public readonly toMaskmap: any;
+    declare public readonly useAlpha: boolean;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -30,19 +33,16 @@ class UTerrainLayer extends UObject {
             "AlphaMap": "alphaMap",
             "UScale": "scaleW",
             "VScale": "scaleH",
+            "Scale": "scale",
             "UPan": "panW",
             "VPan": "panH",
-            "ZPlane": "zPlane",
-            "WPlane": "wPlane",
             "TextureMapAxis": "mapAxis",
             "TextureRotation": "mapRotation",
             "LayerRotation": "layerRotation",
             "TerrainMatrix": "terrainMatrix",
-            "Level": "level",
             "KFriction": "friction",
             "KRestitution": "restitution",
             "LayerWeightMap": "weightMap",
-            "Scale": "scale",
             "ToWorld": "toWorld",
             "ToMaskmap": "toMaskmap",
             "bUseAlpha": "useAlpha"
@@ -51,4 +51,4 @@ class UTerrainLayer extends UObject {
 }
 
 export default UTerrainLayer;
-export { UTerrainLayer };
+export { UTerrainLayer, TextureMapAxis_T };

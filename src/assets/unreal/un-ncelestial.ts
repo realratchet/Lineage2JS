@@ -1,18 +1,15 @@
 import UAActor from "./un-aactor";
-import { FObjectArray } from "./un-array";
 
 abstract class UNCelestial extends UAActor {
-    protected skins = new FObjectArray<UTexture>();
+    declare protected radius: number;
+    declare protected limitMaxRadius: number;
+    declare protected lat: any;
+    declare protected lon: any;
 
-    protected radius: number;
-    protected limitMaxRadius: number;
-    protected lat: any;
-    protected lon: any;
+    declare protected isMakingLightmap: boolean;
 
-    protected isMakingLightmap: boolean;
-
-    protected celestialScale: any;
-    protected celestialPosition: any;
+    declare protected celestialScale: any;
+    declare protected celestialPosition: any;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
