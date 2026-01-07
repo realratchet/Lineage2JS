@@ -1,5 +1,6 @@
 import "./un-object-mixin";
 import { ANativePackage, APackage, UObject } from "@l2js/core";
+import type { UObject as UObject_ } from "@l2js/core/src/unreal/un-object";
 import UModel from "./model/un-model";
 import ULevel from "./un-level";
 import FScale from "./un-scale";
@@ -236,8 +237,10 @@ class UEnginePackage extends UPackage implements C.IEnginePackage {
     }
 }
 
+
 class UNativePackage extends ANativePackage {
 
+    public getStructConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: string): new () => T
     public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: string): new () => T {
         let Constructor: any;
 
@@ -290,6 +293,7 @@ class UNativePackage extends ANativePackage {
         return Constructor;
     }
 
+    protected getNonNativeConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: C.NativeTypes_T): new () => T
     protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: GA.NativeClientTypes_T): new () => T {
         let Constructor: any;
 
