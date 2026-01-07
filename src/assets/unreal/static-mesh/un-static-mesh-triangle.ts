@@ -1,5 +1,3 @@
-import { BufferValue } from "@l2js/core";
-
 class FStaticMeshTriangleSub implements C.IConstructable {
     declare public f0: number[];
     declare public f1: number[];
@@ -51,7 +49,7 @@ class FStaticMeshTriangle implements C.IConstructable {
             debugger;
         } else {
 
-            this.data = pkg.read(3 * 3 * 4).value;
+            this.data = pkg.read(3 * 3 * 4);
 
             const count = pkg.read("uint32");
 

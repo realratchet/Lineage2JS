@@ -1,5 +1,3 @@
-import { BufferValue } from "@l2js/core";
-
 class FRawColorStream implements C.IConstructable {
     declare private elementCount: number;
     declare private data: DataView;
@@ -20,7 +18,7 @@ class FRawColorStream implements C.IConstructable {
 
     public load(pkg: C.APackage): this {
         this.elementCount = pkg.read("compat32");
-        this.data = pkg.read(this.elementCount * 4).value;
+        this.data = pkg.read(this.elementCount * 4);
 
         this.revision = pkg.read("int32");
 

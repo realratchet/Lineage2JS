@@ -1,5 +1,3 @@
-import { BufferValue } from "@l2js/core";
-
 class FStaticMeshVertexStream implements C.IConstructable {
     declare private data: DataView;
     declare private elementCount: number;
@@ -23,7 +21,7 @@ class FStaticMeshVertexStream implements C.IConstructable {
     public load(pkg: C.APackage): this {
         const size = pkg.read("compat32");
 
-        this.data = pkg.read(size * 24).value;
+        this.data = pkg.read(size * 24);
         /**
          * position[0].x, position[0].y, position[0].z, (float: 4 bytes x 3)
          * normal[0].x, position[0].y, position[0].z, (float: 4 bytes x 3)

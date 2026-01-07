@@ -1,4 +1,3 @@
-import { BufferValue } from "@l2js/core";
 import { FStringArray } from "@l2js/core/src/unreal/un-array";
 
 class FURL implements C.IConstructable {
@@ -11,12 +10,10 @@ class FURL implements C.IConstructable {
     public isValid: boolean;
 
     public load(pkg: C.APackage): this {
-        const char = new BufferValue(BufferValue.char);
-
-        this.protocol = pkg.read(char).value;
-        this.host = pkg.read(char).value;
-        this.map = pkg.read(char).value;
-        this.portal = pkg.read(char).value;
+        this.protocol = pkg.read("char");
+        this.host = pkg.read("char");
+        this.map = pkg.read("char");
+        this.portal = pkg.read("char");
         this.options = new FStringArray().load(pkg);
         this.port = pkg.read("int32");
         this.isValid = pkg.read("int32") === 1;
