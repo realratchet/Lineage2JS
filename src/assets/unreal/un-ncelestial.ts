@@ -1,8 +1,6 @@
 import UAActor from "./un-aactor";
 
 abstract class UNCelestial extends UAActor {
-    declare protected skins: C.FObjectArray<GA.UTexture>;
-
     declare protected radius: number;
     declare protected limitMaxRadius: number;
     declare protected lat: any;

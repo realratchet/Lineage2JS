@@ -2,6 +2,10 @@ import FMatrix from "@client/assets/unreal/un-matrix";
 import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
+
+const int32 = new BufferValue(BufferValue.int32);
+const compat = new BufferValue(BufferValue.compat32);
+
 class FSubStructure implements C.IConstructable {
     public lightIndex: number;
     public lightExp: C.UExport;
@@ -12,9 +16,6 @@ class FSubStructure implements C.IConstructable {
     public unkIntArr1: number[];
 
     public load(pkg: C.APackage): this {
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat = new BufferValue(BufferValue.compat32);
-
         this.lightIndex = pkg.read(compat).value;
         this.lightExp = pkg.exports[this.lightIndex - 1];
 
@@ -27,6 +28,7 @@ class FSubStructure implements C.IConstructable {
         return this;
     }
 }
+
 
 class FLightmapIndex implements C.IConstructable {
     public iLightmapTexture: number;
@@ -44,14 +46,14 @@ class FLightmapIndex implements C.IConstructable {
     public unkSubstructure = new FArray(FSubStructure);
     public unkInt0: number;
 
+    public unkArrAsFloats: Array<number> = new Array(9);
+    public unkArrAsInts: Array<number> = new Array(9);
+
     public load(pkg: C.APackage): this {
         // pkg.addDependencies(
         //     pkg,
         //     ["Struct", "Matrix"],
         // );
-
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat = new BufferValue(BufferValue.compat32);
 
         this.uvMatrix = FMatrix.make();
 
@@ -68,9 +70,6 @@ class FLightmapIndex implements C.IConstructable {
         this.uvMatrix.load(pkg);
 
         const unkArray = pkg.read(BufferValue.allocBytes(9 * 4));
-
-        this.unkArrAsFloats = new Array(9);
-        this.unkArrAsInts = new Array(9);
 
         for (let i = 0; i < 9; i++) {
             this.unkArrAsFloats[i] = (unkArray.value as DataView).getFloat32(i * 4, unkArray.endianess === "little");

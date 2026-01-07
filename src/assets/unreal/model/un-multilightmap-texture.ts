@@ -48,7 +48,7 @@ class FStaticLightmapTexture implements C.IConstructable {
         const format = this.getTexturePixelFormat();
 
         let decodedBuffer: ArrayBuffer;
-        let textureType: DecodableTexture_T;
+        let textureType: GD.DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -71,7 +71,7 @@ class FStaticLightmapTexture implements C.IConstructable {
             wrapS: wrapS,
             wrapT: wrapT,
             useMipmaps: mipCount > 0
-        } as ITextureDecodeInfo;
+        } as GD.ITextureDecodeInfo;
 
         return this.uuid;
     }

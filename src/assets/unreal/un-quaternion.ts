@@ -92,7 +92,7 @@ class FAxis {
         return out;
     }
 
-    untransformVector(src: FVector): FVector {
+    public untransformVector(src: FVector): FVector {
         let tmp = this.x.multiplyScalar(src.x);
 
         tmp = this.y.multiplyScalar(src.y).add(tmp);

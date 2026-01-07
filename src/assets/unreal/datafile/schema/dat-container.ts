@@ -1,13 +1,14 @@
 import { BufferValue } from "@l2js/core";
 
+const uint32 = new BufferValue(BufferValue.uint32);
+const uint8 = new BufferValue(BufferValue.uint8)
+const utf16 = new BufferValue(BufferValue.utf16);
+
 class UTF16ContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    read(pkg: UEncodedFile): string[] {
-        const uint32 = new BufferValue(BufferValue.uint32);
+    read(pkg: C.UEncodedFile): string[] {
         const count = pkg.read(uint32).value as number;
-
-        const utf16 = new BufferValue(BufferValue.utf16);
         const elements = new Array<string>(count);
 
         for (let i = 0; i < count; i++)
@@ -22,12 +23,12 @@ class NumberContainerType implements IDatContainerType {
 
     protected dtype: BufferValue<any>;
 
-    constructor(dtype: ValidTypes_T<any>) {
+    constructor(dtype: C.ValidTypes_T<any>) {
         this.dtype = new BufferValue(dtype);
     }
 
-    read(pkg: UEncodedFile): number[] {
-        const count = pkg.read(new BufferValue(BufferValue.uint8)).value as number;
+    read(pkg: C.UEncodedFile): number[] {
+        const count = pkg.read(uint8).value as number;
 
         if (count === 0) return [];
 

@@ -2,6 +2,11 @@ import { BufferValue } from "@l2js/core";
 import { FPlane } from "../un-plane";
 import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 
+const uint64 = new BufferValue(BufferValue.uint64);
+const int32 = new BufferValue(BufferValue.int32);
+const compat32 = new BufferValue(BufferValue.compat32);
+const uint8 = new BufferValue(BufferValue.uint8);
+
 // Flags associated with a Bsp node.
 enum BspNodeFlags_T {
     // Flags.
@@ -14,10 +19,10 @@ enum BspNodeFlags_T {
 };
 
 class FBSPNode implements C.IConstructable {
-    declare public plane: GA.FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
-    declare public zoneMask: bigint;                // 8  byte mask for all zones at or below this node (up to 64).
-    declare public iVertPool: number;               // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
-    declare public iSurf: number;                   // 4  byte index to surface information.
+    public plane: GA.FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
+    public zoneMask: bigint;                // 8  byte mask for all zones at or below this node (up to 64).
+    public iVertPool: number;               // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
+    public iSurf: number;                   // 4  byte index to surface information.
 
     public iBack: number;                            // 4  byte index to node in front (in direction of Normal).
     public iFront: number;                           // 4  byte index to node in back  (opposite direction as Normal).
@@ -43,16 +48,11 @@ class FBSPNode implements C.IConstructable {
     public getChildren() { return [this.iBack, this.iFront, this.iPlane]; }
 
     public load(pkg: C.APackage): this {
+        const verArchive = pkg.header.getArchiveFileVersion();
+
         this.plane = FPlane.make();
         this.exclusiveSphereBound = FPlane.make();
         this.inclusiveSphereBound = FPlane.make();
-
-        const verArchive = pkg.header.getArchiveFileVersion();
-
-        const uint64 = new BufferValue(BufferValue.uint64);
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const uint8 = new BufferValue(BufferValue.uint8);
 
         this.plane.load(pkg);
 

@@ -5,6 +5,9 @@ import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import { indexToTime } from "@client/assets/unreal/un-l2env";
 
+const compat32 = new BufferValue(BufferValue.compat32);
+const int32 = new BufferValue(BufferValue.int32);
+
 class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
@@ -13,9 +16,6 @@ class FStaticMeshLightInfo implements C.IConstructable {
     public light: ULight;
 
     public load(pkg: C.APackage): this {
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const int32 = new BufferValue(BufferValue.int32);
-
         this.lightIndex = pkg.read(compat32).value;
         this.vertexFlags.load(pkg);
 
@@ -58,7 +58,7 @@ abstract class UStaticMeshInstance extends UObject {
         const env = envManager.getCurrentEnvLight();
 
         for (let i = 0; i < len; i++) {
-            const [ r, g, b ] = this.colorStream.getColor(i);
+            const [r, g, b] = this.colorStream.getColor(i);
             const offset = i * 3;
 
             color[offset + 0] = r / 255;
@@ -81,7 +81,8 @@ abstract class UStaticMeshInstance extends UObject {
                 finishIndex = i + 1;
                 // startTime = timeForIndex;
                 // finishTime = indexToTime(finishIndex, len);
-                lightingColor = envManager.selectByTime(env.lightStaticMesh).getColor();
+                const light = envManager.selectByTime(env.lightStaticMesh);
+                lightingColor = light ? light.getColor() : [1, 1, 1, 1];
 
                 break;
             }
@@ -119,7 +120,6 @@ abstract class UStaticMeshInstance extends UObject {
     protected doLoad(pkg: C.APackage, exp: C.UExport): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
-        const compat32 = new BufferValue(BufferValue.compat32);
 
         this.colorStream = new FRawColorStream();
         this.sceneLights = new FArray(FStaticMeshLightInfo);

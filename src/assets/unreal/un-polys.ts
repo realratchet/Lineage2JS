@@ -1,6 +1,4 @@
 import UObject from "@l2js/core";
-import FVector from "./un-vector";
-import { BufferValue } from "@l2js/core";
 
 enum PolyFlags_T {
     // Regular in-game flags.

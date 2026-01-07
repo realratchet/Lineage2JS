@@ -38,8 +38,8 @@
 // type UAmbientSoundObject = import("./un-ambient-sound").UAmbientSoundObject;
 // type USound = import("./un-sound").USound;
 // type ULight = import("./un-light").ULight;
-// type LightEffect_T = import("./un-light").LightEffect_T;
-// type LightType_T = import("./un-light").LightType_T;
+// 
+// 
 // type ATerrainInfo = import("./un-terrain-info").ATerrainInfo;
 // type UNMovableSunLight = import("./un-movable-sunlight").UNMovableSunLight;
 // type UStaticMeshActor = import("./static-mesh/un-static-mesh-actor").UStaticMeshActor;
@@ -57,7 +57,7 @@
 // type UStaticMeshInstance = import("./static-mesh/un-static-mesh-instance").UStaticMeshInstance;
 // type ULevelSummary = import("./un-level-summary").ULevelSummary;
 // type UDefaultPhysicsVolume = import("./un-physics").UDefaultPhysicsVolume;
-// type UEncodedFile = import("./un-encoded-file").UEncodedFile;
+// 
 // type UTextBuffer = import("./un-text-buffer").UTextBuffer;
 // type USkeletalMesh = import("./skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
 // type UMeshAnimation = import("./skeletal-mesh/un-mesh-animation").UMeshAnimation;
@@ -103,14 +103,8 @@
 // type ETextureFormat = import("./un-tex-format").ETextureFormat;
 // type ETexturePixelFormat = import("./un-tex-format").ETexturePixelFormat;
 
-// type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
-// type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
-// type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 // interface IBaseMaterialDecodeInfo { name?: string, materialType: DecodableMaterial_T, color?: boolean }
-// interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
-//     materialType: "modifier",
-//     modifierType: DecodableMaterialModifier_T
-// }
+
 
 // interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
 //     materialType: "particle",
@@ -167,21 +161,8 @@
 //     layers: { map: string, alphaMap: string }[]
 // }
 
-// interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
-//     materialType: "instance",
-//     baseMaterial: string,
-//     modifiers: string[]
-// }
 
-// interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
-//     materialType: "texture",
-//     textureType: DecodableTexture_T,
-//     buffer: ArrayBuffer,
-//     wrapS?: number, wrapT?: number,
-//     width: number, height: number,
-// }
 
-// type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
 // interface IDataTextureDecodeInfo extends ITextureDecodeInfo { format?: DataTextureFormats_T }
 
 // interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -195,37 +176,10 @@
 //     lightmap: string
 // }
 
-// interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
-//     materialType: "shader",
-//     diffuse: string,
-//     opacity: string,
-//     specular: string,
-//     specularMask: string,
-//     blendingMode: SupportedBlendingTypes_T,
-//     depthWrite: boolean,
-//     doubleSide: boolean,
-//     transparent: boolean,
-//     alphaTest: number,
-//     visible: boolean
-// }
 
-// interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
-//     modifierType: "panTexture",
-//     transform: {
-//         matrix: number[],
-//         rate: number,
-//         map: string
-//     }
-// }
 
-// interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
-//     modifierType: "fadeColor",
-//     fadeColors: {
-//         color1: number[],
-//         color2: number[],
-//         period: number
-//     }
-// }
+
+
 
 // interface IBaseTimedConstructable {
 //     time: number;
@@ -248,15 +202,6 @@
 
 
 
-
-
-
-// interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
-//     actorName: string;
-//     type: "StaticMeshActor",
-//     instance: IStaticMeshInstanceDecodeInfo
-// }
-
 // interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
 //     type: "SkinnedMesh";
 //     geometry: string;
@@ -265,47 +210,10 @@
 //     animations: Record<string, IKeyframeDecodeInfo_T[]>
 // }
 
-// type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
 
-// interface IGeometryDecodeInfo {
-//     attributes: {
-//         positions?: Float32Array;
-//         normals?: Float32Array;
-//         colors?: Float32Array,
-//         colorsInstance?: Float32Array,
-//         uvs?: Float32Array | Float32Array[];
-//         uvs2?: Float32Array | Float32Array[];
-//         skinIndex?: Uint8Array;
-//         skinWeight?: Float32Array;
-//     };
-//     indices?: IndexLikeArray;
-//     colliderIndices?: Uint32Array;
-//     groups?: ArrGeometryGroup[],
-//     bounds?: IBoundsDecodeInfo
-// }
 
-// interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
-//     type: "StaticMesh",
-//     geometry: string,
-//     materials?: string
-// }
 
-// interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
-//     type: "Edges",
-//     geometry: string,
-//     color?: [number, number, number],
-//     ignoreDepth?: boolean
-// }
 
-// interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
-//     type: "Light",
-//     color: [number, number, number],
-//     radius: number,
-//     directional: boolean,
-//     lightType: LightType_T,
-//     lightEffect: LightEffect_T,
-//     cone: number
-// }
 
 // interface IMaterialModifier {
 //     type: "Lighting"

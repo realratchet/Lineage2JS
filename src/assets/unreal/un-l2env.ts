@@ -274,6 +274,8 @@ class UL2NEnvManager {
         this.cacheIndex = 1.0;          // Normal time progression
 
         this.currentEnvLight = envLight;
+
+        this.timeOfDay = this.timeOfDay % 24.0;
     }
 
     // Time management
@@ -309,47 +311,6 @@ class UL2NEnvManager {
             brightness: this.getBrightnessStaticMeshSunLight(),
             color: this.getBaseColorPlaneStaticMeshSunLight().getElements() as GD.ColorArr
         };
-    }
-
-    public getEnvColor(colorA: GD.ColorArr, colorB: GD.ColorArr, colorC: GD.ColorArr): GD.ColorArr {
-        // Three-point interpolation based on time and environmental state
-        // This would implement the GetEnvColor logic from MCP analysis
-        const time = this.timeOfDay;
-
-        // Simplified interpolation - in native code this is more complex
-        if (time < 0.25) {
-            // Night to dawn transition
-            return this.interpolateColors(colorA, colorB, time * 4);
-        } else if (time < 0.75) {
-            // Day
-            return colorB;
-        } else {
-            // Dusk to night transition
-            return this.interpolateColors(colorB, colorA, (time - 0.75) * 4);
-        }
-    }
-
-    // Update environmental state (called every frame)
-    public updateNTime(deltaTime: number): void {
-        // Update time progression (deltaTime in seconds, timeOfDay in hours)
-        this.timeOfDay += (deltaTime * this.cacheIndex) / 3600; // Convert seconds to hours
-        if (this.timeOfDay >= 24.0) {
-            this.timeOfDay = 0.0;
-        }
-
-        // Update environmental state based on time
-        this.updateEnvironmentalState();
-    }
-
-    protected updateEnvironmentalState(): void {
-        // Determine environmental period based on time (matches IDA disassembly)
-        // Note: hashNextBuffer removed as unused in current implementation
-        const period = this.timeOfDay < 6.0 ? 0 : // Night (0-6 AM)
-                      this.timeOfDay < 8.0 ? 1 : // Dawn (6-8 AM)
-                      this.timeOfDay < 22.0 ? 2 : // Day (8 AM-10 PM)
-                      3; // Dusk (10 PM-12 AM)
-
-        // Interpolation factors not currently used in this implementation
     }
 
     protected interpolateColors(colorA: GD.ColorArr, colorB: GD.ColorArr, factor: number): GD.ColorArr {

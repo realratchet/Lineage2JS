@@ -1,7 +1,7 @@
 import { MathUtils } from "three";
 import FVector from "../un-vector";
 
-type UNativeRegistry = import("./un-native-registry").UNativeRegistry;
+type UNativeRegistry = typeof import("./un-native-registry").UNativeRegistry;
 
 function pre_op_not_bool                /* !  */(a: boolean) { return !a; }
 function op_eq_bool_bool                /* == */(a: boolean, b: boolean) { return a === b; }
@@ -84,7 +84,7 @@ function fn_not_implemented(...args: any[]) { throw new Error(`Called non-implem
 
 function VSize(a: FVector) { return a.length(); }
 function Normal(a: FVector) { return a.normalized(); }
-function VRand() { return new FVector(Math.random(), Math.random(), Math.random()); }
+function VRand() { return FVector.make(Math.random(), Math.random(), Math.random()); }
 
 function Log(s: string, tag?: string) { console.log(`[UEScript] ${tag ? `{${tag}} ` : ""}${s}`); }
 function Warn(s: string) { console.warn(`[UEScript] ${s}`); }

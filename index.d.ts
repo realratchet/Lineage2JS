@@ -95,6 +95,8 @@ declare global {
                 export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
 
                 export type ULight = import("@unreal/un-light").ULight;
+                export type LightEffect_T = import("@unreal/un-light").LightEffect_T;
+                export type LightType_T = import("@unreal/un-light").LightType_T;
                 export type UNMovableSunLight = import("@unreal/un-movable-sunlight").UNMovableSunLight;
 
                 export type FNTimeColor = import("@unreal/un-l2env").FNTimeColor;
@@ -133,6 +135,7 @@ declare global {
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
 
                 export interface IBoxDecodeInfo { isValid: boolean, min: Vector3Arr, max: Vector3Arr }
+                export interface ISphereDecodeInfo { center: Vector3Arr, radius: number }
 
                 export interface IZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Zone" }
                 export interface ISkyZoneDecodeInfo extends IBaseZoneDecodeInfo { type: "Sky" }
@@ -253,7 +256,10 @@ declare global {
                 }
 
                 // Material and Geometry Types
+                export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
+                export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
                 export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
+                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
 
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
@@ -327,6 +333,81 @@ declare global {
                     time: number,
                     color: ColorArr
                 };
+
+                export interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "instance",
+                    baseMaterial: string,
+                    modifiers: string[]
+                }
+
+
+                export interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "texture",
+                    textureType: DecodableTexture_T,
+                    buffer: ArrayBuffer,
+                    wrapS?: number, wrapT?: number,
+                    width: number, height: number,
+                }
+
+                export interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "Edges",
+                    geometry: string,
+                    color?: [number, number, number],
+                    ignoreDepth?: boolean
+                }
+
+                export interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "Light",
+                    dynamic: boolean,
+                    color: [number, number, number],
+                    radius: number,
+                    directional: boolean,
+                    lightType: GA.LightType_T,
+                    lightEffect: GA.LightEffect_T,
+                    cone: number
+                }
+
+                export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "shader",
+                    diffuse: string,
+                    opacity: string,
+                    specular: string,
+                    specularMask: string,
+                    blendingMode: GA.SupportedBlendingTypes_T,
+                    depthWrite: boolean,
+                    doubleSide: boolean,
+                    transparent: boolean,
+                    alphaTest: number,
+                    visible: boolean
+                }
+
+                export interface ITexPannerDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "panTexture",
+                    transform: {
+                        matrix: number[],
+                        rate: number,
+                        map: string
+                    }
+                }
+
+                export interface IBaseMaterialModifierDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "modifier",
+                    modifierType: DecodableMaterialModifier_T
+                }
+
+                export interface IFadeColorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "fadeColor",
+                    fadeColors: {
+                        color1: number[],
+                        color2: number[],
+                        period: number
+                    }
+                }
+
+                export interface IBoundsDecodeInfo {
+                    sphere: ISphereDecodeInfo,
+                    box: { min: Vector3Arr, max: Vector3Arr } | null
+                }
             }
         }
     }

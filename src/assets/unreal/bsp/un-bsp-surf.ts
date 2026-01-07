@@ -3,32 +3,32 @@ import { BufferValue } from "@l2js/core";
 import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 import { PolyFlags_T } from "../un-polys";
 
+const float = new BufferValue(BufferValue.float);
+const uint32 = new BufferValue(BufferValue.uint32);
+const int32 = new BufferValue(BufferValue.int32);
+const compat32 = new BufferValue(BufferValue.compat32);
+
 class FBSPSurf implements C.IConstructable {
-    declare public material: GA.UShader;
+    public material: GA.UShader;
 
-    declare public flags: number;       // 4 bytes polygon flags.
-    declare public polyFlags: C.FlagDict<keyof typeof PolyFlags_T>;
-    declare public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
-    declare public vNormal: number;          // 4 bytes index to polygon normal.
-    declare public vTextureU: number;        // 4 bytes texture U-vector index.
-    declare public vTextureV: number;        // 4 bytes texture V-vector index.
-    declare public iBrushPoly: number;       // 4 bytes editor brush polygon index.
-    declare public lightMapScale: number;
+    public flags: number;       // 4 bytes polygon flags.
+    public polyFlags: C.FlagDict<keyof typeof PolyFlags_T>;
+    public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
+    public vNormal: number;          // 4 bytes index to polygon normal.
+    public vTextureU: number;        // 4 bytes texture U-vector index.
+    public vTextureV: number;        // 4 bytes texture V-vector index.
+    public iBrushPoly: number;       // 4 bytes editor brush polygon index.
+    public lightMapScale: number;
 
-    declare public plane: FPlane;
+    public plane: FPlane;
 
-    declare public actor: GA.UBrush;            // 4 bytes brush actor owning this Bsp surface.
+    public actor: GA.UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
-    declare public unkInt32: number;
+    public unkInt32: number;
 
     public load(pkg: C.APackage): this {
         this.plane = FPlane.make();
-
-        const float = new BufferValue(BufferValue.float);
-        const uint32 = new BufferValue(BufferValue.uint32);
-        const int32 = new BufferValue(BufferValue.int32);
-        const compat32 = new BufferValue(BufferValue.compat32);
 
         const materialId = pkg.read(compat32).value;
 

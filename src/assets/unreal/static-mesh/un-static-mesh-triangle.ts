@@ -1,4 +1,3 @@
-import FVector from "../un-vector";
 import { BufferValue } from "@l2js/core";
 
 const uint32 = new BufferValue(BufferValue.uint32);

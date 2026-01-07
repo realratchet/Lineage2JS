@@ -1,6 +1,6 @@
 import UMeshInstance from "./un-mesh-instance";
 
-class USkeletalMeshInstance extends UMeshInstance {
+abstract class USkeletalMeshInstance extends UMeshInstance {
 
 }
 

@@ -1,16 +1,18 @@
-import FConstructable from "./un-constructable";
+
 
 import { BufferValue } from "@l2js/core";
 
-class FString extends FConstructable {
+const compat32 = new BufferValue(BufferValue.compat32);
+
+class FString implements C.IConstructable {
     public value: string;
 
     public load(pkg: C.APackage, tag?: C.PropertyTag): this {
 
-        const bufLen = pkg.read(new BufferValue(BufferValue.compat32)).value as number;
-        const buf = pkg.read(BufferValue.allocBytes(bufLen)).value as DataView;
+        const bufLen = pkg.read(compat32).value as number;
+        const buf = pkg.read(bufLen).getBytes();
 
-        this.value = new TextDecoder("ascii").decode(buf.buffer.slice(0, -1));
+        this.value = new TextDecoder("ascii").decode(buf.slice(0, -1));
 
         return this;
     }

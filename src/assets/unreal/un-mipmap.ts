@@ -1,6 +1,9 @@
 import { BufferValue } from "@l2js/core";
 import { FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 
+const int32 = new BufferValue(BufferValue.int32);
+const int8 = new BufferValue(BufferValue.int8);
+
 class FMipmap implements C.IConstructable {
     public readonly dataArray = new FPrimitiveArrayLazy(BufferValue.uint8);
 
@@ -11,9 +14,6 @@ class FMipmap implements C.IConstructable {
 
     public load(pkg: C.APackage, tag: C.PropertyTag): this {
         this.dataArray.load(pkg, tag);
-
-        const int32 = new BufferValue(BufferValue.int32);
-        const int8 = new BufferValue(BufferValue.int8);
 
         this.sizeW = pkg.read(int32).value;
         this.sizeH = pkg.read(int32).value;

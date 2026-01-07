@@ -1,5 +1,4 @@
 import GMath from "@client/assets/unreal/un-gmath";
-import FQuaternion from "@client/assets/unreal/un-quaternion";
 import { UObject } from "@l2js/core";
 
 
@@ -11,9 +10,9 @@ const _INV_TWO_TO_FIFTEEN = 1 / _TWO_TO_FIFTEEN;
 const _INV_TWO_TO_FIFTEEN_TIMES_PI = _INV_TWO_TO_FIFTEEN * _PI;
 
 enum RotName {
-    PITCH,							// looking up and down (0=Straight Ahead, +Up, -Down).
-    YAW,							// rotating around (running in circles), 0=East, +North, -South.
-    ROLL							// rotation about axis of screen, 0=Straight, +Clockwise, -CCW.
+    PITCH,                          // looking up and down (0=Straight Ahead, +Up, -Down).
+    YAW,                            // rotating around (running in circles), 0=East, +North, -South.
+    ROLL                            // rotation about axis of screen, 0=Straight, +Clockwise, -CCW.
 }
 
 abstract class FRotator extends UObject {

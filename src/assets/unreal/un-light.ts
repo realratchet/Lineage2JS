@@ -100,12 +100,12 @@ class FDynamicLight {
                 state = { lastUpdateTime: levelInfo.timeSeconds, toggle: 0 };
                 strobeStateMap.set(actor, state);
             }
-            
+
             if (state.lastUpdateTime !== levelInfo.timeSeconds) {
                 state.lastUpdateTime = levelInfo.timeSeconds;
                 state.toggle ^= 1;
             }
-            
+
             if (state.toggle) intensity = 0.0;
             else intensity = 1.0;
         }

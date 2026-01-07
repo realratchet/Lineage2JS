@@ -1,5 +1,8 @@
 import { BufferValue } from "@l2js/core";
 
+const compat32 = new BufferValue(BufferValue.compat32);
+const uint64 = new BufferValue(BufferValue.uint64);
+
 class FLeaf implements C.IConstructable {
     public iZone: number;
     public iPermeating: number;
@@ -7,9 +10,6 @@ class FLeaf implements C.IConstructable {
     public visibleZones: bigint;
 
     public load(pkg: C.APackage): this {
-        const compat32 = new BufferValue(BufferValue.compat32);
-        const uint64 = new BufferValue(BufferValue.uint64);
-
         this.iZone = pkg.read(compat32).value;
         this.iPermeating = pkg.read(compat32).value;
         this.iVolumetric = pkg.read(compat32).value;
@@ -18,7 +18,7 @@ class FLeaf implements C.IConstructable {
         return this;
     }
 
-    public getDecodeInfo(): IBSPLeafDecodeInfo_T {
+    public getDecodeInfo(): GD.IBSPLeafDecodeInfo_T {
         return {
             zone: this.iZone,
             permiating: this.iPermeating,

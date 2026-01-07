@@ -11,10 +11,9 @@ import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import FArray, { FIndexArray, FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
-import { dumpBspTreeArtifacts } from "@client/utils/bsp-dump";
 
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -70,8 +69,8 @@ abstract class UModel extends UPrimitive {
 
     protected doLoad(pkg: C.APackage, exp: C.UExport): this {
 
-        const verArchive = pkg.header.getArchiveFileVersion();
-        const verLicense = pkg.header.getLicenseeVersion();
+        // const verArchive = pkg.header.getArchiveFileVersion();
+        // const verLicense = pkg.header.getLicenseeVersion();
 
         // console.assert(verArchive === 123, "Archive version differs, will likely not work.");
         // console.assert(verLicense === 23, "Licensee version differs, will likely not work.");

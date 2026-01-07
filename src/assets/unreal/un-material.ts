@@ -1,5 +1,4 @@
-import UPackage from "@client/assets/unreal/un-package";
-import UObject, { APackage, UExport } from "@l2js/core";
+import UObject from "@l2js/core";
 import DecodeLibrary from "./decode-library";
 
 abstract class UBaseMaterial extends UObject {
@@ -458,7 +457,7 @@ abstract class UTexPanner extends UBaseModifier {
                 map: this.material?.loadSelf().getDecodeInfo(library) || null,
                 rate: this.rate
             }
-        } as GA.ITexPannerDecodeInfo;
+        } as GD.ITexPannerDecodeInfo;
 
         return this.material.uuid;
     }
