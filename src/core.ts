@@ -466,10 +466,9 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
-
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins

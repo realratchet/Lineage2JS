@@ -1,7 +1,7 @@
 // @ts-nocheck
 // import * as C from "node_modules/@l2js/core/index";
 
-import { UObject as UObject_ } from "node_modules/@l2js/core/src/unreal/un-object";
+import type { UObject as UObject_ } from "@l2js/core/src/unreal/un-object";
 
 declare module "@l2js/core" {
     abstract class UObject extends UObject_ {

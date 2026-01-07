@@ -9,7 +9,7 @@
         "build-dev": "rm -rf bin/ && node_modules/.bin/webpack --config configs/development.config.js"
     },
     "keywords": [],
-    "author": "",
+    "author": "Ratchet",
     "license": "ISC",
     "devDependencies": {
         "@babel/core": "^7.17.9",
@@ -38,7 +38,7 @@
     },
     "dependencies": {
         "@dimforge/rapier3d": "^0.9.0",
-        "@l2js/core": "file:../l2js-core",
+        "@l2js/core": "git+ssh://git@github.com:realratchet/l2js-core.git#stable",
         "chokidar": "^5.0.0",
         "dat.gui": "^0.7.9",
         "gmp-wasm": "^1.1.0",

@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
-const { SourceMapDevToolPlugin } = require("webpack");
+// const { SourceMapDevToolPlugin } = require("webpack");
 
 function* walkSync(dir) {
     const files = fs.readdirSync(dir, { withFileTypes: true });
