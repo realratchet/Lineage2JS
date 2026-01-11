@@ -412,7 +412,7 @@ abstract class ULight extends UAActor {
             name: this.objectName,
             position: this.location.getVectorElements(),
             scale: this.scale.getVectorElements(),
-            rotation: this.rotation?.getEulerElements() || [0, 0, 0, "XYZ"],
+            quaternion: this.rotation.getQuaternionElements() || [0, 0, 0, 1],
             children: [/*this.getRegionLineHelper(library, [1, 0, 0])*/]
         };
     }

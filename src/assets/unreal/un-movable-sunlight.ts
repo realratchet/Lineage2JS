@@ -15,26 +15,35 @@ abstract class UNMovableSunLight extends ULight {
     //     super.doLoad(pkg, exp);
 
     //     this.readHead = pkg.tell();
-    // }
+    // 
 
-    public getDecodeInfo(library: GD.DecodeLibrary): any {
-        // ((color pane x (bri x 0.0039215689)) x 1.0) x scale_glow
-        // not exactly sure why that 1.0 is constant and if it's always constant, need to trace paths
-
-
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISunLightDecodeInfo {
         return {
-            type: "Sunlight",
-            name: this.objectName,
+            ...super.getDecodeInfo(library),
             light: this,
-            position: this.location.getVectorElements(),
-            rotation: this.rotation.getEulerElements(),
-            scale: this.scale.getVectorElements(),
-            color: this.getColor(),
-            lightness: saturationToBrightness(this.brightness),
-            lightType: this.type,
-            lightEffect: this.effect
+            type: "Sunlight"
         };
     }
+
+    // public getDecodeInfo(library: GD.DecodeLibrary): any {
+    //     // ((color pane x (bri x 0.0039215689)) x 1.0) x scale_glow
+    //     // not exactly sure why that 1.0 is constant and if it's always constant, need to trace paths
+
+    //     debugger;
+
+    //     return {
+    //         type: "Sunlight",
+    //         name: this.objectName,
+    //         light: this,
+    //         position: this.location.getVectorElements(),
+    //         quaternion: this.rotation.getQuaternionElements(),
+    //         scale: this.scale.getVectorElements(),
+    //         color: this.getColor(),
+    //         lightness: saturationToBrightness(this.brightness),
+    //         lightType: this.type,
+    //         lightEffect: this.effect
+    //     };
+    // }
 }
 
 export default UNMovableSunLight;

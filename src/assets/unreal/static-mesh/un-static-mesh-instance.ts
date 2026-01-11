@@ -49,7 +49,7 @@ abstract class UStaticMeshInstance extends UObject {
 
 
 
-    public getDecodeInfo(library: GD.DecodeLibrary): any {
+    public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array, lights: GD.ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color = new Float32Array(len * 3);
         const envManager = this.actor.levelInfo.getL2Env();
@@ -64,56 +64,72 @@ abstract class UStaticMeshInstance extends UObject {
             color[offset + 2] = b / 255;
         }
 
-        let validEnvironment: FStaticMeshLightInfo = null;
-        let startIndex: number;
-        let finishIndex: number;
-        // let startTime: number, finishTime: number;
+        // let validEnvironment: FStaticMeshLightInfo = null;
+        // let startIndex: number;
+        // let finishIndex: number;
+        // // let startTime: number, finishTime: number;
 
-        let lightingColor: GD.ColorArr;
+        // let lightingColor: GD.ColorArr;
 
-        for (let i = 0, len = this.environmentLights.length; i < len; i++) {
-            const timeForIndex = indexToTime(i, len);
+        // for (let i = 0, len = this.environmentLights.length; i < len; i++) {
+        //     const timeForIndex = indexToTime(i, len);
 
-            if (timeForIndex > envManager.getTimeOfDay()) {
-                validEnvironment = this.environmentLights[i];
-                startIndex = i;
-                finishIndex = i + 1;
-                // startTime = timeForIndex;
-                // finishTime = indexToTime(finishIndex, len);
-                const light = envManager.selectByTime(env.lightStaticMesh);
-                lightingColor = light ? light.getColor() : [1, 1, 1, 1];
+        //     if (timeForIndex > envManager.getTimeOfDay()) {
+        //         validEnvironment = this.environmentLights[i];
+        //         startIndex = i;
+        //         finishIndex = i + 1;
+        //         // startTime = timeForIndex;
+        //         // finishTime = indexToTime(finishIndex, len);
+        //         const light = envManager.selectByTime(env.lightStaticMesh);
+        //         lightingColor = light ? light.getColor() : [1, 1, 1, 1];
 
-                break;
+        //         break;
+        //     }
+        // }
+
+        // // const rgb = this.sceneLights[0].light.hue;
+
+        // // debugger;
+
+        // // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "Exp_oren_curumadungeon19")
+        // //     console.warn("Mesh has lights:", this.sceneLights.length, "index:", this.actor.exportIndex+1);
+
+        // // debugger;
+
+        let offset = 0;
+
+        const sceneRanges: [string, number, number][] = [];
+        const environmentRanges: [string, number, number][] = [];
+
+        let totalLength = 0;
+
+        for (const l of this.sceneLights) totalLength += l.vertexFlags.getElemCount();
+        for (const l of this.environmentLights) totalLength += l.vertexFlags.getElemCount();
+
+        const flags = new Uint8Array(totalLength);
+
+        for (const [lights, container] of ([
+            [this.sceneLights, sceneRanges],
+            [this.environmentLights, environmentRanges]
+        ]) as ([FArray<FStaticMeshLightInfo>, [string, number, number][]][])) {
+            for (const light of lights) {
+                const arr = light.vertexFlags.getTypedArray(), arrLen = arr.length;
+
+                flags.set(arr, offset);
+                container.push([light.light.uuid, offset, arrLen]);
+                offset += arrLen;
             }
         }
-
-        // const rgb = this.sceneLights[0].light.hue;
-
-        // debugger;
-
-        // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "Exp_oren_curumadungeon19")
-        //     console.warn("Mesh has lights:", this.sceneLights.length, "index:", this.actor.exportIndex+1);
-
-        // debugger;
 
         return {
             color,
             lights: {
-                // scene: [],
-                // environment: null
-                scene: this.sceneLights,
-                environment: validEnvironment ? {
-                    color: lightingColor,
-                    ...validEnvironment
-                } : null
+                matrix: this.actor.getWorldMatrixElements(),
+                flags: flags.buffer,
+                scene: sceneRanges,
+                environment: environmentRanges
             }
         };
-
-        // const allLights = [...this.sceneLights/*, ...this.unkLights1*/];
-        // const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
-        // const filteredMaps = (Object.values(filteredMapsDict) as ULight[]);//.filter(l => l.getZone() === this.actor.getZone());
-
-        // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }
 
     protected doLoad(pkg: C.APackage, exp: C.UExport): this {

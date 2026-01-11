@@ -113,6 +113,7 @@ declare global {
 
                 export type Vector2Arr = [number, number];
                 export type Vector4Arr = [number, number, number, number];
+                export type Matrix4Arr = number[] & { length: 16 };
                 export type QuaternionArr = Vector4Arr;
                 export type ColorArr = Vector4Arr;
                 export type Vector3Arr = [number, number, number];
@@ -156,6 +157,7 @@ declare global {
                     | "StaticMesh"
                     | "Model"
                     | "Light"
+                    | "Sunlight"
                     | "Edges"
                     | "SkinnedMesh"
                     | "Bone"
@@ -190,11 +192,19 @@ declare global {
                     materials?: string
                 }
 
+                export interface ILightInstanceDecodeInfo {
+                    matrix: Matrix4Arr,
+                    flags: ArrayBuffer,
+                    scene: [string, number, number][],
+                    environment: [string, number, number][]
+                }
+
                 export interface IStaticMeshInstanceDecodeInfo {
                     uuid?: string,
                     name?: string,
                     type: "StaticMeshInstance",
                     mesh: IStaticMeshObjectDecodeInfo,
+                    lights?: ILightInstanceDecodeInfo,
                     attributes?: {
                         colors?: Float32Array
                     }
@@ -365,6 +375,10 @@ declare global {
                     lightType: GA.LightType_T,
                     lightEffect: GA.LightEffect_T,
                     cone: number
+                }
+
+                export interface ISunLightDecodeInfo extends Omit<ILightDecodeInfo, "type"> {
+                    type: "Sunlight"
                 }
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {

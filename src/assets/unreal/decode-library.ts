@@ -22,6 +22,7 @@ class DecodeLibrary {
     public readonly materials: Record<string, GD.IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
     public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
     public readonly leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][] = [];
+    public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
 
     public failed: any[] = [];
     public failedLoad: any[] = [];
@@ -42,7 +43,7 @@ class DecodeLibrary {
         const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
-        
+
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
         const uLevelInfo = uLevel.levelInfo.loadSelf();
 
@@ -77,6 +78,19 @@ class DecodeLibrary {
         if (loadTerrain && expGroups?.TerrainInfo?.length > 0) {
             const terrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
             terrainInfo.getDecodeInfo(decodeLibrary);
+        }
+
+        {
+            const actorTypesToLoad = ["Light", "NMovableSunLight"];
+            const uActorsToLoad = actorTypesToLoad.map(t => expGroups[t]).flat();
+
+            uActorsToLoad
+                .map(exp => {
+                    const uActor = pkg.fetchObject<GA.ULight>(exp.index + 1).loadSelf();
+                    const dActor = uActor.getDecodeInfo(decodeLibrary);
+
+                    decodeLibrary.lightActors.push(dActor);
+                });
         }
 
         if (loadEmitters) {

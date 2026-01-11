@@ -397,10 +397,10 @@ async function startCore() {
     const loadSettings = {
         env: env,
         helpersZoneBounds: false,
-        loadTerrain: true,
+        loadTerrain: false,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: true,
+        loadEmitters: false,
         _loadStaticModelList: [
             // 1441,
             // 1770,

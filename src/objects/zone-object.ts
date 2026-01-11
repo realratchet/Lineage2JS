@@ -1,4 +1,4 @@
-import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh } from "three";
+import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion } from "three";
 
 const tmpColor = new Color();
 const tmpVec4 = new Vector4();
@@ -55,6 +55,25 @@ class ZoneObject extends Object3D {
     // }
 }
 
+export interface ILightInfo {
+    uuid: string;
+    type: "Light" | "Sunlight";
+    name: string;
+
+
+
+    position: Vector3,
+    quaternion: Quaternion,
+
+    isDynamic: boolean,
+    color: Color,
+    radius: number,
+    isDirectional: boolean,
+    lightType: GA.LightType_T,
+    lightEffect: GA.LightEffect_T,
+    cone: number
+}
+
 class SectorObject extends Object3D {
     public readonly isSectorObject = true;
     public readonly type = "Sector";
@@ -74,13 +93,23 @@ class SectorObject extends Object3D {
     public bspGroup?: THREE.Group;
     public staticMeshGroup?: THREE.Group;
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
+    public readonly lights: Record<string, ILightInfo> = {};
+
     protected _lastLoggedStaticMeshLeaf: number | null = null;
 
     // Internal state for zone/leaf change tracking
     private _lastLoggedZone: number | null = null;
     private _lastLoggedLeaf: number | null = null;
 
-    constructor() {
+    public setLights(lights: ILightInfo[]): this {
+        for (const light of lights) {
+            this.lights[light.uuid] = light;
+        }
+
+        return this;
+    }
+
+    public constructor() {
         super();
 
         this.helpers.name = "SectorHelpers";
@@ -464,7 +493,7 @@ class SectorObject extends Object3D {
                         // UE2 portal recursion limit: Recursion < MAX_RECURSION_DEPTH - 1
                         // This means we can see through portals up to depth 3 (0-indexed: 0, 1, 2, 3)
                         // Total of 4 levels: initial zone (0) + 3 portal hops (1, 2, 3)
-                        
+
                         // Distance-based portal culling: don't expand through portals that are too far away
                         // This prevents performance issues when hub zones (like zone 2) connect to many distant zones
                         // Portal sphere radius is typically 200-400 units, so 5000 units is a reasonable limit
@@ -472,8 +501,8 @@ class SectorObject extends Object3D {
                         const portalSphere = currentNode.exclusiveSphereBound;
                         const portalDistance = cameraPosition.distanceTo(portalSphere.center);
                         const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
-                        
-                        const portalVisible = isCurrentZoneActive && 
+
+                        const portalVisible = isCurrentZoneActive &&
                             isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
@@ -481,43 +510,43 @@ class SectorObject extends Object3D {
                         if (leafOnlyMode) {
                             // Don't expand portals when camera is outside sector
                         } else if (portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
-                                // Check if opposite zone is already in the mask (avoid redundant work)
-                                const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
-                                
-                                if (!alreadyAdded) {
-                                    // UE2-style: the recursion depth for the new zone is based on the depth of the
-                                    // *current* zone, not the minimum depth of any active zone.
-                                    //
-                                    // IMPORTANT: The previous logic took the minimum depth across all active zones.
-                                    // Since the camera zone is always depth 0, that effectively made every portal hop
-                                    // look like depth 1 and allowed multi-portal chains to expand without increasing depth.
-                                    const sourceDepth = zoneDepthMap.get(currentZone) ?? recursionDepth;
+                            // Check if opposite zone is already in the mask (avoid redundant work)
+                            const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
 
-                                    // Connectivity is defined per-zone. Only allow expansion if the current zone
-                                    // is connected to the opposite zone.
-                                    let isConnected = true;
-                                    if (this.bspZones && currentZone >= 0 && currentZone < this.bspZones.length) {
-                                        const zoneData = this.bspZones[currentZone];
-                                        if (zoneData && zoneData.connectivity) {
-                                            isConnected = !!(zoneData.connectivity & (1n << BigInt(oppositeZone)));
-                                        }
+                            if (!alreadyAdded) {
+                                // UE2-style: the recursion depth for the new zone is based on the depth of the
+                                // *current* zone, not the minimum depth of any active zone.
+                                //
+                                // IMPORTANT: The previous logic took the minimum depth across all active zones.
+                                // Since the camera zone is always depth 0, that effectively made every portal hop
+                                // look like depth 1 and allowed multi-portal chains to expand without increasing depth.
+                                const sourceDepth = zoneDepthMap.get(currentZone) ?? recursionDepth;
+
+                                // Connectivity is defined per-zone. Only allow expansion if the current zone
+                                // is connected to the opposite zone.
+                                let isConnected = true;
+                                if (this.bspZones && currentZone >= 0 && currentZone < this.bspZones.length) {
+                                    const zoneData = this.bspZones[currentZone];
+                                    if (zoneData && zoneData.connectivity) {
+                                        isConnected = !!(zoneData.connectivity & (1n << BigInt(oppositeZone)));
                                     }
-                                    
-                                    if (isConnected) {
-                                        // Calculate new recursion depth for the portal expansion
-                                        const newDepth = sourceDepth + 1;
-                                        
-                                        // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
-                                        // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
-                                        if (newDepth < MAX_RECURSION_DEPTH) {
-                                            currentZoneMask |= (1n << BigInt(oppositeZone));
-                                            zoneDepthMap.set(oppositeZone, newDepth);
-                                            // Track that this zone was added through a portal
-                                            zonesAddedThroughPortals.add(oppositeZone);
-                                        }
+                                }
+
+                                if (isConnected) {
+                                    // Calculate new recursion depth for the portal expansion
+                                    const newDepth = sourceDepth + 1;
+
+                                    // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
+                                    // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
+                                    if (newDepth < MAX_RECURSION_DEPTH) {
+                                        currentZoneMask |= (1n << BigInt(oppositeZone));
+                                        zoneDepthMap.set(oppositeZone, newDepth);
+                                        // Track that this zone was added through a portal
+                                        zonesAddedThroughPortals.add(oppositeZone);
                                     }
                                 }
                             }
+                        }
                     }
 
                     // Frustum Culling & Visibility
@@ -548,7 +577,7 @@ class SectorObject extends Object3D {
                 if (leaf && leaf.zone >= 0) {
                     const leafZoneBit = 1n << BigInt(leaf.zone);
                     const isZoneInMask = !!(leafZoneBit & currentZoneMask);
-                    
+
                     // Only include leaf if its zone is in the final zone mask
                     // If the zone was added through a portal, it's already been validated as visible
                     // (zonesAddedThroughPortals only contains zones added through visible portals)
@@ -576,10 +605,10 @@ class SectorObject extends Object3D {
         // Check if camera is within this sector (by finding valid leaf)
         const cameraLeaf = this.findPositionLeaf(cameraPosition);
         const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
-        
+
         // Hide helpers when camera is outside sector
         this.helpers.visible = isCameraInSector;
-        
+
         // If camera is outside sector, only render leaf 1 (no portal expansion)
         const leafOnlyMode = !isCameraInSector;
 
@@ -672,10 +701,10 @@ class SectorObject extends Object3D {
         // Check if camera is within this sector (by finding valid leaf)
         const cameraLeaf = this.findPositionLeaf(cameraPosition);
         const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
-        
+
         // Hide helpers when camera is outside sector
         this.helpers.visible = isCameraInSector;
-        
+
         // If camera is outside sector, only render leaf 1 (no portal expansion)
         const leafOnlyMode = !isCameraInSector;
         const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition); // Zone 1 bitmask if leaf-only
@@ -713,7 +742,12 @@ class SectorObject extends Object3D {
         this.staticMeshMap.forEach((object, uuid) => {
             const isVisible = visibleActorUuids.has(uuid);
             object.visible = isVisible;
-            if (isVisible) visibleCount++;
+            if (isVisible) {
+                visibleCount++;
+                if((object as any).isUpdatable) {
+                    (object as any)?.update(this);
+                }
+            }
         });
 
         const leafIndex = this.findPositionLeaf(cameraPosition);

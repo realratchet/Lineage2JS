@@ -122,6 +122,57 @@ abstract class UAActor extends UObject {
         return result;
     }
 
+    public getWorldMatrixElements(): GD.Matrix4Arr {
+        const gm = GMath();
+        const SR = gm.sin(this.rotation.roll),
+            SP = gm.sin(this.rotation.pitch),
+            SY = gm.sin(this.rotation.yaw),
+            CR = gm.cos(this.rotation.roll),
+            CP = gm.cos(this.rotation.pitch),
+            CY = gm.cos(this.rotation.yaw);
+
+        const LX = this.location.x,
+            LY = this.location.y,
+            LZ = this.location.z,
+            PX = this.prePivot.x,
+            PY = this.prePivot.y,
+            PZ = this.prePivot.z;
+
+        const DX = this.scale.x * this.drawScale,
+            DY = this.scale.y * this.drawScale,
+            DZ = this.scale.z * this.drawScale;
+
+        // Calculate UE2 matrix components (same as localToWorld)
+        const ue2_XX = CP * CY * DX;
+        const ue2_XY = CP * DX * SY;
+        const ue2_XZ = DX * SP;
+
+        const ue2_YX = DY * (CY * SP * SR - CR * SY);
+        const ue2_YY = DY * (CR * CY + SP * SR * SY);
+        const ue2_YZ = -CP * DY * SR;
+
+        const ue2_ZX = -DZ * (CR * CY * SP + SR * SY);
+        const ue2_ZY = DZ * (CY * SR - CR * SP * SY);
+        const ue2_ZZ = CP * CR * DZ;
+
+        const ue2_WX = LX - CP * CY * DX * PX + CR * CY * DZ * PZ * SP - CY * DY * PY * SP * SR + CR * DY * PY * SY + DZ * PZ * SR * SY;
+        const ue2_WY = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
+        const ue2_WZ = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
+
+        // Convert to Three.js coordinate system by swapping Y and Z axes
+        // UE2: X=forward, Y=right, Z=up
+        // Three.js: X=right, Y=up, Z=forward (when vertices are stored as X,Z,Y)
+        // Mapping: Three.X = UE2.X, Three.Y = UE2.Z, Three.Z = UE2.Y
+
+        // Return in column-major order for Three.js Matrix4
+        return [
+            ue2_XX, ue2_XZ, ue2_XY, 0,  // Column 0 (Three.js X axis = UE2 X axis)
+            ue2_ZX, ue2_ZZ, ue2_ZY, 0,  // Column 1 (Three.js Y axis = UE2 Z axis)
+            ue2_YX, ue2_YZ, ue2_YY, 0,  // Column 2 (Three.js Z axis = UE2 Y axis)
+            ue2_WX, ue2_WZ, ue2_WY, 1   // Column 3 (position)
+        ];
+    }
+
     protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();
         const _a = this.region.getZone().location;
