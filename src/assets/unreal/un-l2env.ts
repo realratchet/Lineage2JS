@@ -34,6 +34,10 @@ abstract class FNTimeHSV extends UObject implements IEnvTime {
 
     public getColor(): GD.ColorArr { return [...hsvToRgb(this.hue, this.sat, 255), 1]; }
     public toColorPlane() { return FPlane.make(...this.getColor()); }
+
+    public getDecodeInfo(): GD.INTimeHSVDecodeInfo {
+        return [this.time, this.hue, this.sat, this.bri];
+    }
 }
 
 abstract class FNTimeColor extends UObject implements IEnvTime {
@@ -57,6 +61,10 @@ abstract class FNTimeColor extends UObject implements IEnvTime {
 
     public toColorPlane() { return FPlane.make(...this.getColor()); }
     public getColor(): GD.ColorArr { return [this.r / 255, this.g / 255, this.b / 255, 1]; }
+
+    public getDecodeInfo(): GD.INTimeColorDecodeInfo {
+        return [this.time, this.r, this.g, this.b];
+    }
 }
 
 abstract class FNTimeScale extends UObject implements IEnvTime {
@@ -72,6 +80,10 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
 
     public toString(): string {
         return `NTimeScale(T=${this.time}, S=${this.s})`;
+    }
+
+    public getDecodeInfo(): GD.INTimeScaleDecodeInfo {
+        return [this.time, this.s];
     }
 }
 
@@ -112,6 +124,15 @@ abstract class UL2NTimeLight extends UObject {
         this.lightBSP = loadHSV(fileContents, "HSVBSPLight", pkgNative, pkgEngine);
 
         return this;
+    }
+
+    public getDecodeInfo(): GD.IL2NTimeLightDecodeInfo | unknown {
+        return {
+            terrain: { type: "TimeHSV", array: this.lightTerrain?.map(c => c.getDecodeInfo()) ?? [] },
+            actor: { type: "TimeHSV", array: this.lightActor?.map(c => c.getDecodeInfo()) ?? [] },
+            staticMesh: { type: "TimeHSV", array: this.lightStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
+            bsp: { type: "TimeHSV", array: this.lightBSP?.map(c => c.getDecodeInfo()) ?? [] }
+        } as GD.IL2NTimeLightDecodeInfo;
     }
 }
 
@@ -175,7 +196,9 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
     declare public colorIndexHaze: C.FPrimitiveArray<"int32">;
     declare public colorHaze: C.FArray<FNTimeColor>;
     declare public colorIndexCloud: C.FPrimitiveArray<"int32">;
-    declare public colorCloud: C.FArray<FNTimeColor>;
+    declare public colorCloud1: C.FArray<FNTimeColor>;
+    declare public colorCloud2: C.FArray<FNTimeColor>;
+    declare public colorCloud3: C.FArray<FNTimeColor>;
     declare public colorStar: C.FArray<FNTimeColor>;
     declare public colorSun: C.FArray<FNTimeColor>;
     declare public colorMoon: C.FArray<FNTimeColor>;
@@ -189,26 +212,6 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
     declare public scaleMoon: C.FArray<FNTimeScale>;
 
     declare public envType: EEnvCycle;
-
-    protected getPropertyMap(): Record<string, string> {
-        return Object.assign({}, super.getPropertyMap(), {
-            "SkyColor": "colorSky",
-            "HazeColorIndex": "colorIndexHaze",
-            "HazeColor": "colorHaze",
-            "CloudColorIndex": "colorIndexCloud",
-            "CloudColor": "colorCloud",
-            "StarColor": "colorStar",
-            "SunColor": "colorSun",
-            "MoonColor": "colorMoon",
-            "TerrainAmbient": "ambientTerrain",
-            "ActorAmbient": "ambientActor",
-            "StaticMeshAmbient": "ambientStaticMesh",
-            "BSPAmbient": "ambientBSP",
-            "SunScale": "scaleSun",
-            "MoonScale": "scaleMoon",
-            "EnvType": "envType"
-        });
-    }
 
     protected loadFromText(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this {
         super.loadFromText(fileContents, pkgNative, pkgEngine);
@@ -229,6 +232,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         this.colorSky = loadRGB(fileContents, "SkyBoxColor", pkgNative, pkgEngine);
         this.colorHaze = loadRGB(fileContents, "HazeringColor", pkgNative, pkgEngine);
 
+        this.colorCloud1 = loadRGB(fileContents, "CloudColor1", pkgNative, pkgEngine);
+        this.colorCloud2 = loadRGB(fileContents, "CloudColor2", pkgNative, pkgEngine);
+        this.colorCloud3 = loadRGB(fileContents, "CloudColor3", pkgNative, pkgEngine);
+
         return this;
     }
 
@@ -243,6 +250,35 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         }
 
         return `UL2NEnvLight(EnvType=${envName})`;
+    }
+
+    public getDecodeInfo(): GD.IL2NEnvLightDecodeInfo {
+        return {
+            type: this.envType,
+            light: super.getDecodeInfo() as GD.IL2NTimeLightDecodeInfo,
+            color: {
+                sky: { type: "TimeColor", array: this.colorSky?.map(c => c.getDecodeInfo()) ?? [] },
+                indexHaze: { type: "TypedArray", array: this.colorIndexHaze?.getTypedArray() ?? new Int32Array(0) },
+                haze: { type: "TimeColor", array: this.colorHaze?.map(c => c.getDecodeInfo()) ?? [] },
+                indexCloud: { type: "TypedArray", array: this.colorIndexCloud?.getTypedArray() ?? new Int32Array(0) },
+                cloud1: { type: "TimeColor", array: this.colorCloud1?.map(c => c.getDecodeInfo()) ?? [] },
+                cloud2: { type: "TimeColor", array: this.colorCloud2?.map(c => c.getDecodeInfo()) ?? [] },
+                cloud3: { type: "TimeColor", array: this.colorCloud3?.map(c => c.getDecodeInfo()) ?? [] },
+                star: { type: "TimeColor", array: this.colorStar?.map(c => c.getDecodeInfo()) ?? [] },
+                sun: { type: "TimeColor", array: this.colorSun?.map(c => c.getDecodeInfo()) ?? [] },
+                moon: { type: "TimeColor", array: this.colorMoon?.map(c => c.getDecodeInfo()) ?? [] }
+            },
+            ambient: {
+                terrain: { type: "TimeHSV", array: this.ambientTerrain?.map(c => c.getDecodeInfo()) ?? [] },
+                actor: { type: "TimeHSV", array: this.ambientActor?.map(c => c.getDecodeInfo()) ?? [] },
+                staticMesh: { type: "TimeHSV", array: this.ambientStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
+                bsp: { type: "TimeHSV", array: this.ambientBSP?.map(c => c.getDecodeInfo()) ?? [] }
+            },
+            scale: {
+                sun: { type: "TimeScale", array: this.scaleSun?.map(c => c.getDecodeInfo()) ?? [] },
+                moon: { type: "TimeScale", array: this.scaleMoon?.map(c => c.getDecodeInfo()) ?? [] }
+            }
+        }
     }
 }
 
@@ -278,11 +314,6 @@ class UL2NEnvManager {
         this.timeOfDay = this.timeOfDay % 24.0;
     }
 
-    // Time management
-    public setTimeOfDay(timeOfDay: number): void {
-        this.timeOfDay = Math.max(0.0, Math.min(24.0, timeOfDay));
-        this.updateEnvironmentalState();
-    }
 
     public getTimeOfDay(): number {
         return this.timeOfDay;

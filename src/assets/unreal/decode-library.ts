@@ -29,7 +29,7 @@ class DecodeLibrary {
     public failedDecode: any[] = [];
     // public sun: GD.ISunDecodeInfo_T;
 
-    public static async fromPackage(pkg: C.APackage, {
+    public static fromPackage(pkg: C.APackage, {
         env,
         loadBaseModel = true,
         loadStaticModels = true,

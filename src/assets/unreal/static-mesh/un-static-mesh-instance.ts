@@ -116,7 +116,7 @@ abstract class UStaticMeshInstance extends UObject {
                 const arr = light.vertexFlags.getTypedArray(), arrLen = arr.length;
 
                 flags.set(arr, offset);
-                container.push([light.light.uuid, offset, arrLen]);
+                container.push([light.light.objectName, offset, arrLen]);
                 offset += arrLen;
             }
         }

@@ -250,7 +250,7 @@ abstract class UStaticMeshActor extends UAActor {
         return this.uuid;
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, lights: any): void {
+    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, lights?: GD.ILightInstanceDecodeInfo): void {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
@@ -259,14 +259,14 @@ abstract class UStaticMeshActor extends UAActor {
             return;
         }
 
-        const attributes = geometryInfo.attributes;
-        if (!instanceColors) {
-            const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
-                color: new Float32Array(attributes.positions.length).fill(0),
-                lights: { scene: [], ambient: [] }
-            });
-            instanceColors = instance.color;
-        }
+        // const attributes = geometryInfo.attributes;
+        // if (!instanceColors) {
+        //     const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
+        //         color: new Float32Array(attributes.positions.length).fill(0),
+        //         lights: { scene: [], ambient: [] }
+        //     });
+        //     instanceColors = instance.color;
+        // }
 
         const level = this.getLevel();
         const baseModel = level.getModel();
@@ -281,6 +281,7 @@ abstract class UStaticMeshActor extends UAActor {
             type: "StaticMeshActor",
             name: this.objectName,
             position: _position,
+            scaledGlow: this.scaleGlow,
             scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
             instance: {
@@ -471,22 +472,22 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
 
                 const intensity = scaleGlow * light.sampleIntensity(samplingPoint, samplingNormal);
 
-                {
-                    const v = new Vector3(attrPositions[ox], attrPositions[oz], attrPositions[oy]).applyMatrix4(mat4);
-                    const n = new Vector3(attrNormals[ox], attrNormals[oz], attrNormals[oy]).transformDirection(mat4);
+                // {
+                //     const v = new Vector3(attrPositions[ox], attrPositions[oz], attrPositions[oy]).applyMatrix4(mat4);
+                //     const n = new Vector3(attrNormals[ox], attrNormals[oz], attrNormals[oy]).transformDirection(mat4);
 
-                    const dvx = v.x - samplingPoint.x, dvy = v.z - samplingPoint.y, dvz = v.y - samplingPoint.z;
-                    const dnx = n.x - samplingNormal.x, dny = n.z - samplingNormal.y, dnz = n.y - samplingNormal.z;
+                //     const dvx = v.x - samplingPoint.x, dvy = v.z - samplingPoint.y, dvz = v.y - samplingPoint.z;
+                //     const dnx = n.x - samplingNormal.x, dny = n.z - samplingNormal.y, dnz = n.y - samplingNormal.z;
 
-                    // console.log(`diff position: ${dvx}, ${dvy}, ${dvz}`);
-                    // console.log(`diff normal: ${dnx}, ${dny}, ${dnz}`);
+                //     // console.log(`diff position: ${dvx}, ${dvy}, ${dvz}`);
+                //     // console.log(`diff normal: ${dnx}, ${dny}, ${dnz}`);
 
-                    if (
-                        Math.abs(dvx) > 1e-5 || Math.abs(dvy) > 1e-5 || Math.abs(dvz) > 1e-5 ||
-                        Math.abs(dnx) > 1e-5 || Math.abs(dny) > 1e-5 || Math.abs(dnz) > 1e-5
-                    )
-                        debugger;
-                }
+                //     if (
+                //         Math.abs(dvx) > 1e-5 || Math.abs(dvy) > 1e-5 || Math.abs(dvz) > 1e-5 ||
+                //         Math.abs(dnx) > 1e-5 || Math.abs(dny) > 1e-5 || Math.abs(dnz) > 1e-5
+                //     )
+                //         debugger;
+                // }
 
                 r = light.color.x * intensity;
                 g = light.color.y * intensity;

@@ -1,3 +1,5 @@
+import DynamicLight from "@client/objects/dynamic-light";
+import type { L2Environment } from "@client/rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion } from "three";
 
 const tmpColor = new Color();
@@ -93,7 +95,7 @@ class SectorObject extends Object3D {
     public bspGroup?: THREE.Group;
     public staticMeshGroup?: THREE.Group;
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
-    public readonly lights: Record<string, ILightInfo> = {};
+    public readonly lights: Record<string, DynamicLight> = {};
 
     protected _lastLoggedStaticMeshLeaf: number | null = null;
 
@@ -101,9 +103,9 @@ class SectorObject extends Object3D {
     private _lastLoggedZone: number | null = null;
     private _lastLoggedLeaf: number | null = null;
 
-    public setLights(lights: ILightInfo[]): this {
+    public setLights(lights: DynamicLight[]): this {
         for (const light of lights) {
-            this.lights[light.uuid] = light;
+            this.lights[light.name] = light;
         }
 
         return this;
@@ -691,8 +693,141 @@ class SectorObject extends Object3D {
         }
     }
 
+    protected updateLights(environment: L2Environment) {
+        for (const light of Object.values(this.lights)) {
+            light.update(environment, this);
+        }
+    }
 
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
+        this.updateLights(environment);
 
+        const library = (this as any).decodeLibrary as GD.DecodeLibrary;
+
+        // Early return if no BSP data
+        if (!this.bspGroup && !this.staticMeshGroup) return;
+
+        const cameraLeaf = this.findPositionLeaf(cameraPosition);
+        const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+
+        this.helpers.visible = isCameraInSector;
+
+        const leafOnlyMode = !isCameraInSector;
+        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition);
+
+        // Get camera zone from leaf (more reliable than findPositionZone)
+        let currentZone: number | null = null;
+        const leafIndex = this.findPositionLeaf(cameraPosition);
+        if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
+            currentZone = this.bspLeaves[leafIndex].zone;
+        }
+        // Fallback to findPositionZone if leaf lookup fails
+        if (currentZone === null || currentZone < 0) {
+            currentZone = this.findPositionZone(cameraPosition);
+        }
+
+        // Log zone/leaf changes (only when they actually change)
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+
+        if (zoneChanged || leafChanged) {
+            if (zoneChanged) {
+                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
+                this._lastLoggedZone = currentZone;
+            }
+            if (leafChanged) {
+                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
+                this._lastLoggedLeaf = leafIndex;
+            }
+        }
+
+        const { visibleNodes, visibleLeaves, finalZoneMask } = this.traverseBSP(
+            cameraPosition,
+            activeZoneMask,
+            cameraFrustum,
+            frustumCullingEnabled,
+            0,
+            leafOnlyMode
+        );
+
+        if (this.bspGroup && this.bspSections && this.nodeToSection) {
+            // Find which sections contain visible nodes
+            const visibleSections = new Set<number>();
+            visibleNodes.forEach(nodeIndex => {
+                const sectionIndex = this.nodeToSection![nodeIndex];
+                if (sectionIndex !== undefined && sectionIndex >= 0) {
+                    visibleSections.add(sectionIndex);
+                }
+            });
+
+            let visibleMeshCount = 0;
+            this.bspGroup.children.forEach((child) => {
+                if (child instanceof Mesh && child.userData.sectionIndex !== undefined) {
+                    const sectionIndex = child.userData.sectionIndex;
+                    child.visible = visibleSections.has(sectionIndex);
+                    if (child.visible) {
+                        visibleMeshCount++;
+                    }
+                }
+            });
+
+            if (zoneChanged && currentZone !== null && currentZone >= 0) {
+                const finalActiveZones: number[] = [];
+                for (let i = 0; i < 64; i++) {
+                    if (finalZoneMask & (1n << BigInt(i))) {
+                        finalActiveZones.push(i);
+                    }
+                }
+                console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
+            }
+        }
+
+        if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
+            const visibleActorUuids = new Set<string>();
+            const actorBox = new Box3();
+
+            for (const leafIndex of visibleLeaves) {
+                const actors = library.leafActors[leafIndex];
+                if (actors) {
+                    for (const actorBase of actors) {
+                        if (actorBase.type !== "StaticMeshActor") continue;
+                        const actor = actorBase as IStaticMeshActorDecodeInfo;
+                        if (visibleActorUuids.has(actor.uuid)) continue;
+
+                        // Actor frustum and zone mask culling
+                        actorBox.min.fromArray(actor.bounds.min);
+                        actorBox.max.fromArray(actor.bounds.max);
+
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
+
+                        if (isFrustumVisible && isZoneVisible) {
+                            visibleActorUuids.add(actor.uuid);
+                        }
+                    }
+                }
+            }
+
+            let visibleCount = 0;
+            this.staticMeshMap.forEach((object, uuid) => {
+                const isVisible = visibleActorUuids.has(uuid);
+                object.visible = isVisible;
+                if (isVisible) {
+                    visibleCount++;
+                    if ((object as any).isUpdatable) {
+                        (object as any)?.update(this);
+                    }
+                }
+            });
+
+            if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+                console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
+                this._lastLoggedStaticMeshLeaf = leafIndex;
+            }
+        }
+    }
 
     public updateVisibleStaticMeshActors(cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
@@ -744,7 +879,7 @@ class SectorObject extends Object3D {
             object.visible = isVisible;
             if (isVisible) {
                 visibleCount++;
-                if((object as any).isUpdatable) {
+                if ((object as any).isUpdatable) {
                     (object as any)?.update(this);
                 }
             }

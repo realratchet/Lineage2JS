@@ -1,33 +1,21 @@
-import RAPIER, { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { Intersection, Matrix4, Mesh, Raycaster, Vector3 } from "three";
+import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ICollidable } from "./objects";
-import { SectorObject } from "@client/objects/zone-object";
+import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
 
-export interface MeshLight {
-    matrix: Matrix4,
-    scene: { light: string, flags: Uint8Array }[],
-    environment: { light: string, flags: Uint8Array }[]
-}
-
-class CollidingMesh extends Mesh implements ICollidable {
+class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
-    public readonly isUpdatable: boolean = true;
 
     protected colliderDesc: ColliderDesc;
     protected rigidbodyDesc: RigidBodyDesc;
     protected rigidbody: RigidBody;
     protected collider: Collider;
 
-    protected lightInfo: MeshLight;
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number }) {
+        super(props);
 
-    public constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], colliderIndices: Uint32Array, lightInfo: any) {
-        super(geometry, material);
-
-        if (colliderIndices && geometry.hasAttribute("position") && colliderIndices.length > 0)
-            this.makeCollider(colliderIndices, geometry.getAttribute("position").array as Float32Array);
+        if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)
+            this.makeCollider(props.colliderIndices, props.geometry.getAttribute("position").array as Float32Array);
         else this.isCollidable = false;
-
-        this.lightInfo = lightInfo
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
@@ -47,11 +35,6 @@ class CollidingMesh extends Mesh implements ICollidable {
 
     public getCollider(): Collider { return this.collider; }
     public getRigidbody(): RigidBody { return this.rigidbody; }
-
-    public update(sector: SectorObject) {
-        debugger;
-    }
-
 }
 
 export default CollidingMesh;

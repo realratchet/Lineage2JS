@@ -7,6 +7,8 @@ import DecodeLibrary from "./assets/unreal/decode-library";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
+import UL2NEnvManager, { EEnvCycle } from "@client/assets/unreal/un-l2env";
+import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -15,7 +17,7 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 
     pkg = await assetLoader.load(pkg);
 
-    const decodeLibrary = await DecodeLibrary.fromPackage(pkg, settings);
+    const decodeLibrary = DecodeLibrary.fromPackage(pkg, settings);
 
     // debugger;
 
@@ -24,6 +26,15 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
     console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
 
     return decodePackage(decodeLibrary);
+}
+
+function _decodeEnvColors(envColors: { [key in EEnvCycle]: UConfigTimeEnv }) {
+    const outputs = {} as { [key in EEnvCycle]: any };
+
+    for (const [key, env] of Object.entries(envColors))
+        outputs[key as any as EEnvCycle] = decodeEnvColor(env.getDecodeInfo());
+
+    return outputs;
 }
 
 async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, pkgTex: string | C.APackage) {
@@ -185,7 +196,7 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
-async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<GA.UL2NEnvManager> {
+async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<UConfigTimeEnv> {
     const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
 
     return envFile.load(pkgNative, pkgEngine);
@@ -260,8 +271,12 @@ async function startCore() {
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
 
+    const envColors = {
+        [EEnvCycle.Normal]: await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine),
+        [EEnvCycle.Dusk]: await _decodTimeEnvFile("assets/system/timeenv1.int", pkgNative, pkgEngine),
+        [EEnvCycle.Dawn]: await _decodTimeEnvFile("assets/system/timeenv2.int", pkgNative, pkgEngine)
+    } as { [key in EEnvCycle]: UConfigTimeEnv };
 
-    const env = await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine);
 
     // const sound = await assetLoader.load(assetLoader.getPackage("MonSound3", "Sound"));
     // const ants = sound.exports.filter(x=>x.objectName.toLowerCase().includes("antaras"))
@@ -394,8 +409,10 @@ async function startCore() {
 
     // debugger;
 
+    renderManager.setEnvColors(_decodeEnvColors(envColors));
+
     const loadSettings = {
-        env: env,
+        env: new UL2NEnvManager((envColors[EEnvCycle.Normal] as any).envLight, EEnvCycle.Normal),
         helpersZoneBounds: false,
         loadTerrain: false,
         loadBaseModel: true,
@@ -466,9 +483,9 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+    // objectGroup.add(_decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    // objectGroup.add(_decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // objectGroup.add(_decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins

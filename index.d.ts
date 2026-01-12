@@ -105,6 +105,7 @@ declare global {
                 export type UL2NEnvLight = import("@unreal/un-l2env").UL2NEnvLight;
                 export type UL2NTimeLight = import("@unreal/un-l2env").UL2NTimeLight;
                 export type UL2NEnvManager = import("@unreal/un-l2env").UL2NEnvManager;
+                export type EEnvCycle = import("@unreal/un-l2env").EEnvCycle;
             }
 
             namespace Decoding {
@@ -183,7 +184,8 @@ declare global {
                     actorName: string;
                     type: "StaticMeshActor",
                     instance: IStaticMeshInstanceDecodeInfo,
-                    bounds: IBoxDecodeInfo
+                    bounds: IBoxDecodeInfo,
+                    scaledGlow: number
                 }
 
                 export interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -369,12 +371,13 @@ declare global {
                 export interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
                     type: "Light",
                     dynamic: boolean,
-                    color: [number, number, number],
+                    hsv: [number, number, number],
                     radius: number,
                     directional: boolean,
                     lightType: GA.LightType_T,
                     lightEffect: GA.LightEffect_T,
-                    cone: number
+                    cone: number,
+                    isSunlightColor: boolean
                 }
 
                 export interface ISunLightDecodeInfo extends Omit<ILightDecodeInfo, "type"> {
@@ -421,6 +424,42 @@ declare global {
                 export interface IBoundsDecodeInfo {
                     sphere: ISphereDecodeInfo,
                     box: { min: Vector3Arr, max: Vector3Arr } | null
+                }
+
+                export type INTimeColorDecodeInfo = [number, number, number, number];
+                export type INTimeHSVDecodeInfo = [number, number, number, number];
+                export type INTimeScaleDecodeInfo = [number, number];
+                export interface IL2NTimeLightDecodeInfo {
+                    terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] }
+                }
+                export interface IL2NEnvLightDecodeInfo {
+                    type: GA.EEnvCycle,
+                    light: IL2NTimeLightDecodeInfo,
+                    color: {
+                        sky: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        indexHaze: { type: "TypedArray", array: Int32Array },
+                        haze: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        indexCloud: { type: "TypedArray", array: Int32Array },
+                        cloud1: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        cloud2: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        cloud3: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        star: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        sun: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        moon: { type: "TimeColor", array: INTimeColorDecodeInfo[] }
+                    },
+                    ambient: {
+                        terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                        actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                        staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                        bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    },
+                    scale: {
+                        sun: { type: "TimeScale", array: INTimeScaleDecodeInfo[] },
+                        moon: { type: "TimeScale", array: INTimeScaleDecodeInfo[] }
+                    }
                 }
             }
         }

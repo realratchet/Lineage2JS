@@ -5,7 +5,9 @@ import UL2NEnvManager, { UL2NEnvLight, EEnvCycle } from "@client/assets/unreal/u
 class UConfigTimeEnv extends BaseConfigFile {
     declare ["constructor"]: typeof UConfigTimeEnv
 
-    public load(pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): UL2NEnvManager {
+    declare protected envLight: UL2NEnvLight;
+
+    public load(pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this {
         const uClass = pkgEngine.fetchObjectByType<C.UClass<UL2NEnvLight>>("Class", "L2NEnvLight").loadSelf();
         const L2NEnvLight = uClass.buildClass(pkgNative);
 
@@ -14,11 +16,12 @@ class UConfigTimeEnv extends BaseConfigFile {
 
         envLight.load(fileContents, pkgNative, pkgEngine);
 
-        // Create manager with the loaded environmental data
-        const envManager = new UL2NEnvManager(envLight, EEnvCycle.Normal); // Normal cycle (timeenv0.int)
+        this.envLight = envLight;
 
-        return envManager;
+        return this;
     }
+
+    public getDecodeInfo() { return this.envLight.getDecodeInfo(); }
 
 }
 

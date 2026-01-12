@@ -3,9 +3,11 @@ import decodeMaterial from "./material-decoder";
 import ZoneObject, { ILightInfo, SectorObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
-import CollidingMesh, { MeshLight } from "@client/objects/colliding-mesh";
+import CollidingMesh from "@client/objects/colliding-mesh";
 import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 import MeshEmitter from "@client/objects/emitters/mesh-emitter";
+import { MeshLight } from "@client/objects/lit-actor";
+import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -158,8 +160,9 @@ function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: GD.IStaticMesh
 function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshActorDecodeInfo): CollidingMesh {
     const instanceInfo = info.instance;
     const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo);
+    const scaledGlow = info.scaledGlow;
 
-    const object = new CollidingMesh(geometry, materials, collider, lights);
+    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow });
 
     // if (info.name === "Exp_StaticMeshActor140")
     //     debugger;
@@ -283,21 +286,34 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
     return mesh;
 }
 
-function decodeLight(library: GD.DecodeLibrary, info: GD.ILightDecodeInfo | GD.ISunLightDecodeInfo): ILightInfo {
-    return {
-        uuid: info.uuid,
-        type: info.type,
+function decodeLight(library: GD.DecodeLibrary, info: GD.ILightDecodeInfo | GD.ISunLightDecodeInfo): DynamicLight {
+    const light = new DynamicLight({
+        lightMethod: info.type,
         isDynamic: info.dynamic,
-        position: new Vector3().fromArray(info.position),
-        quaternion: new Quaternion().fromArray(info.quaternion),
-        color: new Color().fromArray(info.color),
+        colorHSV: new ColorHSV(...info.hsv),
+        isSunlightColor: info.isSunlightColor,
         cone: info.cone,
         isDirectional: info.directional,
         lightEffect: info.lightEffect,
         lightType: info.lightType,
-        name: info.name,
         radius: info.radius,
-    };
+    });
+
+    applySimpleProperties(library, light, info);
+
+    return light
+
+    // return {
+    //     type: info.type,
+    //     isDynamic: info.dynamic,
+
+    //     color: new Color().fromArray(info.color),
+    //     cone: info.cone,
+    //     isDirectional: info.directional,
+    //     lightEffect: info.lightEffect,
+    //     lightType: info.lightType,
+    //     radius: info.radius,
+    // };
 }
 
 function decodeSector(library: GD.DecodeLibrary) {

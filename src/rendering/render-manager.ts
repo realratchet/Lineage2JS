@@ -7,6 +7,8 @@ import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
 import Visualizer, { VisualizerMode } from "./visualizer";
+import EnvColor from "@client/rendering/env-color";
+import L2Environment from "@client/rendering/l2-env";
 
 const stats = new (Stats as any)(0);
 
@@ -21,6 +23,8 @@ const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
+
+
 
 class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
@@ -43,6 +47,8 @@ class RenderManager {
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
 
+    protected environment: L2Environment;
+
     protected shiftTimeDown: number;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
@@ -63,7 +69,7 @@ class RenderManager {
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
 
-    constructor(viewport: HTMLViewportElement) {
+    public constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
         this.renderer = new WebGLRenderer({
             antialias: true,
@@ -190,6 +196,12 @@ class RenderManager {
         addResizeListeners(this);
     }
 
+    public setEnvColors(envColors: { [key in 0 | 1 | 2]: EnvColor }): this {
+        this.environment = new L2Environment(envColors);
+
+        return this;
+    }
+
     public debugPrintCamera() {
         console.log([
             `this.camera.position.set(${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z});`,
@@ -248,10 +260,10 @@ class RenderManager {
             const currentSector = this.getSector(this.camera.position);
             if (currentSector && this.visualizer.isEnabled()) {
                 const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
-                
+
                 // Create a map with only the current sector
                 const currentSectorMap = new Map<number, Map<number, SectorObject>>();
                 if (currentSector.index) {
@@ -259,7 +271,7 @@ class RenderManager {
                     sectorXMap.set(currentSector.index.y, currentSector);
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
-                
+
                 if (this.visualizer.getMode() === 1) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
                 } else if (this.visualizer.getMode() === 2) { // Zones
@@ -279,10 +291,10 @@ class RenderManager {
             const currentSector = this.getSector(this.camera.position);
             if (currentSector && this.visualizer.isEnabled()) {
                 const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
-                
+
                 // Create a map with only the current sector
                 const currentSectorMap = new Map<number, Map<number, SectorObject>>();
                 if (currentSector.index) {
@@ -290,7 +302,7 @@ class RenderManager {
                     sectorXMap.set(currentSector.index.y, currentSector);
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
-                
+
                 if (this.visualizer.getMode() === 1) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
                 } else if (this.visualizer.getMode() === 2) { // Zones
@@ -315,7 +327,7 @@ class RenderManager {
                 const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
-                
+
                 // Create a map with only the current sector
                 const currentSectorMap = new Map<number, Map<number, SectorObject>>();
                 if (currentSector.index) {
@@ -323,7 +335,7 @@ class RenderManager {
                     sectorXMap.set(currentSector.index.y, currentSector);
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
-                
+
                 this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
             return;
@@ -534,20 +546,10 @@ class RenderManager {
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
 
         this.scene.traverse((object: THREE.Object3D) => {
-            if ((object as SectorObject).isSectorObject) {
-                const sector = object as SectorObject;
-                if (sector.updateVisibleBSPSections && sector.bspSections) {
-                    sector.updateVisibleBSPSections(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
-                }
-                if (sector.updateVisibleStaticMeshActors) {
-                    sector.updateVisibleStaticMeshActors(bspCullingPosition, this.frustum, this.frustumCullingEnabled);
-                }
-            }
-        });
 
-        this.scene.traverse((object: THREE.Object3D) => {
-
-            if ((object as ZoneObject).isZoneObject) {
+            if ((object as SectorObject).isSectorObject)
+                (object as SectorObject).updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled);
+            else if ((object as ZoneObject).isZoneObject) {
 
                 // const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
 
@@ -707,18 +709,18 @@ class RenderManager {
         const currentSector = this.getSector(this.camera.position);
         if (currentSector) {
             const sectorIndex = currentSector.index;
-            if (this.currentSectorIndex === null || 
+            if (this.currentSectorIndex === null ||
                 !sectorIndex.equals(this.currentSectorIndex)) {
                 // Sector changed - recreate visualizer
                 const wasEnabled = this.visualizer.isEnabled();
                 const currentMode = this.visualizer.getMode();
-                
+
                 // Remove old visualizer
                 this.scene.remove(this.visualizer.getGroup());
-                
+
                 // Create new visualizer
                 (this as any).visualizer = new Visualizer(this.scene);
-                
+
                 // Restore state
                 this.visualizer.setMode(currentMode);
                 if (wasEnabled && !this.visualizer.isEnabled()) {
@@ -726,7 +728,7 @@ class RenderManager {
                 } else if (!wasEnabled && this.visualizer.isEnabled()) {
                     this.visualizer.toggle();
                 }
-                
+
                 this.currentSectorIndex = sectorIndex.clone();
             }
         } else {
@@ -740,10 +742,10 @@ class RenderManager {
         // Only visualize the current sector
         if (this.visualizer.isEnabled() && currentSector) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
                 ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                 : this.frustum;
-            
+
             // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
             if (currentSector.index) {
@@ -751,7 +753,7 @@ class RenderManager {
                 sectorXMap.set(currentSector.index.y, currentSector);
                 currentSectorMap.set(currentSector.index.x, sectorXMap);
             }
-            
+
             if (this.visualizer.getMode() === 1) { // Portals
                 this.visualizer.updatePortals(currentSectorMap, cameraPos);
             } else if (this.visualizer.getMode() === 2) { // Zones
@@ -811,10 +813,10 @@ class RenderManager {
         const currentSector = this.getSector(this.camera.position);
         if (currentSector && this.visualizer.isEnabled()) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera 
+            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
                 ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                 : this.frustum;
-            
+
             // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
             if (currentSector.index) {
@@ -822,7 +824,7 @@ class RenderManager {
                 sectorXMap.set(currentSector.index.y, currentSector);
                 currentSectorMap.set(currentSector.index.x, sectorXMap);
             }
-            
+
             if (this.visualizer.getMode() === 1) { // Portals
                 this.visualizer.updatePortals(currentSectorMap, cameraPos);
             } else if (this.visualizer.getMode() === 2) { // Zones

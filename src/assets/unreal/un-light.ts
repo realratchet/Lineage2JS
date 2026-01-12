@@ -402,7 +402,7 @@ abstract class ULight extends UAActor {
         return {
             uuid: this.uuid,
             type: "Light",
-            color: this.getColor(),
+            hsv: [this.hue, this.saturation, this.brightness],
             dynamic: this.isDynamic,
             cone: this.cone,
             lightType: this.type.valueOf(),
@@ -410,6 +410,7 @@ abstract class ULight extends UAActor {
             directional: this.isDirectional,
             radius: this.radius,
             name: this.objectName,
+            isSunlightColor: this.isSunlightColor,
             position: this.location.getVectorElements(),
             scale: this.scale.getVectorElements(),
             quaternion: this.rotation.getQuaternionElements() || [0, 0, 0, 1],
