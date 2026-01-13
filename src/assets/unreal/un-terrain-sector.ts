@@ -62,7 +62,7 @@ abstract class UTerrainSector extends UObject {
     declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
 
-    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
@@ -76,7 +76,7 @@ abstract class UTerrainSector extends UObject {
             geometry: this.uuid,
             materials: this.uuid,
             position: [ox, oy, oz]
-        };
+        } as GD.ITerrainSegmentDecodeInfo;
 
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
@@ -96,7 +96,7 @@ abstract class UTerrainSector extends UObject {
         const tmpVector = FVector.make();
 
         // Get appropriate shadow map for current time of day
-        const validShadowmap = this.getShadowMapForTime(envManager.getTimeOfDay());
+        const validShadowmap = this.getShadowMapForTime(envManager.timeOfDay);
 
         const v = FVector.make();
 
@@ -203,7 +203,7 @@ abstract class UTerrainSector extends UObject {
                     const idxVertOffset = vertexIndex * 3;
 
 
-                    
+
                     if (DEBUG_LIGHTING_RED) {
                         // Debug mode: Force lit areas to be bright red
                         colors[idxVertOffset + 0] = 1.0; // Red
@@ -408,7 +408,15 @@ abstract class UTerrainSector extends UObject {
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
-            position: [ox, oy, oz]
+            position: [ox, oy, oz],
+            lighting: {
+                lights: this.lightInfos.map(li => ({
+                    light: li.light?.uuid,
+                    flags: li.visibilityBitmap.getTypedArray() as Uint8Array
+                })).filter(li => li.light),
+                shadowMaps: this.shadowMaps?.map(sm => sm.getTypedArray() as Uint8Array) ?? [],
+                shadowMapTimes: this.shadowMapTimes ?? []
+            }
         };
     }
 

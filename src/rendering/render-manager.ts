@@ -9,9 +9,23 @@ import Stats from "./stats";
 import Visualizer, { VisualizerMode } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
 import L2Environment from "@client/rendering/l2-env";
+import * as dat from "dat.gui";
+
+const gui = new dat.GUI({ autoPlace: false, width: 300 });
+gui.domElement.style.setProperty("position", "fixed", "important");
+gui.domElement.style.setProperty("top", "50px", "important");
+gui.domElement.style.setProperty("right", "0px", "important");
+gui.domElement.style.setProperty("z-index", "10000", "important");
+document.body.appendChild(gui.domElement);
+
+const guiFolders = {
+    world: gui.addFolder("World")
+};
+guiFolders.world.open();
 
 const stats = new (Stats as any)(0);
-
+stats.dom.style.left = "auto";
+stats.dom.style.right = "0px";
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom);
 
@@ -197,7 +211,30 @@ class RenderManager {
     }
 
     public setEnvColors(envColors: { [key in 0 | 1 | 2]: EnvColor }): this {
-        this.environment = new L2Environment(envColors);
+        const environment = this.environment = new L2Environment(envColors);
+        const self = this;
+
+        const timeState = {
+            get time() { return environment.getTimeOfDay(); },
+            set time(v) {
+                environment.setTimeOfDay(v);
+                self.needsUpdate = true;
+            }
+        };
+
+        guiFolders.world.add(timeState, "time", 0, 24, 0.01)
+            .name("Time");
+
+        const envCycleState = {
+            get cycle() { return environment.getActiveEnv(); },
+            set cycle(v) {
+                environment.setActiveEnv(Number(v) as 0 | 1 | 2);
+                self.needsUpdate = true;
+            }
+        };
+
+        guiFolders.world.add(envCycleState, "cycle", { "Normal": 0, "Dusk": 1, "Dawn": 2 })
+            .name("Env Cycle");
 
         return this;
     }

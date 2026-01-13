@@ -818,7 +818,7 @@ class SectorObject extends Object3D {
                 if (isVisible) {
                     visibleCount++;
                     if ((object as any).isUpdatable) {
-                        (object as any)?.update(this);
+                        (object as any)?.update(this, environment);
                     }
                 }
             });
@@ -881,7 +881,7 @@ class SectorObject extends Object3D {
             if (isVisible) {
                 visibleCount++;
                 if ((object as any).isUpdatable) {
-                    (object as any)?.update(this);
+                    (object as any)?.update(this, environment);
                 }
             }
         });

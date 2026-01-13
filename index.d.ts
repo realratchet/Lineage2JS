@@ -194,6 +194,15 @@ declare global {
                     materials?: string
                 }
 
+                export interface ITerrainSegmentDecodeInfo extends IStaticMeshObjectDecodeInfo {
+                    type: "TerrainSegment",
+                    lighting?: {
+                        lights: { light: string, flags: Uint8Array }[],
+                        shadowMaps: Uint8Array[],
+                        shadowMapTimes: number[]
+                    }
+                }
+
                 export interface ILightInstanceDecodeInfo {
                     matrix: Matrix4Arr,
                     flags: ArrayBuffer,
