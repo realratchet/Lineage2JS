@@ -87,6 +87,7 @@ class SectorObject extends Object3D {
     public bspLeaves: BSPLeafData[];
     public index: THREE.Vector2;
     public sunTexture: any; // MapData_T - texture with size info
+    public brightness: number = 1.0;
 
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];

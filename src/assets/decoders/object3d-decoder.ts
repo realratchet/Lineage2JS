@@ -118,6 +118,8 @@ function decodeStaticMeshData(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
+    debugger;
+
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const geometry = fetchGeometry(infoGeo as GD.IGeometryDecodeInfo);
 
@@ -227,8 +229,6 @@ function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMes
         });
     }
 
-    // debugger;
-
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
 
@@ -297,6 +297,8 @@ function decodeLight(library: GD.DecodeLibrary, info: GD.ILightDecodeInfo | GD.I
         lightEffect: info.lightEffect,
         lightType: info.lightType,
         radius: info.radius,
+        period: info.period,
+        phase: info.phase
     });
 
     applySimpleProperties(library, light, info);
@@ -320,6 +322,7 @@ function decodeSector(library: GD.DecodeLibrary) {
     const sector = new SectorObject();
 
     sector.name = library.name;
+    sector.brightness = library.brightness;
 
     if (library.sector) sector.index = new Vector2().fromArray(library.sector);
 

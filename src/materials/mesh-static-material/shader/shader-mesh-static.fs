@@ -222,6 +222,10 @@ uniform float opacity;
     varying vec3 vColorInstance;
 #endif
 
+#ifdef USE_LIT_ATTRIBUTES
+    varying vec3 vLitColor;
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
@@ -254,8 +258,19 @@ void main() {
         #endif
     #endif
 
-    #include <color_fragment>
+    #ifdef USE_LIT_ATTRIBUTES
+        #if defined( USE_COLOR_ALPHA )
+            diffuseColor *= vColor + vLitColor;
+        #elif defined( USE_COLOR )
+            diffuseColor.rgb *= vColor + vLitColor;
+        #endif
+    #else
+        #include <color_fragment>
+    #endif
     
+    // #ifdef USE_LIT_ATTRIBUTES
+    //     diffuseColor.rgb += vLitColor;
+    // #endif
 
     // #include <alphamap_fragment>
 

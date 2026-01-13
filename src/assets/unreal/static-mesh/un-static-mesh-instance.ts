@@ -6,7 +6,7 @@ import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import { indexToTime } from "@client/assets/unreal/un-l2env";
 
 
-class FStaticMeshLightInfo implements C.IConstructable {
+export class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public applied: boolean;

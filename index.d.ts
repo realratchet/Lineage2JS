@@ -377,7 +377,9 @@ declare global {
                     lightType: GA.LightType_T,
                     lightEffect: GA.LightEffect_T,
                     cone: number,
-                    isSunlightColor: boolean
+                    isSunlightColor: boolean,
+                    period: number,
+                    phase: number
                 }
 
                 export interface ISunLightDecodeInfo extends Omit<ILightDecodeInfo, "type"> {

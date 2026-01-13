@@ -418,7 +418,7 @@ async function startCore() {
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
-        _loadStaticModelList: [
+        loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,

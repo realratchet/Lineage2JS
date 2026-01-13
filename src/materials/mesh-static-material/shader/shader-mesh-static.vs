@@ -137,6 +137,11 @@
     varying vec3 vColorInstance;
 #endif
 
+#ifdef USE_LIT_ATTRIBUTES
+    attribute vec3 lighting;
+    varying vec3 vLitColor;
+#endif
+
 // #ifdef USE_DIRECTIONAL_AMBIENT
 //     // varying vec3 vViewPosition;
 //     // varying vec3 vNormal;
@@ -168,6 +173,10 @@
 void main() {
     #ifdef USE_INSTANCED_ATTRIBUTES
         vColorInstance = colorInstance;
+    #endif
+    
+    #ifdef USE_LIT_ATTRIBUTES
+        vLitColor = lighting;
     #endif
 
     #include <uv_vertex>

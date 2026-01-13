@@ -172,7 +172,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         // debugger
 
         // console.log(info);
-        
+
 
         super({
             vertexShader: VERTEX_SHADER,
@@ -263,6 +263,14 @@ class MeshStaticMaterial extends ShaderMaterial {
 
     public setInstanced() {
         this.defines["USE_INSTANCED_ATTRIBUTES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    public setLit() {
+        this.defines["USE_LIT_ATTRIBUTES"] = "";
 
         this.needsUpdate = true;
 

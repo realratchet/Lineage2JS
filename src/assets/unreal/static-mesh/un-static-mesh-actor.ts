@@ -6,6 +6,7 @@ import GMath from "@client/assets/unreal/un-gmath";
 import { indexToTime, timeToIndex, timeToIndicesLerp } from "@client/assets/unreal/un-l2env";
 import FBox from "@client/assets/unreal/un-box";
 import { Matrix4, Vector3, Quaternion } from "three";
+import { FStaticMeshLightInfo } from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -198,13 +199,13 @@ abstract class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        // const mat4 = new Matrix4().fromArray(this.getWorldMatrixElements());
+        const mat4 = new Matrix4().fromArray(this.getWorldMatrixElements());
 
         // const lightInfos = {
         //     sceneLights: 
         // }
 
-        // applyStaticMeshLight(envManager.getCurrentEnvLight(), vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, instance.lights.scene, mat4);
+        // applyStaticMeshLight(envManager.getCurrentEnvLight(), vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, this.instance.sceneLights, mat4);
 
         // if (this.instance && this.instance.environmentLights.length > 0) {
         //     const lightCount = this.instance.environmentLights.length;
@@ -421,7 +422,7 @@ function applyStaticMeshLightEnv(envManager: GA.UL2NEnvManager, vertexArrayLen: 
     }
 }
 
-function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: any[], mat4) {
+function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: FStaticMeshLightInfo[], mat4) {
     const attrPositions = attributes.positions;
     const attrNormals = attributes.normals;
 
@@ -432,10 +433,10 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
 
     const intensityArray = new Float32Array(instanceColors.length);
 
-    let i = -1;
+    let j_i = -1;
 
     for (let lightInfo of lightsScene) {
-        i++;
+        j_i++;
         if (!lightInfo) continue;
 
         if (!lightInfo || !lightInfo.light)
@@ -470,7 +471,17 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
                 const samplingPoint = localToWorld.transformVector(vertex, vertex);
                 const samplingNormal = localToWorld.transformNormal(normal, normal).normalized();
 
+                // if (vi === 288 && j_i === 3)
+                //     debugger
+
                 const intensity = scaleGlow * light.sampleIntensity(samplingPoint, samplingNormal);
+
+                // if (Math.abs(intensity) > 0)
+                //     debugger;
+
+                1
+                // debugger;
+
 
                 // {
                 //     const v = new Vector3(attrPositions[ox], attrPositions[oz], attrPositions[oy]).applyMatrix4(mat4);
@@ -482,6 +493,8 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
                 //     // console.log(`diff position: ${dvx}, ${dvy}, ${dvz}`);
                 //     // console.log(`diff normal: ${dnx}, ${dny}, ${dnz}`);
 
+                //     debugger;
+
                 //     if (
                 //         Math.abs(dvx) > 1e-5 || Math.abs(dvy) > 1e-5 || Math.abs(dvz) > 1e-5 ||
                 //         Math.abs(dnx) > 1e-5 || Math.abs(dny) > 1e-5 || Math.abs(dnz) > 1e-5
@@ -492,6 +505,10 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
                 r = light.color.x * intensity;
                 g = light.color.y * intensity;
                 b = light.color.z * intensity;
+
+                if (vi === 311) {
+                    console.log(`j_i: ${j_i}, vi: ${vi}, intensity: ${intensity}, r: ${r}, g: ${g}, b: ${b}`);
+                }
 
                 intensityArray[i + 0] = intensityArray[i + 0] + r;
                 intensityArray[i + 1] = intensityArray[i + 1] + g;
@@ -506,6 +523,8 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
             }
         }
     }
+
+    // debugger
 
     for (let i = 0; i < vertexArrayLen; i += 3) {
         instanceColors[i + 0] = instanceColors[i + 0] + (intensityArray[i + 0] /* (lightsScene.length - 1)*/) //+ ambientColor[0];

@@ -2,6 +2,7 @@ const ALLOW_FAILED_OBJECTS = false;
 
 class DecodeLibrary {
     public name: string = "Untitled";
+    public brightness: number = 1.0;
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
@@ -48,6 +49,8 @@ class DecodeLibrary {
         const uLevelInfo = uLevel.levelInfo.loadSelf();
 
         uLevelInfo.setL2Env(env);
+
+        decodeLibrary.brightness = uLevelInfo.brightness;
 
         decodeLibrary.name = uLevel.url.map;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
