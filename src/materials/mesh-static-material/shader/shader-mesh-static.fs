@@ -258,15 +258,9 @@ void main() {
         #endif
     #endif
 
-    #ifdef USE_LIT_ATTRIBUTES
-        #if defined( USE_COLOR_ALPHA )
-            diffuseColor *= vColor + vLitColor;
-        #elif defined( USE_COLOR )
-            diffuseColor.rgb *= vColor + vLitColor;
-        #endif
-    #else
-        #include <color_fragment>
-    #endif
+
+    #include <color_fragment>
+
     
     // #ifdef USE_LIT_ATTRIBUTES
     //     diffuseColor.rgb += vLitColor;
@@ -292,6 +286,10 @@ void main() {
 
         #ifdef USE_INSTANCED_ATTRIBUTES
             reflectedLight.indirectDiffuse += vColorInstance;
+        #endif
+
+        #ifdef USE_LIT_ATTRIBUTES
+            reflectedLight.indirectDiffuse += vLitColor;
         #endif
 
         #ifdef USE_AMBIENT

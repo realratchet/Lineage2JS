@@ -696,7 +696,7 @@ class SectorObject extends Object3D {
 
     protected updateLights(environment: L2Environment) {
         for (const light of Object.values(this.lights)) {
-            light.update(environment, this);
+            light.update(environment, this.brightness);
         }
     }
 

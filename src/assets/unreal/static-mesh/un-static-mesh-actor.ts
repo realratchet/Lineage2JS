@@ -435,6 +435,10 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
 
     let j_i = -1;
 
+    const strings = [];
+
+    debugger;
+
     for (let lightInfo of lightsScene) {
         j_i++;
         if (!lightInfo) continue;
@@ -476,6 +480,8 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
 
                 const intensity = scaleGlow * light.sampleIntensity(samplingPoint, samplingNormal);
 
+                strings.push(`j_i: ${j_i}, vi: ${vi}, bitPtr: ${bitPtr}, bitMask: ${bitMask}, intensity: ${intensity}, lightType: ${light.actor.type}, rgb: (${light.color.x}, ${light.color.y}, ${light.color.z})`)
+
                 // if (Math.abs(intensity) > 0)
                 //     debugger;
 
@@ -506,9 +512,9 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
                 g = light.color.y * intensity;
                 b = light.color.z * intensity;
 
-                if (vi === 311) {
-                    console.log(`j_i: ${j_i}, vi: ${vi}, intensity: ${intensity}, r: ${r}, g: ${g}, b: ${b}`);
-                }
+                // if (vi === 311) {
+                //     console.log(`j_i: ${j_i}, vi: ${vi}, intensity: ${intensity}, r: ${r}, g: ${g}, b: ${b}`);
+                // }
 
                 intensityArray[i + 0] = intensityArray[i + 0] + r;
                 intensityArray[i + 1] = intensityArray[i + 1] + g;
@@ -524,11 +530,16 @@ function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, in
         }
     }
 
-    // debugger
+    debugger
 
     for (let i = 0; i < vertexArrayLen; i += 3) {
         instanceColors[i + 0] = instanceColors[i + 0] + (intensityArray[i + 0] /* (lightsScene.length - 1)*/) //+ ambientColor[0];
         instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] /* (lightsScene.length - 1)*/) //+ ambientColor[1];
         instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] /* (lightsScene.length - 1)*/) //+ ambientColor[2];
     }
+
+    // console.log(strings.join("\n"))
+
+    strings
+    debugger;
 }
