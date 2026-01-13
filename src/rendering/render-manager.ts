@@ -12,20 +12,20 @@ import L2Environment from "@client/rendering/l2-env";
 import * as dat from "dat.gui";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
-gui.domElement.style.setProperty("position", "fixed", "important");
-gui.domElement.style.setProperty("top", "50px", "important");
-gui.domElement.style.setProperty("right", "0px", "important");
-gui.domElement.style.setProperty("z-index", "10000", "important");
+Object.assign(gui.domElement.style, {
+    position: "fixed",
+    top: "0px",
+    right: "0px",
+    zIndex: "10000"
+});
 document.body.appendChild(gui.domElement);
-
 const guiFolders = {
     world: gui.addFolder("World")
 };
 guiFolders.world.open();
 
 const stats = new (Stats as any)(0);
-stats.dom.style.left = "auto";
-stats.dom.style.right = "0px";
+
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom);
 
