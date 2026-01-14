@@ -50,6 +50,29 @@ class L2Environment {
     public getAmbientPlaneBSPLight(target: Color): Color {
         return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.bsp, target);
     }
+
+    public selectEnvironmentLightIndices(totalElements: number): [number, number, number] {
+        const timeOfDay = this.getTimeOfDay();
+
+        if (totalElements === 0) return [0, 0, 0];
+        if (totalElements === 1) return [0, 0, 1];
+
+        const timePerElement = 24.0 / totalElements;
+        const currEnvIndex = Math.floor(timeOfDay / timePerElement) % totalElements;
+        const nextEnvIndex = (currEnvIndex + 1) % totalElements;
+
+        let currEnvTime = currEnvIndex * timePerElement;
+        let nextEnvTime = nextEnvIndex * timePerElement;
+
+        while (nextEnvTime < currEnvTime) nextEnvTime += 24.0;
+
+        let offset = timeOfDay;
+        while (offset < currEnvTime) offset += 24.0;
+
+        const lerp = (offset - currEnvTime) / (nextEnvTime - currEnvTime);
+
+        return [currEnvIndex, nextEnvIndex, lerp];
+    }
 }
 
 function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: T[]): [T, T, number] {
@@ -76,16 +99,13 @@ function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: 
         }
     }
 
-    // Re-implementing UE2 loop logic strictly:
-    idxCurr = 0; idxNext = 1;
+    idxCurr = 0, idxNext = 1;
     if (nElementsMinusOne > 0) {
-        // Find interval
         while (array[idxCurr].time > timeOfDay || array[idxNext].time <= timeOfDay) {
             if (idxCurr >= nElementsMinusOne) {
                 return [array[nElementsMinusOne], array[nElementsMinusOne], 0];
             }
-            idxCurr++;
-            idxNext++;
+            idxCurr++, idxNext++;
         }
     }
 
@@ -94,7 +114,6 @@ function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: 
     const timeCurr = elemCurr.time;
     const timeNext = elemNext.time;
 
-    // Avoid division by zero
     if (timeNext === timeCurr) return [elemCurr, elemNext, 0];
 
     const frac = (timeOfDay - timeCurr) / (timeNext - timeCurr);
@@ -103,16 +122,13 @@ function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: 
 
 function getBrightness(timeOfDay: number, array: TimeHSV[]) {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
-    // Interpolate brightness
-    // Assuming bri is stored in .v property of TimeHSV based on un-l2env (bri) vs env-color (v) mapping
-    // un-l2env: bri. env-color TimeHSV: v.
+
     return lFrac * (hsvNext.value - hsvCurr.value) + hsvCurr.value;
 }
 
 function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Color {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
 
-    // Convert both to RGB using reused vectors to avoid GC
     const rgbCurr = hsvToRgb(hsvCurr.hue, hsvCurr.saturation, 255);
     const rgbNext = hsvToRgb(hsvNext.hue, hsvNext.saturation, 255);
 
@@ -120,10 +136,8 @@ function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Co
     const vNext = tmpColor_2.setRGB(rgbNext[0], rgbNext[1], rgbNext[2]);
 
     // Interpolate: target = vCurr + (vNext - vCurr) * lFrac
-    // Use Three.js Color.lerp
     return target.copy(vCurr).lerp(vNext, lFrac);
 }
-
 
 export default L2Environment;
 export { L2Environment };

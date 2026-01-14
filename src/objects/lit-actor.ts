@@ -1,6 +1,7 @@
 import DynamicLight from "@client/objects/dynamic-light";
 import { ILightInfo, SectorObject } from "@client/objects/zone-object";
 import { Color, Float32BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
+import type { L2Environment } from "@client/rendering/l2-env";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -134,7 +135,14 @@ class LitActorMesh extends Mesh {
             const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased);
 
             this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
-            this.computeLighting(sector, staticEnv, this.staticLightingCache, 0.5);
+            
+            if (staticEnv.length >= 2) {
+                const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
+                this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, lerp * 0.5);
+                this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, (lerp - 1) * 0.5);
+            } else if (staticEnv.length === 1) {
+                this.computeLighting(sector, staticEnv, this.staticLightingCache, 0.5);
+            }
         }
 
         // Apply static cache to the vertex attribute
@@ -144,8 +152,19 @@ class LitActorMesh extends Mesh {
         const dynamicScene = scene.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
         const dynamicEnv = environment.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
 
-        if (dynamicScene.length > 0 || dynamicEnv.length > 0) {
+        if (dynamicScene.length > 0) {
             this.computeLighting(sector, dynamicScene, colorArray, 1.0);
+        }
+        
+        // Dynamic environment lights with time-based interpolation
+        if (dynamicEnv.length >= 2) {
+            const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);
+            
+            // Apply current and next environment lights with interpolation weights
+            this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, lerp * 0.5);
+            this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, (lerp - 1) * 0.5);
+        } else if (dynamicEnv.length === 1) {
+            // Single dynamic environment light, no interpolation needed
             this.computeLighting(sector, dynamicEnv, colorArray, 0.5);
         }
 
