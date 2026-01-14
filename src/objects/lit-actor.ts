@@ -108,14 +108,8 @@ class LitActorMesh extends Mesh {
             if (!light) continue;
 
             if (light.isDynamic || light.isTimeBased) {
-                if (light.needsUpdate) {
-                    anyDynamicLightNeedsUpdate = true;
-                }
-            } else {
-                if (light.needsUpdate) {
-                    staticCacheDirty = true;
-                }
-            }
+                if (light.needsUpdate) anyDynamicLightNeedsUpdate = true;
+            } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
         // Only recalculate if something changed
@@ -126,23 +120,21 @@ class LitActorMesh extends Mesh {
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
-            if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length) {
+            if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
                 this.staticLightingCache = new Float32Array(colorArray.length);
-            }
+
             this.staticLightingCache.fill(0);
 
             const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased);
             const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased);
 
             this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
-            
+
             if (staticEnv.length >= 2) {
                 const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
-                this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, lerp * 0.5);
-                this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, (lerp - 1) * 0.5);
-            } else if (staticEnv.length === 1) {
-                this.computeLighting(sector, staticEnv, this.staticLightingCache, 0.5);
-            }
+                if (lerp < 1.0) this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp);
+                if (lerp > 0.0) this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp);
+            } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0);
         }
 
         // Apply static cache to the vertex attribute
@@ -152,21 +144,12 @@ class LitActorMesh extends Mesh {
         const dynamicScene = scene.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
         const dynamicEnv = environment.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
 
-        if (dynamicScene.length > 0) {
-            this.computeLighting(sector, dynamicScene, colorArray, 1.0);
-        }
-        
-        // Dynamic environment lights with time-based interpolation
+        if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0);
         if (dynamicEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);
-            
-            // Apply current and next environment lights with interpolation weights
-            this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, lerp * 0.5);
-            this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, (lerp - 1) * 0.5);
-        } else if (dynamicEnv.length === 1) {
-            // Single dynamic environment light, no interpolation needed
-            this.computeLighting(sector, dynamicEnv, colorArray, 0.5);
-        }
+            if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp);
+            if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp);
+        } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0);
 
         attrColors.needsUpdate = true;
     }
