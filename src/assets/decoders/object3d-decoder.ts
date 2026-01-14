@@ -118,8 +118,6 @@ function decodeStaticMeshData(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
-    debugger;
-
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const geometry = fetchGeometry(infoGeo as GD.IGeometryDecodeInfo);
 

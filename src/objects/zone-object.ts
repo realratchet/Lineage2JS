@@ -823,6 +823,13 @@ class SectorObject extends Object3D {
                 }
             });
 
+            // Update terrain lighting
+            this.zones.traverseVisible((object) => {
+                if ((object as any).isMesh && object.constructor.name === 'Terrain') {
+                    (object as any).update?.(this, environment);
+                }
+            });
+
             if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
                 this._lastLoggedStaticMeshLeaf = leafIndex;

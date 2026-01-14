@@ -414,7 +414,7 @@ async function startCore() {
     const loadSettings = {
         env: new UL2NEnvManager((envColors[EEnvCycle.Normal] as any).envLight, EEnvCycle.Normal),
         helpersZoneBounds: false,
-        loadTerrain: false,
+        loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
