@@ -594,14 +594,26 @@ class RenderManager {
 
                 // // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
 
-                (object as THREE.Object3D).traverseVisible(object => {
-                    if ((object as any).isUpdatable)
-                        (object as any).update(currentTime);
+                const parentZones = object.parent;
+                const sector = (parentZones && parentZones.parent && (parentZones.parent as any).isSectorObject)
+                    ? (parentZones.parent as SectorObject)
+                    : null;
 
-                    if ((object as THREE.Mesh).isMesh)
-                        (((((object as THREE.Mesh).material as THREE.Material).isMaterial)
-                            ? [(object as THREE.Mesh).material]
-                            : (object as THREE.Mesh).material) as THREE.Material[])
+                (object as THREE.Object3D).traverseVisible(child => {
+                    if ((child as any).isUpdatable) {
+                        // LitActorMesh (and Terrain) need Sector + Env to update lighting
+                        // We check for 'computeLighting' as a heuristic for these objects
+                        if (sector && 'computeLighting' in child) {
+                            (child as any).update(sector, this.environment);
+                        } else {
+                            (child as any).update(currentTime);
+                        }
+                    }
+
+                    if ((child as THREE.Mesh).isMesh)
+                        (((((child as THREE.Mesh).material as THREE.Material).isMaterial)
+                            ? [(child as THREE.Mesh).material]
+                            : (child as THREE.Mesh).material) as THREE.Material[])
                             .forEach(mat => {
                                 if (mat && (mat as any).isUpdatable)
                                     (mat as any).update(currentTime);

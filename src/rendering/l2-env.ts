@@ -8,7 +8,9 @@ const tmpColor_2 = new Color();
 class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
+
     protected time: number = 0; // in seconds
+    protected envVersion: number = 0; // Incremented when activeEnv changes
 
     public constructor(envColors: { [key in 0 | 1 | 2]: EnvColor }) {
         this.envColors = envColors;
@@ -19,7 +21,13 @@ class L2Environment {
     public getEnvColor() { return this.envColors[this.activeEnv]; }
     public getTimeSeconds() { return this.time; }
     public getActiveEnv() { return this.activeEnv; }
-    public setActiveEnv(index: 0 | 1 | 2) { this.activeEnv = index; }
+    public setActiveEnv(index: 0 | 1 | 2) {
+        if (this.activeEnv !== index) {
+            this.activeEnv = index;
+            this.envVersion++;
+        }
+    }
+    public getEnvVersion() { return this.envVersion; }
 
     public getBaseColorPlaneStaticMeshSunLight(target: Color): Color {
         const timeOfDay = this.getTimeOfDay();

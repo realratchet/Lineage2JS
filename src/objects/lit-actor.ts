@@ -21,11 +21,15 @@ class LitActorMesh extends Mesh {
     protected scaledGlow: number;
     protected staticLightingCache?: Float32Array;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number }) {
+    protected isSunAffected: boolean = false;
+    protected lastEnvVersion: number = -1;
+
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
         this.scaledGlow = props.scaledGlow;
+        this.isSunAffected = props.isSunAffected || false;
 
         if (this.lightInfo) {
             const attrColor = this.geometry.getAttribute("color");
@@ -98,6 +102,7 @@ class LitActorMesh extends Mesh {
         // Check if any lights need updating
         let staticCacheDirty = !this.staticLightingCache;
         let anyDynamicLightNeedsUpdate = false;
+        let envChanged = env.getEnvVersion() !== this.lastEnvVersion;
 
         // Collect and augment light info
         const scene = this.lightInfo.scene.map(l => ({ ...l, instance: sector.lights[l.light] }));
@@ -113,7 +118,7 @@ class LitActorMesh extends Mesh {
         }
 
         // Only recalculate if something changed
-        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
+        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !envChanged) return;
 
         const attrColors = this.geometry.getAttribute("lighting");
         const colorArray = attrColors.array as Float32Array;
@@ -150,6 +155,18 @@ class LitActorMesh extends Mesh {
             if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp);
             if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp);
         } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0);
+
+        // Apply Ambient Sunlight if affected
+        // Apply Ambient Sunlight if affected
+        // if (this.isSunAffected) { // REMOVED: Apply ambient globally to match Terrain behavior and fix "No Impact"
+        const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColor);
+        for (let i = 0; i < colorArray.length; i += 3) {
+            colorArray[i + 0] += ambient.r;
+            colorArray[i + 1] += ambient.g;
+            colorArray[i + 2] += ambient.b;
+        }
+        this.lastEnvVersion = env.getEnvVersion();
+        // }
 
         attrColors.needsUpdate = true;
     }

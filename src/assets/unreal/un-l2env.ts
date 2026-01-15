@@ -269,10 +269,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
                 moon: { type: "TimeColor", array: this.colorMoon?.map(c => c.getDecodeInfo()) ?? [] }
             },
             ambient: {
-                terrain: { type: "TimeHSV", array: this.ambientTerrain?.map(c => c.getDecodeInfo()) ?? [] },
-                actor: { type: "TimeHSV", array: this.ambientActor?.map(c => c.getDecodeInfo()) ?? [] },
-                staticMesh: { type: "TimeHSV", array: this.ambientStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
-                bsp: { type: "TimeHSV", array: this.ambientBSP?.map(c => c.getDecodeInfo()) ?? [] }
+                terrain: { type: "TimeHSV", array: this.ambientTerrain?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] },
+                actor: { type: "TimeHSV", array: this.ambientActor?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] },
+                staticMesh: { type: "TimeHSV", array: this.ambientStaticMesh?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] },
+                bsp: { type: "TimeHSV", array: this.ambientBSP?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] }
             },
             scale: {
                 sun: { type: "TimeScale", array: this.scaleSun?.map(c => c.getDecodeInfo()) ?? [] },
@@ -281,6 +281,28 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         }
     }
 }
+
+function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+    r /= 255, g /= 255, b /= 255;
+    let v = Math.max(r, g, b);
+    let diff = v - Math.min(r, g, b);
+    let h = 0, s = 0;
+
+    if (diff === 0) {
+        h = s = 0;
+    } else {
+        s = diff / v;
+        if (r === v) h = (g - b) / diff + (g < b ? 6 : 0);
+        else if (g === v) h = (b - r) / diff + 2;
+        else h = (r - g) / diff + 4;
+        h /= 6;
+    }
+
+
+    // Value correction: hsvToRgb applies a brightening curve (~sqrt). We square V to compensate and preserve linear intensity.
+    return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
+}
+
 
 //------------------------------------------------------------------------------
 // UL2NEnvManager - Singleton Environmental Manager
@@ -405,9 +427,7 @@ class UL2NEnvManager {
         return selectByTime(this.timeOfDay, array);
     }
 
-    public getColorPlaneStaticMeshSunLight(): FPlane {
-        throw new Error("not yet implemented")
-    }
+
 
     public getBrightnessStaticMeshSunLight(): number {
         return getBrightness(this.timeOfDay, this.currentEnvLight.lightStaticMesh);

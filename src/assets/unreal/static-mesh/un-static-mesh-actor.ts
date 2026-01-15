@@ -192,42 +192,8 @@ abstract class UStaticMeshActor extends UAActor {
             }
         }
 
-
-        // const lightInfo = {
-        //     scene: instance.lights.scene.map
-        // }
-
-        // debugger;
-
-        const mat4 = new Matrix4().fromArray(this.getWorldMatrixElements());
-
-        // const lightInfos = {
-        //     sceneLights: 
-        // }
-
-        // applyStaticMeshLight(envManager.getCurrentEnvLight(), vertexArrayLen, instanceColors, this.scaleGlow, localToWorld, attributes, this.instance.sceneLights, mat4);
-
-        // if (this.instance && this.instance.environmentLights.length > 0) {
-        //     const lightCount = this.instance.environmentLights.length;
-
-        //     if (lightCount >= 2) {
-        //         const [currEnvIndex, nextEnvIndex, lerp] = timeToIndicesLerp(envManager.getTimeOfDay(), lightCount);
-
-        //         applyStaticMeshLightEnv(
-        //             envManager,
-        //             vertexArrayLen,
-        //             instanceColors,
-        //             this.scaleGlow,
-        //             localToWorld,
-        //             attributes,
-        //             [
-        //                 [lerp, this.instance.environmentLights[currEnvIndex].getDecodeInfo(library)],
-        //                 [lerp - 1, this.instance.environmentLights[nextEnvIndex].getDecodeInfo(library)]
-        //             ],
-        //         );
-        //     }
-        // }
-
+        /*
+        // Disabled in favor of runtime ambient in LitActorMesh for dynamic Env updates
         if (this.isSunAffected) {
             const ambient = envManager.getAmbientPlaneStaticMeshSunLight();
 
@@ -237,6 +203,7 @@ abstract class UStaticMeshActor extends UAActor {
                 instanceColors[i + 2] += ambient.z;
             }
         }
+        */
 
         for (let i = 0; i < vertexArrayLen; i += 3) {
             instanceColors[i + 0] = Math.max(0, Math.min(1, instanceColors[i + 0]));
@@ -246,12 +213,12 @@ abstract class UStaticMeshActor extends UAActor {
 
         // debugger;
 
-        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox, instance?.lights);
+        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox, instance?.lights, this.isSunAffected);
 
         return this.uuid;
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, lights?: GD.ILightInstanceDecodeInfo): void {
+    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, lights?: GD.ILightInstanceDecodeInfo, isSunAffected: boolean = false): void {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
@@ -285,6 +252,7 @@ abstract class UStaticMeshActor extends UAActor {
             scaledGlow: this.scaleGlow,
             scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
+            isSunAffected,
             instance: {
                 mesh: meshInfo,
                 type: "StaticMeshInstance",
@@ -350,196 +318,3 @@ abstract class UStaticMeshActor extends UAActor {
 
 export default UStaticMeshActor;
 export { UStaticMeshActor };
-
-
-function applyStaticMeshLightEnv(envManager: GA.UL2NEnvManager, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightEnvironment: [number, any][]) {
-    const attrPositions = attributes.positions;
-    const attrNormals = attributes.normals;
-
-    const vertex = FVector.make();
-    const normal = FVector.make();
-
-    let r: number, g: number, b: number;
-
-    const intensityArray = new Float32Array(instanceColors.length);
-
-    for (let [lerp, lightInfo] of lightEnvironment) {
-        if (!lightInfo) continue;
-
-        if (!lightInfo || !lightInfo.light)
-            debugger;
-
-        // debugger;
-
-        const lightActor = lightInfo.light?.loadSelf();
-
-        if (!lightActor) continue;
-
-        const light = lightActor.getRenderInfo(envManager);
-
-        const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
-        const bitPtrIter = lightArray.iter();
-
-        let bitMask = 0x1;
-        let bitPtr = bitPtrIter.next().value;
-
-        const col = light.color;
-
-        for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
-            if ((bitPtr & bitMask) !== 0) {
-                const ox = i, oy = ox + 2, oz = ox + 1;
-
-                vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
-                normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
-
-                const samplingPoint = localToWorld.transformVector(vertex);
-                const samplingNormal = localToWorld.transformNormal(normal).normalized();
-
-                const sampledInt = light.sampleIntensity(samplingPoint, samplingNormal);
-                const intensity = lerp * 0.5 * scaleGlow * sampledInt;
-                r = col.x * intensity;
-                g = col.y * intensity;
-                b = col.z * intensity;
-
-                intensityArray[i + 0] = intensityArray[i + 0] + r;
-                intensityArray[i + 1] = intensityArray[i + 1] + g;
-                intensityArray[i + 2] = intensityArray[i + 2] + b;
-            }
-
-            bitMask = (bitMask << 1) % 0x100; // check for byte overflow
-
-            if (!bitMask) {
-                bitPtr = bitPtrIter.next().value;
-                bitMask = 1;
-            }
-        }
-    }
-
-    for (let i = 0; i < vertexArrayLen; i += 3) {
-        instanceColors[i + 0] = instanceColors[i + 0] + (intensityArray[i + 0] /* (lightsScene.length - 1)*/) //+ ambientColor[0];
-        instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] /* (lightsScene.length - 1)*/) //+ ambientColor[1];
-        instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] /* (lightsScene.length - 1)*/) //+ ambientColor[2];
-    }
-}
-
-function applyStaticMeshLight(env: GA.UL2NEnvManager, vertexArrayLen: number, instanceColors: Float32Array, scaleGlow: number, localToWorld: FMatrix, attributes: { positions: Float32Array, normals: Float32Array }, lightsScene: FStaticMeshLightInfo[], mat4) {
-    const attrPositions = attributes.positions;
-    const attrNormals = attributes.normals;
-
-    const vertex = FVector.make();
-    const normal = FVector.make();
-
-    let r: number, g: number, b: number;
-
-    const intensityArray = new Float32Array(instanceColors.length);
-
-    let j_i = -1;
-
-    const strings = [];
-
-    debugger;
-
-    for (let lightInfo of lightsScene) {
-        j_i++;
-        if (!lightInfo) continue;
-
-        if (!lightInfo || !lightInfo.light)
-            debugger;
-
-        const lightActor: GA.ULight = lightInfo.light?.loadSelf();
-
-        if (!lightActor) continue;
-
-        // debugger;
-
-        const light = lightActor.getRenderInfo(env);
-
-        if (light.dynamic) {
-            debugger;
-            continue;
-        }
-
-        const lightArray: C.FPrimitiveArray<"uint8"> = lightInfo.vertexFlags;
-        const bitPtrIter = lightArray.iter();
-
-        let bitMask = 0x1;
-        let bitPtr = bitPtrIter.next().value;
-
-        for (let i = 0, vi = 0; i < vertexArrayLen; i += 3, vi++) {
-            if ((bitPtr & bitMask) !== 0) {
-                const ox = i, oy = ox + 2, oz = ox + 1;
-
-                vertex.set(attrPositions[ox], attrPositions[oy], attrPositions[oz]);
-                normal.set(attrNormals[ox], attrNormals[oy], attrNormals[oz]);
-
-                const samplingPoint = localToWorld.transformVector(vertex, vertex);
-                const samplingNormal = localToWorld.transformNormal(normal, normal).normalized();
-
-                // if (vi === 288 && j_i === 3)
-                //     debugger
-
-                const intensity = scaleGlow * light.sampleIntensity(samplingPoint, samplingNormal);
-
-                strings.push(`j_i: ${j_i}, vi: ${vi}, bitPtr: ${bitPtr}, bitMask: ${bitMask}, intensity: ${intensity}, lightType: ${light.actor.type}, rgb: (${light.color.x}, ${light.color.y}, ${light.color.z})`)
-
-                // if (Math.abs(intensity) > 0)
-                //     debugger;
-
-                1
-                // debugger;
-
-
-                // {
-                //     const v = new Vector3(attrPositions[ox], attrPositions[oz], attrPositions[oy]).applyMatrix4(mat4);
-                //     const n = new Vector3(attrNormals[ox], attrNormals[oz], attrNormals[oy]).transformDirection(mat4);
-
-                //     const dvx = v.x - samplingPoint.x, dvy = v.z - samplingPoint.y, dvz = v.y - samplingPoint.z;
-                //     const dnx = n.x - samplingNormal.x, dny = n.z - samplingNormal.y, dnz = n.y - samplingNormal.z;
-
-                //     // console.log(`diff position: ${dvx}, ${dvy}, ${dvz}`);
-                //     // console.log(`diff normal: ${dnx}, ${dny}, ${dnz}`);
-
-                //     debugger;
-
-                //     if (
-                //         Math.abs(dvx) > 1e-5 || Math.abs(dvy) > 1e-5 || Math.abs(dvz) > 1e-5 ||
-                //         Math.abs(dnx) > 1e-5 || Math.abs(dny) > 1e-5 || Math.abs(dnz) > 1e-5
-                //     )
-                //         debugger;
-                // }
-
-                r = light.color.x * intensity;
-                g = light.color.y * intensity;
-                b = light.color.z * intensity;
-
-                // if (vi === 311) {
-                //     console.log(`j_i: ${j_i}, vi: ${vi}, intensity: ${intensity}, r: ${r}, g: ${g}, b: ${b}`);
-                // }
-
-                intensityArray[i + 0] = intensityArray[i + 0] + r;
-                intensityArray[i + 1] = intensityArray[i + 1] + g;
-                intensityArray[i + 2] = intensityArray[i + 2] + b;
-            }
-
-            bitMask = (bitMask << 1) % 0x100; // check for byte overflow
-
-            if (!bitMask) {
-                bitPtr = bitPtrIter.next().value;
-                bitMask = 1;
-            }
-        }
-    }
-
-    debugger
-
-    for (let i = 0; i < vertexArrayLen; i += 3) {
-        instanceColors[i + 0] = instanceColors[i + 0] + (intensityArray[i + 0] /* (lightsScene.length - 1)*/) //+ ambientColor[0];
-        instanceColors[i + 1] = instanceColors[i + 1] + (intensityArray[i + 1] /* (lightsScene.length - 1)*/) //+ ambientColor[1];
-        instanceColors[i + 2] = instanceColors[i + 2] + (intensityArray[i + 2] /* (lightsScene.length - 1)*/) //+ ambientColor[2];
-    }
-
-    // console.log(strings.join("\n"))
-
-    strings
-    debugger;
-}
