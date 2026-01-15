@@ -225,16 +225,16 @@ class RenderManager {
         guiFolders.world.add(timeState, "time", 0, 24, 0.01)
             .name("Time");
 
-        const envCycleState = {
-            get cycle() { return environment.getActiveEnv(); },
-            set cycle(v) {
+        const envSignsSkyState = {
+            get signsSky() { return environment.getActiveEnv(); },
+            set signsSky(v) {
                 environment.setActiveEnv(Number(v) as 0 | 1 | 2);
                 self.needsUpdate = true;
             }
         };
 
-        guiFolders.world.add(envCycleState, "cycle", { "Normal": 0, "Dusk": 1, "Dawn": 2 })
-            .name("Env Cycle");
+        guiFolders.world.add(envSignsSkyState, "signsSky", { "Normal": 0, "Dusk": 1, "Dawn": 2 })
+            .name("Signs Sky");
 
         return this;
     }
