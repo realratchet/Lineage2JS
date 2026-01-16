@@ -1,5 +1,5 @@
 import BaseConfigFile from "./un-base-config";
-import UL2NEnvManager, { UL2NEnvLight, EEnvCycle } from "@client/assets/unreal/un-l2env";
+import { UL2NEnvLight } from "@client/assets/unreal/un-l2env";
 
 
 class UConfigTimeEnv extends BaseConfigFile {

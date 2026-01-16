@@ -48,8 +48,6 @@ class DecodeLibrary {
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
         const uLevelInfo = uLevel.levelInfo.loadSelf();
 
-        uLevelInfo.setL2Env(env);
-
         decodeLibrary.brightness = uLevelInfo.brightness;
 
         decodeLibrary.name = uLevel.url.map;

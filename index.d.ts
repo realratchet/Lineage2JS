@@ -104,7 +104,6 @@ declare global {
                 export type FNTimeScale = import("@unreal/un-l2env").FNTimeScale;
                 export type UL2NEnvLight = import("@unreal/un-l2env").UL2NEnvLight;
                 export type UL2NTimeLight = import("@unreal/un-l2env").UL2NTimeLight;
-                export type UL2NEnvManager = import("@unreal/un-l2env").UL2NEnvManager;
                 export type EEnvCycle = import("@unreal/un-l2env").EEnvCycle;
             }
 
@@ -125,7 +124,6 @@ declare global {
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
 
                 export type LoadSettings_T = {
-                    env: GA.UL2NEnvManager,
                     loadTerrain?: boolean,
                     loadBaseModel?: boolean,
                     loadStaticModels?: boolean,
@@ -185,7 +183,12 @@ declare global {
                     type: "StaticMeshActor",
                     instance: IStaticMeshInstanceDecodeInfo,
                     bounds: IBoxDecodeInfo,
-                    scaledGlow: number
+                    scaledGlow: number,
+                    ambient: {
+                        glow: number,
+                        vector: Vector3Arr,
+                        isUnlit: boolean
+                    }
                 }
 
                 export interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -311,6 +314,7 @@ declare global {
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array;
                         skinWeight?: Float32Array;
+                        nodeIndex?: Uint32Array;
                     };
                     indices?: IndexLikeArray;
                     colliderIndices?: Uint32Array;

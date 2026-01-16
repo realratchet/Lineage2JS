@@ -20,16 +20,14 @@ class LitActorMesh extends Mesh {
     protected lightInfo?: MeshLight;
     protected scaledGlow: number;
     protected staticLightingCache?: Float32Array;
+    protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
 
-    protected isSunAffected: boolean = false;
-    protected lastEnvVersion: number = -1;
-
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
-        this.scaledGlow = props.scaledGlow;
-        this.isSunAffected = props.isSunAffected || false;
+        this.scaledGlow = props.scaledGlow ?? 1.0;
+        this.ambient = props.ambient;
 
         if (this.lightInfo) {
             const attrColor = this.geometry.getAttribute("color");
@@ -99,10 +97,13 @@ class LitActorMesh extends Mesh {
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightInfo) return;
 
+        const attrColors = this.geometry.getAttribute("lighting");
+        const colorArray = attrColors.array as Float32Array;
+
         // Check if any lights need updating
-        let staticCacheDirty = !this.staticLightingCache;
+        // CRITICAL FIX: Check length mismatch to prevent crash during copy
+        let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
         let anyDynamicLightNeedsUpdate = false;
-        let envChanged = env.getEnvVersion() !== this.lastEnvVersion;
 
         // Collect and augment light info
         const scene = this.lightInfo.scene.map(l => ({ ...l, instance: sector.lights[l.light] }));
@@ -112,28 +113,50 @@ class LitActorMesh extends Mesh {
         for (const { instance: light } of allLights) {
             if (!light) continue;
 
-            if (light.isDynamic || light.isTimeBased) {
+            if (light.isDynamic || (light.isTimeBased && light.lightMethod !== "Sunlight")) {
                 if (light.needsUpdate) anyDynamicLightNeedsUpdate = true;
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
-        // Only recalculate if something changed
-        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !envChanged) return;
-
-        const attrColors = this.geometry.getAttribute("lighting");
-        const colorArray = attrColors.array as Float32Array;
+        // Always proceed to apply Ambient/Dynamic updates
+        // if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
                 this.staticLightingCache = new Float32Array(colorArray.length);
 
-            this.staticLightingCache.fill(0);
+            const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
+            const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
 
-            const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased);
-            const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased);
+            if (this.ambient) {
+                const { isUnlit, vector, glow } = this.ambient;
+
+                if (isUnlit) {
+                    for (let i = 0; i < this.staticLightingCache.length; i += 3) {
+                        this.staticLightingCache[i] = 0.5;
+                        this.staticLightingCache[i + 1] = 0.5;
+                        this.staticLightingCache[i + 2] = 0.5;
+                    }
+                } else {
+                    const r = (vector[0] + (glow / 255)) * 0.5;
+                    const g = (vector[1] + (glow / 255)) * 0.5;
+                    const b = (vector[2] + (glow / 255)) * 0.5;
+
+                    for (let i = 0; i < this.staticLightingCache.length; i += 3) {
+                        this.staticLightingCache[i] = r;
+                        this.staticLightingCache[i + 1] = g;
+                        this.staticLightingCache[i + 2] = b;
+                    }
+                }
+            } else {
+                this.staticLightingCache.fill(0);
+            }
 
             this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
+
+            // if (staticEnv.length > 0)
+            //     debugger;
 
             if (staticEnv.length >= 2) {
                 const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
@@ -145,9 +168,22 @@ class LitActorMesh extends Mesh {
         // Apply static cache to the vertex attribute
         colorArray.set(this.staticLightingCache!);
 
+        const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColor);
+        if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
+            const r = ambient.r * this.scaledGlow;
+            const g = ambient.g * this.scaledGlow;
+            const b = ambient.b * this.scaledGlow;
+
+            for (let i = 0; i < colorArray.length; i += 3) {
+                colorArray[i] += r;
+                colorArray[i + 1] += g;
+                colorArray[i + 2] += b;
+            }
+        }
+
         // Apply dynamic pass (lights that change over time or move)
-        const dynamicScene = scene.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
-        const dynamicEnv = environment.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
+        const dynamicScene = scene.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
+        const dynamicEnv = environment.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
 
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0);
         if (dynamicEnv.length >= 2) {
@@ -155,18 +191,6 @@ class LitActorMesh extends Mesh {
             if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp);
             if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp);
         } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0);
-
-        // Apply Ambient Sunlight if affected
-        // Apply Ambient Sunlight if affected
-        // if (this.isSunAffected) { // REMOVED: Apply ambient globally to match Terrain behavior and fix "No Impact"
-        const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColor);
-        for (let i = 0; i < colorArray.length; i += 3) {
-            colorArray[i + 0] += ambient.r;
-            colorArray[i + 1] += ambient.g;
-            colorArray[i + 2] += ambient.b;
-        }
-        this.lastEnvVersion = env.getEnvVersion();
-        // }
 
         attrColors.needsUpdate = true;
     }

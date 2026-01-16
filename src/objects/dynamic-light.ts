@@ -261,7 +261,7 @@ class DynamicLight extends Object3D {
             else intensity = 1.0;
         }
         else if (this.lightType === LT_SUBTLE_PULSE)
-            intensity = 0.9 + 0.09 * Math.sin(angle);
+            intensity = 0.95 + 0.05 * Math.sin(angle);
         else if (this.lightType === LT_TEXTURE_PALETTE_LOOP) {
             this.isDynamicLight = true;
         }
@@ -370,9 +370,11 @@ class DynamicLight extends Object3D {
         // const n = new Vector3(0, 1, 0);
 
         if (this.lightEffect === LE_SUNLIGHT) {
+            // LE_SUNLIGHT: Directional light using dot(Normal, LightDir)
+            // Verified from IDA: positive dot means facing towards light
             const dot = direction.dot(sampleNormal);
-            if (dot < 0)
-                return dot * -2;
+            if (dot > 0)
+                return dot * 2;  // SUNLIGHT_ATTENUATION_CONSTANT = 2
             else return 0;
         } else if (this.lightEffect === LE_CYLINDER) {
             // Reuse tmpVec3_1 for lightVector

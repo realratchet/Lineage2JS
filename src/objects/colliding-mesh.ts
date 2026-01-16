@@ -10,7 +10,7 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     protected rigidbody: RigidBody;
     protected collider: Collider;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
         super(props);
 
         if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)

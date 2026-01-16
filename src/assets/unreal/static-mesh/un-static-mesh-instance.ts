@@ -52,8 +52,6 @@ abstract class UStaticMeshInstance extends UObject {
     public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array, lights: GD.ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color = new Float32Array(len * 3);
-        const envManager = this.actor.levelInfo.getL2Env();
-        const env = envManager.getCurrentEnvLight();
 
         for (let i = 0; i < len; i++) {
             const [r, g, b] = this.colorStream.getColor(i);

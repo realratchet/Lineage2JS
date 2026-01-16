@@ -38,6 +38,7 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3));
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
+    if (info.attributes.nodeIndex) geometry.setAttribute("nodeIndex", new BufferAttribute(info.attributes.nodeIndex, 1));
 
     if (info.indices) {
         const AttributeConstructor = getAttributeForTypedArray(info.indices.constructor as GD.IndexTypedArray);
@@ -161,8 +162,9 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const instanceInfo = info.instance;
     const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo);
     const scaledGlow = info.scaledGlow;
+    const ambient = info.ambient;
 
-    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow });
+    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, ambient });
 
     // if (info.name === "Exp_StaticMeshActor140")
     //     debugger;

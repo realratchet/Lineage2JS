@@ -1,6 +1,6 @@
 import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
-import FBSPNode from "../bsp/un-bsp-node";
+import FBSPNode, { BspNodeFlags_T } from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import { PolyFlags_T } from "../un-polys";
 import { BufferValue } from "@l2js/core";
@@ -283,12 +283,11 @@ abstract class UModel extends UPrimitive {
                 };
             }
 
-            if (surf.flags & PolyFlags_T.PF_Invisible) continue;
+            if (surf.flags & (PolyFlags_T.PF_Invisible | PolyFlags_T.PF_Portal | PolyFlags_T.PF_AntiPortal)) continue;
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
-            const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+            const { x: testX, y: testZ } = this.points.getElem(vert.pVertex) as FVector;
 
-            if (testY <= -16000 || testY >= 16000) continue;
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
 
@@ -313,17 +312,27 @@ abstract class UModel extends UPrimitive {
             // Create section key matching UE2's exact criteria
             const sectionKey = `${materialUuid}/${sectionPolyFlags}/${lightmapTextureIndex}`;
 
+            // Determine if node is in "Outdoor" zone (Front Zone)
+            const zoneIndex = node.iZone[1];
+            const zoneProp = this.zones[zoneIndex];
+            const zoneActor = zoneProp?.zoneActor;
+            const isOutdoor = zoneIndex === 0 || (zoneActor && (zoneActor as any).isSunAffected); // zone 0 is LevelInfo (Outdoor)
+
+            // Split sections by Ambient Type (Outdoor vs Indoor)
+            const composedKey = `${sectionKey}/${isOutdoor}`;
+
             if (!sectionMap.has(priority)) sectionMap.set(priority, new Map());
             const prioritySections = sectionMap.get(priority);
 
-            if (!prioritySections.has(sectionKey)) {
-                prioritySections.set(sectionKey, {
+            if (!prioritySections.has(composedKey)) {
+                prioritySections.set(composedKey, {
                     material: materialUuid,
                     lightmap: lightmap ? lightmap.uuid : null,
                     polyFlags: sectionPolyFlags,
                     lightmapTextureIndex: lightmapTextureIndex,
                     totalVertices: 0,
-                    nodes: []
+                    nodes: [],
+                    isOutdoor
                 });
             }
 
@@ -331,7 +340,7 @@ abstract class UModel extends UPrimitive {
             const vcount = node.numVertices;
             if (vcount <= 0) continue; // Skip nodes without vertices (splitter nodes)
 
-            const section = prioritySections.get(sectionKey);
+            const section = prioritySections.get(composedKey);
 
             const light: LightmapInfo = !lightmap ? null : {
                 uuid: lightmap.uuid,
@@ -343,7 +352,7 @@ abstract class UModel extends UPrimitive {
 
             node.iVertexIndex = section.totalVertices;
             section.totalVertices += vcount;
-            section.nodes.push({ node, surf, light });
+            section.nodes.push({ node, surf, light, nodeIndex });
         }
 
         // Create sections from sectionMap (UE2-style: material + lightmap only, NOT split by zone)
@@ -353,6 +362,7 @@ abstract class UModel extends UPrimitive {
             const positions = new Float32Array(totalVertices * 3);
             const normals = new Float32Array(totalVertices * 3);
             const uvs = new Float32Array(totalVertices * 2), uvs2 = new Float32Array(totalVertices * 2);
+            const attrNodeIndices = new Uint32Array(totalVertices);
 
             const TypedIndicesArray = getTypedArrayConstructor(totalVertices);
             const indices: number[] = [];
@@ -361,7 +371,7 @@ abstract class UModel extends UPrimitive {
             let dstVertices = 0;
 
             // Process all nodes in this section (UE2: sections can span multiple zones)
-            for (const { node, surf, light } of nodes) {
+            for (const { node, surf, light, nodeIndex } of nodes) {
                 const textureBase: FVector = this.points.getElem(surf.pBase);
                 const textureX: FVector = this.vectors.getElem(surf.vTextureU);
                 const textureY: FVector = this.vectors.getElem(surf.vTextureV);
@@ -402,6 +412,8 @@ abstract class UModel extends UPrimitive {
                         uvs2[uOffset + 1] = lmV;
                     }
 
+                    attrNodeIndices[vertexIndex + findex] = nodeIndex;
+
                     dstVertices++;
                 }
 
@@ -419,7 +431,7 @@ abstract class UModel extends UPrimitive {
                 // Store node index for this section
                 // UE2 line 1024: Node.iSection = Section - &Sections(0);
                 // Only nodes with NumVertices > 0 get section indices
-                const nodeIndex = this.bspNodes.indexOf(node);
+                // const nodeIndex = this.bspNodes.indexOf(node); // Optimized: passed via NodeInfo_T
                 if (nodeIndex >= 0 && node.numVertices > 0) {
                     nodeIndices.push(nodeIndex);
                     const sectionIndex = library.bspSections.length;
@@ -449,18 +461,20 @@ abstract class UModel extends UPrimitive {
                 attributes: {
                     normals,
                     positions,
-                    uvs: lightmap ? [uvs, uvs2] : [uvs]
+                    uvs: lightmap ? [uvs, uvs2] : [uvs],
+                    nodeIndex: attrNodeIndices
                 }
             };
 
             // Create section info (UE2-style: material + lightmap only, no zone splitting)
-            const sectionInfo: GD.IBSPSectionDecodeInfo_T = {
+            const sectionInfo: GD.IBSPSectionDecodeInfo_T & { isOutdoor: boolean } = {
                 uuid: generateUUID(),
                 priority,
                 material: finalMaterialUuid,
                 lightmap: lightmap,
                 geometry: geometryUuid,
-                nodeIndices
+                nodeIndices,
+                isOutdoor: sectionData.isOutdoor
             };
 
             const sectionIndex = library.bspSections.length;
@@ -497,9 +511,10 @@ type ObjectsForSection_T = {
     polyFlags: number,  // PolyFlags (PF_Unlit | PF_Selected | PF_TwoSided)
     lightmapTextureIndex: number,  // iLightMapTexture index
     totalVertices: number,
-    nodes: NodeInfo_T[]
+    nodes: NodeInfo_T[],
+    isOutdoor: boolean
 };
-type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo | null };
+type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo | null, nodeIndex: number };
 
 type LightmapInfo = {
     uuid: string,

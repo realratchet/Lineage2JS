@@ -487,6 +487,25 @@ class RenderManager {
                 this.player.goTo(collidable.point);
 
             console.log(intersection);
+
+            if ((intersection.object as any).isMesh) {
+                const mesh = intersection.object as THREE.Mesh;
+                const geometry = mesh.geometry;
+                if (geometry.attributes.nodeIndex) {
+                    const nodeIndexAttr = geometry.attributes.nodeIndex;
+                    const indexAttr = geometry.index;
+                    let vertexIndex;
+
+                    if (indexAttr) {
+                        vertexIndex = indexAttr.getX(intersection.faceIndex! * 3);
+                    } else {
+                        vertexIndex = intersection.faceIndex! * 3;
+                    }
+
+                    const nodeIndex = nodeIndexAttr.getX(vertexIndex);
+                    console.log(`Node ID: ${nodeIndex}`);
+                }
+            }
         } catch (e) {
             console.error(e);
         }

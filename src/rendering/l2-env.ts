@@ -56,8 +56,12 @@ class L2Environment {
     }
 
     public getAmbientPlaneBSPLight(target: Color): Color {
-        return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.bsp, target);
+        const envColor = this.getEnvColor();
+        // Fallback to staticMesh ambient if BSP ambient is not available
+        const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
+        return getColorFromHSV(this.getTimeOfDay(), bspArray, target);
     }
+
 
     public selectEnvironmentLightIndices(totalElements: number): [number, number, number] {
         const timeOfDay = this.getTimeOfDay();

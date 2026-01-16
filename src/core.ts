@@ -7,7 +7,7 @@ import DecodeLibrary from "./assets/unreal/decode-library";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
-import UL2NEnvManager, { EEnvCycle } from "@client/assets/unreal/un-l2env";
+import { EEnvCycle } from "@client/assets/unreal/un-l2env";
 import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
 // import { ensureWasmInitialized } from "@l2js/core";
 
@@ -412,13 +412,12 @@ async function startCore() {
     renderManager.setEnvColors(_decodeEnvColors(envColors));
 
     const loadSettings = {
-        env: new UL2NEnvManager((envColors[EEnvCycle.Normal] as any).envLight, EEnvCycle.Normal),
         helpersZoneBounds: false,
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
-        _loadStaticModelList: [
+        loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -456,7 +455,8 @@ async function startCore() {
 
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
             // ...["StaticMeshActor475"] // talking island village broken rock
-            "StaticMeshActor684", // cruma light
+            // "StaticMeshActor684", // cruma light
+            "StaticMeshActor2841"
             // "StaticMeshActor1893" // cruma: broken floating platform light
         ]
     } as GD.LoadSettings_T;

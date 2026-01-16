@@ -764,15 +764,59 @@ class SectorObject extends Object3D {
             });
 
             let visibleMeshCount = 0;
+            let bspAmbientColor: Color | null = null;
+            if (environment) {
+                bspAmbientColor = environment.getAmbientPlaneBSPLight(tmpColor);
+            }
+
+            let outdoorCount = 0, indoorCount = 0;
             this.bspGroup.children.forEach((child) => {
                 if (child instanceof Mesh && child.userData.sectionIndex !== undefined) {
                     const sectionIndex = child.userData.sectionIndex;
                     child.visible = visibleSections.has(sectionIndex);
                     if (child.visible) {
+                        const sectionInfo = this.bspSections![sectionIndex] as any;
+                        const isOutdoor = sectionInfo?.isOutdoor;
+
+                        if (isOutdoor) outdoorCount++; else indoorCount++;
+
+                        // Apply ambient color via MeshStaticMaterial's ambient uniform
+                        let material = child.material;
+                        const applyAmbient = (m: any) => {
+                            // MeshStaticMaterial uses uniforms.ambient.value.color
+                            if (m?.uniforms?.ambient?.value?.color) {
+                                if (isOutdoor && bspAmbientColor) {
+                                    m.uniforms.ambient.value.color.copy(bspAmbientColor);
+                                    // Ensure defines exists before checking USE_AMBIENT
+                                    if (m.defines && !m.defines.USE_AMBIENT) {
+                                        m.defines.USE_AMBIENT = "";
+                                        m.needsUpdate = true;
+                                    }
+                                } else {
+                                    m.uniforms.ambient.value.color.setRGB(1, 1, 1);
+                                }
+                            } else if (m?.color) {
+                                // Fallback for materials with .color (like MeshBasicMaterial)
+                                if (isOutdoor && bspAmbientColor) m.color.copy(bspAmbientColor);
+                                else m.color.setHex(0xffffff);
+                            }
+                        };
+
+                        if (Array.isArray(material)) {
+                            material.forEach(applyAmbient);
+                        } else {
+                            applyAmbient(material);
+                        }
+
                         visibleMeshCount++;
                     }
                 }
             });
+
+            // Log BSP ambient status on zone changes (condensed debug)
+            if (zoneChanged && bspAmbientColor) {
+                console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
+            }
 
             if (zoneChanged && currentZone !== null && currentZone >= 0) {
                 const finalActiveZones: number[] = [];

@@ -152,73 +152,22 @@ abstract class UStaticMeshActor extends UAActor {
 
         const instanceColors = instance?.color ?? new Float32Array(vertexArrayLen).fill(0);
 
-        const envManager = this.levelInfo.getL2Env();
         const ambActor = this.getAmbientLightingActor();
         const zone = this.getZone();
         const ambVector = zone.ambientVector;
 
-        let ambGlow: number;
-        if (ambActor.ambientGlow === 255) {
-            ambGlow = 1.0; // Full brightness for unlit
-        } else {
-            ambGlow = ambActor.ambientGlow / 255;
-        }
+        const ambientProps = {
+            glow: ambActor.ambientGlow,
+            vector: ambVector.getVectorElements(),
+            isUnlit: this.isUnlit
+        };
 
-        const ambGlowVec = FVector.make(ambGlow, ambGlow, ambGlow);
-        const ambColor = ambVector.add(ambGlowVec);
-
-        if (this.isUnlit) {
-            for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += 0.5;
-                instanceColors[i + 1] += 0.5;
-                instanceColors[i + 2] += 0.5;
-            }
-        } else {
-            let ambientVector = FVector.make();
-            for (let leaf of leaves) {
-                const iZone = leaf.iZone;
-                const zoneInfo = baseModel.getZoneActor(iZone).loadSelf();
-                const zoneAmbientVector = zoneInfo.ambientVector;
-
-                ambientVector.x = Math.max(ambientVector.x, zoneAmbientVector.x);
-                ambientVector.y = Math.max(ambientVector.y, zoneAmbientVector.y);
-                ambientVector.z = Math.max(ambientVector.z, zoneAmbientVector.z);
-            }
-
-            for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += ambColor.x * 0.5;
-                instanceColors[i + 1] += ambColor.y * 0.5;
-                instanceColors[i + 2] += ambColor.z * 0.5;
-            }
-        }
-
-        /*
-        // Disabled in favor of runtime ambient in LitActorMesh for dynamic Env updates
-        if (this.isSunAffected) {
-            const ambient = envManager.getAmbientPlaneStaticMeshSunLight();
-
-            for (let i = 0; i < vertexArrayLen; i += 3) {
-                instanceColors[i + 0] += ambient.x;
-                instanceColors[i + 1] += ambient.y;
-                instanceColors[i + 2] += ambient.z;
-            }
-        }
-        */
-
-        for (let i = 0; i < vertexArrayLen; i += 3) {
-            instanceColors[i + 0] = Math.max(0, Math.min(1, instanceColors[i + 0]));
-            instanceColors[i + 1] = Math.max(0, Math.min(1, instanceColors[i + 1]));
-            instanceColors[i + 2] = Math.max(0, Math.min(1, instanceColors[i + 2]));
-        }
-
-        // debugger;
-
-        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox, instance?.lights, this.isSunAffected);
+        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
 
         return this.uuid;
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, lights?: GD.ILightInstanceDecodeInfo, isSunAffected: boolean = false): void {
+    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): void {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
@@ -226,15 +175,6 @@ abstract class UStaticMeshActor extends UAActor {
             console.warn(`Geometry info not found for meshInfo.geometry: ${meshInfo.geometry}, actor: ${this.objectName}`);
             return;
         }
-
-        // const attributes = geometryInfo.attributes;
-        // if (!instanceColors) {
-        //     const instance = (this.instance ? this.instance.getDecodeInfo(library) : {
-        //         color: new Float32Array(attributes.positions.length).fill(0),
-        //         lights: { scene: [], ambient: [] }
-        //     });
-        //     instanceColors = instance.color;
-        // }
 
         const level = this.getLevel();
         const baseModel = level.getModel();
@@ -250,9 +190,9 @@ abstract class UStaticMeshActor extends UAActor {
             name: this.objectName,
             position: _position,
             scaledGlow: this.scaleGlow,
+            ambient,
             scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
-            isSunAffected,
             instance: {
                 mesh: meshInfo,
                 type: "StaticMeshInstance",

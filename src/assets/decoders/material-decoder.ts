@@ -115,7 +115,7 @@ function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MeshSt
         opacity: null,
         specular: null,
         specularMask: null,
-        side: DoubleSide,
+        side: info.twoSided ? DoubleSide : FrontSide,
         blendingMode: "normal",
         transparent: false,
         depthWrite: true,
