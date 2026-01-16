@@ -22,6 +22,7 @@ const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
 const tmpColor = new Color();
 const tmpAmbient = new Color();
+const tmpSun = new Color();
 
 class Terrain extends Mesh implements ICollidable {
     public readonly isCollidable = true;
@@ -102,6 +103,9 @@ class Terrain extends Mesh implements ICollidable {
         // Collect and augment light info
         const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
 
+        // if (this.lightingInfo.lights.length > 0)
+        //     debugger;
+
         for (const { instance: light } of lights) {
             if (!light) continue;
 
@@ -123,8 +127,12 @@ class Terrain extends Mesh implements ICollidable {
             }
             this.staticLightingCache.fill(0);
 
-            // 1. Apply Ambient with Shadow Map
+            // 1. Apply Ambient with Shadow Map (TintMap logic)
+            // Final = Ambient + (Light * Intensity)
+            // Note: hsvToRgb already normalizes to 0-1, so no additional halving needed
             const ambient = env.getAmbientPlaneTerrainLight(tmpAmbient);
+            const light = env.getTerrainLightColor(tmpSun);
+
             const shadowMap = this.lightingInfo.shadowMaps[shadowIndex];
             const shadowMapNext = this.lightingInfo.shadowMaps[shadowNextIndex];
 
@@ -136,13 +144,14 @@ class Terrain extends Mesh implements ICollidable {
                     s = s * (1 - alpha) + sNext * alpha;
                 }
 
-                this.staticLightingCache[i + 0] = ambient.r * s;
-                this.staticLightingCache[i + 1] = ambient.g * s;
-                this.staticLightingCache[i + 2] = ambient.b * s;
+                // Ambient is constant (halved), Light is modulated by shadow map (Intensity)
+                this.staticLightingCache[i + 0] = ambient.r + light.r * s;
+                this.staticLightingCache[i + 1] = ambient.g + light.g * s;
+                this.staticLightingCache[i + 2] = ambient.b + light.b * s;
             }
 
             // 2. Add Static Lights
-            const staticLights = lights.filter(l => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased);
+            const staticLights = lights.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
             if (staticLights.length > 0) {
                 this.computeLighting(staticLights, this.staticLightingCache);
             }
@@ -154,7 +163,7 @@ class Terrain extends Mesh implements ICollidable {
         colorArray.set(this.staticLightingCache!);
 
         // 3. Add Dynamic/Time-Based Lights
-        const dynamicLights = lights.filter(l => l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
+        const dynamicLights = lights.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
         if (dynamicLights.length > 0) {
             this.computeLighting(dynamicLights, colorArray);
         }
@@ -185,6 +194,10 @@ class Terrain extends Mesh implements ICollidable {
 
         const attrPositions = this.geometry.getAttribute("position");
         const attrNormals = this.geometry.getAttribute("normal");
+
+        // Guard: skip if normals are missing
+        if (!attrNormals) return;
+
         const vertexCount = attrPositions.count;
 
         const ox = this.position.x, oy = this.position.y, oz = this.position.z;

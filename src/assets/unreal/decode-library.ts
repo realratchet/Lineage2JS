@@ -83,7 +83,7 @@ class DecodeLibrary {
 
         {
             const actorTypesToLoad = ["Light", "NMovableSunLight"];
-            const uActorsToLoad = actorTypesToLoad.map(t => expGroups[t]).flat();
+            const uActorsToLoad = actorTypesToLoad.map(t => expGroups[t] ?? []).flat();
 
             uActorsToLoad
                 .map(exp => {

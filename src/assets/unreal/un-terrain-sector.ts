@@ -138,9 +138,9 @@ abstract class UTerrainSector extends UObject {
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
                 // Initialize vertex colors to black (lighting will be applied later)
-                colors[idxVertOffset + 0] = 0;
-                colors[idxVertOffset + 1] = 0;
-                colors[idxVertOffset + 2] = 0;
+                // colors[idxVertOffset + 0] = 0;
+                // colors[idxVertOffset + 1] = 0;
+                // colors[idxVertOffset + 2] = 0;
 
                 // {
                 //     const hmx = x + this.offsetX;
@@ -269,6 +269,7 @@ abstract class UTerrainSector extends UObject {
             attributes: {
                 positions,
                 colors,
+                normals
                 // uvs
             },
             indices,
@@ -304,7 +305,7 @@ abstract class UTerrainSector extends UObject {
             position: [ox, oy, oz],
             lighting: {
                 lights: this.lightInfos.map(li => ({
-                    light: li.light?.uuid,
+                    light: li.light?.objectName,
                     flags: li.visibilityBitmap.getTypedArray() as Uint8Array
                 })).filter(li => li.light),
                 shadowMaps: this.shadowMaps?.map(sm => sm.getTypedArray() as Uint8Array) ?? [],
@@ -423,13 +424,13 @@ abstract class UTerrainSector extends UObject {
         return vertices[offset];
     }
 
-    protected getVertexColor(x: number, y: number): GA.FColor {
-        const info = this.info;
-        const colors = info.vertexColors;
-        const offset = info.getGlobalVertex(x, y);
+    // protected getVertexColor(x: number, y: number): GA.FColor {
+    //     const info = this.info;
+    //     const colors = info.vertexColors;
+    //     const offset = info.getGlobalVertex(x, y);
 
-        return colors[offset];
-    }
+    //     return colors[offset];
+    // }
 
     protected getVertexNormal(x: number, y: number): FVector {
         const info = this.info;
@@ -450,7 +451,7 @@ abstract class UTerrainSector extends UObject {
         const vertices = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
-        const colors = new Float32Array(vertexCount * 4);
+        // const colors = new Float32Array(vertexCount * 4);
 
         if (info.texModifyInfo.loadSelf().colorOp !== 1) {
             debugger;
@@ -461,7 +462,7 @@ abstract class UTerrainSector extends UObject {
             for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
-                const color = this.getVertexColor(x, y);
+                // const color = this.getVertexColor(x, y);
 
                 const ix = this.offsetX + x, iy = this.offsetY + y;
                 const hix = ix + 0.5, hiy = iy + 0.5;
@@ -476,10 +477,10 @@ abstract class UTerrainSector extends UObject {
                 normals[it3 + 1] = normal.y;
                 normals[it3 + 2] = normal.z;
 
-                colors[it4 + 0] = color.r / 255;
-                colors[it4 + 1] = color.g / 255;
-                colors[it4 + 2] = color.b / 255;
-                colors[it4 + 3] = color.a / 255;
+                // colors[it4 + 0] = color.r / 255;
+                // colors[it4 + 1] = color.g / 255;
+                // colors[it4 + 2] = color.b / 255;
+                // colors[it4 + 3] = color.a / 255;
 
                 uvs[it2 + 0] = u;
                 uvs[it2 + 1] = v;
@@ -561,7 +562,7 @@ abstract class UTerrainSector extends UObject {
             vertices,
             normals,
             uvs,
-            colors
+            // colors
         }
 
         // TODO: update decorators

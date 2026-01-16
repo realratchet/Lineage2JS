@@ -4,6 +4,7 @@ import hsvToRgb from "@client/utils/hsv-to-rgb";
 
 const tmpColor_1 = new Color();
 const tmpColor_2 = new Color();
+const tmpColor_3 = new Color();
 
 class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
@@ -60,6 +61,14 @@ class L2Environment {
         // Fallback to staticMesh ambient if BSP ambient is not available
         const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
         return getColorFromHSV(this.getTimeOfDay(), bspArray, target);
+    }
+
+    public getSunColor(target: Color): Color {
+        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sun, target);
+    }
+
+    public getTerrainLightColor(target: Color): Color {
+        return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().light.terrain, target);
     }
 
 
@@ -148,6 +157,15 @@ function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Co
     const vNext = tmpColor_2.setRGB(rgbNext[0], rgbNext[1], rgbNext[2]);
 
     // Interpolate: target = vCurr + (vNext - vCurr) * lFrac
+    return target.copy(vCurr).lerp(vNext, lFrac);
+}
+
+function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: Color): Color {
+    const [cCurr, cNext, lFrac] = pickArrayIndices(timeOfDay, array);
+
+    const vCurr = tmpColor_1.setRGB(cCurr.r / 255, cCurr.g / 255, cCurr.b / 255);
+    const vNext = tmpColor_2.setRGB(cNext.r / 255, cNext.g / 255, cNext.b / 255);
+
     return target.copy(vCurr).lerp(vNext, lFrac);
 }
 
