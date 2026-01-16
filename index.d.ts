@@ -184,6 +184,7 @@ declare global {
                     instance: IStaticMeshInstanceDecodeInfo,
                     bounds: IBoxDecodeInfo,
                     scaledGlow: number,
+                    isSunAffected?: boolean,
                     ambient: {
                         glow: number,
                         vector: Vector3Arr,

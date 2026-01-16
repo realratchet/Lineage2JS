@@ -48,6 +48,22 @@ class L2Environment {
         return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
     }
 
+    /**
+     * Get terrain ambient color with per-byte halving (matching IDA: shr r/g/b, 1)
+     * The halving happens at byte level (0-255) BEFORE normalization.
+     */
+    public getAmbientPlaneTerrainLightHalved(target: Color): Color {
+        getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
+        // Convert to bytes, halve, convert back to 0-1
+        target.r = Math.floor(target.r * 255) >> 1;
+        target.g = Math.floor(target.g * 255) >> 1;
+        target.b = Math.floor(target.b * 255) >> 1;
+        target.r /= 255;
+        target.g /= 255;
+        target.b /= 255;
+        return target;
+    }
+
     public getAmbientPlaneActorLight(target: Color): Color {
         return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.actor, target);
     }

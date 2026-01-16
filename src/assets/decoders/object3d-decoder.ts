@@ -162,9 +162,10 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const instanceInfo = info.instance;
     const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo);
     const scaledGlow = info.scaledGlow;
+    const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
 
-    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, ambient });
+    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient });
 
     // if (info.name === "Exp_StaticMeshActor140")
     //     debugger;

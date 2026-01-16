@@ -19,14 +19,16 @@ class LitActorMesh extends Mesh {
 
     protected lightInfo?: MeshLight;
     protected scaledGlow: number;
+    protected isSunAffected: boolean;
     protected staticLightingCache?: Float32Array;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
         this.scaledGlow = props.scaledGlow ?? 1.0;
+        this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
         this.ambient = props.ambient;
 
         if (this.lightInfo) {
@@ -139,9 +141,11 @@ class LitActorMesh extends Mesh {
                         this.staticLightingCache[i + 2] = 0.5;
                     }
                 } else {
-                    const r = (vector[0] + (glow / 255)) * 0.5;
-                    const g = (vector[1] + (glow / 255)) * 0.5;
-                    const b = (vector[2] + (glow / 255)) * 0.5;
+                    // Static mesh actors use ambient directly (zone ambient + glow)
+                    // IDA: FinalRGB = AmbPlane + SunPlane * Diffuse
+                    const r = vector[0] + (glow / 255);
+                    const g = vector[1] + (glow / 255);
+                    const b = vector[2] + (glow / 255);
 
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
                         this.staticLightingCache[i] = r;
@@ -168,16 +172,19 @@ class LitActorMesh extends Mesh {
         // Apply static cache to the vertex attribute
         colorArray.set(this.staticLightingCache!);
 
-        const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColor);
-        if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
-            const r = ambient.r * this.scaledGlow;
-            const g = ambient.g * this.scaledGlow;
-            const b = ambient.b * this.scaledGlow;
+        // Apply sun ambient only to outdoor (sun-affected) meshes
+        if (this.isSunAffected) {
+            const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColor);
+            if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
+                const r = ambient.r * this.scaledGlow;
+                const g = ambient.g * this.scaledGlow;
+                const b = ambient.b * this.scaledGlow;
 
-            for (let i = 0; i < colorArray.length; i += 3) {
-                colorArray[i] += r;
-                colorArray[i + 1] += g;
-                colorArray[i + 2] += b;
+                for (let i = 0; i < colorArray.length; i += 3) {
+                    colorArray[i] += r;
+                    colorArray[i + 1] += g;
+                    colorArray[i + 2] += b;
+                }
             }
         }
 

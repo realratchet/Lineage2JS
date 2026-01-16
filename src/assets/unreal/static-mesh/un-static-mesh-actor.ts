@@ -190,6 +190,7 @@ abstract class UStaticMeshActor extends UAActor {
             name: this.objectName,
             position: _position,
             scaledGlow: this.scaleGlow,
+            isSunAffected: this.isSunAffected,
             ambient,
             scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],

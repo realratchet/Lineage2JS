@@ -128,9 +128,9 @@ class Terrain extends Mesh implements ICollidable {
             this.staticLightingCache.fill(0);
 
             // 1. Apply Ambient with Shadow Map (TintMap logic)
-            // Final = Ambient + (Light * Intensity)
-            // Note: hsvToRgb already normalizes to 0-1, so no additional halving needed
-            const ambient = env.getAmbientPlaneTerrainLight(tmpAmbient);
+            // Final = (Ambient >> 1) + (Light * Intensity)
+            // Per-byte halving matches IDA: shr r/g/b, 1
+            const ambient = env.getAmbientPlaneTerrainLightHalved(tmpAmbient);
             const light = env.getTerrainLightColor(tmpSun);
 
             const shadowMap = this.lightingInfo.shadowMaps[shadowIndex];
