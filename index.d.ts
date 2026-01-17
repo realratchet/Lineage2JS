@@ -266,6 +266,20 @@ declare global {
                     visibleZones: bigint
                 }
 
+                // Add IZoneFogInfo for L2FogInfo object
+                export interface IL2FogInfoDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "L2FogInfo",
+                    affectRange: { A: number, B: number },
+                    fogRange1: { A: number, B: number },
+                    fogRange2: { A: number, B: number },
+                    fogRange3: { A: number, B: number },
+                    fogRange4: { A: number, B: number },
+                    fogRange5: { A: number, B: number },
+                    colors: any[],
+                    cloudTexture: any,
+                    zoneMask: bigint
+                }
+
                 export interface IBSPZoneDecodeInfo_T {
                     connectivity: bigint,
                     visibility: bigint,

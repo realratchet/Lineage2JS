@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -8,7 +8,7 @@ import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
 import Visualizer, { VisualizerMode } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
-import L2Environment from "@client/rendering/l2-env";
+import L2Environment, { FogBlendState, interpolateFogInfoColor } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import * as dat from "dat.gui";
 
@@ -727,57 +727,108 @@ class RenderManager {
 
             // Check for L2FogInfo overrides (Priority over Zone/Global)
             // Use 'some' to stop after finding the first active fog info (optimization)
-            sector.children.some(child => {
-                if ((child as any).isFogInfo) {
-                    const fogInfo = child as FogInfoObject;
-                    // Check if camera is inside AffectRange
-                    // AffectRange is a struct { A: Min, B: Max }. Usually B is the outer radius.
-                    const dist = this.camera.position.distanceTo(fogInfo.position);
-                    let radius = fogInfo.affectRange ? fogInfo.affectRange.B : 0;
-                    if (radius === 0 && fogInfo.affectRange) radius = fogInfo.affectRange.A; // Fallback to A if B is 0
+            // REPLACED with Weighted Mixing logic
+            let accStart = 0;
+            let accEnd = 0;
+            let accR = 0;
+            let accG = 0;
+            let accB = 0;
+            let totalWeight = 0;
 
-                    if (dist <= radius) {
-                        const presetIndex = this.envConfig.fogPreset;
-                        let range = fogInfo[`fogRange${presetIndex}` as keyof FogInfoObject] as { A: number, B: number };
+            const presetIndex = this.envConfig.fogPreset;
 
-                        // Fallback to range1 if specific preset is missing or zero
-                        if (!range || (range.A === 0 && range.B === 0)) {
-                            range = fogInfo.fogRange1;
-                        }
+            // Iterate over optimized fogInfos array directly
+            const fogInfos = sector.fogInfos || [];
+            fogInfos.forEach(fogInfo => {
+                // if ((child as any).isFogInfo) {
+                //    const fogInfo = child as FogInfoObject;
 
-                        if (range) {
-                            targetFogStart = range.A;
-                            targetFogEnd = range.B;
-                        }
-
-                        if (fogInfo.colors && fogInfo.colors.length > 0) {
-                            // TODO: Interpolate based on Time
-                            const colorInfo = fogInfo.colors[0] as any;
-                            if (colorInfo && colorInfo.FogColor) {
-                                const c = colorInfo.FogColor;
-                                targetFogColor.set(c.R, c.G, c.B);
-                            }
-                        }
-                        return true; // Apply first found fog info and exit
-                    }
+                // Zone Mask Check (Visibility Culling)
+                // If fogInfo has a zoneMask, check if it intersects with the currently visible zone mask
+                const visibleMask = sector.lastZoneMask;
+                if (fogInfo.zoneMask && visibleMask && !(fogInfo.zoneMask & visibleMask)) {
+                    return; // FogInfo is in a zone not currently visible/connected
                 }
-                return false;
+
+                const affectRange = fogInfo.affectRange;
+                if (!affectRange) return;
+
+                const inner = Math.min(affectRange.A, affectRange.B);
+                const outer = Math.max(affectRange.A, affectRange.B);
+
+                const dist = this.camera.position.distanceTo(fogInfo.position);
+
+                if (dist > outer) return;
+
+                // Calculate weight: 1.0 inside Inner, linear falloff to 0.0 at Outer
+                let weight = 1.0;
+                if (outer > inner) {
+                    if (dist > inner) {
+                        weight = 1.0 - ((dist - inner) / (outer - inner));
+                    }
+                } else {
+                    // Inner >= Outer, strict cutoff (weight 1 or 0)
+                    weight = 1.0;
+                }
+
+                if (weight <= 0) return;
+
+                // Fetch params
+                let range = fogInfo[`fogRange${presetIndex}` as keyof FogInfoObject] as { A: number, B: number };
+                if (!range || (range.A === 0 && range.B === 0)) {
+                    range = fogInfo.fogRange1;
+                }
+                if (!range) return;
+
+                // Time-based color interpolation (matches UE2/L2 behavior)
+                const timeOfDay = env.getTimeOfDay();
+                const fogColor = interpolateFogInfoColor(timeOfDay, fogInfo.colors, tmpColorByte);
+                const cR = fogColor.r, cG = fogColor.g, cB = fogColor.b;
+
+                // Accumulate
+                accStart += range.A * weight;
+                accEnd += range.B * weight;
+                accR += cR * weight;
+                accG += cG * weight;
+                accB += cB * weight;
+                totalWeight += weight;
             });
+
+            if (totalWeight > 0) {
+                // If weight > 1, blend fog infos first
+                const finalStart = accStart / totalWeight;
+                const finalEnd = accEnd / totalWeight;
+                const finalR = accR / totalWeight;
+                const finalG = accG / totalWeight;
+                const finalB = accB / totalWeight;
+
+                // Blend with global/zone target
+                const blendFactor = Math.min(totalWeight, 1.0);
+
+                targetFogStart = MathUtils.lerp(targetFogStart, finalStart, blendFactor);
+                targetFogEnd = MathUtils.lerp(targetFogEnd, finalEnd, blendFactor);
+
+                targetFogColor.set(
+                    MathUtils.lerp(targetFogColor.r, finalR, blendFactor),
+                    MathUtils.lerp(targetFogColor.g, finalG, blendFactor),
+                    MathUtils.lerp(targetFogColor.b, finalB, blendFactor)
+                );
+            }
         }
 
         // 4. Update Header/Global State (Interpolate)
         // For now, snap to target values. TODO: Add interpolation for smooth transitions.
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
 
-        // // Update Scene Fog
-        // if (!this.scene.fog || !(this.scene.fog as any).isFog) {
-        //     this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
-        // } else {
-        //     const sceneFog = this.scene.fog as Fog;
-        //     sceneFog.color.copy(fogColorThree);
-        //     sceneFog.near = targetFogStart;
-        //     sceneFog.far = targetFogEnd;
-        // }cwc
+        // Update Scene Fog
+        if (!this.scene.fog || !(this.scene.fog as any).isFog) {
+            this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
+        } else {
+            const sceneFog = this.scene.fog as Fog;
+            sceneFog.color.copy(fogColorThree);
+            sceneFog.near = targetFogStart;
+            sceneFog.far = targetFogEnd;
+        }
 
         // Update Shader Uniforms
         GLOBAL_UNIFORMS.fogColor.value.copy(fogColorThree);

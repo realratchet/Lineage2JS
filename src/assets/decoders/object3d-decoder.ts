@@ -419,6 +419,19 @@ function decodeSector(library: GD.DecodeLibrary) {
         sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
     }
 
+
+
+    // Add Fog Infos
+    library.fogInfos.forEach(info => {
+        try {
+            const fogObject = decodeObject3D(library, info);
+            sector.fogInfos.push(fogObject as FogInfoObject); // Keep reference in array
+            sector.add(fogObject); // Add to scene graph
+        } catch (e) {
+            console.warn("Failed to decode fog info", e);
+        }
+    });
+
     // library.bspColliders.forEach(collider => {
     //     const box = new Box3();
 
@@ -698,13 +711,17 @@ function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) 
     if (info.name) object.name = info.name;
     if (info.position) object.position.fromArray(info.position); // L2FogInfo is an Actor, has location
 
-    object.affectRange = info.affectRange as any;
-    object.fogRange1 = info.fogRange1 as any;
-    object.fogRange2 = info.fogRange2 as any;
-    object.fogRange3 = info.fogRange3 as any;
-    object.fogRange4 = info.fogRange4 as any;
-    object.fogRange5 = info.fogRange5 as any;
+    // Convert array ranges [min, max] to objects {A, B} for compatibility with render-manager
+    const toRange = (arr: number[] | undefined) => arr ? { A: arr[0], B: arr[1] } : { A: 0, B: 0 };
+
+    object.affectRange = toRange(info.affectRange as any);
+    object.fogRange1 = toRange(info.fogRange1 as any);
+    object.fogRange2 = toRange(info.fogRange2 as any);
+    object.fogRange3 = toRange(info.fogRange3 as any);
+    object.fogRange4 = toRange(info.fogRange4 as any);
+    object.fogRange5 = toRange(info.fogRange5 as any);
     object.colors = info.colors as any;
+    object.zoneMask = (info as any).zoneMask ?? 0n;
 
     return object;
 }

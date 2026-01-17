@@ -24,6 +24,7 @@ class DecodeLibrary {
     public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
     public readonly leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][] = [];
     public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
+    public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public skyZone: GD.IBaseZoneDecodeInfo = null;
 
@@ -117,18 +118,16 @@ class DecodeLibrary {
         {
             const fogTypes = ["L2FogInfo"];
             const uFogsToLoad = fogTypes.map(t => expGroups[t] ?? []).flat();
-            const fogs = [];
 
             uFogsToLoad.forEach(exp => {
                 const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
                 if (uActor.getDecodeInfo) {
-                    fogs.push(uActor.getDecodeInfo(decodeLibrary));
-                    // decodeLibrary.celestials.push(uActor.getDecodeInfo(decodeLibrary));
+                    decodeLibrary.fogInfos.push(uActor.getDecodeInfo(decodeLibrary));
                 }
             });
-
-            debugger
         }
+
+
 
         if (loadEmitters) {
             const actorsToLoad = expGroups["Emitter"] || [];

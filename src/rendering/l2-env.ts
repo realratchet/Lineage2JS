@@ -1,5 +1,5 @@
-import EnvColor, { TimeHSV } from "@client/rendering/env-color";
-import { Color } from "three";
+import EnvColor, { TimeColor, TimeHSV } from "@client/rendering/env-color";
+import { Color, MathUtils } from "three";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -8,6 +8,105 @@ import { ColorByte } from "@client/utils/color-byte";
 // const tmpColor_3 = new Color();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
+
+/**
+ * FogBlendState - Manages smooth fog transitions matching UE2/L2 behavior
+ * Based on IDA analysis: interpolates over ~1 second when fog target changes
+ */
+class FogBlendState {
+    // Target fog values (what we're transitioning to)
+    public targetColor = new ColorByte();
+    public targetStart = 2000;
+    public targetEnd = 8000;
+
+    // Previous fog values (where we started)
+    public prevColor = new ColorByte();
+    public prevStart = 2000;
+    public prevEnd = 8000;
+
+    // Current interpolated fog values
+    public currentColor = new ColorByte();
+    public currentStart = 2000;
+    public currentEnd = 8000;
+
+    // Blend timing (default 1.0 second)
+    public totalTime = 1.0;
+    public remainingTime = 0;
+
+    /**
+     * Update the blend state based on elapsed time
+     * @param deltaTime Time since last frame in seconds
+     */
+    public update(deltaTime: number): void {
+        if (this.remainingTime <= 0) {
+            // No blending in progress, snap to target
+            this.currentColor.copy(this.targetColor);
+            this.currentStart = this.targetStart;
+            this.currentEnd = this.targetEnd;
+            return;
+        }
+
+        // Decrease remaining time
+        this.remainingTime = Math.max(0, this.remainingTime - deltaTime);
+
+        // Calculate blend factor (0 = prev, 1 = target)
+        const t = 1.0 - (this.remainingTime / this.totalTime);
+
+        // Interpolate values
+        this.currentStart = MathUtils.lerp(this.prevStart, this.targetStart, t);
+        this.currentEnd = MathUtils.lerp(this.prevEnd, this.targetEnd, t);
+        this.currentColor.set(
+            MathUtils.lerp(this.prevColor.r, this.targetColor.r, t),
+            MathUtils.lerp(this.prevColor.g, this.targetColor.g, t),
+            MathUtils.lerp(this.prevColor.b, this.targetColor.b, t)
+        );
+    }
+
+    /**
+     * Set new target fog values, triggering a blend transition
+     */
+    public setTarget(color: ColorByte, start: number, end: number): void {
+        // Check if target actually changed
+        const colorChanged = color.r !== this.targetColor.r ||
+            color.g !== this.targetColor.g ||
+            color.b !== this.targetColor.b;
+        const rangeChanged = start !== this.targetStart || end !== this.targetEnd;
+
+        if (!colorChanged && !rangeChanged) return;
+
+        // Store current as previous
+        this.prevColor.copy(this.currentColor);
+        this.prevStart = this.currentStart;
+        this.prevEnd = this.currentEnd;
+
+        // Set new target
+        this.targetColor.copy(color);
+        this.targetStart = start;
+        this.targetEnd = end;
+
+        // Start blend timer
+        this.remainingTime = this.totalTime;
+    }
+
+    /**
+     * Instantly snap to target values (no transition)
+     */
+    public snapToTarget(color: ColorByte, start: number, end: number): void {
+        this.targetColor.copy(color);
+        this.targetStart = start;
+        this.targetEnd = end;
+
+        this.prevColor.copy(color);
+        this.prevStart = start;
+        this.prevEnd = end;
+
+        this.currentColor.copy(color);
+        this.currentStart = start;
+        this.currentEnd = end;
+
+        this.remainingTime = 0;
+    }
+}
 
 class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
@@ -32,6 +131,9 @@ class L2Environment {
         }
     }
     public getEnvVersion() { return this.envVersion; }
+
+    /** Get normalized time (0-1 range representing 0-24 hours) */
+    public getNormalizedTime() { return this.getTimeOfDay() / 24; }
 
     public getBaseColorPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
         const timeOfDay = this.getTimeOfDay();
@@ -219,5 +321,73 @@ function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: Co
     return target.copy(vCurr).lerp(vNext, lFrac);
 }
 
+/**
+ * Interpolate L2FogInfo color array based on time of day
+ * L2FogInfo colors are in format: { time: number, fogColor: [r, g, b, a], ... }
+ */
+function interpolateFogInfoColor(
+    timeOfDay: number,
+    colors: { time: number; fogColor: number[] }[],
+    target: ColorByte
+): ColorByte {
+    if (!colors || colors.length === 0) {
+        return target.set(128, 128, 128); // Default gray fallback
+    }
+
+    if (colors.length === 1) {
+        const c = colors[0].fogColor;
+        return target.set(c[0], c[1], c[2]);
+    }
+
+    // Find surrounding keyframes
+    let prevIdx = 0;
+    let nextIdx = 0;
+
+    for (let i = 0; i < colors.length; i++) {
+        if (colors[i].time <= timeOfDay) {
+            prevIdx = i;
+        }
+    }
+
+    nextIdx = prevIdx + 1;
+    if (nextIdx >= colors.length) {
+        // Wrap around to first keyframe
+        nextIdx = 0;
+    }
+
+    const prev = colors[prevIdx];
+    const next = colors[nextIdx];
+
+    // Calculate interpolation factor
+    let t = 0;
+    if (prev.time !== next.time) {
+        let prevTime = prev.time;
+        let nextTime = next.time;
+
+        // Handle wrap-around (e.g., time 23 to time 0)
+        if (nextTime < prevTime) {
+            nextTime += 24;
+        }
+
+        let currentTime = timeOfDay;
+        if (currentTime < prevTime) {
+            currentTime += 24;
+        }
+
+        t = (currentTime - prevTime) / (nextTime - prevTime);
+        t = Math.max(0, Math.min(1, t)); // Clamp to [0, 1]
+    }
+
+    // Interpolate RGB values
+    const pC = prev.fogColor;
+    const nC = next.fogColor;
+
+    return target.set(
+        pC[0] + (nC[0] - pC[0]) * t,
+        pC[1] + (nC[1] - pC[1]) * t,
+        pC[2] + (nC[2] - pC[2]) * t
+    );
+}
+
 export default L2Environment;
-export { L2Environment };
+export { L2Environment, FogBlendState, interpolateFogInfoColor };

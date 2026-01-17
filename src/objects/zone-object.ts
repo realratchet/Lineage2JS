@@ -20,6 +20,7 @@ export class FogInfoObject extends Object3D {
     public fogRange4: { A: number, B: number };
     public fogRange5: { A: number, B: number };
     public colors: any[];
+    public zoneMask: bigint = 0n;
 }
 
 
@@ -106,6 +107,7 @@ class SectorObject extends Object3D {
     public index: THREE.Vector2;
     public sunTexture: any; // MapData_T - texture with size info
     public brightness: number = 1.0;
+    public lastZoneMask: bigint = 0n;
 
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];
@@ -332,6 +334,7 @@ class SectorObject extends Object3D {
         const visibleLeaves = new Set<number>();
 
         if (this.bspNodes.length === 0 || !this.nodeZoneMasks) {
+            this.lastZoneMask = activeZoneMask;
             return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
         }
 
@@ -611,6 +614,7 @@ class SectorObject extends Object3D {
             }
         }
 
+        this.lastZoneMask = currentZoneMask;
         return { visibleNodes, visibleLeaves: filteredVisibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
     }
 

@@ -1,5 +1,6 @@
 import UObject, { APackage, UExport } from "@l2js/core";
 import AInfo from "./un-info";
+import { Vector3 } from "three";
 
 abstract class UL2FogInfo extends AInfo {
     declare protected readonly affectRange: GA.FRange;
@@ -12,6 +13,30 @@ abstract class UL2FogInfo extends AInfo {
     declare protected readonly cloudTexture: GA.UMaterial;
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
+        let zoneMask = 0n;
+        const level = this.getLevel();
+        const model = level?.getModel();
+
+        if (model && this.location && this.affectRange) {
+            let radius = this.affectRange.B;
+            if (radius <= 0) radius = this.affectRange.A;
+            if (radius <= 0) radius = 1000;
+
+            const pos = this.location.getVectorElements();
+            const origin = new Vector3(pos[0], pos[1], pos[2]);
+            const extent = new Vector3(radius, radius, radius);
+
+            // Find leaves touching this box
+            const leafIndices = model.boxLeavesRecursive(0, origin, extent);
+
+            for (const leafIndex of leafIndices) {
+                const leaf = library.bspLeaves[leafIndex];
+                if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+                    zoneMask |= (1n << BigInt(leaf.zone));
+                }
+            }
+        }
+
         return {
             type: "L2FogInfo",
             position: this.location ? this.location.getVectorElements() : [0, 0, 0],
@@ -22,7 +47,8 @@ abstract class UL2FogInfo extends AInfo {
             fogRange4: this.fogRange4.getDecodeInfo(library),
             fogRange5: this.fogRange5.getDecodeInfo(library),
             colors: this.colors.map(c => c.getDecodeInfo()),
-            cloudTexture: this.cloudTexture?.getDecodeInfo(library) ?? null
+            cloudTexture: this.cloudTexture?.getDecodeInfo(library) ?? null,
+            zoneMask
         };
     }
 
