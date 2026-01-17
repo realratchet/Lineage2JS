@@ -1,11 +1,13 @@
 import DynamicLight from "@client/objects/dynamic-light";
 import { ILightInfo, SectorObject } from "@client/objects/zone-object";
-import { Color, Float32BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
+import { Color, BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
 import type { L2Environment } from "@client/rendering/l2-env";
+import { ColorByte } from "@client/utils/color-byte";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
-const tmpColor = new Color();
+// const tmpColor = new Color();
+const tmpColorByte = new ColorByte();
 
 function* iterFlags(arr: Uint8Array): Generator<number, null, unknown> {
     for (let i = 0, len = arr.length; i < len; i++)
@@ -20,7 +22,7 @@ class LitActorMesh extends Mesh {
     protected lightInfo?: MeshLight;
     protected scaledGlow: number;
     protected isSunAffected: boolean;
-    protected staticLightingCache?: Float32Array;
+    protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
 
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
@@ -42,15 +44,16 @@ class LitActorMesh extends Mesh {
 
             this.geometry.setAttribute(
                 "lighting",
-                new Float32BufferAttribute(
-                    new Float32Array(attrColor.count * attrColor.itemSize),
-                    3
+                new BufferAttribute(
+                    new Uint8ClampedArray(attrColor.count * attrColor.itemSize),
+                    3,
+                    true
                 )
             );
         }
     }
 
-    protected computeLighting(sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Float32Array, multiplier: number) {
+    protected computeLighting(sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, multiplier: number) {
         if (lights.length === 0) return;
 
         const attrPositions = this.geometry.getAttribute("position");
@@ -81,9 +84,11 @@ class LitActorMesh extends Mesh {
 
                     const intensity = multiplier * scaleGlow * this.sampleIntensity(light, samplingPoint, samplingNormal);
 
-                    target[vi * 3 + 0] += col.r * intensity;
-                    target[vi * 3 + 1] += col.g * intensity;
-                    target[vi * 3 + 2] += col.b * intensity;
+                    if (intensity > 0) {
+                        target[vi * 3 + 0] += Math.floor(col.r * intensity);
+                        target[vi * 3 + 1] += Math.floor(col.g * intensity);
+                        target[vi * 3 + 2] += Math.floor(col.b * intensity);
+                    }
                 }
 
                 bitMask = (bitMask << 1) % 0x100;
@@ -100,7 +105,7 @@ class LitActorMesh extends Mesh {
         if (!this.lightInfo) return;
 
         const attrColors = this.geometry.getAttribute("lighting");
-        const colorArray = attrColors.array as Float32Array;
+        const colorArray = attrColors.array as Uint8ClampedArray;
 
         // Check if any lights need updating
         // CRITICAL FIX: Check length mismatch to prevent crash during copy
@@ -126,7 +131,7 @@ class LitActorMesh extends Mesh {
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
-                this.staticLightingCache = new Float32Array(colorArray.length);
+                this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
             const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
             const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
@@ -136,16 +141,18 @@ class LitActorMesh extends Mesh {
 
                 if (isUnlit) {
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
-                        this.staticLightingCache[i] = 0.5;
-                        this.staticLightingCache[i + 1] = 0.5;
-                        this.staticLightingCache[i + 2] = 0.5;
+                        this.staticLightingCache[i] = 255;
+                        this.staticLightingCache[i + 1] = 255;
+                        this.staticLightingCache[i + 2] = 255;
                     }
                 } else {
                     // Static mesh actors use ambient directly (zone ambient + glow)
                     // IDA: FinalRGB = AmbPlane + SunPlane * Diffuse
-                    const r = vector[0] + (glow / 255);
-                    const g = vector[1] + (glow / 255);
-                    const b = vector[2] + (glow / 255);
+                    // Using ColorByte for accurate byte addition
+                    tmpColorByte.set(vector[0], vector[1], vector[2]);
+                    const r = tmpColorByte.r + glow;
+                    const g = tmpColorByte.g + glow;
+                    const b = tmpColorByte.b + glow;
 
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
                         this.staticLightingCache[i] = r;
@@ -174,8 +181,10 @@ class LitActorMesh extends Mesh {
 
         // Apply sun ambient only to outdoor (sun-affected) meshes
         if (this.isSunAffected) {
-            const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColor);
+            const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
             if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
+                // ambient is ColorByte (0-255), use directly
+                // scaledGlow is float scaler
                 const r = ambient.r * this.scaledGlow;
                 const g = ambient.g * this.scaledGlow;
                 const b = ambient.b * this.scaledGlow;

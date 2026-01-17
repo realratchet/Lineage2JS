@@ -2,10 +2,11 @@ import { SectorObject } from "@client/objects/zone-object";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { Color, Object3D, Vector3 } from "three";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
+import ColorByte from "@client/utils/color-byte";
 
 // Preallocated vectors to avoid GC
 const tmpVec3_1 = new Vector3();
-const tmpColor_1 = new Color();
+const tmpColorByte_1 = new ColorByte();
 
 // Constants for sun/moon direction calculation (from IDA analysis)
 const DEG2RAD = 0.017453292519943295;
@@ -129,9 +130,9 @@ class ColorHSV {
         this.value = value;
     }
 
-    public toColor(target: Color = new Color()): Color {
+    public toColor(target: ColorByte = new ColorByte()): ColorByte {
         const [r, g, b] = hsvToRgb(this.hue, this.saturation, 255);
-        return target.setRGB(r, g, b);
+        return target.set(r, g, b);
     }
 }
 
@@ -168,13 +169,13 @@ class DynamicLight extends Object3D {
     private strobeState: { lastUpdateTime: number, toggle: number } | null = null;
 
     // Track last computed color for change detection
-    private lastComputedColor: Color | null = null;
+    private lastComputedColor: ColorByte | null = null;
     private lastComputedDirection: Vector3 | null = null;
     private lastEnvVersion: number = -1; // Track environment version for forced updates
 
     // Render state properties (Mirrors FDynamicLight)
     public alpha: number = 1;
-    public color: Color = new Color(1, 1, 1);
+    public color: ColorByte = new ColorByte(255, 255, 255);
     public lightDirection: Vector3 = new Vector3(0, 0, 0);
     public lightPosition: Vector3 = new Vector3(0, 0, 0);
     public lightRadius: number = 0;
@@ -210,8 +211,11 @@ class DynamicLight extends Object3D {
     public update(envManager: L2Environment, levelBrightness: number) {
         const timeSeconds = envManager.getTimeSeconds();
 
+        // if (this.name === "Exp_Light104")
+        //     debugger;
+
         // Use preallocated vector for baseColor calculation
-        const baseColor = tmpColor_1;
+        const baseColor = tmpColorByte_1;
         let brightness: number;
 
         if (this.isSunlightColor) {
@@ -266,9 +270,12 @@ class DynamicLight extends Object3D {
             this.isDynamicLight = true;
         }
 
-        // Apply to this.color (reusing this.color instance)
-        // Note: Color uses multiplyScalar for RGB scaling
-        this.color.copy(baseColor).multiplyScalar((brightness / 255) * intensity * levelBrightness);
+        // Copy base color first, then apply modifiers
+        this.color.copy(baseColor);
+
+        if (brightness !== 255) this.color.multiplyByte(brightness);
+
+        this.color.multiplyScalar(Math.min(1, Math.max(0, intensity * levelBrightness)));
 
 
         if (this.lightEffect === LE_SUNLIGHT) {

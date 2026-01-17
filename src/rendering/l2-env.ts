@@ -1,10 +1,13 @@
 import EnvColor, { TimeHSV } from "@client/rendering/env-color";
 import { Color } from "three";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
+import { ColorByte } from "@client/utils/color-byte";
 
-const tmpColor_1 = new Color();
-const tmpColor_2 = new Color();
-const tmpColor_3 = new Color();
+// const tmpColor_1 = new Color();
+// const tmpColor_2 = new Color();
+// const tmpColor_3 = new Color();
+const tmpColorByte = new ColorByte();
+const tmpColorByte_2 = new ColorByte();
 
 class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
@@ -30,61 +33,78 @@ class L2Environment {
     }
     public getEnvVersion() { return this.envVersion; }
 
-    public getBaseColorPlaneStaticMeshSunLight(target: Color): Color {
+    public getBaseColorPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
         const timeOfDay = this.getTimeOfDay();
         const envColor = this.getEnvColor();
 
         // light.staticMesh is TimeHSV[]
-        return getColorFromHSV(timeOfDay, envColor.light.staticMesh, target);
+        return getColorByteFromHSV(timeOfDay, envColor.light.staticMesh, target);
     }
 
     public getBrightnessStaticMeshSunLight() {
-        const timeOfDay = this.getTimeOfDay();
-        const envColor = this.getEnvColor();
-        return getBrightness(timeOfDay, envColor.light.staticMesh);
+        return getBrightness(this.getTimeOfDay(), this.getEnvColor().light.staticMesh);
     }
 
-    public getAmbientPlaneTerrainLight(target: Color): Color {
-        return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
+    public getBrightnessActorSunLight() {
+        return getBrightness(this.getTimeOfDay(), this.getEnvColor().light.actor);
+    }
+
+    public getBrightnessTerrainSunLight() {
+        return getBrightness(this.getTimeOfDay(), this.getEnvColor().light.terrain);
+    }
+
+    public getBrightnessStaticMeshAmbient() {
+        return getBrightness(this.getTimeOfDay(), this.getEnvColor().ambient.staticMesh);
+    }
+
+    public getBrightnessActorAmbient() {
+        return getBrightness(this.getTimeOfDay(), this.getEnvColor().ambient.actor);
+    }
+
+    public getBrightnessTerrainAmbient() {
+        return getBrightness(this.getTimeOfDay(), this.getEnvColor().ambient.terrain);
+    }
+
+    public getBrightnessBSPAmbient() {
+        const envColor = this.getEnvColor();
+        const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
+        return getBrightness(this.getTimeOfDay(), bspArray);
+    }
+
+    public getAmbientPlaneTerrainLight(target: ColorByte): ColorByte {
+        return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
     }
 
     /**
      * Get terrain ambient color with per-byte halving (matching IDA: shr r/g/b, 1)
      * The halving happens at byte level (0-255) BEFORE normalization.
      */
-    public getAmbientPlaneTerrainLightHalved(target: Color): Color {
-        getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
-        // Convert to bytes, halve, convert back to 0-1
-        target.r = Math.floor(target.r * 255) >> 1;
-        target.g = Math.floor(target.g * 255) >> 1;
-        target.b = Math.floor(target.b * 255) >> 1;
-        target.r /= 255;
-        target.g /= 255;
-        target.b /= 255;
-        return target;
+    public getAmbientPlaneTerrainLightHalved(target: ColorByte): ColorByte {
+        getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
+        return target.shr(1);
     }
 
-    public getAmbientPlaneActorLight(target: Color): Color {
-        return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.actor, target);
+    public getAmbientPlaneActorLight(target: ColorByte): ColorByte {
+        return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.actor, target);
     }
 
-    public getAmbientPlaneStaticMeshSunLight(target: Color): Color {
-        return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.staticMesh, target);
+    public getAmbientPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
+        return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().ambient.staticMesh, target);
     }
 
-    public getAmbientPlaneBSPLight(target: Color): Color {
+    public getAmbientPlaneBSPLight(target: ColorByte): ColorByte {
         const envColor = this.getEnvColor();
         // Fallback to staticMesh ambient if BSP ambient is not available
         const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
-        return getColorFromHSV(this.getTimeOfDay(), bspArray, target);
+        return getColorByteFromHSV(this.getTimeOfDay(), bspArray, target);
     }
 
-    public getSunColor(target: Color): Color {
+    public getSunColor(target: ColorByte): ColorByte {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sun, target);
     }
 
-    public getTerrainLightColor(target: Color): Color {
-        return getColorFromHSV(this.getTimeOfDay(), this.getEnvColor().light.terrain, target);
+    public getTerrainLightColor(target: ColorByte): ColorByte {
+        return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().light.terrain, target);
     }
 
 
@@ -163,24 +183,33 @@ function getBrightness(timeOfDay: number, array: TimeHSV[]) {
     return lFrac * (hsvNext.value - hsvCurr.value) + hsvCurr.value;
 }
 
-function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Color {
+// function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Color {
+//     getColorByteFromHSV(timeOfDay, array, tmpColorByte);
+//     return tmpColorByte.toFloats(target);
+// }
+
+function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte): ColorByte {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
 
-    const rgbCurr = hsvToRgb(hsvCurr.hue, hsvCurr.saturation, 255);
-    const rgbNext = hsvToRgb(hsvNext.hue, hsvNext.saturation, 255);
+    // Get RGB color at v=255 for interpolation
+    target.setFromHSV(hsvCurr.hue, hsvCurr.saturation, 255);
+    tmpColorByte_2.setFromHSV(hsvNext.hue, hsvNext.saturation, 255);
 
-    const vCurr = tmpColor_1.setRGB(rgbCurr[0], rgbCurr[1], rgbCurr[2]);
-    const vNext = tmpColor_2.setRGB(rgbNext[0], rgbNext[1], rgbNext[2]);
+    // Interpolate the colors
+    target.lerp(tmpColorByte_2, lFrac);
 
-    // Interpolate: target = vCurr + (vNext - vCurr) * lFrac
-    return target.copy(vCurr).lerp(vNext, lFrac);
+    // Calculate interpolated Value (Brightness)
+    const v = hsvCurr.value + (hsvNext.value - hsvCurr.value) * lFrac;
+
+    // Apply the real brightness scale at the end
+    return target.multiplyByte(v);
 }
 
-function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: Color): Color {
+function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: ColorByte): ColorByte {
     const [cCurr, cNext, lFrac] = pickArrayIndices(timeOfDay, array);
 
-    const vCurr = tmpColor_1.setRGB(cCurr.r / 255, cCurr.g / 255, cCurr.b / 255);
-    const vNext = tmpColor_2.setRGB(cNext.r / 255, cNext.g / 255, cNext.b / 255);
+    const vCurr = tmpColorByte.set(cCurr.r, cCurr.g, cCurr.b);
+    const vNext = tmpColorByte_2.set(cNext.r, cNext.g, cNext.b);
 
     return target.copy(vCurr).lerp(vNext, lFrac);
 }

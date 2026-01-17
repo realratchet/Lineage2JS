@@ -2,7 +2,10 @@ import DynamicLight from "@client/objects/dynamic-light";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion } from "three";
 
+import { ColorByte } from "@client/utils/color-byte";
+
 const tmpColor = new Color();
+const tmpColorByte = new ColorByte();
 const tmpVec4 = new Vector4();
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
@@ -762,11 +765,10 @@ class SectorObject extends Object3D {
                     visibleSections.add(sectionIndex);
                 }
             });
-
             let visibleMeshCount = 0;
-            let bspAmbientColor: Color | null = null;
+            let bspAmbientColor: ColorByte | null = null;
             if (environment) {
-                bspAmbientColor = environment.getAmbientPlaneBSPLight(tmpColor);
+                bspAmbientColor = environment.getAmbientPlaneBSPLight(tmpColorByte);
             }
 
             let outdoorCount = 0, indoorCount = 0;
@@ -783,10 +785,10 @@ class SectorObject extends Object3D {
                         // Apply ambient color via MeshStaticMaterial's ambient uniform
                         let material = child.material;
                         const applyAmbient = (m: any) => {
-                            // MeshStaticMaterial uses uniforms.ambient.value.color
+                            // MeshStaticMaterial uses uniforms.ambient.value.color (which is THREE.Color)
                             if (m?.uniforms?.ambient?.value?.color) {
                                 if (isOutdoor && bspAmbientColor) {
-                                    m.uniforms.ambient.value.color.copy(bspAmbientColor);
+                                    bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
                                     // Ensure defines exists before checking USE_AMBIENT
                                     if (m.defines && !m.defines.USE_AMBIENT) {
                                         m.defines.USE_AMBIENT = "";
@@ -797,7 +799,7 @@ class SectorObject extends Object3D {
                                 }
                             } else if (m?.color) {
                                 // Fallback for materials with .color (like MeshBasicMaterial)
-                                if (isOutdoor && bspAmbientColor) m.color.copy(bspAmbientColor);
+                                if (isOutdoor && bspAmbientColor) bspAmbientColor.toFloats(m.color);
                                 else m.color.setHex(0xffffff);
                             }
                         };

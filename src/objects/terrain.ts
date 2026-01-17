@@ -11,18 +11,20 @@
  * 
  * Lighting formula: color = ambient * shadow + Σ(lightColor * sampleIntensity(...))
  */
-import DynamicLight from "./dynamic-light";
-import { SectorObject } from "./zone-object";
+import DynamicLight from "@client/objects/dynamic-light";
+import { ILightInfo, SectorObject } from "@client/objects/zone-object";
 import type { L2Environment } from "@client/rendering/l2-env";
-import { Color, Mesh, Vector3, Float32BufferAttribute } from "three";
+import { BufferGeometry, Float32BufferAttribute, Mesh, Vector3, Color } from "three";
 import type { ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { ColorByte } from "@client/utils/color-byte";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
-const tmpColor = new Color();
-const tmpAmbient = new Color();
-const tmpSun = new Color();
+// const tmpAmbient = new Color();
+// const tmpSun = new Color();
+const cbAmbient = new ColorByte();
+const cbLight = new ColorByte();
 
 class Terrain extends Mesh implements ICollidable {
     public readonly isCollidable = true;
@@ -40,7 +42,7 @@ class Terrain extends Mesh implements ICollidable {
     protected lightingInfo?: TerrainLightingInfo;
     protected lastUpdatedTime: number = -1;
     protected lastShadowIndex: number = -1;
-    protected staticLightingCache?: Float32Array;
+    protected staticLightingCache?: Uint8ClampedArray;
 
     public useShadowLerp: boolean = true;
 
@@ -118,36 +120,41 @@ class Terrain extends Mesh implements ICollidable {
         if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
 
         const attrColors = this.geometry.getAttribute("color");
-        const colorArray = attrColors.array as Float32Array;
+        const colorArray = attrColors.array as Uint8ClampedArray;
 
         // Rebuild static cache if necessary (ambient + shadows + static lights)
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length) {
-                this.staticLightingCache = new Float32Array(colorArray.length);
+                this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
             }
             this.staticLightingCache.fill(0);
 
             // 1. Apply Ambient with Shadow Map (TintMap logic)
             // Final = (Ambient >> 1) + (Light * Intensity)
             // Per-byte halving matches IDA: shr r/g/b, 1
-            const ambient = env.getAmbientPlaneTerrainLightHalved(tmpAmbient);
-            const light = env.getTerrainLightColor(tmpSun);
+            env.getAmbientPlaneTerrainLightHalved(cbAmbient);
+            env.getTerrainLightColor(cbLight);
+
+            // cbAmbient.setFromFloats(tmpAmbient.r, tmpAmbient.g, tmpAmbient.b);
+            // cbLight.setFromFloats(tmpSun.r, tmpSun.g, tmpSun.b);
 
             const shadowMap = this.lightingInfo.shadowMaps[shadowIndex];
             const shadowMapNext = this.lightingInfo.shadowMaps[shadowNextIndex];
 
             for (let i = 0, len = this.staticLightingCache.length; i < len; i += 3) {
-                let s = shadowMap ? shadowMap[i / 3] / 255 : 1;
+                let s = shadowMap ? shadowMap[i / 3] : 255;
 
                 if (this.useShadowLerp && shadowMapNext) {
-                    const sNext = shadowMapNext[i / 3] / 255;
+                    const sNext = shadowMapNext[i / 3];
                     s = s * (1 - alpha) + sNext * alpha;
                 }
 
-                // Ambient is constant (halved), Light is modulated by shadow map (Intensity)
-                this.staticLightingCache[i + 0] = ambient.r + light.r * s;
-                this.staticLightingCache[i + 1] = ambient.g + light.g * s;
-                this.staticLightingCache[i + 2] = ambient.b + light.b * s;
+                // FinalByte = (AmbientByte >> 1) + (LightByte * IntensityByte / 255)
+                // tmpColorByte is Ambient >> 1 already from l2-env
+                // Inline multiplyByte logic: (c * b / 255) | 0
+                this.staticLightingCache[i + 0] = cbAmbient.r + ((cbLight.r * s / 255) | 0);
+                this.staticLightingCache[i + 1] = cbAmbient.g + ((cbLight.g * s / 255) | 0);
+                this.staticLightingCache[i + 2] = cbAmbient.b + ((cbLight.b * s / 255) | 0);
             }
 
             // 2. Add Static Lights
@@ -168,10 +175,10 @@ class Terrain extends Mesh implements ICollidable {
             this.computeLighting(dynamicLights, colorArray);
         }
 
-        // Clamp colors
-        for (let i = 0, len = colorArray.length; i < len; i++) {
-            colorArray[i] = Math.max(0, Math.min(1, colorArray[i]));
-        }
+        // Clamp colors - Uint8ClampedArray clamps automatically
+        // for (let i = 0, len = colorArray.length; i < len; i++) {
+        //     colorArray[i] = Math.max(0, Math.min(1, colorArray[i]));
+        // }
 
         attrColors.needsUpdate = true;
     }
@@ -189,7 +196,7 @@ class Terrain extends Mesh implements ICollidable {
      * Note: Terrain uses raw intensity without scaleGlow (unlike static meshes)
      * Note: Terrain only uses scene lights, not environment lights
      */
-    protected computeLighting(lights: { flags: Uint8Array, instance?: DynamicLight }[], target: Float32Array) {
+    protected computeLighting(lights: { flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray) {
         if (lights.length === 0) return;
 
         const attrPositions = this.geometry.getAttribute("position");
@@ -222,9 +229,9 @@ class Terrain extends Mesh implements ICollidable {
                     const intensity = light.sampleIntensity(tmpVertex, tmpNormal);
 
                     if (intensity > 0) {
-                        target[vi * 3 + 0] += col.r * intensity;
-                        target[vi * 3 + 1] += col.g * intensity;
-                        target[vi * 3 + 2] += col.b * intensity;
+                        target[vi * 3 + 0] += Math.floor(col.r * intensity);
+                        target[vi * 3 + 1] += Math.floor(col.g * intensity);
+                        target[vi * 3 + 2] += Math.floor(col.b * intensity);
                     }
                 }
 

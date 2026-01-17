@@ -5,7 +5,6 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
 import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
-import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -85,7 +84,7 @@ abstract class UTerrainSector extends UObject {
         const width = iTerrainMap.width;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
-        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
+        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Uint8ClampedArray(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
 
         const trueBoundingBox = FBox.make();
@@ -424,14 +423,6 @@ abstract class UTerrainSector extends UObject {
         return vertices[offset];
     }
 
-    // protected getVertexColor(x: number, y: number): GA.FColor {
-    //     const info = this.info;
-    //     const colors = info.vertexColors;
-    //     const offset = info.getGlobalVertex(x, y);
-
-    //     return colors[offset];
-    // }
-
     protected getVertexNormal(x: number, y: number): FVector {
         const info = this.info;
         const ox = this.offsetX, oy = this.offsetY;
@@ -462,7 +453,6 @@ abstract class UTerrainSector extends UObject {
             for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
-                // const color = this.getVertexColor(x, y);
 
                 const ix = this.offsetX + x, iy = this.offsetY + y;
                 const hix = ix + 0.5, hiy = iy + 0.5;
@@ -476,11 +466,6 @@ abstract class UTerrainSector extends UObject {
                 normals[it3 + 0] = normal.x;
                 normals[it3 + 1] = normal.y;
                 normals[it3 + 2] = normal.z;
-
-                // colors[it4 + 0] = color.r / 255;
-                // colors[it4 + 1] = color.g / 255;
-                // colors[it4 + 2] = color.b / 255;
-                // colors[it4 + 3] = color.a / 255;
 
                 uvs[it2 + 0] = u;
                 uvs[it2 + 1] = v;
@@ -561,8 +546,7 @@ abstract class UTerrainSector extends UObject {
             this: this,
             vertices,
             normals,
-            uvs,
-            // colors
+            uvs
         }
 
         // TODO: update decorators

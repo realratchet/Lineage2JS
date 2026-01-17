@@ -221,7 +221,7 @@ declare global {
                     mesh: IStaticMeshObjectDecodeInfo,
                     lights?: ILightInstanceDecodeInfo,
                     attributes?: {
-                        colors?: Float32Array
+                        colors?: Float32Array | Uint8Array
                     }
                 }
 
@@ -309,8 +309,8 @@ declare global {
                     attributes: {
                         positions?: Float32Array;
                         normals?: Float32Array;
-                        colors?: Float32Array,
-                        colorsInstance?: Float32Array,
+                        colors?: Float32Array | Uint8Array,
+                        colorsInstance?: Float32Array | Uint8Array,
                         uvs?: Float32Array | Float32Array[];
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array;

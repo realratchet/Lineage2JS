@@ -59,9 +59,6 @@ abstract class FNTimeColor extends UObject implements IEnvTime {
         return `NTimeHSV(T=${this.time}, R=${this.r}, G=${this.g}, B=${this.b})`;
     }
 
-    public toColorPlane() { return FPlane.make(...this.getColor()); }
-    public getColor(): GD.ColorArr { return [this.r / 255, this.g / 255, this.b / 255, 1]; }
-
     public getDecodeInfo(): GD.INTimeColorDecodeInfo {
         return [this.time, this.r, this.g, this.b];
     }

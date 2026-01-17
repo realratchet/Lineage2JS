@@ -1,12 +1,7 @@
 import UAActor, { EPhysics_T } from "../un-aactor";
 import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
-import FMatrix from "@client/assets/unreal/un-matrix";
-import GMath from "@client/assets/unreal/un-gmath";
-import { indexToTime, timeToIndex, timeToIndicesLerp } from "@client/assets/unreal/un-l2env";
 import FBox from "@client/assets/unreal/un-box";
-import { Matrix4, Vector3, Quaternion } from "three";
-import { FStaticMeshLightInfo } from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -150,7 +145,7 @@ abstract class UStaticMeshActor extends UAActor {
         const vertexArrayLen = attributes.positions.length;
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
-        const instanceColors = instance?.color ?? new Float32Array(vertexArrayLen).fill(0);
+        const instanceColors = instance?.color ?? new Uint8Array(vertexArrayLen).fill(0);
 
         const ambActor = this.getAmbientLightingActor();
         const zone = this.getZone();
@@ -158,7 +153,7 @@ abstract class UStaticMeshActor extends UAActor {
 
         const ambientProps = {
             glow: ambActor.ambientGlow,
-            vector: ambVector.getVectorElements(),
+            vector: ambVector.getVectorElements().map(v => Math.round(v)),
             isUnlit: this.isUnlit
         };
 
@@ -167,7 +162,7 @@ abstract class UStaticMeshActor extends UAActor {
         return this.uuid;
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): void {
+    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | Uint8Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): void {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];

@@ -34,8 +34,8 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
 
     if (info.attributes.normals) geometry.setAttribute("normal", new BufferAttribute(info.attributes.normals, 3));
     if (info.attributes.positions) geometry.setAttribute("position", new BufferAttribute(info.attributes.positions, 3));
-    if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3));
-    if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3));
+    if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
+    if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.nodeIndex) geometry.setAttribute("nodeIndex", new BufferAttribute(info.attributes.nodeIndex, 1));

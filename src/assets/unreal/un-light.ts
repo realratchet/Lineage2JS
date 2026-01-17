@@ -1,35 +1,7 @@
-import GMath from "@client/assets/unreal/un-gmath";
-import FPlane from "@client/assets/unreal/un-plane";
 import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
-import { clamp, generateUUID, RAD2DEG } from "three/src/math/MathUtils";
+import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import UAActor from "./un-aactor";
 import FVector from "./un-vector";
-
-function getHSV(H: number, S: number, V: number): FPlane {
-
-    return FPlane.make(...hsvToRgb(H, S, V), 1);
-
-    // let Brightness = V * 1.4 / 255;
-
-    // Brightness *= 0.7 / (0.01 + Math.sqrt(Brightness));
-    // Brightness = clamp(Brightness, 0, 1);
-
-    // const Hue = (H < 86) ? FVector.make((85 - H) / 85, (H - 0) / 85, 0) : (H < 171) ? FVector.make(0, (170 - H) / 85, (H - 85) / 85) : FVector.make((H - 170) / 85, 0, (255 - H) / 84);
-    // const invHue = FVector.make(1, 1, 1).sub(Hue);
-    // const rgbComp = Hue.addScalar(S / 255).mul(invHue).multiplyScalar(Brightness);
-
-    // return FPlane.make(rgbComp.x, rgbComp.y, rgbComp.z, 1);
-}
-
-// Helper function to convert FColor to normalized FPlane (FVector with w=1)
-function colorToPlane(color: GA.FColor): FPlane {
-    const lengthSq = color.r * color.r + color.g * color.g + color.b * color.b;
-    if (lengthSq === 0) {
-        return FPlane.make(1, 1, 1, 1); // Default to white if zero-length
-    }
-    const length = Math.sqrt(lengthSq);
-    return FPlane.make(color.r / length, color.g / length, color.b / length, 1);
-}
 
 
 abstract class ULight extends UAActor {
