@@ -211,10 +211,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
                 moon: { type: "TimeColor", array: this.colorMoon?.map(c => c.getDecodeInfo()) ?? [] }
             },
             ambient: {
-                terrain: { type: "TimeHSV", array: this.ambientTerrain?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] },
-                actor: { type: "TimeHSV", array: this.ambientActor?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] },
-                staticMesh: { type: "TimeHSV", array: this.ambientStaticMesh?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] },
-                bsp: { type: "TimeHSV", array: this.ambientBSP?.map(c => { const [h, s, v] = rgbToHsv(c.r, c.g, c.b); return [c.time, h, s, v]; }) ?? [] }
+                terrain: { type: "TimeColor", array: this.ambientTerrain?.map(c => c.getDecodeInfo()) ?? [] },
+                actor: { type: "TimeColor", array: this.ambientActor?.map(c => c.getDecodeInfo()) ?? [] },
+                staticMesh: { type: "TimeColor", array: this.ambientStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
+                bsp: { type: "TimeColor", array: this.ambientBSP?.map(c => c.getDecodeInfo()) ?? [] }
             },
             scale: {
                 sun: { type: "TimeScale", array: this.scaleSun?.map(c => c.getDecodeInfo()) ?? [] },

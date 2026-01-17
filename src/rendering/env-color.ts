@@ -20,7 +20,12 @@ type EnvLightInfo = {
     bsp: TimeHSV[];
 }
 
-type EnvAmbientInfo = EnvLightInfo;
+type EnvAmbientInfo = {
+    terrain: TimeColor[];
+    actor: TimeColor[];
+    staticMesh: TimeColor[];
+    bsp: TimeColor[];
+};
 
 type EnvScaleInfo = { sun: TimeScale[]; moon: TimeScale[]; }
 
