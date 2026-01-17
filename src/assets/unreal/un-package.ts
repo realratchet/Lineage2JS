@@ -53,6 +53,7 @@ import UMover from "@client/assets/unreal/un-mover";
 import * as NEnv from "@client/assets/unreal/un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
+import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
 
 type CoreStructs_T =
     | "Vector"
@@ -266,6 +267,8 @@ class UNativePackage extends ANativePackage {
             case "NTimeHSV": Constructor = NEnv.FNTimeHSV; break;
             case "NTimeScale": Constructor = NEnv.FNTimeScale; break;
 
+            case "L2EnvironmentColorInfo": Constructor = UL2EnvironmentColorInfo; break;
+
             // structs we dont care about yet
             case "InterpCurve":
             case "InterpCurvePoint":
@@ -375,7 +378,7 @@ class UNativePackage extends ANativePackage {
             case "Mover": Constructor = UMover; break;
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
-            case "L2FogInfo": Constructor = UObject; break;
+            case "L2FogInfo": Constructor = UL2FogInfo; break;
             case "L2SeamlessInfo": Constructor = UObject; break;
             case "SceneManager": Constructor = UObject; break;
             case "PathNode": Constructor = UObject; break;
@@ -600,7 +603,7 @@ class UNativePackage extends ANativePackage {
     // //         case "Emitter": Constructor = UEmitter; break;
     // //         case "NSun": Constructor = UNSun; break;
     // //         case "NMoon": Constructor = UNMoon; break;
-    // //         case "L2FogInfo": Constructor = FFogInfo; break;
+    // //         case "L2FogInfo": Constructor = UL2FogInfo; break;
     // //         case "PlayerStart": Constructor = UPlayerStart; break;
     // //         case "MusicVolume": Constructor = UMusicVolume; break;
     // //         case "Mover": Constructor = UMover; break;

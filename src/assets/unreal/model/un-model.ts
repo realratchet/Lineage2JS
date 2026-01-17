@@ -286,10 +286,11 @@ abstract class UModel extends UPrimitive {
             if (surf.flags & (PolyFlags_T.PF_Invisible | PolyFlags_T.PF_Portal | PolyFlags_T.PF_AntiPortal)) continue;
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
-            const { x: testX, y: testZ } = this.points.getElem(vert.pVertex) as FVector;
+            const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
 
             if (testX <= -327680.00 || testX >= 327680.00) continue;
             if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+            // if (testY <= -18000 || testY >= 18000) continue;
 
             if (node.iCollisionBound >= 0) {
                 library.bspColliders.push(nodeInfo.collision.bounds);

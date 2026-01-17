@@ -74,7 +74,7 @@ declare global {
                 export type AActor = import("@unreal/un-aactor").UAActor;
 
                 export type AInfo = import("@unreal/un-info").AInfo;
-                export type FFogInfo = import("@unreal/un-fog-info").FFogInfo;
+                export type UL2FogInfo = import("@unreal/un-fog-info").UL2FogInfo;
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
                 export type ATerrainInfo = import("@unreal/un-terrain-info").ATerrainInfo;
 
@@ -231,7 +231,9 @@ declare global {
                     name?: string,
                     bounds: IBoxDecodeInfo,
                     children: IBaseObjectOrInstanceDecodeInfo[],
-                    fog?: IZoneFogInfo
+                    fog?: IZoneFogInfo,
+                    isFogZone?: boolean,
+                    isSunAffected?: boolean
                 }
 
                 // BSP Types

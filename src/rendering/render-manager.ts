@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -9,6 +9,7 @@ import Stats from "./stats";
 import Visualizer, { VisualizerMode } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
 import L2Environment from "@client/rendering/l2-env";
+import SkyRenderer from "./sky-renderer";
 import * as dat from "dat.gui";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
@@ -31,6 +32,9 @@ document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
+import { ColorByte } from "@client/utils/color-byte";
+const tmpColorByte = new ColorByte();
+const tmpColorByte_2 = new ColorByte();
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
@@ -54,6 +58,8 @@ class RenderManager {
     public readonly raycaster = new Raycaster();
     public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
+
+    public readonly skyRenderer = new SkyRenderer();
 
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
@@ -83,6 +89,11 @@ class RenderManager {
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
 
+
+    public envConfig = {
+        fogPreset: "1"
+    };
+
     public constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
         this.renderer = new WebGLRenderer({
@@ -91,6 +102,14 @@ class RenderManager {
             premultipliedAlpha: false,
             logarithmicDepthBuffer: true,
             alpha: true,
+        });
+
+        guiFolders.world.add(this.envConfig, "fogPreset", {
+            "1 (2k-8k)": "1",
+            "2 (3k-10k)": "2",
+            "3 (4k-12k)": "3",
+            "4 (5k-14k)": "4",
+            "5 (8k-20k)": "5"
         });
 
         this.renderer.autoClear = false;
@@ -237,6 +256,13 @@ class RenderManager {
             .name("Signs Sky");
 
         return this;
+    }
+
+    private skyZone: any = null;
+
+    public setSkyData(celestials: any[], skyZone: any, textureGetter: (uuid: string) => any) {
+        this.skyRenderer.init(celestials, textureGetter);
+        this.skyZone = skyZone;
     }
 
     public debugPrintCamera() {
@@ -568,8 +594,11 @@ class RenderManager {
         return xsect.get(sectorY);
     }
 
+
+
     protected _updateObjects(currentTime: number, deltaTime: number) {
         const globalTime = currentTime / 600;
+        const oldFar = this.camera.far;
 
         // Update helper camera: copy from main camera if inactive, otherwise keep frozen
         if (this.bspHelperCamera) {
@@ -592,6 +621,7 @@ class RenderManager {
                 this.bspHelperCameraHelper.update();
             }
         }
+
 
         // NEW: Update BSP section visibility based on camera position (UE2-style culling)
         // Use helper camera position only when active (frozen), otherwise use main camera
@@ -641,40 +671,123 @@ class RenderManager {
             }
         });
 
-        let fog: THREE.Fog;
+        if (this.camera.far !== oldFar) this.camera.updateProjectionMatrix();
 
+        this._updateEnvironment();
+    }
+
+    protected _updateEnvironment() {
+        const env = this.environment;
+        if (!env) return;
+
+        this.skyRenderer.update(this.camera, env, this.skyZone);
+
+        // 1. Get Sky Color (Background)
+        const skyColor = env.getSkyColor(tmpColorByte);
+        this.scene.background = new Color().setRGB(skyColor.r / 255, skyColor.g / 255, skyColor.b / 255);
+
+        // 2. Get Fog Settings
+        // Default Fog Settings (from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u))
+        let targetFogStart = 2000;
+        let targetFogEnd = 8000;
+
+        switch (String(this.envConfig.fogPreset)) {
+            case "2": targetFogStart = 3000; targetFogEnd = 10000; break;
+            case "3": targetFogStart = 4000; targetFogEnd = 12000; break;
+            case "4": targetFogStart = 5000; targetFogEnd = 14000; break;
+            case "5": targetFogStart = 8000; targetFogEnd = 20000; break;
+            case "1": default: targetFogStart = 2000; targetFogEnd = 8000; break;
+        }
+        let targetFogColor = env.getHazeColor(tmpColorByte_2); // Default to Haze
+
+        // targetFogStart = 1;
+        // targetFogEnd = 10
+
+        // 3. Zone Overrides
         const sector = this.getSector(this.camera.position);
-
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
-            fog = zone?.fog ?? null;
+
+            if (zone && zone.fog) {
+                if (zone.isFogZone && zone.isSunAffected) {
+                    const zR = zone.fog.color.r * 255;
+                    const zG = zone.fog.color.g * 255;
+                    const zB = zone.fog.color.b * 255;
+
+                    targetFogColor.set(
+                        (targetFogColor.r + zR) * 0.5,
+                        (targetFogColor.g + zG) * 0.5,
+                        (targetFogColor.b + zB) * 0.5
+                    );
+                } else {
+                    targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
+                }
+            }
+
+            // Check for L2FogInfo overrides (Priority over Zone/Global)
+            // Use 'some' to stop after finding the first active fog info (optimization)
+            sector.children.some(child => {
+                if ((child as any).isFogInfo) {
+                    const fogInfo = child as FogInfoObject;
+                    // Check if camera is inside AffectRange
+                    // AffectRange is a struct { A: Min, B: Max }. Usually B is the outer radius.
+                    const dist = this.camera.position.distanceTo(fogInfo.position);
+                    let radius = fogInfo.affectRange ? fogInfo.affectRange.B : 0;
+                    if (radius === 0 && fogInfo.affectRange) radius = fogInfo.affectRange.A; // Fallback to A if B is 0
+
+                    if (dist <= radius) {
+                        const presetIndex = this.envConfig.fogPreset;
+                        let range = fogInfo[`fogRange${presetIndex}` as keyof FogInfoObject] as { A: number, B: number };
+
+                        // Fallback to range1 if specific preset is missing or zero
+                        if (!range || (range.A === 0 && range.B === 0)) {
+                            range = fogInfo.fogRange1;
+                        }
+
+                        if (range) {
+                            targetFogStart = range.A;
+                            targetFogEnd = range.B;
+                        }
+
+                        if (fogInfo.colors && fogInfo.colors.length > 0) {
+                            // TODO: Interpolate based on Time
+                            const colorInfo = fogInfo.colors[0] as any;
+                            if (colorInfo && colorInfo.FogColor) {
+                                const c = colorInfo.FogColor;
+                                targetFogColor.set(c.R, c.G, c.B);
+                            }
+                        }
+                        return true; // Apply first found fog info and exit
+                    }
+                }
+                return false;
+            });
         }
 
-        GLOBAL_UNIFORMS.globalTime.value = globalTime;
+        // 4. Update Header/Global State (Interpolate)
+        // For now, snap to target values. TODO: Add interpolation for smooth transitions.
+        const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
 
-        const oldFar = this.camera.far;
+        // // Update Scene Fog
+        // if (!this.scene.fog || !(this.scene.fog as any).isFog) {
+        //     this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
+        // } else {
+        //     const sceneFog = this.scene.fog as Fog;
+        //     sceneFog.color.copy(fogColorThree);
+        //     sceneFog.near = targetFogStart;
+        //     sceneFog.far = targetFogEnd;
+        // }cwc
 
-        if (fog) {
-            GLOBAL_UNIFORMS.fogColor.value.copy(fog.color);
-            GLOBAL_UNIFORMS.fogNear.value = fog.near;
-            GLOBAL_UNIFORMS.fogFar.value = fog.far;
+        // Update Shader Uniforms
+        GLOBAL_UNIFORMS.fogColor.value.copy(fogColorThree);
+        if (GLOBAL_UNIFORMS.fogNear) GLOBAL_UNIFORMS.fogNear.value = targetFogStart;
+        if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
 
-            this.renderer.setClearColor(fog.color);
-            this.camera.far = fog.far * 1.2;
-        } else {
-            GLOBAL_UNIFORMS.fogColor.value.setHex(DEFAULT_CLEAR_COLOR);
-            GLOBAL_UNIFORMS.fogNear.value = DEFAULT_FAR * 10;
-            GLOBAL_UNIFORMS.fogFar.value = DEFAULT_FAR * 10 + 1;
-
-            this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
-            this.camera.far = DEFAULT_FAR;
-        }
-
-        if (this.camera.far !== oldFar) this.camera.updateProjectionMatrix();
-
-        // this.scene.fog = new FogExp2(0xff00ff, 0.1);
+        // Clear Color matches Fog for seamless horizon
+        this.renderer.setClearColor(fogColorThree);
     }
+
 
     protected nextPhysicsTick: number;
 
@@ -773,6 +886,13 @@ class RenderManager {
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
+        // Render Sky (Background)
+        this.renderer.clear();
+        this.skyRenderer.render(this.renderer);
+        this.renderer.clearDepth();
+
+        this.renderer.render(this.scene, this.camera);
+
         // Check for sector change and recreate visualizer if needed
         const currentSector = this.getSector(this.camera.position);
         if (currentSector) {

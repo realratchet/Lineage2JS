@@ -24,6 +24,8 @@ class DecodeLibrary {
     public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
     public readonly leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][] = [];
     public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
+    public readonly celestials: any[] = []; // Stores Sun and Moon actors
+    public skyZone: GD.IBaseZoneDecodeInfo = null;
 
     public failed: any[] = [];
     public failedLoad: any[] = [];
@@ -48,6 +50,12 @@ class DecodeLibrary {
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
         const uLevelInfo = uLevel.levelInfo.loadSelf();
 
+        // Load SkyZone if present
+        if (uLevelInfo.skyZone) {
+            const skyZoneActor = uLevelInfo.skyZone.loadSelf();
+            decodeLibrary.skyZone = skyZoneActor.getDecodeInfo(decodeLibrary);
+        }
+
         decodeLibrary.brightness = uLevelInfo.brightness;
 
         decodeLibrary.name = uLevel.url.map;
@@ -65,7 +73,7 @@ class DecodeLibrary {
 
         if (isNotSector) {
             sectorIndex = [17, 25]
-            debugger;
+            // debugger;
         }
 
         decodeLibrary.sector = sectorIndex;
@@ -92,6 +100,34 @@ class DecodeLibrary {
 
                     decodeLibrary.lightActors.push(dActor);
                 });
+        }
+
+        {
+            const celestialTypes = ["NSun", "NMoon"];
+            const uCelestialsToLoad = celestialTypes.map(t => expGroups[t] ?? []).flat();
+
+            uCelestialsToLoad.forEach(exp => {
+                const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                if (uActor.getDecodeInfo) {
+                    decodeLibrary.celestials.push(uActor.getDecodeInfo(decodeLibrary));
+                }
+            });
+        }
+
+        {
+            const fogTypes = ["L2FogInfo"];
+            const uFogsToLoad = fogTypes.map(t => expGroups[t] ?? []).flat();
+            const fogs = [];
+
+            uFogsToLoad.forEach(exp => {
+                const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                if (uActor.getDecodeInfo) {
+                    fogs.push(uActor.getDecodeInfo(decodeLibrary));
+                    // decodeLibrary.celestials.push(uActor.getDecodeInfo(decodeLibrary));
+                }
+            });
+
+            debugger
         }
 
         if (loadEmitters) {

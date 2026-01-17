@@ -25,6 +25,11 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 
     console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
 
+    if (decodeLibrary.celestials.length > 0 || decodeLibrary.skyZone) {
+        // TODO: Implement proper texture loading for sprites
+        renderManager.setSkyData(decodeLibrary.celestials, decodeLibrary.skyZone, (uuid) => null);
+    }
+
     return decodePackage(decodeLibrary);
 }
 
@@ -455,8 +460,8 @@ async function startCore() {
 
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
             // ...["StaticMeshActor475"] // talking island village broken rock
-            "StaticMeshActor684", // cruma light
-            // "StaticMeshActor2841"
+            // "StaticMeshActor684", // cruma light
+            "StaticMeshActor2841"
             // "StaticMeshActor1893" // cruma: broken floating platform light
         ]
     } as GD.LoadSettings_T;

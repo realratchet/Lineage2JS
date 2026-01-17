@@ -25,18 +25,18 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly lensFlareOffset: any[];
     declare public readonly lensFlareScale: any[];
 
-    declare public readonly  panSpeedU: number;
-    declare public readonly  panSpeedV: number;
+    declare public readonly panSpeedU: number;
+    declare public readonly panSpeedV: number;
 
-    declare public readonly  skyZone: any;
-    declare public readonly  locationName: any;
-    declare public readonly  distanceFogBlendTime: any;
-    declare public readonly  environmentMap: any;
-    declare public readonly  zoneEffect: any;
-    declare public readonly  isLonelyZone: boolean;
-    declare public readonly  manualExcludes: any;
+    declare public readonly skyZone: any;
+    declare public readonly locationName: any;
+    declare public readonly distanceFogBlendTime: any;
+    declare public readonly environmentMap: any;
+    declare public readonly zoneEffect: any;
+    declare public readonly isLonelyZone: boolean;
+    declare public readonly manualExcludes: any;
 
-    declare public readonly  timeSeconds: number;
+    declare public readonly timeSeconds: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -96,6 +96,9 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
             name: this.objectName,
             bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
             children: [],
+            location: this.location ? [this.location.x, this.location.z, this.location.y] : [0, 0, 0],
+            isFogZone: this.isFogZone,
+            isSunAffected: this.isSunAffected,
             fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
                 start: this.distanceFogStart,
                 end: this.distanceFogEnd,

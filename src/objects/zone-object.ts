@@ -11,6 +11,17 @@ const tmpVec4 = new Vector4();
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
+export class FogInfoObject extends Object3D {
+    public readonly isFogInfo = true;
+    public affectRange: { A: number, B: number };
+    public fogRange1: { A: number, B: number };
+    public fogRange2: { A: number, B: number };
+    public fogRange3: { A: number, B: number };
+    public fogRange4: { A: number, B: number };
+    public fogRange5: { A: number, B: number };
+    public colors: any[];
+}
+
 
 interface IStaticMeshActorDecodeInfo {
     uuid: string;
@@ -24,6 +35,9 @@ interface IStaticMeshActorDecodeInfo {
 
 class ZoneObject extends Object3D {
     public fog: Fog = null;
+    public fog: Fog = null;
+    public isFogZone: boolean = false;
+    public isSunAffected: boolean = false;
 
     public readonly boundsRender = new Box3();
     public readonly boundsRenderSphere = new Sphere();
@@ -84,6 +98,7 @@ class SectorObject extends Object3D {
     public readonly type = "Sector";
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
+    public readonly fogInfos: FogInfoObject[] = [];
 
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];

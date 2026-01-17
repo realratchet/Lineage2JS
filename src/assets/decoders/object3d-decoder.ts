@@ -1,6 +1,6 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
 import decodeMaterial from "./material-decoder";
-import ZoneObject, { ILightInfo, SectorObject } from "../../objects/zone-object";
+import ZoneObject, { ILightInfo, SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
@@ -258,6 +258,8 @@ function decodeZoneObject(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInf
     if (info.name) object.name = info.name;
     if (info.bounds?.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
+    if (info.isFogZone) object.isFogZone = true;
+    if (info.isSunAffected) object.isSunAffected = true;
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
     // object.visible = false;
@@ -690,6 +692,23 @@ function decodeSpriteEmitter(library: GD.DecodeLibrary, info: GD.ISpriteEmitterD
     return emitter;
 }
 
+function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) {
+    const object = new FogInfoObject();
+
+    if (info.name) object.name = info.name;
+    if (info.position) object.position.fromArray(info.position); // L2FogInfo is an Actor, has location
+
+    object.affectRange = info.affectRange as any;
+    object.fogRange1 = info.fogRange1 as any;
+    object.fogRange2 = info.fogRange2 as any;
+    object.fogRange3 = info.fogRange3 as any;
+    object.fogRange4 = info.fogRange4 as any;
+    object.fogRange5 = info.fogRange5 as any;
+    object.colors = info.colors as any;
+
+    return object;
+}
+
 function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
     switch (info.type) {
         case "Group":
@@ -705,6 +724,7 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
         case "SpriteEmitter": return decodeSpriteEmitter(library, info as GD.ISpriteEmitterDecodeInfo);
         case "MeshEmitter": return decodeMeshEmitter(library, info as GD.IMeshEmitterDecodeInfo);
+        case "L2FogInfo": return decodeFogInfo(library, info as GD.IBaseZoneDecodeInfo);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

@@ -13,7 +13,7 @@ class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
 
-    protected time: number = 60 * 60; // in seconds
+    protected time: number = 20 * 60; // in seconds
     protected envVersion: number = 0; // Incremented when activeEnv changes
 
     public constructor(envColors: { [key in 0 | 1 | 2]: EnvColor }) {
@@ -101,6 +101,14 @@ class L2Environment {
 
     public getSunColor(target: ColorByte): ColorByte {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sun, target);
+    }
+
+    public getSkyColor(target: ColorByte): ColorByte {
+        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sky, target);
+    }
+
+    public getHazeColor(target: ColorByte): ColorByte {
+        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.haze, target);
     }
 
     public getTerrainLightColor(target: ColorByte): ColorByte {

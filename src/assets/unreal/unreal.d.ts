@@ -48,7 +48,7 @@
 // type UFont = import("./un-font").UFont;
 // type UNSun = import("./un-nsun").UNSun;
 // type UNMoon = import("./un-nmoon").UNMoon;
-// type FFogInfo = import("./un-fog-info").FFogInfo;
+// type UL2FogInfo = import("./un-fog-info").UL2FogInfo;
 // type UPlayerStart = import("./un-player-start").UPlayerStart;
 // type UMusicVolume = import("./un-music-volume").UMusicVolume;
 // type UMover = import("./un-mover").UMover;
