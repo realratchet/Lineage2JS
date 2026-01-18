@@ -8,7 +8,7 @@ import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
 import Visualizer, { VisualizerMode } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
-import L2Environment, { FogBlendState, interpolateFogInfoColor } from "@client/rendering/l2-env";
+import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import * as dat from "dat.gui";
 
@@ -35,6 +35,7 @@ const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new
 import { ColorByte } from "@client/utils/color-byte";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
+const tmpColorByte_3 = new ColorByte(); // For sky color blending
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
@@ -682,9 +683,8 @@ class RenderManager {
 
         this.skyRenderer.update(this.camera, env, this.skyZone);
 
-        // 1. Get Sky Color (Background)
-        const skyColor = env.getSkyColor(tmpColorByte);
-        this.scene.background = new Color().setRGB(skyColor.r / 255, skyColor.g / 255, skyColor.b / 255);
+        // 1. Get Base Sky Color (from timeenv - will be blended with L2FogInfo later)
+        const targetSkyColor = env.getSkyColor(tmpColorByte);
 
         // 2. Get Fog Settings
         // Default Fog Settings (from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u))
@@ -733,6 +733,10 @@ class RenderManager {
             let accR = 0;
             let accG = 0;
             let accB = 0;
+            // Sky color accumulators (for L2FogInfo skyColor blending)
+            let accSkyR = 0;
+            let accSkyG = 0;
+            let accSkyB = 0;
             let totalWeight = 0;
 
             const presetIndex = this.envConfig.fogPreset;
@@ -785,12 +789,19 @@ class RenderManager {
                 const fogColor = interpolateFogInfoColor(timeOfDay, fogInfo.colors, tmpColorByte);
                 const cR = fogColor.r, cG = fogColor.g, cB = fogColor.b;
 
-                // Accumulate
+                // Also get sky color from L2FogInfo
+                const skyColor = interpolateFogInfoSkyColor(timeOfDay, fogInfo.colors, tmpColorByte_3);
+
+                // Accumulate fog
                 accStart += range.A * weight;
                 accEnd += range.B * weight;
                 accR += cR * weight;
                 accG += cG * weight;
                 accB += cB * weight;
+                // Accumulate sky
+                accSkyR += skyColor.r * weight;
+                accSkyG += skyColor.g * weight;
+                accSkyB += skyColor.b * weight;
                 totalWeight += weight;
             });
 
@@ -813,8 +824,22 @@ class RenderManager {
                     MathUtils.lerp(targetFogColor.g, finalG, blendFactor),
                     MathUtils.lerp(targetFogColor.b, finalB, blendFactor)
                 );
+
+                // Blend sky color from L2FogInfo
+                const finalSkyR = accSkyR / totalWeight;
+                const finalSkyG = accSkyG / totalWeight;
+                const finalSkyB = accSkyB / totalWeight;
+
+                targetSkyColor.set(
+                    MathUtils.lerp(targetSkyColor.r, finalSkyR, blendFactor),
+                    MathUtils.lerp(targetSkyColor.g, finalSkyG, blendFactor),
+                    MathUtils.lerp(targetSkyColor.b, finalSkyB, blendFactor)
+                );
             }
         }
+
+        // 4. Apply final sky color to scene background
+        this.scene.background = new Color().setRGB(targetSkyColor.r / 255, targetSkyColor.g / 255, targetSkyColor.b / 255);
 
         // 4. Update Header/Global State (Interpolate)
         // For now, snap to target values. TODO: Add interpolation for smooth transitions.
