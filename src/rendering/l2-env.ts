@@ -155,24 +155,6 @@ class L2Environment {
         return getBrightness(this.getTimeOfDay(), this.getEnvColor().light.terrain);
     }
 
-    public getBrightnessStaticMeshAmbient() {
-        return getBrightness(this.getTimeOfDay(), this.getEnvColor().ambient.staticMesh);
-    }
-
-    public getBrightnessActorAmbient() {
-        return getBrightness(this.getTimeOfDay(), this.getEnvColor().ambient.actor);
-    }
-
-    public getBrightnessTerrainAmbient() {
-        return getBrightness(this.getTimeOfDay(), this.getEnvColor().ambient.terrain);
-    }
-
-    public getBrightnessBSPAmbient() {
-        const envColor = this.getEnvColor();
-        const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
-        return getBrightness(this.getTimeOfDay(), bspArray);
-    }
-
     public getAmbientPlaneTerrainLight(target: ColorByte): ColorByte {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
     }
