@@ -39,6 +39,7 @@ const tmpColorByte_3 = new ColorByte(); // For sky color blending
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
+const DEFAULT_HORIZONTAL_FOV = 90;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
@@ -49,7 +50,7 @@ class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
-    public readonly camera = new PerspectiveCamera(75, 1, 0.1, DEFAULT_FAR);
+    public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
@@ -92,7 +93,7 @@ class RenderManager {
 
 
     public envConfig = {
-        fogPreset: "1"
+        fogPreset: "4"
     };
 
     public constructor(viewport: HTMLViewportElement) {
@@ -128,12 +129,8 @@ class RenderManager {
         // Create visualizer system (will be recreated when sector changes)
         this.visualizer = new Visualizer(this.scene);
 
-        this.sun = new Mesh(new PlaneGeometry(), new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
-        this.sunCam = new Camera();
-
         this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8 * 100, 0));
 
-        // this.scene.add(this.sun);
 
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
@@ -261,8 +258,7 @@ class RenderManager {
 
     private skyZone: any = null;
 
-    public setSkyData(celestials: any[], skyZone: any, textureGetter: (uuid: string) => any) {
-        this.skyRenderer.init(celestials, textureGetter);
+    public setSkyZone(skyZone: any) {
         this.skyZone = skyZone;
     }
 
@@ -552,7 +548,21 @@ class RenderManager {
         this.getDomElement().style.display = "none";
         const { width, height } = this.viewport.getBoundingClientRect();
 
-        this.camera.aspect = width / height;
+        const aspect = width / height;
+        this.camera.aspect = aspect;
+
+        // Convert horizontal FOV to vertical FOV for Three.js PerspectiveCamera
+        // Formula: vFOV = 2 * atan(tan(hFOV / 2) / aspect)
+        const hFOV = MathUtils.degToRad(DEFAULT_HORIZONTAL_FOV);
+        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / aspect);
+        this.camera.fov = MathUtils.radToDeg(vFOV);
+
+        if (this.bspHelperCamera) {
+            this.bspHelperCamera.aspect = aspect;
+            this.bspHelperCamera.fov = this.camera.fov;
+            this.bspHelperCamera.updateProjectionMatrix();
+        }
+
         this.camera.updateProjectionMatrix();
         this.setSize(width, height);
         this.getDomElement().style.display = oldStyle;
@@ -839,7 +849,7 @@ class RenderManager {
         }
 
         // 4. Apply final sky color to scene background
-        this.scene.background = new Color().setRGB(targetSkyColor.r / 255, targetSkyColor.g / 255, targetSkyColor.b / 255);
+        // this.scene.background = new Color().setRGB(targetSkyColor.r / 255, targetSkyColor.g / 255, targetSkyColor.b / 255);
 
         // 4. Update Header/Global State (Interpolate)
         // For now, snap to target values. TODO: Add interpolation for smooth transitions.
@@ -928,37 +938,8 @@ class RenderManager {
         this.player.position.lerp(desiredPosition, 0.1);
 
         this._updateObjects(currentTime, deltaTime);
-        // this._updateSun();
 
         this.renderer.clear();
-    }
-
-    protected _updateSun() {
-        const sector = this.getSector(this.camera.position);
-
-        if (sector) {
-            const sunMaterial = sector.sunTexture;
-            (this.sun.material as THREE.MeshBasicMaterial).map = sunMaterial.texture;
-        }
-
-        // debugger;
-
-        const radius = 3000;
-        const multiplier = (2 * Math.PI) / 24;
-        const px = (radius * Math.cos(Math.PI + multiplier * 9));
-        const py = (radius * Math.sin(Math.PI + multiplier * 9));
-
-        this.sun.position.copy(this.camera.position);
-        this.sun.position.z += py;
-        this.sun.position.y += px;
-
-        // this.sun.material.color.setRGB(255 / 255, 219 / 255, 151 / 255);
-        this.sun.scale.set(10000 * 0.5, 10000 * 0.5, 10000 * 0.5);
-        this.sun.lookAt(this.camera.position);
-
-        // this.renderer.setClearColor(new Color(66 / 255, 124 / 255, 176 / 255));
-
-        this.sun.updateMatrixWorld(true);
     }
 
     protected _doRender(currentTime: number, deltaTime: number) {
@@ -966,8 +947,6 @@ class RenderManager {
         this.renderer.clear();
         this.skyRenderer.render(this.renderer);
         this.renderer.clearDepth();
-
-        this.renderer.render(this.scene, this.camera);
 
         // Check for sector change and recreate visualizer if needed
         const currentSector = this.getSector(this.camera.position);
@@ -1073,6 +1052,11 @@ class RenderManager {
 
         this.objectGroup.add(sector);
 
+        // Initialize sky renderer with celestials from sector (if any)
+        if (sector.celestials && sector.celestials.length > 0) {
+            this.skyRenderer.initFromSector(sector.celestials);
+        }
+
         // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);
         if (currentSector && this.visualizer.isEnabled()) {
@@ -1108,7 +1092,7 @@ class RenderManager {
     public toggleBSPHelperCamera() {
         if (!this.bspHelperCamera) {
             // Create helper camera if it doesn't exist
-            this.bspHelperCamera = new PerspectiveCamera(75, this.camera.aspect, 0.1, DEFAULT_FAR);
+            this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
             this.bspHelperCamera.position.copy(this.camera.position);
             this.bspHelperCamera.rotation.copy(this.camera.rotation);
             this.bspHelperCamera.updateMatrixWorld(true);

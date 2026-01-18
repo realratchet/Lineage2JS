@@ -1,4 +1,4 @@
-import EnvColor, { TimeColor, TimeHSV } from "@client/rendering/env-color";
+import EnvColor, { TimeColor, TimeHSV, TimeScale } from "@client/rendering/env-color";
 import { Color, MathUtils } from "three";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import { ColorByte } from "@client/utils/color-byte";
@@ -240,6 +240,16 @@ class L2Environment {
 
         return [currEnvIndex, nextEnvIndex, lerp];
     }
+
+    /** Get interpolated sun scale for current time */
+    public getSunScale(): number {
+        return getScaleValue(this.getTimeOfDay(), this.getEnvColor().scale.sun);
+    }
+
+    /** Get interpolated moon scale for current time */
+    public getMoonScale(): number {
+        return getScaleValue(this.getTimeOfDay(), this.getEnvColor().scale.moon);
+    }
 }
 
 function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: T[]): [T, T, number] {
@@ -291,6 +301,13 @@ function getBrightness(timeOfDay: number, array: TimeHSV[]) {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
 
     return lFrac * (hsvNext.value - hsvCurr.value) + hsvCurr.value;
+}
+
+function getScaleValue(timeOfDay: number, array: TimeScale[]): number {
+    if (!array || array.length === 0) return 1.0; // Default scale
+
+    const [curr, next, lFrac] = pickArrayIndices(timeOfDay, array);
+    return curr.scale + (next.scale - curr.scale) * lFrac;
 }
 
 // function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Color {

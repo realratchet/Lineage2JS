@@ -419,7 +419,37 @@ function decodeSector(library: GD.DecodeLibrary) {
         sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
     }
 
+    // Decode celestials (NSun, NMoon) with their textures
+    console.log(`[Celestials] Found ${library.celestials.length} celestials to decode`);
+    library.celestials.forEach(celestialInfo => {
+        try {
+            console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);
+            if (celestialInfo.sprites && celestialInfo.sprites.length > 0) {
+                const spriteUuid = typeof celestialInfo.sprites[0] === 'string'
+                    ? celestialInfo.sprites[0]
+                    : celestialInfo.sprites[0].uuid || celestialInfo.sprites[0].material;
 
+                console.log(`[Celestials] Sprite UUID: ${spriteUuid}, exists in materials: ${!!library.materials[spriteUuid]}`);
+                const spriteTextureInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo;
+                let texture = null;
+
+                if (spriteTextureInfo) {
+                    const mapData = decodeTexture(library, spriteTextureInfo);
+                    // decodeTexture returns { texture, size } not { map }
+                    texture = (mapData as any)?.texture || null;
+                    console.log(`[Celestials] Decoded texture: ${!!texture}`);
+                }
+
+                sector.celestials.push({
+                    type: celestialInfo.type,
+                    sprite: texture,
+                    data: celestialInfo
+                });
+            }
+        } catch (e) {
+            console.warn("Failed to decode celestial", celestialInfo, e);
+        }
+    });
 
     // Add Fog Infos
     library.fogInfos.forEach(info => {

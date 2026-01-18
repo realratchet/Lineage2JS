@@ -14,6 +14,7 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
+import { anyFlags } from "@l2js/core/utils/flags";
 
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -283,7 +284,12 @@ abstract class UModel extends UPrimitive {
                 };
             }
 
-            if (surf.flags & (PolyFlags_T.PF_Invisible | PolyFlags_T.PF_Portal | PolyFlags_T.PF_AntiPortal)) continue;
+            if (surf.flags & (
+                PolyFlags_T.PF_Invisible |
+                PolyFlags_T.PF_Portal |
+                PolyFlags_T.PF_AntiPortal |
+                PolyFlags_T.PF_FakeBackdrop // no skybox
+            )) continue;
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
             const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;

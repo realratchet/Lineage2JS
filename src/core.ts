@@ -25,9 +25,9 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 
     console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
 
-    if (decodeLibrary.celestials.length > 0 || decodeLibrary.skyZone) {
-        // TODO: Implement proper texture loading for sprites
-        renderManager.setSkyData(decodeLibrary.celestials, decodeLibrary.skyZone, (uuid) => null);
+    if (decodeLibrary.skyZone) {
+        // Sky zone passed to render manager for positioning (celestials now decoded with sector)
+        renderManager.setSkyZone(decodeLibrary.skyZone);
     }
 
     return decodePackage(decodeLibrary);

@@ -8,11 +8,13 @@ abstract class UNSun extends UNCelestial {
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
-        const sprites = this.loadSelf().skins?.map(skin => skin.loadSelf().getDecodeInfo(library));
+        const self = this.loadSelf();
+        const sprites = self.skins?.map(skin => skin.loadSelf().getDecodeInfo(library));
 
         return {
             type: "Sun",
-            sprites
+            sprites,
+            ...this.getCelestialDecodeInfo()
         };
     }
 }

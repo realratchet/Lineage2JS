@@ -1,7 +1,6 @@
 import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Sprite, SpriteMaterial, Texture, Color, AdditiveBlending } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
-import { getTexture } from "@client/assets/assets"; // Assuming global texture getter or similar, will rely on passed function
 
 const tmpColor = new ColorByte();
 const tmpColor2 = new ColorByte();
@@ -59,19 +58,55 @@ export default class SkyRenderer {
         });
     }
 
-    public update(mainCamera: PerspectiveCamera, env: L2Environment, skyZoneDetails: any) {
-        // 1. Sync Camera
-        this.camera.copy(mainCamera, false);
-        // Reset position to origin or skyzone center for rendering sky elements
-        // Celestials are "infinite", so position relative to camera matters mainly for rotation
-        // But if we render Sky Geometry, we need absolute SkyZone coordinates.
-        // For Sprites, we can attach them to camera or place them far away.
+    /**
+     * Initialize from pre-decoded sector celestials (textures already loaded)
+     * @param celestials Array of { type, sprite (texture), data }
+     */
+    public initFromSector(celestials: { type: string; sprite: any; data: any }[]) {
+        console.log(`[SkyRenderer] initFromSector called with ${celestials.length} celestials`);
+        this.scene.clear();
+        this.sunResults = [];
+        this.moonResults = [];
 
+        celestials.forEach(cel => {
+            console.log(`[SkyRenderer] Adding celestial: type=${cel.type}, hasSprite=${!!cel.sprite}, lat=${cel.data?.lat}, lon=${cel.data?.lon}, radius=${cel.data?.radius}, drawScale=${cel.data?.drawScale}, celestialScale=${cel.data?.celestialScale}, position=${JSON.stringify(cel.data?.position)}`);
+            const mat = new SpriteMaterial({
+                transparent: true,
+                blending: AdditiveBlending,
+                depthWrite: false,
+                depthTest: false
+            });
+
+            if (cel.sprite) {
+                mat.map = cel.sprite;
+            }
+
+            const sprite = new Sprite(mat);
+            this.scene.add(sprite);
+
+            const result = { sprite, data: cel.data };
+            if (cel.type === "Sun") this.sunResults.push(result);
+            else if (cel.type === "Moon") this.moonResults.push(result);
+        });
+
+        console.log(`[SkyRenderer] Initialized: suns=${this.sunResults.length}, moons=${this.moonResults.length}`);
+    }
+
+    private _debugLogged = false;
+    public update(mainCamera: PerspectiveCamera, env: L2Environment, skyZoneDetails: any) {
+        // 1. Sync Camera Properties (Rotation, FOV, Aspect)
+        // We do NOT copy the main camera to avoid inheriting position or incompatible near/far planes.
+        this.camera.quaternion.copy(mainCamera.quaternion);
+        this.camera.fov = mainCamera.fov;
+        this.camera.aspect = mainCamera.aspect;
+        this.camera.near = 10;   // Ensure near plane is close enough
+        this.camera.far = 20000; // Ensure far plane covers celestial distance (4000)
+        this.camera.updateProjectionMatrix();
+
+        // SkyZone location handling (if we ever render geometry that needs it)
+        // For infinite celestials, (0,0,0) is fine.
         if (skyZoneDetails && skyZoneDetails.location) {
             const { location } = skyZoneDetails;
-            // Sky Camera is at SkyZone Location + MainCamera Rotation (usually)
-            // But usually SkyZone implies "Look from this point". 
-            // If we rotate, we look around that point.
             this.camera.position.set(location[0], location[1], location[2]);
         } else {
             this.camera.position.set(0, 0, 0);
@@ -79,77 +114,88 @@ export default class SkyRenderer {
 
         this.camera.updateMatrixWorld();
 
-        // 2. Position Celestials
-        // This is complex math involving game time -> pitch/yaw
-        // For this pass, we will place them at a fixed distance based on time
+        // 2. Position Celestials using decoded data
         const time = env.getTimeOfDay();
 
-        // Simple Orbit Logic (Placeholder for full Ephemeris)
-        // 0 = Midnight, 6 = Dawn, 12 = Noon, 18 = Dusk
-        // Sun should be up 6-18. Moon 18-6.
-        // Angle = (Time / 24) * 2 * PI
+        // Debug log once to confirm new camera setup
+        if (!this._debugLogged) {
+            console.log(`[SkyRenderer] update time=${time}, cameraPos=${this.camera.position.toArray()}, mainCamPos=${mainCamera.position.toArray()}`);
+            this._debugLogged = true;
+        }
 
-        const distance = 4000; // Far enough
-        const angle = ((time - 6) / 24) * Math.PI * 2; // -PI/2 at 6am (Horizon), 0 at Noon (Zenith), PI/2 at 6pm (Horizon)
-        // Wait, standard mapping: 
-        // 6AM -> Rising -> East?
-        // Let's use simple rotation around X axis for now
+        // Position all celestials using their decoded data and environment scale
+        const positionCelestial = (res: { sprite: Sprite, data: any }, isSun: boolean, offsetHours: number = 0) => {
+            const data = res.data;
+            const distance = data.radius ?? 4000;
 
-        const sy = Math.sin(angle) * distance;
-        const sz = Math.cos(angle) * distance;
+            // Get time-based scale from environment (this matches the original game's GetSunScale/GetMoonScale)
+            const envScale = isSun ? env.getSunScale() : env.getMoonScale();
+            // Multiply by actor's drawScale and the celestialScale property
+            // The envScale is a multiplier that varies by time of day (typically 0.5 to 2.0)
+            const baseScale = (data.drawScale ?? 1) * (data.celestialScale ?? 1);
+            // Scale relative to distance for proper angular size
+            const scale = distance * envScale * baseScale * 0.2;
 
-        this.sunResults.forEach(res => {
-            // Sun Position
-            res.sprite.position.set(0, sy, sz).applyQuaternion(this.camera.quaternion);
-            // Wait, if we apply quaternion, it locks to camera. We want it in World Space relative to SkyCamera.
-            // Actually, we want it fixed in Sky Space.
-            // If angle implies "Time of Day", it moves in World.
-            // So:
-            res.sprite.position.set(0, sy, -sz); // Z is up? No Y is Up in ThreeJS? 
-            // Unreal: Z is Up. Three: Y is Up.
-            // Let's use:
-            // Sun rises East (+X?), sets West (-X?)
-            // Rotates around Y (Up)? No, rotates around North-South axis?
-            // Simple: Just rotate around X axis (East-West path)
+            let direction: Vector3;
 
-            // 0 -> Midnight -> Down (-Y)
-            // 6 -> 6AM -> Right (+X)
-            // 12 -> Noon -> Up (+Y)
-            // 18 -> 6PM -> Left (-X)
+            // Check if position is a non-zero vector
+            const hasValidPosition = data.position &&
+                (data.position[0] !== 0 || data.position[1] !== 0 || data.position[2] !== 0);
 
-            // Angle 0-24
-            const rad = (time / 24) * Math.PI * 2;
-            const y = -Math.cos(rad) * distance; // Midnight(0) = -1(Down), Noon(12) = 1(Up)
-            const x = Math.sin(rad) * distance;  // 6(PI/2) = 1(East), 18(3PI/2) = -1(West)
+            if (hasValidPosition) {
+                // Position already in Three.js coordinates from decode
+                direction = new Vector3().fromArray(data.position).normalize();
+            } else if (data.lat !== undefined && data.lon !== undefined && (data.lat !== 0 || data.lon !== 0)) {
+                // Use lat/lon to compute direction (skip if both are 0)
+                // lat: -90 to 90 (south to north), lon: 0 to 360 (around horizon)
+                const latRad = data.lat * Math.PI / 180;
+                const lonRad = data.lon * Math.PI / 180;
 
-            // Adjust to SkyCamera
-            res.sprite.position.copy(this.camera.position).add(new Vector3(x, y, 0));
+                // Convert spherical to cartesian (Y-up, Three.js coords)
+                // lat=0 is equator, lat=90 is north pole (up)
+                const cosLat = Math.cos(latRad);
+                direction = new Vector3(
+                    cosLat * Math.sin(lonRad),  // X
+                    Math.sin(latRad),            // Y (up)
+                    cosLat * Math.cos(lonRad)   // Z
+                );
+            } else {
+                // Fallback: compute from time of day
+                const rad = ((time + offsetHours) / 24) * Math.PI * 2;
+                direction = new Vector3(
+                    0,
+                    -Math.cos(rad),  // Y: up at noon, down at midnight
+                    Math.sin(rad)    // Z: east at dawn, west at dusk
+                );
+            }
 
-            // Updates
-            res.sprite.updateMatrix();
-
-            // Scale
-            const scale = res.data.sprites[0]?.scale || 500; // Default scale
+            // Position sprite relative to camera at specified distance
+            res.sprite.position.copy(this.camera.position).addScaledVector(direction, distance);
             res.sprite.scale.set(scale, scale, 1);
-        });
-
-        this.moonResults.forEach(res => {
-            // Moon opposite to Sun
-            const rad = ((time + 12) % 24 / 24) * Math.PI * 2;
-            const y = -Math.cos(rad) * distance;
-            const x = Math.sin(rad) * distance;
-
-            res.sprite.position.copy(this.camera.position).add(new Vector3(x, y, 0));
             res.sprite.updateMatrix();
+        };
 
-            const scale = res.data.sprites[0]?.scale || 500;
-            res.sprite.scale.set(scale, scale, 1);
-        });
+        this.sunResults.forEach(res => positionCelestial(res, true, 0));
+        this.moonResults.forEach(res => positionCelestial(res, false, 12)); // Moon opposite to sun
 
         this.scene.updateMatrixWorld();
     }
 
+    private _renderLogged = false;
     public render(renderer: WebGLRenderer) {
         renderer.render(this.scene, this.camera);
+
+        if (!this._renderLogged && this.sunResults.length > 0) {
+            const sun = this.sunResults[0].sprite;
+            const vector = sun.position.clone().project(this.camera);
+            console.log(`[SkyRenderer] Sun Screen Pos: ${vector.x.toFixed(2)}, ${vector.y.toFixed(2)}, ${vector.z.toFixed(2)} (Visible if x,y in [-1,1] and z in [0,1])`);
+
+            if (this.moonResults.length > 0) {
+                const moon = this.moonResults[0].sprite;
+                const mVector = moon.position.clone().project(this.camera);
+                console.log(`[SkyRenderer] Moon Screen Pos: ${mVector.x.toFixed(2)}, ${mVector.y.toFixed(2)}, ${mVector.z.toFixed(2)}`);
+            }
+            this._renderLogged = true;
+        }
     }
 }

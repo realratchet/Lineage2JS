@@ -106,6 +106,7 @@ class SectorObject extends Object3D {
     public bspLeaves: BSPLeafData[];
     public index: THREE.Vector2;
     public sunTexture: any; // MapData_T - texture with size info
+    public celestials: { type: string; sprite: any; data: any }[] = []; // Decoded celestial data with textures
     public brightness: number = 1.0;
     public lastZoneMask: bigint = 0n;
 
