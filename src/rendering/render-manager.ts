@@ -39,7 +39,7 @@ const tmpColorByte_3 = new ColorByte(); // For sky color blending
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
-const DEFAULT_HORIZONTAL_FOV = 90;
+const DEFAULT_HORIZONTAL_FOV = 60;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
@@ -185,8 +185,8 @@ class RenderManager {
         // this.controls.orbit.target.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
 
         // // ti - should have terrain light
-        // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
-        // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
+        this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
+        this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);
@@ -199,6 +199,10 @@ class RenderManager {
         // // ti church
         // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
         // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
+
+        // should see moon
+        // this.camera.position.set(18126.590453715344, -3521.039633507794, 115584.07279848716);
+        // this.controls.orbit.target.set(18218.654368394516, -3487.7660069524377, 115563.64973824144);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

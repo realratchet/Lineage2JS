@@ -3,7 +3,7 @@
 import GMath from "@client/assets/unreal/un-gmath";
 import FMatrix from "@client/assets/unreal/un-matrix";
 import FVector from "@client/assets/unreal/un-vector";
-import UObject from "@l2js/core";
+import UObject, { APackage, UExport } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
 abstract class UAActor extends UObject {

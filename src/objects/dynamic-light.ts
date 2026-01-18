@@ -20,7 +20,7 @@ const NEG_PI = -Math.PI;      // -3.1415927
  * @param baseYawDegrees - Base yaw angle in degrees (from envManager.field_0x170)
  * @returns [pitch, yaw, brightness] in radians
  */
-function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 0): [number, number, number] {
+function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
     let pitch: number;
@@ -46,17 +46,28 @@ function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 0): [num
  * @param baseYawDegrees - Base yaw angle in degrees (from envManager.field_0x170)
  * @returns [pitch, yaw, brightness] in radians
  */
-function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 0): [number, number, number] {
+function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
     let pitch: number;
 
-    if (timeOfDay >= 7.0 && timeOfDay < 23.0) {
+    // Moon visible from ~19h to ~7h (nighttime)
+    // From IDA: if (time < 7 || time >= 19) then compute pitch, else hidden
+    if (timeOfDay >= 7.0 && timeOfDay < 19.0) {
         // Daytime - moon is hidden
         pitch = NEG_PI;
     } else {
-        // Nighttime moon arc: ~30° per hour
-        pitch = timeOfDay * 0.5235987755982988 - HALF_PI;
+        // Nighttime moon arc
+        // For evening (19-24), we need to continue the arc from where it left off
+        // At 19h: should be rising (negative pitch, below horizon)
+        // At midnight: pitch = 0 * 30deg - 90deg = -90deg (horizon)
+        // At 7h: pitch = 7 * 30deg - 90deg = 120deg (setting)
+        let moonTime = timeOfDay;
+        if (timeOfDay >= 19.0) {
+            // Continue arc: 19h -> -5, 24h -> 0 (so it connects with midnight)
+            moonTime = timeOfDay - 24;
+        }
+        pitch = moonTime * 0.5235987755982988 - HALF_PI;
     }
 
     return [pitch, yaw, brightness];
@@ -453,4 +464,4 @@ function calculateAttenuation(distance: number, radius: number, dx: number, dy: 
 }
 
 export default DynamicLight;
-export { DynamicLight, ColorHSV };
+export { DynamicLight, ColorHSV, getSunModifierInfo, getMoonModifierInfo, pitchYawToDirection };

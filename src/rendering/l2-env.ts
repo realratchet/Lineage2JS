@@ -112,7 +112,7 @@ class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
 
-    protected time: number = 20 * 60; // in seconds
+    protected time: number = 60 * 60; // in seconds
     protected envVersion: number = 0; // Incremented when activeEnv changes
 
     public constructor(envColors: { [key in 0 | 1 | 2]: EnvColor }) {

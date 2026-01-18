@@ -1,6 +1,7 @@
 import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Sprite, SpriteMaterial, Texture, Color, AdditiveBlending } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
+import { getSunModifierInfo, getMoonModifierInfo, pitchYawToDirection } from "@client/objects/dynamic-light";
 
 const tmpColor = new ColorByte();
 const tmpColor2 = new ColorByte();
@@ -15,6 +16,10 @@ export default class SkyRenderer {
 
     // Settings
     private skyZoneLocation: Vector3 | null = null;
+
+    // debug
+    private _lastMoonPrintTime: number = NaN;
+    private _lastSunPrintTime: number = NaN;
 
     constructor() {
         this.scene = new Scene();
@@ -124,7 +129,7 @@ export default class SkyRenderer {
         }
 
         // Position all celestials using their decoded data and environment scale
-        const positionCelestial = (res: { sprite: Sprite, data: any }, isSun: boolean, offsetHours: number = 0) => {
+        const positionCelestial = (res: { sprite: Sprite, data: any }, isSun: boolean) => {
             const data = res.data;
             const distance = data.radius ?? 4000;
 
@@ -134,7 +139,9 @@ export default class SkyRenderer {
             // The envScale is a multiplier that varies by time of day (typically 0.5 to 2.0)
             const baseScale = (data.drawScale ?? 1) * (data.celestialScale ?? 1);
             // Scale relative to distance for proper angular size
-            const scale = distance * envScale * baseScale * 0.2;
+            // Scale relative to distance for proper angular size
+            // 0.2 was too big (11 deg), 0.04 too small (2.3 deg). 0.08 (~4.5 deg) should be close to L2 style.
+            const scale = distance * envScale * baseScale * 0.08;
 
             let direction: Vector3;
 
@@ -160,13 +167,26 @@ export default class SkyRenderer {
                     cosLat * Math.cos(lonRad)   // Z
                 );
             } else {
-                // Fallback: compute from time of day
-                const rad = ((time + offsetHours) / 24) * Math.PI * 2;
-                direction = new Vector3(
-                    0,
-                    -Math.cos(rad),  // Y: up at noon, down at midnight
-                    Math.sin(rad)    // Z: east at dawn, west at dusk
-                );
+                // Use IDA-derived formulas from dynamic-light.ts
+                const [pitch, yaw] = isSun ? getSunModifierInfo(time) : getMoonModifierInfo(time);
+
+
+
+                if (!isSun && this._lastMoonPrintTime !== time) {
+                    this._lastMoonPrintTime = time;
+                } else if (isSun && this._lastSunPrintTime !== time) {
+                    this._lastSunPrintTime = time;
+                }
+
+                // pitchYawToDirection converts to Three.js Y-up coordinates
+                // Game Pitch: 0 = Zenith, -90 = Horizon. Standard: 0 = Horizon.
+                // We need to add 90° (PI/2) to convert game pitch to standard pitch.
+                direction = new Vector3();
+                pitchYawToDirection(pitch + Math.PI / 2, yaw - Math.PI / 2, direction);
+
+                // if (!isSun && this._lastMoonPrintTime === time) {
+                //     console.log(`[Moon] time: ${time} | pitch: ${pitch} | correctedPitch: ${pitch + Math.PI / 2} | dir: ${direction.toArray().map(v => v.toFixed(3))}`);
+                // }
             }
 
             // Position sprite relative to camera at specified distance
@@ -175,8 +195,8 @@ export default class SkyRenderer {
             res.sprite.updateMatrix();
         };
 
-        this.sunResults.forEach(res => positionCelestial(res, true, 0));
-        this.moonResults.forEach(res => positionCelestial(res, false, 12)); // Moon opposite to sun
+        this.sunResults.forEach(res => positionCelestial(res, true));
+        this.moonResults.forEach(res => positionCelestial(res, false));
 
         this.scene.updateMatrixWorld();
     }
