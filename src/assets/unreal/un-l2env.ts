@@ -1,7 +1,7 @@
 import FPlane from "@client/assets/unreal/un-plane";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import GMath from "@client/assets/unreal/un-gmath";
-import { UObject } from "@l2js/core";
+import { APackage, UExport, UObject } from "@l2js/core";
 import FArray from "@l2js/core/src/unreal/un-array";
 
 // Environmental preset types for Seven Signs events
@@ -456,7 +456,7 @@ function consumeScale(line: string): [number, number] {
 
         switch (k.toLowerCase()) {
             case "t": t = parseInt(v); break;
-            case "s": s = parseInt(v); break;
+            case "s": s = parseFloat(v); break;
             default: throw new Error(`Unknown light parameter: ${k}`);
         }
     }
