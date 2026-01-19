@@ -2,6 +2,7 @@ import UAActor, { EPhysics_T } from "../un-aactor";
 import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
+import FColor from "@client/assets/unreal/un-color";
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -152,11 +153,29 @@ abstract class UStaticMeshActor extends UAActor {
 
         const ambActor = this.getAmbientLightingActor();
         const zone = this.getZone();
-        const ambVector = zone.ambientVector;
+
+        // const h = zone.ambientHue || 0;
+        // const s = zone.ambientSaturation || 0;
+        // const b = zone.ambientBrightness || 0;
+
+        let ambX = 0, ambY = 0, ambZ = 0;
+        const xmodel = this.levelInfo.getLevel().getModel();
+
+        for (let leaf of leaves) {
+            const zoneInfo = xmodel.getZoneActor(leaf.iZone);
+            const zone = zoneInfo.getZone();
+            const amb = zone.ambientVector;
+
+            ambX = Math.max(ambX, amb.x);
+            ambY = Math.max(ambY, amb.y);
+            ambZ = Math.max(ambZ, amb.z);
+        }
+
+        const ambVector = FColor.fromFloating(ambX, ambY, ambZ)
 
         const ambientProps = {
             glow: ambActor.ambientGlow,
-            vector: ambVector.getVectorElements().map(v => Math.round(v)),
+            color: ambVector.toArray(),
             isUnlit: this.isUnlit
         };
 

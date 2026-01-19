@@ -461,7 +461,8 @@ async function startCore() {
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
             // ...["StaticMeshActor475"] // talking island village broken rock
             // "StaticMeshActor684", // cruma light
-            "StaticMeshActor2841"
+            // "StaticMeshActor2841"
+            "StaticMeshActor517", // cruma too dark
             // "StaticMeshActor1893" // cruma: broken floating platform light
         ]
     } as GD.LoadSettings_T;
@@ -494,7 +495,7 @@ async function startCore() {
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI

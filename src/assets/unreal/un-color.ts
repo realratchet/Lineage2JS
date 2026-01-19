@@ -43,6 +43,15 @@ abstract class FColor extends UObject {
         return super.doLoad(pkg, exp);
     }
 
+    public static fromFloating(r: number, g: number, b: number, a?: number) {
+        return FColor.make(
+            Math.floor(Math.max(0, Math.min(255, r * 255))),
+            Math.floor(Math.max(0, Math.min(255, g * 255))),
+            Math.floor(Math.max(0, Math.min(255, b * 255))),
+            Math.floor(Math.max(0, Math.min(255, (a ?? 0) * 255)))
+        );
+    }
+
     getBrightness() { return (this.g * 3.0 + this.b + this.b + this.r) * 0.0006510417; }
 
     toArray(array: number[] | ArrayLike<number> | GD.ColorArr = [], offset = 0) {

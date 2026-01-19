@@ -39,7 +39,7 @@ const tmpColorByte_3 = new ColorByte(); // For sky color blending
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
-const DEFAULT_HORIZONTAL_FOV = 60;
+const DEFAULT_HORIZONTAL_FOV = 90;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
@@ -185,8 +185,8 @@ class RenderManager {
         // this.controls.orbit.target.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
 
         // // ti - should have terrain light
-        this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
-        this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
+        // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
+        // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);

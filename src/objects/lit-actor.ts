@@ -23,9 +23,9 @@ class LitActorMesh extends Mesh {
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
-    protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
+    protected ambient?: { glow: number, color: [number, number, number, number], isUnlit: boolean };
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, color: [number, number, number, number], isUnlit: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
@@ -137,7 +137,7 @@ class LitActorMesh extends Mesh {
             const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
 
             if (this.ambient) {
-                const { isUnlit, vector, glow } = this.ambient;
+                const { isUnlit, color, glow } = this.ambient;
 
                 if (isUnlit) {
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
@@ -149,7 +149,7 @@ class LitActorMesh extends Mesh {
                     // Static mesh actors use ambient directly (zone ambient + glow)
                     // IDA: FinalRGB = AmbPlane + SunPlane * Diffuse
                     // Using ColorByte for accurate byte addition
-                    tmpColorByte.set(vector[0], vector[1], vector[2]);
+                    tmpColorByte.set(color[0], color[1], color[2]);
                     const r = tmpColorByte.r + glow;
                     const g = tmpColorByte.g + glow;
                     const b = tmpColorByte.b + glow;

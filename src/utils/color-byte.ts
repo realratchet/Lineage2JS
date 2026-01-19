@@ -103,7 +103,7 @@ class ColorByte {
         }
 
         const saturation = (s & 0xff) * 0.003921569;
-        let lightness = v * 0.005882353; // Updated multiplier: 1.5 / 255.0
+        let lightness = v * 0.005490196; // Updated multiplier: 1.4 / 255.0
 
         const sqrLightness = Math.sqrt(lightness);
         lightness = (lightness / (sqrLightness + 0.01)) * 0.7;
