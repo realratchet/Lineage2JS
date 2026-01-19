@@ -284,11 +284,20 @@ abstract class UModel extends UPrimitive {
                 };
             }
 
+
+            // if (nodeIndex === 14)
+            //     debugger;
+
+            // if (!(surf.flags | PolyFlags_T.PF_Unused2)) {
+            //     continue
+            // }
+
             if (surf.flags & (
                 PolyFlags_T.PF_Invisible |
                 PolyFlags_T.PF_Portal |
                 PolyFlags_T.PF_AntiPortal |
-                PolyFlags_T.PF_FakeBackdrop // no skybox
+                PolyFlags_T.PF_FakeBackdrop | // no skybox
+                PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
             )) continue;
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
