@@ -124,6 +124,12 @@
             "name": "Launch Chrome against localhost",
             "url": "http://ratchet-pc:8080",
             "webRoot": "${workspaceFolder}",
+            "runtimeArgs": [
+                "--password-store=basic",
+                "--user-data-dir=${workspaceFolder}/.vscode-chrome",
+                "--no-first-run",
+                "--no-default-browser-check"
+            ],
             "sourceMapPathOverrides": {
                 "webpack:///../*": "${workspaceFolder}/*",
             },
