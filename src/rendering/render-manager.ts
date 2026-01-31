@@ -201,8 +201,8 @@ class RenderManager {
         // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
         // should see moon
-        // this.camera.position.set(18126.590453715344, -3521.039633507794, 115584.07279848716);
-        // this.controls.orbit.target.set(18218.654368394516, -3487.7660069524377, 115563.64973824144);
+        this.camera.position.set(18345, -3583, 115670);
+        this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

@@ -1,221 +1,242 @@
-import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Sprite, SpriteMaterial, Texture, Color, AdditiveBlending } from "three";
+import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, PlaneGeometry, Texture, Color, AdditiveBlending, NormalBlending, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
-import { getSunModifierInfo, getMoonModifierInfo, pitchYawToDirection } from "@client/objects/dynamic-light";
 
-const tmpColor = new ColorByte();
-const tmpColor2 = new ColorByte();
+// Constants from Analysis (CELESTIAL_POSITIONING_COMPLETE.md)
+const DEG2RAD = Math.PI / 180;
+const HALF_PI = Math.PI / 2;
+const NEG_PI = -Math.PI;
+const X_ROTATION_ANGLE = 30 * DEG2RAD;
+const PI = Math.PI;
+
+const MATERIAL_U_SIZE = 32; // Used for scaling instead of texture size
+
+const TMP_VEC3 = new Vector3();
 
 export default class SkyRenderer {
-    private scene: Scene;
-    private camera: PerspectiveCamera;
+    private celestialScene = new Scene();
+    private sun: Mesh;
+    private moon: Mesh;
+    private camera: PerspectiveCamera | null = null;
 
-    // Celestials
-    private sunResults: { sprite: Sprite, data: any }[] = [];
-    private moonResults: { sprite: Sprite, data: any }[] = [];
-
-    // Settings
-    private skyZoneLocation: Vector3 | null = null;
-
-    // debug
-    private _lastMoonPrintTime: number = NaN;
-    private _lastSunPrintTime: number = NaN;
+    private sunData: any = null;
+    private moonData: any = null;
 
     constructor() {
-        this.scene = new Scene();
-        this.camera = new PerspectiveCamera();
-        // We handle camera updates manually
-        this.scene.autoUpdate = false;
-    }
+        const geometry = new PlaneGeometry(1, 1);
 
-    public init(celestialsData: any[], textureGetter: (uuid: string) => Promise<Texture> | Texture | null) {
-        this.scene.clear();
-        this.sunResults = [];
-        this.moonResults = [];
-
-        celestialsData.forEach(cel => {
-            if (!cel.sprites || cel.sprites.length === 0) return;
-
-            // For now, take the first sprite. TODO: Handle animations/multiple sprites
-            const spriteData = cel.sprites[0];
-            const uuid = typeof spriteData === 'string' ? spriteData : spriteData.uuid || spriteData.material;
-
-            const mat = new SpriteMaterial({
-                transparent: true,
-                blending: AdditiveBlending,
-                depthWrite: false,
-                depthTest: false
-            });
-
-            const tex = textureGetter(uuid);
-            if (tex instanceof Promise) {
-                tex.then(t => { mat.map = t; mat.needsUpdate = true; });
-            } else if (tex) {
-                mat.map = tex;
-            }
-
-            const sprite = new Sprite(mat);
-            this.scene.add(sprite);
-
-            const result = { sprite, data: cel };
-            if (cel.type === "Sun") this.sunResults.push(result);
-            else if (cel.type === "Moon") this.moonResults.push(result);
+        // Sun Material
+        const sunMat = new MeshBasicMaterial({
+            transparent: true,
+            blending: CustomBlending,
+            blendSrc: OneFactor,
+            blendDst: OneMinusSrcColorFactor,
+            depthWrite: false,
+            depthTest: false,
+            side: DoubleSide
         });
-    }
+        this.sun = new Mesh(geometry, sunMat);
+        this.sun.visible = false;
+        this.sun.frustumCulled = false;
 
-    /**
-     * Initialize from pre-decoded sector celestials (textures already loaded)
-     * @param celestials Array of { type, sprite (texture), data }
-     */
-    public initFromSector(celestials: { type: string; sprite: any; data: any }[]) {
-        console.log(`[SkyRenderer] initFromSector called with ${celestials.length} celestials`);
-        this.scene.clear();
-        this.sunResults = [];
-        this.moonResults = [];
-
-        celestials.forEach(cel => {
-            console.log(`[SkyRenderer] Adding celestial: type=${cel.type}, hasSprite=${!!cel.sprite}, lat=${cel.data?.lat}, lon=${cel.data?.lon}, radius=${cel.data?.radius}, drawScale=${cel.data?.drawScale}, celestialScale=${cel.data?.celestialScale}, position=${JSON.stringify(cel.data?.position)}`);
-            const mat = new SpriteMaterial({
-                transparent: true,
-                blending: AdditiveBlending,
-                depthWrite: false,
-                depthTest: false
-            });
-
-            if (cel.sprite) {
-                mat.map = cel.sprite;
-            }
-
-            const sprite = new Sprite(mat);
-            this.scene.add(sprite);
-
-            const result = { sprite, data: cel.data };
-            if (cel.type === "Sun") this.sunResults.push(result);
-            else if (cel.type === "Moon") this.moonResults.push(result);
+        // Moon Material
+        const moonMat = new MeshBasicMaterial({
+            transparent: true,
+            blending: CustomBlending,
+            blendSrc: OneFactor,
+            blendDst: OneMinusSrcColorFactor,
+            depthWrite: false,
+            depthTest: false,
+            side: DoubleSide,
+            color: 0xffffff // White base color
         });
+        this.moon = new Mesh(geometry, moonMat);
+        this.moon.visible = false;
+        this.moon.frustumCulled = false;
 
-        console.log(`[SkyRenderer] Initialized: suns=${this.sunResults.length}, moons=${this.moonResults.length}`);
+        this.celestialScene.add(this.sun);
+        this.celestialScene.add(this.moon);
     }
 
-    private _debugLogged = false;
-    public update(mainCamera: PerspectiveCamera, env: L2Environment, skyZoneDetails: any) {
-        // 1. Sync Camera Properties (Rotation, FOV, Aspect)
-        // We do NOT copy the main camera to avoid inheriting position or incompatible near/far planes.
-        this.camera.quaternion.copy(mainCamera.quaternion);
-        this.camera.fov = mainCamera.fov;
-        this.camera.aspect = mainCamera.aspect;
-        this.camera.near = 10;   // Ensure near plane is close enough
-        this.camera.far = 20000; // Ensure far plane covers celestial distance (4000)
-        this.camera.updateProjectionMatrix();
+    public initFromSector(celestials: any[]) {
+        if (!celestials) return;
 
-        // SkyZone location handling (if we ever render geometry that needs it)
-        // For infinite celestials, (0,0,0) is fine.
-        if (skyZoneDetails && skyZoneDetails.location) {
-            const { location } = skyZoneDetails;
-            this.camera.position.set(location[0], location[1], location[2]);
-        } else {
-            this.camera.position.set(0, 0, 0);
-        }
-
-        this.camera.updateMatrixWorld();
-
-        // 2. Position Celestials using decoded data
-        const time = env.getTimeOfDay();
-
-        // Debug log once to confirm new camera setup
-        if (!this._debugLogged) {
-            console.log(`[SkyRenderer] update time=${time}, cameraPos=${this.camera.position.toArray()}, mainCamPos=${mainCamera.position.toArray()}`);
-            this._debugLogged = true;
-        }
-
-        // Position all celestials using their decoded data and environment scale
-        const positionCelestial = (res: { sprite: Sprite, data: any }, isSun: boolean) => {
-            const data = res.data;
-            const distance = data.radius ?? 4000;
-
-            // Get time-based scale from environment (this matches the original game's GetSunScale/GetMoonScale)
-            const envScale = isSun ? env.getSunScale() : env.getMoonScale();
-            // Multiply by actor's drawScale and the celestialScale property
-            // The envScale is a multiplier that varies by time of day (typically 0.5 to 2.0)
-            const baseScale = (data.drawScale ?? 1) * (data.celestialScale ?? 1);
-            // Scale relative to distance for proper angular size
-            // Scale relative to distance for proper angular size
-            // 0.2 was too big (11 deg), 0.04 too small (2.3 deg). 0.08 (~4.5 deg) should be close to L2 style.
-            const scale = distance * envScale * baseScale * 0.08;
-
-            let direction: Vector3;
-
-            // Check if position is a non-zero vector
-            const hasValidPosition = data.position &&
-                (data.position[0] !== 0 || data.position[1] !== 0 || data.position[2] !== 0);
-
-            if (hasValidPosition) {
-                // Position already in Three.js coordinates from decode
-                direction = new Vector3().fromArray(data.position).normalize();
-            } else if (data.lat !== undefined && data.lon !== undefined && (data.lat !== 0 || data.lon !== 0)) {
-                // Use lat/lon to compute direction (skip if both are 0)
-                // lat: -90 to 90 (south to north), lon: 0 to 360 (around horizon)
-                const latRad = data.lat * Math.PI / 180;
-                const lonRad = data.lon * Math.PI / 180;
-
-                // Convert spherical to cartesian (Y-up, Three.js coords)
-                // lat=0 is equator, lat=90 is north pole (up)
-                const cosLat = Math.cos(latRad);
-                direction = new Vector3(
-                    cosLat * Math.sin(lonRad),  // X
-                    Math.sin(latRad),            // Y (up)
-                    cosLat * Math.cos(lonRad)   // Z
-                );
-            } else {
-                // Use IDA-derived formulas from dynamic-light.ts
-                const [pitch, yaw] = isSun ? getSunModifierInfo(time) : getMoonModifierInfo(time);
-
-
-
-                if (!isSun && this._lastMoonPrintTime !== time) {
-                    this._lastMoonPrintTime = time;
-                } else if (isSun && this._lastSunPrintTime !== time) {
-                    this._lastSunPrintTime = time;
+        celestials.forEach(celestial => {
+            if (celestial.type === "Sun") {
+                this.sunData = celestial.data;
+                if (celestial.sprite) {
+                    const tex = celestial.sprite;
+                    tex.flipY = true;
+                    tex.needsUpdate = true;
+                    (this.sun.material as MeshBasicMaterial).map = tex;
+                    (this.sun.material as MeshBasicMaterial).needsUpdate = true;
                 }
-
-                // pitchYawToDirection converts to Three.js Y-up coordinates
-                // Game Pitch: 0 = Zenith, -90 = Horizon. Standard: 0 = Horizon.
-                // We need to add 90° (PI/2) to convert game pitch to standard pitch.
-                direction = new Vector3();
-                pitchYawToDirection(pitch + Math.PI / 2, yaw - Math.PI / 2, direction);
-
-                // if (!isSun && this._lastMoonPrintTime === time) {
-                //     console.log(`[Moon] time: ${time} | pitch: ${pitch} | correctedPitch: ${pitch + Math.PI / 2} | dir: ${direction.toArray().map(v => v.toFixed(3))}`);
-                // }
+            } else if (celestial.type === "Moon") {
+                this.moonData = celestial.data;
+                if (celestial.sprite) {
+                    const tex = celestial.sprite;
+                    tex.flipY = true;
+                    tex.needsUpdate = true;
+                    (this.moon.material as MeshBasicMaterial).map = tex;
+                    (this.moon.material as MeshBasicMaterial).needsUpdate = true;
+                }
             }
-
-            // Position sprite relative to camera at specified distance
-            res.sprite.position.copy(this.camera.position).addScaledVector(direction, distance);
-            res.sprite.scale.set(scale, scale, 1);
-            res.sprite.updateMatrix();
-        };
-
-        this.sunResults.forEach(res => positionCelestial(res, true));
-        this.moonResults.forEach(res => positionCelestial(res, false));
-
-        this.scene.updateMatrixWorld();
+        });
     }
 
-    private _renderLogged = false;
-    public render(renderer: WebGLRenderer) {
-        renderer.render(this.scene, this.camera);
+    public update(camera: PerspectiveCamera, env: L2Environment, skyZone: any) {
+        this.camera = camera;
+        const timeOfDay = env.getTimeOfDay();
 
-        if (!this._renderLogged && this.sunResults.length > 0) {
-            const sun = this.sunResults[0].sprite;
-            const vector = sun.position.clone().project(this.camera);
-            console.log(`[SkyRenderer] Sun Screen Pos: ${vector.x.toFixed(2)}, ${vector.y.toFixed(2)}, ${vector.z.toFixed(2)} (Visible if x,y in [-1,1] and z in [0,1])`);
+        this.updateSun(timeOfDay, camera, env);
+        this.updateMoon(timeOfDay, camera, env);
+    }
 
-            if (this.moonResults.length > 0) {
-                const moon = this.moonResults[0].sprite;
-                const mVector = moon.position.clone().project(this.camera);
-                console.log(`[SkyRenderer] Moon Screen Pos: ${mVector.x.toFixed(2)}, ${mVector.y.toFixed(2)}, ${mVector.z.toFixed(2)}`);
+    private getCelestialPositioningAngles(
+        timeOfDay: number,
+        celestialType: "sun" | "moon"
+    ): [number, number] {
+        const longitude = PI; // 180 * DEG2RAD
+
+        let latitude: number;
+        if (celestialType === "sun") {
+            if (timeOfDay >= 5.0 && timeOfDay < 24.0) {
+                latitude = (timeOfDay - 6.0) * (10 * DEG2RAD) - HALF_PI;
+            } else if (timeOfDay >= 1.0 && timeOfDay < 5.0) {
+                latitude = (timeOfDay + 24.0 - 6.0) * (10 * DEG2RAD) - HALF_PI;
+            } else {
+                latitude = NEG_PI;
             }
-            this._renderLogged = true;
+        } else { // moon
+            if (timeOfDay < 7.0 || timeOfDay >= 23.0) {
+                let moonTime = timeOfDay;
+                if (timeOfDay >= 23.0) {
+                    moonTime = timeOfDay - 24.0;
+                }
+                // 0.5235987755982988 is PI/6 (30 degrees)
+                latitude = moonTime * 0.5235987755982988 - HALF_PI;
+            } else {
+                latitude = NEG_PI;
+            }
+        }
+
+        return [latitude, longitude];
+    }
+
+    private calculateCelestialOffset(
+        timeOfDay: number,
+        celestialType: "sun" | "moon",
+        radius: number
+    ): Vector3 {
+        const [lat, lon] = this.getCelestialPositioningAngles(timeOfDay, celestialType);
+
+        if (lat === NEG_PI) return new Vector3(0, 0, 0);
+
+        // Step 1: Spherical to Cartesian (UE2 coords: Z-up)
+        // x = r * sin(lat) * cos(lon)
+        // y = r * sin(lat) * sin(lon)
+        // z = r * cos(lat)
+        const x = radius * Math.sin(lat) * Math.cos(lon);
+        const y = radius * Math.sin(lat) * Math.sin(lon);
+        const z = radius * Math.cos(lat);
+
+        const spherical = TMP_VEC3.set(x, y, z);
+
+        // Step 2: Rotate around X-axis (UE2 coords)
+        // Angle: 30 degrees (PI/6)
+        spherical.applyAxisAngle(new Vector3(1, 0, 0), X_ROTATION_ANGLE);
+
+        // Step 3: Convert to Three.js coordinates
+        // Mapping UE (x, y, z) -> Three (x, z, y)  (Swapping Y and Z, no neagtion)
+        return new Vector3(spherical.x, spherical.z, spherical.y);
+    }
+
+    private calculateCelestialScale(
+        celestialType: "sun" | "moon",
+        baseScale: number,     // actor.celestialScale
+        actorDrawScale: number, // actor.drawScale
+        env: L2Environment
+    ): number {
+        const envScale = celestialType === "sun" ? env.getSunScale() : env.getMoonScale();
+        const multiplier = celestialType === "sun" ? 8.0 : 1.0;
+
+        // Formula from Analysis: drawScale(final) = envScale * actor->Scale * multiplier * MATERIAL_U_SIZE
+        // We want (0.5 * S) = (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE)
+        // So S = (...) * 2
+
+        return (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE);
+    }
+
+    private updateSun(timeOfDay: number, camera: PerspectiveCamera, env: L2Environment) {
+        if (!this.sunData) return;
+
+        const [lat] = this.getCelestialPositioningAngles(timeOfDay, "sun");
+
+        if (lat !== NEG_PI) {
+            this.sun.visible = true;
+
+            // Dynamic Radius from actor data
+            const radius = this.sunData.radius || 4000;
+            const offset = this.calculateCelestialOffset(timeOfDay, "sun", radius);
+
+            this.sun.position.copy(camera.position).add(offset);
+
+            // Scale
+            const baseScale = this.sunData.celestialScale ?? 1.0;
+            const drawScale = this.sunData.drawScale ?? 1.0;
+
+            const scale = this.calculateCelestialScale("sun", baseScale, drawScale, env);
+            this.sun.scale.setScalar(scale);
+
+            this.sun.lookAt(camera.position);
+
+            // Optional: Log scale debug once
+            if (!this.sun.userData.logged) {
+                console.log(`[SkyRenderer] Sun Scale Init: ${scale} (Env:${env.getSunScale()} Base:${baseScale} Draw:${drawScale} Tex:${MATERIAL_U_SIZE})`);
+                this.sun.userData.logged = true;
+            }
+
+        } else {
+            this.sun.visible = false;
+        }
+    }
+
+    private updateMoon(timeOfDay: number, camera: PerspectiveCamera, env: L2Environment) {
+        if (!this.moonData) return;
+
+        const [lat] = this.getCelestialPositioningAngles(timeOfDay, "moon");
+
+        if (lat !== NEG_PI) {
+            this.moon.visible = true;
+
+            const radius = this.moonData.radius || 4000;
+            const offset = this.calculateCelestialOffset(timeOfDay, "moon", radius);
+
+            this.moon.position.copy(camera.position).add(offset);
+
+            // Scale
+            const baseScale = this.moonData.celestialScale ?? 1.0;
+            const drawScale = this.moonData.drawScale ?? 1.0;
+
+            const scale = this.calculateCelestialScale("moon", baseScale, drawScale, env);
+            this.moon.scale.setScalar(scale);
+
+            this.moon.lookAt(camera.position);
+
+            // Log debug
+            if (!this.moon.userData.logged) {
+                console.log(`[SkyRenderer] Moon Scale Init: ${scale}`);
+                this.moon.userData.logged = true;
+            }
+
+        } else {
+            this.moon.visible = false;
+        }
+    }
+
+    public render(renderer: WebGLRenderer) {
+        if (this.camera) {
+            renderer.render(this.celestialScene, this.camera);
         }
     }
 }
