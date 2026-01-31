@@ -46,7 +46,8 @@ abstract class UNCelestial extends UAActor {
             // celestialScale is a time-based modifier applied by the game at runtime
             drawScale: self.drawScale ?? 1,
             celestialScale: self.celestialScale ?? 1,
-            position
+            position,
+            objectName: self.objectName
         };
     }
 }

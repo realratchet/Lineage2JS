@@ -430,8 +430,17 @@ function decodeSector(library: GD.DecodeLibrary) {
                     : celestialInfo.sprites[0].uuid || celestialInfo.sprites[0].material;
 
                 console.log(`[Celestials] Sprite UUID: ${spriteUuid}, exists in materials: ${!!library.materials[spriteUuid]}`);
-                const spriteTextureInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo;
+                let spriteTextureInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
                 let texture = null;
+
+                // Handle Shader materials by extracting the diffuse texture
+                if (spriteTextureInfo && spriteTextureInfo.materialType === "shader") {
+                    const shaderInfo = spriteTextureInfo as GD.IShaderDecodeInfo;
+                    if (shaderInfo.diffuse && library.materials[shaderInfo.diffuse]) {
+                        console.log(`[Celestials] Resolving shader diffuse texture: ${shaderInfo.diffuse}`);
+                        spriteTextureInfo = library.materials[shaderInfo.diffuse] as GD.ITextureDecodeInfo;
+                    }
+                }
 
                 if (spriteTextureInfo) {
                     const mapData = decodeTexture(library, spriteTextureInfo);

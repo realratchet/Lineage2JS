@@ -130,6 +130,7 @@ declare global {
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
                     helpersZoneBounds?: boolean,
+                    loadCelestials?: boolean,
                 };
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }

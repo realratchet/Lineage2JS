@@ -20,7 +20,9 @@ export default class SkyRenderer {
     private camera: PerspectiveCamera | null = null;
 
     private sunData: any = null;
-    private moonData: any = null;
+
+    public moons: { data: any, texture: Texture | null }[] = [];
+    public activeMoonIndex: number = 0;
 
     constructor() {
         const geometry = new PlaneGeometry(1, 1);
@@ -58,6 +60,21 @@ export default class SkyRenderer {
         this.celestialScene.add(this.moon);
     }
 
+    public setActiveMoon(index: number) {
+        if (index >= 0 && index < this.moons.length) {
+            this.activeMoonIndex = index;
+            this.updateActiveMoonMaterial();
+        }
+    }
+
+    private updateActiveMoonMaterial() {
+        const activeMoon = this.moons[this.activeMoonIndex];
+        if (activeMoon && activeMoon.texture) {
+            (this.moon.material as MeshBasicMaterial).map = activeMoon.texture;
+            (this.moon.material as MeshBasicMaterial).needsUpdate = true;
+        }
+    }
+
     public initFromSector(celestials: any[]) {
         if (!celestials) return;
 
@@ -72,16 +89,28 @@ export default class SkyRenderer {
                     (this.sun.material as MeshBasicMaterial).needsUpdate = true;
                 }
             } else if (celestial.type === "Moon") {
-                this.moonData = celestial.data;
+                const moonEntry: { data: any, texture: Texture | null } = { data: celestial.data, texture: null };
                 if (celestial.sprite) {
                     const tex = celestial.sprite;
                     tex.flipY = true;
                     tex.needsUpdate = true;
-                    (this.moon.material as MeshBasicMaterial).map = tex;
-                    (this.moon.material as MeshBasicMaterial).needsUpdate = true;
+                    moonEntry.texture = tex;
                 }
+                this.moons.push(moonEntry);
             }
         });
+
+        // Sort moons by objectName to ensure consistent ordering
+        this.moons.sort((a, b) => {
+            const nameA = a.data.objectName || "";
+            const nameB = b.data.objectName || "";
+            return nameA.localeCompare(nameB);
+        });
+
+        if (this.moons.length > 0) {
+            this.activeMoonIndex = 0; // Default to first (alphabetically)
+            this.updateActiveMoonMaterial();
+        }
     }
 
     public update(camera: PerspectiveCamera, env: L2Environment, skyZone: any) {
@@ -162,7 +191,7 @@ export default class SkyRenderer {
 
         // Formula from Analysis: drawScale(final) = envScale * actor->Scale * multiplier * MATERIAL_U_SIZE
         // We want (0.5 * S) = (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE)
-        // So S = (...) * 2
+        // So S = (...)
 
         return (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE);
     }
@@ -202,21 +231,24 @@ export default class SkyRenderer {
     }
 
     private updateMoon(timeOfDay: number, camera: PerspectiveCamera, env: L2Environment) {
-        if (!this.moonData) return;
+        if (this.moons.length === 0) return;
+        const activeMoon = this.moons[this.activeMoonIndex];
+        if (!activeMoon) return;
+        const moonData = activeMoon.data;
 
         const [lat] = this.getCelestialPositioningAngles(timeOfDay, "moon");
 
         if (lat !== NEG_PI) {
             this.moon.visible = true;
 
-            const radius = this.moonData.radius || 4000;
+            const radius = moonData.radius || 4000;
             const offset = this.calculateCelestialOffset(timeOfDay, "moon", radius);
 
             this.moon.position.copy(camera.position).add(offset);
 
             // Scale
-            const baseScale = this.moonData.celestialScale ?? 1.0;
-            const drawScale = this.moonData.drawScale ?? 1.0;
+            const baseScale = moonData.celestialScale ?? 1.0;
+            const drawScale = moonData.drawScale ?? 1.0;
 
             const scale = this.calculateCelestialScale("moon", baseScale, drawScale, env);
             this.moon.scale.setScalar(scale);

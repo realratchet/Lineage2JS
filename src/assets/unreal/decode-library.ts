@@ -41,6 +41,7 @@ class DecodeLibrary {
         loadTerrain = true,
         helpersZoneBounds = false,
         loadEmitters = true,
+        loadCelestials = false,
     }: GD.LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
@@ -104,15 +105,17 @@ class DecodeLibrary {
         }
 
         {
-            const celestialTypes = ["NSun", "NMoon"];
-            const uCelestialsToLoad = celestialTypes.map(t => expGroups[t] ?? []).flat();
+            if (loadCelestials) { // Check loadCelestials
+                const celestialTypes = ["NSun", "NMoon"];
+                const uCelestialsToLoad = celestialTypes.map(t => expGroups[t] ?? []).flat();
 
-            uCelestialsToLoad.forEach(exp => {
-                const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
-                if (uActor.getDecodeInfo) {
-                    decodeLibrary.celestials.push(uActor.getDecodeInfo(decodeLibrary));
-                }
-            });
+                uCelestialsToLoad.forEach(exp => {
+                    const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                    if (uActor.getDecodeInfo) {
+                        decodeLibrary.celestials.push(uActor.getDecodeInfo(decodeLibrary));
+                    }
+                });
+            }
         }
 
         {

@@ -1044,6 +1044,33 @@ class RenderManager {
         // this.collidables.push(this.player.createCollider(this.physicsWorld));
     }
 
+    public globalSkyLoaded = false;
+
+    public setGlobalSky(sector: SectorObject) {
+        this.globalSkyLoaded = true;
+        if (sector.celestials && sector.celestials.length > 0) {
+            this.skyRenderer.initFromSector(sector.celestials);
+
+            // Add GUI specific for Moons if multiple exist
+            if (this.skyRenderer.moons.length > 1) {
+                const moonFolder = guiFolders.world.addFolder("Moons");
+                const moonConfig = { activeMoon: 0 };
+                const moonIndices: Record<string, number> = {};
+                this.skyRenderer.moons.forEach((m, i) => {
+                    const name = m.data.objectName || `Moon ${i + 1}`;
+                    moonIndices[name] = i;
+                });
+
+                moonFolder.add(moonConfig, "activeMoon", moonIndices)
+                    .name("Active Moon")
+                    .onChange((value) => {
+                        this.skyRenderer.setActiveMoon(parseInt(value as string));
+                    });
+                moonFolder.open();
+            }
+        }
+    }
+
     public addSector(sector: SectorObject) {
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
@@ -1057,7 +1084,8 @@ class RenderManager {
         this.objectGroup.add(sector);
 
         // Initialize sky renderer with celestials from sector (if any)
-        if (sector.celestials && sector.celestials.length > 0) {
+        // Only if global sky hasn't been set
+        if (!this.globalSkyLoaded && sector.celestials && sector.celestials.length > 0) {
             this.skyRenderer.initFromSector(sector.celestials);
         }
 

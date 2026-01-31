@@ -506,7 +506,11 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "skylevel", loadSettings));  // skylevel
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
+
+    // Load global sky level
+    const userSkylevel = await _decodePackage(renderManager, assetLoader, "skylevel", { ...loadSettings, loadCelestials: true });
+    renderManager.setGlobalSky(userSkylevel);
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 
