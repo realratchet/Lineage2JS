@@ -1051,21 +1051,31 @@ class RenderManager {
         if (sector.celestials && sector.celestials.length > 0) {
             this.skyRenderer.initFromSector(sector.celestials);
 
-            // Add GUI specific for Moons if multiple exist
-            if (this.skyRenderer.moons.length > 1) {
+            // Add GUI specific for Moons
+            if (this.skyRenderer.moons.length > 0) {
                 const moonFolder = guiFolders.world.addFolder("Moons");
-                const moonConfig = { activeMoon: 0 };
-                const moonIndices: Record<string, number> = {};
-                this.skyRenderer.moons.forEach((m, i) => {
-                    const name = m.data.objectName || `Moon ${i + 1}`;
-                    moonIndices[name] = i;
-                });
 
-                moonFolder.add(moonConfig, "activeMoon", moonIndices)
-                    .name("Active Moon")
-                    .onChange((value) => {
-                        this.skyRenderer.setActiveMoon(parseInt(value as string));
+                if (this.skyRenderer.moons.length > 1) {
+                    const moonConfig = { activeMoon: 0 };
+                    const moonIndices: Record<string, number> = {};
+                    this.skyRenderer.moons.forEach((m, i) => {
+                        const name = m.data.objectName || `Moon ${i + 1}`;
+                        moonIndices[name] = i;
                     });
+
+                    moonFolder.add(moonConfig, "activeMoon", moonIndices)
+                        .name("Active Moon")
+                        .onChange((value) => {
+                            this.skyRenderer.setActiveMoon(parseInt(value as string));
+                        });
+                }
+
+                moonFolder.add(this.skyRenderer, "moonMultiplier", 0.1, 15.0, 0.1)
+                    .name("Scale Multiplier")
+                    .onChange(() => {
+                        this.needsUpdate = true;
+                    });
+
                 moonFolder.open();
             }
         }

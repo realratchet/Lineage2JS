@@ -40,7 +40,7 @@ abstract class UNCelestial extends UAActor {
         return {
             lat: self.lat,
             lon: self.lon,
-            radius: self.radius ?? 4000,
+            radius: self.radius,
             limitMaxRadius: self.limitMaxRadius,
             // Use actor's drawScale as the base visual size
             // celestialScale is a time-based modifier applied by the game at runtime

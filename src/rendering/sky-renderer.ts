@@ -10,6 +10,7 @@ const X_ROTATION_ANGLE = 30 * DEG2RAD;
 const PI = Math.PI;
 
 const MATERIAL_U_SIZE = 32; // Used for scaling instead of texture size
+const DEFAULT_CELESTIAL_RADIUS = 15000; // Calibrated for ~0.5 degree angular size
 
 const TMP_VEC3 = new Vector3();
 
@@ -23,9 +24,16 @@ export default class SkyRenderer {
 
     public moons: { data: any, texture: Texture | null }[] = [];
     public activeMoonIndex: number = 0;
+    public moonMultiplier: number = 1.0;
 
     constructor() {
         const geometry = new PlaneGeometry(1, 1);
+
+        // Flip UVs vertically in geometry
+        const uv = geometry.attributes.uv;
+        for (let i = 0; i < uv.count; i++) {
+            uv.setY(i, 1 - uv.getY(i));
+        }
 
         // Sun Material
         const sunMat = new MeshBasicMaterial({
@@ -83,7 +91,6 @@ export default class SkyRenderer {
                 this.sunData = celestial.data;
                 if (celestial.sprite) {
                     const tex = celestial.sprite;
-                    tex.flipY = true;
                     tex.needsUpdate = true;
                     (this.sun.material as MeshBasicMaterial).map = tex;
                     (this.sun.material as MeshBasicMaterial).needsUpdate = true;
@@ -92,7 +99,6 @@ export default class SkyRenderer {
                 const moonEntry: { data: any, texture: Texture | null } = { data: celestial.data, texture: null };
                 if (celestial.sprite) {
                     const tex = celestial.sprite;
-                    tex.flipY = true;
                     tex.needsUpdate = true;
                     moonEntry.texture = tex;
                 }
@@ -137,13 +143,15 @@ export default class SkyRenderer {
                 latitude = NEG_PI;
             }
         } else { // moon
+            // Rate: 30 degrees per hour (PI/6 radians per hour)
+            // Rise at 23:00, Set at 07:00 (8h duration)
             if (timeOfDay < 7.0 || timeOfDay >= 23.0) {
                 let moonTime = timeOfDay;
                 if (timeOfDay >= 23.0) {
                     moonTime = timeOfDay - 24.0;
                 }
-                // 0.5235987755982988 is PI/6 (30 degrees)
-                latitude = moonTime * 0.5235987755982988 - HALF_PI;
+                // (moonTime + 1) centers the arc at midnight (00:00) 
+                latitude = moonTime * (PI / 6) - HALF_PI;
             } else {
                 latitude = NEG_PI;
             }
@@ -171,12 +179,12 @@ export default class SkyRenderer {
 
         const spherical = TMP_VEC3.set(x, y, z);
 
-        // Step 2: Rotate around X-axis (UE2 coords)
-        // Angle: 30 degrees (PI/6)
+        // Step 2: Rotate around X-axis (UE2 North/South axis)
+        // This tilts the East-West arc towards North/South
         spherical.applyAxisAngle(new Vector3(1, 0, 0), X_ROTATION_ANGLE);
 
         // Step 3: Convert to Three.js coordinates
-        // Mapping UE (x, y, z) -> Three (x, z, y)  (Swapping Y and Z, no neagtion)
+        // Restore previous working mapping: UE(x, y, z) -> Three(x, z, y)
         return new Vector3(spherical.x, spherical.z, spherical.y);
     }
 
@@ -187,12 +195,9 @@ export default class SkyRenderer {
         env: L2Environment
     ): number {
         const envScale = celestialType === "sun" ? env.getSunScale() : env.getMoonScale();
-        const multiplier = celestialType === "sun" ? 8.0 : 1.0;
+        const multiplier = celestialType === "sun" ? 8.0 : this.moonMultiplier;
 
         // Formula from Analysis: drawScale(final) = envScale * actor->Scale * multiplier * MATERIAL_U_SIZE
-        // We want (0.5 * S) = (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE)
-        // So S = (...)
-
         return (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE);
     }
 
@@ -204,24 +209,21 @@ export default class SkyRenderer {
         if (lat !== NEG_PI) {
             this.sun.visible = true;
 
-            // Dynamic Radius from actor data
-            const radius = this.sunData.radius || 4000;
+            // Use Decoded Radius (falling back to calibrated default if missing)
+            const radius = this.sunData.radius || DEFAULT_CELESTIAL_RADIUS;
             const offset = this.calculateCelestialOffset(timeOfDay, "sun", radius);
-
             this.sun.position.copy(camera.position).add(offset);
 
             // Scale
             const baseScale = this.sunData.celestialScale ?? 1.0;
             const drawScale = this.sunData.drawScale ?? 1.0;
-
             const scale = this.calculateCelestialScale("sun", baseScale, drawScale, env);
             this.sun.scale.setScalar(scale);
 
             this.sun.lookAt(camera.position);
 
-            // Optional: Log scale debug once
             if (!this.sun.userData.logged) {
-                console.log(`[SkyRenderer] Sun Scale Init: ${scale} (Env:${env.getSunScale()} Base:${baseScale} Draw:${drawScale} Tex:${MATERIAL_U_SIZE})`);
+                console.log(`[SkyRenderer] Sun Actor: rad=${radius}, ds=${drawScale}, cs=${baseScale}, finalScale=${scale}`);
                 this.sun.userData.logged = true;
             }
 
@@ -241,9 +243,9 @@ export default class SkyRenderer {
         if (lat !== NEG_PI) {
             this.moon.visible = true;
 
-            const radius = moonData.radius || 4000;
+            // Use Decoded Radius (falling back to calibrated default if missing)
+            const radius = moonData.radius || DEFAULT_CELESTIAL_RADIUS;
             const offset = this.calculateCelestialOffset(timeOfDay, "moon", radius);
-
             this.moon.position.copy(camera.position).add(offset);
 
             // Scale
@@ -254,6 +256,11 @@ export default class SkyRenderer {
             this.moon.scale.setScalar(scale);
 
             this.moon.lookAt(camera.position);
+
+            if (!this.moon.userData.logged) {
+                console.log(`[SkyRenderer] Moon Actor: rad=${radius}, ds=${drawScale}, cs=${baseScale}, finalScale=${scale}`);
+                this.moon.userData.logged = true;
+            }
 
             // Log debug
             if (!this.moon.userData.logged) {
