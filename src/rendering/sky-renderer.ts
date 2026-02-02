@@ -277,9 +277,13 @@ export default class SkyRenderer {
         const longitude = PI;
         let latitude: number;
         if (celestialType === "sun") {
-            if (timeOfDay >= 5.0 && timeOfDay < 24.0) latitude = (timeOfDay - 6.0) * (10 * DEG2RAD) - HALF_PI;
-            else if (timeOfDay >= 1.0 && timeOfDay < 5.0) latitude = (timeOfDay + 24.0 - 6.0) * (10 * DEG2RAD) - HALF_PI;
-            else latitude = NEG_PI;
+            // Unified sun position logic (confirmed by trace visibility at 00:20AM)
+            // Sun moves 10 degrees/hour. 06:00 = -90 (Horizon), 15:00 = 0 (Zenith), 24:00 = 90 (Horizon Set).
+            // Night (00:00 - 06:00) continues 90 -> 150.
+            const t = (timeOfDay < 6.0) ? (timeOfDay + 24.0) : timeOfDay;
+            latitude = (t - 6.0) * (10 * DEG2RAD) - HALF_PI;
+            // No strict cut-off; sun renders below horizon at night (faintly via EnvColor)
+            if (t > 30.0) latitude = NEG_PI; // Safety cap if needed, though t is max 24+6=30.
         } else {
             if (timeOfDay < 7.0 || timeOfDay >= 23.0) {
                 let moonTime = timeOfDay >= 23.0 ? timeOfDay - 24.0 : timeOfDay;
@@ -315,14 +319,14 @@ export default class SkyRenderer {
             this.sun.scale.setScalar(scale);
             this.sun.lookAt(camera.position);
 
-            // Color Tinging (Dimming) with intensity multiplier
-            // Intensity justified by BloomScale=4.0 in CELESTIAL_BLOOM.md
+            // Color Tinging (Dimming)
+            // Intensity of 4.0 belongs to the Bloom Pass (Post-Processing), not the Sprite itself.
+            // The sprite should use the natural environment color.
             env.getSunColor(tmpColorByte);
-            const intensity = 4.0;
             (this.sun.material as MeshBasicMaterial).color.setRGB(
-                (tmpColorByte.r / 255) * intensity,
-                (tmpColorByte.g / 255) * intensity,
-                (tmpColorByte.b / 255) * intensity
+                tmpColorByte.r / 255,
+                tmpColorByte.g / 255,
+                tmpColorByte.b / 255
             );
         } else this.sun.visible = false;
     }
