@@ -161,7 +161,10 @@ declare global {
                     | "Edges"
                     | "SkinnedMesh"
                     | "Bone"
-                    | "Emitter";
+                    | "Emitter"
+                    | "SpriteEmitter"
+                    | "MeshEmitter"
+                    | "L2FogInfo";
 
                 export interface IBaseObjectOrInstanceDecodeInfo {
                     uuid: string,
@@ -193,13 +196,60 @@ declare global {
                     }
                 }
 
-                export interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
-                    type: "StaticMesh",
+                export interface IBaseMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
                     geometry: string,
                     materials?: string
                 }
 
-                export interface ITerrainSegmentDecodeInfo extends IStaticMeshObjectDecodeInfo {
+                export interface IStaticMeshObjectDecodeInfo extends IBaseMeshObjectDecodeInfo {
+                    type: "StaticMesh"
+                }
+
+                export interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "SkinnedMesh";
+                    geometry: string;
+                    materials?: string;
+                    skeleton: IBoneDecodeInfo[];
+                    animations: Record<string, IKeyframeDecodeInfo_T[]>
+                }
+
+                export interface IEmitterDecodeInfo extends IBaseObjectDecodeInfo {
+                    acceleration: Vector3Arr,
+                    lifetime: [number, number],
+                    maxParticles: number,
+                    initial: {
+                        particlesPerSecond: number,
+                        scale: { min: Vector3Arr, max: Vector3Arr },
+                        velocity: { min: Vector3Arr, max: Vector3Arr },
+                        location: { min: Vector3Arr, max: Vector3Arr },
+                        angularVelocity: { min: Vector3Arr, max: Vector3Arr }
+                    },
+                    particlesPerSecond: number,
+                    blendingMode: ParticleBlendModes_T,
+                    opacity: number,
+                    changesOverLifetime: {
+                        scale: { values: [number, number][], repeats: number }
+                    },
+                    fadeIn: Fade_T,
+                    fadeOut: Fade_T,
+                    colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+                    allSettings: any
+                }
+
+                export interface ISpriteEmitterDecodeInfo extends IEmitterDecodeInfo {
+                    type: "SpriteEmitter",
+                    texture: string
+                }
+
+                export interface IMeshEmitterDecodeInfo extends IEmitterDecodeInfo {
+                    type: "MeshEmitter",
+                    mesh: {
+                        geometry: string,
+                        materials: string
+                    }
+                }
+
+                export interface ITerrainSegmentDecodeInfo extends IBaseMeshObjectDecodeInfo {
                     type: "TerrainSegment",
                     lighting?: {
                         lights: { light: string, flags: Uint8Array }[],
@@ -226,6 +276,15 @@ declare global {
                     }
                 }
 
+                export interface IBoneDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "Bone",
+                    name: string,
+                    position: Vector3Arr,
+                    quaternion: QuaternionArr,
+                    scale: Vector3Arr,
+                    parent: number
+                }
+
                 export interface IBaseZoneDecodeInfo {
                     type: "Sector" | "Zone" | "Sky",
                     uuid: string,
@@ -234,7 +293,15 @@ declare global {
                     children: IBaseObjectOrInstanceDecodeInfo[],
                     fog?: IZoneFogInfo,
                     isFogZone?: boolean,
-                    isSunAffected?: boolean
+                    isSunAffected?: boolean,
+                    position?: Vector3Arr,
+                    affectRange?: Vector2Arr,
+                    fogRange1?: Vector2Arr,
+                    fogRange2?: Vector2Arr,
+                    fogRange3?: Vector2Arr,
+                    fogRange4?: Vector2Arr,
+                    fogRange5?: Vector2Arr,
+                    colors?: any[]
                 }
 
                 // BSP Types
@@ -281,6 +348,13 @@ declare global {
                     zoneMask: bigint
                 }
 
+                export type IKeyframeDecodeInfo_T = {
+                    name: string,
+                    times: Float32Array,
+                    values: Float32Array,
+                    type: "Vector" | "Quaternion"
+                }
+
                 export interface IBSPZoneDecodeInfo_T {
                     connectivity: bigint,
                     visibility: bigint,
@@ -318,6 +392,13 @@ declare global {
                 export interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "group",
                     materials: string[]
+                }
+
+                export interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "particle",
+                    material: string,
+                    blendingMode: ParticleBlendModes_T,
+                    opacity: number
                 }
 
                 export type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;

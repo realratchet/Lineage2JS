@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, FogExp2, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, MultiplyBlending, SubtractiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -8,7 +8,7 @@ import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
 import Visualizer, { VisualizerMode } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
-import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor } from "@client/rendering/l2-env";
+import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import * as dat from "dat.gui";
 
@@ -36,6 +36,8 @@ import { ColorByte } from "@client/utils/color-byte";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte(); // For sky color blending
+const tmpColorByte_4 = new ColorByte(); // For haze color blending
+const tmpColorByte_5 = new ColorByte(); // For cloud color blending
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
@@ -71,7 +73,7 @@ class RenderManager {
 
     protected environment: L2Environment;
 
-    protected shiftTimeDown: number;
+    protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
@@ -260,11 +262,9 @@ class RenderManager {
         return this;
     }
 
-    private skyZone: any = null;
 
-    public setSkyZone(skyZone: any) {
-        this.skyZone = skyZone;
-    }
+
+
 
     public debugPrintCamera() {
         console.log([
@@ -695,8 +695,6 @@ class RenderManager {
         const env = this.environment;
         if (!env) return;
 
-        this.skyRenderer.update(this.camera, env, this.skyZone);
-
         // 1. Get Base Sky Color (from timeenv - will be blended with L2FogInfo later)
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
@@ -739,33 +737,30 @@ class RenderManager {
                 }
             }
 
-            // Check for L2FogInfo overrides (Priority over Zone/Global)
-            // Use 'some' to stop after finding the first active fog info (optimization)
-            // REPLACED with Weighted Mixing logic
-            let accStart = 0;
-            let accEnd = 0;
-            let accR = 0;
-            let accG = 0;
-            let accB = 0;
-            // Sky color accumulators (for L2FogInfo skyColor blending)
-            let accSkyR = 0;
-            let accSkyG = 0;
-            let accSkyB = 0;
-            let totalWeight = 0;
+            // Sky color accumulators
+            let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;
+            // Haze/Cloud accumulators
+            let accHazeR = 0, accHazeG = 0, accHazeB = 0, totalHazeWeight = 0;
+            let accCloudR = 0, accCloudG = 0, accCloudB = 0, totalCloudWeight = 0;
+
+            // Fog accumulators (Standard spatial weight)
+            let accStart = 0, accEnd = 0, accR = 0, accG = 0, accB = 0, totalFogWeight = 0;
+
+            // Haze Array accumulators (for vertical gradient)
+            let accHArrR: number[] = [], accHArrG: number[] = [], accHArrB: number[] = [];
+            let totalHArrWeight = 0;
 
             const presetIndex = this.envConfig.fogPreset;
-
-            // Iterate over optimized fogInfos array directly
             const fogInfos = sector.fogInfos || [];
-            fogInfos.forEach(fogInfo => {
-                // if ((child as any).isFogInfo) {
-                //    const fogInfo = child as FogInfoObject;
+            const timeOfDay = env.getTimeOfDay();
 
-                // Zone Mask Check (Visibility Culling)
-                // If fogInfo has a zoneMask, check if it intersects with the currently visible zone mask
+            let maxHArrLen = 0;
+            const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
+
+            fogInfos.forEach(fogInfo => {
                 const visibleMask = sector.lastZoneMask;
                 if (fogInfo.zoneMask && visibleMask && !(fogInfo.zoneMask & visibleMask)) {
-                    return; // FogInfo is in a zone not currently visible/connected
+                    return;
                 }
 
                 const affectRange = fogInfo.affectRange;
@@ -773,93 +768,136 @@ class RenderManager {
 
                 const inner = Math.min(affectRange.A, affectRange.B);
                 const outer = Math.max(affectRange.A, affectRange.B);
-
                 const dist = this.camera.position.distanceTo(fogInfo.position);
 
                 if (dist > outer) return;
 
-                // Calculate weight: 1.0 inside Inner, linear falloff to 0.0 at Outer
                 let weight = 1.0;
                 if (outer > inner) {
                     if (dist > inner) {
                         weight = 1.0 - ((dist - inner) / (outer - inner));
                     }
-                } else {
-                    // Inner >= Outer, strict cutoff (weight 1 or 0)
-                    weight = 1.0;
                 }
 
                 if (weight <= 0) return;
 
-                // Fetch params
-                let range = fogInfo[`fogRange${presetIndex}` as keyof FogInfoObject] as { A: number, B: number };
+                const hArr = interpolateFogInfoHazeColors(timeOfDay, fogInfo.colors);
+                if (hArr.length > 0) {
+                    maxHArrLen = Math.max(maxHArrLen, hArr.length);
+                }
+
+                activeInfos.push({ fogInfo, weight, hArr });
+            });
+
+            activeInfos.forEach(({ fogInfo, weight, hArr }) => {
+                let range = (fogInfo as any)[`fogRange${presetIndex}`] as { A: number, B: number };
                 if (!range || (range.A === 0 && range.B === 0)) {
                     range = fogInfo.fogRange1;
                 }
                 if (!range) return;
 
-                // Time-based color interpolation (matches UE2/L2 behavior)
-                const timeOfDay = env.getTimeOfDay();
                 const fogColor = interpolateFogInfoColor(timeOfDay, fogInfo.colors, tmpColorByte);
-                const cR = fogColor.r, cG = fogColor.g, cB = fogColor.b;
-
-                // Also get sky color from L2FogInfo
                 const skyColor = interpolateFogInfoSkyColor(timeOfDay, fogInfo.colors, tmpColorByte_3);
+                const hazeColor = interpolateFogInfoHazeColor(timeOfDay, fogInfo.colors, tmpColorByte_4);
+                const cloudColor = interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, tmpColorByte_5, 0);
 
-                // Accumulate fog
+                // 1. Fog Blending
                 accStart += range.A * weight;
                 accEnd += range.B * weight;
-                accR += cR * weight;
-                accG += cG * weight;
-                accB += cB * weight;
-                // Accumulate sky
-                accSkyR += skyColor.r * weight;
-                accSkyG += skyColor.g * weight;
-                accSkyB += skyColor.b * weight;
-                totalWeight += weight;
+                accR += fogColor.r * weight;
+                accG += fogColor.g * weight;
+                accB += fogColor.b * weight;
+                totalFogWeight += weight;
+
+                // 2. Sky Blending
+                const skyWeight = weight * (skyColor.a / 255);
+                accSkyR += skyColor.r * skyWeight;
+                accSkyG += skyColor.g * skyWeight;
+                accSkyB += skyColor.b * skyWeight;
+                totalSkyWeight += skyWeight;
+
+                // 3. Haze Blending
+                const hazeWeight = weight * (hazeColor.a / 255);
+                accHazeR += hazeColor.r * hazeWeight;
+                accHazeG += hazeColor.g * hazeWeight;
+                accHazeB += hazeColor.b * hazeWeight;
+                totalHazeWeight += hazeWeight;
+
+                // 4. Cloud Blending
+                const cloudWeight = weight * (cloudColor.a / 255);
+                accCloudR += cloudColor.r * cloudWeight;
+                accCloudG += cloudColor.g * cloudWeight;
+                accCloudB += cloudColor.b * cloudWeight;
+                totalCloudWeight += cloudWeight;
+
+                // 5. Haze Array Blending
+                if (hArr.length > 0) {
+                    for (let i = 0; i < maxHArrLen; i++) {
+                        const color = hArr[i] || hArr[hArr.length - 1];
+                        accHArrR[i] = (accHArrR[i] || 0) + color.r * hazeWeight;
+                        accHArrG[i] = (accHArrG[i] || 0) + color.g * hazeWeight;
+                        accHArrB[i] = (accHArrB[i] || 0) + color.b * hazeWeight;
+                    }
+                    totalHArrWeight += hazeWeight;
+                }
             });
 
-            if (totalWeight > 0) {
-                // If weight > 1, blend fog infos first
-                const finalStart = accStart / totalWeight;
-                const finalEnd = accEnd / totalWeight;
-                const finalR = accR / totalWeight;
-                const finalG = accG / totalWeight;
-                const finalB = accB / totalWeight;
+            const blendFactor = Math.min(totalFogWeight, 1.0);
 
-                // Blend with global/zone target
-                const blendFactor = Math.min(totalWeight, 1.0);
-
-                targetFogStart = MathUtils.lerp(targetFogStart, finalStart, blendFactor);
-                targetFogEnd = MathUtils.lerp(targetFogEnd, finalEnd, blendFactor);
-
+            if (totalFogWeight > 0) {
+                targetFogStart = MathUtils.lerp(targetFogStart, accStart / totalFogWeight, blendFactor);
+                targetFogEnd = MathUtils.lerp(targetFogEnd, accEnd / totalFogWeight, blendFactor);
                 targetFogColor.set(
-                    MathUtils.lerp(targetFogColor.r, finalR, blendFactor),
-                    MathUtils.lerp(targetFogColor.g, finalG, blendFactor),
-                    MathUtils.lerp(targetFogColor.b, finalB, blendFactor)
-                );
-
-                // Blend sky color from L2FogInfo
-                const finalSkyR = accSkyR / totalWeight;
-                const finalSkyG = accSkyG / totalWeight;
-                const finalSkyB = accSkyB / totalWeight;
-
-                targetSkyColor.set(
-                    MathUtils.lerp(targetSkyColor.r, finalSkyR, blendFactor),
-                    MathUtils.lerp(targetSkyColor.g, finalSkyG, blendFactor),
-                    MathUtils.lerp(targetSkyColor.b, finalSkyB, blendFactor)
+                    MathUtils.lerp(targetFogColor.r, accR / totalFogWeight, blendFactor),
+                    MathUtils.lerp(targetFogColor.g, accG / totalFogWeight, blendFactor),
+                    MathUtils.lerp(targetFogColor.b, accB / totalFogWeight, blendFactor)
                 );
             }
+
+            if (totalSkyWeight > 0) {
+                const sW = Math.min(totalSkyWeight, 1.0);
+                targetSkyColor.set(
+                    MathUtils.lerp(targetSkyColor.r, accSkyR / totalSkyWeight, sW),
+                    MathUtils.lerp(targetSkyColor.g, accSkyG / totalSkyWeight, sW),
+                    MathUtils.lerp(targetSkyColor.b, accSkyB / totalSkyWeight, sW)
+                );
+            }
+
+            if (totalHazeWeight > 0) {
+                const hW = Math.min(totalHazeWeight, 1.0);
+                tmpColorByte_4.set(
+                    MathUtils.lerp(targetFogColor.r, accHazeR / totalHazeWeight, hW),
+                    MathUtils.lerp(targetFogColor.g, accHazeG / totalHazeWeight, hW),
+                    MathUtils.lerp(targetFogColor.b, accHazeB / totalHazeWeight, hW)
+                );
+            } else {
+                tmpColorByte_4.copy(targetFogColor);
+            }
+
+            if (totalCloudWeight > 0) {
+                tmpColorByte_5.set(accCloudR / totalCloudWeight, accCloudG / totalCloudWeight, accCloudB / totalCloudWeight);
+            } else {
+                tmpColorByte_5.set(255, 255, 255);
+            }
+
+            let blendedHazeColors: ColorByte[] = [];
+            if (totalHArrWeight > 0) {
+                for (let i = 0; i < maxHArrLen; i++) {
+                    const cb = new ColorByte();
+                    cb.set(
+                        accHArrR[i] / totalHArrWeight,
+                        accHArrG[i] / totalHArrWeight,
+                        accHArrB[i] / totalHArrWeight,
+                        255
+                    );
+                    blendedHazeColors.push(cb);
+                }
+            }
+
+            this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, tmpColorByte_5, sector);
         }
 
-        // 4. Apply final sky color to scene background
-        // this.scene.background = new Color().setRGB(targetSkyColor.r / 255, targetSkyColor.g / 255, targetSkyColor.b / 255);
-
-        // 4. Update Header/Global State (Interpolate)
-        // For now, snap to target values. TODO: Add interpolation for smooth transitions.
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
-
-        // Update Scene Fog
         if (!this.scene.fog || !(this.scene.fog as any).isFog) {
             this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
         } else {
@@ -869,12 +907,10 @@ class RenderManager {
             sceneFog.far = targetFogEnd;
         }
 
-        // Update Shader Uniforms
         GLOBAL_UNIFORMS.fogColor.value.copy(fogColorThree);
         if (GLOBAL_UNIFORMS.fogNear) GLOBAL_UNIFORMS.fogNear.value = targetFogStart;
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
 
-        // Clear Color matches Fog for seamless horizon
         this.renderer.setClearColor(fogColorThree);
     }
 
@@ -946,7 +982,7 @@ class RenderManager {
         this.renderer.clear();
     }
 
-    protected _doRender(currentTime: number, deltaTime: number) {
+    protected _doRender(_currentTime: number, _deltaTime: number) {
         // Render Sky (Background)
         this.renderer.clear();
         this.skyRenderer.render(this.renderer);
@@ -1010,11 +1046,14 @@ class RenderManager {
             }
         }
 
-        // this.renderer.render(this.sun, this.camera);
+        this.renderer.autoClear = false;
+        this.renderer.clear();
+        this.skyRenderer.render(this.renderer);
+
         this.renderer.render(this.scene, this.camera);
     }
 
-    protected _postRender(currentTime: number, deltaTime: number) { }
+    protected _postRender(_currentTime: number, _deltaTime: number) { }
 
     public startRendering() {
         this.physicsWorld.step();

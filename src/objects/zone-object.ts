@@ -903,7 +903,7 @@ class SectorObject extends Object3D {
         }
     }
 
-    public updateVisibleStaticMeshActors(cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
+    public updateVisibleStaticMeshActors(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
         if (!library || !this.staticMeshGroup || this.staticMeshMap.size === 0) return;
 
