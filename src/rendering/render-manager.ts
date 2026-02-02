@@ -299,6 +299,9 @@ class RenderManager {
     }
 
     public onHandleKeyDown(event: KeyboardEvent) {
+        if (document.activeElement?.tagName === "INPUT")
+            return;
+
         // Handle F1 separately to prevent browser help (must be before switch)
         if (event.key === "F1" || event.code === "F1") {
             event.preventDefault();
