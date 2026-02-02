@@ -41,7 +41,7 @@ const tmpColorByte_5 = new ColorByte(); // For cloud color blending
 
 const DEFAULT_FAR = 100_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
-const DEFAULT_HORIZONTAL_FOV = 90;
+const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
