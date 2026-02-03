@@ -28,7 +28,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly panSpeedU: number;
     declare public readonly panSpeedV: number;
 
-    declare public readonly skyZone: any;
+    declare public skyZone: any;
     declare public readonly locationName: any;
     declare public readonly distanceFogBlendTime: any;
     declare public readonly environmentMap: any;

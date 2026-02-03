@@ -3,7 +3,7 @@ import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import { indexToTime } from "@client/assets/unreal/un-l2env";
+
 
 
 export class FStaticMeshLightInfo implements C.IConstructable {

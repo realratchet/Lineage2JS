@@ -7,8 +7,9 @@ import DecodeLibrary from "./assets/unreal/decode-library";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
-import { EEnvCycle } from "@client/assets/unreal/un-l2env";
+import { EEnvCycle } from "@client/assets/unreal/env-consts";
 import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
+import decodeEnv from "@client/assets/decoders/env-decoder";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -26,17 +27,7 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
     console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
 
 
-
     return decodePackage(decodeLibrary);
-}
-
-function _decodeEnvColors(envColors: { [key in EEnvCycle]: UConfigTimeEnv }) {
-    const outputs = {} as { [key in EEnvCycle]: any };
-
-    for (const [key, env] of Object.entries(envColors))
-        outputs[key as any as EEnvCycle] = decodeEnvColor(env.getDecodeInfo());
-
-    return outputs;
 }
 
 async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, pkgTex: string | C.APackage) {
@@ -198,10 +189,12 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
-async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<UConfigTimeEnv> {
-    const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
 
-    return envFile.load(pkgNative, pkgEngine);
+
+async function _decodeEnvConfig(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage, pkgL2Skies: C.APackage): Promise<UConfigEnv> {
+    const envFile = await (new UConfigEnv(path).asReadable()).decode();
+
+    return await envFile.load(pkgNative, pkgEngine, pkgL2Skies);
 }
 
 async function startCore() {
@@ -272,12 +265,6 @@ async function startCore() {
 
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
-
-    const envColors = {
-        [EEnvCycle.Normal]: await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine),
-        [EEnvCycle.Dusk]: await _decodTimeEnvFile("assets/system/timeenv1.int", pkgNative, pkgEngine),
-        [EEnvCycle.Dawn]: await _decodTimeEnvFile("assets/system/timeenv2.int", pkgNative, pkgEngine)
-    } as { [key in EEnvCycle]: UConfigTimeEnv };
 
 
     // const sound = await assetLoader.load(assetLoader.getPackage("MonSound3", "Sound"));
@@ -411,7 +398,6 @@ async function startCore() {
 
     // debugger;
 
-    renderManager.setEnvColors(_decodeEnvColors(envColors));
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -464,8 +450,16 @@ async function startCore() {
         ]
     } as GD.LoadSettings_T;
 
+    const pkgL2Skies = await assetLoader.load(assetLoader.getPackage("l2_skies", "Texture"));
+    const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
+    const skyLevel = await _decodePackage(renderManager, assetLoader, "skylevel", {
+        ...loadSettings, isSkyLevel: true
+    });
+
+
+
     // working (or mostly working)
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager. addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
@@ -506,8 +500,10 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
 
     // Load global sky level
-    const userSkylevel = await _decodePackage(renderManager, assetLoader, "skylevel", { ...loadSettings, loadCelestials: true });
-    renderManager.setGlobalSky(userSkylevel);
+
+    renderManager.setEnv(decodeEnv(envConfig));
+    renderManager.setGlobalSky(skyLevel);
+
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 

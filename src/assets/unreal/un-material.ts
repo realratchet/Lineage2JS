@@ -286,40 +286,27 @@ abstract class UFadeColor extends UBaseModifier {
 }
 
 abstract class UColorModifier extends UBaseMaterial {
-    // protected color: FColor;
-    // protected doubleSide: boolean;
-    // protected alphaBlend: boolean;
+    declare protected color: GA.FColor;
+    declare protected doubleSide: boolean;
+    declare protected alphaBlend: boolean;
 
-    // // public async decodeMaterial(): Promise<THREE.Material> {
-    // //     const material = await this.material?.decodeMaterial() as THREE.ShaderMaterial;
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.material.uuid;
 
-    // //     material.uniforms.diffuse.value.setRGB(this.color.r / 255, this.color.g / 255, this.color.b / 255);
-    // //     material.uniforms.opacity.value = this.color.a / 255;
+        library.materials[this.uuid] = null;
 
-    // //     if (this.doubleSide !== undefined) material.side = this.doubleSide ? DoubleSide : BackSide;
+        this.material.loadSelf().getDecodeInfo(library);
 
-    // //     return material;
-    // // }
+        return this.material.uuid;
+    }
 
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.material.uuid;
-
-    //     library.materials[this.uuid] = null;
-
-    //     debugger;
-
-    //     this.material.loadSelf().getDecodeInfo(library);
-
-    //     return this.material.uuid;
-    // }
-
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "Color": "color",
-    //         "RenderTwoSided": "doubleSide",
-    //         "AlphaBlend": "alphaBlend"
-    //     });
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Color": "color",
+            "RenderTwoSided": "doubleSide",
+            "AlphaBlend": "alphaBlend"
+        });
+    }
 }
 
 abstract class UTexRotator extends UBaseModifier {

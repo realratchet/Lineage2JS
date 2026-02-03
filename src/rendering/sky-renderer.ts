@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, PlaneGeometry, Texture, Color, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, SphereGeometry, BackSide, AdditiveBlending, BufferAttribute } from "three";
+import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, PlaneGeometry, Texture, Color, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, SphereGeometry, BackSide, BufferAttribute, BufferGeometry } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -17,59 +17,9 @@ const CLOUD_LAYER_RADIUS = 18000;
 const TMP_VEC3 = new Vector3();
 
 
-export default class SkyRenderer {
-    private celestialScene = new Scene();
-    private skyDome: Mesh;
-    private clouds: Mesh;
-    private sun: Mesh;
-    private moon: Mesh;
-    private camera: PerspectiveCamera | null = null;
-
-    private sunData: any = null;
-
-    public moons: { data: any, texture: Texture | null }[] = [];
-    public activeMoonIndex: number = 0;
-    public moonMultiplier: number = 1.0;
-
-    constructor() {
-        const spriteGeom = new PlaneGeometry(1, 1);
-        const uv = spriteGeom.attributes.uv;
-        for (let i = 0; i < uv.count; i++) {
-            uv.setY(i, 1 - uv.getY(i));
-        }
-
-        // 1. Sky Dome
-        // 1. Sky Dome
-        const skyMat = new MeshBasicMaterial({
-            vertexColors: true,
-            side: BackSide,
-            depthWrite: false,
-            fog: false
-        });
-        this.skyDome = new Mesh(new SphereGeometry(SKY_DOME_RADIUS, 32, 32), skyMat);
-        this.skyDome.frustumCulled = false;
-
-        // Init color attribute
-        const count = this.skyDome.geometry.attributes.position.count;
-        this.skyDome.geometry.setAttribute('color', new BufferAttribute(new Float32Array(count * 3), 3));
-
-        this.celestialScene.add(this.skyDome);
-
-        // 2. Clouds
-        const cloudMat = new MeshBasicMaterial({
-            transparent: true,
-            depthWrite: false,
-            side: BackSide,
-            map: null,
-            color: new Color(0xffffff)
-        });
-        this.clouds = new Mesh(new SphereGeometry(CLOUD_LAYER_RADIUS, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2), cloudMat);
-        this.clouds.frustumCulled = false;
-        this.clouds.visible = false;
-        this.celestialScene.add(this.clouds);
-
-        // 3. Sun
-        const sunMat = new MeshBasicMaterial({
+class CelestialMaterial extends MeshBasicMaterial {
+    public constructor() {
+        super({
             transparent: true,
             blending: CustomBlending,
             blendSrc: OneFactor,
@@ -78,23 +28,35 @@ export default class SkyRenderer {
             depthTest: false,
             side: DoubleSide
         });
-        this.sun = new Mesh(spriteGeom, sunMat);
-        this.sun.visible = false;
-        this.sun.frustumCulled = false;
-        this.celestialScene.add(this.sun);
+    }
+}
 
-        // 4. Moon
-        const moonMat = new MeshBasicMaterial({
-            transparent: true,
-            blending: AdditiveBlending,
-            depthWrite: false,
-            depthTest: false,
-            side: DoubleSide,
-            color: 0xffffff
-        });
-        this.moon = new Mesh(spriteGeom, moonMat);
-        this.moon.visible = false;
-        this.moon.frustumCulled = false;
+
+class Celestial extends Mesh {
+    public static readonly _geometry = new PlaneGeometry(1, -1);
+
+    public constructor() {
+        super(Celestial._geometry, new CelestialMaterial());
+
+        this.frustumCulled = false;
+        this.visible = false;
+    }
+}
+
+export default class SkyRenderer {
+    private celestialScene = new Scene();
+    private sun: Celestial = new Celestial();
+    private moon: Celestial = new Celestial();
+    private camera: PerspectiveCamera | null = null;
+
+    private sunData: any = null;
+
+    public moons: { data: any, texture: Texture | null }[] = [];
+    public activeMoonIndex: number = 0;
+    public moonMultiplier: number = 1.0;
+
+    public constructor() {
+        this.celestialScene.add(this.sun);
         this.celestialScene.add(this.moon);
     }
 
@@ -148,130 +110,11 @@ export default class SkyRenderer {
         this.camera = camera;
         const timeOfDay = env.getTimeOfDay();
 
-        // Update Sky Dome colors (Vertex Gradient)
-        const geo = this.skyDome.geometry;
-        const positions = geo.attributes.position;
-        const colors = geo.attributes.color;
-        const count = positions.count;
-
-        const zenithColor = new Color(skyColor.r / 255, skyColor.g / 255, skyColor.b / 255);
-        const horizonColor = new Color(hazeColor.r / 255, hazeColor.g / 255, hazeColor.b / 255);
-
-        const useHazeArray = hazeColors && hazeColors.length > 0;
-        // Pre-convert haze array to THREE.Color for speed
-        const hazeColorArray = useHazeArray ? hazeColors.map(c => new Color(c.r / 255, c.g / 255, c.b / 255)) : [];
-
-        const tmpColor = new Color();
-
-        for (let i = 0; i < count; i++) {
-            const y = positions.getY(i);
-            // SKY_DOME_RADIUS = 20000
-            // Zenith (Top) is y = 20000
-            // Horizon is y = 0
-            // Nadir (Bottom) is y = -20000
-
-            // Normalize height 0..1 (from horizon to zenith)
-            let h = y / SKY_DOME_RADIUS;
-
-            // Render full sphere, but usually we care about h >= 0
-            if (h < 0) {
-                // Below horizon: just use horizon color (or fade to black/nadir if desired)
-                // Using horizon color for continuity
-                if (useHazeArray) {
-                    colors.setXYZ(i, hazeColorArray[0].r, hazeColorArray[0].g, hazeColorArray[0].b);
-                } else {
-                    colors.setXYZ(i, horizonColor.r, horizonColor.g, horizonColor.b);
-                }
-            } else {
-                // Above horizon
-                if (useHazeArray) {
-                    // Map 0..1 to hazeColors array + zenith
-                    // If we have N haze colors, they might represent bands
-                    // Let's assume hazeColors distribute from horizon up to some point, then SkyColor
-                    // Or hazeColors covers the gradient to SkyColor?
-
-                    // Experiment: Map 0..0.5 to hazeColors, then to SkyColor?
-                    // Or spread hazeColors across the whole dome?
-                    // Typically haze is low.
-
-                    // Simple approach: Interpolate between Horizon(haze[0]) -> ... -> Zenith(Sky)
-                    // If hazeColors has 4 items: 
-                    // 0: Horizon
-                    // ...
-                    // Last: Haze Top
-                    // Then -> SkyColor
-
-                    // Total stops: HazeCount + 1 (Zenith)
-                    const totalStops = hazeColorArray.length + 1;
-                    const segment = h * (totalStops - 1); // 0 .. N
-                    const idx = Math.floor(segment);
-                    const alpha = segment - idx;
-
-                    let c1: Color, c2: Color;
-
-                    if (idx < hazeColorArray.length - 1) {
-                        c1 = hazeColorArray[idx];
-                        c2 = hazeColorArray[idx + 1];
-                    } else if (idx === hazeColorArray.length - 1) {
-                        c1 = hazeColorArray[idx];
-                        c2 = zenithColor;
-                    } else {
-                        c1 = zenithColor;
-                        c2 = zenithColor;
-                    }
-
-                    tmpColor.copy(c1).lerp(c2, alpha);
-                    colors.setXYZ(i, tmpColor.r, tmpColor.g, tmpColor.b);
-
-                } else {
-                    // Standard linear blend
-                    // Add exponent to push blue up?
-                    const t = Math.pow(h, 0.5); // Push horizon up a bit
-                    tmpColor.copy(horizonColor).lerp(zenithColor, t);
-                    colors.setXYZ(i, tmpColor.r, tmpColor.g, tmpColor.b);
-                }
-            }
-        }
-        colors.needsUpdate = true;
-
-        this.skyDome.position.copy(camera.position);
-
-        // Update Clouds
-        this.updateClouds(camera, cloudColor, sector);
-
         // Update Celestials
         this.updateSun(timeOfDay, camera, env);
         this.updateMoon(timeOfDay, camera, env);
     }
 
-    private updateClouds(camera: PerspectiveCamera, cloudColor: ColorByte, sector: any) {
-        // Find cloud texture from current fog info if available
-        // RenderManager passes 'sector' which might have 'fogInfos'
-        let texture = null;
-        if (sector && sector.fogInfos) {
-            for (const fogInfo of sector.fogInfos) {
-                if (fogInfo.cloudTexture) {
-                    texture = fogInfo.cloudTexture;
-                    break;
-                }
-            }
-        }
-
-        if (texture) {
-            const mat = this.clouds.material as MeshBasicMaterial;
-            if (mat.map !== texture) {
-                mat.map = texture;
-                mat.needsUpdate = true;
-            }
-            mat.color.setRGB(cloudColor.r / 255, cloudColor.g / 255, cloudColor.b / 255);
-            this.clouds.visible = true;
-            this.clouds.position.copy(camera.position);
-            // Slowly rotate clouds
-            this.clouds.rotation.y += 0.0001;
-        } else {
-            this.clouds.visible = false;
-        }
-    }
 
     private getCelestialPositioningAngles(timeOfDay: number, celestialType: "sun" | "moon"): [number, number] {
         const longitude = PI;

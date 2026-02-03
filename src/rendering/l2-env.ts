@@ -2,6 +2,7 @@ import EnvColor, { TimeColor, TimeHSV, TimeScale } from "@client/rendering/env-c
 import { Color, MathUtils } from "three";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import { ColorByte } from "@client/utils/color-byte";
+import EnvInfo from "@client/rendering/env-info";
 
 // const tmpColor_1 = new Color();
 // const tmpColor_2 = new Color();
@@ -110,13 +111,15 @@ class FogBlendState {
 
 class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
+    protected env: EnvInfo;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
 
     protected time: number = 60 * 60; // in seconds
     protected envVersion: number = 0; // Incremented when activeEnv changes
 
-    public constructor(envColors: { [key in 0 | 1 | 2]: EnvColor }) {
-        this.envColors = envColors;
+    public constructor(env: EnvInfo) {
+        this.env = env;
+        this.envColors = env.setup.timeEnv;
     }
 
     public getTimeOfDay() { return this.time / 3600 % 24; }
@@ -191,6 +194,7 @@ class L2Environment {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sky, target);
     }
 
+    /** never used in the game as far as i can tell, instructions never called, would make the moon red */
     public getMoonColor(target: ColorByte): ColorByte {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.moon, target);
     }

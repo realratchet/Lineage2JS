@@ -5,6 +5,7 @@ import FBSPSurf from "../bsp/un-bsp-surf";
 import { PolyFlags_T } from "../un-polys";
 import { BufferValue } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
+import USkyZoneInfo from "../un-sky-zone-info";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
@@ -45,8 +46,9 @@ abstract class UModel extends UPrimitive {
     declare protected isLinked: boolean;
 
     declare protected lights: FObjectArray;
+    declare protected isSky: boolean;
 
-    public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; }
+    public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; return this; }
     public getLevelInfo() { return this.levelInfo; }
 
     protected preLoad(pkg: C.APackage, exp: C.UExport): void {
@@ -97,6 +99,8 @@ abstract class UModel extends UPrimitive {
         for (let i = 0; i < numZones; i++)
             this.zones[i] = new FZoneProperties().load(pkg);
 
+        // debugger;
+
         this.readHead = pkg.tell();
         const polysId = pkg.read("compat32");
         const polyExp = pkg.exports[polysId - 1];
@@ -142,6 +146,8 @@ abstract class UModel extends UPrimitive {
         //     debugger;
 
         // debugger;
+
+        this.isSky = pkg.path === "assets/maps/skylevel.unr";
 
         return this;
     }
@@ -295,17 +301,25 @@ abstract class UModel extends UPrimitive {
             if (surf.flags & (
                 PolyFlags_T.PF_Invisible |
                 PolyFlags_T.PF_Portal |
-                PolyFlags_T.PF_AntiPortal |
+                PolyFlags_T.PF_AntiPortal | 0
+                // PolyFlags_T.PF_FakeBackdrop | // no skybox
+                // PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
+            )) continue;
+
+            if (!this.isSky && surf.flags & (
                 PolyFlags_T.PF_FakeBackdrop | // no skybox
                 PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
             )) continue;
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
-            const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
 
-            if (testX <= -327680.00 || testX >= 327680.00) continue;
-            if (testZ <= -262144.00 || testZ >= 262144.00) continue;
-            // if (testY <= -18000 || testY >= 18000) continue;
+            if (!this.isSky) {
+                const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+
+                if (testX <= -327680.00 || testX >= 327680.00) continue;
+                if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+                // if (testY <= -18000 || testY >= 18000) continue;
+            }
 
             if (node.iCollisionBound >= 0) {
                 library.bspColliders.push(nodeInfo.collision.bounds);

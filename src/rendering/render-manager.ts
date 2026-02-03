@@ -1,4 +1,5 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter } from "three";
+import { UGlowPass } from "./postprocessing/uglow-pass";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
@@ -33,6 +34,7 @@ document.body.appendChild(stats.dom);
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 import { ColorByte } from "@client/utils/color-byte";
+import EnvInfo from "@client/rendering/env-info";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte(); // For sky color blending
@@ -64,6 +66,8 @@ class RenderManager {
     public readonly mixer = new AnimationMixer(this.scene);
 
     public readonly skyRenderer = new SkyRenderer();
+    private uGlowPass: UGlowPass;
+    private mainRenderTarget: WebGLRenderTarget;
 
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
@@ -107,6 +111,18 @@ class RenderManager {
             logarithmicDepthBuffer: true,
             alpha: true,
         });
+
+        // Initialize Native Bloom System
+        this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
+            minFilter: LinearFilter,
+            magFilter: LinearFilter,
+            format: RGBAFormat,
+            stencilBuffer: false
+        });
+        this.mainRenderTarget.texture.name = "RenderManager.mainTarget";
+
+        this.uGlowPass = new UGlowPass(new Vector2(256, 256));
+        this.uGlowPass.renderToScreen = true;
 
         guiFolders.world.add(this.envConfig, "fogPreset", {
             "1 (2k-8k)": "1",
@@ -233,8 +249,8 @@ class RenderManager {
         addResizeListeners(this);
     }
 
-    public setEnvColors(envColors: { [key in 0 | 1 | 2]: EnvColor }): this {
-        const environment = this.environment = new L2Environment(envColors);
+    public setEnv(env: EnvInfo): this {
+        const environment = this.environment = new L2Environment(env);
         const self = this;
 
         const timeState = {
@@ -572,6 +588,18 @@ class RenderManager {
 
         this.camera.updateProjectionMatrix();
         this.setSize(width, height);
+
+        const pixelRatio = this.pixelRatio;
+        // Use client dims * pixelRatio for render targets
+        const targetWidth = Math.floor(width); // setSize handles ratio internally usually, but here width is bounding rect width. 
+        // Wait, setSize at 547 uses renderer.setSize(width, height).
+        // renderer.setSize updates the canvas. 
+        // RenderTargets need exact pixel size.
+        const rtWidth = width * pixelRatio;
+        const rtHeight = height * pixelRatio;
+
+        this.mainRenderTarget.setSize(rtWidth, rtHeight);
+        this.uGlowPass.setSize(rtWidth, rtHeight);
         this.getDomElement().style.display = oldStyle;
         this.needsUpdate = true;
     }
@@ -720,6 +748,8 @@ class RenderManager {
 
         // 3. Zone Overrides
         const sector = this.getSector(this.camera.position);
+        const blendedHazeColors: ColorByte[] = [];
+
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
@@ -883,7 +913,7 @@ class RenderManager {
                 tmpColorByte_5.set(255, 255, 255);
             }
 
-            let blendedHazeColors: ColorByte[] = [];
+
             if (totalHArrWeight > 0) {
                 for (let i = 0; i < maxHArrLen; i++) {
                     const cb = new ColorByte();
@@ -897,8 +927,9 @@ class RenderManager {
                 }
             }
 
-            this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, tmpColorByte_5, sector);
         }
+
+        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, [], tmpColorByte_5, sector);
 
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
         if (!this.scene.fog || !(this.scene.fog as any).isFog) {
@@ -986,6 +1017,10 @@ class RenderManager {
     }
 
     protected _doRender(_currentTime: number, _deltaTime: number) {
+        // // Redirect to Main Target for Bloom
+        // i think bloom pass is only enabled when shader rendering used which is off by default
+        // this.renderer.setRenderTarget(this.mainRenderTarget);
+
         // Render Sky (Background)
         this.renderer.clear();
         this.skyRenderer.render(this.renderer);
@@ -1050,10 +1085,14 @@ class RenderManager {
         }
 
         this.renderer.autoClear = false;
-        this.renderer.clear();
-        this.skyRenderer.render(this.renderer);
 
+        // Render World
         this.renderer.render(this.scene, this.camera);
+
+        // // Apply Native Bloom (Sun/Glow) -> Screen
+        // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);
+
+        // this.renderer.setRenderTarget(null);
     }
 
     protected _postRender(_currentTime: number, _deltaTime: number) { }
@@ -1135,11 +1174,7 @@ class RenderManager {
 
         this.objectGroup.add(sector);
 
-        // Initialize sky renderer with celestials from sector (if any)
-        // Only if global sky hasn't been set
-        if (!this.globalSkyLoaded && sector.celestials && sector.celestials.length > 0) {
-            this.skyRenderer.initFromSector(sector.celestials);
-        }
+
 
         // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);

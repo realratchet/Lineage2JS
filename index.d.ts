@@ -130,7 +130,7 @@ declare global {
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
                     helpersZoneBounds?: boolean,
-                    loadCelestials?: boolean,
+                    isSkyLevel?: boolean
                 };
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
@@ -548,6 +548,32 @@ declare global {
                     actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
                     staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
                     bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] }
+                }
+                export interface ILNEnvSetupDecodeInfo {
+                    isClock: boolean,
+                    startTime: number,
+                    timeRatio: number,
+                    shadowTick: number,
+                    staticLightingAdjust: number,
+                    slopeSunAngle: number,
+                    subLightNum: number
+                    timeEnv: { [key in GA.EEnvCycle]: IL2NEnvLightDecodeInfo }
+                    skybox: string,
+                    hazering: string,
+                    clouds: string[],
+                }
+                export interface IL2NEnvDecodeInfo {
+                    envSetup: ILNEnvSetupDecodeInfo,
+                    fog: {
+                        ranges: GD.Vector2Arr[];
+                        fogSpeed: number;
+                    },
+                    waterVolume: {
+                        fogColor: GD.ColorArr;
+                        fogStart: number;
+                        fogEnd: number;
+                        cellophaneColor: GD.ColorArr;
+                    }
                 }
                 export interface IL2NEnvLightDecodeInfo {
                     type: GA.EEnvCycle,

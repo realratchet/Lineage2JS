@@ -26,7 +26,11 @@ class DecodeLibrary {
     public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
-    public skyZone: GD.IBaseZoneDecodeInfo = null;
+    public readonly skyLevel: {
+        skybox: string;
+        hazering: string;
+        clouds: string[]
+    }
 
     public failed: any[] = [];
     public failedLoad: any[] = [];
@@ -41,7 +45,7 @@ class DecodeLibrary {
         loadTerrain = true,
         helpersZoneBounds = false,
         loadEmitters = true,
-        loadCelestials = false,
+        isSkyLevel = false,
     }: GD.LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
@@ -51,12 +55,6 @@ class DecodeLibrary {
 
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
         const uLevelInfo = uLevel.levelInfo.loadSelf();
-
-        // Load SkyZone if present
-        if (uLevelInfo.skyZone) {
-            const skyZoneActor = uLevelInfo.skyZone.loadSelf();
-            decodeLibrary.skyZone = skyZoneActor.getDecodeInfo(decodeLibrary);
-        }
 
         decodeLibrary.brightness = uLevelInfo.brightness;
 
@@ -80,9 +78,10 @@ class DecodeLibrary {
 
         decodeLibrary.sector = sectorIndex;
 
-        const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId).loadSelf(); // base model
+        const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId); // base model
 
-        uModel.setLevelInfo(uLevelInfo);
+        uModel.setLevelInfo(uLevelInfo).loadSelf();
+
         if (loadBaseModel) uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         else uModel.getZoneDecodeInfo(decodeLibrary, uLevelInfo);
 
@@ -105,7 +104,7 @@ class DecodeLibrary {
         }
 
         {
-            if (loadCelestials) { // Check loadCelestials
+            if (isSkyLevel) { // Load skylevel
                 const celestialTypes = ["NSun", "NMoon"];
                 const uCelestialsToLoad = celestialTypes.map(t => expGroups[t] ?? []).flat();
 

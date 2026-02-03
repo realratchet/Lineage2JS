@@ -1,15 +1,10 @@
+import { EEnvCycle } from "./env-consts";
 import FPlane from "@client/assets/unreal/un-plane";
 import hsvToRgb from "@client/utils/hsv-to-rgb";
 import GMath from "@client/assets/unreal/un-gmath";
 import { APackage, UExport, UObject } from "@l2js/core";
 import FArray from "@l2js/core/src/unreal/un-array";
 
-// Environmental preset types for Seven Signs events
-const enum EEnvCycle {
-    Normal = 0,  // Standard day/night cycle (timeenv0.int)
-    Dusk = 1,    // Special dusk cycle ([SS]Dusk - timeenv1.int)
-    Dawn = 2     // Special dawn cycle ([SS]Dawn - timeenv2.int)
-};
 
 interface IEnvTime { time: number; }
 
@@ -246,6 +241,14 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
 }
 
 
+import {
+    findSection,
+    consumeNextValue,
+    consumeHSV,
+    consumeRGB,
+    consumeScale
+} from "./conf-files/conf-parser";
+
 export { UL2NEnvLight, UL2NTimeLight, EEnvCycle, FNTimeHSV, FNTimeColor, FNTimeScale };
 
 function getEnvType(fileContents: string): EEnvCycle {
@@ -348,118 +351,4 @@ function loadRGB(fileContents: string, sectionName: string, pkgNative: C.ANative
     }
 
     return array;
-}
-
-function findSection(fileContents: string, sectionName: string): number {
-    const sectionHeader = `[${sectionName}]\r\n`;
-    const indexOf = fileContents.indexOf(sectionHeader);
-
-    if (indexOf === -1)
-        throw new Error(`Section '${sectionName}' was not found in file contents!`);
-
-    return indexOf + sectionHeader.length;
-}
-
-function consumeNextValue(fileContents: string, startOffset: number): [string, string, number] {
-    let offset = startOffset;
-
-    while (fileContents[offset] === ";")
-        offset = fileContents.indexOf("\r\n", offset) + 2;
-
-    const eqSign = fileContents.indexOf("=", offset);
-
-    if (eqSign === -1)
-        throw new Error(`Could not find assignment: ${fileContents.slice(offset)}`);
-
-    const lineEnd = fileContents.indexOf("\r\n", eqSign + 1);
-
-    if (lineEnd === -1)
-        throw new Error(`Could not find eol: ${fileContents.slice(eqSign + 1)}`);
-
-    const varName = fileContents.slice(offset, eqSign).trim();
-    const varValue = fileContents.slice(eqSign + 1, lineEnd).trim();
-
-    return [varName, varValue, lineEnd - startOffset + 2];
-}
-
-function consumeHSV(line: string): [number, number, number, number] {
-    const offsetLeft = line.indexOf("(");
-
-    if (offsetLeft === -1)
-        throw new Error(`Could not find '(': ${line}`);
-
-    const offsetRight = line.indexOf(")", offsetLeft);
-
-    if (offsetRight === -1)
-        throw new Error(`Could not find ')': ${line}`);
-
-    let t = 0, h = 0, s = 0, b = 0;
-
-    for (const param of line.slice(offsetLeft + 1, offsetRight).split(",")) {
-        const [k, v] = param.split("=").map(v => v.trim());
-
-        switch (k.toLowerCase()) {
-            case "t": t = parseInt(v); break;
-            case "hue": h = parseInt(v); break;
-            case "sat": s = parseInt(v); break;
-            case "bri": b = parseInt(v); break;
-            default: throw new Error(`Unknown light parameter: ${k}`);
-        }
-    }
-
-    return [t, h, s, b];
-}
-
-function consumeRGB(line: string): [number, number, number, number] {
-    const offsetLeft = line.indexOf("(");
-
-    if (offsetLeft === -1)
-        throw new Error(`Could not find '(': ${line}`);
-
-    const offsetRight = line.indexOf(")", offsetLeft);
-
-    if (offsetRight === -1)
-        throw new Error(`Could not find ')': ${line}`);
-
-    let t = 0, r = 0, g = 0, b = 0;
-
-    for (const param of line.slice(offsetLeft + 1, offsetRight).split(",")) {
-        const [k, v] = param.split("=").map(v => v.trim());
-
-        switch (k.toLowerCase()) {
-            case "t": t = parseInt(v); break;
-            case "r": r = parseInt(v); break;
-            case "g": g = parseInt(v); break;
-            case "b": b = parseInt(v); break;
-            default: throw new Error(`Unknown light parameter: ${k}`);
-        }
-    }
-
-    return [t, r, g, b];
-}
-
-function consumeScale(line: string): [number, number] {
-    const offsetLeft = line.indexOf("(");
-
-    if (offsetLeft === -1)
-        throw new Error(`Could not find '(': ${line}`);
-
-    const offsetRight = line.indexOf(")", offsetLeft);
-
-    if (offsetRight === -1)
-        throw new Error(`Could not find ')': ${line}`);
-
-    let t = 0, s = 0;
-
-    for (const param of line.slice(offsetLeft + 1, offsetRight).split(",")) {
-        const [k, v] = param.split("=").map(v => v.trim());
-
-        switch (k.toLowerCase()) {
-            case "t": t = parseInt(v); break;
-            case "s": s = parseFloat(v); break;
-            default: throw new Error(`Unknown light parameter: ${k}`);
-        }
-    }
-
-    return [t, s];
 }
