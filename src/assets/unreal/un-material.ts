@@ -74,6 +74,32 @@ enum TexRotationType_T {
     TR_OscillatingRotation,
 };
 
+enum ETexOscillationType_T {
+    OT_Pan,
+    OT_Stretch,
+    OT_StretchRepeat,
+    OT_Jitter
+};
+
+enum EColorOperation_T {
+    CO_Use_Color_From_Material1,
+    CO_Use_Color_From_Material2,
+    CO_Multiply,
+    CO_Add,
+    CO_Subtract,
+    CO_AlphaBlend_With_Mask,
+    CO_Add_With_Mask_Modulation,
+    CO_Use_Color_From_Mask,
+};
+
+enum EAlphaOperation_T {
+    AO_Use_Mask,
+    AO_Multiply,
+    AO_Add,
+    AO_Use_Alpha_From_Material1,
+    AO_Use_Alpha_From_Material2,
+};
+
 /**
     // blending
     if (OutputBlending == OB_Normal && !Opacity)
@@ -118,13 +144,57 @@ abstract class UTexEnvMap extends UBaseModifier {
     }
 
     public getDecodeInfo(library: DecodeLibrary): string {
-        return null;
+        if (this.uuid in library.materials) return this.uuid;
+
+        library.materials[this.uuid] = {
+            materialType: "modifier",
+            modifierType: "envMapTexture",
+            envMapType: this.type === 0 ? "world" : "camera",
+            map: this.material?.loadSelf().getDecodeInfo(library) || null
+        } as GD.ITexEnvMapDecodeInfo;
+
+        return this.uuid;
     }
 }
 
 abstract class UCombiner extends UBaseModifier {
+    declare protected combineOperation: EColorOperation_T;
+    declare protected alphaOperation: EAlphaOperation_T;
+    declare protected material1: UMaterial;
+    declare protected material2: UMaterial;
+    declare protected mask: UMaterial;
+    declare protected invertMask: boolean;
+    declare protected modulate2X: boolean;
+    declare protected modulate4X: boolean;
+
     public getDecodeInfo(library: DecodeLibrary): string {
-        return null;
+        if (this.uuid in library.materials) return this.uuid;
+
+        library.materials[this.uuid] = {
+            materialType: "combiner",
+            combineMode: this.combineOperation.valueOf(),
+            material1: this.material1?.loadSelf().getDecodeInfo(library) || null,
+            material2: this.material2?.loadSelf().getDecodeInfo(library) || null,
+            mask: this.mask?.loadSelf().getDecodeInfo(library) || null,
+            invertMask: this.invertMask,
+            alphaFrom1: this.alphaOperation.valueOf() === EAlphaOperation_T.AO_Use_Alpha_From_Material1,
+            alphaFrom2: this.alphaOperation.valueOf() === EAlphaOperation_T.AO_Use_Alpha_From_Material2
+        } as GD.ICombinerDecodeInfo;
+
+        return this.uuid;
+    }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "CombineOperation": "combineOperation",
+            "AlphaOperation": "alphaOperation",
+            "Material1": "material1",
+            "Material2": "material2",
+            "Mask": "mask",
+            "InvertMask": "invertMask",
+            "Modulate2X": "modulate2X",
+            "Modulate4X": "modulate4X"
+        });
     }
 }
 
@@ -291,13 +361,18 @@ abstract class UColorModifier extends UBaseMaterial {
     declare protected alphaBlend: boolean;
 
     public getDecodeInfo(library: DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.material.uuid;
+        if (this.uuid in library.materials) return this.uuid;
 
-        library.materials[this.uuid] = null; // TODO: implement
+        library.materials[this.uuid] = {
+            materialType: "modifier",
+            modifierType: "colorModifier",
+            material: this.material?.loadSelf().getDecodeInfo(library) || null,
+            modifierColor: [this.color.r / 255, this.color.g / 255, this.color.b / 255, this.color.a / 255],
+            doubleSide: this.doubleSide,
+            alphaBlend: this.alphaBlend
+        } as GD.IColorModifierDecodeInfo;
 
-        this.material.loadSelf().getDecodeInfo(library);
-
-        return this.material.uuid;
+        return this.uuid;
     }
 
     protected getPropertyMap() {
@@ -340,13 +415,29 @@ abstract class UTexRotator extends UBaseModifier {
     // }
 
     public getDecodeInfo(library: DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.material.uuid;
+        if (this.uuid in library.materials) return this.uuid;
 
-        library.materials[this.uuid] = null;
+        let rotationType: "fixed" | "rotating" | "oscillating" = "fixed";
+        switch (this.type.valueOf()) {
+            case TexRotationType_T.TR_FixedRotation: rotationType = "fixed"; break;
+            case TexRotationType_T.TR_ConstantlyRotating: rotationType = "rotating"; break;
+            case TexRotationType_T.TR_OscillatingRotation: rotationType = "oscillating"; break;
+        }
 
-        this.material.loadSelf().getDecodeInfo(library);
+        library.materials[this.uuid] = {
+            materialType: "modifier",
+            modifierType: "rotateTexture",
+            transform: {
+                matrix: this.matrix.getElements3x3(),
+                map: this.material?.loadSelf().getDecodeInfo(library) || null,
+                type: rotationType,
+                rotation: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll, "XYZ"],
+                offsetU: this.offsetU,
+                offsetV: this.offsetV
+            }
+        } as GD.ITexRotatorDecodeInfo;
 
-        return this.material.uuid;
+        return this.uuid;
     }
 
     protected getPropertyMap() {
@@ -363,52 +454,68 @@ abstract class UTexRotator extends UBaseModifier {
 
 
 abstract class UTexOscillator extends UBaseModifier {
-    // protected matrix: FMatrix;
-    // protected rateU: number;
-    // protected rateV: number;
-    // protected phaseU: number;
-    // protected phaseV: number;
-    // protected amplitudeU: number;
-    // protected amplitudeV: number;
-    // protected typeU: number;
-    // protected typeV: number;
-    // protected offsetU: number;
-    // protected offsetV: number;
-    // protected currentUJitter: number;
-    // protected currentVJitter: number;
+    declare protected matrix: GA.FMatrix;
+    declare protected rateU: number;
+    declare protected rateV: number;
+    declare protected phaseU: number;
+    declare protected phaseV: number;
+    declare protected amplitudeU: number;
+    declare protected amplitudeV: number;
+    declare protected typeU: ETexOscillationType_T;
+    declare protected typeV: ETexOscillationType_T;
+    declare protected offsetU: number;
+    declare protected offsetV: number;
 
-    // protected _lastSu: any;
-    // protected _lastSV: any;
-
-    public getDecodeInfo(library: DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.material.uuid;
-
-        library.materials[this.uuid] = null;
-
-        this.material.loadSelf().getDecodeInfo(library);
-
-        return this.material.uuid;
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "M": "matrix",
+            "UOscillationRate": "rateU",
+            "VOscillationRate": "rateV",
+            "UOscillationPhase": "phaseU",
+            "VOscillationPhase": "phaseV",
+            "UOscillationAmplitude": "amplitudeU",
+            "VOscillationAmplitude": "amplitudeV",
+            "UOscillationType": "typeU",
+            "VOscillationType": "typeV",
+            "UOffset": "offsetU",
+            "VOffset": "offsetV"
+        });
     }
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "M": "matrix",
-    //         "UOscillationRate": "rateU",
-    //         "VOscillationRate": "rateV",
-    //         "UOscillationPhase": "phaseU",
-    //         "VOscillationPhase": "phaseV",
-    //         "UOscillationAmplitude": "amplitudeU",
-    //         "VOscillationAmplitude": "amplitudeV",
-    //         "UOscillationType": "typeU",
-    //         "VOscillationType": "typeV",
-    //         "UOffset": "offsetU",
-    //         "VOffset": "offsetV",
-    //         "LastSu": "_lastSu",
-    //         "LastSv": "_lastSV",
-    //         "CurrentUJitter": "currentUJitter",
-    //         "CurrentVJitter": "currentVJitter"
-    //     });
-    // }
+    public getDecodeInfo(library: DecodeLibrary): string {
+        if (this.uuid in library.materials) return this.uuid;
+
+        const mapType = (type: ETexOscillationType_T): "pan" | "stretch" | "stretchRepeat" | "jitter" => {
+            switch (type.valueOf()) {
+                case ETexOscillationType_T.OT_Pan: return "pan";
+                case ETexOscillationType_T.OT_Stretch: return "stretch";
+                case ETexOscillationType_T.OT_StretchRepeat: return "stretchRepeat";
+                case ETexOscillationType_T.OT_Jitter: return "jitter";
+                default: return "pan";
+            }
+        };
+
+        library.materials[this.uuid] = {
+            materialType: "modifier",
+            modifierType: "oscillateTexture",
+            transform: {
+                matrix: this.matrix.getElements3x3(),
+                map: this.material?.loadSelf().getDecodeInfo(library) || null,
+                rateU: this.rateU,
+                rateV: this.rateV,
+                phaseU: this.phaseU,
+                phaseV: this.phaseV,
+                amplitudeU: this.amplitudeU,
+                amplitudeV: this.amplitudeV,
+                typeU: mapType(this.typeU),
+                typeV: mapType(this.typeV),
+                offsetU: this.offsetU,
+                offsetV: this.offsetV
+            }
+        } as GD.ITexOscillatorDecodeInfo;
+
+        return this.uuid;
+    }
 }
 
 abstract class UTexCoordSource extends UBaseModifier {
@@ -434,8 +541,6 @@ abstract class UTexPanner extends UBaseModifier {
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
-        library.materials[this.uuid] = null;
-
         library.materials[this.uuid] = {
             materialType: "modifier",
             modifierType: "panTexture",
@@ -446,7 +551,7 @@ abstract class UTexPanner extends UBaseModifier {
             }
         } as GD.ITexPannerDecodeInfo;
 
-        return this.material.uuid;
+        return this.uuid;
     }
 
     protected getPropertyMap() {

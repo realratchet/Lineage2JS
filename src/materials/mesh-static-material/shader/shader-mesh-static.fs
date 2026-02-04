@@ -21,7 +21,7 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
-#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK))
+#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2))
     struct TextureData {
         sampler2D texture;
         vec2 size;
@@ -34,9 +34,25 @@ uniform float opacity;
             varying vec2 vUvTransformedDiffuse;
             
             struct TransformDiffuseData {
+                mat3 matrix;
                 #if USE_MAP_DIFFUSE_TRANSFORM == PAN
-                    mat3 matrix;
                     float rate;
+                #elif USE_MAP_DIFFUSE_TRANSFORM == ROTATE
+                    vec3 rotation;
+                    float offsetU;
+                    float offsetV;
+                    int type;
+                #elif USE_MAP_DIFFUSE_TRANSFORM == OSCILLATE
+                    float rateU;
+                    float rateV;
+                    float phaseU;
+                    float phaseV;
+                    float amplitudeU;
+                    float amplitudeV;
+                    int typeU;
+                    int typeV;
+                    float offsetU;
+                    float offsetV;
                 #endif
             };
         #endif
@@ -48,6 +64,9 @@ uniform float opacity;
                 #ifdef USE_MAP_DIFFUSE_TRANSFORM
                 TransformDiffuseData transform;
                 #endif
+            #endif
+            #ifdef USE_COLOR_MODIFIER
+                vec4 modifierColor;
             #endif
         };
 
@@ -69,9 +88,25 @@ uniform float opacity;
             varying vec2 vUvTransformedOpacity;
             
             struct TransformOpacityData {
+                mat3 matrix;
                 #if USE_MAP_OPACITY_TRANSFORM == PAN
-                    mat3 matrix;
                     float rate;
+                #elif USE_MAP_OPACITY_TRANSFORM == ROTATE
+                    vec3 rotation;
+                    float offsetU;
+                    float offsetV;
+                    int type;
+                #elif USE_MAP_OPACITY_TRANSFORM == OSCILLATE
+                    float rateU;
+                    float rateV;
+                    float phaseU;
+                    float phaseV;
+                    float amplitudeU;
+                    float amplitudeV;
+                    int typeU;
+                    int typeV;
+                    float offsetU;
+                    float offsetV;
                 #endif
             };
         #endif
@@ -83,6 +118,9 @@ uniform float opacity;
             #endif
             #ifdef USE_MAP_OPACITY_TRANSFORM
                 TransformOpacityData transform;
+            #endif
+            #ifdef USE_COLOR_MODIFIER
+                vec4 modifierColor;
             #endif
         };
 
@@ -112,9 +150,25 @@ uniform float opacity;
             varying vec2 vUvTransformedSpecular;
             
             struct TransformSpecularData {
+                mat3 matrix;
                 #if USE_MAP_SPECULAR_TRANSFORM == PAN
-                    mat3 matrix;
                     float rate;
+                #elif USE_MAP_SPECULAR_TRANSFORM == ROTATE
+                    vec3 rotation;
+                    float offsetU;
+                    float offsetV;
+                    int type;
+                #elif USE_MAP_SPECULAR_TRANSFORM == OSCILLATE
+                    float rateU;
+                    float rateV;
+                    float phaseU;
+                    float phaseV;
+                    float amplitudeU;
+                    float amplitudeV;
+                    int typeU;
+                    int typeV;
+                    float offsetU;
+                    float offsetV;
                 #endif
             };
         #endif
@@ -130,6 +184,9 @@ uniform float opacity;
 
             #ifdef USE_MAP_SPECULAR_TRANSFORM
                 TransformSpecularData transform;
+            #endif
+            #ifdef USE_COLOR_MODIFIER
+                vec4 modifierColor;
             #endif
         };
 
@@ -152,9 +209,25 @@ uniform float opacity;
             varying vec2 vUvTransformedSpecularMask;
             
             struct TransformSpecularMaskData {
+                mat3 matrix;
                 #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
-                    mat3 matrix;
                     float rate;
+                #elif USE_MAP_SPECULAR_MASK_TRANSFORM == ROTATE
+                    vec3 rotation;
+                    float offsetU;
+                    float offsetV;
+                    int type;
+                #elif USE_MAP_SPECULAR_MASK_TRANSFORM == OSCILLATE
+                    float rateU;
+                    float rateV;
+                    float phaseU;
+                    float phaseV;
+                    float amplitudeU;
+                    float amplitudeV;
+                    int typeU;
+                    int typeV;
+                    float offsetU;
+                    float offsetV;
                 #endif
             };
         #endif
@@ -165,6 +238,9 @@ uniform float opacity;
             #endif
             #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
                 TransformSpecularMaskData transform;
+            #endif
+            #ifdef USE_COLOR_MODIFIER
+                vec4 modifierColor;
             #endif
         };
 
@@ -178,6 +254,70 @@ uniform float opacity;
             #define UV_SPECULAR_MASK vUv
         #endif
     #endif
+#endif
+
+#ifdef USE_MATERIAL2
+    #if defined(USE_UV) && defined(USE_MAP_MATERIAL2)
+        #ifdef USE_MAP_MATERIAL2_TRANSFORM
+            varying vec2 vUvTransformedMaterial2;
+            
+            struct TransformMaterial2Data {
+                mat3 matrix;
+                #if USE_MAP_MATERIAL2_TRANSFORM == PAN
+                    float rate;
+                #elif USE_MAP_MATERIAL2_TRANSFORM == ROTATE
+                    vec3 rotation;
+                    float offsetU;
+                    float offsetV;
+                    int type;
+                #elif USE_MAP_MATERIAL2_TRANSFORM == OSCILLATE
+                    float rateU;
+                    float rateV;
+                    float phaseU;
+                    float phaseV;
+                    float amplitudeU;
+                    float amplitudeV;
+                    int typeU;
+                    int typeV;
+                    float offsetU;
+                    float offsetV;
+                #endif
+            };
+        #endif
+
+        struct Material2Data {
+            #ifdef USE_MAP_MATERIAL2
+                TextureData map;
+
+                #ifdef USE_MAP_MATERIAL2_TRANSFORM
+                TransformMaterial2Data transform;
+                #endif
+            #endif
+            #ifdef USE_COLOR_MODIFIER
+                vec4 modifierColor;
+            #endif
+        };
+
+        uniform Material2Data shMaterial2;
+    #endif
+
+    #ifdef USE_UV
+        #if defined(USE_MAP_MATERIAL2) && defined(USE_MAP_MATERIAL2_TRANSFORM)
+            #define UV_MATERIAL2 vUvTransformedMaterial2
+        #else
+            #define UV_MATERIAL2 vUv
+        #endif
+    #endif
+#endif
+
+#ifdef USE_COMBINER
+    struct CombinerData {
+        int combineMode;
+        bool invertMask;
+        bool alphaFrom1;
+        bool alphaFrom2;
+    };
+    uniform CombinerData combiner;
 #endif
 
 #ifdef USE_GLOBAL_TIME
@@ -244,8 +384,56 @@ void main() {
             #ifdef USE_MASKING
                 diffuseColor.a *= texelDiffuse.a;
             #endif
+
+            #ifdef USE_COLOR_MODIFIER
+                diffuseColor.rgb *= shDiffuse.modifierColor.rgb;
+                diffuseColor.a *= shDiffuse.modifierColor.a;
+            #endif
         #endif
     #endif
+
+    #ifdef USE_COMBINER
+        vec3 color1 = diffuseColor.rgb;
+        float alpha1 = diffuseColor.a;
+        
+        vec4 color2 = vec4(1.0);
+        #ifdef USE_MATERIAL2
+            #ifdef USE_MAP_MATERIAL2
+                color2 = texture2D(shMaterial2.map.texture, UV_MATERIAL2);
+                #ifdef USE_COLOR_MODIFIER
+                    color2.rgb *= shMaterial2.modifierColor.rgb;
+                    color2.a *= shMaterial2.modifierColor.a;
+                #endif
+            #endif
+        #endif
+        
+        float maskVal = 1.0;
+        #ifdef USE_SPECULAR
+            #ifdef USE_MAP_SPECULAR
+                 maskVal = texture2D(shSpecular.map.texture, UV_SPECULAR).g;
+            #endif
+        #endif
+        
+        if (combiner.invertMask) maskVal = 1.0 - maskVal;
+        
+        if (combiner.combineMode == 1) { // Modulate
+            diffuseColor.rgb = color1 * color2.rgb;
+        } else if (combiner.combineMode == 2) { // Modulate2X
+            diffuseColor.rgb = color1 * color2.rgb * 2.0;
+        } else if (combiner.combineMode == 3) { // Modulate4X
+            diffuseColor.rgb = color1 * color2.rgb * 4.0;
+        } else if (combiner.combineMode == 4) { // Add
+            diffuseColor.rgb = color1 + color2.rgb;
+        } else if (combiner.combineMode == 5) { // Subtract
+            diffuseColor.rgb = color1 - color2.rgb;
+        } else if (combiner.combineMode == 6) { // AlphaBlend
+            diffuseColor.rgb = mix(color2.rgb, color1, maskVal);
+        }
+        
+        if (combiner.alphaFrom1) diffuseColor.a = alpha1;
+        else if (combiner.alphaFrom2) diffuseColor.a = color2.a;
+    #endif
+
 
     #ifdef USE_OPACITY
         #ifdef USE_MAP_OPACITY
@@ -253,8 +441,9 @@ void main() {
             
             diffuseColor.rgba *= texelOpacity.a;
             
-            // if (texelOpacity.a < 0.5)
-            //     discard;
+            #ifdef USE_COLOR_MODIFIER
+                diffuseColor.rgba *= shOpacity.modifierColor.a;
+            #endif
         #endif
     #endif
 

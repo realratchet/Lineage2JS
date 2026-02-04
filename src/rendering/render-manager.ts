@@ -644,6 +644,7 @@ class RenderManager {
 
     protected _updateObjects(currentTime: number, deltaTime: number) {
         const globalTime = currentTime / 600;
+        GLOBAL_UNIFORMS.globalTime.value = globalTime;
         const oldFar = this.camera.far;
 
         // Update helper camera: copy from main camera if inactive, otherwise keep frozen
@@ -677,43 +678,44 @@ class RenderManager {
         // Update frustum for BSP culling
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
 
+        // Pass 1: Visibility updates
         this.scene.traverse((object: THREE.Object3D) => {
-
-            if ((object as SectorObject).isSectorObject)
+            if ((object as any).isSectorObject) {
                 (object as SectorObject).updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled);
-            else if ((object as ZoneObject).isZoneObject) {
+            }
+        });
 
-                // const inBounds = (object as ZoneObject).boundsRender.containsPoint(this.camera.position);
-
-                // if (inBounds) fog = (object as ZoneObject).fog;
-
-                // // if (!(object as ZoneObject).update(this.enableZoneCulling, this.frustum)) return;
-
-                const parentZones = object.parent;
-                const sector = (parentZones && parentZones.parent && (parentZones.parent as any).isSectorObject)
-                    ? (parentZones.parent as SectorObject)
-                    : null;
-
-                (object as THREE.Object3D).traverseVisible(child => {
-                    if ((child as any).isUpdatable) {
-                        // LitActorMesh (and Terrain) need Sector + Env to update lighting
-                        // We check for 'computeLighting' as a heuristic for these objects
-                        if (sector && 'computeLighting' in child) {
-                            (child as any).update(sector, this.environment);
-                        } else {
-                            (child as any).update(currentTime);
-                        }
+        // Pass 2: Object & Material updates
+        this.scene.traverseVisible(child => {
+            if ((child as any).isUpdatable) {
+                // Find the nearest sector for objects that need lighting updates
+                let sector: SectorObject | null = null;
+                let parent = child.parent;
+                while (parent) {
+                    if ((parent as any).isSectorObject) {
+                        sector = parent as SectorObject;
+                        break;
                     }
+                    parent = parent.parent;
+                }
 
-                    if ((child as THREE.Mesh).isMesh)
-                        (((((child as THREE.Mesh).material as THREE.Material).isMaterial)
-                            ? [(child as THREE.Mesh).material]
-                            : (child as THREE.Mesh).material) as THREE.Material[])
-                            .forEach(mat => {
-                                if (mat && (mat as any).isUpdatable)
-                                    (mat as any).update(currentTime);
-                            });
-                });
+                if (sector && 'computeLighting' in child) {
+                    (child as any).update(sector, this.environment);
+                } else {
+                    (child as any).update(currentTime);
+                }
+            }
+
+            if ((child as THREE.Mesh).isMesh) {
+                const mat = (child as THREE.Mesh).material;
+                if (mat) {
+                    const materials = (mat as any).isMaterial ? [mat] : (mat as any);
+                    (materials as THREE.Material[]).forEach(m => {
+                        if (m && (m as any).isUpdatable) {
+                            (m as any).update(currentTime);
+                        }
+                    });
+                }
             }
         });
 

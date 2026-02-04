@@ -115,13 +115,14 @@ declare global {
                 export type Vector4Arr = [number, number, number, number];
                 export type Matrix4Arr = number[] & { length: 16 };
                 export type QuaternionArr = Vector4Arr;
-                export type ColorArr = Vector4Arr;
+                export type ColorArr = Vector3Arr | Vector4Arr;
                 export type Vector3Arr = [number, number, number];
                 export type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
                 export type EulerArr = [...Vector3Arr, EulerOrder];
                 export type ArrGeometryGroup = [number, number, number];
 
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
+                export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
                 export type LoadSettings_T = {
                     loadTerrain?: boolean,
@@ -132,6 +133,23 @@ declare global {
                     helpersZoneBounds?: boolean,
                     isSkyLevel?: boolean
                 };
+
+
+
+                export interface IDecodedParameter {
+                    uniforms: Record<string, any>,
+                    defines: Record<string, any>,
+                    isUsingMap: boolean,
+                    transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap",
+                    sprites?: any[],
+                    framerate?: number
+                }
+
+                export interface IDecodedSpriteParameter extends IDecodedParameter {
+                    isSprite: true,
+                    sprites: any[],
+                    framerate: number
+                }
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
 
@@ -375,13 +393,39 @@ declare global {
                 // Material and Geometry Types
                 export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
-                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
-                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
+                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner";
+                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier";
 
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
                     materialType: DecodableMaterial_T,
                     color?: boolean
+                }
+
+                export interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "sprite",
+                    sprites: ITextureDecodeInfo[],
+                    framerate: number
+                }
+
+                export interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "terrain";
+                    layers: { map: string, alphaMap: string }[]
+                }
+
+                export interface IMaterialTerrainSegmentDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "terrainSegment";
+                    terrainMaterial: string,
+                    uvs: ITextureDecodeInfo
+                }
+
+                export interface ISolidMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "solid",
+                    solidColor: number
+                }
+
+                export interface IDataTextureDecodeInfo extends ITextureDecodeInfo {
+                    format?: DataTextureFormats_T
                 }
 
                 export interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -423,7 +467,25 @@ declare global {
                 }
 
                 export interface IMaterialModifier {
-                    type: "Lighting"
+                    type: string
+                }
+
+                export interface IBaseLightingMaterialModifier extends IMaterialModifier {
+                    type: "Lighting",
+                    mode: "Ambient" | "Directional"
+                }
+
+                export interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
+                    mode: "Ambient",
+                    color: ColorArr,
+                    brightness: number
+                }
+
+                export interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
+                    mode: "Directional",
+                    color: ColorArr,
+                    brightness: number,
+                    direction: Vector3Arr
                 }
 
                 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
@@ -472,6 +534,7 @@ declare global {
                     buffer: ArrayBuffer,
                     wrapS?: number, wrapT?: number,
                     width: number, height: number,
+                    twoSided?: boolean
                 }
 
                 export interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -498,6 +561,9 @@ declare global {
                 export interface ISunLightDecodeInfo extends Omit<ILightDecodeInfo, "type"> {
                     type: "Sunlight"
                 }
+
+
+
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "shader",
@@ -534,6 +600,61 @@ declare global {
                         color2: number[],
                         period: number
                     }
+                }
+
+                export interface ITexRotatorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "rotateTexture",
+                    transform: {
+                        matrix: number[],
+                        map: string,
+                        type: "fixed" | "rotating" | "oscillating",
+                        rotation: EulerArr,
+                        offsetU: number,
+                        offsetV: number
+                    }
+                }
+
+                export interface ITexOscillatorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "oscillateTexture",
+                    transform: {
+                        matrix: number[],
+                        map: string,
+                        rateU: number,
+                        rateV: number,
+                        phaseU: number,
+                        phaseV: number,
+                        amplitudeU: number,
+                        amplitudeV: number,
+                        typeU: "pan" | "stretch" | "stretchRepeat" | "jitter",
+                        typeV: "pan" | "stretch" | "stretchRepeat" | "jitter",
+                        offsetU: number,
+                        offsetV: number
+                    }
+                }
+
+                export interface ITexEnvMapDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "envMapTexture",
+                    envMapType: "world" | "camera",
+                    map: string
+                }
+
+                export interface IColorModifierDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "colorModifier",
+                    material: string,
+                    modifierColor: ColorArr,
+                    doubleSide: boolean,
+                    alphaBlend: boolean
+                }
+
+                export interface ICombinerDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "combiner",
+                    combineMode: number, // TODO: enum
+                    material1: string,
+                    material2: string,
+                    mask: string,
+                    invertMask: boolean,
+                    alphaFrom1: boolean,
+                    alphaFrom2: boolean
                 }
 
                 export interface IBoundsDecodeInfo {

@@ -1,13 +1,13 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor, DoubleSide } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor } from "three";
 
-type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
+type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
-    parameters: IDecodedParameter,
+    parameters: GD.IDecodedParameter,
     uniforms: Record<string, Uniform>,
     defines: Record<string, any>
 }
@@ -26,6 +26,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         case "shOpacity": defName = "OPACITY"; break;
         case "shSpecular": defName = "SPECULAR"; break;
         case "shSpecularMask": defName = "SPECULAR_MASK"; break;
+        case "shMaterial2": defName = "MATERIAL2"; break;
     }
 
     defines[`USE_${defName}`] = "";
@@ -34,10 +35,10 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
     Object.assign(defines, parameters.defines);
 
     if (parameters.isUsingMap) {
-        if ((parameters as IDecodedSpriteParameter).isSprite) {
+        if ((parameters as GD.IDecodedSpriteParameter).isSprite) {
             sprites[name] = {
-                framerate: (parameters as IDecodedSpriteParameter).framerate,
-                sprites: (parameters as IDecodedSpriteParameter).sprites,
+                framerate: (parameters as GD.IDecodedSpriteParameter).framerate,
+                sprites: (parameters as GD.IDecodedSpriteParameter).sprites,
             } as SpriteParam_T;
         }
 
@@ -47,6 +48,8 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         if (parameters.transformType !== "none") {
             defines["PAN"] = 0;
             defines["ROTATE"] = 1;
+            defines["OSCILLATE"] = 2;
+            defines["ENVMAP"] = 3;
             defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
         }
     }
@@ -94,6 +97,7 @@ class MeshStaticMaterial extends ShaderMaterial {
                 shOpacity: new Uniform(null),
                 shSpecular: new Uniform(null),
                 shSpecularMask: new Uniform(null),
+                shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
                     color: new Color(1, 1, 1),
@@ -108,7 +112,7 @@ class MeshStaticMaterial extends ShaderMaterial {
             }
         ]));
 
-        function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
+        function apply(name: SupportedShaderParams_T, parameters: GD.IDecodedParameter) {
             if (!parameters) return;
 
             applyParameters({
@@ -129,6 +133,17 @@ class MeshStaticMaterial extends ShaderMaterial {
         if (info.blendingMode === "masked") {
             defines["USE_MASKING"] = "";
             defines["USE_ALPHATEST"] = "";
+        }
+
+        if (info.combiner) {
+            defines["USE_COMBINER"] = "";
+            apply("shMaterial2", info.combiner.material2);
+            uniforms["combiner"] = new Uniform({
+                combineMode: info.combiner.combineMode,
+                invertMask: info.combiner.invertMask,
+                alphaFrom1: info.combiner.alphaFrom1 ?? true,
+                alphaFrom2: info.combiner.alphaFrom2 ?? true
+            });
         }
 
         // defines["USE_DIRECTIONAL_AMBIENT"] = "";
@@ -215,7 +230,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         }
     }
 
-    public setLightmap(lightmap: MapData_T) {
+    public setLightmap(lightmap: GD.MapData_T) {
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -304,13 +319,21 @@ type IAmbientLighting = IBaseLighting;
 type IDirectionalAmbientLighting = IBaseLighting & { direction: THREE.Vector3 };
 
 type MeshStaticMaterialParameters = {
-    diffuse: IDecodedParameter,
-    opacity: IDecodedParameter,
-    specular: IDecodedParameter,
-    specularMask: IDecodedParameter,
+    diffuse: GD.IDecodedParameter,
+    opacity: GD.IDecodedParameter,
+    specular: GD.IDecodedParameter,
+    specularMask: GD.IDecodedParameter,
     side: THREE.Side,
-    blendingMode: SupportedBlendingTypes_T,
+    blendingMode: GA.SupportedBlendingTypes_T,
     transparent: boolean,
     depthWrite: boolean,
-    visible: boolean
+    visible: boolean,
+    combiner?: {
+        combineMode: number,
+        material1: GD.IDecodedParameter,
+        material2: GD.IDecodedParameter,
+        invertMask: boolean,
+        alphaFrom1: boolean,
+        alphaFrom2: boolean
+    }
 };
