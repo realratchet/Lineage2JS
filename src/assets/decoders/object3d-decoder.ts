@@ -167,7 +167,7 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
 
     const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient });
 
-    // if (info.name === "Exp_StaticMeshActor140")
+    // if (info.name === "StaticMeshActor140")
     //     debugger;
 
     // debugger;
@@ -282,7 +282,7 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
     const materials = decodeMaterial(library, materialInfo);
     const mesh = new Mesh(geometry, materials);
 
-    mesh.name = `BSPSection_${sectionInfo.priority}_${sectionInfo.uuid}`;
+    mesh.name = `BSPSection_${sectionInfo.sectionName}`;
     mesh.userData.sectionIndex = sectionIndex;
     mesh.userData.priority = sectionInfo.priority;
 

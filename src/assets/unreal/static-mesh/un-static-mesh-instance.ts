@@ -89,7 +89,7 @@ abstract class UStaticMeshInstance extends UObject {
 
         // // debugger;
 
-        // // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "Exp_oren_curumadungeon19")
+        // // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "oren_curumadungeon19")
         // //     console.warn("Mesh has lights:", this.sceneLights.length, "index:", this.actor.exportIndex+1);
 
         // // debugger;

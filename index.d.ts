@@ -364,6 +364,7 @@ declare global {
                 // NEW: BSP Section (material + lightmap combination)
                 export interface IBSPSectionDecodeInfo_T {
                     uuid: string,
+                    sectionName: string;
                     priority: "opaque" | "transparent",
                     material: string,  // material UUID
                     lightmap: string | null,  // lightmap UUID (null if no lightmap)

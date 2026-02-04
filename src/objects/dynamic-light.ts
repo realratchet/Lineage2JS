@@ -222,7 +222,7 @@ class DynamicLight extends Object3D {
     public update(envManager: L2Environment, levelBrightness: number) {
         const timeSeconds = envManager.getTimeSeconds();
 
-        // if (this.name === "Exp_Light104")
+        // if (this.name === "Light104")
         //     debugger;
 
         // Use preallocated vector for baseColor calculation

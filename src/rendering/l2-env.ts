@@ -135,6 +135,8 @@ class L2Environment {
     }
     public getEnvVersion() { return this.envVersion; }
 
+    public getEnv() { return this.env; }
+
     /** Get normalized time (0-1 range representing 0-24 hours) */
     public getNormalizedTime() { return this.getTimeOfDay() / 24; }
 

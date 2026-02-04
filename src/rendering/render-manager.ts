@@ -1130,7 +1130,7 @@ class RenderManager {
     public setGlobalSky(sector: SectorObject) {
         this.globalSkyLoaded = true;
         if (sector.celestials && sector.celestials.length > 0) {
-            this.skyRenderer.initFromSector(sector.celestials);
+            this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
 
             // Add GUI specific for Moons
             if (this.skyRenderer.moons.length > 0) {

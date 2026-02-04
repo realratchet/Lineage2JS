@@ -21,9 +21,14 @@ Object.assign(UObject, {
 Object.defineProperty(UObject.prototype, "uuid", {
     get() {
         if (this._uuid !== undefined) return this._uuid;
-        return this._uuid = generateUUID();
+
+        this._uuid = `${this.constructor.friendlyName}_${this.objectName}_${generateUUID()}`
+
+        return this._uuid;
     },
-    set(v: string) { this._uuid = v; },
+    set(v) {
+        debugger
+    },
     configurable: true,
     enumerable: true
 });

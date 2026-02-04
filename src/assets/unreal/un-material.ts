@@ -293,7 +293,7 @@ abstract class UColorModifier extends UBaseMaterial {
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.material.uuid;
 
-        library.materials[this.uuid] = null;
+        library.materials[this.uuid] = null; // TODO: implement
 
         this.material.loadSelf().getDecodeInfo(library);
 

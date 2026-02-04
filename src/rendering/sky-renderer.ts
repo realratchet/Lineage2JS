@@ -1,6 +1,8 @@
 import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, PlaneGeometry, Texture, Color, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, SphereGeometry, BackSide, BufferAttribute, BufferGeometry } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
+import { SectorObject } from "@client/objects/zone-object";
+import EnvInfo from "@client/rendering/env-info";
 
 // Constants from Analysis (CELESTIAL_POSITIONING_COMPLETE.md)
 const DEG2RAD = Math.PI / 180;
@@ -44,6 +46,9 @@ class Celestial extends Mesh {
 }
 
 export default class SkyRenderer {
+    private skyLevel: SectorObject;
+    private envInfo: EnvInfo;
+
     private celestialScene = new Scene();
     private sun: Celestial = new Celestial();
     private moon: Celestial = new Celestial();
@@ -75,8 +80,14 @@ export default class SkyRenderer {
         }
     }
 
-    public initFromSector(celestials: any[]) {
-        if (!celestials) return;
+    public initSkyLevel(envInfo: EnvInfo, skyLevel: SectorObject) {
+        this.envInfo = envInfo;
+        this.skyLevel = skyLevel;
+
+        if (!skyLevel || !skyLevel.celestials)
+            debugger;
+
+        const celestials = skyLevel.celestials;
 
         celestials.forEach(celestial => {
             if (celestial.type === "Sun") {
@@ -104,6 +115,21 @@ export default class SkyRenderer {
             this.activeMoonIndex = 0;
             this.updateActiveMoonMaterial();
         }
+
+        const { skybox, hazering, clouds } = envInfo.setup;
+
+        const bspSections = skyLevel.getObjectByName("BSP_Sections");
+        /**
+         * children:
+         *      BSPSection_Texture_WhiteChip_39e9a726-dc81-4a8d-bb2d-d176c50bb319/4194304/-1/true
+         *      BSPSection_Shader_HazeRing_1b48a962-7c86-4445-8dce-f260bd26717b/4194304/-1/true
+         *      BSPSection_Shader_HazeRing_1b48a962-7c86-4445-8dce-f260bd26717b/4194560/-1/true
+         *      BSPSection_Shader_Cloud_9e7343bf-b798-41f0-94ee-3925e63096a6/4194560/-1/true
+         *      BSPSection_Shader_StarField01_5a1f7043-8a6e-4fa3-9fd3-fb4f225444fd/4194560/-1/true
+         *      BSPSection_Shader_StarField02_e0dff78e-28ec-4801-af5a-cff72f98e1ee/4194560/-1/true
+         */
+
+        // debugger;
     }
 
     public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, hazeColor: ColorByte, hazeColors: ColorByte[], cloudColor: ColorByte, sector: any) {

@@ -313,13 +313,13 @@ abstract class UModel extends UPrimitive {
 
             const vert: FVert = this.vertices.getElem(node.iVertPool);
 
-            if (!this.isSky) {
-                const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+            // if (!this.isSky) {
+            //     const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
 
-                if (testX <= -327680.00 || testX >= 327680.00) continue;
-                if (testZ <= -262144.00 || testZ >= 262144.00) continue;
-                // if (testY <= -18000 || testY >= 18000) continue;
-            }
+            //     if (testX <= -327680.00 || testX >= 327680.00) continue;
+            //     if (testZ <= -262144.00 || testZ >= 262144.00) continue;
+            //     // if (testY <= -18000 || testY >= 18000) continue;
+            // }
 
             if (node.iCollisionBound >= 0) {
                 library.bspColliders.push(nodeInfo.collision.bounds);
@@ -473,7 +473,7 @@ abstract class UModel extends UPrimitive {
             // Create material (lightmapped or regular)
             let finalMaterialUuid: string;
             if (lightmap) {
-                finalMaterialUuid = generateUUID();
+                finalMaterialUuid = `${material}+LM_${generateUUID()}`;
                 library.materials[finalMaterialUuid] = {
                     materialType: "lightmapped",
                     material: material,
@@ -504,7 +504,8 @@ abstract class UModel extends UPrimitive {
                 lightmap: lightmap,
                 geometry: geometryUuid,
                 nodeIndices,
-                isOutdoor: sectionData.isOutdoor
+                isOutdoor: sectionData.isOutdoor,
+                sectionName: sectionKey
             };
 
             const sectionIndex = library.bspSections.length;
