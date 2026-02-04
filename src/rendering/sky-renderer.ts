@@ -117,16 +117,22 @@ export default class SkyRenderer {
         }
 
         const { skybox, hazering, clouds } = envInfo.setup;
+        // skybox: ColorModifier_SkybackgroundColor_{UUID}
+        // hazering: ColorModifier_HazeRing_Final_{UUID}
+        // clouds:
+        //      - ColorModifier_Cloud_Final_{UUID}
+        //      - ColorModifier_StarField_Final01_{UUID}
+        //      - ColorModifier_StarField_Final02_{UUID}
 
         const bspSections = skyLevel.getObjectByName("BSP_Sections");
         /**
          * children:
-         *      BSPSection_Texture_WhiteChip_39e9a726-dc81-4a8d-bb2d-d176c50bb319/4194304/-1/true
-         *      BSPSection_Shader_HazeRing_1b48a962-7c86-4445-8dce-f260bd26717b/4194304/-1/true
-         *      BSPSection_Shader_HazeRing_1b48a962-7c86-4445-8dce-f260bd26717b/4194560/-1/true
-         *      BSPSection_Shader_Cloud_9e7343bf-b798-41f0-94ee-3925e63096a6/4194560/-1/true
-         *      BSPSection_Shader_StarField01_5a1f7043-8a6e-4fa3-9fd3-fb4f225444fd/4194560/-1/true
-         *      BSPSection_Shader_StarField02_e0dff78e-28ec-4801-af5a-cff72f98e1ee/4194560/-1/true
+         *      BSPSection_ColorModifier_SkybackgroundColor_{UUID}/4194304/-1/true
+         *      BSPSection_ColorModifier_HazeRing_Final_{UUID}/4194304/-1/true
+         *      BSPSection_ColorModifier_HazeRing_Final_{UUID}/4194560/-1/true
+         *      BSPSection_ColorModifier_Cloud_Final_{UUID}1/4194560/-1/true
+         *      BSPSection_ColorModifier_StarField_Final01_{UUID}/4194560/-1/true
+         *      BSPSection_ColorModifier_StarField_Final02_{UUID}/4194560/-1/true
          */
 
         // debugger;
