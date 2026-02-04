@@ -52,6 +52,9 @@ export default class SkyRenderer {
     private celestialScene = new Scene();
     private sun: Celestial = new Celestial();
     private moon: Celestial = new Celestial();
+    private skybox: Mesh;
+    private hazering: Mesh;
+    private cloudLayers: Mesh[];
     private camera: PerspectiveCamera | null = null;
 
     private sunData: any = null;
@@ -59,6 +62,8 @@ export default class SkyRenderer {
     public moons: { data: any, texture: Texture | null }[] = [];
     public activeMoonIndex: number = 0;
     public moonMultiplier: number = 1.0;
+
+
 
     public constructor() {
         this.celestialScene.add(this.sun);
@@ -136,6 +141,12 @@ export default class SkyRenderer {
          */
 
         // debugger;
+
+        this.skybox = bspSections.children.find(o => o.name.includes(skybox)) as Mesh;
+        this.hazering = bspSections.children.find(o => o.name.includes(hazering)) as Mesh;
+        this.cloudLayers = clouds.map(c => bspSections.children.find(o => o.name.includes(c))) as Mesh[];
+
+        debugger;
     }
 
     public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, hazeColor: ColorByte, hazeColors: ColorByte[], cloudColor: ColorByte, sector: any) {

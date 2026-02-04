@@ -34,7 +34,7 @@ class EnvInfo {
     public readonly waterVolume: EnvWaterVolume;
 
     public constructor(setup: EnvSetup, fog: EnvFog, waterVolume: EnvWaterVolume) {
-        this.setup  = setup;
+        this.setup = setup;
         this.fog = fog;
         this.waterVolume = waterVolume;
     }
