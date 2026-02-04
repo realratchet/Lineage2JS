@@ -149,7 +149,7 @@ function _decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierD
         case "oscillateTexture": return decodeTexOscillatorModifer(library, info as GD.ITexOscillatorDecodeInfo);
         case "envMapTexture": return decodeTexEnvMapModifer(library, info as GD.ITexEnvMapDecodeInfo);
         case "colorModifier": return decodeColorModifier(library, info as GD.IColorModifierDecodeInfo);
-        default: throw new Error(`Unknown decodable type: ${info.materialType}`);
+        default: throw new Error(`Unknown modifier type: ${info.modifierType}`);
     }
 }
 
@@ -234,7 +234,7 @@ function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): Mes
 }
 
 function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
-    return new MeshBasicMaterial({ color: 0xff00ff }) as any;
+    return new MeshBasicMaterial({ color: 0xff0000 }) as any;
 }
 
 function decodeGroup(library: DecodeLibrary, info: GD.IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
@@ -319,6 +319,24 @@ function decodeSolidColor(library: DecodeLibrary, info: ISolidMaterialDecodeInfo
     });
 }
 
+function decodeEmptyMaterial(): MeshStaticMaterial {
+    const material = new MeshStaticMaterial({
+        diffuse: null,
+        opacity: null,
+        specular: null,
+        specularMask: null,
+        side: FrontSide,
+        blendingMode: "normal",
+        transparent: false,
+        depthWrite: true,
+        visible: true
+    });
+
+    material.uniforms.diffuse.value.setHex(0xa3a3a3);
+
+    return material;
+}
+
 function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     const baseMaterial = library.materials[info.material];
     const { blendingMode, opacity } = info;
@@ -364,8 +382,6 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
 }
 
 function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
-    // return new MeshBasicMaterial({ color: Math.floor(Math.random() * 0xffffff) })
-
     if (!info) return new MeshBasicMaterial({ color: 0xff00ff });
 
     switch (info.materialType) {
@@ -380,6 +396,7 @@ function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo
         case "solid": return decodeSolidColor(library, info as GD.ISolidMaterialDecodeInfo);
         case "particle": return decodeParticleMaterial(library, info as GD.IParticleMaterialDecodeInfo);
         case "combiner": return decodeCombiner(library, info as GD.ICombinerDecodeInfo);
+        case "empty": return decodeEmptyMaterial();
         default: throw new Error(`Unknown decodable type: ${info.materialType}`);
     }
 

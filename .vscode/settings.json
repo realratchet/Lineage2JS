@@ -94,6 +94,7 @@
         "**/.hg": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        ".vscode-chrome": true
+        ".vscode-chrome": true,
+        "bin/": true,
     }
 }

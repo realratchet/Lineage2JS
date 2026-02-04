@@ -144,7 +144,7 @@ abstract class UTexture extends UMaterial {
     protected decodeTexture(library: GD.DecodeLibrary) {
         const totalMipCount = this.mipmaps.length;
 
-        if (totalMipCount === 0) return null;
+        if (totalMipCount === 0) return { materialType: "empty" };
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
 

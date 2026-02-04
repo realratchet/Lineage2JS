@@ -393,7 +393,7 @@ declare global {
                 // Material and Geometry Types
                 export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
-                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner";
+                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
                 export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier";
 
                 export interface IBaseMaterialDecodeInfo {

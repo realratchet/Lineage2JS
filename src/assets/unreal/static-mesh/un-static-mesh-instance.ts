@@ -62,6 +62,7 @@ abstract class UStaticMeshInstance extends UObject {
             color[offset + 2] = b;
         }
 
+
         // let validEnvironment: FStaticMeshLightInfo = null;
         // let startIndex: number;
         // let finishIndex: number;

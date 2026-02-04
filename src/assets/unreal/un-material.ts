@@ -21,6 +21,7 @@ abstract class UBaseMaterial extends UObject {
     // protected isTreatingDoubleSided: boolean = false;
 
     declare protected material: UBaseMaterial;
+    declare protected defaultMaterial: UBaseMaterial;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -38,7 +39,8 @@ abstract class UBaseMaterial extends UObject {
             "ZTest": "depthTest",
             //         "TreatAsTwoSided": "isTreatingDoubleSided",
 
-            "Material": "material"
+            "Material": "material",
+            "DefaultMaterial": "defaultMaterial"
         });
     }
 }
@@ -595,14 +597,16 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
 
     public getDecodeInfo(library: DecodeLibrary): string {
 
-        if (this.uuid in library.materials) return this.material?.uuid || null;
+        if (this.uuid in library.materials) return this.material?.uuid ?? this.defaultMaterial?.uuid ?? null;
 
         library.materials[this.uuid] = null;
 
         if (this.material)
             this.material.loadSelf().getDecodeInfo(library);
+        else if (this.defaultMaterial)
+            this.defaultMaterial.loadSelf().getDecodeInfo(library);
 
-        return this.material?.uuid || null;
+        return this.material?.uuid ?? this.defaultMaterial?.uuid ?? null;
     }
 }
 
