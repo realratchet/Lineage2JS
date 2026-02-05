@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, PlaneGeometry, Texture, Color, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, SphereGeometry, BackSide, BufferAttribute, BufferGeometry } from "three";
+import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, Texture, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, PlaneGeometry, Group, AdditiveBlending } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 import { SectorObject } from "@client/objects/zone-object";
@@ -13,10 +13,9 @@ const PI = Math.PI;
 
 const MATERIAL_U_SIZE = 32; // Used for scaling instead of texture size
 const DEFAULT_CELESTIAL_RADIUS = 15000; // Calibrated for ~0.5 degree angular size
-const SKY_DOME_RADIUS = 20000;
-const CLOUD_LAYER_RADIUS = 18000;
 
 const TMP_VEC3 = new Vector3();
+const tmpColorByte = new ColorByte();
 
 
 class CelestialMaterial extends MeshBasicMaterial {
@@ -46,28 +45,35 @@ class Celestial extends Mesh {
 }
 
 export default class SkyRenderer {
-    private skyLevel: SectorObject;
     private envInfo: EnvInfo;
 
     private celestialScene = new Scene();
     private sun: Celestial = new Celestial();
     private moon: Celestial = new Celestial();
-    private skybox: Mesh;
-    private hazering: Mesh;
-    private cloudLayers: Mesh[];
     private camera: PerspectiveCamera | null = null;
 
     private sunData: any = null;
+    private skyLayerGroup: Group = new Group();
+
+    private skyLayers: {
+        skybox: Mesh[];
+        haze: Mesh[];
+        clouds: { mesh: Mesh, index: number }[];
+        stars: Mesh[];
+    } = { skybox: [], haze: [], clouds: [], stars: [] };
 
     public moons: { data: any, texture: Texture | null }[] = [];
     public activeMoonIndex: number = 0;
     public moonMultiplier: number = 1.0;
 
 
-
     public constructor() {
+        this.celestialScene.add(this.skyLayerGroup);
         this.celestialScene.add(this.sun);
         this.celestialScene.add(this.moon);
+
+        this.sun.renderOrder = -8;
+        this.moon.renderOrder = -7;
     }
 
     public setActiveMoon(index: number) {
@@ -87,10 +93,16 @@ export default class SkyRenderer {
 
     public initSkyLevel(envInfo: EnvInfo, skyLevel: SectorObject) {
         this.envInfo = envInfo;
-        this.skyLevel = skyLevel;
 
-        if (!skyLevel || !skyLevel.celestials)
-            debugger;
+        // Diagnostic: Find SkyZoneInfo to determine canonical origin
+        const skyZoneInfos: any[] = [];
+        skyLevel.traverse(obj => {
+            if (obj.constructor.name === "USkyZoneInfo" || (obj as any).isSkyZoneInfo) {
+                skyZoneInfos.push(obj);
+            }
+        });
+        console.log(`[SkyRenderer] Found ${skyZoneInfos.length} SkyZoneInfo actors in skylevel`);
+        skyZoneInfos.forEach(szi => console.log(`  > ${szi.name}: Position(${szi.position.toArray().map((v: number) => v.toFixed(2))})`));
 
         const celestials = skyLevel.celestials;
 
@@ -98,19 +110,11 @@ export default class SkyRenderer {
             if (celestial.type === "Sun") {
                 this.sunData = celestial.data;
                 if (celestial.sprite) {
-                    const tex = celestial.sprite;
-                    tex.needsUpdate = true;
-                    (this.sun.material as MeshBasicMaterial).map = tex;
+                    (this.sun.material as MeshBasicMaterial).map = celestial.sprite;
                     (this.sun.material as MeshBasicMaterial).needsUpdate = true;
                 }
             } else if (celestial.type === "Moon") {
-                const moonEntry: { data: any, texture: Texture | null } = { data: celestial.data, texture: null };
-                if (celestial.sprite) {
-                    const tex = celestial.sprite;
-                    tex.needsUpdate = true;
-                    moonEntry.texture = tex;
-                }
-                this.moons.push(moonEntry);
+                this.moons.push({ data: celestial.data, texture: celestial.sprite });
             }
         });
 
@@ -122,54 +126,191 @@ export default class SkyRenderer {
         }
 
         const { skybox, hazering, clouds } = envInfo.setup;
-        // skybox: ColorModifier_SkybackgroundColor_{UUID}
-        // hazering: ColorModifier_HazeRing_Final_{UUID}
-        // clouds:
-        //      - ColorModifier_Cloud_Final_{UUID}
-        //      - ColorModifier_StarField_Final01_{UUID}
-        //      - ColorModifier_StarField_Final02_{UUID}
-
         const bspSections = skyLevel.getObjectByName("BSP_Sections");
-        /**
-         * children:
-         *      BSPSection_ColorModifier_SkybackgroundColor_{UUID}/4194304/-1/true
-         *      BSPSection_ColorModifier_HazeRing_Final_{UUID}/4194304/-1/true
-         *      BSPSection_ColorModifier_HazeRing_Final_{UUID}/4194560/-1/true
-         *      BSPSection_ColorModifier_Cloud_Final_{UUID}1/4194560/-1/true
-         *      BSPSection_ColorModifier_StarField_Final01_{UUID}/4194560/-1/true
-         *      BSPSection_ColorModifier_StarField_Final02_{UUID}/4194560/-1/true
-         */
+        if (!bspSections) return;
 
-        // debugger;
+        let meshCount = 0;
+        const children = bspSections.children as Mesh[];
 
-        this.skybox = bspSections.children.find(o => o.name.includes(skybox)) as Mesh;
-        this.hazering = bspSections.children.find(o => o.name.includes(hazering)) as Mesh;
-        this.cloudLayers = clouds.map(c => bspSections.children.find(o => o.name.includes(c))) as Mesh[];
+        // 1. Determine a common origin for the sky assembly.
+        const skyOrigin = new Vector3();
+        const skyZoneInfo = skyZoneInfos[0];
 
-        debugger;
+        if (skyZoneInfo) {
+            // USkyZoneInfo position is the canonical origin for sky rendering.
+            // Use userData.skyOrigin if available (to avoid scene graph transform issues), otherwise fallback to position.
+            if (skyZoneInfo.userData && skyZoneInfo.userData.skyOrigin) {
+                skyOrigin.copy(skyZoneInfo.userData.skyOrigin);
+            } else {
+                skyOrigin.copy(skyZoneInfo.position);
+            }
+            console.log(`[SkyRenderer] Using USkyZoneInfo as canonical origin: ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
+        } else {
+            const skyboxPattern = envInfo.setup.skybox;
+            let skyboxMesh = skyboxPattern ? children.find(m => m.name.includes(skyboxPattern)) : null;
+
+            // Robust Fallback: If skybox is filtered out, use the first available sky component (e.g. Clouds) as anchor
+            if (!skyboxMesh && children.length > 0) skyboxMesh = children[0];
+
+            if (skyboxMesh) {
+                if (!skyboxMesh.geometry.boundingBox) skyboxMesh.geometry.computeBoundingBox();
+                skyboxMesh.geometry.boundingBox!.getCenter(skyOrigin);
+
+                // Offset the anchor down so the camera isn't dead-center in the sky assembly.
+                // This prevents flat cloud/star layers from slicing exactly through the eyes (Y=0).
+                skyOrigin.y -= 250;
+                console.warn(`[SkyRenderer] USkyZoneInfo NOT FOUND. Falling back to mesh center (${skyboxMesh.name}): ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
+            }
+        }
+
+        const processMesh = (mesh: Mesh, type: "skybox" | "haze" | "cloud" | "star", index: number = 0) => {
+            if (!mesh) return;
+
+            // 1. Material Setup
+            const material = mesh.material as any;
+            material.transparent = true;
+            material.depthWrite = false;
+            material.depthTest = false;
+            material.side = DoubleSide;
+            material.fog = false;
+            if (material.defines) delete material.defines.USE_FOG;
+            mesh.frustumCulled = false; // Always render sky components
+
+            // 2. Geometry Centering (Relative to Sky Origin)
+            // Translate geometry so it is centered on (0,0,0) local relative to the sky assembly
+            mesh.geometry.translate(-skyOrigin.x, -skyOrigin.y, -skyOrigin.z);
+            mesh.geometry.computeBoundingBox();
+
+            // 3. Sky Scene Attachment
+            // Add to skyLayerGroup so it follows the camera position (infinite sky effect)
+            this.skyLayerGroup.add(mesh);
+            mesh.position.set(0, 0, 0);
+            mesh.position.set(0, 0, 0);
+            mesh.rotation.set(0, 0, 0);
+            // mesh.scale.set(1, 1, 1);
+            mesh.scale.set(1, 1, 1);
+            mesh.updateMatrix();
+
+            // 4. Layer & Render Order Config
+            meshCount++;
+            if (type === "skybox") {
+                mesh.renderOrder = -10000 + meshCount;
+                this.skyLayers.skybox.push(mesh);
+            } else if (type === "haze") {
+                mesh.renderOrder = -8000 + meshCount;
+                material.blending = AdditiveBlending;
+                material.transparent = true;
+                material.depthWrite = false;
+                material.depthTest = false;
+                this.skyLayers.haze.push(mesh);
+                console.log(mesh.name, mesh.material.defines, mesh.material.uniforms)
+            } else if (type === "cloud") {
+                mesh.renderOrder = -7000 + (index * 100) + meshCount;
+                this.skyLayers.clouds.push({ mesh, index });
+            } else if (type === "star") {
+                mesh.renderOrder = -9000 + meshCount;
+                material.blending = CustomBlending;
+                material.blendSrc = OneFactor;
+                material.blendDst = OneFactor;
+                this.skyLayers.stars.push(mesh);
+            }
+
+            // 5. Debug Log
+            if (['skybox', 'haze', 'cloud', 'star'].includes(type) && (index === 0 || type === 'cloud')) {
+                // const box = mesh.geometry.boundingBox!;
+                // console.log(`[SkyRenderer] DEBUG ${type} (${mesh.name})`);
+                // console.log(`  > Translation Applied: ${skyOrigin.toArray().map(v => v.toFixed(2))}`);
+                // console.log(`  > Final GeoBox: Min(${box.min.toArray().map(v => v.toFixed(2))}) Max(${box.max.toArray().map(v => v.toFixed(2))})`);
+                // console.log(`  > Mat: Visible=${material.visible}, Opacity=${material.opacity}, DepthTest=${material.depthTest}`);
+                // console.log(`  > RenderOrder: ${mesh.renderOrder}, Parent: ${mesh.parent?.type}`);
+            }
+        };
+
+        // Use filter to capture all meshes for each layer (multiple BSP flags)
+        children.filter(o => skybox && o.name.includes(skybox)).forEach(m => processMesh(m, "skybox"));
+        children.filter(o => hazering && o.name.includes(hazering)).forEach(m => processMesh(m, "haze"));
+
+        clouds.forEach((pattern, i) => {
+            if (pattern) {
+                children.filter(o => o.name.includes(pattern)).forEach(m => processMesh(m, "cloud", i));
+            }
+        });
+
+        // Also add stars if found
+        children.filter(o => o.name.includes("StarField")).forEach(s => processMesh(s, "star"));
     }
 
-    public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, hazeColor: ColorByte, hazeColors: ColorByte[], cloudColor: ColorByte, sector: any) {
+    public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColor: ColorByte, _sector: any) {
         this.camera = camera;
         const timeOfDay = env.getTimeOfDay();
+
+        this.skyLayerGroup.position.copy(camera.position);
 
         // Update Celestials
         this.updateSun(timeOfDay, camera, env);
         this.updateMoon(timeOfDay, camera, env);
+        this.updateSkyLayers(env, skyColor, _hazeColor, hazeColors, cloudColor);
     }
 
+    private updateSkyLayers(env: L2Environment, skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], _cloudColor: ColorByte) {
+        if (!this.envInfo) return;
+
+        function updateMaterialProperties(material: any, colorByte: ColorByte) {
+            const r = colorByte.r / 255;
+            const g = colorByte.g / 255;
+            const b = colorByte.b / 255;
+            const a = colorByte.a / 255;
+
+            const isStatic = !!(material.isStaticMeshMaterial || material.uniforms?.shDiffuse);
+
+            if (isStatic) {
+                material.uniforms.diffuse.value.setRGB(r, g, b);
+                material.uniforms.opacity.value = a;
+            } else if (material.color) {
+                // console.log(`[SkyRenderer] Applying Standard Material Color: ${r.toFixed(2)},${g.toFixed(2)},${b.toFixed(2)} to ${material.uuid}`);
+                material.color.setRGB(r, g, b);
+                material.opacity = a;
+            }
+        }
+
+        // Skybox
+        this.skyLayers.skybox.forEach(mesh => {
+            updateMaterialProperties(mesh.material as any, skyColor);
+        });
+
+        // Haze
+        const targetHazeColor = (hazeColors && hazeColors.length > 0) ? hazeColors[0] : _hazeColor;
+        this.skyLayers.haze.forEach((mesh) => {
+            updateMaterialProperties(mesh.material as any, targetHazeColor);
+        });
+
+        // Clouds
+        this.skyLayers.clouds.forEach(({ mesh, index }) => {
+            // RenderManager calculates a single blended cloud color (cloudColor)
+            // But Env has separate colors for cloud1, cloud2, cloud3.
+            // For now, let's trust Env for individual layer colors if we aren't blending?
+            // Actually, if RenderManager blends them, maybe we should use cloudColor? 
+            // But cloudColor is 1 value, and we have 3 layers. 
+            // Let's stick to env.getCloudColor(index) for now as it supports multiple layers,
+            // unless we confirm cloudColor is intended to override all.
+            // The issue reported was about HAZERING, so I will stick to fixing haze.
+            env.getCloudColor(index, tmpColorByte);
+            updateMaterialProperties(mesh.material as any, tmpColorByte);
+        });
+
+        // Stars
+        this.skyLayers.stars.forEach((mesh) => {
+            env.getStarColor(tmpColorByte);
+            updateMaterialProperties(mesh.material as any, tmpColorByte);
+        });
+    }
 
     private getCelestialPositioningAngles(timeOfDay: number, celestialType: "sun" | "moon"): [number, number] {
         const longitude = PI;
         let latitude: number;
         if (celestialType === "sun") {
-            // Unified sun position logic (confirmed by trace visibility at 00:20AM)
-            // Sun moves 10 degrees/hour. 06:00 = -90 (Horizon), 15:00 = 0 (Zenith), 24:00 = 90 (Horizon Set).
-            // Night (00:00 - 06:00) continues 90 -> 150.
             const t = (timeOfDay < 6.0) ? (timeOfDay + 24.0) : timeOfDay;
             latitude = (t - 6.0) * (10 * DEG2RAD) - HALF_PI;
-            // No strict cut-off; sun renders below horizon at night (faintly via EnvColor)
-            if (t > 30.0) latitude = NEG_PI; // Safety cap if needed, though t is max 24+6=30.
         } else {
             if (timeOfDay < 7.0 || timeOfDay >= 23.0) {
                 let moonTime = timeOfDay >= 23.0 ? timeOfDay - 24.0 : timeOfDay;
@@ -189,7 +330,6 @@ export default class SkyRenderer {
 
     private calculateCelestialScale(celestialType: "sun" | "moon", baseScale: number, actorDrawScale: number, env: L2Environment): number {
         const envScale = celestialType === "sun" ? env.getSunScale() : env.getMoonScale();
-        // multiplier: 8.0x for sun is confirmed in ANSun::Tick (0x86902c: v37 = v17 * 8.0)
         const multiplier = celestialType === "sun" ? 8.0 : this.moonMultiplier;
         return (envScale * baseScale * multiplier * actorDrawScale * MATERIAL_U_SIZE);
     }
@@ -205,9 +345,6 @@ export default class SkyRenderer {
             this.sun.scale.setScalar(scale);
             this.sun.lookAt(camera.position);
 
-            // Color Tinging (Dimming)
-            // Intensity of 4.0 belongs to the Bloom Pass (Post-Processing), not the Sprite itself.
-            // The sprite should use the natural environment color.
             env.getSunColor(tmpColorByte);
             (this.sun.material as MeshBasicMaterial).color.setRGB(
                 tmpColorByte.r / 255,
@@ -230,15 +367,14 @@ export default class SkyRenderer {
             this.moon.scale.setScalar(scale);
             this.moon.lookAt(camera.position);
 
-            // Color Tinging (Dimming)
             (this.moon.material as MeshBasicMaterial).color.setHex(0xffffff);
             (this.moon.material as MeshBasicMaterial).opacity = 1.0;
         } else this.moon.visible = false;
     }
 
     public render(renderer: WebGLRenderer) {
-        if (this.camera) renderer.render(this.celestialScene, this.camera);
+        if (!this.camera) return;
+
+        renderer.render(this.celestialScene, this.camera);
     }
 }
-
-const tmpColorByte = new ColorByte();

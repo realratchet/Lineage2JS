@@ -26,6 +26,7 @@ class DecodeLibrary {
     public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
+    public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public readonly skyLevel: {
         skybox: string;
         hazering: string;
@@ -115,6 +116,15 @@ class DecodeLibrary {
                     }
                 });
             }
+
+            const skyZoneTypes = ["SkyZoneInfo"];
+            const uSkyZones = skyZoneTypes.map(t => expGroups[t] ?? []).flat();
+            uSkyZones.forEach(exp => {
+                const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                if (uActor.getDecodeInfo) {
+                    decodeLibrary.skyZoneInfos.push(uActor.getDecodeInfo(decodeLibrary));
+                }
+            });
         }
 
         {

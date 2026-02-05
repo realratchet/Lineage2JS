@@ -182,6 +182,9 @@ declare global {
                     | "Emitter"
                     | "SpriteEmitter"
                     | "MeshEmitter"
+                    | "Zone"
+                    | "Sky"
+                    | "SkyZoneInfo"
                     | "L2FogInfo";
 
                 export interface IBaseObjectOrInstanceDecodeInfo {
@@ -387,7 +390,9 @@ declare global {
                     material: string,  // material UUID
                     lightmap: string | null,  // lightmap UUID (null if no lightmap)
                     geometry: string,  // geometry UUID
-                    nodeIndices: number[]  // nodes in this section
+                    nodeIndices: number[],  // nodes in this section
+                    isUnlit?: boolean,
+                    isOutdoor?: boolean
                 }
 
                 // Material and Geometry Types
@@ -452,8 +457,8 @@ declare global {
                     attributes: {
                         positions?: Float32Array;
                         normals?: Float32Array;
-                        colors?: Float32Array | Uint8Array,
-                        colorsInstance?: Float32Array | Uint8Array,
+                        colors?: Float32Array | Uint8Array | Uint8ClampedArray,
+                        colorsInstance?: Float32Array | Uint8Array | Uint8ClampedArray,
                         uvs?: Float32Array | Float32Array[];
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array;

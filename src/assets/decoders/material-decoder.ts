@@ -1,13 +1,13 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector3, Vector4 } from "three";
+import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, Vector4 } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
 import DecodeLibrary from "../unreal/decode-library";
 import ParticleMaterial from "@client/materials/particle-material";
 
-const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, MapData_T>();
+const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
 
-function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): MapData_T {
+function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.MapData_T {
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
@@ -40,8 +40,13 @@ function decodeFadeColorModifier(library: DecodeLibrary, info: GD.IFadeColorDeco
     };
 }
 
-function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecodeInfo): GD.IDecodedParameter {
-    const isUsingMap = info.transform.map !== null;
+function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
+    const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
+    const isUsingMap = materialIndex !== null;
+
+    if (isUsingMap && !library.materials[materialIndex!!]) {
+        console.warn(`[MaterialDecoder] PanTexture map not found in library: ${materialIndex}`);
+    }
 
     return {
         isUsingMap,
@@ -50,18 +55,20 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
             USE_DIFFUSE: "",
             USE_GLOBAL_TIME: ""
         },
-        uniforms: Object.assign({
-            map: isUsingMap ? fetchTexture(library, library.materials[info.transform.map] as GD.ITextureDecodeInfo) : null,
+        uniforms: {
+            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
-                rate: info.transform.rate,
+                rate: Array.isArray(info.transform.rate) ? new Vector2().fromArray(info.transform.rate) : info.transform.rate,
+                map: materialIndex
             }
-        })
+        }
     };
 }
 
-function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDecodeInfo): GD.IDecodedParameter {
-    const isUsingMap = info.transform.map !== null;
+function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
+    const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
+    const isUsingMap = materialIndex !== null;
 
     return {
         isUsingMap,
@@ -71,7 +78,7 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
             USE_GLOBAL_TIME: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[info.transform.map] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rotation: [info.transform.rotation[0], info.transform.rotation[1], info.transform.rotation[2]],
@@ -83,8 +90,9 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
     };
 }
 
-function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscillatorDecodeInfo): GD.IDecodedParameter {
-    const isUsingMap = info.transform.map !== null;
+function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscillatorDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
+    const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
+    const isUsingMap = materialIndex !== null;
 
     return {
         isUsingMap,
@@ -94,7 +102,7 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
             USE_GLOBAL_TIME: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[info.transform.map] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rateU: info.transform.rateU,
@@ -129,9 +137,25 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
     };
 }
 
-function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDecodeInfo): GD.IDecodedParameter {
-    const parameter = decodeParameter(library, library.materials[info.material]);
-    const [r, g, b, a] = info.modifierColor;
+function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
+    const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.material;
+    const parameter = decodeParameter(library, library.materials[materialIndex]);
+    let [r, g, b, a] = info.modifierColor;
+
+    // Normalize if values are in 0-255 range
+    if (r > 1 || g > 1 || b > 1 || a > 1) {
+        r /= 255; g /= 255; b /= 255; a /= 255;
+    }
+
+    // Fix potential zero alpha issue if color is valid
+    if (a === 0 && (r > 0 || g > 0 || b > 0)) {
+        a = 1.0;
+    }
+
+    // Fallback: If completely zero, assume default white/opaque (fixes invisible sky)
+    if (r === 0 && g === 0 && b === 0 && a === 0) {
+        r = 1.0; g = 1.0; b = 1.0; a = 1.0;
+    }
 
     if (parameter) {
         parameter.uniforms.modifierColor = new Vector4(r, g, b, a);
@@ -141,26 +165,34 @@ function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDeco
     return parameter;
 }
 
-function _decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDecodeInfo): GD.IDecodedParameter {
+function _decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
+    let param: GD.IDecodedParameter;
     switch (info.modifierType) {
-        case "fadeColor": return decodeFadeColorModifier(library, info as GD.IFadeColorDecodeInfo);
-        case "panTexture": return decodeTexPannerModifer(library, info as GD.ITexPannerDecodeInfo);
-        case "rotateTexture": return decodeTexRotatorModifer(library, info as GD.ITexRotatorDecodeInfo);
-        case "oscillateTexture": return decodeTexOscillatorModifer(library, info as GD.ITexOscillatorDecodeInfo);
-        case "envMapTexture": return decodeTexEnvMapModifer(library, info as GD.ITexEnvMapDecodeInfo);
-        case "colorModifier": return decodeColorModifier(library, info as GD.IColorModifierDecodeInfo);
+        case "fadeColor": param = decodeFadeColorModifier(library, info as GD.IFadeColorDecodeInfo); break;
+        case "panTexture": param = decodeTexPannerModifer(library, info as GD.ITexPannerDecodeInfo, overrideMaterial); break;
+        case "rotateTexture": param = decodeTexRotatorModifer(library, info as GD.ITexRotatorDecodeInfo, overrideMaterial); break;
+        case "oscillateTexture": param = decodeTexOscillatorModifer(library, info as GD.ITexOscillatorDecodeInfo, overrideMaterial); break;
+        case "envMapTexture": param = decodeTexEnvMapModifer(library, info as GD.ITexEnvMapDecodeInfo); break;
+        case "colorModifier": param = decodeColorModifier(library, info as GD.IColorModifierDecodeInfo, overrideMaterial); break;
         default: throw new Error(`Unknown modifier type: ${info.modifierType}`);
     }
+
+    if (param && param.uniforms && param.uniforms.map) {
+        param.isUsingMap = true;
+    }
+    return param;
 }
 
 function decodeParameter(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): GD.IDecodedParameter {
     if (!info) return null;
 
+    let param: GD.IDecodedParameter;
+
     switch (info.materialType) {
         case "sprite":
             const decodedSprites = (info as GD.IAnimatedSpriteDecodeInfo).sprites.map(info => fetchTexture(library, info));
 
-            return {
+            param = {
                 uniforms: { map: decodedSprites[0] },
                 sprites: decodedSprites,
                 framerate: (info as GD.IAnimatedSpriteDecodeInfo).framerate,
@@ -169,15 +201,25 @@ function decodeParameter(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInf
                 isSprite: true,
                 transformType: "none"
             } as GD.IDecodedSpriteParameter;
-        case "modifier": return _decodeModifier(library, info as GD.IBaseMaterialModifierDecodeInfo);
-        case "texture": return {
+            break;
+        case "modifier": param = _decodeModifier(library, info as GD.IBaseMaterialModifierDecodeInfo); break;
+        case "texture": param = {
             uniforms: { map: fetchTexture(library, info as GD.ITextureDecodeInfo) },
             defines: {},
             isUsingMap: true,
             transformType: "none"
-        }
+        }; break;
+        case "shader":
+            // Shaders nested in modifiers (like ColorModifier) should return the diffuse parameter
+            param = decodeParameter(library, library.materials[(info as GD.IShaderDecodeInfo).diffuse]); break;
         default: throw new Error(`Unsupported decoder parameter: ${info.materialType}`);
     }
+
+    if (param && param.uniforms && param.uniforms.map) {
+        param.isUsingMap = true;
+    }
+
+    return param;
 }
 
 function decodeCombiner(library: DecodeLibrary, info: GD.ICombinerDecodeInfo): MeshStaticMaterial {
@@ -234,7 +276,32 @@ function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): Mes
 }
 
 function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDecodeInfo): MeshStaticMaterial {
-    return new MeshBasicMaterial({ color: 0xff0000 }) as any;
+    let materialIndex: string = null;
+
+    if (info.modifierType === "colorModifier") materialIndex = (info as GD.IColorModifierDecodeInfo).material;
+    else if (info.modifierType === "envMapTexture") materialIndex = (info as GD.ITexEnvMapDecodeInfo).map;
+    else if (info.modifierType === "panTexture") materialIndex = (info as GD.ITexPannerDecodeInfo).transform.map;
+    else if (info.modifierType === "rotateTexture") materialIndex = (info as GD.ITexRotatorDecodeInfo).transform.map;
+    else if (info.modifierType === "oscillateTexture") materialIndex = (info as GD.ITexOscillatorDecodeInfo).transform.map;
+
+    const baseMaterial = library.materials[materialIndex] as GD.IBaseMaterialDecodeInfo;
+    const isShader = baseMaterial?.materialType === "shader";
+    const shader = baseMaterial as GD.IShaderDecodeInfo;
+
+    const isColorMod = info.modifierType === "colorModifier";
+    const colorMod = info as GD.IColorModifierDecodeInfo;
+
+    return new MeshStaticMaterial({
+        diffuse: _decodeModifier(library, info, isShader ? shader.diffuse : materialIndex),
+        opacity: isShader ? _decodeModifier(library, info, shader.opacity) : ((isColorMod && colorMod.alphaBlend) ? _decodeModifier(library, info, materialIndex) : null),
+        specular: isShader ? _decodeModifier(library, info, shader.specular) : null,
+        specularMask: isShader ? _decodeModifier(library, info, shader.specularMask) : null,
+        side: (isColorMod && colorMod.doubleSide) ? DoubleSide : ((info as GD.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide),
+        blendingMode: (isColorMod && colorMod.alphaBlend) ? "translucent" : (isShader ? shader.blendingMode : "normal"),
+        transparent: isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false),
+        depthWrite: isShader ? shader.depthWrite : true,
+        visible: isShader ? shader.visible : true
+    });
 }
 
 function decodeGroup(library: DecodeLibrary, info: GD.IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
@@ -267,21 +334,21 @@ function decodeTerrainSegment(library: DecodeLibrary, info: GD.IMaterialTerrainS
 //     });
 // }
 
-function decodeLightmapped(library: DecodeLibrary, info: ILightmappedDecodeInfo) {
+function decodeLightmapped(library: DecodeLibrary, info: GD.ILightmappedDecodeInfo) {
     return (decodeMaterial(library, library.materials[info["material"]]) as MeshStaticMaterial)
         .setLightmap(fetchTexture(library, library.materials[info["lightmap"]] as GD.ITextureDecodeInfo));
 }
 
 function applyModAmbient(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: GD.ILightAmbientMaterialModifier) {
     material.enableAmbient({
-        color: new Color().fromArray(color),
+        vector: new Color().fromArray(color),
         brightness
     });
 }
 
 function applyModDirectional(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness, direction }: GD.ILightDirectionalMaterialModifier) {
     material.enableDirectionalAmbient({
-        color: new Color().fromArray(color),
+        vector: new Color().fromArray(color),
         direction: new Vector3().fromArray(direction),
         brightness
     });
@@ -313,7 +380,7 @@ function decodeInstancedMaterial(library: DecodeLibrary, info: GD.IMaterialInsta
     return materials;
 }
 
-function decodeSolidColor(library: DecodeLibrary, info: ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
+function decodeSolidColor(library: DecodeLibrary, info: GD.ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
     return new MeshBasicMaterial({
         color: info["solidColor"]
     });
@@ -337,11 +404,11 @@ function decodeEmptyMaterial(): MeshStaticMaterial {
     return material;
 }
 
-function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     const baseMaterial = library.materials[info.material];
     const { blendingMode, opacity } = info;
 
-    function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): any {
+    function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): any {
         return {
             name: info.name,
             type: "texture",
@@ -351,7 +418,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
         };
     }
 
-    function decodeSprite(library: DecodeLibrary, info: IAnimatedSpriteDecodeInfo): any {
+    function decodeSprite(library: DecodeLibrary, info: GD.IAnimatedSpriteDecodeInfo): any {
         return {
             name: info.name,
             type: "sprite",
@@ -362,7 +429,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
         };
     }
 
-    function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+    function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
         switch (info.materialType) {
             case "texture": return decodeTexture(library, info as GD.ITextureDecodeInfo);
             case "sprite": return decodeSprite(library, info as GD.IAnimatedSpriteDecodeInfo);
@@ -370,7 +437,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
         }
     }
 
-    function decodeGroup(library: DecodeLibrary, info: IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
+    function decodeGroup(library: DecodeLibrary, info: GD.IMaterialGroupDecodeInfo): MeshStaticMaterial[] {
         return info.materials.map(info => decodeMaterial(library, library.materials[info]) as MeshStaticMaterial);
     }
 

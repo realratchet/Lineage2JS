@@ -256,10 +256,23 @@ function decodeZoneObject(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInf
     const object = new ZoneObject();
 
     if (info.name) object.name = info.name;
+    if (info.name) object.name = info.name;
     if (info.bounds?.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
     if (info.isFogZone) object.isFogZone = true;
     if (info.isSunAffected) object.isSunAffected = true;
+    if (info.type === "Sky") {
+        (object as any).type = "Sky";
+        (object as any).isSkyZoneInfo = true;
+
+        // Store the original position for SkyRenderer, but DON'T apply it to the object
+        // to avoid double-transforming children (which are already in world space).
+        if (info.position) {
+            object.userData.skyOrigin = new Vector3().fromArray(info.position);
+        } else if ((info as any).location) {
+            object.userData.skyOrigin = new Vector3().fromArray((info as any).location);
+        }
+    }
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
     // object.visible = false;
@@ -280,6 +293,15 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
     }
 
     const materials = decodeMaterial(library, materialInfo);
+
+    if (sectionInfo.isUnlit) {
+        if (Array.isArray(materials)) {
+            materials.forEach(m => (m as any).setUnlit?.());
+        } else {
+            (materials as any).setUnlit?.();
+        }
+    }
+
     const mesh = new Mesh(geometry, materials);
 
     mesh.name = `BSPSection_${sectionInfo.sectionName}`;
@@ -333,6 +355,7 @@ function decodeSector(library: GD.DecodeLibrary) {
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
+    library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
 
     // NEW: Render BSP sections (UE2-style section-based rendering)
     if (library.bspSections && library.bspSections.length > 0) {
@@ -429,7 +452,6 @@ function decodeSector(library: GD.DecodeLibrary) {
                     ? celestialInfo.sprites[0]
                     : celestialInfo.sprites[0].uuid || celestialInfo.sprites[0].material;
 
-                console.log(`[Celestials] Sprite UUID: ${spriteUuid}, exists in materials: ${!!library.materials[spriteUuid]}`);
                 let spriteTextureInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
                 let texture = null;
 
@@ -437,16 +459,14 @@ function decodeSector(library: GD.DecodeLibrary) {
                 if (spriteTextureInfo && spriteTextureInfo.materialType === "shader") {
                     const shaderInfo = spriteTextureInfo as GD.IShaderDecodeInfo;
                     if (shaderInfo.diffuse && library.materials[shaderInfo.diffuse]) {
-                        console.log(`[Celestials] Resolving shader diffuse texture: ${shaderInfo.diffuse}`);
                         spriteTextureInfo = library.materials[shaderInfo.diffuse] as GD.ITextureDecodeInfo;
                     }
                 }
 
                 if (spriteTextureInfo) {
-                    const mapData = decodeTexture(library, spriteTextureInfo);
+                    const mapData = decodeTexture(library, spriteTextureInfo as GD.ITextureDecodeInfo);
                     // decodeTexture returns { texture, size } not { map }
                     texture = (mapData as any)?.texture || null;
-                    console.log(`[Celestials] Decoded texture: ${!!texture}`);
                 }
 
                 sector.celestials.push({
@@ -781,6 +801,9 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "SpriteEmitter": return decodeSpriteEmitter(library, info as GD.ISpriteEmitterDecodeInfo);
         case "MeshEmitter": return decodeMeshEmitter(library, info as GD.IMeshEmitterDecodeInfo);
         case "L2FogInfo": return decodeFogInfo(library, info as GD.IBaseZoneDecodeInfo);
+        case "Zone":
+        case "Sky":
+        case "SkyZoneInfo": return decodeZoneObject(library, info as any);
         default: throw new Error(`Unsupported object type: ${info.type}`);
     }
 }

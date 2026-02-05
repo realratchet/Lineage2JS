@@ -96,7 +96,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
             name: this.objectName,
             bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
             children: [],
-            location: this.location ? [this.location.x, this.location.z, this.location.y] : [0, 0, 0],
+            position: this.location ? [this.location.x, this.location.z, this.location.y] : [0, 0, 0],
             isFogZone: this.isFogZone,
             isSunAffected: this.isSunAffected,
             fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {

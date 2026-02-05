@@ -36,7 +36,7 @@ uniform float opacity;
             struct TransformDiffuseData {
                 mat3 matrix;
                 #if USE_MAP_DIFFUSE_TRANSFORM == PAN
-                    float rate;
+                    vec2 rate;
                 #elif USE_MAP_DIFFUSE_TRANSFORM == ROTATE
                     vec3 rotation;
                     float offsetU;
@@ -90,7 +90,7 @@ uniform float opacity;
             struct TransformOpacityData {
                 mat3 matrix;
                 #if USE_MAP_OPACITY_TRANSFORM == PAN
-                    float rate;
+                    vec2 rate;
                 #elif USE_MAP_OPACITY_TRANSFORM == ROTATE
                     vec3 rotation;
                     float offsetU;
@@ -152,7 +152,7 @@ uniform float opacity;
             struct TransformSpecularData {
                 mat3 matrix;
                 #if USE_MAP_SPECULAR_TRANSFORM == PAN
-                    float rate;
+                    vec2 rate;
                 #elif USE_MAP_SPECULAR_TRANSFORM == ROTATE
                     vec3 rotation;
                     float offsetU;
@@ -211,7 +211,7 @@ uniform float opacity;
             struct TransformSpecularMaskData {
                 mat3 matrix;
                 #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
-                    float rate;
+                    vec2 rate;
                 #elif USE_MAP_SPECULAR_MASK_TRANSFORM == ROTATE
                     vec3 rotation;
                     float offsetU;
@@ -518,6 +518,10 @@ void main() {
                 vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
                 specularColor = texelSpecular.rgb;
             #endif
+        #endif
+
+        #ifdef USE_COLOR_MODIFIER
+            specularColor.rgb *= shSpecular.modifierColor.rgb;
         #endif
 
         

@@ -189,24 +189,52 @@ class L2Environment {
     }
 
     public getSunColor(target: ColorByte): ColorByte {
-        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sun, target);
+        const colors = this.getEnvColor().color.sun;
+        if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
+        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
     }
 
     public getSkyColor(target: ColorByte): ColorByte {
-        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.sky, target);
+        const colors = this.getEnvColor().color.sky;
+        if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
+        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
     }
 
     /** never used in the game as far as i can tell, instructions never called, would make the moon red */
     public getMoonColor(target: ColorByte): ColorByte {
-        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.moon, target);
+        const colors = this.getEnvColor().color.moon;
+        if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
+        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
     }
 
     public getHazeColor(target: ColorByte): ColorByte {
-        return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().color.haze, target);
+        const colors = this.getEnvColor().color.haze;
+        if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
+        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
     }
 
     public getTerrainLightColor(target: ColorByte): ColorByte {
         return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().light.terrain, target);
+    }
+
+
+    public getStarColor(target: ColorByte): ColorByte {
+        const starColors = this.getEnvColor().color.star;
+        if (!starColors || starColors.length === 0) return target.set(0, 0, 0, 0);
+        return getColorFromTimeColor(this.getTimeOfDay(), starColors, target);
+    }
+
+    public getCloudColor(index: number, target: ColorByte): ColorByte {
+        let cloudColors: any[];
+        switch (index) {
+            case 0: cloudColors = this.getEnvColor().color.cloud1; break;
+            case 1: cloudColors = this.getEnvColor().color.cloud2; break;
+            case 2: cloudColors = this.getEnvColor().color.cloud3; break;
+            default: return target.set(0, 0, 0, 0);
+        }
+
+        if (!cloudColors || cloudColors.length === 0) return target.set(0, 0, 0, 0);
+        return getColorFromTimeColor(this.getTimeOfDay(), cloudColors, target);
     }
 
 
@@ -246,7 +274,7 @@ class L2Environment {
 
 function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: T[]): [T, T, number] {
     const nElements = array.length;
-    if (nElements === 0) throw new Error("Empty array"); // Should ideally not happen
+    if (nElements === 0) return [null as any, null as any, 0];
     if (nElements === 1) return [array[0], array[0], 0];
 
     const nElementsMinusOne = nElements - 1;
@@ -291,14 +319,16 @@ function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: 
 
 function getBrightness(timeOfDay: number, array: TimeHSV[]) {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
+    if (!hsvCurr) return 1.0;
 
     return lFrac * (hsvNext.value - hsvCurr.value) + hsvCurr.value;
 }
 
 function getScaleValue(timeOfDay: number, array: TimeScale[]): number {
-    if (!array || array.length === 0) return 1.0; // Default scale
+    if (!array || array.length === 0) return 1.0;
 
     const [curr, next, lFrac] = pickArrayIndices(timeOfDay, array);
+    if (!curr) return 1.0;
     return curr.scale + (next.scale - curr.scale) * lFrac;
 }
 
@@ -309,6 +339,7 @@ function getScaleValue(timeOfDay: number, array: TimeScale[]): number {
 
 function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte): ColorByte {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
+    if (!hsvCurr) return target.set(255, 255, 255, 255);
 
     // Calculate interpolated Value (Brightness) first
     const v = hsvCurr.value + (hsvNext.value - hsvCurr.value) * lFrac;
@@ -323,6 +354,7 @@ function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorB
 
 function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: ColorByte): ColorByte {
     const [cCurr, cNext, lFrac] = pickArrayIndices(timeOfDay, array);
+    if (!cCurr) return target.set(255, 255, 255, 255);
 
     const vCurr = tmpColorByte.set(cCurr.r, cCurr.g, cCurr.b, 255);
     const vNext = tmpColorByte_2.set(cNext.r, cNext.g, cNext.b, 255);

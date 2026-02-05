@@ -176,6 +176,7 @@ abstract class UStaticMeshActor extends UAActor {
         const ambientProps = {
             glow: ambActor.ambientGlow,
             color: ambVector.toArray(),
+            vector: Array.from(ambVector.toArray()),
             isUnlit: this.isUnlit
         };
 

@@ -543,15 +543,19 @@ abstract class UTexPanner extends UBaseModifier {
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
+        const D = this.direction.toVector();
+        const rateU = (this.rate * D.x) / 1024.0;
+        const rateV = (this.rate * D.y) / 1024.0;
+
         library.materials[this.uuid] = {
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {
                 matrix: this.matrix.getElements3x3(),
                 map: this.material?.loadSelf().getDecodeInfo(library) || null,
-                rate: this.rate
+                rate: [rateU, rateV]
             }
-        } as GD.ITexPannerDecodeInfo;
+        } as any as GD.ITexPannerDecodeInfo;
 
         return this.uuid;
     }

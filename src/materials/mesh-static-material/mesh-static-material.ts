@@ -55,10 +55,10 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
     }
 }
 
-class MeshStaticMaterial extends ShaderMaterial {
-    protected sprites: Record<string, SpriteParam_T>;
-
+export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
+    public sprites: Record<string, SpriteParam_T> = {};
+
     public readonly isUpdatable = true;
 
     // @ts-ignore
@@ -100,13 +100,13 @@ class MeshStaticMaterial extends ShaderMaterial {
                 shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
-                    color: new Color(1, 1, 1),
+                    vector: new Color(1, 1, 1),
                     brightness: 1
                 }),
 
                 directionalAmbient: new Uniform({
                     direction: new Vector3(),
-                    color: new Color(1, 1, 1),
+                    vector: new Color(1, 1, 1),
                     brightness: 1
                 })
             }
@@ -249,10 +249,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableAmbient({ color, brightness }: IAmbientLighting) {
+    public enableAmbient({ vector, brightness }: IAmbientLighting) {
         const u = this.uniforms.ambient.value;
 
-        u.color.copy(color);
+        u.vector.copy(vector);
         u.brightness = brightness / 5;
 
         this.defines["USE_AMBIENT"] = "";
@@ -262,10 +262,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbientLighting) {
+    public enableDirectionalAmbient({ vector, direction, brightness }: IDirectionalAmbientLighting) {
         const u = this.uniforms.directionalAmbient.value;
 
-        u.color.copy(color);
+        u.vector.copy(vector);
         u.direction.copy(direction);
         u.brightness = brightness;
 
@@ -292,6 +292,13 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    public setUnlit() {
+        delete this.defines["USE_AMBIENT"];
+        delete this.defines["USE_LIGHTMAP"];
+        this.needsUpdate = true;
+        return this;
+    }
+
     public update(time: number) {
         Object.entries(this.sprites).forEach(([k, { sprites, framerate }]) => {
             const frameCount = sprites.length;
@@ -307,11 +314,8 @@ class MeshStaticMaterial extends ShaderMaterial {
     }
 }
 
-export default MeshStaticMaterial;
-export { MeshStaticMaterial };
-
 type IBaseLighting = {
-    color: THREE.Color,
+    vector: THREE.Color,
     brightness: number
 };
 

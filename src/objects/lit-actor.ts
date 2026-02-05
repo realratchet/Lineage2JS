@@ -1,6 +1,6 @@
 import DynamicLight from "@client/objects/dynamic-light";
-import { ILightInfo, SectorObject } from "@client/objects/zone-object";
-import { Color, BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
+import { SectorObject } from "@client/objects/zone-object";
+import { BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -23,9 +23,9 @@ class LitActorMesh extends Mesh {
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
-    protected ambient?: { glow: number, color: [number, number, number, number], isUnlit: boolean };
+    protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, color: [number, number, number, number], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
@@ -53,7 +53,7 @@ class LitActorMesh extends Mesh {
         }
     }
 
-    protected computeLighting(sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, multiplier: number) {
+    protected computeLighting(_sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, multiplier: number) {
         if (lights.length === 0) return;
 
         const attrPositions = this.geometry.getAttribute("position");
@@ -110,7 +110,6 @@ class LitActorMesh extends Mesh {
         // Check if any lights need updating
         // CRITICAL FIX: Check length mismatch to prevent crash during copy
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
-        let anyDynamicLightNeedsUpdate = false;
 
         // Collect and augment light info
         const scene = this.lightInfo.scene.map(l => ({ ...l, instance: sector.lights[l.light] }));
@@ -121,7 +120,7 @@ class LitActorMesh extends Mesh {
             if (!light) continue;
 
             if (light.isDynamic || (light.isTimeBased && light.lightMethod !== "Sunlight")) {
-                if (light.needsUpdate) anyDynamicLightNeedsUpdate = true;
+                // if (light.needsUpdate) anyDynamicLightNeedsUpdate = true;
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
@@ -137,7 +136,7 @@ class LitActorMesh extends Mesh {
             const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
 
             if (this.ambient) {
-                const { isUnlit, color, glow } = this.ambient;
+                const { isUnlit, vector, glow } = this.ambient;
 
                 if (isUnlit) {
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
@@ -149,7 +148,7 @@ class LitActorMesh extends Mesh {
                     // Static mesh actors use ambient directly (zone ambient + glow)
                     // IDA: FinalRGB = AmbPlane + SunPlane * Diffuse
                     // Using ColorByte for accurate byte addition
-                    tmpColorByte.set(color[0], color[1], color[2]);
+                    tmpColorByte.set(vector[0], vector[1], vector[2]);
                     const r = tmpColorByte.r + glow;
                     const g = tmpColorByte.g + glow;
                     const b = tmpColorByte.b + glow;

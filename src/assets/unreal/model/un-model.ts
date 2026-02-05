@@ -16,12 +16,14 @@ import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
 import { anyFlags } from "@l2js/core/utils/flags";
+import { decodeTextureAsB64 } from "@client/assets/decoders/texture-decoder";
 
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
+const PF_Unlit = 0x00400000; // from UnObj.h line 254
 
 const nodeCache = new Array<number>();
 
@@ -301,12 +303,7 @@ abstract class UModel extends UPrimitive {
             if (surf.flags & (
                 PolyFlags_T.PF_Invisible |
                 PolyFlags_T.PF_Portal |
-                PolyFlags_T.PF_AntiPortal | 0
-                // PolyFlags_T.PF_FakeBackdrop | // no skybox
-                // PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
-            )) continue;
-
-            if (!this.isSky && surf.flags & (
+                PolyFlags_T.PF_AntiPortal |
                 PolyFlags_T.PF_FakeBackdrop | // no skybox
                 PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
             )) continue;
@@ -329,14 +326,22 @@ abstract class UModel extends UPrimitive {
             const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as GA.FStaticLightmapTexture : null;
             const priority: PriorityGroups_T = /*false &&*/ surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
+
             // Get material UUID
             const materialUuid = surf.material.loadSelf().getDecodeInfo(library);
             const lightmapTextureIndex = lightmapIndex ? lightmapIndex.iLightmapTexture : -1;
 
+            // const matInfo = library.materials[library.materials[materialUuid].material];
+
+            // const _decodeMat = decodeTextureAsB64;
+
+            // debugger;
+
             // UE2 groups sections by: Material + PolyFlags + iLightMapTexture
             // PolyFlags used: PF_Unlit | PF_Selected | PF_TwoSided (from UnModel.cpp line 1000)
             // PF_Unlit = 0x00400000 (from UnObj.h line 254)
-            const PF_Unlit = 0x00400000;
+            // UE2 groups sections by: Material + PolyFlags + iLightMapTexture
+            // PolyFlags used: PF_Unlit | PF_Selected | PF_TwoSided (from UnModel.cpp line 1000)
             const sectionPolyFlags = surf.flags & (PF_Unlit | PolyFlags_T.PF_Selected | PolyFlags_T.PF_TwoSided);
 
             // Create section key matching UE2's exact criteria
@@ -416,8 +421,14 @@ abstract class UModel extends UPrimitive {
                     const position: FVector = this.points.getElem(vert.pVertex);
 
                     const texB = position.sub(textureBase);
-                    const texU = texB.dot(textureX) / TEXEL_SCALE;
-                    const texV = texB.dot(textureY) / TEXEL_SCALE;
+                    const isSkySurface = (surf.flags & PolyFlags_T.PF_FakeBackdrop) !== 0;
+                    const texelScale = isSkySurface ? 1024 : TEXEL_SCALE;
+                    const texU = texB.dot(textureX) / texelScale;
+                    const texV = texB.dot(textureY) / texelScale;
+
+                    if (isSkySurface && Math.random() < 0.001) {
+                        console.log(`[UModel] Sky Surface UV Scale check: UScale=${textureX.length().toFixed(4)}, VScale=${textureY.length().toFixed(4)}, applied scale=${texelScale}`);
+                    }
 
                     const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
 
@@ -505,6 +516,7 @@ abstract class UModel extends UPrimitive {
                 geometry: geometryUuid,
                 nodeIndices,
                 isOutdoor: sectionData.isOutdoor,
+                isUnlit: !!(sectionData.polyFlags & PF_Unlit),
                 sectionName: sectionKey
             };
 

@@ -41,7 +41,7 @@ const tmpColorByte_3 = new ColorByte(); // For sky color blending
 const tmpColorByte_4 = new ColorByte(); // For haze color blending
 const tmpColorByte_5 = new ColorByte(); // For cloud color blending
 
-const DEFAULT_FAR = 100_000;
+const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
@@ -642,8 +642,8 @@ class RenderManager {
 
 
 
-    protected _updateObjects(currentTime: number, deltaTime: number) {
-        const globalTime = currentTime / 600;
+    protected _updateObjects(currentTime: number) {
+        const globalTime = currentTime / 2400;
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
         const oldFar = this.camera.far;
 
@@ -751,6 +751,7 @@ class RenderManager {
         // 3. Zone Overrides
         const sector = this.getSector(this.camera.position);
         const blendedHazeColors: ColorByte[] = [];
+        let activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
 
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
@@ -790,7 +791,8 @@ class RenderManager {
             const timeOfDay = env.getTimeOfDay();
 
             let maxHArrLen = 0;
-            const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
+            // const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
+            activeInfos = [];
 
             fogInfos.forEach(fogInfo => {
                 const visibleMask = sector.lastZoneMask;
@@ -816,7 +818,9 @@ class RenderManager {
 
                 if (weight <= 0) return;
 
+                // const hArr = interpolateFogInfoHazeColors(timeOfDay, fogInfo.colors);
                 const hArr = interpolateFogInfoHazeColors(timeOfDay, fogInfo.colors);
+                // console.log(`[RenderManager] FogInfo HArr Len: ${hArr.length}`);
                 if (hArr.length > 0) {
                     maxHArrLen = Math.max(maxHArrLen, hArr.length);
                 }
@@ -852,7 +856,9 @@ class RenderManager {
                 totalSkyWeight += skyWeight;
 
                 // 3. Haze Blending
-                const hazeWeight = weight * (hazeColor.a / 255);
+                const alpha = hazeColor.a === 0 ? 255 : hazeColor.a;
+                const hazeWeight = weight * (alpha / 255);
+                // console.log(`[RenderManager] HazeWeight: ${hazeWeight.toFixed(4)} | FogWeight: ${weight.toFixed(4)} | HazeAlpha: ${hazeColor.a}`);
                 accHazeR += hazeColor.r * hazeWeight;
                 accHazeG += hazeColor.g * hazeWeight;
                 accHazeB += hazeColor.b * hazeWeight;
@@ -927,11 +933,16 @@ class RenderManager {
                     );
                     blendedHazeColors.push(cb);
                 }
+                if (blendedHazeColors.length > 0) {
+                    // console.log(`[RenderManager] Haze[0]: ${blendedHazeColors[0].r},${blendedHazeColors[0].g},${blendedHazeColors[0].b}`);
+                }
             }
 
         }
 
-        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, [], tmpColorByte_5, sector);
+        // console.log(`[RenderManager] HazeColor(Fallback): ${tmpColorByte_4.r},${tmpColorByte_4.g},${tmpColorByte_4.b} | TargetFog: ${targetFogColor.r},${targetFogColor.g},${targetFogColor.b} | FogInfos: ${activeInfos.length}`);
+
+        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, tmpColorByte_5, sector);
 
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
         if (!this.scene.fog || !(this.scene.fog as any).isFog) {
@@ -1013,7 +1024,7 @@ class RenderManager {
 
         this.player.position.lerp(desiredPosition, 0.1);
 
-        this._updateObjects(currentTime, deltaTime);
+        this._updateObjects(currentTime);
 
         this.renderer.clear();
     }
@@ -1131,36 +1142,34 @@ class RenderManager {
 
     public setGlobalSky(sector: SectorObject) {
         this.globalSkyLoaded = true;
-        if (sector.celestials && sector.celestials.length > 0) {
-            this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
+        this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
 
-            // Add GUI specific for Moons
-            if (this.skyRenderer.moons.length > 0) {
-                const moonFolder = guiFolders.world.addFolder("Moons");
+        // Add GUI specific for Moons
+        if (this.skyRenderer.moons.length > 0) {
+            const moonFolder = guiFolders.world.addFolder("Moons");
 
-                if (this.skyRenderer.moons.length > 1) {
-                    const moonConfig = { activeMoon: 0 };
-                    const moonIndices: Record<string, number> = {};
-                    this.skyRenderer.moons.forEach((m, i) => {
-                        const name = m.data.objectName || `Moon ${i + 1}`;
-                        moonIndices[name] = i;
+            if (this.skyRenderer.moons.length > 1) {
+                const moonConfig = { activeMoon: 0 };
+                const moonIndices: Record<string, number> = {};
+                this.skyRenderer.moons.forEach((m, i) => {
+                    const name = m.data.objectName || `Moon ${i + 1}`;
+                    moonIndices[name] = i;
+                });
+
+                moonFolder.add(moonConfig, "activeMoon", moonIndices)
+                    .name("Active Moon")
+                    .onChange((value) => {
+                        this.skyRenderer.setActiveMoon(parseInt(value as string));
                     });
-
-                    moonFolder.add(moonConfig, "activeMoon", moonIndices)
-                        .name("Active Moon")
-                        .onChange((value) => {
-                            this.skyRenderer.setActiveMoon(parseInt(value as string));
-                        });
-                }
-
-                moonFolder.add(this.skyRenderer, "moonMultiplier", 0.1, 15.0, 0.1)
-                    .name("Scale Multiplier")
-                    .onChange(() => {
-                        this.needsUpdate = true;
-                    });
-
-                moonFolder.open();
             }
+
+            moonFolder.add(this.skyRenderer, "moonMultiplier", 0.1, 15.0, 0.1)
+                .name("Scale Multiplier")
+                .onChange(() => {
+                    this.needsUpdate = true;
+                });
+
+            moonFolder.open();
         }
     }
 

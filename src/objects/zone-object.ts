@@ -36,16 +36,16 @@ interface IStaticMeshActorDecodeInfo {
 
 class ZoneObject extends Object3D {
     public fog: Fog = null;
-    public fog: Fog = null;
     public isFogZone: boolean = false;
     public isSunAffected: boolean = false;
+    public isSkyZoneInfo: boolean = false;
 
     public readonly boundsRender = new Box3();
     public readonly boundsRenderSphere = new Sphere();
 
     public readonly isCullable: boolean = true;
     public readonly isZoneObject = true;
-    public readonly type: "Zone" | "Sector" = "Zone";
+    public readonly type: "Zone" | "Sector" | "Sky" = "Zone";
 
     public setRenderBounds(min: GD.Vector3Arr, max: GD.Vector3Arr): this {
 
