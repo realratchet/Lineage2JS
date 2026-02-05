@@ -213,6 +213,47 @@ class L2Environment {
         return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
     }
 
+    /**
+     * Build the haze gradient array from indexHaze and haze colors.
+     * Each entry in indexHaze points to an entry in haze array.
+     * Based on IDA: UL2NEnvLight::GetHazeColor iterates indexHaze count times,
+     * interpolating the corresponding haze entry by time of day.
+     */
+    public getHazeGradient(): ColorByte[] {
+        const envColor = this.getEnvColor();
+        const indexHaze = envColor.color.indexHaze;
+        const hazeColors = envColor.color.haze;
+        const timeOfDay = this.getTimeOfDay();
+
+        if (!indexHaze || indexHaze.length === 0) {
+            // Fallback: return single haze color as gradient
+            const single = this.getHazeColor(new ColorByte());
+            return [single];
+        }
+
+        const result: ColorByte[] = [];
+        for (let i = 0; i < indexHaze.length; i++) {
+            const hazeIdx = indexHaze[i];
+            const target = new ColorByte();
+
+            // Get the haze color at this index, interpolated by time
+            if (hazeColors && hazeIdx >= 0 && hazeIdx < hazeColors.length) {
+                // For indexed access, we get the specific color entry
+                const color = hazeColors[hazeIdx];
+                if (color) {
+                    target.set(color.r, color.g, color.b, 255);
+                } else {
+                    target.set(128, 128, 128, 255);
+                }
+            } else {
+                // Fallback to time-interpolated haze
+                getColorFromTimeColor(timeOfDay, hazeColors, target);
+            }
+            result.push(target);
+        }
+        return result;
+    }
+
     public getTerrainLightColor(target: ColorByte): ColorByte {
         return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().light.terrain, target);
     }

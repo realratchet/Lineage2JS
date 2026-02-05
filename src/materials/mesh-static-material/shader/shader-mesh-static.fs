@@ -439,7 +439,7 @@ void main() {
         #ifdef USE_MAP_OPACITY
             vec4 texelOpacity = texture2D(shOpacity.map.texture, UV_OPACITY);
             
-            diffuseColor.rgba *= texelOpacity.a;
+            diffuseColor.a *= texelOpacity.a;
             
             #ifdef USE_COLOR_MODIFIER
                 diffuseColor.rgba *= shOpacity.modifierColor.a;

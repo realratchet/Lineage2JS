@@ -643,7 +643,7 @@ class RenderManager {
 
 
     protected _updateObjects(currentTime: number) {
-        const globalTime = currentTime / 2400;
+        const globalTime = currentTime / 600;
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
         const oldFar = this.camera.far;
 
@@ -750,7 +750,9 @@ class RenderManager {
 
         // 3. Zone Overrides
         const sector = this.getSector(this.camera.position);
-        const blendedHazeColors: ColorByte[] = [];
+        // Initialize with base haze gradient from EnvLight (via indexHaze)
+        // L2FogInfo blending will modify these values if in range
+        const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
 
         if (sector) {
@@ -923,18 +925,21 @@ class RenderManager {
 
 
             if (totalHArrWeight > 0) {
-                for (let i = 0; i < maxHArrLen; i++) {
-                    const cb = new ColorByte();
-                    cb.set(
-                        accHArrR[i] / totalHArrWeight,
-                        accHArrG[i] / totalHArrWeight,
-                        accHArrB[i] / totalHArrWeight,
+                // Blend L2FogInfo haze colors onto the base gradient
+                const blendFactor = Math.min(totalHArrWeight, 1.0);
+                for (let i = 0; i < maxHArrLen && i < blendedHazeColors.length; i++) {
+                    const fogInfoColor = {
+                        r: accHArrR[i] / totalHArrWeight,
+                        g: accHArrG[i] / totalHArrWeight,
+                        b: accHArrB[i] / totalHArrWeight
+                    };
+                    // Blend FogInfo color onto base gradient
+                    blendedHazeColors[i].set(
+                        MathUtils.lerp(blendedHazeColors[i].r, fogInfoColor.r, blendFactor),
+                        MathUtils.lerp(blendedHazeColors[i].g, fogInfoColor.g, blendFactor),
+                        MathUtils.lerp(blendedHazeColors[i].b, fogInfoColor.b, blendFactor),
                         255
                     );
-                    blendedHazeColors.push(cb);
-                }
-                if (blendedHazeColors.length > 0) {
-                    // console.log(`[RenderManager] Haze[0]: ${blendedHazeColors[0].r},${blendedHazeColors[0].g},${blendedHazeColors[0].b}`);
                 }
             }
 

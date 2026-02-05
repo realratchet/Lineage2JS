@@ -62,7 +62,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isUpdatable = true;
 
     // @ts-ignore
-    constructor(info: MeshStaticMaterialParameters) {
+    public constructor(info: MeshStaticMaterialParameters = {}) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -295,6 +295,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public setUnlit() {
         delete this.defines["USE_AMBIENT"];
         delete this.defines["USE_LIGHTMAP"];
+        this.needsUpdate = true;
+        return this;
+    }
+
+    public setVertexColors() {
+        this.vertexColors = true;
+        this.defines["USE_COLOR"] = "";
         this.needsUpdate = true;
         return this;
     }

@@ -308,6 +308,9 @@ abstract class UModel extends UPrimitive {
                 PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
             )) continue;
 
+            // if (surf.flags === 4194304)
+            //     continue
+
             const vert: FVert = this.vertices.getElem(node.iVertPool);
 
             // if (!this.isSky) {
@@ -412,6 +415,11 @@ abstract class UModel extends UPrimitive {
                 const textureY: FVector = this.vectors.getElem(surf.vTextureV);
                 const tangentZ: FVector = this.vectors.getElem(surf.vNormal);
 
+                // Extract material dimensions for correct UV scaling (UE2 standard)
+                const texSize = surf.material?.loadSelf?.().getTextureSize();
+                const texWidth = texSize?.width ?? TEXEL_SCALE;
+                const texHeight = texSize?.height ?? TEXEL_SCALE;
+
                 const fcount = node.numVertices - 2;
                 const findex = dstVertices; // Starting vertex index for this node
 
@@ -421,14 +429,8 @@ abstract class UModel extends UPrimitive {
                     const position: FVector = this.points.getElem(vert.pVertex);
 
                     const texB = position.sub(textureBase);
-                    const isSkySurface = (surf.flags & PolyFlags_T.PF_FakeBackdrop) !== 0;
-                    const texelScale = isSkySurface ? 1024 : TEXEL_SCALE;
-                    const texU = texB.dot(textureX) / texelScale;
-                    const texV = texB.dot(textureY) / texelScale;
-
-                    if (isSkySurface && Math.random() < 0.001) {
-                        console.log(`[UModel] Sky Surface UV Scale check: UScale=${textureX.length().toFixed(4)}, VScale=${textureY.length().toFixed(4)}, applied scale=${texelScale}`);
-                    }
+                    const texU = texB.dot(textureX) / texWidth;
+                    const texV = texB.dot(textureY) / texHeight;
 
                     const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
 
@@ -480,6 +482,8 @@ abstract class UModel extends UPrimitive {
                     library.bspNodes[nodeIndex].sectionIndex = sectionIndex;
                 }
             }
+
+            // extracted last time in sky_dumps.txt
 
             // Create material (lightmapped or regular)
             let finalMaterialUuid: string;

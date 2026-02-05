@@ -33,25 +33,55 @@ function getFormat(type: GD.DataTextureFormats_T) {
     }
 }
 
-const decodeDDS = (function () {
+// Replaced CompressedTexture with DataTexture (Software Decode) to fix Alpha Issues
+function decodeDDS(buffer: ArrayBuffer): THREE.Texture {
+    // 1. Try Manual Software Decompression (Matches B64 Export Logic)
+    try {
+        const header = new Int32Array(buffer, 0, 31);
+        const height = header[3];
+        const width = header[4];
+        const fourCC = header[21];
+        const dataOffset = 128; // DDS header size
+
+        let rgbaData: Uint8Array | null = null;
+        const input = new Uint8Array(buffer, dataOffset);
+
+        if (fourCC === 0x31545844) { // DXT1
+            rgbaData = dxt1ToRgba(width, height, input);
+        } else if (fourCC === 0x33545844) { // DXT3
+            rgbaData = dxt3ToRgba(width, height, input);
+        } else if (fourCC === 0x35545844) { // DXT5
+            rgbaData = dxt5ToRgba(width, height, input);
+        }
+
+        if (rgbaData) {
+            const texture = new DataTexture(rgbaData, width, height, RGBAFormat);
+            texture.flipY = false;
+            texture.needsUpdate = true;
+            texture.minFilter = LinearFilter;
+            texture.magFilter = LinearFilter;
+            texture.generateMipmaps = true; // DataTexture supports mipmaps? Maybe not auto-gen? 
+            // Manual mipmaps not supported easily for DataTexture without input.
+            // But Haze is single level usually? Or we accept aliasing for now?
+            return texture;
+        }
+    } catch (e) {
+        console.warn("[decodeDDS] Software Decode Failed, falling back to DDSLoader", e);
+    }
+
+    // 2. Fallback to Original DDSLoader (CompressedTexture)
     const ddsLoader = new DDSLoader();
+    const dds = ddsLoader.parse(buffer, true);
+    const { mipmaps, width, height, format: _format, mipmapCount } = dds;
+    const texture = new CompressedTexture(mipmaps as ImageData[], width, height, _format as THREE.CompressedPixelFormat);
 
-    return function decodeDDS(buffer: ArrayBuffer): THREE.CompressedTexture {
-        const dds = ddsLoader.parse(buffer, true);
-        const { mipmaps, width, height, format: _format, mipmapCount } = dds;
-        const texture = new CompressedTexture(mipmaps as ImageData[], width, height, _format as THREE.CompressedPixelFormat);
+    if (mipmapCount === 1) texture.minFilter = LinearFilter;
 
-        if (mipmapCount === 1) texture.minFilter = LinearFilter;
-        // texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+    texture.needsUpdate = true;
+    texture.flipY = false;
 
-        // debugger;
-
-        texture.needsUpdate = true;
-        texture.flipY = false;
-
-        return texture;
-    };
-})();
+    return texture;
+}
 
 function decodeRGBA(info: GD.IDataTextureDecodeInfo): DataTexture {
     const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);

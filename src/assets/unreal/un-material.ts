@@ -43,6 +43,8 @@ abstract class UBaseMaterial extends UObject {
             "DefaultMaterial": "defaultMaterial"
         });
     }
+
+    public abstract getTextureSize(): { width: number, height: number } | null;
 }
 
 abstract class UBaseModifier extends UBaseMaterial {
@@ -57,6 +59,10 @@ abstract class UBaseModifier extends UBaseMaterial {
     //         "TexCoordProjected": "texCoordProjected",
     //     });
     // }
+
+    public getTextureSize(): { width: number; height: number; } | null {
+        return this.material?.loadSelf?.().getTextureSize() || null;
+    }
 }
 abstract class UMaterial extends UBaseMaterial { }
 
@@ -323,6 +329,10 @@ abstract class UShader extends UMaterial {
 
         return this.uuid;
     }
+
+    public getTextureSize(): { width: number; height: number; } | null {
+        return this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
+    }
 }
 
 abstract class UFadeColor extends UBaseModifier {
@@ -375,6 +385,10 @@ abstract class UColorModifier extends UBaseMaterial {
         } as GD.IColorModifierDecodeInfo;
 
         return this.uuid;
+    }
+
+    public getTextureSize(): { width: number; height: number; } | null {
+        return this.material?.loadSelf?.().getTextureSize() || null;
     }
 
     protected getPropertyMap() {

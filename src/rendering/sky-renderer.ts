@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, Texture, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, PlaneGeometry, Group, AdditiveBlending } from "three";
+import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, Texture, DoubleSide, CustomBlending, OneFactor, OneMinusSrcColorFactor, PlaneGeometry, Group, AdditiveBlending, NormalBlending } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 import { SectorObject } from "@client/objects/zone-object";
@@ -198,12 +198,13 @@ export default class SkyRenderer {
                 this.skyLayers.skybox.push(mesh);
             } else if (type === "haze") {
                 mesh.renderOrder = -8000 + meshCount;
-                material.blending = AdditiveBlending;
+                material.blending = NormalBlending; // Match Trace 3040954 (SrcAlpha, InvSrcAlpha)
                 material.transparent = true;
                 material.depthWrite = false;
                 material.depthTest = false;
+
+                mesh.visible = true;
                 this.skyLayers.haze.push(mesh);
-                console.log(mesh.name, mesh.material.defines, mesh.material.uniforms)
             } else if (type === "cloud") {
                 mesh.renderOrder = -7000 + (index * 100) + meshCount;
                 this.skyLayers.clouds.push({ mesh, index });
@@ -278,10 +279,56 @@ export default class SkyRenderer {
             updateMaterialProperties(mesh.material as any, skyColor);
         });
 
-        // Haze
-        const targetHazeColor = (hazeColors && hazeColors.length > 0) ? hazeColors[0] : _hazeColor;
+        // Haze - apply per-vertex gradient coloring
         this.skyLayers.haze.forEach((mesh) => {
-            updateMaterialProperties(mesh.material as any, targetHazeColor);
+            const material = mesh.material as any;
+            const geometry = mesh.geometry;
+            const colorAttr = geometry.attributes.color;
+            const posAttr = geometry.attributes.position;
+
+            if (!colorAttr || !posAttr) return;
+
+            // Use hazeColors array for gradient, fallback to single color
+            const colors = (hazeColors && hazeColors.length > 0) ? hazeColors : [_hazeColor];
+            if (colors.length === 0) return;
+
+            // Get Y bounds for normalization
+            if (!geometry.boundingBox) geometry.computeBoundingBox();
+            const box = geometry.boundingBox!;
+            const yMin = box.min.y;
+            const yMax = box.max.y;
+            const yRange = yMax - yMin;
+
+            // DEBUG: Check haze geometry bounds once
+            // if (Math.random() < 0.01) console.log(`[SkyRenderer] Haze Mesh: ${mesh.name} | Y: [${yMin.toFixed(1)}, ${yMax.toFixed(1)}] | Range: ${yRange.toFixed(1)} | Pos: ${mesh.position.toArray()}`);
+
+            // Apply per-vertex colors based on Y position (Color Only, Gradient is in Shader)
+            for (let i = 0; i < posAttr.count; i++) {
+                const y = posAttr.getY(i);
+                const t = yRange > 0 ? (y - yMin) / yRange : 0; // 0 = bottom, 1 = top
+
+                // Map t to colors array with interpolation
+                const colorIndex = t * (colors.length - 1);
+                const lowIdx = Math.floor(colorIndex);
+                const highIdx = Math.min(Math.ceil(colorIndex), colors.length - 1);
+                const frac = colorIndex - lowIdx;
+
+                const colorLow = colors[lowIdx];
+                const colorHigh = colors[highIdx];
+
+                // Interpolate and set vertex color (normalized to 0-1)
+                const r = (colorLow.r + (colorHigh.r - colorLow.r) * frac) / 255;
+                const g = (colorLow.g + (colorHigh.g - colorLow.g) * frac) / 255;
+                const b = (colorLow.b + (colorHigh.b - colorLow.b) * frac) / 255;
+
+                colorAttr.setXYZ(i, r, g, b);
+            }
+            colorAttr.needsUpdate = true;
+
+            // Also set material opacity from first color's alpha
+            if (colors[0].a !== undefined) {
+                material.opacity = colors[0].a / 255;
+            }
         });
 
         // Clouds

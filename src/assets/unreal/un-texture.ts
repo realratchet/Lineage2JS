@@ -89,6 +89,10 @@ abstract class UTexture extends UMaterial {
 
     public isTransparent() { return this.isAlphaTexture || this.isMasked; }
 
+    public getTextureSize(): { width: number; height: number; } | null {
+        return { width: this.width, height: this.height };
+    }
+
     public doLoad(pkg: C.APackage, exp: C.UExport) {    // 2785
         super.doLoad(pkg, exp);
 
