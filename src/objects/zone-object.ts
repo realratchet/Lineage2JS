@@ -970,6 +970,7 @@ class SectorObject extends Object3D {
 class BSPZoneData {
     public connectivity: bigint;
     public visibility: bigint;
+    public zoneInfo: any;
 
     protected constructor() { }
 
@@ -978,6 +979,7 @@ class BSPZoneData {
 
         zone.connectivity = info.connectivity
         zone.visibility = info.visibility;
+        zone.zoneInfo = info.zoneInfo;
 
         return zone;
     }

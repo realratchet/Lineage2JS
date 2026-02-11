@@ -321,6 +321,7 @@ abstract class UShader extends UMaterial {
             specular,
             specularMask,
             depthWrite,
+            // depthTest: this.depthTest,
             doubleSide,
             transparent,
             alphaTest,
@@ -558,8 +559,8 @@ abstract class UTexPanner extends UBaseModifier {
         if (this.uuid in library.materials) return this.uuid;
 
         const D = this.direction.toVector();
-        const rateU = (this.rate * D.x) / 1024.0;
-        const rateV = (this.rate * D.y) / 1024.0;
+        const rateU = (this.rate * D.x);
+        const rateV = (this.rate * D.y);
 
         library.materials[this.uuid] = {
             materialType: "modifier",

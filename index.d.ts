@@ -392,7 +392,12 @@ declare global {
                     geometry: string,  // geometry UUID
                     nodeIndices: number[],  // nodes in this section
                     isUnlit?: boolean,
-                    isOutdoor?: boolean
+                    isOutdoor?: boolean,
+                    depthTest?: boolean,
+                    depthWrite?: boolean,
+                    side?: THREE.Side,
+                    fog?: boolean,
+                    blendingMode?: GA.SupportedBlendingTypes_T
                 }
 
                 // Material and Geometry Types
@@ -578,6 +583,7 @@ declare global {
                     specularMask: string,
                     blendingMode: GA.SupportedBlendingTypes_T,
                     depthWrite: boolean,
+                    depthTest: boolean,
                     doubleSide: boolean,
                     transparent: boolean,
                     alphaTest: number,

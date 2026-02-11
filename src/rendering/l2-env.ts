@@ -114,7 +114,7 @@ class L2Environment {
     protected env: EnvInfo;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
 
-    protected time: number = 60 * 60; // in seconds
+    protected time: number = 12 * 60 * 60; // in seconds
     protected envVersion: number = 0; // Incremented when activeEnv changes
 
     public constructor(env: EnvInfo) {
@@ -191,13 +191,17 @@ class L2Environment {
     public getSunColor(target: ColorByte): ColorByte {
         const colors = this.getEnvColor().color.sun;
         if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
-        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
+        getColorFromTimeColor(this.getTimeOfDay(), colors, target);
+        target.a = 255;
+        return target;
     }
 
     public getSkyColor(target: ColorByte): ColorByte {
         const colors = this.getEnvColor().color.sky;
         if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
-        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
+        getColorFromTimeColor(this.getTimeOfDay(), colors, target);
+        target.a = 255;
+        return target;
     }
 
     /** never used in the game as far as i can tell, instructions never called, would make the moon red */
@@ -210,14 +214,23 @@ class L2Environment {
     public getHazeColor(target: ColorByte): ColorByte {
         const colors = this.getEnvColor().color.haze;
         if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);
-        return getColorFromTimeColor(this.getTimeOfDay(), colors, target);
+        getColorFromTimeColor(this.getTimeOfDay(), colors, target);
+        target.a = 255;
+        return target;
+    }
+
+    /**
+     * Get the current Fog Color (used for Global Fog / Clouds Zenith Tint)
+     * This should ideally come from the Zone Info (L2FogInfo) if available, otherwise TimeEnv.
+     */
+    public getFogColor(target: ColorByte): ColorByte {
+        // In the absence of a connected Zone Info system here, we'll return a default
+        // or try to match the Haze Color as a fallback, since they often align.
+        return this.getHazeColor(target);
     }
 
     /**
      * Build the haze gradient array from indexHaze and haze colors.
-     * Each entry in indexHaze points to an entry in haze array.
-     * Based on IDA: UL2NEnvLight::GetHazeColor iterates indexHaze count times,
-     * interpolating the corresponding haze entry by time of day.
      */
     public getHazeGradient(): ColorByte[] {
         const envColor = this.getEnvColor();
@@ -238,16 +251,18 @@ class L2Environment {
 
             // Get the haze color at this index, interpolated by time
             if (hazeColors && hazeIdx >= 0 && hazeIdx < hazeColors.length) {
-                // For indexed access, we get the specific color entry
                 const color = hazeColors[hazeIdx];
                 if (color) {
                     target.set(color.r, color.g, color.b, 255);
                 } else {
                     target.set(128, 128, 128, 255);
                 }
-            } else {
+            } else if (hazeColors && hazeColors.length > 0) {
                 // Fallback to time-interpolated haze
                 getColorFromTimeColor(timeOfDay, hazeColors, target);
+                target.a = 255;
+            } else {
+                target.set(128, 128, 128, 255);
             }
             result.push(target);
         }
@@ -271,11 +286,13 @@ class L2Environment {
             case 0: cloudColors = this.getEnvColor().color.cloud1; break;
             case 1: cloudColors = this.getEnvColor().color.cloud2; break;
             case 2: cloudColors = this.getEnvColor().color.cloud3; break;
-            default: return target.set(0, 0, 0, 0);
+            default: return target.set(0, 0, 0, 255);
         }
 
-        if (!cloudColors || cloudColors.length === 0) return target.set(0, 0, 0, 0);
-        return getColorFromTimeColor(this.getTimeOfDay(), cloudColors, target);
+        if (!cloudColors || cloudColors.length === 0) return target.set(0, 0, 0, 255);
+        getColorFromTimeColor(this.getTimeOfDay(), cloudColors, target);
+        target.a = 255;
+        return target;
     }
 
 
@@ -322,7 +339,6 @@ function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: 
     let idxCurr = 0, idxNext = 1;
 
     // Find the current time slot
-    // Note: This logic assumes sorted array by time, consistent with UE2 logic
     while (idxCurr < nElementsMinusOne) {
         if (timeOfDay >= array[idxCurr].time && timeOfDay < array[idxNext].time) {
             break;
@@ -373,23 +389,15 @@ function getScaleValue(timeOfDay: number, array: TimeScale[]): number {
     return curr.scale + (next.scale - curr.scale) * lFrac;
 }
 
-// function getColorFromHSV(timeOfDay: number, array: TimeHSV[], target: Color): Color {
-//     getColorByteFromHSV(timeOfDay, array, tmpColorByte);
-//     return tmpColorByte.toFloats(target);
-// }
-
 function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte): ColorByte {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
     if (!hsvCurr) return target.set(255, 255, 255, 255);
 
-    // Calculate interpolated Value (Brightness) first
     const v = hsvCurr.value + (hsvNext.value - hsvCurr.value) * lFrac;
 
-    // Get RGB color with actual brightness value applied through setFromHSV
     target.setFromHSV(hsvCurr.hue, hsvCurr.saturation, v);
     tmpColorByte_2.setFromHSV(hsvNext.hue, hsvNext.saturation, v);
 
-    // Interpolate the colors
     return target.lerp(tmpColorByte_2, lFrac);
 }
 
@@ -397,23 +405,19 @@ function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: Co
     const [cCurr, cNext, lFrac] = pickArrayIndices(timeOfDay, array);
     if (!cCurr) return target.set(255, 255, 255, 255);
 
-    const vCurr = tmpColorByte.set(cCurr.r, cCurr.g, cCurr.b, 255);
-    const vNext = tmpColorByte_2.set(cNext.r, cNext.g, cNext.b, 255);
+    const vCurr = tmpColorByte.set(cCurr.r, cCurr.g, cCurr.b, cCurr.a ?? 255);
+    const vNext = tmpColorByte_2.set(cNext.r, cNext.g, cNext.b, cNext.a ?? 255);
 
     return target.copy(vCurr).lerp(vNext, lFrac);
 }
 
-/**
- * Interpolate L2FogInfo color array based on time of day
- * L2FogInfo colors are in format: { time: number, fogColor: [r, g, b, a], ... }
- */
 function interpolateFogInfoColor(
     timeOfDay: number,
     colors: { time: number; fogColor: number[] }[],
     target: ColorByte
 ): ColorByte {
     if (!colors || colors.length === 0) {
-        return target.set(128, 128, 128); // Default gray fallback
+        return target.set(128, 128, 128, 255);
     }
 
     if (colors.length === 1) {
@@ -421,86 +425,55 @@ function interpolateFogInfoColor(
         return target.set(c[0], c[1], c[2], c[3] ?? 255);
     }
 
-    // Find surrounding keyframes
     let prevIdx = 0;
-    let nextIdx = 0;
-
     for (let i = 0; i < colors.length; i++) {
-        if (colors[i].time <= timeOfDay) {
-            prevIdx = i;
-        }
+        if (colors[i].time <= timeOfDay) prevIdx = i;
     }
 
-    nextIdx = prevIdx + 1;
-    if (nextIdx >= colors.length) {
-        // Wrap around to first keyframe
-        nextIdx = 0;
-    }
-
+    let nextIdx = (prevIdx + 1) % colors.length;
     const prev = colors[prevIdx];
     const next = colors[nextIdx];
 
-    // Calculate interpolation factor
     let t = 0;
     if (prev.time !== next.time) {
-        let prevTime = prev.time;
-        let nextTime = next.time;
-
-        // Handle wrap-around (e.g., time 23 to time 0)
-        if (nextTime < prevTime) {
-            nextTime += 24;
-        }
-
+        let prevTime = prev.time, nextTime = next.time;
+        if (nextTime < prevTime) nextTime += 24;
         let currentTime = timeOfDay;
-        if (currentTime < prevTime) {
-            currentTime += 24;
-        }
-
-        t = (currentTime - prevTime) / (nextTime - prevTime);
-        t = Math.max(0, Math.min(1, t)); // Clamp to [0, 1]
+        if (currentTime < prevTime) currentTime += 24;
+        t = Math.max(0, Math.min(1, (currentTime - prevTime) / (nextTime - prevTime)));
     }
 
-    // Interpolate RGB values
     const pC = prev.fogColor;
     const nC = next.fogColor;
-
-    const pA = pC[3] ?? 255;
-    const nA = nC[3] ?? 255;
 
     return target.set(
         pC[0] + (nC[0] - pC[0]) * t,
         pC[1] + (nC[1] - pC[1]) * t,
         pC[2] + (nC[2] - pC[2]) * t,
-        pA + (nA - pA) * t
+        (pC[3] ?? 255) + ((nC[3] ?? 255) - (pC[3] ?? 255)) * t
     );
 }
 
-/**
- * Interpolate L2FogInfo skyColor array based on time of day
- */
 function interpolateFogInfoSkyColor(
     timeOfDay: number,
     colors: { time: number; skyColor: number[] }[],
     target: ColorByte
 ): ColorByte {
     if (!colors || colors.length === 0) {
-        return target.set(128, 128, 128);
+        return target.set(128, 128, 128, 255);
     }
 
     if (colors.length === 1) {
         const c = colors[0].skyColor;
-        return target.set(c[0], c[1], c[2], c[3] ?? 255);
+        return target.set(c[0], c[1], c[2], 255);
     }
 
-    // Find surrounding keyframes (same logic as fogColor)
     let prevIdx = 0;
     for (let i = 0; i < colors.length; i++) {
         if (colors[i].time <= timeOfDay) prevIdx = i;
     }
 
-    let nextIdx = prevIdx + 1;
-    if (nextIdx >= colors.length) nextIdx = 0;
-
+    let nextIdx = (prevIdx + 1) % colors.length;
     const prev = colors[prevIdx];
     const next = colors[nextIdx];
 
@@ -516,34 +489,27 @@ function interpolateFogInfoSkyColor(
     const pC = prev.skyColor;
     const nC = next.skyColor;
 
-    const pA = pC[3] ?? 255;
-    const nA = nC[3] ?? 255;
-
     return target.set(
         pC[0] + (nC[0] - pC[0]) * t,
         pC[1] + (nC[1] - pC[1]) * t,
         pC[2] + (nC[2] - pC[2]) * t,
-        pA + (nA - pA) * t
+        255
     );
 }
 
-/**
- * Interpolate L2FogInfo hazeringColor array based on time of day
- * Note: hazeringColor is array<array<color>>, we take the first element
- */
 function interpolateFogInfoHazeColor(
     timeOfDay: number,
     colors: { time: number; hazeringColor: number[][] }[],
     target: ColorByte
 ): ColorByte {
     if (!colors || colors.length === 0) {
-        return target.set(128, 128, 128);
+        return target.set(128, 128, 128, 255);
     }
 
     if (colors.length === 1) {
         const c = colors[0].hazeringColor?.[0];
         if (!c) return target.set(128, 128, 128, 255);
-        return target.set(c[0], c[1], c[2], c[3] ?? 255);
+        return target.set(c[0], c[1], c[2], 255);
     }
 
     let prevIdx = 0;
@@ -551,9 +517,7 @@ function interpolateFogInfoHazeColor(
         if (colors[i].time <= timeOfDay) prevIdx = i;
     }
 
-    let nextIdx = prevIdx + 1;
-    if (nextIdx >= colors.length) nextIdx = 0;
-
+    let nextIdx = (prevIdx + 1) % colors.length;
     const prev = colors[prevIdx];
     const next = colors[nextIdx];
 
@@ -569,53 +533,32 @@ function interpolateFogInfoHazeColor(
     const pC = prev.hazeringColor?.[0] || [128, 128, 128];
     const nC = next.hazeringColor?.[0] || [128, 128, 128];
 
-    const pA = pC[3] ?? 255;
-    const nA = nC[3] ?? 255;
-
     return target.set(
         pC[0] + (nC[0] - pC[0]) * t,
         pC[1] + (nC[1] - pC[1]) * t,
         pC[2] + (nC[2] - pC[2]) * t,
-        pA + (nA - pA) * t
+        255
     );
 }
 
-/**
- * Interpolate all L2FogInfo hazeringColors based on time of day
- */
 export function interpolateFogInfoHazeColors(
     timeOfDay: number,
     colors: { time: number; hazeringColor: number[][] }[]
 ): ColorByte[] {
-    if (!colors || colors.length === 0) {
-        return [];
-    }
+    if (!colors || colors.length === 0) return [];
 
-    // Identify standard length from first valid entry
     const sample = colors.find(c => c.hazeringColor && c.hazeringColor.length > 0)?.hazeringColor;
     if (!sample) return [];
 
     const count = sample.length;
     const result: ColorByte[] = new Array(count).fill(null).map(() => new ColorByte());
 
-    if (colors.length === 1) {
-        const cArr = colors[0].hazeringColor;
-        if (!cArr) return result;
-        for (let i = 0; i < count; i++) {
-            const c = cArr[i] || [128, 128, 128, 255];
-            result[i].set(c[0], c[1], c[2], c[3] ?? 255);
-        }
-        return result;
-    }
-
     let prevIdx = 0;
     for (let i = 0; i < colors.length; i++) {
         if (colors[i].time <= timeOfDay) prevIdx = i;
     }
 
-    let nextIdx = prevIdx + 1;
-    if (nextIdx >= colors.length) nextIdx = 0;
-
+    let nextIdx = (prevIdx + 1) % colors.length;
     const prev = colors[prevIdx];
     const next = colors[nextIdx];
 
@@ -632,51 +575,34 @@ export function interpolateFogInfoHazeColors(
     const nArr = next.hazeringColor || [];
 
     for (let i = 0; i < count; i++) {
-        const pC = pArr[i] || [128, 128, 128, 255];
-        const nC = nArr[i] || [128, 128, 128, 255];
-
-        const pA = pC[3] ?? 255;
-        const nA = nC[3] ?? 255;
+        const pC = pArr[i] || [128, 128, 128];
+        const nC = nArr[i] || [128, 128, 128];
 
         result[i].set(
             pC[0] + (nC[0] - pC[0]) * t,
             pC[1] + (nC[1] - pC[1]) * t,
             pC[2] + (nC[2] - pC[2]) * t,
-            pA + (nA - pA) * t
+            255
         );
     }
 
     return result;
 }
 
-/**
- * Interpolate L2FogInfo cloudColor array based on time of day
- * @param index Index of cloud color (0-2)
- */
 function interpolateFogInfoCloudColor(
     timeOfDay: number,
     colors: { time: number; cloudColor: number[][] }[],
     target: ColorByte,
     index: number = 0
 ): ColorByte {
-    if (!colors || colors.length === 0) {
-        return target.set(128, 128, 128);
-    }
-
-    if (colors.length === 1) {
-        const c = colors[0].cloudColor?.[index];
-        if (!c) return target.set(128, 128, 128);
-        return target.set(c[0], c[1], c[2], c[3] ?? 255);
-    }
+    if (!colors || colors.length === 0) return target.set(128, 128, 128, 255);
 
     let prevIdx = 0;
     for (let i = 0; i < colors.length; i++) {
         if (colors[i].time <= timeOfDay) prevIdx = i;
     }
 
-    let nextIdx = prevIdx + 1;
-    if (nextIdx >= colors.length) nextIdx = 0;
-
+    let nextIdx = (prevIdx + 1) % colors.length;
     const prev = colors[prevIdx];
     const next = colors[nextIdx];
 
@@ -689,17 +615,21 @@ function interpolateFogInfoCloudColor(
         t = Math.max(0, Math.min(1, (currentTime - prevTime) / (nextTime - prevTime)));
     }
 
-    const pC = prev.cloudColor?.[index] || [128, 128, 128];
-    const nC = next.cloudColor?.[index] || [128, 128, 128];
+    // Default fallbacks: index 0 (clouds) -> grey/opaque, index 1/2 (stars) -> black/transparent
+    // EXCEPT we want Cloud2/3 to default to index 0 if index 0 is available but 1/2 is not.
+    // However, this helper is usually called per-index. 
+    // The "default to 0th index" logic will be handled in RenderManager.
 
-    const pA = pC[3] ?? 255;
-    const nA = nC[3] ?? 255;
+    const pC = prev.cloudColor?.[index];
+    const nC = next.cloudColor?.[index];
+
+    if (!pC || !nC) return null as any;
 
     return target.set(
         pC[0] + (nC[0] - pC[0]) * t,
         pC[1] + (nC[1] - pC[1]) * t,
         pC[2] + (nC[2] - pC[2]) * t,
-        pA + (nA - pA) * t
+        255
     );
 }
 

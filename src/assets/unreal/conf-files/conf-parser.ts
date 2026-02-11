@@ -59,7 +59,7 @@ export function consumeHSV(line: string): [number, number, number, number] {
     return [t, h, s, b];
 }
 
-export function consumeRGB(line: string): [number, number, number, number] {
+export function consumeRGB(line: string): [number, number, number, number, number] {
     const offsetLeft = line.indexOf("(");
 
     if (offsetLeft === -1)
@@ -70,7 +70,7 @@ export function consumeRGB(line: string): [number, number, number, number] {
     if (offsetRight === -1)
         throw new Error(`Could not find ')': ${line}`);
 
-    let t = 0, r = 0, g = 0, b = 0;
+    let t = 0, r = 0, g = 0, b = 0, a = 255;
 
     for (const param of line.slice(offsetLeft + 1, offsetRight).split(",")) {
         const [k, v] = param.split("=").map(v => v.trim());
@@ -80,11 +80,12 @@ export function consumeRGB(line: string): [number, number, number, number] {
             case "r": r = parseInt(v); break;
             case "g": g = parseInt(v); break;
             case "b": b = parseInt(v); break;
+            case "a": a = parseInt(v); break;
             default: throw new Error(`Unknown light parameter: ${k}`);
         }
     }
 
-    return [t, r, g, b];
+    return [t, r, g, b, a];
 }
 
 export function consumeScale(line: string): [number, number] {

@@ -33,8 +33,8 @@ class EnvSetup {
             slopeSunAngle: this.slopeSunAngle,
             subLightNum: this.subLightNum,
             timeEnv: Object.fromEntries(Object.entries(this.timeEnv).map(([k, v]) => [k, v.getDecodeInfo()])) as any,
-            skybox: this.skybox.uuid,
-            hazering: this.hazering.uuid,
+            skybox: this.skybox?.uuid,
+            hazering: this.hazering?.uuid,
             clouds: this.clouds.map(c => c.uuid)
         };
     }

@@ -31,7 +31,12 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 
     defines[`USE_${defName}`] = "";
 
-    Object.assign(uniforms[name].value = {}, parameters.uniforms);
+    const { diffuse, opacity, ...restUniforms } = parameters.uniforms;
+
+    if (diffuse !== undefined) uniforms.diffuse.value.copy(diffuse);
+    if (opacity !== undefined) uniforms.opacity.value = opacity;
+
+    Object.assign(uniforms[name].value = {}, restUniforms);
     Object.assign(defines, parameters.defines);
 
     if (parameters.isUsingMap) {
@@ -197,6 +202,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             side: info.side,
             transparent: info.transparent,
             // depthWrite: info.depthWrite,
+            // depthTest: info.depthTest,
             visible: info.visible,
             premultipliedAlpha: true,
             lights: true,
@@ -299,13 +305,6 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public setVertexColors() {
-        this.vertexColors = true;
-        this.defines["USE_COLOR"] = "";
-        this.needsUpdate = true;
-        return this;
-    }
-
     public update(time: number) {
         Object.entries(this.sprites).forEach(([k, { sprites, framerate }]) => {
             const frameCount = sprites.length;
@@ -338,6 +337,7 @@ type MeshStaticMaterialParameters = {
     blendingMode: GA.SupportedBlendingTypes_T,
     transparent: boolean,
     depthWrite: boolean,
+    depthTest: boolean,
     visible: boolean,
     combiner?: {
         combineMode: number,

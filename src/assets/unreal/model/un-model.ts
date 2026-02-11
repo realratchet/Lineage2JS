@@ -311,15 +311,25 @@ abstract class UModel extends UPrimitive {
             // if (surf.flags === 4194304)
             //     continue
 
-            const vert: FVert = this.vertices.getElem(node.iVertPool);
+            // Determine if node is in a SkyZone
+            // We check the front zone (iZone[1]) as the primary zone for the node
+            const zoneIndex = node.iZone[1];
+            const zoneProp = this.zones[zoneIndex];
+            const zoneActor = zoneProp?.zoneActor;
 
-            // if (!this.isSky) {
-            //     const { x: testX, y: testZ, z: testY } = this.points.getElem(vert.pVertex) as FVector;
+            // Check if this node belongs to a SkyZoneInfo
+            const isSkyZone = zoneActor?.tag === "SkyZoneInfo";
 
-            //     if (testX <= -327680.00 || testX >= 327680.00) continue;
-            //     if (testZ <= -262144.00 || testZ >= 262144.00) continue;
-            //     // if (testY <= -18000 || testY >= 18000) continue;
-            // }
+            // Filtering Logic:
+            // 1. If we are loading a Sky Level (library.isSkyLevel = true):
+            //    - We ONLY want to render the SkyZone geometry.
+            //    - So, if the node is NOT in a SkyZone, we skip it.
+            if (library.isSkyLevel && !isSkyZone) continue;
+
+            // 2. If we are loading a Normal Level (library.isSkyLevel = false):
+            //    - We want to EXCLUDE the SkyZone geometry (it will be handled by SkyRenderer).
+            //    - So, if the node IS in a SkyZone, we skip it.
+            if (!library.isSkyLevel && isSkyZone) continue;
 
             if (node.iCollisionBound >= 0) {
                 library.bspColliders.push(nodeInfo.collision.bounds);
@@ -351,9 +361,7 @@ abstract class UModel extends UPrimitive {
             const sectionKey = `${materialUuid}/${sectionPolyFlags}/${lightmapTextureIndex}`;
 
             // Determine if node is in "Outdoor" zone (Front Zone)
-            const zoneIndex = node.iZone[1];
-            const zoneProp = this.zones[zoneIndex];
-            const zoneActor = zoneProp?.zoneActor;
+            // (zoneIndex, zoneProp, zoneActor are determined above for filtering)
             const isOutdoor = zoneIndex === 0 || (zoneActor && (zoneActor as any).isSunAffected); // zone 0 is LevelInfo (Outdoor)
 
             // Split sections by Ambient Type (Outdoor vs Indoor)
@@ -521,7 +529,14 @@ abstract class UModel extends UPrimitive {
                 nodeIndices,
                 isOutdoor: sectionData.isOutdoor,
                 isUnlit: !!(sectionData.polyFlags & PF_Unlit),
-                sectionName: sectionKey
+                sectionName: sectionKey,
+                // Sky level defaults or surface overrides
+                depthWrite: this.isSky ? false : undefined,
+                depthTest: this.isSky ? false : undefined,
+                fog: this.isSky ? true : undefined,
+                side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided)) ? 2 : undefined, // 2 = DoubleSide
+                blendingMode: this.isSky ? (!(sectionData.polyFlags & PolyFlags_T.PF_TwoSided) ? "brighten" : "normal") :
+                    ((sectionData.polyFlags & PolyFlags_T.PF_Additive) ? "brighten" : undefined),
             };
 
             const sectionIndex = library.bspSections.length;

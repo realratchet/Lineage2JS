@@ -1,6 +1,6 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, Vector4 } from "three";
+import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3 } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
 import DecodeLibrary from "../unreal/decode-library";
 import ParticleMaterial from "@client/materials/particle-material";
@@ -158,8 +158,8 @@ function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDeco
     }
 
     if (parameter) {
-        parameter.uniforms.modifierColor = new Vector4(r, g, b, a);
-        parameter.defines.USE_COLOR_MODIFIER = "";
+        parameter.uniforms.diffuse = new Color(r, g, b);
+        parameter.uniforms.opacity = a;
     }
 
     return parameter;
@@ -235,6 +235,7 @@ function decodeCombiner(library: DecodeLibrary, info: GD.ICombinerDecodeInfo): M
         blendingMode: "normal",
         transparent: true,
         depthWrite: true,
+        depthTest: true,
         visible: true,
         combiner: {
             combineMode: info.combineMode,
@@ -257,6 +258,7 @@ function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshS
         blendingMode: info.blendingMode,
         transparent: info.transparent,
         depthWrite: info.depthWrite,
+        depthTest: info.depthTest,
         visible: info.visible
     });
 }
@@ -271,6 +273,7 @@ function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): Mes
         blendingMode: "normal",
         transparent: false,
         depthWrite: true,
+        depthTest: true,
         visible: true
     });
 }
@@ -297,9 +300,10 @@ function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDe
         specular: isShader ? _decodeModifier(library, info, shader.specular) : null,
         specularMask: isShader ? _decodeModifier(library, info, shader.specularMask) : null,
         side: (isColorMod && colorMod.doubleSide) ? DoubleSide : ((info as GD.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide),
-        blendingMode: (isColorMod && colorMod.alphaBlend) ? "translucent" : (isShader ? shader.blendingMode : "normal"),
+        blendingMode: shader.blendingMode ?? "normal",
         transparent: isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false),
         depthWrite: isShader ? shader.depthWrite : true,
+        depthTest: isShader ? shader.depthTest ?? true : true,
         visible: isShader ? shader.visible : true
     });
 }
@@ -396,6 +400,7 @@ function decodeEmptyMaterial(): MeshStaticMaterial {
         blendingMode: "normal",
         transparent: false,
         depthWrite: true,
+        depthTest: true,
         visible: true
     });
 

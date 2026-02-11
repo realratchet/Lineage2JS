@@ -78,6 +78,14 @@ class ColorByte {
         return this.set((this.r * b / 255) | 0, (this.g * b / 255) | 0, (this.b * b / 255) | 0, (this.a * b / 255) | 0);
     }
 
+    public multiply(other: ColorByte): this {
+        this.r = (this.r * other.r / 255) | 0;
+        this.g = (this.g * other.g / 255) | 0;
+        this.b = (this.b * other.b / 255) | 0;
+        this.a = (this.a * other.a / 255) | 0;
+        return this;
+    }
+
     public lerp(other: ColorByte, alpha: number): this {
         this.r += (other.r - this.r) * alpha;
         this.g += (other.g - this.g) * alpha;
@@ -132,6 +140,13 @@ class ColorByte {
 
     public clone() {
         return new ColorByte(this.r, this.g, this.b, this.a);
+    }
+
+    public toHex(): string {
+        const r = Math.min(255, Math.max(0, this.r | 0)).toString(16).padStart(2, "0");
+        const g = Math.min(255, Math.max(0, this.g | 0)).toString(16).padStart(2, "0");
+        const b = Math.min(255, Math.max(0, this.b | 0)).toString(16).padStart(2, "0");
+        return `#${r}${g}${b}`;
     }
 }
 

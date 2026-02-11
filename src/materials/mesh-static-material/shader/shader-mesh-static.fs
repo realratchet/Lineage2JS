@@ -65,9 +65,6 @@ uniform float opacity;
                 TransformDiffuseData transform;
                 #endif
             #endif
-            #ifdef USE_COLOR_MODIFIER
-                vec4 modifierColor;
-            #endif
         };
 
         uniform DiffuseData shDiffuse;
@@ -118,9 +115,6 @@ uniform float opacity;
             #endif
             #ifdef USE_MAP_OPACITY_TRANSFORM
                 TransformOpacityData transform;
-            #endif
-            #ifdef USE_COLOR_MODIFIER
-                vec4 modifierColor;
             #endif
         };
 
@@ -185,9 +179,6 @@ uniform float opacity;
             #ifdef USE_MAP_SPECULAR_TRANSFORM
                 TransformSpecularData transform;
             #endif
-            #ifdef USE_COLOR_MODIFIER
-                vec4 modifierColor;
-            #endif
         };
 
         uniform SpecularData shSpecular;
@@ -239,9 +230,6 @@ uniform float opacity;
             #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
                 TransformSpecularMaskData transform;
             #endif
-            #ifdef USE_COLOR_MODIFIER
-                vec4 modifierColor;
-            #endif
         };
 
         uniform SpecularMaskData shSpecularMask;
@@ -292,9 +280,6 @@ uniform float opacity;
                 #ifdef USE_MAP_MATERIAL2_TRANSFORM
                 TransformMaterial2Data transform;
                 #endif
-            #endif
-            #ifdef USE_COLOR_MODIFIER
-                vec4 modifierColor;
             #endif
         };
 
@@ -384,11 +369,6 @@ void main() {
             #ifdef USE_MASKING
                 diffuseColor.a *= texelDiffuse.a;
             #endif
-
-            #ifdef USE_COLOR_MODIFIER
-                diffuseColor.rgb *= shDiffuse.modifierColor.rgb;
-                diffuseColor.a *= shDiffuse.modifierColor.a;
-            #endif
         #endif
     #endif
 
@@ -400,10 +380,6 @@ void main() {
         #ifdef USE_MATERIAL2
             #ifdef USE_MAP_MATERIAL2
                 color2 = texture2D(shMaterial2.map.texture, UV_MATERIAL2);
-                #ifdef USE_COLOR_MODIFIER
-                    color2.rgb *= shMaterial2.modifierColor.rgb;
-                    color2.a *= shMaterial2.modifierColor.a;
-                #endif
             #endif
         #endif
         
@@ -440,10 +416,6 @@ void main() {
             vec4 texelOpacity = texture2D(shOpacity.map.texture, UV_OPACITY);
             
             diffuseColor.a *= texelOpacity.a;
-            
-            #ifdef USE_COLOR_MODIFIER
-                diffuseColor.rgba *= shOpacity.modifierColor.a;
-            #endif
         #endif
     #endif
 
@@ -520,10 +492,6 @@ void main() {
             #endif
         #endif
 
-        #ifdef USE_COLOR_MODIFIER
-            specularColor.rgb *= shSpecular.modifierColor.rgb;
-        #endif
-
         
         #ifdef USE_MAP_SPECULAR_MASK
             vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
@@ -539,7 +507,15 @@ void main() {
     #include <output_fragment>
     #include <tonemapping_fragment>
     #include <encodings_fragment>
-    #include <fog_fragment>
+    // Haze uses black fog for atmospheric depth (trace shows FOGCOLOR=0 for haze)
+    #ifdef HAZE_BLACK_FOG
+        #ifdef USE_FOG
+            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+            gl_FragColor.rgb = mix( gl_FragColor.rgb, vec3(0.0), fogFactor );
+        #endif
+    #else
+        #include <fog_fragment>
+    #endif
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
 
@@ -559,4 +535,5 @@ void main() {
     // gl_FragColor = vec4((directLight.color * (saturate( dot( geometry.normal, directLight.direction ) ))) * BRDF_Lambert( material.diffuseColor ) * 10.0, 1.0);
 
     // gl_FragColor.a = texture2D(shDiffuse.map.texture, UV_DIFFUSE).a;
+
 }

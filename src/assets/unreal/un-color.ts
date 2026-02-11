@@ -33,9 +33,9 @@ abstract class FColor extends UObject {
     protected doLoad(pkg: APackage, exp: UExport): void {
         const bytes = pkg.read(4);
 
-        this.r = bytes.getUint8(0);
+        this.b = bytes.getUint8(0);
         this.g = bytes.getUint8(1);
-        this.b = bytes.getUint8(2);
+        this.r = bytes.getUint8(2);
         this.a = bytes.getUint8(3);
 
         this.readHead = pkg.tell();

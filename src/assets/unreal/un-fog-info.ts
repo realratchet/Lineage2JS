@@ -1,6 +1,7 @@
 import UObject, { APackage, UExport } from "@l2js/core";
 import AInfo from "./un-info";
 import { Vector3 } from "three";
+import FVector from "@client/assets/unreal/un-vector";
 
 abstract class UL2FogInfo extends AInfo {
     declare protected readonly affectRange: GA.FRange;
@@ -11,35 +12,31 @@ abstract class UL2FogInfo extends AInfo {
     declare protected readonly fogRange5: GA.FRange;
     declare protected readonly colors: C.FArray<UL2EnvironmentColorInfo>;
     declare protected readonly cloudTexture: GA.UMaterial;
+    declare protected readonly textureDistance: number;
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
         let zoneMask = 0n;
         const level = this.getLevel();
         const model = level?.getModel();
 
-        if (model && this.location && this.affectRange) {
-            let radius = this.affectRange.B;
-            if (radius <= 0) radius = this.affectRange.A;
-            if (radius <= 0) radius = 1000;
+        const radius = this.affectRange.max;
+        const origin = this.location;
+        const extent = FVector.make(radius, radius, radius);
 
-            const pos = this.location.getVectorElements();
-            const origin = new Vector3(pos[0], pos[1], pos[2]);
-            const extent = new Vector3(radius, radius, radius);
+        // Find leaves touching this box
+        const leafIndices = model.boxLeavesRecursive(0, origin, extent);
 
-            // Find leaves touching this box
-            const leafIndices = model.boxLeavesRecursive(0, origin, extent);
-
-            for (const leafIndex of leafIndices) {
-                const leaf = library.bspLeaves[leafIndex];
-                if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
-                    zoneMask |= (1n << BigInt(leaf.zone));
-                }
+        for (const leafIndex of leafIndices) {
+            const leaf = library.bspLeaves[leafIndex];
+            if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+                zoneMask |= (1n << BigInt(leaf.zone));
             }
         }
 
+
         return {
             type: "L2FogInfo",
-            position: this.location ? this.location.getVectorElements() : [0, 0, 0],
+            position: this.location.getVectorElements(),
             affectRange: this.affectRange.getDecodeInfo(library),
             fogRange1: this.fogRange1.getDecodeInfo(library),
             fogRange2: this.fogRange2.getDecodeInfo(library),
@@ -48,7 +45,8 @@ abstract class UL2FogInfo extends AInfo {
             fogRange5: this.fogRange5.getDecodeInfo(library),
             colors: this.colors.map(c => c.getDecodeInfo()),
             cloudTexture: this.cloudTexture?.getDecodeInfo(library) ?? null,
-            zoneMask
+            zoneMask,
+            textureDistance: this.textureDistance
         };
     }
 
@@ -61,7 +59,8 @@ abstract class UL2FogInfo extends AInfo {
             "FogRange4": "fogRange4",
             "FogRange5": "fogRange5",
             "Colors": "colors",
-            "CloudTexture": "cloudTexture"
+            "CloudTexture": "cloudTexture",
+            "TextureDistance": "textureDistance"
         });
     }
 }
@@ -74,6 +73,9 @@ abstract class UL2EnvironmentColorInfo extends UObject {
     declare protected hazeringColor: C.FArray<GA.FColor>;
 
     public getDecodeInfo() {
+        if (this.cloudColor.length !== 1 || this.hazeringColor.length !== 1)
+            debugger;
+
         return {
             time: this.time,
             fogColor: this.fogColor.toArray(),

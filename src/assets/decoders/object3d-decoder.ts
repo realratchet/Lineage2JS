@@ -302,6 +302,18 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
         }
     }
 
+    // Apply BSP Section overrides
+    (Array.isArray(materials) ? materials : [materials]).forEach(m => {
+        if (!m) return;
+        if (sectionInfo.depthWrite !== undefined) m.depthWrite = sectionInfo.depthWrite;
+        if (sectionInfo.depthTest !== undefined) m.depthTest = sectionInfo.depthTest;
+        if (sectionInfo.side !== undefined) m.side = sectionInfo.side;
+        if (sectionInfo.fog !== undefined) (m as any).fog = sectionInfo.fog;
+        if (sectionInfo.blendingMode !== undefined) {
+            (m as any).setBlendingMode?.(sectionInfo.blendingMode);
+        }
+    });
+
     const mesh = new Mesh(geometry, materials);
 
     mesh.name = `BSPSection_${sectionInfo.sectionName}`;

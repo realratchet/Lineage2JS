@@ -40,22 +40,24 @@ abstract class FNTimeColor extends UObject implements IEnvTime {
     declare public readonly r: number;
     declare public readonly g: number;
     declare public readonly b: number;
+    declare public readonly a: number;
 
-    public constructor(time = 0, r = 0, g = 0, b = 0) {
+    public constructor(time = 0, r = 0, g = 0, b = 0, a = 255) {
         super();
 
         this.time = time;
         this.r = r;
         this.g = g;
         this.b = b;
+        this.a = a;
     }
 
     public toString(): string {
-        return `NTimeHSV(T=${this.time}, R=${this.r}, G=${this.g}, B=${this.b})`;
+        return `NTimeColor(T=${this.time}, R=${this.r}, G=${this.g}, B=${this.b}, A=${this.a})`;
     }
 
-    public getDecodeInfo(): GD.INTimeColorDecodeInfo {
-        return [this.time, this.r, this.g, this.b];
+    public getDecodeInfo() {
+        return [this.time, this.r, this.g, this.b, this.a];
     }
 }
 
@@ -172,6 +174,11 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         this.colorCloud1 = loadRGB(fileContents, "CloudColor1", pkgNative, pkgEngine);
         this.colorCloud2 = loadRGB(fileContents, "CloudColor2", pkgNative, pkgEngine);
         this.colorCloud3 = loadRGB(fileContents, "CloudColor3", pkgNative, pkgEngine);
+        try {
+            this.colorStar = loadRGB(fileContents, "StarColor", pkgNative, pkgEngine);
+        } catch (e) {
+            // StarColor is optional or missing in some env files
+        }
 
         return this;
     }
@@ -204,13 +211,13 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
                 star: { type: "TimeColor", array: this.colorStar?.map(c => c.getDecodeInfo()) ?? [] },
                 sun: { type: "TimeColor", array: this.colorSun?.map(c => c.getDecodeInfo()) ?? [] },
                 moon: { type: "TimeColor", array: this.colorMoon?.map(c => c.getDecodeInfo()) ?? [] }
-            },
+            } as any,
             ambient: {
                 terrain: { type: "TimeColor", array: this.ambientTerrain?.map(c => c.getDecodeInfo()) ?? [] },
                 actor: { type: "TimeColor", array: this.ambientActor?.map(c => c.getDecodeInfo()) ?? [] },
                 staticMesh: { type: "TimeColor", array: this.ambientStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
                 bsp: { type: "TimeColor", array: this.ambientBSP?.map(c => c.getDecodeInfo()) ?? [] }
-            },
+            } as any,
             scale: {
                 sun: { type: "TimeScale", array: this.scaleSun?.map(c => c.getDecodeInfo()) ?? [] },
                 moon: { type: "TimeScale", array: this.scaleMoon?.map(c => c.getDecodeInfo()) ?? [] }
@@ -343,11 +350,11 @@ function loadRGB(fileContents: string, sectionName: string, pkgNative: C.ANative
         if (nameMax.toLowerCase() !== `color${i}`)
             throw new Error(`Invalid variable found '${nameMax}' expected 'Light${i}'`);
 
-        const [t, h, s, b] = consumeRGB(nameVal);
+        const [t, r, g, b, a] = consumeRGB(nameVal);
 
         readOffset = readOffset + readContent;
 
-        array[i - 1] = new FNTimeColor(t, h, s, b);
+        array[i - 1] = new FNTimeColor(t, r, g, b, a);
     }
 
     return array;

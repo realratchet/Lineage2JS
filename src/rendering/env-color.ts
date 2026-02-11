@@ -50,12 +50,14 @@ class TimeColor {
     public readonly r: number;
     public readonly g: number;
     public readonly b: number;
+    public readonly a: number;
 
-    public constructor(time: number, r: number, g: number, b: number) {
+    public constructor(time: number, r: number, g: number, b: number, a: number = 255) {
         this.time = time;
         this.r = r;
         this.g = g;
         this.b = b;
+        this.a = a;
     }
 }
 

@@ -27,6 +27,7 @@ class DecodeLibrary {
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
+    public readonly isSkyLevel: boolean;
     public readonly skyLevel: {
         skybox: string;
         hazering: string;
@@ -60,6 +61,7 @@ class DecodeLibrary {
         decodeLibrary.brightness = uLevelInfo.brightness;
 
         decodeLibrary.name = uLevel.url.map;
+        (decodeLibrary as any).isSkyLevel = isSkyLevel;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
 
         // const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();

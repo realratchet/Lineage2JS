@@ -76,6 +76,7 @@ class RenderManager {
     public readonly visualizer: Visualizer;
 
     protected environment: L2Environment;
+    protected activeFogId: string | null = null;
 
     protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
@@ -99,6 +100,7 @@ class RenderManager {
 
 
     public envConfig = {
+        showLevel: true,
         fogPreset: "4"
     };
 
@@ -131,6 +133,20 @@ class RenderManager {
             "4 (5k-14k)": "4",
             "5 (8k-20k)": "5"
         });
+
+        guiFolders.world.add(this.envConfig, "showLevel")
+            .name("Show Level")
+            .onChange(v => {
+                this.objectGroup.visible = v;
+            });
+
+        const skyFolder = gui.addFolder("Sky Layers");
+        skyFolder.add(this.skyRenderer.config, "celestials").name("Celestials");
+        skyFolder.add(this.skyRenderer.config, "haze1").name("Haze 1 (Clearing)");
+        skyFolder.add(this.skyRenderer.config, "starsClouds").name("Stars/Clouds");
+        skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
+
+        skyFolder.open();
 
         this.renderer.autoClear = false;
 
@@ -361,6 +377,13 @@ class RenderManager {
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
                 } else if (this.visualizer.getMode() === 3) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+                } else if (this.visualizer.getMode() === 4) { // Fogs
+                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
+                }
+
+                // Overlay fogs if in other modes
+                if (this.visualizer.getMode() !== 4) {
+                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
             return;
@@ -392,6 +415,13 @@ class RenderManager {
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
                 } else if (this.visualizer.getMode() === 3) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+                } else if (this.visualizer.getMode() === 4) { // Fogs
+                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
+                }
+
+                // Overlay fogs if in other modes
+                if (this.visualizer.getMode() !== 4) {
+                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
             return;
@@ -624,11 +654,15 @@ class RenderManager {
 
     public enableZoneCulling = true;
 
-    public getSector(position: THREE.Vector3) {
+    public getSector(position: THREE.Vector3): SectorObject | null {
         const sectorSize = 256 * 128;
         const sectorX = Math.floor(position.x / sectorSize) + 20;
         const sectorY = Math.floor(position.z / sectorSize) + 18;
 
+        return this.getSectorByCoords(sectorX, sectorY);
+    }
+
+    public getSectorByCoords(sectorX: number, sectorY: number): SectorObject | null {
         if (!this.sectors.has(sectorX))
             return null;
 
@@ -733,16 +767,28 @@ class RenderManager {
 
         // 2. Get Fog Settings
         // Default Fog Settings (from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u))
+
+        // Fix: Load Fog Presets Dynamically from EnvInfo (Env.int)
+        // Scaling Factor: 2048 (Derived from Trace: 2.5 * 2048 = 5120)
+        const presetIndex = parseInt(String(this.envConfig.fogPreset).split(" ")[0]);
+        const range = env.getEnv().fog.ranges[presetIndex - 1]; // 0-based array
+
+        // Default or Fallback
         let targetFogStart = 2000;
         let targetFogEnd = 8000;
 
-        switch (String(this.envConfig.fogPreset)) {
-            case "2": targetFogStart = 3000; targetFogEnd = 10000; break;
-            case "3": targetFogStart = 4000; targetFogEnd = 12000; break;
-            case "4": targetFogStart = 5000; targetFogEnd = 14000; break;
-            case "5": targetFogStart = 8000; targetFogEnd = 20000; break;
-            case "1": default: targetFogStart = 2000; targetFogEnd = 8000; break;
+        if (range) {
+            targetFogStart = range.x * 2048;
+            targetFogEnd = range.y * 2048;
+        } else {
+            // Fallback to Preset 1 if invalid
+            const defRange = env.getEnv().fog.ranges[0];
+            if (defRange) {
+                targetFogStart = defRange.x * 2048;
+                targetFogEnd = defRange.y * 2048;
+            }
         }
+
         let targetFogColor = env.getHazeColor(tmpColorByte_2); // Default to Haze
 
         // targetFogStart = 1;
@@ -754,6 +800,14 @@ class RenderManager {
         // L2FogInfo blending will modify these values if in range
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
+        let skyVisibility = 1.0;
+
+        // Initialize with default baseline colors from Env.int
+        const targetCloudColors: ColorByte[] = [
+            env.getCloudColor(0, new ColorByte()),
+            env.getCloudColor(1, new ColorByte()),
+            env.getCloudColor(2, new ColorByte())
+        ];
 
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
@@ -779,23 +833,48 @@ class RenderManager {
             let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;
             // Haze/Cloud accumulators
             let accHazeR = 0, accHazeG = 0, accHazeB = 0, totalHazeWeight = 0;
-            let accCloudR = 0, accCloudG = 0, accCloudB = 0, totalCloudWeight = 0;
+            let accCloudR = [0, 0, 0], accCloudG = [0, 0, 0], accCloudB = [0, 0, 0], totalCloudWeight = [0, 0, 0];
 
             // Fog accumulators (Standard spatial weight)
             let accStart = 0, accEnd = 0, accR = 0, accG = 0, accB = 0, totalFogWeight = 0;
 
             // Haze Array accumulators (for vertical gradient)
             let accHArrR: number[] = [], accHArrG: number[] = [], accHArrB: number[] = [];
+
             let totalHArrWeight = 0;
 
             const presetIndex = this.envConfig.fogPreset;
-            const fogInfos = sector.fogInfos || [];
             const timeOfDay = env.getTimeOfDay();
 
-            let maxHArrLen = 0;
-            // const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
-            activeInfos = [];
+            // Collect fogInfos from current sector and 8 neighbor sectors to handle cross-sector ranges
+            const fogInfosAll: any[] = [];
+            const sectorSize = 256 * 128;
+            const currentX = Math.floor(this.camera.position.x / sectorSize) + 20;
+            const currentY = Math.floor(this.camera.position.z / sectorSize) + 18;
 
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    const s = this.getSectorByCoords(currentX + dx, currentY + dy);
+                    if (s && s.fogInfos) {
+                        for (const fi of s.fogInfos) {
+                            if (!fogInfosAll.includes(fi)) {
+                                fogInfosAll.push(fi);
+                            }
+                        }
+                    }
+                }
+            }
+            const fogInfos = fogInfosAll;
+
+            this.activeFogId = null;
+            let minFogDist = Infinity;
+            const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
+            const fogRefPosition = bspCullingCamera.position;
+
+            let maxHArrLen = 0;
+            const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
+
+            // First pass: Find the closest active fog (closest wins logic)
             fogInfos.forEach(fogInfo => {
                 const visibleMask = sector.lastZoneMask;
                 if (fogInfo.zoneMask && visibleMask && !(fogInfo.zoneMask & visibleMask)) {
@@ -805,24 +884,27 @@ class RenderManager {
                 const affectRange = fogInfo.affectRange;
                 if (!affectRange) return;
 
-                const inner = Math.min(affectRange.A, affectRange.B);
                 const outer = Math.max(affectRange.A, affectRange.B);
-                const dist = this.camera.position.distanceTo(fogInfo.position);
+                const dist = fogRefPosition.distanceTo(fogInfo.position);
 
-                if (dist > outer) return;
-
-                let weight = 1.0;
-                if (outer > inner) {
-                    if (dist > inner) {
-                        weight = 1.0 - ((dist - inner) / (outer - inner));
+                if (dist <= outer) {
+                    if (dist < minFogDist) {
+                        minFogDist = dist;
+                        this.activeFogId = fogInfo.uuid;
                     }
                 }
+            });
 
-                if (weight <= 0) return;
+            // Second pass: Use only the active fog if one was found, otherwise fallback to default
+            // Note: The user requested "closest wins", so we only process the active one.
+            fogInfos.forEach(fogInfo => {
+                const isActive = fogInfo.uuid === this.activeFogId;
+                if (!isActive) return;
 
-                // const hArr = interpolateFogInfoHazeColors(timeOfDay, fogInfo.colors);
+                const weight = 1.0; // The closest one wins with full weight
+                const timeOfDay = env.getTimeOfDay();
+
                 const hArr = interpolateFogInfoHazeColors(timeOfDay, fogInfo.colors);
-                // console.log(`[RenderManager] FogInfo HArr Len: ${hArr.length}`);
                 if (hArr.length > 0) {
                     maxHArrLen = Math.max(maxHArrLen, hArr.length);
                 }
@@ -840,9 +922,14 @@ class RenderManager {
                 const fogColor = interpolateFogInfoColor(timeOfDay, fogInfo.colors, tmpColorByte);
                 const skyColor = interpolateFogInfoSkyColor(timeOfDay, fogInfo.colors, tmpColorByte_3);
                 const hazeColor = interpolateFogInfoHazeColor(timeOfDay, fogInfo.colors, tmpColorByte_4);
-                const cloudColor = interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, tmpColorByte_5, 0);
+                const cloudColors = [
+                    interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, tmpColorByte_5, 0),
+                    interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, new ColorByte(), 1),
+                    interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, new ColorByte(), 2)
+                ];
 
                 // 1. Fog Blending
+                // Ranges in EnvInfo are KiloUnits (scaled by 2048), but FogInfo (Zones) are already Units
                 accStart += range.A * weight;
                 accEnd += range.B * weight;
                 accR += fogColor.r * weight;
@@ -851,104 +938,142 @@ class RenderManager {
                 totalFogWeight += weight;
 
                 // 2. Sky Blending
-                const skyWeight = weight * (skyColor.a / 255);
+                // Alpha 0 in assets usually means fallback to 255 (fully opaque)
+                const skyAlpha = skyColor.a === 0 ? 255 : skyColor.a;
+                const skyWeight = weight * (skyAlpha / 255);
                 accSkyR += skyColor.r * skyWeight;
                 accSkyG += skyColor.g * skyWeight;
                 accSkyB += skyColor.b * skyWeight;
                 totalSkyWeight += skyWeight;
 
                 // 3. Haze Blending
-                const alpha = hazeColor.a === 0 ? 255 : hazeColor.a;
-                const hazeWeight = weight * (alpha / 255);
-                // console.log(`[RenderManager] HazeWeight: ${hazeWeight.toFixed(4)} | FogWeight: ${weight.toFixed(4)} | HazeAlpha: ${hazeColor.a}`);
+                const hAlpha = hazeColor.a === 0 ? 255 : hazeColor.a;
+                const hazeWeight = weight * (hAlpha / 255);
                 accHazeR += hazeColor.r * hazeWeight;
                 accHazeG += hazeColor.g * hazeWeight;
                 accHazeB += hazeColor.b * hazeWeight;
                 totalHazeWeight += hazeWeight;
 
-                // 4. Cloud Blending
-                const cloudWeight = weight * (cloudColor.a / 255);
-                accCloudR += cloudColor.r * cloudWeight;
-                accCloudG += cloudColor.g * cloudWeight;
-                accCloudB += cloudColor.b * cloudWeight;
-                totalCloudWeight += cloudWeight;
+                // 4. Cloud Blending (Calculated for all 3 indices)
+                cloudColors.forEach((c, idx) => {
+                    if (!c) return;
+                    const cAlpha = c.a === 0 ? 255 : c.a;
+                    const weightC = weight * (cAlpha / 255);
+                    accCloudR[idx] += c.r * weightC;
+                    accCloudG[idx] += c.g * weightC;
+                    accCloudB[idx] += c.b * weightC;
+                    totalCloudWeight[idx] += weightC;
+                });
 
                 // 5. Haze Array Blending
                 if (hArr.length > 0) {
                     for (let i = 0; i < maxHArrLen; i++) {
                         const color = hArr[i] || hArr[hArr.length - 1];
-                        accHArrR[i] = (accHArrR[i] || 0) + color.r * hazeWeight;
-                        accHArrG[i] = (accHArrG[i] || 0) + color.g * hazeWeight;
-                        accHArrB[i] = (accHArrB[i] || 0) + color.b * hazeWeight;
+                        accHArrR[i] = (accHArrR[i] || 0) + color.r * weight;
+                        accHArrG[i] = (accHArrG[i] || 0) + color.g * weight;
+                        accHArrB[i] = (accHArrB[i] || 0) + color.b * weight;
                     }
-                    totalHArrWeight += hazeWeight;
+                    totalHArrWeight += weight;
                 }
             });
 
-            const blendFactor = Math.min(totalFogWeight, 1.0);
+            // Calculate Sky Visibility (Suppressed by bClearToFogColor)
+            // If zones with bClearToFogColor are active, sky visibility should drop
+            skyVisibility = 1.0;
+            activeInfos.forEach(({ fogInfo, weight }) => {
+                if ((fogInfo as any).useFogColorClear) {
+                    skyVisibility = Math.max(0, skyVisibility - weight);
+                }
+            });
 
-            if (totalFogWeight > 0) {
-                targetFogStart = MathUtils.lerp(targetFogStart, accStart / totalFogWeight, blendFactor);
-                targetFogEnd = MathUtils.lerp(targetFogEnd, accEnd / totalFogWeight, blendFactor);
+            if (this.activeFogId) {
+                // If a zone fog is active, it completely overrides the global fog palette
+                targetFogStart = accStart / totalFogWeight;
+                targetFogEnd = accEnd / totalFogWeight;
                 targetFogColor.set(
-                    MathUtils.lerp(targetFogColor.r, accR / totalFogWeight, blendFactor),
-                    MathUtils.lerp(targetFogColor.g, accG / totalFogWeight, blendFactor),
-                    MathUtils.lerp(targetFogColor.b, accB / totalFogWeight, blendFactor)
+                    accR / totalFogWeight,
+                    accG / totalFogWeight,
+                    accB / totalFogWeight,
+                    255
                 );
+            } else {
+                // No active zone fog - already has default values from Env.int
             }
 
-            if (totalSkyWeight > 0) {
-                const sW = Math.min(totalSkyWeight, 1.0);
+            if (totalSkyWeight > 0 && this.activeFogId) {
                 targetSkyColor.set(
-                    MathUtils.lerp(targetSkyColor.r, accSkyR / totalSkyWeight, sW),
-                    MathUtils.lerp(targetSkyColor.g, accSkyG / totalSkyWeight, sW),
-                    MathUtils.lerp(targetSkyColor.b, accSkyB / totalSkyWeight, sW)
+                    accSkyR / totalSkyWeight,
+                    accSkyG / totalSkyWeight,
+                    accSkyB / totalSkyWeight,
+                    255
                 );
             }
 
-            if (totalHazeWeight > 0) {
-                const hW = Math.min(totalHazeWeight, 1.0);
-                tmpColorByte_4.set(
-                    MathUtils.lerp(targetFogColor.r, accHazeR / totalHazeWeight, hW),
-                    MathUtils.lerp(targetFogColor.g, accHazeG / totalHazeWeight, hW),
-                    MathUtils.lerp(targetFogColor.b, accHazeB / totalHazeWeight, hW)
-                );
-            } else {
-                tmpColorByte_4.copy(targetFogColor);
-            }
+            // Calculate final Cloud Colors (Blended result of Baseline + Regional Overrides)
+            targetCloudColors.forEach((tc, idx) => {
+                const baseCloud = env.getCloudColor(idx, new ColorByte());
+                tc.copy(baseCloud);
+                if (this.activeFogId && totalCloudWeight[idx] > 0) {
+                    // Engine logic: Whichever wins provides the complete palette for that component
+                    // If the active fog has an override for this index, it completely overrides baseline
+                    const r = accCloudR[idx] / totalCloudWeight[idx];
+                    const g = accCloudG[idx] / totalCloudWeight[idx];
+                    const b = accCloudB[idx] / totalCloudWeight[idx];
+                    tc.set(r, g, b, 255);
+                }
+            });
 
-            if (totalCloudWeight > 0) {
-                tmpColorByte_5.set(accCloudR / totalCloudWeight, accCloudG / totalCloudWeight, accCloudB / totalCloudWeight);
-            } else {
-                tmpColorByte_5.set(255, 255, 255);
-            }
-
-
+            // 5. Apply Haze Array Blending to the final gradient
             if (totalHArrWeight > 0) {
-                // Blend L2FogInfo haze colors onto the base gradient
-                const blendFactor = Math.min(totalHArrWeight, 1.0);
-                for (let i = 0; i < maxHArrLen && i < blendedHazeColors.length; i++) {
-                    const fogInfoColor = {
-                        r: accHArrR[i] / totalHArrWeight,
-                        g: accHArrG[i] / totalHArrWeight,
-                        b: accHArrB[i] / totalHArrWeight
-                    };
-                    // Blend FogInfo color onto base gradient
-                    blendedHazeColors[i].set(
-                        MathUtils.lerp(blendedHazeColors[i].r, fogInfoColor.r, blendFactor),
-                        MathUtils.lerp(blendedHazeColors[i].g, fogInfoColor.g, blendFactor),
-                        MathUtils.lerp(blendedHazeColors[i].b, fogInfoColor.b, blendFactor),
-                        255
-                    );
+                // Aggressive override: If weight is high, prioritize regional color (reduces global bleed)
+                const haW = totalHArrWeight >= 0.95 ? 1.0 : Math.min(totalHArrWeight, 1.0);
+                for (let i = 0; i < blendedHazeColors.length; i++) {
+                    const baseColor = blendedHazeColors[i];
+                    if (accHArrR[i] !== undefined) {
+                        baseColor.set(
+                            MathUtils.lerp(baseColor.r, accHArrR[i] / totalHArrWeight, haW),
+                            MathUtils.lerp(baseColor.g, accHArrG[i] / totalHArrWeight, haW),
+                            MathUtils.lerp(baseColor.b, accHArrB[i] / totalHArrWeight, haW),
+                            baseColor.a
+                        );
+                    }
                 }
             }
 
+            // Restore Haze Color Blending (for modulatedHazeBase/tmpColorByte_4)
+            if (totalHazeWeight > 0) {
+                const hW = totalHazeWeight >= 0.95 ? 1.0 : Math.min(totalHazeWeight, 1.0);
+                tmpColorByte_4.set(
+                    MathUtils.lerp(255, accHazeR / totalHazeWeight, hW), // 255 is base (White) assumption if no fog color used
+                    MathUtils.lerp(255, accHazeG / totalHazeWeight, hW),
+                    MathUtils.lerp(255, accHazeB / totalHazeWeight, hW),
+                    255
+                );
+            } else {
+                // Default to White (Identity) so base haze colors are visible
+                tmpColorByte_4.set(255, 255, 255, 255);
+            }
         }
 
-        // console.log(`[RenderManager] HazeColor(Fallback): ${tmpColorByte_4.r},${tmpColorByte_4.g},${tmpColorByte_4.b} | TargetFog: ${targetFogColor.r},${targetFogColor.g},${targetFogColor.b} | FogInfos: ${activeInfos.length}`);
 
-        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, tmpColorByte_5, sector);
+        // Initialize with default Sky Color as fallback
+        const targetClearColor = targetSkyColor.clone();
 
+        // If useFogColorClear is active for the current weighted zone state, 
+        // we should clear to the fog color instead.
+        // We use the skyVisibility (which is derived from bClearToFogColor weights)
+        // to blend between Sky Color and Fog Color for a smooth transition.
+        if (skyVisibility < 1.0) {
+            // Linear blend: 1.0 Visibility = Pure Sky, 0.0 Visibility = Pure Fog
+            targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
+        }
+
+        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
+
+        const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
+        this.renderer.setClearColor(clearColorThree);
+
+        // Update Scene Fog (Always use targetFogColor for 3D fogging)
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
         if (!this.scene.fog || !(this.scene.fog as any).isFog) {
             this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
@@ -962,8 +1087,6 @@ class RenderManager {
         GLOBAL_UNIFORMS.fogColor.value.copy(fogColorThree);
         if (GLOBAL_UNIFORMS.fogNear) GLOBAL_UNIFORMS.fogNear.value = targetFogStart;
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
-
-        this.renderer.setClearColor(fogColorThree);
     }
 
 
@@ -1056,6 +1179,7 @@ class RenderManager {
 
                 // Remove old visualizer
                 this.scene.remove(this.visualizer.getGroup());
+                this.scene.remove(this.visualizer.getFogGroup());
 
                 // Create new visualizer
                 (this as any).visualizer = new Visualizer(this.scene);
@@ -1079,11 +1203,8 @@ class RenderManager {
 
         // Update visualizer based on camera position (use bspHelperCamera if active)
         // Only visualize the current sector
-        if (this.visualizer.isEnabled() && currentSector) {
+        if (currentSector) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-            const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                : this.frustum;
 
             // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
@@ -1093,13 +1214,71 @@ class RenderManager {
                 currentSectorMap.set(currentSector.index.x, sectorXMap);
             }
 
-            if (this.visualizer.getMode() === 1) { // Portals
-                this.visualizer.updatePortals(currentSectorMap, cameraPos);
-            } else if (this.visualizer.getMode() === 2) { // Zones
-                this.visualizer.updateZones(currentSectorMap, cameraPos);
-            } else if (this.visualizer.getMode() === 3) { // Leaves
-                this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+            if (this.visualizer.isEnabled()) {
+                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
+                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                    : this.frustum;
+
+                if (this.visualizer.getMode() === 1) { // Portals
+                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
+                } else if (this.visualizer.getMode() === 2) { // Zones
+                    this.visualizer.updateZones(currentSectorMap, cameraPos);
+                } else if (this.visualizer.getMode() === 3) { // Leaves
+                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+                } else if (this.visualizer.getMode() === 4) { // Fogs
+                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
+                }
             }
+        }
+
+        // Always update HUD in Fogs mode to prevent stale data when transitioning between sectors or leaving them
+        if (this.visualizer.isEnabled() && this.visualizer.getMode() === 4) {
+            // Capture raw source colors from the active fog if available
+            let activeFogColors: import("./visualizer").FogSourceColors | undefined;
+            if (this.activeFogId) {
+                const s = this.getSector(this.camera.position);
+                const fogInfo = s?.fogInfos?.find(fi => fi.uuid === this.activeFogId);
+                if (fogInfo) {
+                    const timeOfDay = this.environment.getTimeOfDay();
+                    activeFogColors = {
+                        fog: interpolateFogInfoColor(timeOfDay, fogInfo.colors, new ColorByte()),
+                        sky: interpolateFogInfoSkyColor(timeOfDay, fogInfo.colors, new ColorByte()),
+                        cloud: interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, new ColorByte(), 0),
+                        haze: interpolateFogInfoHazeColor(timeOfDay, fogInfo.colors, new ColorByte())
+                    };
+                }
+            }
+            // Capture global environment colors
+            const globalEnvColors: import("./visualizer").GlobalEnvColors = {
+                fog: this.environment.getFogColor(new ColorByte()),
+                sky: this.environment.getSkyColor(new ColorByte()),
+                cloud1: this.environment.getCloudColor(0, new ColorByte()),
+                cloud2: this.environment.getCloudColor(1, new ColorByte()),
+                cloud3: this.environment.getCloudColor(2, new ColorByte()),
+                sun: this.environment.getSunColor(new ColorByte()),
+                haze: this.environment.getHazeColor(new ColorByte())
+            };
+
+            // Capture active zone fog data
+            let zoneFogData: import("./visualizer").ZoneFogData | undefined;
+            const sector = this.getSector(this.camera.position);
+            if (sector) {
+                const zoneIndex = sector.findPositionZone(this.camera.position);
+                if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
+                    const zoneData = sector.bspZones[zoneIndex];
+                    const zi = zoneData.zoneInfo;
+                    if (zi) {
+                        zoneFogData = {
+                            isFogZone: !!zi.isFogZone,
+                            color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
+                            start: zi.fog ? zi.fog.start : 0,
+                            end: zi.fog ? zi.fog.end : 0
+                        };
+                    }
+                }
+            }
+
+            this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);
         }
 
         this.renderer.autoClear = false;
@@ -1168,14 +1347,9 @@ class RenderManager {
                     });
             }
 
-            moonFolder.add(this.skyRenderer, "moonMultiplier", 0.1, 15.0, 0.1)
-                .name("Scale Multiplier")
-                .onChange(() => {
-                    this.needsUpdate = true;
-                });
-
-            moonFolder.open();
+            moonFolder.close();
         }
+
     }
 
     public addSector(sector: SectorObject) {
