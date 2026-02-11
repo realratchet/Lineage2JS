@@ -143,13 +143,12 @@ abstract class UStaticMeshActor extends UAActor {
         }
 
         const attributes = library.geometries[meshInfo.geometry].attributes as { positions: Float32Array, normals: Float32Array };
-        const vertexArrayLen = attributes.positions.length;
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
         // if (attributes.positions.length / 3 === 1587)
         //     debugger;
 
-        const instanceColors = instance?.color ?? new Uint8Array(vertexArrayLen).fill(0);
+        const instanceColors = instance?.color ?? null;
 
         const ambActor = this.getAmbientLightingActor();
         const zone = this.getZone();

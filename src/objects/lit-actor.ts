@@ -33,8 +33,8 @@ class LitActorMesh extends Mesh {
         this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
         this.ambient = props.ambient;
 
-        if (this.lightInfo) {
-            const attrColor = this.geometry.getAttribute("color");
+        if (this.lightInfo || (this.ambient && !this.ambient.isUnlit)) {
+            const attrPositions = this.geometry.getAttribute("position");
 
             (
                 this.material instanceof Array
@@ -45,7 +45,7 @@ class LitActorMesh extends Mesh {
             this.geometry.setAttribute(
                 "lighting",
                 new BufferAttribute(
-                    new Uint8ClampedArray(attrColor.count * attrColor.itemSize),
+                    new Uint8ClampedArray(attrPositions.count * 3),
                     3,
                     true
                 )
@@ -102,7 +102,7 @@ class LitActorMesh extends Mesh {
     }
 
     public update(sector: SectorObject, env: L2Environment) {
-        if (!this.lightInfo) return;
+        if (!this.lightInfo && !this.ambient) return;
 
         const attrColors = this.geometry.getAttribute("lighting");
         const colorArray = attrColors.array as Uint8ClampedArray;
@@ -112,8 +112,8 @@ class LitActorMesh extends Mesh {
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
 
         // Collect and augment light info
-        const scene = this.lightInfo.scene.map(l => ({ ...l, instance: sector.lights[l.light] }));
-        const environment = this.lightInfo.environment.map(l => ({ ...l, instance: sector.lights[l.light] }));
+        const scene = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
+        const environment = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
         const allLights = [...scene, ...environment];
 
         for (const { instance: light } of allLights) {
@@ -163,7 +163,7 @@ class LitActorMesh extends Mesh {
                 this.staticLightingCache.fill(0);
             }
 
-            this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
+            if (this.lightInfo) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
 
             // if (staticEnv.length > 0)
             //     debugger;

@@ -220,7 +220,9 @@ function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMes
 
     const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
 
-    (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setInstanced?.());
+    (materials instanceof Array ? materials : [materials]).forEach(mat => {
+        if (info.attributes.colors) (mat as any)?.setInstanced?.();
+    });
 
     if (infoGeo.attributes.colors) {
         (materials instanceof Array ? materials : [materials]).forEach(mat => {

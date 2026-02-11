@@ -544,7 +544,9 @@ declare global {
                     buffer: ArrayBuffer,
                     wrapS?: number, wrapT?: number,
                     width: number, height: number,
-                    twoSided?: boolean
+                    twoSided?: boolean,
+                    isMasked?: boolean,
+                    isAlphaTexture?: boolean
                 }
 
                 export interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {

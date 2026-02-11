@@ -257,6 +257,7 @@ function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshS
         side: info.doubleSide ? DoubleSide : FrontSide,
         blendingMode: info.blendingMode,
         transparent: info.transparent,
+        alphaTest: info.alphaTest,
         depthWrite: info.depthWrite,
         depthTest: info.depthTest,
         visible: info.visible
@@ -264,14 +265,17 @@ function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshS
 }
 
 function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): MeshStaticMaterial {
+    const isMasked = info.isMasked;
+    const isAlpha = info.isAlphaTexture;
+
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, info),
         opacity: null,
         specular: null,
         specularMask: null,
         side: info.twoSided ? DoubleSide : FrontSide,
-        blendingMode: "normal",
-        transparent: false,
+        blendingMode: isMasked ? "masked" : "normal",
+        transparent: isMasked || isAlpha,
         depthWrite: true,
         depthTest: true,
         visible: true

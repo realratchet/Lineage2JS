@@ -306,7 +306,9 @@ abstract class UTexture extends UMaterial {
             wrapS: this.wrapS,
             wrapT: this.wrapT,
             useMipmaps: mipCount > 0,
-            twoSided: this.isTwoSided
+            twoSided: this.isTwoSided,
+            isMasked: this.isMasked,
+            isAlphaTexture: this.isAlphaTexture
         } as GD.ITextureDecodeInfo;
     }
 

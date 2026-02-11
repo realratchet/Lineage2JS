@@ -134,8 +134,15 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
 
-        if (info.opacity) defines["USE_ALPHATEST"] = "";
+        if (info.alphaTest !== undefined) uniforms.alphaTest.value = info.alphaTest;
+
+        if (info.opacity || info.alphaTest !== undefined) defines["USE_ALPHATEST"] = "";
         if (info.blendingMode === "masked") {
+            defines["USE_MASKING"] = "";
+            defines["USE_ALPHATEST"] = "";
+        }
+
+        if (info.transparent && !info.opacity) {
             defines["USE_MASKING"] = "";
             defines["USE_ALPHATEST"] = "";
         }
@@ -336,6 +343,7 @@ type MeshStaticMaterialParameters = {
     side: THREE.Side,
     blendingMode: GA.SupportedBlendingTypes_T,
     transparent: boolean,
+    alphaTest?: number,
     depthWrite: boolean,
     depthTest: boolean,
     visible: boolean,
