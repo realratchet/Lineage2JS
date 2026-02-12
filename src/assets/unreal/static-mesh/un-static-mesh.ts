@@ -314,6 +314,10 @@ abstract class UStaticMesh extends UPrimitive {
             const [px, py, pz, nx, ny, nz] = this.vertexStream.getElem(i);
             const [u, v] = this.uvStream.getElem(0).getUV(i);
 
+            // if (Math.abs(px - 241.79730224609375) < 1 && Math.abs(py + 235.71449279785156) < 1 && Math.abs(pz + 622.3489990234375) < 1) {
+            //     debugger;
+            // }
+
             positions[i * 3 + 0] = px;
             positions[i * 3 + 1] = pz;
             positions[i * 3 + 2] = py;

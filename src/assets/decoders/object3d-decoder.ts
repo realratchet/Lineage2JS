@@ -449,13 +449,6 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.add(staticMeshGroup);
     sector.staticMeshGroup = staticMeshGroup;
 
-    if (library.sun) {
-        const spriteUuid = library.sun.sprites[0];
-        const spriteInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo;
-
-        sector.setSun(decodeTexture(library, spriteInfo) as MapData_T);
-    }
-
     // Decode celestials (NSun, NMoon) with their textures
     console.log(`[Celestials] Found ${library.celestials.length} celestials to decode`);
     library.celestials.forEach(celestialInfo => {
@@ -811,7 +804,7 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "Model":
         case "StaticMesh": return decodeStaticMeshWrapped(library, info as GD.IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as GD.IEdgesObjectDecodeInfo);
-        case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
+        case "SkinnedMesh": return decodeSkinnedMesh(library, info as GD.ISkinnedMeshObjectDecodeInfo);
         case "SpriteEmitter": return decodeSpriteEmitter(library, info as GD.ISpriteEmitterDecodeInfo);
         case "MeshEmitter": return decodeMeshEmitter(library, info as GD.IMeshEmitterDecodeInfo);
         case "L2FogInfo": return decodeFogInfo(library, info as GD.IBaseZoneDecodeInfo);

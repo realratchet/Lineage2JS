@@ -104,11 +104,11 @@ class LitActorMesh extends Mesh {
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightInfo && !this.ambient) return;
 
+
         const attrColors = this.geometry.getAttribute("lighting");
         const colorArray = attrColors.array as Uint8ClampedArray;
 
         // Check if any lights need updating
-        // CRITICAL FIX: Check length mismatch to prevent crash during copy
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
 
         // Collect and augment light info
@@ -126,6 +126,9 @@ class LitActorMesh extends Mesh {
 
         // Always proceed to apply Ambient/Dynamic updates
         // if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
+
+        // if (staticCacheDirty && this.name === "StaticMeshActor2277")
+        //     debugger;
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
@@ -182,11 +185,11 @@ class LitActorMesh extends Mesh {
         if (this.isSunAffected) {
             const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
             if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
-                // ambient is ColorByte (0-255), use directly
-                // scaledGlow is float scaler
-                const r = ambient.r * this.scaledGlow;
-                const g = ambient.g * this.scaledGlow;
-                const b = ambient.b * this.scaledGlow;
+                // ambient is ColorByte (0-255), add directly without scaledGlow
+                // scaledGlow only affects dynamic lights, not ambient (per UE code)
+                const r = ambient.r;
+                const g = ambient.g;
+                const b = ambient.b;
 
                 for (let i = 0; i < colorArray.length; i += 3) {
                     colorArray[i] += r;
