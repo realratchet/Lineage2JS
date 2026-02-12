@@ -442,7 +442,7 @@ void main() {
         #ifdef HAS_LIGHTS
             reflectedLight.indirectDiffuse += vec3( 0.0 );
         #elif !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES) && !defined(USE_LIT_ATTRIBUTES)
-            reflected_light.indirectDiffuse += vec3( 1.0 );
+            reflectedLight.indirectDiffuse += vec3( 1.0 );
         #endif
 
         #ifdef USE_INSTANCED_ATTRIBUTES

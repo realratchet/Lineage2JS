@@ -142,7 +142,6 @@ abstract class UStaticMeshActor extends UAActor {
             leaves = baseModel.boxLeaves(predictedBox);
         }
 
-        const attributes = library.geometries[meshInfo.geometry].attributes as { positions: Float32Array, normals: Float32Array };
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
         // if (attributes.positions.length / 3 === 1587)
