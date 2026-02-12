@@ -531,12 +531,12 @@ abstract class UModel extends UPrimitive {
                 isUnlit: !!(sectionData.polyFlags & PF_Unlit),
                 sectionName: sectionKey,
                 // Sky level defaults or surface overrides
-                depthWrite: this.isSky ? false : undefined,
-                depthTest: this.isSky ? false : undefined,
-                fog: this.isSky ? true : undefined,
-                side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided)) ? 2 : undefined, // 2 = DoubleSide
-                blendingMode: this.isSky ? (!(sectionData.polyFlags & PolyFlags_T.PF_TwoSided) ? "brighten" : "normal") :
-                    ((sectionData.polyFlags & PolyFlags_T.PF_Additive) ? "brighten" : undefined),
+                // depthWrite: this.isSky ? false : undefined,
+                // depthTest: this.isSky ? false : undefined,
+                // fog: this.isSky ? true : undefined,
+                // side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided)) ? 2 : undefined, // 2 = DoubleSide
+                // blendingMode: this.isSky ? (!(sectionData.polyFlags & PolyFlags_T.PF_TwoSided) ? "brighten" : "normal") :
+                //     ((sectionData.polyFlags & PolyFlags_T.PF_Additive) ? "brighten" : undefined),
             };
 
             const sectionIndex = library.bspSections.length;
