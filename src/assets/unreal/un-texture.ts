@@ -299,7 +299,7 @@ abstract class UTexture extends UMaterial {
         return {
             materialType: "texture",
             textureType,
-            name: this.objectName,
+            name: this.uuid,
             buffer: decodedBuffer,
             width,
             height,
@@ -328,7 +328,7 @@ abstract class UTexture extends UMaterial {
             }
 
             library.materials[this.uuid] = {
-                name: `Sprite_${this.objectName}`,
+                name: `Sprite_${this.uuid}`,
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate

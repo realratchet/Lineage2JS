@@ -614,9 +614,9 @@ abstract class ATerrainInfo extends AInfo {
         this.updateTriangles(startX, startY, endX, endY);
         // debugger;
         // this.combineLayerWeights(); -- not used in seamless terrain
-        
+
         const xy = this.getSWMapXY(this.location.x, this.location.y);
-        
+
         // debugger;
     }
 
@@ -656,6 +656,7 @@ abstract class ATerrainInfo extends AInfo {
         }
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "terrain",
             layers
         } as GD.IMaterialTerrainDecodeInfo;

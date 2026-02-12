@@ -155,6 +155,7 @@ abstract class UTexEnvMap extends UBaseModifier {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "modifier",
             modifierType: "envMapTexture",
             envMapType: this.type === 0 ? "world" : "camera",
@@ -179,6 +180,7 @@ abstract class UCombiner extends UBaseModifier {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "combiner",
             combineMode: this.combineOperation.valueOf(),
             material1: this.material1?.loadSelf().getDecodeInfo(library) || null,
@@ -314,6 +316,7 @@ abstract class UShader extends UMaterial {
         // debugger;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "shader",
             blendingMode,
             diffuse,
@@ -347,6 +350,7 @@ abstract class UFadeColor extends UBaseModifier {
         library.materials[this.uuid] = null;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "modifier",
             modifierType: "fadeColor",
             fadeColors: {
@@ -377,6 +381,7 @@ abstract class UColorModifier extends UBaseMaterial {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "modifier",
             modifierType: "colorModifier",
             material: this.material?.loadSelf().getDecodeInfo(library) || null,
@@ -442,6 +447,7 @@ abstract class UTexRotator extends UBaseModifier {
         }
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "modifier",
             modifierType: "rotateTexture",
             transform: {
@@ -513,6 +519,7 @@ abstract class UTexOscillator extends UBaseModifier {
         };
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "modifier",
             modifierType: "oscillateTexture",
             transform: {
@@ -563,6 +570,7 @@ abstract class UTexPanner extends UBaseModifier {
         const rateV = (this.rate * D.y);
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {

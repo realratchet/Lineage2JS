@@ -283,6 +283,7 @@ abstract class UTerrainSector extends UObject {
         // debugger;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "terrainSegment",
             terrainMaterial: info.uuid,
             uvs: {

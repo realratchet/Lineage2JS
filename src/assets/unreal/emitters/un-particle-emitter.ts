@@ -430,7 +430,7 @@ abstract class UParticleEmitter extends UObject {
             debugger;
 
         return {
-            name: this.objectName,
+            name: this.uuid,
             maxParticles: this.maxParticles,
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),

@@ -11,6 +11,8 @@ abstract class UNSun extends UNCelestial {
         const self = this.loadSelf();
         const sprites = self.skins?.map(skin => skin.loadSelf().getDecodeInfo(library));
 
+        // debugger;
+
         return {
             type: "Sun",
             sprites,

@@ -101,6 +101,8 @@ export default class SkyRenderer {
         }
     }
 
+
+
     public initSkyLevel(envInfo: EnvInfo, skyLevel: SectorObject) {
         this.envInfo = envInfo;
 
@@ -115,6 +117,9 @@ export default class SkyRenderer {
         skyZoneInfos.forEach(szi => console.log(`  > ${szi.name}: Position(${szi.position.toArray().map((v: number) => v.toFixed(2))})`));
 
         const celestials = skyLevel.celestials;
+
+
+        const stetup = envInfo.setup
 
         celestials.forEach(celestial => {
             if (celestial.type === "Sun") {

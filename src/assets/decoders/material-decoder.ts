@@ -460,23 +460,33 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
 function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) return new MeshBasicMaterial({ color: 0xff00ff });
 
-    switch (info.materialType) {
-        case "group": return decodeGroup(library, info as GD.IMaterialGroupDecodeInfo);
-        case "shader": return decodeShader(library, info as GD.IShaderDecodeInfo);
-        case "texture": return decodeTexture(library, info as GD.ITextureDecodeInfo);
-        case "modifier": return decodeModifier(library, info as GD.IBaseMaterialModifierDecodeInfo);
-        // case "terrain": return decodeTerrain(library, info as GD.IMaterialTerrainDecodeInfo);
-        case "lightmapped": return decodeLightmapped(library, info as GD.ILightmappedDecodeInfo);
-        case "instance": return decodeInstancedMaterial(library, info as GD.IMaterialInstancedDecodeInfo);
-        case "terrainSegment": return decodeTerrainSegment(library, info as GD.IMaterialTerrainSegmentDecodeInfo);
-        case "solid": return decodeSolidColor(library, info as GD.ISolidMaterialDecodeInfo);
-        case "particle": return decodeParticleMaterial(library, info as GD.IParticleMaterialDecodeInfo);
-        case "combiner": return decodeCombiner(library, info as GD.ICombinerDecodeInfo);
-        case "empty": return decodeEmptyMaterial();
-        default: throw new Error(`Unknown decodable type: ${info.materialType}`);
+    const material = ((): THREE.Material | THREE.Material[] => {
+        switch (info.materialType) {
+            case "group": return decodeGroup(library, info as GD.IMaterialGroupDecodeInfo);
+            case "shader": return decodeShader(library, info as GD.IShaderDecodeInfo);
+            case "texture": return decodeTexture(library, info as GD.ITextureDecodeInfo);
+            case "modifier": return decodeModifier(library, info as GD.IBaseMaterialModifierDecodeInfo);
+            // case "terrain": return decodeTerrain(library, info as GD.IMaterialTerrainDecodeInfo);
+            case "lightmapped": return decodeLightmapped(library, info as GD.ILightmappedDecodeInfo);
+            case "instance": return decodeInstancedMaterial(library, info as GD.IMaterialInstancedDecodeInfo);
+            case "terrainSegment": return decodeTerrainSegment(library, info as GD.IMaterialTerrainSegmentDecodeInfo);
+            case "solid": return decodeSolidColor(library, info as GD.ISolidMaterialDecodeInfo);
+            case "particle": return decodeParticleMaterial(library, info as GD.IParticleMaterialDecodeInfo);
+            case "combiner": return decodeCombiner(library, info as GD.ICombinerDecodeInfo);
+            case "empty": return decodeEmptyMaterial();
+            default: throw new Error(`Unknown decodable type: ${info.materialType}`);
+        }
+    })();
+
+    if (info.name && material) {
+        if (Array.isArray(material)) {
+            material.forEach(m => { if (m) m.name = info.name; });
+        } else {
+            material.name = info.name;
+        }
     }
 
-
+    return material;
 }
 
 export default decodeMaterial;

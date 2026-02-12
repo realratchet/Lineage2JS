@@ -380,7 +380,7 @@ abstract class UStaticMesh extends UPrimitive {
             library.materials[uuid].color = true;
         });
 
-        library.materials[this.uuid] = { materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
+        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
 
         return {
             uuid: this.uuid,
