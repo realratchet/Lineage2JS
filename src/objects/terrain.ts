@@ -149,12 +149,15 @@ class Terrain extends Mesh implements ICollidable {
                     s = s * (1 - alpha) + sNext * alpha;
                 }
 
-                // FinalByte = (AmbientByte >> 1) + (LightByte * IntensityByte / 255)
-                // tmpColorByte is Ambient >> 1 already from l2-env
-                // Inline multiplyByte logic: (c * b / 255) | 0
-                this.staticLightingCache[i + 0] = cbAmbient.r + ((cbLight.r * s / 255) | 0);
-                this.staticLightingCache[i + 1] = cbAmbient.g + ((cbLight.g * s / 255) | 0);
-                this.staticLightingCache[i + 2] = cbAmbient.b + ((cbLight.b * s / 255) | 0);
+                // FinalByte = ((AmbientByte >> 1) + LightByte) * TintMap / 255
+                // Tint map modulates the combined ambient+sun color
+                const combinedR = cbAmbient.r + cbLight.r;
+                const combinedG = cbAmbient.g + cbLight.g;
+                const combinedB = cbAmbient.b + cbLight.b;
+
+                this.staticLightingCache[i + 0] = (combinedR * s / 255) | 0;
+                this.staticLightingCache[i + 1] = (combinedG * s / 255) | 0;
+                this.staticLightingCache[i + 2] = (combinedB * s / 255) | 0;
             }
 
             // 2. Add Static Lights

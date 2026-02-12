@@ -1,3 +1,4 @@
+
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
 import { BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
