@@ -22,7 +22,9 @@ Object.defineProperty(UObject.prototype, "uuid", {
     get() {
         if (this._uuid !== undefined) return this._uuid;
 
-        this._uuid = this.name ?? `${this.constructor.friendlyName}_${this.objectName}_${generateUUID()}`;
+        this._uuid = `${this.constructor.friendlyName ?? this.constructor.name}_${this.objectName}_${generateUUID()}`;
+
+        // this._uuid = this.name ?? `${this.constructor.name}_${this.objectName}_${generateUUID()}`;
 
         return this._uuid;
     },

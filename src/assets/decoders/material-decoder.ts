@@ -11,7 +11,7 @@ function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.M
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
-    const data = _decodeTexture(library, info);
+    const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : null;
 
     cacheTextures.set(info, data);
 
