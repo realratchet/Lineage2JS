@@ -12,9 +12,9 @@
  * Lighting formula: color = ambient * shadow + Σ(lightColor * sampleIntensity(...))
  */
 import DynamicLight from "@client/objects/dynamic-light";
-import { ILightInfo, SectorObject } from "@client/objects/zone-object";
+import { SectorObject } from "@client/objects/zone-object";
 import type { L2Environment } from "@client/rendering/l2-env";
-import { BufferGeometry, Float32BufferAttribute, Mesh, Vector3, Color } from "three";
+import { Mesh, Vector3 } from "three";
 import type { ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { ColorByte } from "@client/utils/color-byte";
@@ -43,6 +43,13 @@ class Terrain extends Mesh implements ICollidable {
     protected lastUpdatedTime: number = -1;
     protected lastShadowIndex: number = -1;
     protected staticLightingCache?: Uint8ClampedArray;
+    public readonly isTerrain = true;
+    public mapX: number = 0;
+    public mapY: number = 0;
+    public offsetX: number = 0;
+    public offsetY: number = 0;
+    public heightmapX: number = 0;
+    public heightmapY: number = 0;
 
     public useShadowLerp: boolean = true;
 
@@ -54,12 +61,19 @@ class Terrain extends Mesh implements ICollidable {
         if (fieldInfo) this.setTerrainField(fieldInfo);
     }
 
-    public setTerrainField({ segments: [vx, vz], heightfield, bounds }: TerrainFieldInfo_T) {
+    public setTerrainField({ segments: [vx, vz], heightfield, bounds, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
         this.bounds = bounds;
         this.boundsSize = bounds.getSize(new Vector3());
         this.boundsPosition = bounds.getCenter(new Vector3());
         this.colliderDesc = ColliderDesc.heightfield(vx, vz, heightfield, { x: this.boundsSize.x, y: 1, z: this.boundsSize.z });
         this.rigidbodyDesc = RigidBodyDesc.fixed();
+
+        if (mapX !== undefined) this.mapX = mapX;
+        if (mapY !== undefined) this.mapY = mapY;
+        if (offsetX !== undefined) this.offsetX = offsetX;
+        if (offsetY !== undefined) this.offsetY = offsetY;
+        if (heightmapX !== undefined) this.heightmapX = heightmapX;
+        if (heightmapY !== undefined) this.heightmapY = heightmapY;
     }
 
     /**
@@ -368,6 +382,129 @@ class Terrain extends Mesh implements ICollidable {
 
         return this.collider;
     }
+
+    /**
+     * Stitches this terrain's Eastern (Right) edge to match a Western neighbor's Left edge.
+     * Only applied at inter-map boundaries (offsetX === 240).
+     */
+    public stitchWestToEast(neighbor: Terrain) {
+        const attr = this.geometry.getAttribute("position");
+        const nAttr = neighbor.geometry.getAttribute("position");
+        if (!attr || !nAttr) return false;
+
+        const pos = attr.array as Float32Array;
+        const nPos = nAttr.array as Float32Array;
+        const hDiff = neighbor.position.y - this.position.y;
+
+        for (let y = 0; y < 17; y++) {
+            const selfIdx = (y * 17 + 16) * 3 + 1; // Right Edge (x=16)
+            const neighborIdx = (y * 17 + 0) * 3 + 1; // Neighbor Left Edge (x=0)
+            pos[selfIdx] = nPos[neighborIdx] + hDiff;
+        }
+
+        attr.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+        return true;
+    }
+
+    /**
+     * Stitches this terrain's Southern (Bottom) edge to match a Northern neighbor's Top edge.
+     * Only applied at inter-map boundaries (offsetY === 240).
+     */
+    public stitchNorthToSouth(neighbor: Terrain) {
+        const attr = this.geometry.getAttribute("position");
+        const nAttr = neighbor.geometry.getAttribute("position");
+        if (!attr || !nAttr) return false;
+
+        const pos = attr.array as Float32Array;
+        const nPos = nAttr.array as Float32Array;
+        const hDiff = neighbor.position.y - this.position.y;
+
+        for (let x = 0; x < 17; x++) {
+            const selfIdx = (16 * 17 + x) * 3 + 1; // Bottom Edge (y=16)
+            const neighborIdx = (0 * 17 + x) * 3 + 1; // Neighbor Top Edge (y=0)
+            pos[selfIdx] = nPos[neighborIdx] + hDiff;
+        }
+
+        attr.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+        return true;
+    }
+
+    /**
+     * Stitches this terrain's South-Eastern (Bottom-Right) corner to match neighbor's Top-Left corner.
+     * Only applied at inter-map boundaries (offsetX === 240 && offsetY === 240).
+     */
+    public stitchCorner(neighbor: Terrain) {
+        const attr = this.geometry.getAttribute("position");
+        const nAttr = neighbor.geometry.getAttribute("position");
+        if (!attr || !nAttr) return false;
+
+        const pos = attr.array as Float32Array;
+        const nPos = nAttr.array as Float32Array;
+        const hDiff = neighbor.position.y - this.position.y;
+
+        const selfIdx = (16 * 17 + 16) * 3 + 1; // Bottom-Right corner
+        const neighborIdx = (0 * 17 + 0) * 3 + 1; // Neighbor Top-Left corner
+        pos[selfIdx] = nPos[neighborIdx] + hDiff;
+
+        attr.needsUpdate = true;
+        this.geometry.computeVertexNormals();
+        return true;
+    }
+
+    /**
+     * Orchestrates stitching for a collection of terrain objects.
+     * Identifies neighbors and delegates to instance stitching methods.
+     */
+    public static stitchAll(terrains: Terrain[]) {
+        if (terrains.length < 2) return { processed: terrains.length, stitches: 0 };
+
+        const terrainMap = new Map<string, Terrain>();
+        for (const t of terrains) {
+            const key = `${t.mapX}_${t.mapY}_${t.offsetX}_${t.offsetY}`;
+            terrainMap.set(key, t);
+        }
+
+        const debugInfo = {
+            processed: terrains.length,
+            stitches: 0
+        };
+
+        for (const t of terrains) {
+            const mapX = Number(t.mapX);
+            const mapY = Number(t.mapY);
+
+            // Horizontal: The Western map (t.offsetX === 240) modifies its Right Edge 
+            // to match the Eastern map's (mapX + 1, offsetX === 0) Left Edge.
+            if (t.offsetX === 240) {
+                const neighbor = terrainMap.get(`${mapX + 1}_${mapY}_0_${t.offsetY}`);
+                if (neighbor && t.stitchWestToEast(neighbor)) {
+                    debugInfo.stitches++;
+                }
+            }
+
+            // Vertical: The Northern map (t.offsetY === 240) modifies its Bottom Edge 
+            // to match the Southern map's (mapY + 1, offsetY === 0) Top Edge.
+            if (t.offsetY === 240) {
+                const neighbor = terrainMap.get(`${mapX}_${mapY + 1}_${t.offsetX}_0`);
+                if (neighbor && t.stitchNorthToSouth(neighbor)) {
+                    debugInfo.stitches++;
+                }
+            }
+
+            // Diagonal: The North-Western map (240, 240) modifies its single Bottom-Right corner 
+            // to match the South-Eastern map's (mapX + 1, mapY + 1, 0, 0) Top-Left corner vertex.
+            if (t.offsetX === 240 && t.offsetY === 240) {
+                const neighbor = terrainMap.get(`${mapX + 1}_${mapY + 1}_0_0`);
+                if (neighbor && t.stitchCorner(neighbor)) {
+                    debugInfo.stitches++;
+                }
+            }
+        }
+
+        return debugInfo;
+    }
 }
 
 export default Terrain;
@@ -382,5 +519,11 @@ export type TerrainLightingInfo = {
 type TerrainFieldInfo_T = {
     segments: [number, number],
     heightfield: Float32Array,
-    bounds: THREE.Box3
+    bounds: THREE.Box3,
+    mapX?: number,
+    mapY?: number,
+    offsetX?: number,
+    offsetY?: number,
+    heightmapX?: number,
+    heightmapY?: number
 }

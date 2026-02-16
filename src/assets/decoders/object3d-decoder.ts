@@ -604,8 +604,18 @@ function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
         }
     }
 
-    const terrainInfo = info as GD.ITerrainSegmentDecodeInfo;
-    const terrain = new Terrain(geometry, materials, { segments: [16, 16], heightfield, bounds }, terrainInfo.lighting);
+    const terrainInfo = info as any as GD.ITerrainSegmentDecodeInfo;
+    const terrain = new Terrain(geometry, materials, {
+        segments: [16, 16],
+        heightfield,
+        bounds,
+        mapX: terrainInfo.mapX,
+        mapY: terrainInfo.mapY,
+        offsetX: terrainInfo.offsetX,
+        offsetY: terrainInfo.offsetY,
+        heightmapX: terrainInfo.heightmapX,
+        heightmapY: terrainInfo.heightmapY
+    }, terrainInfo.lighting);
 
     applySimpleProperties(library, terrain, info);
 

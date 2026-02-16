@@ -310,7 +310,13 @@ abstract class UTerrainSector extends UObject {
                 })).filter(li => li.light),
                 shadowMaps: this.shadowMaps?.map(sm => sm.getTypedArray() as Uint8Array) ?? [],
                 shadowMapTimes: this.shadowMapTimes ?? []
-            }
+            },
+            mapX: info.mapX,
+            mapY: info.mapY,
+            offsetX: this.offsetX,
+            offsetY: this.offsetY,
+            heightmapX: info.heightmapX,
+            heightmapY: info.heightmapY
         };
     }
 

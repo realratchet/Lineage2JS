@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
@@ -11,6 +11,7 @@ import Visualizer, { VisualizerMode } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
+import Terrain from "../objects/terrain";
 import * as dat from "dat.gui";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
@@ -97,6 +98,7 @@ class RenderManager {
     protected activeSector = 0;
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
+    public readonly globalSky = new Group();
 
 
     public envConfig = {
@@ -826,7 +828,6 @@ class RenderManager {
         // Initialize with base haze gradient from EnvLight (via indexHaze)
         // L2FogInfo blending will modify these values if in range
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
-        let activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
         let skyVisibility = 1.0;
 
         // Initialize with default baseline colors from Env.int
@@ -1327,6 +1328,7 @@ class RenderManager {
         this.scene.updateMatrixWorld(true);
 
         this.collectColliders();
+        this.stitchTerrains();
 
         this.onHandleRender(0);
     }
@@ -1392,8 +1394,7 @@ class RenderManager {
         this.sectorBounds.push(sectorBounds);
 
         this.objectGroup.add(sector);
-
-
+        this.stitchTerrains();
 
         // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);
@@ -1462,6 +1463,23 @@ class RenderManager {
             }
         }
         this.needsUpdate = true;
+    }
+
+    public setGlobalSkyObject(sky: THREE.Group) {
+        this.globalSky.clear();
+        this.globalSky.add(sky);
+        this.globalSky.updateMatrixWorld(true);
+    }
+
+    public stitchTerrains() {
+        const terrains: Terrain[] = [];
+        this.scene.traverse(child => {
+            if ((child as any).isTerrain) terrains.push(child as Terrain);
+        });
+
+        if (terrains.length < 2) return;
+
+        (window as any).terrainDebug = Terrain.stitchAll(terrains);
     }
 }
 

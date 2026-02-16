@@ -276,7 +276,13 @@ declare global {
                         lights: { light: string, flags: Uint8Array }[],
                         shadowMaps: Uint8Array[],
                         shadowMapTimes: number[]
-                    }
+                    },
+                    mapX: number,
+                    mapY: number,
+                    offsetX: number,
+                    offsetY: number,
+                    heightmapX: number,
+                    heightmapY: number
                 }
 
                 export interface ILightInstanceDecodeInfo {

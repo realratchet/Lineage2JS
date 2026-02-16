@@ -55,8 +55,8 @@ abstract class ATerrainInfo extends AInfo {
     declare protected readonly showOnTerrain: number;
     declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"int32">;
     declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"int32">;
-    declare protected readonly mapX: number;
-    declare protected readonly mapY: number;
+    declare public readonly mapX: number;
+    declare public readonly mapY: number;
     declare public readonly quadVisibilityBitmapOrig: C.FPrimitiveArray<"int32">;
     declare public readonly edgeTurnBitmapOrig: C.FPrimitiveArray<"int32">;
     declare protected readonly generatedSectorCounter: number;
