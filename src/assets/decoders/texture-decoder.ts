@@ -1,4 +1,4 @@
-import { CompressedTexture, LinearFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat } from "three";
+import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import DecodeLibrary from "../unreal/decode-library";
 
@@ -118,12 +118,10 @@ function decodeFloat(info: GD.IDataTextureDecodeInfo): DataTexture {
         info.width, info.height,
         getFormat(info.format),
         FloatType,
-        // UVMapping,
-        // ClampToEdgeWrapping,
-        // ClampToEdgeWrapping,
-        // LinearFilter,
-        // LinearFilter
     );
+
+    texture.minFilter = NearestFilter;
+    texture.magFilter = NearestFilter;
 
     // debugger;
 

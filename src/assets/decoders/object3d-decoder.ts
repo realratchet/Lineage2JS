@@ -39,6 +39,7 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.nodeIndex) geometry.setAttribute("nodeIndex", new BufferAttribute(info.attributes.nodeIndex, 1));
+    if ((info.attributes as any).terrainIndex) geometry.setAttribute("terrainIndex", new BufferAttribute((info.attributes as any).terrainIndex, 1));
 
     if (info.indices) {
         const AttributeConstructor = getAttributeForTypedArray(info.indices.constructor as GD.IndexTypedArray);
