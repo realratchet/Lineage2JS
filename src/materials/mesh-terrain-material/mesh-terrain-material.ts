@@ -10,8 +10,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
         const defines: Record<string, any> = {
             USE_FOG: "",
             USE_UV_TEXTURE: "",
-            UV_COUNT: info.uvs.size.height,
-            MASK_UV_INDEX: info.uvs.size.height - 1
+            UV_COUNT: info.uvs.size.y,
+            MASK_UV_INDEX: info.uvs.size.y - 1
         };
 
         const uniforms: Record<string, Uniform> = appendGlobalUniforms({

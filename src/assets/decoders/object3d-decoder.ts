@@ -450,7 +450,6 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.staticMeshGroup = staticMeshGroup;
 
     // Decode celestials (NSun, NMoon) with their textures
-    console.log(`[Celestials] Found ${library.celestials.length} celestials to decode`);
     library.celestials.forEach(celestialInfo => {
         try {
             console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);

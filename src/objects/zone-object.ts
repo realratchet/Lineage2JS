@@ -109,6 +109,7 @@ class SectorObject extends Object3D {
     public celestials: { type: string; sprite: any; data: any }[] = []; // Decoded celestial data with textures
     public brightness: number = 1.0;
     public lastZoneMask: bigint = 0n;
+    public readonly worldBounds = new Box3();
 
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];
@@ -329,7 +330,8 @@ class SectorObject extends Object3D {
         cameraFrustum: THREE.Frustum,
         frustumCullingEnabled: boolean = true,
         recursionDepth: number = 0,
-        leafOnlyMode: boolean = false
+        leafOnlyMode: boolean = false,
+        topLevelOnly: boolean = false
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
@@ -337,6 +339,36 @@ class SectorObject extends Object3D {
         if (this.bspNodes.length === 0 || !this.nodeZoneMasks) {
             this.lastZoneMask = activeZoneMask;
             return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
+        }
+
+        // top-level only mode: only render outdoor zones/sections
+        if (topLevelOnly) {
+            // Find nodes that belong to outdoor sections
+            for (let nodeIndex = 0; nodeIndex < this.bspNodes.length; nodeIndex++) {
+                const sectionIndex = this.nodeToSection ? this.nodeToSection[nodeIndex] : -1;
+                if (sectionIndex >= 0) {
+                    const sectionInfo = this.bspSections ? this.bspSections[sectionIndex] as any : null;
+                    if (sectionInfo?.isOutdoor) {
+                        visibleNodes.add(nodeIndex);
+                    }
+                } else if (this.nodeZoneMasks) {
+                    // Fallback to zone 1 if section info is missing but zone mask exists
+                    if (this.nodeZoneMasks[nodeIndex] & (1n << 1n)) {
+                        visibleNodes.add(nodeIndex);
+                    }
+                }
+            }
+
+            // For leaves, we also want those marked as outdoor if possible
+            // In the absence of a clear outdoor flag for leaves, we'll use zone 1 as a heuristic
+            if (this.bspLeaves) {
+                for (let leafIndex = 0; leafIndex < this.bspLeaves.length; leafIndex++) {
+                    if (this.bspLeaves[leafIndex].zone === 1) {
+                        visibleLeaves.add(leafIndex);
+                    }
+                }
+            }
+            return { visibleNodes, visibleLeaves, finalZoneMask: (1n << 1n), zonesAddedThroughPortals: new Set<number>() };
         }
 
         // Leaf-only mode: only render leaf 1 (no portal expansion, no traversal)
@@ -723,7 +755,7 @@ class SectorObject extends Object3D {
         }
     }
 
-    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false) {
         this.updateLights(environment);
 
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
@@ -773,7 +805,8 @@ class SectorObject extends Object3D {
             cameraFrustum,
             frustumCullingEnabled,
             0,
-            leafOnlyMode
+            leafOnlyMode,
+            topLevelOnly
         );
 
         if (this.bspGroup && this.bspSections && this.nodeToSection) {

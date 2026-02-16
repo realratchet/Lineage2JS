@@ -1,17 +1,28 @@
 import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3 } from "three";
+import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
 import DecodeLibrary from "../unreal/decode-library";
 import ParticleMaterial from "@client/materials/particle-material";
 
 const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
 
+let emptyMapData: GD.MapData_T;
+
 function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.MapData_T {
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
-    const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : null;
+    if (!emptyMapData) {
+        emptyMapData = {
+            texture: new DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, RGBAFormat),
+            size: new Vector2(1, 1)
+        };
+        emptyMapData.texture.name = "EmptyTexture";
+        emptyMapData.texture.needsUpdate = true;
+    }
+
+    const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : emptyMapData;
 
     cacheTextures.set(info, data);
 

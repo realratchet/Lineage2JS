@@ -1,4 +1,4 @@
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
@@ -237,6 +237,10 @@ class RenderManager {
         // should see moon
         this.camera.position.set(18345, -3583, 115670);
         this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
+
+        // seam
+        this.camera.position.set(-93965.70166078406, -933.6590151180576, 245523.81285369548);
+        this.controls.orbit.target.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -713,9 +717,32 @@ class RenderManager {
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
 
         // Pass 1: Visibility updates
+        const fogPadding = 2048 * 2; // Increased padding
+        const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
+        const fogSphere = new Sphere(bspCullingPosition, fogFar + fogPadding);
+
+        const activeSector = this.getSector(bspCullingPosition);
+
         this.scene.traverse((object: THREE.Object3D) => {
             if ((object as any).isSectorObject) {
-                (object as SectorObject).updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled);
+                const sector = object as SectorObject;
+                const isCameraInSector = activeSector === sector;
+
+                // 1. Z-Culling: If outside fog range, hide entire sector
+                // NEVER cull the active sector
+                if (!isCameraInSector) {
+                    if (!fogSphere.intersectsBox(sector.worldBounds)) {
+                        sector.visible = false;
+                        return;
+                    }
+                }
+
+                sector.visible = true;
+
+                // 2. Zone Visibility: If camera is not in the sector, only show top level
+                const topLevelOnly = !isCameraInSector;
+
+                sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly);
             }
         });
 
@@ -1360,7 +1387,9 @@ class RenderManager {
             this.sectors.get(sector.index.x).set(sector.index.y, sector);
         }
 
-        this.sectorBounds.push(new Box3().setFromObject(sector));
+        const sectorBounds = new Box3().setFromObject(sector);
+        sector.worldBounds.copy(sectorBounds);
+        this.sectorBounds.push(sectorBounds);
 
         this.objectGroup.add(sector);
 

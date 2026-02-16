@@ -466,8 +466,72 @@ abstract class ATerrainInfo extends AInfo {
         }
     }
 
-    public getGlobalVertex(x: number, y: number) { return x + y * this.heightmapX; }
+    public static LoadedTerrains: Record<string, ATerrainInfo> = {};
+
+    public getGlobalVertex(x: number, y: number) { return x + y * (this.heightmapX + 1); }
     protected heightmapToWorld(H: FVector) { return H.transformPointBy(this.toWorld); }
+
+    // Stitching logic to handle seamless terrain edges
+    public stitchRightEdge(other: ATerrainInfo) {
+        if (!other || !other.vertices) return;
+
+        const myEdgeX = this.heightmapX;
+        const otherEdgeX = 0;
+
+        for (let y = 0; y <= this.heightmapY; y++) {
+            const myIdx = this.getGlobalVertex(myEdgeX, y);
+            const otherIdx = other.getGlobalVertex(otherEdgeX, y);
+
+            this.vertices[myIdx] = other.vertices[otherIdx];
+
+            // Stitch normals for seamless lighting
+            const myNormal = this.faceNormals[myIdx];
+            const otherNormal = other.faceNormals[otherIdx];
+
+            if (myNormal && otherNormal) {
+                myNormal.normal1 = otherNormal.normal1;
+                myNormal.normal2 = otherNormal.normal2;
+            }
+        }
+
+        // Update affected sectors (Rightmost column)
+        this.sectors.forEach(sector => {
+            if (sector.offsetX >= 240) {
+                sector.generateTriangles();
+            }
+        });
+    }
+
+    public stitchBottomEdge(other: ATerrainInfo) {
+        if (!other || !other.vertices) return;
+
+        const myEdgeY = this.heightmapY;
+        const otherEdgeY = 0;
+
+        for (let x = 0; x <= this.heightmapX; x++) {
+            const myIdx = this.getGlobalVertex(x, myEdgeY);
+            const otherIdx = other.getGlobalVertex(x, otherEdgeY);
+
+            this.vertices[myIdx] = other.vertices[otherIdx];
+
+            // Stitch normals for seamless lighting
+            const myNormal = this.faceNormals[myIdx];
+            const otherNormal = other.faceNormals[otherIdx];
+
+            if (myNormal && otherNormal) {
+                myNormal.normal1 = otherNormal.normal1;
+                myNormal.normal2 = otherNormal.normal2;
+            }
+        }
+
+        // Update affected sectors (Bottommost row)
+        this.sectors.forEach(sector => {
+            if (sector.offsetY >= 240) {
+                sector.generateTriangles();
+            }
+        });
+    }
+
     protected getHeightmap(x: number, y: number) {
 
         x = Math.min(x, this.heightmapX - 1);
@@ -494,7 +558,27 @@ abstract class ATerrainInfo extends AInfo {
         throw new Error("not yet implemented");
     }
 
-    public getVertexNormal(x: number, y: number) {
+    public getVertexNormal(x: number, y: number): FVector {
+
+        try {
+            if (x === 0) {
+                const left = ATerrainInfo.LoadedTerrains[`${this.mapX - 1}_${this.mapY}`];
+                if (left && left.vertices && left.vertices.length > left.heightmapX * left.heightmapY) {
+                    return left.getVertexNormal(left.heightmapX, y);
+                }
+            }
+
+            if (y === 0) {
+                const top = ATerrainInfo.LoadedTerrains[`${this.mapX}_${this.mapY - 1}`];
+                if (top && top.vertices && top.vertices.length > top.heightmapX * top.heightmapY) {
+                    return top.getVertexNormal(x, top.heightmapY);
+                }
+            }
+        } catch (e) {
+            console.error(`[TerrainInfo] Error getting neighbor normal at ${x},${y} Map:${this.mapX}_${this.mapY}`, e);
+            return FVector.make(0, 0, 1);
+        }
+
         const v = this.getGlobalVertex(x, y);
         const fn = this.faceNormals[v];
 
@@ -527,12 +611,28 @@ abstract class ATerrainInfo extends AInfo {
         return n;
     }
 
+    public updateLeftEdge() {
+        this.sectors.forEach(sector => {
+            if (sector.offsetX === 0) {
+                sector.generateTriangles();
+            }
+        });
+    }
+
+    public updateTopEdge() {
+        this.sectors.forEach(sector => {
+            if (sector.offsetY === 0) {
+                sector.generateTriangles();
+            }
+        });
+    }
+
     protected updateVertices(startX: number, startY: number, endX: number, endY: number) {
 
         if (!this.terrainMap)
             return;
 
-        const vCount = this.heightmapX * this.heightmapY;
+        const vCount = (this.heightmapX + 1) * (this.heightmapY + 1);
         const vertices = new Array<FVector>(vCount);
         const faceNormals = new Array<FTerrainNormalPair>(vCount);
 
@@ -550,7 +650,7 @@ abstract class ATerrainInfo extends AInfo {
                 if (x > 0 && y > 0) {
                     const normIdx = this.getGlobalVertex(x - 1, y - 1);
                     const faceNormal = faceNormals[normIdx] = new FTerrainNormalPair();
-                    if (this.getEdgeTurnBitmap(x - 1, y - 1)) {
+                    if (this.getEdgeTurnBitmapOrig(x - 1, y - 1)) {
                         // 124, 423
                         faceNormal.normal1 = FPlane.fromPoints(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)]).vector().normalized();
                         faceNormal.normal2 = FPlane.fromPoints(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]).vector().normalized();
@@ -562,9 +662,8 @@ abstract class ATerrainInfo extends AInfo {
                 }
             }
         }
-
-        this.faceNormals = faceNormals;
         this.vertices = vertices;
+        this.faceNormals = faceNormals;
     }
 
     public getSWMapXY(s: number, w: number): [number, number] {
@@ -598,24 +697,104 @@ abstract class ATerrainInfo extends AInfo {
 
     protected combineLayerWeights() { throw new Error("not yet implemented"); }
 
+    public diagnoseAlphaSeam(other: ATerrainInfo) {
+        if (!this.layers || !other.layers) return;
+
+        for (let i = 0; i < Math.min(this.layers.length, other.layers.length); i++) {
+            const l1 = this.layers[i];
+            const l2 = other.layers[i];
+
+            if (!l1 || !l2 || !l1.alphaMap || !l2.alphaMap) continue;
+
+            // Check assume loading implies mipmaps are available
+            const m1 = l1.alphaMap.loadSelf().mipmaps[0];
+            const m2 = l2.alphaMap.loadSelf().mipmaps[0];
+
+            if (!m1 || !m2) continue;
+
+            const w1 = l1.alphaMap.width;
+            // const w2 = l2.alphaMap.width;
+
+            // Check a few rows
+            const rowsToCheck = [0, 128, 255];
+
+            try {
+                const data1 = m1.dataArray.getTypedArray() as Uint8Array;
+                const data2 = m2.dataArray.getTypedArray() as Uint8Array;
+
+                // console.log(`[AlphaSeam] Layer ${i} WrapS: ${l1.alphaMap.wrapS} / ${l2.alphaMap.wrapS}`);
+
+                if (!data1 || !data2) continue;
+
+                if (l1.alphaMap.wrapS !== 1 || l2.alphaMap.wrapS !== 1) { // 1 = TC_Clamp
+                    console.warn(`[AlphaSeam] Layer ${i} is NOT Clamped! WrapS: ${l1.alphaMap.wrapS} / ${l2.alphaMap.wrapS}`);
+                }
+
+                for (const y of rowsToCheck) {
+                    const idx1 = (w1 * y) + (w1 - 1); // My Right Edge
+                    const idx2 = (l2.alphaMap.width * y) + 0; // Other Left Edge
+
+                    const val1 = data1[idx1];
+                    const val2 = data2[idx2];
+
+                    if (val1 !== val2) {
+                        console.warn(`[AlphaSeam] Mismatch Layer ${i} Row ${y}: Me[${w1 - 1}]=${val1} Other[0]=${val2}`);
+                        // return; // Don't return, create noise for all mismatches
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+        // console.log(`[AlphaSeam] Verified Layer Edges Match for ${this.mapX}_${this.mapY} -> ${other.mapX}_${other.mapY}`);
+    }
+
     public postLoad(pkg: C.APackage, exp: C.UExport<C.UObject>) {
         super.postLoad(pkg, exp);
 
         let startX = 0, startY = 0;
-        let endX = this.heightmapX, endY = this.heightmapY;
+        let endX = this.heightmapX + 1, endY = this.heightmapY + 1;
 
-        // debugger;
         // this.precomputeLayerWeights(); -- not used in seamless terrain
-        // debugger;
         this.calcLayerTexCoords();
-        // debugger;
         this.updateVertices(startX, startY, endX, endY);
-        // debugger;
-        this.updateTriangles(startX, startY, endX, endY);
-        // debugger;
+        this.updateTriangles(startX, startY, this.heightmapX, this.heightmapY);
         // this.combineLayerWeights(); -- not used in seamless terrain
 
-        const xy = this.getSWMapXY(this.location.x, this.location.y);
+        // const xy = this.getSWMapXY(this.location.x, this.location.y);
+
+        // Register for Stitching
+        console.log(`[TerrainStitch] Registering Terrain ${this.mapX}_${this.mapY} (Loc: ${this.location.x}, ${this.location.y})`);
+        ATerrainInfo.LoadedTerrains[`${this.mapX}_${this.mapY}`] = this;
+
+        // Stitch with Right Neighbor (X+1)
+        const right = ATerrainInfo.LoadedTerrains[`${this.mapX + 1}_${this.mapY}`];
+        if (right) {
+            this.stitchRightEdge(right);
+            right.updateLeftEdge();
+            this.diagnoseAlphaSeam(right);
+        }
+
+        // Stitch with Left Neighbor (X-1)
+        const left = ATerrainInfo.LoadedTerrains[`${this.mapX - 1}_${this.mapY}`];
+        if (left) {
+            left.stitchRightEdge(this);
+            this.updateLeftEdge();
+        }
+
+        // Stitch with Bottom Neighbor (Y+1)
+        const bottom = ATerrainInfo.LoadedTerrains[`${this.mapX}_${this.mapY + 1}`];
+        if (bottom) {
+            this.stitchBottomEdge(bottom);
+            bottom.updateTopEdge();
+        }
+
+        // Stitch with Top Neighbor (Y-1)
+        const top = ATerrainInfo.LoadedTerrains[`${this.mapX}_${this.mapY - 1}`];
+        if (top) {
+            top.stitchBottomEdge(this);
+            this.updateTopEdge();
+        }
 
         // debugger;
     }
@@ -627,7 +806,7 @@ abstract class ATerrainInfo extends AInfo {
         const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
         const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
-        const edgeTurnBitmap = this.edgeTurnBitmap.getTypedArray();
+        const edgeTurnBitmap = this.edgeTurnBitmapOrig.getTypedArray();
         const heightmapData = { info: iTerrainMap, data: terrainData, edgeTurns: edgeTurnBitmap };
 
         const layers: { map: string, alphaMap: string }[] = new Array(layerCount);

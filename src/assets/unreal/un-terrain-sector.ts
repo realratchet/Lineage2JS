@@ -179,7 +179,7 @@ abstract class UTerrainSector extends UObject {
                     const indexOffset = vertexIndex >> 5;
                     const vertexMask = 1 << (vertexIndex & 0x1F);
 
-                    isVisible = (info.quadVisibilityBitmapOrig.getElem(indexOffset) & vertexMask) !== 0;
+                    isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask) !== 0;
 
                     // const idxOffset = y * 17 + x;
                     // const idxVertOffset = idxOffset * 3;
