@@ -144,9 +144,8 @@ class Terrain extends Mesh implements ICollidable {
             this.staticLightingCache.fill(0);
 
             // 1. Apply Ambient with Shadow Map (TintMap logic)
-            // Final = (Ambient >> 1) + (Light * Intensity)
-            // Per-byte halving matches IDA: shr r/g/b, 1
-            env.getAmbientPlaneTerrainLightHalved(cbAmbient);
+            // Final = Ambient + (Light * Intensity)
+            env.getAmbientPlaneTerrainLight(cbAmbient);
             env.getTerrainLightColor(cbLight);
 
             // cbAmbient.setFromFloats(tmpAmbient.r, tmpAmbient.g, tmpAmbient.b);
@@ -163,15 +162,15 @@ class Terrain extends Mesh implements ICollidable {
                     s = s * (1 - alpha) + sNext * alpha;
                 }
 
-                // FinalByte = ((AmbientByte >> 1) + LightByte) * TintMap / 255
-                // Tint map modulates the combined ambient+sun color
-                const combinedR = cbAmbient.r + cbLight.r;
-                const combinedG = cbAmbient.g + cbLight.g;
-                const combinedB = cbAmbient.b + cbLight.b;
+                // FinalByte = (AmbientByte >> 1) + (LightByte * TintMap / 255)
+                // Tint map modulates only the sun color, preventing pitch black shadows
+                const sunR = cbLight.r * s;
+                const sunG = cbLight.g * s;
+                const sunB = cbLight.b * s;
 
-                this.staticLightingCache[i + 0] = (combinedR * s / 255) | 0;
-                this.staticLightingCache[i + 1] = (combinedG * s / 255) | 0;
-                this.staticLightingCache[i + 2] = (combinedB * s / 255) | 0;
+                this.staticLightingCache[i + 0] = (cbAmbient.r + (sunR / 255)) | 0;
+                this.staticLightingCache[i + 1] = (cbAmbient.g + (sunG / 255)) | 0;
+                this.staticLightingCache[i + 2] = (cbAmbient.b + (sunB / 255)) | 0;
             }
 
             // 2. Add Static Lights
