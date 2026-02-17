@@ -646,6 +646,8 @@ class RenderManager {
 
         if (isFrameDirty) {
             stats.begin();
+            this.environment.setAnimationTime(currentTime);
+            this.environment.update(deltaTime);
             this._preRender(currentTime, deltaTime);
             this._doRender(currentTime, deltaTime);
             this._postRender(currentTime, deltaTime);
@@ -750,32 +752,28 @@ class RenderManager {
 
         // Pass 2: Object & Material updates
         this.scene.traverseVisible(child => {
-            if ((child as any).isUpdatable) {
-                // Find the nearest sector for objects that need lighting updates
-                let sector: SectorObject | null = null;
-                let parent = child.parent;
-                while (parent) {
-                    if ((parent as any).isSectorObject) {
-                        sector = parent as SectorObject;
-                        break;
-                    }
-                    parent = parent.parent;
+            // Find the nearest sector for view-dependent updates (lighting, LOD)
+            let sector: SectorObject | null = null;
+            let parent = child.parent;
+            while (parent) {
+                if ((parent as any).isSectorObject) {
+                    sector = parent as SectorObject;
+                    break;
                 }
+                parent = parent.parent;
+            }
 
-                if (sector && 'computeLighting' in child) {
-                    (child as any).update(sector, this.environment);
-                } else {
-                    (child as any).update(currentTime);
-                }
+            if ((child as any).isUpdatable) {
+                (child as any).update(this.camera, this.environment, sector);
             }
 
             if ((child as THREE.Mesh).isMesh) {
                 const mat = (child as THREE.Mesh).material;
                 if (mat) {
                     const materials = (mat as any).isMaterial ? [mat] : (mat as any);
-                    (materials as THREE.Material[]).forEach(m => {
-                        if (m && (m as any).isUpdatable) {
-                            (m as any).update(currentTime);
+                    (materials as THREE.Material[]).forEach((m: any) => {
+                        if (m && m.isMeshStaticMaterial) {
+                            m.update(this.camera, this.environment, sector);
                         }
                     });
                 }

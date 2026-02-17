@@ -388,7 +388,7 @@ abstract class UStaticMesh extends UPrimitive {
 
         const lods = new Array<[GD.IStaticMeshObjectDecodeInfo, number]>();
 
-        if (this.hasStaticMeshLod) {
+        if (this.hasStaticMeshLod || true) {
             if (this.staticMeshLod1?.loadSelf()) {
                 lods.push([this.staticMeshLod1.getDecodeInfo(library, matModifiers), this.lodRange1]);
             }

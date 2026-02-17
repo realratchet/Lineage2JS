@@ -1,7 +1,9 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor, Camera } from "three";
+import { L2Environment } from "../../rendering/l2-env";
+import { SectorObject } from "../../objects/zone-object";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -312,7 +314,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public update(time: number) {
+    public update(_camera: Camera, env: L2Environment, _sector: SectorObject | null) {
+        const time = env.getAnimationTime();
         Object.entries(this.sprites).forEach(([k, { sprites, framerate }]) => {
             const frameCount = sprites.length;
 

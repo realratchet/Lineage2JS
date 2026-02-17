@@ -916,16 +916,13 @@ class SectorObject extends Object3D {
                 object.visible = isVisible;
                 if (isVisible) {
                     visibleCount++;
-                    if ((object as any).isUpdatable) {
-                        (object as any)?.update(this, environment);
-                    }
                 }
             });
 
-            // Update terrain lighting
+            // Update terrain lighting (redundant, handled by RenderManager)
             this.zones.traverseVisible((object) => {
                 if ((object as any).isMesh && object.constructor.name === 'Terrain') {
-                    (object as any).update?.(this, environment);
+                    // (object as any).update?.(this, environment);
                 }
             });
 

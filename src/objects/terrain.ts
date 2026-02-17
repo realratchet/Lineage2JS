@@ -14,7 +14,7 @@
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
 import type { L2Environment } from "@client/rendering/l2-env";
-import { Mesh, Vector3 } from "three";
+import { Mesh, Vector3, Camera } from "three";
 import type { ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { ColorByte } from "@client/utils/color-byte";
@@ -28,6 +28,7 @@ const cbLight = new ColorByte();
 
 class Terrain extends Mesh implements ICollidable {
     public readonly isCollidable = true;
+    public readonly isUpdatable = true;
 
     protected rigidbodyDesc: RigidBodyDesc;
     protected colliderDesc: ColliderDesc;
@@ -90,7 +91,7 @@ class Terrain extends Mesh implements ICollidable {
      * - Dynamic scene lights (bDynamicLight=true or moving lights)
      * - Time-based lights (LT_Pulse, LT_Blink, etc.)
      */
-    public update(sector: SectorObject, env: L2Environment) {
+    public update(_camera: Camera, env: L2Environment, sector: SectorObject | null) {
         if (!this.lightingInfo) return;
 
         const timeOfDay = env.getTimeOfDay();
@@ -114,10 +115,9 @@ class Terrain extends Mesh implements ICollidable {
             staticCacheDirty = true;
         }
 
-        let anyDynamicLightNeedsUpdate = false;
 
         // Collect and augment light info
-        const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
+        const lights = sector ? this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] })) : [];
 
         // if (this.lightingInfo.lights.length > 0)
         //     debugger;
@@ -130,13 +130,10 @@ class Terrain extends Mesh implements ICollidable {
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
-        // Only recalculate if something changed (time or light)
-        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
-
         const attrColors = this.geometry.getAttribute("color");
         const colorArray = attrColors.array as Uint8ClampedArray;
 
-        // Rebuild static cache if necessary (ambient + shadows + static lights)
+        // Only recalculate static cache if necessary (ambient + shadows + static lights)
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length) {
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);

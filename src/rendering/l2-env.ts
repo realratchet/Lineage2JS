@@ -115,6 +115,7 @@ class L2Environment {
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
 
     protected time: number = 1 * 60 * 60; // in seconds
+    protected animationTime: number = 0; // in milliseconds (monotonic)
     protected envVersion: number = 0; // Incremented when activeEnv changes
 
     public constructor(env: EnvInfo) {
@@ -134,6 +135,20 @@ class L2Environment {
         }
     }
     public getEnvVersion() { return this.envVersion; }
+
+    public getAnimationTime() { return this.animationTime; }
+    public setAnimationTime(ms: number) { this.animationTime = ms; }
+
+    /** Update environment state (time, etc) */
+    public update(deltaTimeMS: number) {
+        // Increment game time
+        // Standard L2: 1 real second = some amount of game seconds.
+        // For now, let's use a 1:1 real-to-game time progression or a Configuraable one.
+        // Actually, many servers use 4x speed (6 hours = 24 hours game time).
+        const timeScale = 1.0;
+        this.time += (deltaTimeMS / 1000) * timeScale;
+        if (this.time >= 24 * 3600) this.time %= 24 * 3600;
+    }
 
     public getEnv() { return this.env; }
 

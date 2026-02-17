@@ -1,7 +1,7 @@
 
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
-import { BufferAttribute, Matrix4, Mesh, Object3D, Vector3 } from "three";
+import { BufferAttribute, Matrix4, Mesh, LOD, Object3D, Vector3, Camera } from "three";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -17,48 +17,85 @@ function* iterFlags(arr: Uint8Array): Generator<number, null, unknown> {
     return null;
 }
 
-class LitActorMesh extends Mesh {
+class LitActorMesh extends LOD {
     public readonly isUpdatable: boolean = true;
+    public readonly isMesh: boolean = true;
 
+    protected lod0: Mesh;
     protected lightInfo?: MeshLight;
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
+    protected lods?: LodLevel[];
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean, lodLevels?: LodLevel[] } }) {
-        super(props.geometry, props.materials);
+    public get geometry() { return this.lod0.geometry; }
+    public get material() { return this.lod0.material; }
+
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, lods?: LodLevel[] }) {
+        super();
+
+        this.lod0 = new Mesh(props.geometry, props.materials);
+        this.addLevel(this.lod0, 0);
 
         this.lightInfo = props.lightInfo;
         this.scaledGlow = props.scaledGlow ?? 1.0;
         this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
         this.ambient = props.ambient;
+        this.lods = props.lods;
 
-        if (this.lightInfo || (this.ambient && !this.ambient.isUnlit)) {
-            const attrPositions = this.geometry.getAttribute("position");
+        if (this.lightInfo || this.ambient) {
+            const mesh0 = this.findMesh(this.lod0);
+            if (mesh0) {
+                (
+                    mesh0.material instanceof Array
+                        ? mesh0.material
+                        : [mesh0.material]
+                ).forEach(mat => (mat as any)?.setLit?.());
 
-            (
-                this.material instanceof Array
-                    ? this.material
-                    : [this.material]
-            ).forEach(mat => (mat as any)?.setLit?.());
+                const attrPositions = mesh0.geometry.getAttribute("position");
+                mesh0.geometry.setAttribute(
+                    "lighting",
+                    new BufferAttribute(
+                        new Uint8ClampedArray(attrPositions.count * 3),
+                        3,
+                        true
+                    )
+                );
+            }
+        }
 
-            this.geometry.setAttribute(
-                "lighting",
-                new BufferAttribute(
-                    new Uint8ClampedArray(attrPositions.count * 3),
-                    3,
-                    true
-                )
-            );
+        if (this.lods) {
+            for (const [obj, distance] of this.lods) {
+                this.addLevel(obj, distance * 2000);
+
+                const mesh = this.findMesh(obj);
+                if (mesh) {
+                    // Lower LODs don't need lit attributes, they use simple color multiplier
+                    if (mesh.material instanceof Array) {
+                        mesh.material.forEach(mat => (mat as any)?.setUnlit?.());
+                    } else {
+                        (mesh.material as any)?.setUnlit?.();
+                    }
+                }
+            }
         }
     }
 
-    protected computeLighting(_sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, multiplier: number) {
+    protected findMesh(object: Object3D): Mesh | null {
+        if (object instanceof Mesh) return object;
+        let found: Mesh | null = null;
+        object.traverse(child => {
+            if (child instanceof Mesh && !found) found = child;
+        });
+        return found;
+    }
+
+    protected computeLighting(geometry: THREE.BufferGeometry, _sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, multiplier: number) {
         if (lights.length === 0) return;
 
-        const attrPositions = this.geometry.getAttribute("position");
-        const attrNormals = this.geometry.getAttribute("normal");
+        const attrPositions = geometry.getAttribute("position");
+        const attrNormals = geometry.getAttribute("normal");
 
         const vertex = tmpVertex;
         const normal = tmpNormal;
@@ -102,11 +139,14 @@ class LitActorMesh extends Mesh {
         }
     }
 
-    public update(sector: SectorObject, env: L2Environment) {
-        if (!this.lightInfo && !this.ambient) return;
+    public update(camera: Camera, env?: L2Environment, sector?: SectorObject | null): void {
+        super.update(camera);
 
+        if (!env || !sector) return;
 
-        const attrColors = this.geometry.getAttribute("lighting");
+        const attrColors = this.lod0.geometry.getAttribute("lighting");
+        if (!attrColors) return;
+
         const colorArray = attrColors.array as Uint8ClampedArray;
 
         // Check if any lights need updating
@@ -127,9 +167,6 @@ class LitActorMesh extends Mesh {
 
         // Always proceed to apply Ambient/Dynamic updates
         // if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
-
-        // if (staticCacheDirty && this.name === "StaticMeshActor2277")
-        //     debugger;
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
@@ -167,49 +204,83 @@ class LitActorMesh extends Mesh {
                 this.staticLightingCache.fill(0);
             }
 
-            if (this.lightInfo) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
-
-            // if (staticEnv.length > 0)
-            //     debugger;
+            if (this.lightInfo) this.computeLighting(this.lod0.geometry, sector, staticScene, this.staticLightingCache, 1.0);
 
             if (staticEnv.length >= 2) {
                 const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
-                if (lerp < 1.0) this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp);
-                if (lerp > 0.0) this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp);
-            } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0);
+                if (lerp < 1.0) this.computeLighting(this.lod0.geometry, sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp);
+                if (lerp > 0.0) this.computeLighting(this.lod0.geometry, sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp);
+            } else if (staticEnv.length === 1) this.computeLighting(this.lod0.geometry, sector, staticEnv, this.staticLightingCache, 1.0);
         }
 
         // Apply static cache to the vertex attribute
         colorArray.set(this.staticLightingCache!);
 
+        // Calculate ambient contribution for other LODs
+        let ambR = 0, ambG = 0, ambB = 0;
+        if (this.ambient) {
+            if (this.ambient.isUnlit) {
+                ambR = ambG = ambB = 255;
+            } else {
+                tmpColorByte.set(this.ambient.vector[0], this.ambient.vector[1], this.ambient.vector[2]);
+                ambR = tmpColorByte.r + this.ambient.glow;
+                ambG = tmpColorByte.g + this.ambient.glow;
+                ambB = tmpColorByte.b + this.ambient.glow;
+            }
+        } else {
+            const bspAmb = env.getAmbientPlaneBSPLight(tmpColorByte);
+            ambR = bspAmb.r;
+            ambG = bspAmb.g;
+            ambB = bspAmb.b;
+        }
+
         // Apply sun ambient only to outdoor (sun-affected) meshes
         if (this.isSunAffected) {
-            const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
-            if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
-                // ambient is ColorByte (0-255), add directly without scaledGlow
-                // scaledGlow only affects dynamic lights, not ambient (per UE code)
-                const r = ambient.r;
-                const g = ambient.g;
-                const b = ambient.b;
+            const sunAmbient = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
+            if (sunAmbient.r !== 0 || sunAmbient.g !== 0 || sunAmbient.b !== 0) {
+                const r = sunAmbient.r;
+                const g = sunAmbient.g;
+                const b = sunAmbient.b;
 
                 for (let i = 0; i < colorArray.length; i += 3) {
                     colorArray[i] += r;
                     colorArray[i + 1] += g;
                     colorArray[i + 2] += b;
                 }
+
+                ambR += r;
+                ambG += g;
+                ambB += b;
             }
         }
 
-        // Apply dynamic pass (lights that change over time or move)
+        // Update other LOD levels with material color multiplier
+        for (let i = 1; i < this.levels.length; i++) {
+            const levelObj = this.levels[i].object;
+            const mesh = this.findMesh(levelObj);
+            if (mesh) {
+                const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
+                for (const mat of materials) {
+                    const m = mat as any;
+                    if (m.uniforms?.diffuse) {
+                        m.uniforms.diffuse.value.setRGB(ambR / 255, ambG / 255, ambB / 255);
+                    } else if ("color" in m) {
+                        m.color.setRGB(ambR / 255, ambG / 255, ambB / 255);
+                    }
+                }
+            }
+        }
+
+        // Apply dynamic pass (lights that change over time or move) - ONLY LOD0
         const dynamicScene = scene.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
         const dynamicEnv = environment.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
 
-        if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0);
+        if (dynamicScene.length > 0) this.computeLighting(this.lod0.geometry, sector, dynamicScene, colorArray, 1.0);
         if (dynamicEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);
-            if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp);
-            if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp);
-        } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0);
+            if (lerp < 1.0) this.computeLighting(this.lod0.geometry, sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp);
+            if (lerp > 0.0) this.computeLighting(this.lod0.geometry, sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp);
+        } else if (dynamicEnv.length === 1) this.computeLighting(this.lod0.geometry, sector, dynamicEnv, colorArray, 1.0);
 
         attrColors.needsUpdate = true;
     }

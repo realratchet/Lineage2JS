@@ -1,5 +1,7 @@
-import { Box3, Object3D, Vector3, Vector4 } from "three";
+import { Box3, Object3D, Vector3, Vector4, Camera } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
+import { L2Environment } from "../../rendering/l2-env";
+import { SectorObject } from "../zone-object";
 
 
 class Particle_T {
@@ -462,8 +464,8 @@ abstract class BaseEmitter extends Object3D {
         // Note: MeshVertsAndNormals contains [bone0_vertex, bone0_normal, bone1_vertex, bone1_normal, ...]
         // So array length = actual_bone_count * 2, but C++ uses total array length as NumBones
         // Only execute if skeletal mesh actor is set and meshVertsAndNormals is populated
-        if (this.useSkeletalLocationAs && this.useSkeletalLocationAs.valueOf() !== PTSU_None && 
-            this.meshVertsAndNormals && this.meshVertsAndNormals.length > 0 && 
+        if (this.useSkeletalLocationAs && this.useSkeletalLocationAs.valueOf() !== PTSU_None &&
+            this.meshVertsAndNormals && this.meshVertsAndNormals.length > 0 &&
             this.RelativeBoneIndexRange && this.skeletalScale) {
             const NumBones = this.meshVertsAndNormals.length;
             // C++: Particle.BoneIndex = Clamp<INT>(RelativeBoneIndexRange.GetRand() * NumBones, 0.f, NumBones - 1);
@@ -474,14 +476,14 @@ abstract class BaseEmitter extends Object3D {
             const randValue = rangeMin + (rangeMax - rangeMin) * Math.random();
             const boneIndexFloat = randValue * NumBones;
             Particle.BoneIndex = clamp(Math.trunc(boneIndexFloat), 0, NumBones - 1);
-            
+
             // C++: Particle.OldMeshLocation = MeshVertsAndNormals( Particle.BoneIndex ) * SkeletalScale;
             // C++ accesses array directly by BoneIndex - but we need to ensure we get vertex (even index)
             // Since vertices are at even indices (0, 2, 4, ...) and normals at odd (1, 3, 5, ...)
             const vertexIndex = Particle.BoneIndex & ~1; // Round down to nearest even number
             if (vertexIndex < this.meshVertsAndNormals.length) {
-                const scaleVec = Array.isArray(this.skeletalScale) 
-                    ? new Vector3().fromArray(this.skeletalScale) 
+                const scaleVec = Array.isArray(this.skeletalScale)
+                    ? new Vector3().fromArray(this.skeletalScale)
                     : this.skeletalScale;
                 Particle.OldMeshLocation.copy(this.meshVertsAndNormals[vertexIndex].clone().multiply(scaleVec));
                 Particle.position.add(Particle.OldMeshLocation);
@@ -577,7 +579,7 @@ abstract class BaseEmitter extends Object3D {
 
             switch (this.getVelocityDirectionFrom.valueOf()) {
                 case PTVD_StartPositionAndOwner:
-                    
+
                     Particle.Velocity.copy(Particle.Velocity.clone().negate().multiply(Direction));
                     break;
                 case PTVD_OwnerAndStartPosition:
@@ -1301,7 +1303,10 @@ abstract class BaseEmitter extends Object3D {
         return this.activeParticles - DeadParticles;
     }
 
-    public update(currentTime: number) {
+    public update(_camera: Camera, env: L2Environment, sector: SectorObject | null) {
+        if (this.isDisabled || this.isRespawningDeadParticles) return;
+
+        const currentTime = env.getAnimationTime();
         if (currentTime === 0) return;
 
         // if (this.name !== "SpriteEmitter3" || this.parent.name !== "Emitter7") return;
