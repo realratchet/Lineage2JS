@@ -236,11 +236,25 @@ abstract class UTerrainSector extends UObject {
                     const hmy = y + this.offsetY;
                     const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    let u = (hmx / layer.scaleW) * (layer.scale.x / info.terrainScale.x) * 2.0 + layer.panW;
-                    let uvV = (hmy / layer.scaleH) * (layer.scale.y / info.terrainScale.y) * 2.0 + layer.panH;
+                    // let u = (hmx / layer.scaleW) * (layer.scale.x / info.terrainScale.x) * 2.0 + layer.panW;
+                    // let uvV = (hmy / layer.scaleH) * (layer.scale.y / info.terrainScale.y) * 2.0 + layer.panH;
 
-                    uvs[layerOffset + idxOffset + 0] = u;
-                    uvs[layerOffset + idxOffset + 1] = uvV;
+                    const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
+
+                    // Reconstruct the Unified World Space vertex (Z-up) for this point
+                    // We reuse 'v' scratch vector if possible or create new one contextually. 
+                    // Note: 'v' is defined in outer scope but we should be careful. 
+                    // Let's use a new temporary vector to be safe/clean or reuse `v`.
+                    // The outer `v` is used in the geometry loop, this is the UV loop.
+
+                    // We must use info.toWorld to get the correct absolute position
+                    const worldVert = FVector.make(hmx, hmy, data[offset]).transformBy(info.toWorld);
+
+                    // Transform by the layer's texture matrix to get UVs
+                    const uvVert = worldVert.applyMatrix4(layer.terrainMatrix);
+
+                    uvs[layerOffset + idxOffset + 0] = uvVert.x;
+                    uvs[layerOffset + idxOffset + 1] = uvVert.y;
                 }
             }
         }
@@ -549,7 +563,10 @@ abstract class UTerrainSector extends UObject {
             vertices,
             normals,
             uvs
-        }
+        };
+
+        // if (this.objectName === "TerrainSector127")
+        //     debugger;
 
         // TODO: update decorators
 

@@ -43,6 +43,7 @@ class MeshTerrainMaterial extends ShaderMaterial {
 
         info.layers.forEach((layer, i) => {
             if (!layer.map) return;
+            if (!layer.alphaMap) return;
 
             needsPreamble = true;
 
@@ -51,27 +52,22 @@ class MeshTerrainMaterial extends ShaderMaterial {
             defines[`USE_LAYER_${i}`] = "";
 
 
-            if (layer.alphaMap) {
-                needsOpacityPreamble = true;
-                defines[`USE_LAYER_${i}_OPACITY`] = "";
+            needsOpacityPreamble = true;
+            defines[`USE_LAYER_${i}_OPACITY`] = "";
 
-                layerCode.push(`${ws}layerMask = texture2D(layer${i}.alphaMap.texture, vUv[MASK_UV_INDEX]);`);
-                paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
+            layerCode.push(`${ws}layerMask = texture2D(layer${i}.alphaMap.texture, vUv[MASK_UV_INDEX]);`);
+            paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
 
-                Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
-                layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
-                layer.alphaMap.uniforms.map.texture.wrapS = RepeatWrapping;
-                layer.alphaMap.uniforms.map.texture.wrapT = RepeatWrapping;
-                // Use linear filtering like the original L2 viewer
-                layer.alphaMap.uniforms.map.texture.minFilter = LinearFilter;
-                layer.alphaMap.uniforms.map.texture.magFilter = LinearFilter;
-                layer.alphaMap.uniforms.map.texture.needsUpdate = true;
-            } else {
-                layerCode.push(`${ws}layerMask = vec4(1.0);`);
-                paramsCode.push(`${wsParams}uniform LayerData layer${i};`);
-            }
+            Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
+            layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
+            layer.alphaMap.uniforms.map.texture.wrapS = RepeatWrapping;
+            layer.alphaMap.uniforms.map.texture.wrapT = RepeatWrapping;
+            // Use linear filtering like the original L2 viewer
+            layer.alphaMap.uniforms.map.texture.minFilter = LinearFilter;
+            layer.alphaMap.uniforms.map.texture.magFilter = LinearFilter;
+            layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i}]).rgb, layerMask.r);`)
+            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
             if (!isFirst) {
                 layerCode.push(`${ws}texelDiffuse = addLayer(layer, texelDiffuse);`);
             } else {

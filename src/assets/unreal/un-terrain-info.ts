@@ -403,12 +403,13 @@ abstract class ATerrainInfo extends AInfo {
         // This matches exactly what the engine does
 
         const toHeightmapTransposed = this.toHeightMap.transpose();
+        // const toHeightmapTransposed = this.toHeightMap; // Do not transpose, we want World -> Heightmap transform
         for (let i = 0, lcount = this.layers.length; i < lcount; i++) {
-            const layer = this.layers[i];
+            const layer = this.layers[i]?.loadSelf();
 
-            if (!layer || !layer.map || !layer.alphaMap) continue;
+            if (!layer) continue;
 
-            if (layer.alphaMap.loadSelf().format === ETextureFormat.TEXF_P8) {
+            if (layer.alphaMap && layer.alphaMap.loadSelf().format === ETextureFormat.TEXF_P8) {
                 const palette = layer.alphaMap.palette.loadSelf();
 
                 for (let p = 0; p < 256; p++) {
@@ -421,10 +422,10 @@ abstract class ATerrainInfo extends AInfo {
             // Exact implementation from UE source:
             // FCoords TexCoords = ( GMath.UnitCoords / FRotator( 0.f, Layers[i].TextureRotation, 0.f) );
             const rotator = FRotator.make(0, layer.mapRotation, 0);
-            const texCoords = GMath().unitCoords.div(rotator);
+            let texCoords = GMath().unitCoords.div(rotator);
 
             // TexCoords *= ToHeightmap.Transpose();
-            texCoords.mul(toHeightmapTransposed);
+            texCoords = texCoords.mul(toHeightmapTransposed);
 
             // TexCoords.XAxis /= Layers[i].UScale;
             // TexCoords.YAxis /= Layers[i].VScale;
@@ -458,7 +459,7 @@ abstract class ATerrainInfo extends AInfo {
 
             // TexCoords = TexCoords * ( GMath.UnitCoords / Layers[i].LayerRotation );
             const layerRotInverse = GMath().unitCoords.div(layer.layerRotation);
-            texCoords.mul(layerRotInverse);
+            texCoords = texCoords.mul(layerRotInverse);
 
             // Layers[i].TextureMatrix = TexCoords.Matrix();
             const terrainMatrix = texCoords.matrix();
@@ -624,6 +625,9 @@ abstract class ATerrainInfo extends AInfo {
         const terrainLayers = this.layers.filter(x => x);
         const layerCount = terrainLayers.length;
 
+        // Force recalculation of texture matrices to ensure they use loaded layer data
+        this.calcLayerTexCoords();
+
         const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
         const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
@@ -634,6 +638,11 @@ abstract class ATerrainInfo extends AInfo {
 
         for (let k = 0; k < layerCount; k++) {
             const layer = terrainLayers[k].loadSelf();
+
+            // if (k !== 10) {
+            //     layers[k] = { map: null, alphaMap: null };
+            //     continue;
+            // }
 
             if (!layer.map && !layer.alphaMap) {
                 layers[k] = { map: null, alphaMap: null };
@@ -647,13 +656,15 @@ abstract class ATerrainInfo extends AInfo {
             }
 
             layers[k] = {
-                map: layer.map?.loadSelf().getDecodeInfo(library) || null,
-                alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) || null
+                map: layer.map?.loadSelf().getDecodeInfo(library) ?? null,
+                alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) ?? null
             };
 
             if (layers[k].alphaMap && !layers[k].map)
                 debugger;
         }
+
+
 
         library.materials[this.uuid] = {
             name: this.uuid,
