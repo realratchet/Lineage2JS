@@ -73,7 +73,7 @@ abstract class UStaticMesh extends UPrimitive {
             ["bMakeTwoSideMesh", "BoolProperty"],
             ["bStaticMeshLodBlend", "BoolProperty"],
             ["Frequency", "FloatProperty"],
-            ["bUseBillBoard", "FloatProperty"],
+            ["bUseBillBoard", "BoolProperty"],
         ];
     }
 
@@ -386,6 +386,18 @@ abstract class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
 
+        const lods = new Array<[GD.IStaticMeshObjectDecodeInfo, number]>();
+
+        if (this.hasStaticMeshLod) {
+            if (this.staticMeshLod1?.loadSelf()) {
+                lods.push([this.staticMeshLod1.getDecodeInfo(library, matModifiers), this.lodRange1]);
+            }
+
+            if (this.staticMeshLod2?.loadSelf()) {
+                lods.push([this.staticMeshLod2.getDecodeInfo(library, matModifiers), this.lodRange2]);
+            }
+        }
+
         return {
             uuid: this.uuid,
             type: "StaticMesh",
@@ -394,7 +406,8 @@ abstract class UStaticMesh extends UPrimitive {
             materials: materialUuid,
             children: [
                 // this.getDecodeTrisInfo(library),
-            ]
+            ],
+            lods: lods.length > 0 ? lods : null
         };
     }
 

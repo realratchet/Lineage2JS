@@ -223,7 +223,8 @@ declare global {
                 }
 
                 export interface IStaticMeshObjectDecodeInfo extends IBaseMeshObjectDecodeInfo {
-                    type: "StaticMesh"
+                    type: "StaticMesh",
+                    lods?: [Omit<IStaticMeshObjectDecodeInfo, "lods">, number][]
                 }
 
                 export interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {

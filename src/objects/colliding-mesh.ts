@@ -1,6 +1,9 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ICollidable } from "./objects";
 import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
+import { Object3D } from "three";
+
+type LodLevel = [Object3D, number];
 
 class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
@@ -10,7 +13,7 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     protected rigidbody: RigidBody;
     protected collider: Collider;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean, lods?: LodLevel[] } }) {
         super(props);
 
         if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)

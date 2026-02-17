@@ -161,12 +161,12 @@ function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: GD.IStaticMesh
 
 function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshActorDecodeInfo): CollidingMesh {
     const instanceInfo = info.instance;
-    const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo);
+    const { geometry, materials, collider, lights, lods } = decodeStaticMeshInstance(library, instanceInfo);
     const scaledGlow = info.scaledGlow;
     const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
 
-    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient });
+    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient, lods });
 
     // if (info.name === "StaticMeshActor140")
     //     debugger;
@@ -217,6 +217,14 @@ function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMes
     const geometry = fetchGeometry(infoGeo);
     const meshInfo = info.mesh;
 
+    let lods: [Object3D, number][] | null = null;
+
+    if (meshInfo.lods) {
+        lods = meshInfo.lods.map(([info, distance]) => {
+            return [decodeStaticMeshWrapped(library, info), distance];
+        });
+    }
+
     const infoMats = library.materials[meshInfo.materials];
 
     const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
@@ -236,7 +244,7 @@ function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMes
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
 
-    return { geometry, materials, collider, lights };
+    return { geometry, materials, collider, lights, lods };
 }
 
 function decodeStaticMeshActorLight(library: GD.DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight | null {

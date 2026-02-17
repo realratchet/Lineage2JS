@@ -1,7 +1,7 @@
 
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
-import { BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
+import { BufferAttribute, Matrix4, Mesh, Object3D, Vector3 } from "three";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -26,7 +26,7 @@ class LitActorMesh extends Mesh {
     protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean, lodLevels?: LodLevel[] } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
@@ -218,6 +218,8 @@ class LitActorMesh extends Mesh {
         return light.sampleIntensity(samplingPoint, samplingNormal);
     }
 }
+
+export type LodLevel = [Object3D, number];
 
 export interface MeshLight {
     matrix: Matrix4,
