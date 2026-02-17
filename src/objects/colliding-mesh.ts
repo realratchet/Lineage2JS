@@ -1,9 +1,8 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ICollidable } from "./objects";
-import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
-import { Object3D } from "three";
+import LitActorMesh, { LodLevel, MeshLight } from "@client/objects/lit-actor";
+import { LoaderUtils, Object3D } from "three";
 
-type LodLevel = [Object3D, number];
 
 class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
