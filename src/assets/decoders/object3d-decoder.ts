@@ -198,6 +198,8 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
 
     applySimpleProperties(library, object, info);
 
+    if (info.name) object.lod0.name = `${info.name}_LOD0`;
+
     // object.add(new Mesh(geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
 
     return object;

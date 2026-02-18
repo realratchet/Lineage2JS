@@ -21,7 +21,7 @@ class LitActorMesh extends LOD {
     public readonly isUpdatable: boolean = true;
     public readonly isMesh: boolean = true;
 
-    protected lod0: Mesh;
+    public readonly lod0: Mesh;
     protected lightInfo?: MeshLight;
     protected scaledGlow: number;
     protected isSunAffected: boolean;

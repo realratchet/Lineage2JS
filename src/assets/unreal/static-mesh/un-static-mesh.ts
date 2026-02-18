@@ -232,54 +232,27 @@ abstract class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary, matModifiers?: string[]): GD.IStaticMeshObjectDecodeInfo {
-        // await this.onDecodeReady();
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IStaticMeshObjectDecodeInfo {
+        const lods = new Array<[GD.IStaticMeshObjectDecodeInfo, number]>();
 
-        // debugger;
+        if (this.hasStaticMeshLod || true) {
+            if (this.staticMeshLod1?.loadSelf()) {
+                lods.push([this.staticMeshLod1.getDecodeInfo(library), this.lodRange1]);
+            }
 
-        let materialUuid = this.uuid;
-
-        if (matModifiers?.length > 0) {
-            const hash = new StringSet(matModifiers).hash();
-            const hashArr = new Uint8Array(new BigUint64Array([hash]).buffer);
-
-            materialUuid = seededUuid(hashArr, materialUuid);
-
-            if (!(materialUuid in library.materials)) {
-                library.materials[materialUuid] = {
-                    materialType: "instance",
-                    baseMaterial: this.uuid,
-                    modifiers: matModifiers
-                } as GD.IMaterialInstancedDecodeInfo;
-
-                // debugger;
+            if (this.staticMeshLod2?.loadSelf()) {
+                lods.push([this.staticMeshLod2.getDecodeInfo(library), this.lodRange2]);
             }
         }
-
-        // debugger;
-
-
-        // if (!(materialUuid in library.materials)) {
-        //     debugger;
-        //     const materials = await Promise.all(this.materials.map((mat: UStaticMeshMaterial) => mat.getDecodeInfo(library)));
-
-        //     materials.forEach(uuid => {
-        //         if (!library.materials[uuid]) return;
-
-        //         library.materials[uuid].color = true;
-        //     });
-
-        //     library.materials[materialUuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
-
-        //     debugger;
-        // }
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: materialUuid,
+            materials: this.uuid,
+            lods: lods.length > 0 ? lods : null,
+            billboard: this.isUsingBillboard
         } as GD.IStaticMeshObjectDecodeInfo;
 
         library.geometryInstances[this.uuid] = 0;
@@ -386,28 +359,19 @@ abstract class UStaticMesh extends UPrimitive {
 
         library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
 
-        const lods = new Array<[GD.IStaticMeshObjectDecodeInfo, number]>();
 
-        if (this.hasStaticMeshLod || true) {
-            if (this.staticMeshLod1?.loadSelf()) {
-                lods.push([this.staticMeshLod1.getDecodeInfo(library, matModifiers), this.lodRange1]);
-            }
-
-            if (this.staticMeshLod2?.loadSelf()) {
-                lods.push([this.staticMeshLod2.getDecodeInfo(library, matModifiers), this.lodRange2]);
-            }
-        }
 
         return {
             uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
-            materials: materialUuid,
+            materials: this.uuid,
             children: [
                 // this.getDecodeTrisInfo(library),
             ],
-            lods: lods.length > 0 ? lods : null
+            lods: lods.length > 0 ? lods : null,
+            billboard: this.isUsingBillboard
         };
     }
 

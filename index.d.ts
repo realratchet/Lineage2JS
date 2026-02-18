@@ -224,6 +224,7 @@ declare global {
 
                 export interface IStaticMeshObjectDecodeInfo extends IBaseMeshObjectDecodeInfo {
                     type: "StaticMesh",
+                    billboard: boolean,
                     lods?: [Omit<IStaticMeshObjectDecodeInfo, "lods">, number][]
                 }
 

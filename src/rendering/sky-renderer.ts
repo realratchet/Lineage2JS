@@ -113,13 +113,8 @@ export default class SkyRenderer {
                 skyZoneInfos.push(obj);
             }
         });
-        console.log(`[SkyRenderer] Found ${skyZoneInfos.length} SkyZoneInfo actors in skylevel`);
-        skyZoneInfos.forEach(szi => console.log(`  > ${szi.name}: Position(${szi.position.toArray().map((v: number) => v.toFixed(2))})`));
 
         const celestials = skyLevel.celestials;
-
-
-        const stetup = envInfo.setup
 
         celestials.forEach(celestial => {
             if (celestial.type === "Sun") {
@@ -159,7 +154,6 @@ export default class SkyRenderer {
             } else {
                 skyOrigin.copy(skyZoneInfo.position);
             }
-            console.log(`[SkyRenderer] Using USkyZoneInfo as canonical origin: ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
         } else {
             const skyboxPattern = envInfo.setup.skybox;
             let skyboxMesh = skyboxPattern ? children.find(m => m.name.includes(skyboxPattern)) : null;
@@ -175,6 +169,7 @@ export default class SkyRenderer {
                 // This prevents flat cloud/star layers from slicing exactly through the eyes (Y=0).
                 skyOrigin.y -= 250;
                 console.warn(`[SkyRenderer] USkyZoneInfo NOT FOUND. Falling back to mesh center (${skyboxMesh.name}): ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
+                debugger;
             }
         }
 

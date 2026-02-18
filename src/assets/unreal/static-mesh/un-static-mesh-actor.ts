@@ -112,7 +112,7 @@ abstract class UStaticMeshActor extends UAActor {
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {
         const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
-        const meshInfo = mesh.getDecodeInfo(library, null);
+        const meshInfo = mesh.getDecodeInfo(library);
 
         const level = this.getLevel();
         const baseModel = level.getModel();
