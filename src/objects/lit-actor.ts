@@ -28,12 +28,16 @@ class LitActorMesh extends LOD {
     protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
     protected billboard: boolean = false;
+    protected lodBias: number = 1.0;
+    protected cullDistance: number = 0;
     protected lods?: LodLevel[];
+
+    public static readonly STATIC_MESH_LOD_CONSTANT = 5.0;
 
     public get geometry() { return this.lod0.geometry; }
     public get material() { return this.lod0.material; }
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, lods?: LodLevel[], billboard?: boolean }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, lods?: LodLevel[], billboard?: boolean, lodBias?: number, cullDistance?: number }) {
         super();
 
         this.lod0 = new Mesh(props.geometry, props.materials);
@@ -44,6 +48,8 @@ class LitActorMesh extends LOD {
         this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
         this.ambient = props.ambient;
         this.billboard = props.billboard ?? false;
+        this.lodBias = props.lodBias ?? 1.0;
+        this.cullDistance = props.cullDistance ?? 0;
         this.lods = props.lods;
 
         if (this.lightInfo || this.ambient) {
@@ -69,7 +75,7 @@ class LitActorMesh extends LOD {
 
         if (this.lods) {
             for (const [obj, distance] of this.lods) {
-                this.addLevel(obj, distance * 2000);
+                this.addLevel(obj, distance);
 
                 const mesh = this.findMesh(obj);
                 if (mesh) {
@@ -142,9 +148,48 @@ class LitActorMesh extends LOD {
     }
 
     public update(camera: Camera, env?: L2Environment, sector?: SectorObject | null): void {
-        super.update(camera);
+        // super.update(camera); // We use our own screen-ratio based LOD selection
 
         if (!env || !sector) return;
+
+        const worldPos = tmpVertex.setFromMatrixPosition(this.matrixWorld);
+        const camPos = tmpNormal.setFromMatrixPosition(camera.matrixWorld);
+        const distance = worldPos.distanceTo(camPos);
+
+        // 1. Culling
+        if (this.cullDistance > 0 && distance > this.cullDistance) {
+            this.visible = false;
+            return;
+        }
+        this.visible = true;
+
+        // 2. LOD Selection
+        const levels = this.levels;
+        if (levels.length > 1) {
+            const radius = this.lod0.geometry.boundingSphere?.radius ?? 100;
+            const screenSize = (radius / Math.max(1, distance)) * LitActorMesh.STATIC_MESH_LOD_CONSTANT;
+            const effectiveScreenSize = screenSize / this.lodBias;
+
+            // LOD selection logic from lod.md:
+            // LOD 0: ScreenSize > LodRange01
+            // LOD 1: LodRange01 >= ScreenSize > LodRange02
+            // LOD 2: LodRange02 >= ScreenSize
+
+            let activeLevelIndex = 0;
+            for (let i = 1; i < levels.length; i++) {
+                const threshold = levels[i].distance; // Threshold for this level (LodRange01, LodRange02)
+                if (effectiveScreenSize <= threshold) {
+                    activeLevelIndex = i;
+                } else {
+                    break;
+                }
+            }
+
+            for (let i = 0; i < levels.length; i++) {
+                levels[i].object.visible = (i === activeLevelIndex);
+            }
+            (this as any)._level = activeLevelIndex;
+        }
 
         const attrColors = this.lod0.geometry.getAttribute("lighting");
         if (!attrColors) return;
@@ -302,11 +347,11 @@ class LitActorMesh extends LOD {
             const isBillboard = levelIdx === 0 ? this.billboard : currentObj.userData.billboard;
             if (isBillboard) {
                 // Cylindrical billboarding (face camera around Y axis)
-                const camPos = camera.position;
-                const worldPos = new Vector3();
-                this.getWorldPosition(worldPos);
+                // We use worldToLocal to compensate for the actor's world rotation
+                const localCamPos = tmpVertex.copy(camera.position);
+                this.worldToLocal(localCamPos);
 
-                const angle = Math.atan2(camPos.x - worldPos.x, camPos.z - worldPos.z);
+                const angle = Math.atan2(localCamPos.x, localCamPos.z);
                 currentObj.rotation.y = angle;
                 currentObj.updateMatrix();
             }

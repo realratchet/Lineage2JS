@@ -214,7 +214,9 @@ declare global {
                         glow: number,
                         vector: Vector3Arr,
                         isUnlit: boolean
-                    }
+                    },
+                    lodBias?: number,
+                    cullDistance?: number
                 }
 
                 export interface IBaseMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {

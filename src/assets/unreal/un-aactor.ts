@@ -59,6 +59,7 @@ abstract class UAActor extends UObject {
     declare public readonly isCastingShadow: boolean;
     declare public readonly scaleGlow: number;
     declare public ambientGlow: number;
+    declare public readonly cullDistance: number;
 
     declare public readonly physics: EPhysics_T;
     declare public readonly drawType: EDrawType_T;
@@ -229,6 +230,7 @@ abstract class UAActor extends UObject {
 
             "ScaleGlow": "scaleGlow",
             "AmbientGlow": "ambientGlow",
+            "CullDistance": "cullDistance",
 
             "bHiddenEd": "isHiddenInEditor",
             "bLightChanged": "isLightChanged",
