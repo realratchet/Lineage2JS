@@ -772,7 +772,7 @@ class RenderManager {
                 if (mat) {
                     const materials = (mat as any).isMaterial ? [mat] : (mat as any);
                     (materials as THREE.Material[]).forEach((m: any) => {
-                        if (m && m.isMeshStaticMaterial) {
+                        if (m && (m as any).isUpdatable) {
                             m.update(this.camera, this.environment, sector);
                         }
                     });
