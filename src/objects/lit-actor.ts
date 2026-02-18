@@ -27,12 +27,13 @@ class LitActorMesh extends LOD {
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
+    protected billboard: boolean = false;
     protected lods?: LodLevel[];
 
     public get geometry() { return this.lod0.geometry; }
     public get material() { return this.lod0.material; }
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, lods?: LodLevel[] }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, lods?: LodLevel[], billboard?: boolean }) {
         super();
 
         this.lod0 = new Mesh(props.geometry, props.materials);
@@ -42,6 +43,7 @@ class LitActorMesh extends LOD {
         this.scaledGlow = props.scaledGlow ?? 1.0;
         this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
         this.ambient = props.ambient;
+        this.billboard = props.billboard ?? false;
         this.lods = props.lods;
 
         if (this.lightInfo || this.ambient) {
@@ -283,6 +285,32 @@ class LitActorMesh extends LOD {
         } else if (dynamicEnv.length === 1) this.computeLighting(this.lod0.geometry, sector, dynamicEnv, colorArray, 1.0);
 
         attrColors.needsUpdate = true;
+
+        // Apply billboarding
+        let currentObj: Object3D | null = null;
+        let levelIdx = -1;
+
+        for (let i = 0; i < this.levels.length; i++) {
+            if (this.levels[i].object.visible) {
+                currentObj = this.levels[i].object;
+                levelIdx = i;
+                break;
+            }
+        }
+
+        if (currentObj) {
+            const isBillboard = levelIdx === 0 ? this.billboard : currentObj.userData.billboard;
+            if (isBillboard) {
+                // Cylindrical billboarding (face camera around Y axis)
+                const camPos = camera.position;
+                const worldPos = new Vector3();
+                this.getWorldPosition(worldPos);
+
+                const angle = Math.atan2(camPos.x - worldPos.x, camPos.z - worldPos.z);
+                currentObj.rotation.y = angle;
+                currentObj.updateMatrix();
+            }
+        }
     }
 
     protected sampleIntensity(light: DynamicLight, samplingPoint: Vector3, samplingNormal: Vector3): number {

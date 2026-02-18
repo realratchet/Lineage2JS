@@ -141,6 +141,8 @@ function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: GD.IStaticMesh
 
     applySimpleProperties(library, mesh, info);
 
+    obj.userData.billboard = info.billboard;
+
     // obj.add(new Mesh(mesh.geometry, new MeshBasicMaterial({ color: 0xffffff, wireframe: true })))
     obj.add(mesh);
 
@@ -161,12 +163,12 @@ function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: GD.IStaticMesh
 
 function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshActorDecodeInfo): CollidingMesh {
     const instanceInfo = info.instance;
-    const { geometry, materials, collider, lights, lods } = decodeStaticMeshInstance(library, instanceInfo);
+    const { geometry, materials, collider, lights, lods, billboard } = decodeStaticMeshInstance(library, instanceInfo);
     const scaledGlow = info.scaledGlow;
     const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
 
-    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient, lods });
+    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient, lods, billboard });
 
     // if (info.name === "StaticMeshActor140")
     //     debugger;
@@ -245,8 +247,9 @@ function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMes
 
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
+    const billboard = meshInfo.billboard;
 
-    return { geometry, materials, collider, lights, lods };
+    return { geometry, materials, collider, lights, lods, billboard };
 }
 
 function decodeStaticMeshActorLight(library: GD.DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight | null {
