@@ -136,7 +136,7 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
 
     return {
         isUsingMap,
-        transformType: "envMap" as any, // Not yet in transformType union
+        transformType: "none",
         defines: {
             USE_DIFFUSE: "",
             USE_ENVMAP: ""

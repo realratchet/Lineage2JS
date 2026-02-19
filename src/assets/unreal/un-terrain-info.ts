@@ -206,7 +206,7 @@ abstract class ATerrainInfo extends AInfo {
     // protected readStruct(pkg: UPackage, tag: PropertyTag): any {
     //     const exp = new UExport();
 
-    //     exp.objectName = `${tag.name}[Struct]`;
+    //     exp.objectName = `${ tag.name } [Struct]`;
     //     exp.offset = pkg.tell();
     //     exp.size = tag.dataSize;
 

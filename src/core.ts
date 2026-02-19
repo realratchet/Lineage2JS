@@ -459,11 +459,11 @@ async function startCore() {
 
 
     // working (or mostly working)
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
