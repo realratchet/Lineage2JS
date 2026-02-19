@@ -450,6 +450,14 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.add(staticMeshGroup);
     sector.staticMeshGroup = staticMeshGroup;
 
+    // Static mesh actors never move — compute matrices once and freeze
+    staticMeshGroup.updateMatrixWorld(true);
+    const frozenUpdateMatrixWorld = function () { }; // no-op: both local and world matrices are already computed
+    for (const child of staticMeshGroup.children) {
+        child.matrixAutoUpdate = false;
+        child.updateMatrixWorld = frozenUpdateMatrixWorld;
+    }
+
     // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {
         try {
