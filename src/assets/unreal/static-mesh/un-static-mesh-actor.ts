@@ -156,24 +156,26 @@ abstract class UStaticMeshActor extends UAActor {
         // const s = zone.ambientSaturation || 0;
         // const b = zone.ambientBrightness || 0;
 
-        let ambX = 0, ambY = 0, ambZ = 0;
+        // let ambX = 0, ambY = 0, ambZ = 0;
         const xmodel = this.levelInfo.getLevel().getModel();
 
-        for (let leaf of leaves) {
-            const zoneInfo = xmodel.getZoneActor(leaf.iZone);
-            const zone = zoneInfo.getZone();
-            const amb = zone.ambientVector;
+        const [ambX, ambY, ambZ] = this.getRegion().getZone().ambientVector.getElements();
 
-            ambX = Math.max(ambX, amb.x);
-            ambY = Math.max(ambY, amb.y);
-            ambZ = Math.max(ambZ, amb.z);
-        }
+        // for (let leaf of leaves) {
+        //     const zoneInfo = xmodel.getZoneActor(leaf.iZone);
+        //     const zone = zoneInfo.getZone();
+        //     const amb = zone.ambientVector;
+
+        //     ambX = Math.max(ambX, amb.x);
+        //     ambY = Math.max(ambY, amb.y);
+        //     ambZ = Math.max(ambZ, amb.z);
+        // }
 
         const ambVector = FColor.fromFloating(ambX, ambY, ambZ)
 
         const ambientProps = {
             glow: ambActor.ambientGlow,
-            color: ambVector.toArray(),
+            // color: ambVector.toArray(),
             vector: Array.from(ambVector.toArray()),
             isUnlit: this.isUnlit
         };

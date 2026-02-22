@@ -232,17 +232,17 @@ class RenderManager {
         // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
         // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
-        // // ti church
-        // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
-        // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
+        // ti church
+        this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
+        this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
-        // should see moon
-        this.camera.position.set(18345, -3583, 115670);
-        this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
+        // // should see moon
+        // this.camera.position.set(18345, -3583, 115670);
+        // this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
 
-        // seam
-        this.camera.position.set(-93965.70166078406, -933.6590151180576, 245523.81285369548);
-        this.controls.orbit.target.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
+        // // seam
+        // this.camera.position.set(-93965.70166078406, -933.6590151180576, 245523.81285369548);
+        // this.controls.orbit.target.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
 
         // // horrible performance
         // this.camera.position.set(13773.791753219824, -3153.232327352311, 122575.56746151186);

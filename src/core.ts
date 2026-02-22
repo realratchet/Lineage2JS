@@ -405,7 +405,7 @@ async function startCore() {
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
-        _loadStaticModelList: [
+        loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -445,21 +445,28 @@ async function startCore() {
             // ...["StaticMeshActor475"] // talking island village broken rock
             // "StaticMeshActor684", // cruma light
             // "StaticMeshActor2841"
-            "StaticMeshActor517", // cruma too dark
+            // "StaticMeshActor517", // cruma too dark
             // "StaticMeshActor1893" // cruma: broken floating platform light
+
+            "StaticMeshActor495", "StaticMeshActor188", "StaticMeshActor6"
         ]
     } as GD.LoadSettings_T;
 
     const pkgL2Skies = await assetLoader.load(assetLoader.getPackage("l2_skies", "Texture"));
     const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
     const skyLevel = await _decodePackage(renderManager, assetLoader, "skylevel", {
-        ...loadSettings, isSkyLevel: true
+        ...loadSettings, isSkyLevel: true,
+        loadTerrain: true,
+        loadBaseModel: true,
+        loadStaticModels: false,
+        loadEmitters: false,
+        loadStaticModelList: undefined,
     });
 
 
 
     // working (or mostly working)
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
