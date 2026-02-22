@@ -148,6 +148,11 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
     };
 }
 
+function decodeFinalBlendModifier(library: DecodeLibrary, info: GD.IFinalBlendDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
+    const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.material;
+    return decodeParameter(library, library.materials[materialIndex]);
+}
+
 function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.material;
     const parameter = decodeParameter(library, library.materials[materialIndex]);
@@ -185,6 +190,7 @@ function _decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierD
         case "oscillateTexture": param = decodeTexOscillatorModifer(library, info as GD.ITexOscillatorDecodeInfo, overrideMaterial); break;
         case "envMapTexture": param = decodeTexEnvMapModifer(library, info as GD.ITexEnvMapDecodeInfo); break;
         case "colorModifier": param = decodeColorModifier(library, info as GD.IColorModifierDecodeInfo, overrideMaterial); break;
+        case "finalBlend": param = decodeFinalBlendModifier(library, info as GD.IFinalBlendDecodeInfo, overrideMaterial); break;
         default: throw new Error(`Unknown modifier type: ${info.modifierType}`);
     }
 
@@ -301,6 +307,7 @@ function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDe
     else if (info.modifierType === "panTexture") materialIndex = (info as GD.ITexPannerDecodeInfo).transform.map;
     else if (info.modifierType === "rotateTexture") materialIndex = (info as GD.ITexRotatorDecodeInfo).transform.map;
     else if (info.modifierType === "oscillateTexture") materialIndex = (info as GD.ITexOscillatorDecodeInfo).transform.map;
+    else if (info.modifierType === "finalBlend") materialIndex = (info as GD.IFinalBlendDecodeInfo).material;
 
     const baseMaterial = library.materials[materialIndex] as GD.IBaseMaterialDecodeInfo;
     const isShader = baseMaterial?.materialType === "shader";
@@ -309,17 +316,21 @@ function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDe
     const isColorMod = info.modifierType === "colorModifier";
     const colorMod = info as GD.IColorModifierDecodeInfo;
 
+    const isFinalBlend = info.modifierType === "finalBlend";
+    const finalBlend = info as GD.IFinalBlendDecodeInfo;
+
     return new MeshStaticMaterial({
         diffuse: _decodeModifier(library, info, isShader ? shader.diffuse : materialIndex),
         opacity: isShader ? _decodeModifier(library, info, shader.opacity) : ((isColorMod && colorMod.alphaBlend) ? _decodeModifier(library, info, materialIndex) : null),
         specular: isShader ? _decodeModifier(library, info, shader.specular) : null,
         specularMask: isShader ? _decodeModifier(library, info, shader.specularMask) : null,
-        side: (isColorMod && colorMod.doubleSide) ? DoubleSide : ((info as GD.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide),
-        blendingMode: shader.blendingMode ?? "normal",
-        transparent: isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false),
-        depthWrite: isShader ? shader.depthWrite : true,
-        depthTest: isShader ? shader.depthTest ?? true : true,
-        visible: isShader ? shader.visible : true
+        side: (isColorMod && colorMod.doubleSide) ? DoubleSide : (isFinalBlend ? (finalBlend.doubleSide ? DoubleSide : FrontSide) : ((info as GD.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide)),
+        blendingMode: isFinalBlend ? finalBlend.blendingMode : (shader.blendingMode ?? "normal"),
+        transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false)),
+        depthWrite: isFinalBlend ? finalBlend.depthWrite : (isShader ? shader.depthWrite : true),
+        depthTest: isFinalBlend ? finalBlend.depthTest : (isShader ? shader.depthTest ?? true : true),
+        visible: isShader ? shader.visible : true,
+        alphaTest: isFinalBlend ? (finalBlend.alphaTest ? finalBlend.alphaRef : 0) : (isShader ? shader.alphaTest : 0)
     });
 }
 
@@ -469,7 +480,10 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
 }
 
 function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
-    if (!info) return new MeshBasicMaterial({ color: 0xff00ff });
+    if (!info) {
+        console.warn("Undefined material used!");
+        return new MeshBasicMaterial({ color: 0xff00ff });
+    }
 
     const material = ((): THREE.Material | THREE.Material[] => {
         switch (info.materialType) {

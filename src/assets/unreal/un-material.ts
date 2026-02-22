@@ -208,30 +208,74 @@ abstract class UCombiner extends UBaseModifier {
     }
 }
 
-abstract class UFinalBlend extends UBaseModifier {
-    // protected frameBufferBlending: number;
-    // protected doubleSide: boolean;
-    // protected alphaTest: boolean;
-    // protected alphaRef: number;
+enum EFrameBufferBlending {
+    FB_Overwrite,
+    FB_Normal,
+    FB_Masked,
+    FB_Translucent,
+    FB_Modulate,
+    FB_Brighten,
+    FB_Darken,
+    FB_Invisible,
+    FB_AlphaBlend,
+    FB_AlphaModulate_Simple,
+    FB_AlphaModulate_Brighten,
+    FB_AlphaModulate_Darken,
+    FB_AlphaModulate_Invisible,
+};
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "FrameBufferBlending": "frameBufferBlending",
-    //         "TwoSided": "doubleSide",
-    //         "AlphaTest": "alphaTest",
-    //         "AlphaRef": "alphaRef",
-    //     });
-    // }
+abstract class UFinalBlend extends UBaseModifier {
+    declare protected frameBufferBlending: EFrameBufferBlending;
+    declare protected doubleSide: boolean;
+    declare protected alphaTest: boolean;
+    declare protected alphaRef: number;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "FrameBufferBlending": "frameBufferBlending",
+            "TwoSided": "doubleSide",
+            "AlphaTest": "alphaTest",
+            "AlphaRef": "alphaRef",
+        });
+    }
 
     public getDecodeInfo(library: DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.material.uuid;
+        if (this.uuid in library.materials) return this.uuid;
 
-        library.materials[this.uuid] = null;
+        const map = this.material?.loadSelf().getDecodeInfo(library) || null;
 
+        let blendingMode: GA.SupportedBlendingTypes_T = "normal";
+        let transparent = false;
+        switch (this.frameBufferBlending.valueOf()) {
+            case EFrameBufferBlending.FB_Overwrite: blendingMode = "normal"; break;
+            case EFrameBufferBlending.FB_Normal: blendingMode = "normal"; break;
+            case EFrameBufferBlending.FB_Masked: blendingMode = "masked"; break;
+            case EFrameBufferBlending.FB_Translucent: blendingMode = "translucent"; transparent = true; break;
+            case EFrameBufferBlending.FB_Modulate: blendingMode = "modulate"; transparent = true; break;
+            case EFrameBufferBlending.FB_Brighten: blendingMode = "brighten"; transparent = true; break;
+            case EFrameBufferBlending.FB_Darken: blendingMode = "darken"; transparent = true; break;
+            case EFrameBufferBlending.FB_Invisible: blendingMode = "invisible"; transparent = true; break;
+            case EFrameBufferBlending.FB_AlphaBlend: blendingMode = "normal"; transparent = true; break;
+            default: console.warn("Unknown FinalBlend blending mode:", this.frameBufferBlending); break;
+        }
 
-        this.material.loadSelf().getDecodeInfo(library);
+        if (this.alphaTest) transparent = true;
 
-        return this.material.uuid;
+        library.materials[this.uuid] = {
+            name: this.uuid,
+            materialType: "modifier",
+            modifierType: "finalBlend",
+            material: map,
+            blendingMode,
+            doubleSide: this.doubleSide,
+            alphaTest: this.alphaTest,
+            alphaRef: this.alphaRef / 255,
+            transparent,
+            depthWrite: this.depthWrite,
+            depthTest: this.depthTest
+        } as GD.IFinalBlendDecodeInfo;
+
+        return this.uuid;
     }
 }
 

@@ -424,7 +424,6 @@ function decodeSector(library: GD.DecodeLibrary) {
         sector.add(bspGroup);
     }
 
-    // ACCURATE UE2: Decode static mesh actors from leaf association
     const staticMeshGroup = new Group();
     staticMeshGroup.name = "StaticMeshActors";
     const uniqueActors = new Map<string, GD.IBaseObjectOrInstanceDecodeInfo>();

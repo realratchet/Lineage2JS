@@ -244,6 +244,10 @@ class RenderManager {
         this.camera.position.set(-93965.70166078406, -933.6590151180576, 245523.81285369548);
         this.controls.orbit.target.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
 
+        // // horrible performance
+        // this.camera.position.set(13773.791753219824, -3153.232327352311, 122575.56746151186);
+        // this.controls.orbit.target.set(13761.929509381232, -3152.8878889174143, 122674.86080737793);
+
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
 

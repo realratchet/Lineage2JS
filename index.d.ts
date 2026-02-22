@@ -410,7 +410,7 @@ declare global {
                 export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
                 export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
-                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier";
+                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend";
 
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
@@ -663,6 +663,18 @@ declare global {
                     modifierColor: ColorArr,
                     doubleSide: boolean,
                     alphaBlend: boolean
+                }
+
+                export interface IFinalBlendDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "finalBlend",
+                    material: string,
+                    blendingMode: GA.SupportedBlendingTypes_T,
+                    doubleSide: boolean,
+                    alphaTest: boolean,
+                    alphaRef: number,
+                    transparent: boolean,
+                    depthWrite: boolean,
+                    depthTest: boolean
                 }
 
                 export interface ICombinerDecodeInfo extends IBaseMaterialDecodeInfo {
