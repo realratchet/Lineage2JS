@@ -144,9 +144,9 @@ class RenderManager {
 
         const skyFolder = gui.addFolder("Sky Layers");
         skyFolder.add(this.skyRenderer.config, "celestials").name("Celestials");
-        skyFolder.add(this.skyRenderer.config, "haze1").name("Haze 1 (Clearing)");
+        skyFolder.add(this.skyRenderer.config, "haze1").name("Haze");
         skyFolder.add(this.skyRenderer.config, "starsClouds").name("Stars/Clouds");
-        skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
+        // skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
 
         skyFolder.open();
 

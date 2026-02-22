@@ -15,6 +15,7 @@ class FRawColorStream implements C.IConstructable {
     }
 
     public getElemCount() { return this.elementCount };
+    public toTypedArray() { return new Uint8Array(this.data.buffer, this.data.byteOffset, this.data.byteLength) };
 
     public load(pkg: C.APackage): this {
         this.elementCount = pkg.read("compat32");

@@ -159,7 +159,7 @@ abstract class UStaticMeshActor extends UAActor {
         // let ambX = 0, ambY = 0, ambZ = 0;
         const xmodel = this.levelInfo.getLevel().getModel();
 
-        const [ambX, ambY, ambZ] = this.getRegion().getZone().ambientVector.getElements();
+        const [ambX, ambY, ambZ] = !zone.isSunAffected ? [0, 0, 0] : zone.ambientVector.getElements();
 
         // for (let leaf of leaves) {
         //     const zoneInfo = xmodel.getZoneActor(leaf.iZone);

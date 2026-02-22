@@ -405,7 +405,7 @@ async function startCore() {
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
-        loadStaticModelList: [
+        _loadStaticModelList: [
             // 1441,
             // 1770,
             // 1802,
@@ -448,7 +448,7 @@ async function startCore() {
             // "StaticMeshActor517", // cruma too dark
             // "StaticMeshActor1893" // cruma: broken floating platform light
 
-            "StaticMeshActor495", "StaticMeshActor188", "StaticMeshActor6"
+            "StaticMeshActor495", /*"StaticMeshActor188",*/ "StaticMeshActor6"
         ]
     } as GD.LoadSettings_T;
 
@@ -466,7 +466,7 @@ async function startCore() {
 
 
     // working (or mostly working)
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
@@ -488,12 +488,12 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI

@@ -14,6 +14,11 @@ abstract class UPointRegion extends UObject {
             "ZoneNumber": "zoneNumber"
         });
     }
+
+    public toString(...args: any): string;
+    public toString(): string {
+        return `PointRegion(Zone=${this.zone?.toString()}, iLeaf=${this.indexLeaf}, ZoneNumber=${this.zoneNumber})`;
+    }
 }
 
 export default UPointRegion;

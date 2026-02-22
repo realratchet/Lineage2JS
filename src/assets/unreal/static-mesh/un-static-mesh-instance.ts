@@ -142,8 +142,8 @@ abstract class UStaticMeshInstance extends UObject {
         super.doLoad(pkg, exp);
 
         if (verArchive < 0x70) {
-            console.warn("Unsupported yet");
             debugger;
+            throw new Error("not implemented");
         } else this.colorStream.load(pkg);
 
         this.readHead = pkg.tell();
