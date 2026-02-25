@@ -73,8 +73,8 @@ abstract class UL2EnvironmentColorInfo extends UObject {
     declare protected hazeringColor: C.FArray<GA.FColor>;
 
     public getDecodeInfo() {
-        if (this.cloudColor.length !== 1 || this.hazeringColor.length !== 1)
-            debugger;
+        // if (this.cloudColor.length !== 1 || this.hazeringColor.length !== 1)
+        //     debugger;
 
         return {
             time: this.time,

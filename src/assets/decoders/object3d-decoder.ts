@@ -1080,6 +1080,136 @@ function decodePackage(library: GD.DecodeLibrary) {
     return sector;
 }
 
+function decodeTerrainInfo(library: GD.DecodeLibrary, info: GD.IBaseObjectDecodeInfo) {
+    const group = new Object3D();
+    applySimpleProperties(library, group, info);
+
+    // Identify terrain sectors among children
+    const sectors: Terrain[] = [];
+    group.children.forEach(child => {
+        if ((child as any).isTerrain) {
+            sectors.push(child as Terrain);
+        }
+    });
+
+    if (sectors.length > 1) {
+        // Merge all sectors into a single batch
+        const totalVertices = sectors.reduce((acc, s) => acc + s.geometry.getAttribute("position").count, 0);
+        const totalIndices = sectors.reduce((acc, s) => acc + (s.geometry.index?.count || 0), 0);
+
+        const mergedGeometry = new BufferGeometry();
+        const mergedPositions = new Float32Array(totalVertices * 3);
+        const mergedNormals = new Float32Array(totalVertices * 3);
+        const mergedColors = new Uint8ClampedArray(totalVertices * 3);
+        const mergedTerrainIndices = new Float32Array(totalVertices);
+        const mergedIndices = new Uint32Array(totalIndices);
+
+        const materials: Material[] = [];
+        let vertexOffset = 0;
+        let indexOffset = 0;
+
+        sectors.forEach((sector, sectorIndex) => {
+            const geo = sector.geometry;
+            const idx = geo.index;
+            const pos = geo.getAttribute("position");
+            const norm = geo.getAttribute("normal");
+            const color = geo.getAttribute("color");
+            const terrainIndex = geo.getAttribute("terrainIndex");
+
+            const vCount = pos.count;
+            const iCount = idx ? idx.count : 0;
+
+            const sectorPos = sector.position;
+
+            // Copy and shift data
+            for (let i = 0; i < vCount; i++) {
+                const vi = vertexOffset + i;
+                mergedPositions[vi * 3 + 0] = pos.getX(i) + sectorPos.x;
+                mergedPositions[vi * 3 + 1] = pos.getY(i) + sectorPos.y;
+                mergedPositions[vi * 3 + 2] = pos.getZ(i) + sectorPos.z;
+
+                if (norm) {
+                    mergedNormals[vi * 3 + 0] = norm.getX(i);
+                    mergedNormals[vi * 3 + 1] = norm.getY(i);
+                    mergedNormals[vi * 3 + 2] = norm.getZ(i);
+                }
+
+                if (color) {
+                    mergedColors[vi * 3 + 0] = color.getX(i);
+                    mergedColors[vi * 3 + 1] = color.getY(i);
+                    mergedColors[vi * 3 + 2] = color.getZ(i);
+                }
+
+                if (terrainIndex) {
+                    mergedTerrainIndices[vi] = terrainIndex.getX(i);
+                }
+            }
+
+            if (idx) {
+                const idxArray = idx.array as Uint32Array;
+                for (let i = 0; i < iCount; i++) {
+                    mergedIndices[indexOffset + i] = idxArray[i] + vertexOffset;
+                }
+            }
+
+            // Setup multi-material group
+            const matIndex = materials.length;
+            const groupOffset = mergedGeometry.groups.length;
+            if (Array.isArray(sector.material)) {
+                sector.material.forEach(m => materials.push(m));
+                mergedGeometry.addGroup(indexOffset, iCount, matIndex);
+            } else {
+                materials.push(sector.material);
+                mergedGeometry.addGroup(indexOffset, iCount, matIndex);
+            }
+            const groupCount = mergedGeometry.groups.length - groupOffset;
+
+            // Link sector to batch for lighting/visibility updates
+            sector.batchGeometry = mergedGeometry;
+            sector.batchVertexOffset = vertexOffset;
+            sector.batchIndexOffset = indexOffset;
+            sector.batchSectorIndex = sectorIndex;
+            (sector as any).batchGroupOffset = groupOffset;
+            (sector as any).batchGroupCount = groupCount;
+
+            // Shift bounds to world space for frustum culling in zone-object.ts
+            sector.bounds.min.add(sector.position);
+            sector.bounds.max.add(sector.position);
+
+            vertexOffset += vCount;
+            indexOffset += iCount;
+        });
+
+        mergedGeometry.setAttribute("position", new BufferAttribute(mergedPositions, 3));
+        mergedGeometry.setAttribute("normal", new BufferAttribute(mergedNormals, 3));
+        mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true));
+        mergedGeometry.setAttribute("terrainIndex", new BufferAttribute(mergedTerrainIndices, 1));
+        mergedGeometry.setIndex(new BufferAttribute(mergedIndices, 1));
+
+        mergedGeometry.computeBoundingBox();
+        mergedGeometry.computeBoundingSphere();
+
+        // Create the merged terrain mesh
+        const batchTerrain = new Mesh(mergedGeometry, materials);
+        batchTerrain.name = `${group.name}_Batch`;
+        batchTerrain.userData.isTerrainBatch = true;
+        batchTerrain.userData.sectors = sectors;
+        batchTerrain.userData.originalGroups = [...mergedGeometry.groups];
+
+        // Ensure the batch mesh is updated for visibility correctly
+        // We'll handle this in zone-object.ts traversal
+        group.add(batchTerrain);
+
+        // Remove original sectors from the scene graph to avoid raycasting/interaction interference
+        // but keep them as references in batchTerrain.userData for updates
+        sectors.forEach(s => group.remove(s));
+
+        console.log(`[Terrain Batch] Merged ${sectors.length} sectors into one mesh (${totalVertices} vertices)`);
+    }
+
+    return group;
+}
+
 function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObjectDecodeInfo) {
     const infoGeo = library.geometries[info.geometry];
     const { geometry, materials } = decodeStaticMeshData(library, info);
@@ -1302,7 +1432,7 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
     switch (info.type) {
         case "Group":
         case "Level":
-        case "TerrainInfo": return decodeSimpleObject(library, Object3D, info as GD.IBaseObjectDecodeInfo);
+        case "TerrainInfo": return decodeTerrainInfo(library, info as GD.IBaseObjectDecodeInfo);
         case "Emitter": return decodeEmitterObject(library, info as GD.IBaseObjectDecodeInfo);
         case "StaticMeshActor": return decodeStaticMeshActor(library, info as GD.IStaticMeshActorDecodeInfo);
         // case "Light": return decodeLight(library, info as GD.ILightDecodeInfo);

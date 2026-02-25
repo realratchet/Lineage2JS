@@ -1,6 +1,7 @@
 import DynamicLight from "@client/objects/dynamic-light";
 import type { L2Environment } from "@client/rendering/l2-env";
-import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion } from "three";
+import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
+import type { Terrain } from "@client/objects/terrain";
 
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -989,9 +990,46 @@ class SectorObject extends Object3D {
                 }
             });
 
-            // Update terrain lighting
-            this.zones.traverseVisible((object) => {
-                if ((object as any).isMesh && object.constructor.name === 'Terrain') {
+            // Update terrain lighting and batch visibility
+            this.zones.traverse((object) => {
+                const userData = (object as any).userData;
+                const isTerrainBatch = userData?.isTerrainBatch;
+                const isTerrain = (object as any).isTerrain;
+
+                if (isTerrainBatch) {
+                    const batch = object as Mesh;
+                    const batchGeo = batch.geometry as BufferGeometry;
+                    const sectors = userData.sectors as any[];
+                    const originalGroups = userData.originalGroups as any[];
+                    if (!sectors || !batchGeo || !originalGroups) return;
+
+                    const visibleGroups: any[] = [];
+                    sectors.forEach(sector => {
+                        // Terrain sectors have 'bounds' (THREE.Box3)
+                        const isVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds);
+
+                        if (isVisible) {
+                            sector.update(this, environment);
+                            // Add this sector's groups to visibility
+                            const start = sector.batchGroupOffset;
+                            const count = sector.batchGroupCount;
+                            for (let i = start; i < start + count; i++) {
+                                visibleGroups.push(originalGroups[i]);
+                            }
+                        }
+                    });
+
+                    if (visibleGroups.length > 0) {
+                        batch.visible = true;
+                        batchGeo.clearGroups();
+                        visibleGroups.forEach(g => {
+                            batchGeo.addGroup(g.start, g.count, g.materialIndex);
+                        });
+                    } else {
+                        batch.visible = false;
+                    }
+                } else if (isTerrain && object.visible && !(object as any).batchGeometry) {
+                    // Standalone terrain or fallback: update if visible
                     (object as any).update?.(this, environment);
                 }
             });

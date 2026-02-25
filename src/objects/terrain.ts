@@ -35,7 +35,7 @@ class Terrain extends Mesh implements ICollidable {
     protected collider: RAPIER.Collider;
     protected rigidbody: RAPIER.RigidBody;
 
-    protected bounds: THREE.Box3;
+    public bounds: THREE.Box3;
     protected boundsSize: THREE.Vector3;
     protected boundsPosition: THREE.Vector3;
 
@@ -62,6 +62,12 @@ class Terrain extends Mesh implements ICollidable {
     public heightmapY: number = 0;
 
     public useShadowLerp: boolean = true;
+
+    // Batch mode: when set, this sector writes to a shared geometry buffer at vertexOffset
+    public batchGeometry: THREE.BufferGeometry | null = null;
+    public batchVertexOffset: number = 0;
+    public batchIndexOffset: number = 0;
+    public batchSectorIndex: number = -1;
 
     constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], fieldInfo?: TerrainFieldInfo_T, lightingInfo?: TerrainLightingInfo) {
         super(geometry, material);
@@ -135,9 +141,6 @@ class Terrain extends Mesh implements ICollidable {
         // Collect and augment light info
         const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
 
-        // if (this.lightingInfo.lights.length > 0)
-        //     debugger;
-
         for (const { instance: light } of lights) {
             if (!light) continue;
 
@@ -149,18 +152,19 @@ class Terrain extends Mesh implements ICollidable {
         // Only recalculate if something changed (time or light)
         if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
 
-        const attrColors = this.geometry.getAttribute("color");
+        // In batch mode, we use the shared geometry's color attribute
+        const targetGeometry = this.batchGeometry || this.geometry;
+        const attrColors = targetGeometry.getAttribute("color");
         const colorArray = attrColors.array as Uint8ClampedArray;
+        const vertexCount = this.geometry.getAttribute("position").count;
+        const colorOffset = this.batchVertexOffset * 3;
 
         // Rebuild static cache if necessary (ambient + shadows + static lights)
         if (staticCacheDirty) {
-            if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length) {
-                this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
+            if (!this.staticLightingCache || this.staticLightingCache.length !== vertexCount * 3) {
+                this.staticLightingCache = new Uint8ClampedArray(vertexCount * 3);
             }
             this.staticLightingCache.fill(0);
-
-            // Final = Ambient + (Light * Intensity)
-            // (cbAmbient and cbLight are already fetched above)
 
             const shadowMap = this.lightingInfo.shadowMaps[shadowIndex];
             const shadowMapNext = this.lightingInfo.shadowMaps[shadowNextIndex];
@@ -173,8 +177,6 @@ class Terrain extends Mesh implements ICollidable {
                     s = s * (1 - alpha) + sNext * alpha;
                 }
 
-                // FinalByte = (AmbientByte >> 1) + (LightByte * TintMap / 255)
-                // Tint map modulates only the sun color, preventing pitch black shadows
                 const sunR = cbLight.r * s;
                 const sunG = cbLight.g * s;
                 const sunB = cbLight.b * s;
@@ -187,7 +189,7 @@ class Terrain extends Mesh implements ICollidable {
             // 2. Add Static Lights
             const staticLights = lights.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
             if (staticLights.length > 0) {
-                this.computeLighting(staticLights, this.staticLightingCache);
+                this.computeLighting(staticLights, this.staticLightingCache, true);
             }
 
             this.lastShadowIndex = shadowIndex;
@@ -201,19 +203,14 @@ class Terrain extends Mesh implements ICollidable {
             this.lastSunB = cbLight.b;
         }
 
-        // Apply static cache to the vertex attribute
-        colorArray.set(this.staticLightingCache!);
+        // Apply static cache to the vertex attribute (at the correct offset)
+        colorArray.set(this.staticLightingCache!, colorOffset);
 
         // 3. Add Dynamic/Time-Based Lights
         const dynamicLights = lights.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
         if (dynamicLights.length > 0) {
-            this.computeLighting(dynamicLights, colorArray);
+            this.computeLighting(dynamicLights, colorArray, false);
         }
-
-        // Clamp colors - Uint8ClampedArray clamps automatically
-        // for (let i = 0, len = colorArray.length; i < len; i++) {
-        //     colorArray[i] = Math.max(0, Math.min(1, colorArray[i]));
-        // }
 
         attrColors.needsUpdate = true;
     }
@@ -231,16 +228,20 @@ class Terrain extends Mesh implements ICollidable {
      * Note: Terrain uses raw intensity without scaleGlow (unlike static meshes)
      * Note: Terrain only uses scene lights, not environment lights
      */
-    protected computeLighting(lights: { flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray) {
+    protected computeLighting(lights: { flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, isCache: boolean) {
         if (lights.length === 0) return;
 
-        const attrPositions = this.geometry.getAttribute("position");
-        const attrNormals = this.geometry.getAttribute("normal");
+        // In batch mode, positions and normals are also in the shared geometry
+        const sourceGeometry = this.batchGeometry || this.geometry;
+        const attrPositions = sourceGeometry.getAttribute("position");
+        const attrNormals = sourceGeometry.getAttribute("normal");
 
         // Guard: skip if normals are missing
         if (!attrNormals) return;
 
-        const vertexCount = attrPositions.count;
+        const vertexCount = this.geometry.getAttribute("position").count;
+        const vertexOffset = this.batchVertexOffset;
+        const targetOffset = isCache ? 0 : this.batchVertexOffset * 3;
 
         const ox = this.position.x, oy = this.position.y, oz = this.position.z;
 
@@ -254,19 +255,25 @@ class Terrain extends Mesh implements ICollidable {
 
             for (let vi = 0; vi < vertexCount; vi++) {
                 if ((bitPtr & bitMask) !== 0) {
-                    tmpVertex.fromBufferAttribute(attrPositions, vi);
-                    tmpVertex.x += ox;
-                    tmpVertex.y += oy;
-                    tmpVertex.z += oz;
+                    const sourceVi = vertexOffset + vi;
+                    tmpVertex.fromBufferAttribute(attrPositions, sourceVi);
 
-                    tmpNormal.fromBufferAttribute(attrNormals, vi);
+                    // In batch mode, vertices are already shifted to world space in the shared buffer.
+                    // Otherwise, we must add the sector's own position.
+                    if (!this.batchGeometry) {
+                        tmpVertex.x += ox;
+                        tmpVertex.y += oy;
+                        tmpVertex.z += oz;
+                    }
+
+                    tmpNormal.fromBufferAttribute(attrNormals, sourceVi);
 
                     const intensity = light.sampleIntensity(tmpVertex, tmpNormal);
 
                     if (intensity > 0) {
-                        target[vi * 3 + 0] += Math.floor(col.r * intensity);
-                        target[vi * 3 + 1] += Math.floor(col.g * intensity);
-                        target[vi * 3 + 2] += Math.floor(col.b * intensity);
+                        target[targetOffset + vi * 3 + 0] += Math.floor(col.r * intensity);
+                        target[targetOffset + vi * 3 + 1] += Math.floor(col.g * intensity);
+                        target[targetOffset + vi * 3 + 2] += Math.floor(col.b * intensity);
                     }
                 }
 
@@ -406,22 +413,30 @@ class Terrain extends Mesh implements ICollidable {
      * Only applied at inter-map boundaries (offsetX === 240).
      */
     public stitchWestToEast(neighbor: Terrain) {
-        const attr = this.geometry.getAttribute("position");
-        const nAttr = neighbor.geometry.getAttribute("position");
+        const targetGeometry = this.batchGeometry || this.geometry;
+        const attr = targetGeometry.getAttribute("position");
+        const nAttr = (neighbor.batchGeometry || neighbor.geometry).getAttribute("position");
         if (!attr || !nAttr) return false;
 
         const pos = attr.array as Float32Array;
         const nPos = nAttr.array as Float32Array;
-        const hDiff = neighbor.position.y - this.position.y;
+
+        const selfOffset = this.batchVertexOffset * 3;
+        const neighborOffset = neighbor.batchVertexOffset * 3;
+
+        // If both are in batch mode, vertices are absolute and should match perfectly.
+        // Otherwise, use relative offsets.
+        const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
+        const hDiff = useAbsolute ? 0 : neighbor.position.y - this.position.y;
 
         for (let y = 0; y < 17; y++) {
-            const selfIdx = (y * 17 + 16) * 3 + 1; // Right Edge (x=16)
-            const neighborIdx = (y * 17 + 0) * 3 + 1; // Neighbor Left Edge (x=0)
+            const selfIdx = selfOffset + (y * 17 + 16) * 3 + 1; // Right Edge (x=16)
+            const neighborIdx = neighborOffset + (y * 17 + 0) * 3 + 1; // Neighbor Left Edge (x=0)
             pos[selfIdx] = nPos[neighborIdx] + hDiff;
         }
 
         attr.needsUpdate = true;
-        this.geometry.computeVertexNormals();
+        if (!this.batchGeometry) this.geometry.computeVertexNormals();
         return true;
     }
 
@@ -430,22 +445,28 @@ class Terrain extends Mesh implements ICollidable {
      * Only applied at inter-map boundaries (offsetY === 240).
      */
     public stitchNorthToSouth(neighbor: Terrain) {
-        const attr = this.geometry.getAttribute("position");
-        const nAttr = neighbor.geometry.getAttribute("position");
+        const targetGeometry = this.batchGeometry || this.geometry;
+        const attr = targetGeometry.getAttribute("position");
+        const nAttr = (neighbor.batchGeometry || neighbor.geometry).getAttribute("position");
         if (!attr || !nAttr) return false;
 
         const pos = attr.array as Float32Array;
         const nPos = nAttr.array as Float32Array;
-        const hDiff = neighbor.position.y - this.position.y;
+
+        const selfOffset = this.batchVertexOffset * 3;
+        const neighborOffset = neighbor.batchVertexOffset * 3;
+
+        const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
+        const hDiff = useAbsolute ? 0 : neighbor.position.y - this.position.y;
 
         for (let x = 0; x < 17; x++) {
-            const selfIdx = (16 * 17 + x) * 3 + 1; // Bottom Edge (y=16)
-            const neighborIdx = (0 * 17 + x) * 3 + 1; // Neighbor Top Edge (y=0)
+            const selfIdx = selfOffset + (16 * 17 + x) * 3 + 1; // Bottom Edge (y=16)
+            const neighborIdx = neighborOffset + (0 * 17 + x) * 3 + 1; // Neighbor Top Edge (y=0)
             pos[selfIdx] = nPos[neighborIdx] + hDiff;
         }
 
         attr.needsUpdate = true;
-        this.geometry.computeVertexNormals();
+        if (!this.batchGeometry) this.geometry.computeVertexNormals();
         return true;
     }
 
@@ -454,20 +475,26 @@ class Terrain extends Mesh implements ICollidable {
      * Only applied at inter-map boundaries (offsetX === 240 && offsetY === 240).
      */
     public stitchCorner(neighbor: Terrain) {
-        const attr = this.geometry.getAttribute("position");
-        const nAttr = neighbor.geometry.getAttribute("position");
+        const targetGeometry = this.batchGeometry || this.geometry;
+        const attr = targetGeometry.getAttribute("position");
+        const nAttr = (neighbor.batchGeometry || neighbor.geometry).getAttribute("position");
         if (!attr || !nAttr) return false;
 
         const pos = attr.array as Float32Array;
         const nPos = nAttr.array as Float32Array;
-        const hDiff = neighbor.position.y - this.position.y;
 
-        const selfIdx = (16 * 17 + 16) * 3 + 1; // Bottom-Right corner
-        const neighborIdx = (0 * 17 + 0) * 3 + 1; // Neighbor Top-Left corner
+        const selfOffset = this.batchVertexOffset * 3;
+        const neighborOffset = neighbor.batchVertexOffset * 3;
+
+        const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
+        const hDiff = useAbsolute ? 0 : neighbor.position.y - this.position.y;
+
+        const selfIdx = selfOffset + (16 * 17 + 16) * 3 + 1; // Bottom-Right corner
+        const neighborIdx = neighborOffset + (0 * 17 + 0) * 3 + 1; // Neighbor Top-Left corner
         pos[selfIdx] = nPos[neighborIdx] + hDiff;
 
         attr.needsUpdate = true;
-        this.geometry.computeVertexNormals();
+        if (!this.batchGeometry) this.geometry.computeVertexNormals();
         return true;
     }
 

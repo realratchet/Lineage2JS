@@ -1483,7 +1483,14 @@ class RenderManager {
     public stitchTerrains() {
         const terrains: Terrain[] = [];
         this.scene.traverse(child => {
-            if ((child as any).isTerrain) terrains.push(child as Terrain);
+            if ((child as any).isTerrain) {
+                terrains.push(child as Terrain);
+            } else if ((child as any).userData?.isTerrainBatch) {
+                const batchSectors = (child as any).userData.sectors as Terrain[];
+                if (batchSectors) {
+                    batchSectors.forEach(s => terrains.push(s));
+                }
+            }
         });
 
         if (terrains.length < 2) return;
