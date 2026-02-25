@@ -1,4 +1,4 @@
-import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat } from "three";
+import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import DecodeLibrary from "../unreal/decode-library";
 
@@ -57,12 +57,10 @@ function decodeDDS(buffer: ArrayBuffer): THREE.Texture {
         if (rgbaData) {
             const texture = new DataTexture(rgbaData, width, height, RGBAFormat);
             texture.flipY = false;
-            texture.needsUpdate = true;
-            texture.minFilter = LinearFilter;
+            texture.generateMipmaps = true;
+            texture.minFilter = LinearMipmapLinearFilter;
             texture.magFilter = LinearFilter;
-            texture.generateMipmaps = true; // DataTexture supports mipmaps? Maybe not auto-gen? 
-            // Manual mipmaps not supported easily for DataTexture without input.
-            // But Haze is single level usually? Or we accept aliasing for now?
+            texture.needsUpdate = true;
             return texture;
         }
     } catch (e) {
@@ -87,7 +85,9 @@ function decodeRGBA(info: GD.IDataTextureDecodeInfo): DataTexture {
     const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);
     const texture = new DataTexture(image, info.width, info.height, getFormat(info.format));
 
-    texture.minFilter = LinearFilter;   // seems to have 2x1 mipmaps which causes issues
+    texture.generateMipmaps = true;
+    texture.minFilter = LinearMipmapLinearFilter;
+    texture.magFilter = LinearFilter;
 
     texture.flipY = false;
     texture.needsUpdate = true;

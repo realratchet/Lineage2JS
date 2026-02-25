@@ -62,13 +62,10 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
             layer.alphaMap.uniforms.map.texture.wrapS = RepeatWrapping;
             layer.alphaMap.uniforms.map.texture.wrapT = RepeatWrapping;
-            // Use linear filtering like the original L2 viewer
-            layer.alphaMap.uniforms.map.texture.minFilter = LinearFilter;
-            layer.alphaMap.uniforms.map.texture.magFilter = LinearFilter;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
             layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
-            if (!isFirst) {
+            if (isFirst) {
                 layerCode.push(`${ws}texelDiffuse = addLayer(layer, texelDiffuse);`);
             } else {
                 layerCode.push(`${ws}texelDiffuse = layer;`);
@@ -79,9 +76,6 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layer.map.uniforms.map.texture.premultiplyAlpha = true;
             layer.map.uniforms.map.texture.wrapS = RepeatWrapping;
             layer.map.uniforms.map.texture.wrapT = RepeatWrapping;
-            // Use linear filtering like the original L2 viewer
-            layer.map.uniforms.map.texture.minFilter = LinearFilter;
-            layer.map.uniforms.map.texture.magFilter = LinearFilter;
             layer.map.uniforms.map.texture.needsUpdate = true;
 
             Object.assign(u.value.map, layer.map.uniforms.map);

@@ -131,7 +131,11 @@ declare global {
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
                     helpersZoneBounds?: boolean,
-                    isSkyLevel?: boolean
+                    isSkyLevel?: boolean,
+                    batching?: {
+                        terrain?: boolean,
+                        staticMeshes?: boolean
+                    }
                 };
 
 

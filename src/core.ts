@@ -401,6 +401,10 @@ async function startCore() {
 
     const loadSettings = {
         helpersZoneBounds: false,
+        batching: {
+            terrain: true,
+            staticMeshes: true
+        },
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
@@ -461,6 +465,7 @@ async function startCore() {
         loadStaticModels: false,
         loadEmitters: false,
         loadStaticModelList: undefined,
+        batching: { staticMeshes: false, terrain: false }
     });
 
 

@@ -1,7 +1,6 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
-import { generateUUID } from "three/src/math/MathUtils";
 import decodeMaterial from "./material-decoder";
-import ZoneObject, { ILightInfo, SectorObject, FogInfoObject } from "../../objects/zone-object";
+import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
@@ -9,6 +8,7 @@ import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
+import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance } from "./object-batching";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -57,10 +57,10 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
             geometry.boundingSphere.radius = info.bounds.sphere.radius;
         }
 
-        if (info.bounds.box) {
+        if ((info.bounds as any).box) {
             geometry.boundingBox = geometry.boundingBox || new Box3();
-            geometry.boundingBox.min.fromArray(info.bounds.box.min);
-            geometry.boundingBox.max.fromArray(info.bounds.box.max);
+            geometry.boundingBox.min.fromArray((info.bounds as any).box.min);
+            geometry.boundingBox.max.fromArray((info.bounds as any).box.max);
         }
     }
 
@@ -69,7 +69,7 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     return geometry;
 }
 
-function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
+function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibrary, object: T, info: GD.IBaseObjectDecodeInfo) {
 
     if (info.name) object.name = info.name;
     if (info.position) object.position.fromArray(info.position);
@@ -162,7 +162,7 @@ function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: GD.IStaticMesh
 
 function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshActorDecodeInfo): CollidingMesh {
     const instanceInfo = info.instance;
-    const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo);
+    const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo, fetchGeometry);
     const scaledGlow = info.scaledGlow;
     const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
@@ -204,62 +204,9 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     return object;
 }
 
-function decodeStaticMeshInstance(library: GD.DecodeLibrary, info: GD.IStaticMeshInstanceDecodeInfo) {
-
-    const geometryUuid = info.mesh.geometry;
-    const infoGeo = {
-        ...library.geometries[geometryUuid],
-        attributes: {
-            ...library.geometries[geometryUuid].attributes,
-            ...Object.fromEntries(Object.keys(info.attributes).map((k: "colors") => [`${k}Instance`, info.attributes[k]]))
-        }
-    };
-
-    const geometry = fetchGeometry(infoGeo);
-    const meshInfo = info.mesh;
-
-    const infoMats = library.materials[meshInfo.materials];
-
-    const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
-
-    (materials instanceof Array ? materials : [materials]).forEach(mat => {
-        if (info.attributes.colors) (mat as any)?.setInstanced?.();
-    });
-
-    if (infoGeo.attributes.colors) {
-        (materials instanceof Array ? materials : [materials]).forEach(mat => {
-            if (!mat) return;
-
-            mat.vertexColors = true;
-        });
-    }
-
-    const collider = infoGeo.colliderIndices || null;
-    const lights = decodeStaticMeshActorLight(library, info.lights);
-
-    return { geometry, materials, collider, lights };
-}
-
-function decodeStaticMeshActorLight(library: GD.DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight | null {
-    if (!info) return null;
-
-    const matrix = new Matrix4().fromArray(info.matrix);
-    const buffer = info.flags;
-
-    const [scene, environment] = [info.scene, info.environment].map(elems =>
-        elems.map(([uuid, byteOffset, length]) => ({
-            light: uuid,
-            flags: new Uint8Array(buffer, byteOffset, length)
-        }))
-    )
-
-    return { matrix, scene, environment };
-}
-
 function decodeZoneObject(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) {
     const object = new ZoneObject();
 
-    if (info.name) object.name = info.name;
     if (info.name) object.name = info.name;
     if (info.bounds?.isValid) object.setRenderBounds(info.bounds.min, info.bounds.max);
     if (info.fog) object.setFogInfo(info.fog.start, info.fog.end, info.fog.color);
@@ -438,513 +385,7 @@ function decodeSector(library: GD.DecodeLibrary) {
     });
 
     // --- Static Mesh Batching ---
-    // Group batchable actors by their StaticMesh (geometry+material) key.
-    // Actors sharing the same StaticMesh have their geometries merged into a
-    // single draw call, with vertices pre-transformed by each actor's world matrix.
-
-    const batchGroups = new Map<string, GD.IStaticMeshActorDecodeInfo[]>();
-    const unbatchable: GD.IStaticMeshActorDecodeInfo[] = [];
-
-    uniqueActors.forEach(actorBase => {
-        const actor = actorBase as GD.IStaticMeshActorDecodeInfo;
-        const meshMaterials = actor.instance?.mesh?.materials;
-        const isBatchable = !actor.dontBatch && meshMaterials;
-
-        if (!isBatchable) {
-            unbatchable.push(actor);
-            return;
-        }
-
-        // Key by StaticMesh materials UUID (actors with same mesh share geometry+material)
-        const batchKey = meshMaterials;
-
-        if (!batchGroups.has(batchKey)) batchGroups.set(batchKey, []);
-        batchGroups.get(batchKey)!.push(actor);
-    });
-
-    // Check if a material is transparent (can't batch transparent materials — need sorting)
-    function isMaterialTransparent(materialInfo: GD.IBaseMaterialDecodeInfo): boolean {
-        if (!materialInfo) return false;
-        switch (materialInfo.materialType) {
-            case "shader": return !!(materialInfo as GD.IShaderDecodeInfo).transparent;
-            case "modifier": {
-                const mod = materialInfo as GD.IBaseMaterialModifierDecodeInfo;
-                if (mod.modifierType === "finalBlend") return !!(mod as GD.IFinalBlendDecodeInfo).transparent;
-                return false;
-            }
-            case "group": {
-                const group = materialInfo as GD.IMaterialGroupDecodeInfo;
-                return group.materials.some(uuid => isMaterialTransparent(library.materials[uuid]));
-            }
-            default: return false;
-        }
-    }
-
-    // Process each batch group
-    batchGroups.forEach((actors, batchKey) => {
-        // Check if the material is transparent — if so, don't batch
-        const materialInfo = library.materials[batchKey];
-        if (isMaterialTransparent(materialInfo) || actors.length < 2) {
-            // Not enough actors to batch or transparent — decode individually
-            unbatchable.push(...actors);
-            return;
-        }
-
-        try {
-            // Decode materials once from the first actor (they all share the same mesh)
-            const firstActor = actors[0];
-            const { materials, collider: _colliderTemplate } = decodeStaticMeshInstance(library, firstActor.instance);
-
-            // Collect per-actor geometry data
-            const actorGeometries: {
-                geometry: THREE.BufferGeometry;
-                worldMatrix: Matrix4;
-                normalMatrix: Matrix3;
-                reverseWinding: boolean;
-                lights: MeshLight | null;
-                ambient: typeof firstActor.ambient;
-                scaledGlow: number;
-                isSunAffected: boolean;
-                collider: Uint32Array | null;
-            }[] = [];
-
-            for (const actor of actors) {
-                const { geometry, lights, collider } = decodeStaticMeshInstance(library, actor.instance);
-
-                // Build world matrix from actor properties
-                const worldMatrix = new Matrix4();
-                const pos = actor.position || [0, 0, 0];
-                const scl = actor.scale || [1, 1, 1];
-                const quat = actor.quaternion || [0, 0, 0, 1];
-                worldMatrix.compose(
-                    new Vector3(pos[0], pos[1], pos[2]),
-                    new Quaternion(quat[0], quat[1], quat[2], quat[3]),
-                    new Vector3(scl[0], scl[1], scl[2])
-                );
-
-                const normalMatrix = new Matrix3().getNormalMatrix(worldMatrix);
-                const reverseWinding = worldMatrix.determinant() < 0;
-
-                actorGeometries.push({
-                    geometry, worldMatrix, normalMatrix, reverseWinding,
-                    lights, ambient: actor.ambient,
-                    scaledGlow: actor.scaledGlow,
-                    isSunAffected: actor.isSunAffected ?? true,
-                    collider
-                });
-            }
-
-            // Compute total vertex and index counts
-            let totalVertices = 0;
-            let totalIndices = 0;
-            let totalColliderIndices = 0;
-            let hasColors = false;
-            let hasColorsInstance = false;
-            let hasUVs = false;
-            let ColorArrayConstructor: Float32ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor = Float32Array;
-            let ColorInstanceConstructor: Float32ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor = Float32Array;
-            let colorNormalized = false;
-            let colorInstanceNormalized = false;
-
-            for (const { geometry, collider } of actorGeometries) {
-                totalVertices += geometry.getAttribute("position").count;
-                totalIndices += geometry.index ? geometry.index.count : 0;
-                if (collider) totalColliderIndices += collider.length;
-                if (geometry.hasAttribute("color")) {
-                    hasColors = true;
-                    const attr = geometry.getAttribute("color");
-                    ColorArrayConstructor = attr.array.constructor as any;
-                    colorNormalized = attr.normalized;
-                }
-                if (geometry.hasAttribute("colorInstance")) {
-                    hasColorsInstance = true;
-                    const attr = geometry.getAttribute("colorInstance");
-                    ColorInstanceConstructor = attr.array.constructor as any;
-                    colorInstanceNormalized = attr.normalized;
-                }
-                if (geometry.hasAttribute("uv")) hasUVs = true;
-            }
-
-            // Allocate merged buffers
-            const mergedPositions = new Float32Array(totalVertices * 3);
-            const mergedNormals = new Float32Array(totalVertices * 3);
-            const mergedUVs = hasUVs ? new Float32Array(totalVertices * 2) : null;
-            const mergedColors = hasColors ? new ColorArrayConstructor(totalVertices * 3) : null;
-            const mergedColorsInstance = hasColorsInstance ? new ColorInstanceConstructor(totalVertices * 3) : null;
-            const mergedIndices = new Uint32Array(totalIndices);
-            const mergedColliderIndices = totalColliderIndices > 0 ? new Uint32Array(totalColliderIndices) : null;
-
-            // Merge per-actor light info: concatenate flags with proper vertex offsets
-            const mergedSceneLights = new Map<string, Uint8Array[]>();
-            const mergedEnvLights = new Map<string, Uint8Array[]>();
-            let hasAnyLights = false;
-            let mergedLightMatrix: Matrix4 | null = null;
-
-            // Track per-actor ambient info for the merged lighting attribute
-            const perActorAmbient: { startVertex: number, count: number, ambient: typeof firstActor.ambient, scaledGlow: number, isSunAffected: boolean }[] = [];
-
-            let vertexOffset = 0;
-            let indexOffset = 0;
-            let colliderIndexOffset = 0;
-
-            // Merge geometry groups (for multi-material)
-            const mergedGroups: { start: number, count: number, materialIndex: number, actorIndex: number }[] = [];
-
-            for (let ai = 0; ai < actorGeometries.length; ai++) {
-                const { geometry, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, collider } = actorGeometries[ai];
-                const positions = geometry.getAttribute("position");
-                const normals = geometry.getAttribute("normal");
-                const uvs = geometry.hasAttribute("uv") ? geometry.getAttribute("uv") : null;
-                const colors = geometry.hasAttribute("color") ? geometry.getAttribute("color") : null;
-                const colorsInstance = geometry.hasAttribute("colorInstance") ? geometry.getAttribute("colorInstance") : null;
-                const vertexCount = positions.count;
-
-                // Transform and copy positions
-                const tmpV = new Vector3();
-                const tmpN = new Vector3();
-                for (let vi = 0; vi < vertexCount; vi++) {
-                    tmpV.fromBufferAttribute(positions, vi);
-                    tmpV.applyMatrix4(worldMatrix);
-                    mergedPositions[(vertexOffset + vi) * 3] = tmpV.x;
-                    mergedPositions[(vertexOffset + vi) * 3 + 1] = tmpV.y;
-                    mergedPositions[(vertexOffset + vi) * 3 + 2] = tmpV.z;
-
-                    tmpN.fromBufferAttribute(normals, vi);
-                    tmpN.applyMatrix3(normalMatrix).normalize();
-                    mergedNormals[(vertexOffset + vi) * 3] = tmpN.x;
-                    mergedNormals[(vertexOffset + vi) * 3 + 1] = tmpN.y;
-                    mergedNormals[(vertexOffset + vi) * 3 + 2] = tmpN.z;
-                }
-
-                // Copy UVs (unchanged by transform)
-                if (mergedUVs && uvs) {
-                    for (let vi = 0; vi < vertexCount; vi++) {
-                        mergedUVs[(vertexOffset + vi) * 2] = uvs.getX(vi);
-                        mergedUVs[(vertexOffset + vi) * 2 + 1] = uvs.getY(vi);
-                    }
-                }
-
-                // Copy vertex colors
-                if (mergedColors && colors) {
-                    for (let vi = 0; vi < vertexCount; vi++) {
-                        mergedColors[(vertexOffset + vi) * 3] = colors.getX(vi);
-                        mergedColors[(vertexOffset + vi) * 3 + 1] = colors.getY(vi);
-                        mergedColors[(vertexOffset + vi) * 3 + 2] = colors.getZ(vi);
-                    }
-                }
-
-                if (mergedColorsInstance && colorsInstance) {
-                    for (let vi = 0; vi < vertexCount; vi++) {
-                        mergedColorsInstance[(vertexOffset + vi) * 3] = colorsInstance.getX(vi);
-                        mergedColorsInstance[(vertexOffset + vi) * 3 + 1] = colorsInstance.getY(vi);
-                        mergedColorsInstance[(vertexOffset + vi) * 3 + 2] = colorsInstance.getZ(vi);
-                    }
-                }
-
-                // Copy and offset indices
-                const srcIndex = geometry.index;
-                if (srcIndex) {
-                    const groups = geometry.groups.length > 0 ? geometry.groups : [{ start: 0, count: srcIndex.count, materialIndex: 0 }];
-                    for (const group of groups) {
-                        mergedGroups.push({
-                            start: indexOffset + group.start,
-                            count: group.count,
-                            materialIndex: group.materialIndex ?? 0,
-                            actorIndex: ai
-                        });
-                    }
-
-                    if (reverseWinding) {
-                        for (let ii = 0; ii < srcIndex.count; ii += 3) {
-                            mergedIndices[indexOffset + ii] = srcIndex.getX(ii) + vertexOffset;
-                            mergedIndices[indexOffset + ii + 1] = srcIndex.getX(ii + 2) + vertexOffset;
-                            mergedIndices[indexOffset + ii + 2] = srcIndex.getX(ii + 1) + vertexOffset;
-                        }
-                    } else {
-                        for (let ii = 0; ii < srcIndex.count; ii++) {
-                            mergedIndices[indexOffset + ii] = srcIndex.getX(ii) + vertexOffset;
-                        }
-                    }
-                    indexOffset += srcIndex.count;
-                }
-
-                // Copy and offset collider indices
-                if (mergedColliderIndices && collider) {
-                    if (reverseWinding) {
-                        for (let ci = 0; ci < collider.length; ci += 3) {
-                            mergedColliderIndices[colliderIndexOffset + ci] = collider[ci] + vertexOffset;
-                            mergedColliderIndices[colliderIndexOffset + ci + 1] = collider[ci + 2] + vertexOffset;
-                            mergedColliderIndices[colliderIndexOffset + ci + 2] = collider[ci + 1] + vertexOffset;
-                        }
-                    } else {
-                        for (let ci = 0; ci < collider.length; ci++) {
-                            mergedColliderIndices[colliderIndexOffset + ci] = collider[ci] + vertexOffset;
-                        }
-                    }
-                    colliderIndexOffset += collider.length;
-                }
-
-                // Merge lighting data
-                if (lights) {
-                    hasAnyLights = true;
-                    // Use identity matrix since vertices are already world-space
-                    if (!mergedLightMatrix) mergedLightMatrix = new Matrix4();
-
-                    // Extend light flag arrays: for each light, pad flags to cover the full merged vertex range
-                    for (const entry of lights.scene) {
-                        if (!mergedSceneLights.has(entry.light)) {
-                            const arr = new Array(actorGeometries.length).fill(null);
-                            mergedSceneLights.set(entry.light, arr);
-                        }
-                        mergedSceneLights.get(entry.light)![ai] = entry.flags;
-                    }
-                    for (const entry of lights.environment) {
-                        if (!mergedEnvLights.has(entry.light)) {
-                            const arr = new Array(actorGeometries.length).fill(null);
-                            mergedEnvLights.set(entry.light, arr);
-                        }
-                        mergedEnvLights.get(entry.light)![ai] = entry.flags;
-                    }
-                }
-
-                perActorAmbient.push({ startVertex: vertexOffset, count: vertexCount, ambient, scaledGlow, isSunAffected });
-                vertexOffset += vertexCount;
-            }
-
-            // Build merged BufferGeometry
-            const mergedGeometry = new BufferGeometry();
-            mergedGeometry.setAttribute("position", new BufferAttribute(mergedPositions, 3));
-            mergedGeometry.setAttribute("normal", new BufferAttribute(mergedNormals, 3));
-            if (mergedUVs) mergedGeometry.setAttribute("uv", new BufferAttribute(mergedUVs, 2));
-            if (mergedColors) mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, colorNormalized));
-            if (mergedColorsInstance) mergedGeometry.setAttribute("colorInstance", new BufferAttribute(mergedColorsInstance, 3, colorInstanceNormalized));
-            // Track per-actor, per-material sub-ranges for per-element culling
-            type BatchElementGroup = { start: number; count: number; materialIndex: number };
-            type BatchElement = {
-                uuid: string;
-                boundsMin: number[];
-                boundsMax: number[];
-                groups: BatchElementGroup[];
-                zoneMask: bigint;
-                isRangeIgnored: boolean;
-            };
-            const batchElements: BatchElement[] = actors.map(a => ({
-                uuid: a.uuid,
-                boundsMin: a.bounds?.min || [0, 0, 0],
-                boundsMax: a.bounds?.max || [0, 0, 0],
-                groups: [] as BatchElementGroup[],
-                zoneMask: (a as any).zoneMask || 0n,
-                isRangeIgnored: !!(a as any).isRangeIgnored
-            }));
-
-            const hasMultiMaterial = mergedGroups.length > 0;
-
-            if (hasMultiMaterial) {
-                // Group indices by materialIndex, tracking actor ownership
-                const materialGroupsMap = new Map<number, { indices: number[], actorIndex: number }[]>();
-
-                for (const group of mergedGroups) {
-                    const matIndex = group.materialIndex;
-                    if (!materialGroupsMap.has(matIndex)) materialGroupsMap.set(matIndex, []);
-                    const arr = materialGroupsMap.get(matIndex)!;
-
-                    const indices: number[] = [];
-                    for (let ii = 0; ii < group.count; ii++) {
-                        indices.push(mergedIndices[group.start + ii]);
-                    }
-                    arr.push({ indices, actorIndex: group.actorIndex });
-                }
-
-                mergedGeometry.clearGroups();
-                let globalIndexOffset = 0;
-
-                Array.from(materialGroupsMap.keys()).sort().forEach(matIndex => {
-                    const entries = materialGroupsMap.get(matIndex)!;
-                    const matGroupStart = globalIndexOffset;
-                    let matGroupCount = 0;
-
-                    for (const { indices, actorIndex } of entries) {
-                        const elemStart = globalIndexOffset;
-                        mergedIndices.set(indices, globalIndexOffset);
-                        globalIndexOffset += indices.length;
-                        matGroupCount += indices.length;
-
-                        batchElements[actorIndex].groups.push({
-                            start: elemStart,
-                            count: indices.length,
-                            materialIndex: matIndex
-                        });
-                    }
-
-                    mergedGeometry.addGroup(matGroupStart, matGroupCount, matIndex);
-                });
-            } else {
-                mergedGeometry.clearGroups();
-                // Single material — each actor's original groups map directly
-                for (const group of mergedGroups) {
-                    batchElements[group.actorIndex].groups.push({
-                        start: group.start,
-                        count: group.count,
-                        materialIndex: 0
-                    });
-                }
-            }
-
-            mergedGeometry.setIndex(new BufferAttribute(mergedIndices, 1));
-
-            // Compute bounding box/sphere
-            mergedGeometry.computeBoundingBox();
-            mergedGeometry.computeBoundingSphere();
-
-            // Build merged light info
-            let mergedLightInfo: MeshLight | null = null;
-            if (hasAnyLights) {
-                // Build concatenated flag arrays: for each light, we need a bit per vertex in the merged buffer
-                const bytesNeeded = Math.ceil(totalVertices / 8);
-
-                const buildFlagArray = (lightId: string, flagArrays: Uint8Array[]): Uint8Array => {
-                    const result = new Uint8Array(bytesNeeded);
-                    let globalVertex = 0;
-                    for (let ai = 0; ai < actorGeometries.length; ai++) {
-                        const actorVertexCount = actorGeometries[ai].geometry.getAttribute("position").count;
-                        const actorFlags = flagArrays[ai];
-                        if (actorFlags) {
-                            // Copy bit flags from actor's flag array into the global position
-                            for (let vi = 0; vi < actorVertexCount; vi++) {
-                                const srcByte = Math.floor(vi / 8);
-                                const srcBit = vi % 8;
-                                if (srcByte < actorFlags.length && (actorFlags[srcByte] & (1 << srcBit))) {
-                                    const dstVertex = globalVertex + vi;
-                                    const dstByte = Math.floor(dstVertex / 8);
-                                    const dstBit = dstVertex % 8;
-                                    result[dstByte] |= (1 << dstBit);
-                                }
-                            }
-                        }
-                        globalVertex += actorVertexCount;
-                    }
-                    return result;
-                };
-
-                const sceneEntries = Array.from(mergedSceneLights.entries()).map(([light, flagArrays]) => ({
-                    light,
-                    flags: buildFlagArray(light, flagArrays)
-                }));
-                const envEntries = Array.from(mergedEnvLights.entries()).map(([light, flagArrays]) => ({
-                    light,
-                    flags: buildFlagArray(light, flagArrays)
-                }));
-
-                mergedLightInfo = {
-                    matrix: mergedLightMatrix || new Matrix4(), // Identity — vertices are already in world space
-                    scene: sceneEntries,
-                    environment: envEntries
-                };
-            }
-
-            // Use first actor's ambient as default; the merged mesh will have per-vertex ambient via the lighting attribute
-            const batchUuid = generateUUID();
-            const mergedObject = new CollidingMesh({
-                geometry: mergedGeometry,
-                materials,
-                lightInfo: mergedLightInfo,
-                colliderIndices: mergedColliderIndices,
-                scaledGlow: actors[0].scaledGlow,
-                isSunAffected: actors.some(a => a.isSunAffected ?? true),
-                ambient: actors[0].ambient
-            });
-
-            mergedObject.name = `Batch_${actors.length}_${actors[0].name}`;
-            mergedObject.userData.isBatch = true;
-            mergedObject.userData.batchActorUuids = actors.map(a => a.uuid);
-            // Store per-actor ambient data for the update pass
-            mergedObject.userData.perActorAmbient = perActorAmbient;
-            // Store per-element culling data
-            mergedObject.userData.batchElements = batchElements;
-            // Store the full groups snapshot for quick restore
-            mergedObject.userData.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
-
-            staticMeshGroup.add(mergedObject);
-
-            // Register the merged mesh for each constituent actor UUID
-            for (const actor of actors) {
-                sector.staticMeshMap.set(actor.uuid, mergedObject);
-            }
-
-            // Also update leafActors: replace individual actor entries with a batch entry
-            // so visibility checks show the merged mesh when any constituent actor is visible
-            const batchActorEntry = {
-                uuid: batchUuid,
-                type: "StaticMeshActor" as const,
-                zoneMask: actors.reduce((mask, a) => mask | ((a as any).zoneMask || 0n), 0n),
-                bounds: {
-                    min: [Infinity, Infinity, Infinity],
-                    max: [-Infinity, -Infinity, -Infinity]
-                }
-            };
-
-            // Compute union bounds
-            for (const actor of actors) {
-                if (actor.bounds) {
-                    for (let i = 0; i < 3; i++) {
-                        batchActorEntry.bounds.min[i] = Math.min(batchActorEntry.bounds.min[i], actor.bounds.min[i]);
-                        batchActorEntry.bounds.max[i] = Math.max(batchActorEntry.bounds.max[i], actor.bounds.max[i]);
-                    }
-                }
-            }
-
-            // Replace individual actors in leaf arrays with the batch entry
-            const actorUuidSet = new Set(actors.map(a => a.uuid));
-            sector.staticMeshMap.set(batchUuid, mergedObject);
-
-            for (let li = 0; li < library.leafActors.length; li++) {
-                const leaf = library.leafActors[li];
-                let hasBatchActor = false;
-                for (let ai = leaf.length - 1; ai >= 0; ai--) {
-                    if (actorUuidSet.has(leaf[ai].uuid)) {
-                        if (!hasBatchActor) {
-                            leaf[ai] = batchActorEntry as any;
-                            hasBatchActor = true;
-                        } else {
-                            leaf.splice(ai, 1);
-                        }
-                    }
-                }
-            }
-
-            console.log(`[Batch] Merged ${actors.length} actors → ${mergedObject.name} (${totalVertices} verts, ${totalIndices / 3} tris)`);
-        } catch (e) {
-            console.warn(`[Batch] Failed to merge batch group ${batchKey}, falling back to individual:`, e);
-            unbatchable.push(...actors);
-        }
-    });
-
-    // Decode unbatchable actors individually (original path)
-    for (const actor of unbatchable) {
-        try {
-            const object = decodeObject3D(library, actor);
-            staticMeshGroup.add(object);
-            sector.staticMeshMap.set(actor.uuid, object);
-        } catch (e) {
-            console.warn(`Failed to decode static mesh actor ${actor.uuid}:`, e);
-        }
-    }
-
-    sector.add(staticMeshGroup);
-    sector.staticMeshGroup = staticMeshGroup;
-
-    // Static mesh actors never move — compute matrices once and freeze
-    staticMeshGroup.updateMatrixWorld(true);
-    const frozenUpdateMatrixWorld = function () { }; // no-op: both local and world matrices are already computed
-    for (const child of staticMeshGroup.children) {
-        child.matrixAutoUpdate = false;
-        child.updateMatrixWorld = frozenUpdateMatrixWorld;
-        // BSP traversal handles culling — disable Three.js redundant frustum/matrix checks
-        child.traverse(node => {
-            node.frustumCulled = false;
-            node.matrixAutoUpdate = false;
-        });
-    }
+    batchStaticMeshActors(library, sector, staticMeshGroup, uniqueActors, fetchGeometry, decodeObject3D);
 
     // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {
@@ -1092,120 +533,7 @@ function decodeTerrainInfo(library: GD.DecodeLibrary, info: GD.IBaseObjectDecode
         }
     });
 
-    if (sectors.length > 1) {
-        // Merge all sectors into a single batch
-        const totalVertices = sectors.reduce((acc, s) => acc + s.geometry.getAttribute("position").count, 0);
-        const totalIndices = sectors.reduce((acc, s) => acc + (s.geometry.index?.count || 0), 0);
-
-        const mergedGeometry = new BufferGeometry();
-        const mergedPositions = new Float32Array(totalVertices * 3);
-        const mergedNormals = new Float32Array(totalVertices * 3);
-        const mergedColors = new Uint8ClampedArray(totalVertices * 3);
-        const mergedTerrainIndices = new Float32Array(totalVertices);
-        const mergedIndices = new Uint32Array(totalIndices);
-
-        const materials: Material[] = [];
-        let vertexOffset = 0;
-        let indexOffset = 0;
-
-        sectors.forEach((sector, sectorIndex) => {
-            const geo = sector.geometry;
-            const idx = geo.index;
-            const pos = geo.getAttribute("position");
-            const norm = geo.getAttribute("normal");
-            const color = geo.getAttribute("color");
-            const terrainIndex = geo.getAttribute("terrainIndex");
-
-            const vCount = pos.count;
-            const iCount = idx ? idx.count : 0;
-
-            const sectorPos = sector.position;
-
-            // Copy and shift data
-            for (let i = 0; i < vCount; i++) {
-                const vi = vertexOffset + i;
-                mergedPositions[vi * 3 + 0] = pos.getX(i) + sectorPos.x;
-                mergedPositions[vi * 3 + 1] = pos.getY(i) + sectorPos.y;
-                mergedPositions[vi * 3 + 2] = pos.getZ(i) + sectorPos.z;
-
-                if (norm) {
-                    mergedNormals[vi * 3 + 0] = norm.getX(i);
-                    mergedNormals[vi * 3 + 1] = norm.getY(i);
-                    mergedNormals[vi * 3 + 2] = norm.getZ(i);
-                }
-
-                if (color) {
-                    mergedColors[vi * 3 + 0] = color.getX(i);
-                    mergedColors[vi * 3 + 1] = color.getY(i);
-                    mergedColors[vi * 3 + 2] = color.getZ(i);
-                }
-
-                if (terrainIndex) {
-                    mergedTerrainIndices[vi] = terrainIndex.getX(i);
-                }
-            }
-
-            if (idx) {
-                const idxArray = idx.array as Uint32Array;
-                for (let i = 0; i < iCount; i++) {
-                    mergedIndices[indexOffset + i] = idxArray[i] + vertexOffset;
-                }
-            }
-
-            // Setup multi-material group
-            const matIndex = materials.length;
-            const groupOffset = mergedGeometry.groups.length;
-            if (Array.isArray(sector.material)) {
-                sector.material.forEach(m => materials.push(m));
-                mergedGeometry.addGroup(indexOffset, iCount, matIndex);
-            } else {
-                materials.push(sector.material);
-                mergedGeometry.addGroup(indexOffset, iCount, matIndex);
-            }
-            const groupCount = mergedGeometry.groups.length - groupOffset;
-
-            // Link sector to batch for lighting/visibility updates
-            sector.batchGeometry = mergedGeometry;
-            sector.batchVertexOffset = vertexOffset;
-            sector.batchIndexOffset = indexOffset;
-            sector.batchSectorIndex = sectorIndex;
-            (sector as any).batchGroupOffset = groupOffset;
-            (sector as any).batchGroupCount = groupCount;
-
-            // Shift bounds to world space for frustum culling in zone-object.ts
-            sector.bounds.min.add(sector.position);
-            sector.bounds.max.add(sector.position);
-
-            vertexOffset += vCount;
-            indexOffset += iCount;
-        });
-
-        mergedGeometry.setAttribute("position", new BufferAttribute(mergedPositions, 3));
-        mergedGeometry.setAttribute("normal", new BufferAttribute(mergedNormals, 3));
-        mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true));
-        mergedGeometry.setAttribute("terrainIndex", new BufferAttribute(mergedTerrainIndices, 1));
-        mergedGeometry.setIndex(new BufferAttribute(mergedIndices, 1));
-
-        mergedGeometry.computeBoundingBox();
-        mergedGeometry.computeBoundingSphere();
-
-        // Create the merged terrain mesh
-        const batchTerrain = new Mesh(mergedGeometry, materials);
-        batchTerrain.name = `${group.name}_Batch`;
-        batchTerrain.userData.isTerrainBatch = true;
-        batchTerrain.userData.sectors = sectors;
-        batchTerrain.userData.originalGroups = [...mergedGeometry.groups];
-
-        // Ensure the batch mesh is updated for visibility correctly
-        // We'll handle this in zone-object.ts traversal
-        group.add(batchTerrain);
-
-        // Remove original sectors from the scene graph to avoid raycasting/interaction interference
-        // but keep them as references in batchTerrain.userData for updates
-        sectors.forEach(s => group.remove(s));
-
-        console.log(`[Terrain Batch] Merged ${sectors.length} sectors into one mesh (${totalVertices} vertices)`);
-    }
+    batchTerrainSectors(library, group, sectors);
 
     return group;
 }
@@ -1216,7 +544,7 @@ function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
 
     const positions = infoGeo.attributes.positions;
     const heightfield = new Float32Array(17 * 17);
-    const { min, max } = infoGeo.bounds.box;
+    const { min, max } = (infoGeo.bounds as any).box;
 
     const bounds = new Box3();
 

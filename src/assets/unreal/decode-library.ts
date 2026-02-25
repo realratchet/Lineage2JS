@@ -33,6 +33,10 @@ class DecodeLibrary {
         hazering: string;
         clouds: string[]
     }
+    public readonly batching: {
+        terrain: boolean,
+        staticMeshes: boolean
+    } = { terrain: true, staticMeshes: true };
 
     public failed: any[] = [];
     public failedLoad: any[] = [];
@@ -48,6 +52,7 @@ class DecodeLibrary {
         helpersZoneBounds = false,
         loadEmitters = true,
         isSkyLevel = false,
+        batching = { terrain: true, staticMeshes: true }
     }: GD.LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
@@ -63,6 +68,8 @@ class DecodeLibrary {
         decodeLibrary.name = uLevel.url.map;
         (decodeLibrary as any).isSkyLevel = isSkyLevel;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
+        decodeLibrary.batching.terrain = batching?.terrain !== false;
+        decodeLibrary.batching.staticMeshes = batching?.staticMeshes !== false;
 
         // const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 
