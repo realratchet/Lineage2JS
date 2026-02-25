@@ -501,6 +501,15 @@ async function startCore() {
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
+
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_23", loadSettings));
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_22", loadSettings));
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "18_22", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "18_21", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));
+
+
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_26", loadSettings));  // TI

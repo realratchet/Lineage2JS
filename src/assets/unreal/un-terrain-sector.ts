@@ -549,9 +549,9 @@ abstract class UTerrainSector extends UObject {
                     pass.maxIndex = Math.max(pass.indices[j], pass.maxIndex);
                 }
             } else {
-                debugger;
+                // debugger;
                 // remove passess without triangles and adjust iterator
-                this.renderPasses.splice(i);
+                this.renderPasses.splice(i, 1);
 
                 len = len - 1;
                 i = i - 1;
