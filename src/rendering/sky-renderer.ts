@@ -250,10 +250,6 @@ export default class SkyRenderer {
                 children.filter(o => o.name.includes(pattern)).forEach(m => processMesh(m, "cloud", i));
             }
         });
-
-        // Analysis confirms StarField meshes are already included in the `clouds` array via Env.int
-        // (Cloud2=StarField_Final01, Cloud3=StarField_Final02)
-        // So no manual addition is needed. The processMesh loop above handles them.
     }
 
     public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], _fogColor: ColorByte, fogStart: number, fogEnd: number, _sector: SectorObject | null, clearColor: ColorByte, skyVisibility: number) {

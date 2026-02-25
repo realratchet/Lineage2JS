@@ -8,7 +8,6 @@ type EnvColorInfo = {
     cloud1: TimeColor[];
     cloud2: TimeColor[];
     cloud3: TimeColor[];
-    star: TimeColor[];
     sun: TimeColor[];
     moon: TimeColor[];
 };

@@ -274,12 +274,6 @@ class L2Environment {
     }
 
 
-    public getStarColor(target: ColorByte): ColorByte {
-        const starColors = this.getEnvColor().color.star;
-        if (!starColors || starColors.length === 0) return target.set(0, 0, 0, 0);
-        return getColorFromTimeColor(this.getTimeOfDay(), starColors, target);
-    }
-
     public getCloudColor(index: number, target: ColorByte): ColorByte {
         let cloudColors: any[];
         switch (index) {

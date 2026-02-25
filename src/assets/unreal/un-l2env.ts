@@ -138,7 +138,6 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
     declare public colorCloud1: C.FArray<FNTimeColor>;
     declare public colorCloud2: C.FArray<FNTimeColor>;
     declare public colorCloud3: C.FArray<FNTimeColor>;
-    declare public colorStar: C.FArray<FNTimeColor>;
     declare public colorSun: C.FArray<FNTimeColor>;
     declare public colorMoon: C.FArray<FNTimeColor>;
 
@@ -174,11 +173,6 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         this.colorCloud1 = loadRGB(fileContents, "CloudColor1", pkgNative, pkgEngine);
         this.colorCloud2 = loadRGB(fileContents, "CloudColor2", pkgNative, pkgEngine);
         this.colorCloud3 = loadRGB(fileContents, "CloudColor3", pkgNative, pkgEngine);
-        try {
-            this.colorStar = loadRGB(fileContents, "StarColor", pkgNative, pkgEngine);
-        } catch (e) {
-            // StarColor is optional or missing in some env files
-        }
 
         return this;
     }
@@ -208,7 +202,6 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
                 cloud1: { type: "TimeColor", array: this.colorCloud1?.map(c => c.getDecodeInfo()) ?? [] },
                 cloud2: { type: "TimeColor", array: this.colorCloud2?.map(c => c.getDecodeInfo()) ?? [] },
                 cloud3: { type: "TimeColor", array: this.colorCloud3?.map(c => c.getDecodeInfo()) ?? [] },
-                star: { type: "TimeColor", array: this.colorStar?.map(c => c.getDecodeInfo()) ?? [] },
                 sun: { type: "TimeColor", array: this.colorSun?.map(c => c.getDecodeInfo()) ?? [] },
                 moon: { type: "TimeColor", array: this.colorMoon?.map(c => c.getDecodeInfo()) ?? [] }
             } as any,
