@@ -55,6 +55,7 @@ abstract class UAActor extends UObject {
     declare public readonly isBlockingKarma: boolean;
     declare public readonly isDynamicLight: boolean;
     declare public readonly isStaticLighting: boolean;
+    declare public readonly dontBatch: boolean;
 
     declare public readonly isCastingShadow: boolean;
     declare public readonly scaleGlow: number;
@@ -267,6 +268,8 @@ abstract class UAActor extends UObject {
 
             "Base": "base",
             "bUseLightingFromBase": "isUsingLightingFromBase",
+
+            "bDontBatch": "dontBatch",
         });
     };
 }

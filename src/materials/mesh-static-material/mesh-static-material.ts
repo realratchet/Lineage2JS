@@ -63,8 +63,9 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
+    private spriteEntries: [string, SpriteParam_T][] = [];
 
-    public readonly isUpdatable = true;
+    public isUpdatable = false;
 
     // @ts-ignore
     public constructor(info: MeshStaticMaterialParameters = {}) {
@@ -217,6 +218,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         });
 
         this.sprites = sprites;
+        this.spriteEntries = Object.entries(sprites);
+        this.isUpdatable = this.spriteEntries.length > 0;
 
         if (info.opacity) this.transparent = true;
 
@@ -313,17 +316,20 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     }
 
     public update(time: number) {
-        Object.entries(this.sprites).forEach(([k, { sprites, framerate }]) => {
+        if (!this.isUpdatable) return;
+
+        for (let i = 0; i < this.spriteEntries.length; i++) {
+            const [k, { sprites, framerate }] = this.spriteEntries[i];
             const frameCount = sprites.length;
 
-            if (frameCount <= 1) return;
+            if (frameCount <= 1) continue;
 
             const uniform = this.uniforms[k];
             const activeFrameIndex = Math.floor(time / framerate) % frameCount;
             const activeFrame = sprites[activeFrameIndex];
 
             uniform.value.map = activeFrame;
-        });
+        }
     }
 }
 

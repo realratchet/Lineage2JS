@@ -29,6 +29,7 @@ interface IStaticMeshActorDecodeInfo {
     uuid: string;
     type: "StaticMeshActor";
     zoneMask: bigint; // Added for conservative culling
+    dontBatch?: boolean;
     bounds: {
         min: number[];
         max: number[];
@@ -844,7 +845,7 @@ class SectorObject extends Object3D {
                                 if (isOutdoor && bspAmbientColor) {
                                     bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
                                     // Ensure defines exists before checking USE_AMBIENT
-                                    if (m.defines && !m.defines.USE_AMBIENT) {
+                                    if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";
                                         m.needsUpdate = true;
                                     }
@@ -904,10 +905,11 @@ class SectorObject extends Object3D {
                         const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
                         const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
-                        // Distance-based culling using ClippingRange multiplier
+                        // Distance-based culling — skip for actors with bIgnoredRange
                         const actorCenter = actorBox.getCenter(tmpVec3);
                         const distSq = cameraPosition.distanceToSquared(actorCenter);
-                        const isInRange = distSq <= staticMeshCullDistanceSq;
+                        const isRangeIgnored = !!(actor as any).isRangeIgnored;
+                        const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
                         if (isFrustumVisible && isZoneVisible && isInRange) {
                             visibleActorUuids.add(actor.uuid);
@@ -917,13 +919,72 @@ class SectorObject extends Object3D {
             }
 
             let visibleCount = 0;
+            const processedBatches = new Set<string>();
+
             this.staticMeshMap.forEach((object, uuid) => {
-                const isVisible = visibleActorUuids.has(uuid);
-                object.visible = isVisible;
-                if (isVisible) {
-                    visibleCount++;
-                    if ((object as any).isUpdatable) {
+                // For batched meshes, per-element culling via geometry.groups
+                if (object.userData.isBatch) {
+                    // Only process each batch mesh once (multiple UUIDs map to same object)
+                    const batchId = object.uuid;
+                    if (processedBatches.has(batchId)) return;
+                    processedBatches.add(batchId);
+
+                    const batchElements = object.userData.batchElements;
+                    const geometry = (object as any).geometry;
+                    if (!batchElements || !geometry) return;
+
+                    // Test each element's bounds individually
+                    const visibleGroups: { start: number; count: number; materialIndex: number }[] = [];
+
+                    for (const elem of batchElements) {
+                        // Check if this element is visible via the leaf/frustum pass
+                        let elemVisible = visibleActorUuids.has(elem.uuid);
+
+                        // If not found in leaf traversal, also check direct bounds
+                        if (!elemVisible) {
+                            actorBox.min.fromArray(elem.boundsMin);
+                            actorBox.max.fromArray(elem.boundsMax);
+
+                            const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                            const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
+                            const actorCenter = actorBox.getCenter(tmpVec3);
+                            const distSq = cameraPosition.distanceToSquared(actorCenter);
+                            const isInRange = elem.isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+
+                            elemVisible = isFrustumVisible && isZoneVisible && isInRange;
+                        }
+
+                        if (elemVisible) {
+                            for (const g of elem.groups) {
+                                visibleGroups.push(g);
+                            }
+                        }
+                    }
+
+                    // Rebuild geometry groups with only visible elements
+                    if (visibleGroups.length > 0) {
+                        geometry.clearGroups();
+                        for (const g of visibleGroups) {
+                            geometry.addGroup(g.start, g.count, g.materialIndex);
+                        }
+                        object.visible = true;
+                        visibleCount++;
+                    } else {
+                        object.visible = false;
+                    }
+
+                    if (object.visible && (object as any).isUpdatable) {
                         (object as any)?.update(this, environment);
+                    }
+                } else {
+                    // Non-batch actors: simple visibility toggle
+                    const isVisible = visibleActorUuids.has(uuid);
+                    object.visible = isVisible;
+                    if (isVisible) {
+                        visibleCount++;
+                        if ((object as any).isUpdatable) {
+                            (object as any)?.update(this, environment);
+                        }
                     }
                 }
             });
@@ -987,13 +1048,62 @@ class SectorObject extends Object3D {
         }
 
         let visibleCount = 0;
+        const processedBatches = new Set<string>();
+
         this.staticMeshMap.forEach((object, uuid) => {
-            const isVisible = visibleActorUuids.has(uuid);
-            object.visible = isVisible;
-            if (isVisible) {
-                visibleCount++;
-                if ((object as any).isUpdatable) {
+            if (object.userData.isBatch) {
+                const batchId = object.uuid;
+                if (processedBatches.has(batchId)) return;
+                processedBatches.add(batchId);
+
+                const batchElements = object.userData.batchElements;
+                const geometry = (object as any).geometry;
+                if (!batchElements || !geometry) return;
+
+                const visibleGroups: { start: number; count: number; materialIndex: number }[] = [];
+
+                for (const elem of batchElements) {
+                    let elemVisible = visibleActorUuids.has(elem.uuid);
+
+                    if (!elemVisible) {
+                        actorBox.min.fromArray(elem.boundsMin);
+                        actorBox.max.fromArray(elem.boundsMax);
+
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
+
+                        elemVisible = isFrustumVisible && isZoneVisible;
+                    }
+
+                    if (elemVisible) {
+                        for (const g of elem.groups) {
+                            visibleGroups.push(g);
+                        }
+                    }
+                }
+
+                if (visibleGroups.length > 0) {
+                    geometry.clearGroups();
+                    for (const g of visibleGroups) {
+                        geometry.addGroup(g.start, g.count, g.materialIndex);
+                    }
+                    object.visible = true;
+                    visibleCount++;
+                } else {
+                    object.visible = false;
+                }
+
+                if (object.visible && (object as any).isUpdatable) {
                     (object as any)?.update(this, environment);
+                }
+            } else {
+                const isVisible = visibleActorUuids.has(uuid);
+                object.visible = isVisible;
+                if (isVisible) {
+                    visibleCount++;
+                    if ((object as any).isUpdatable) {
+                        (object as any)?.update(this, environment);
+                    }
                 }
             }
         });

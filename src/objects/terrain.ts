@@ -42,6 +42,16 @@ class Terrain extends Mesh implements ICollidable {
     protected lightingInfo?: TerrainLightingInfo;
     protected lastUpdatedTime: number = -1;
     protected lastShadowIndex: number = -1;
+    protected lastShadowNextIndex: number = -1;
+    protected lastAlpha: number = -1;
+
+    protected lastAmbientR: number = -1;
+    protected lastAmbientG: number = -1;
+    protected lastAmbientB: number = -1;
+    protected lastSunR: number = -1;
+    protected lastSunG: number = -1;
+    protected lastSunB: number = -1;
+
     protected staticLightingCache?: Uint8ClampedArray;
     public readonly isTerrain = true;
     public mapX: number = 0;
@@ -104,14 +114,20 @@ class Terrain extends Mesh implements ICollidable {
             shadowIndex = this.getShadowMapIndex(timeOfDay);
         }
 
-        // Check if any lights need updating
-        // When lerping, we need to update every frame if alpha changes, so staticCache is always dirty unless alpha is 0 or 1
-        // But practically, time always moves, so we just check if it's dirty
+        env.getAmbientPlaneTerrainLight(cbAmbient);
+        env.getTerrainLightColor(cbLight);
+
+        // When lerping, we need to update if alpha changes significantly, or if light colors change
         let staticCacheDirty = !this.staticLightingCache || shadowIndex !== this.lastShadowIndex;
 
-        if (this.useShadowLerp) {
-            // Force update if lerping is enabled, as alpha changes continuously
-            staticCacheDirty = true;
+        if (this.useShadowLerp && this.staticLightingCache) {
+            const colorsChanged = cbAmbient.r !== this.lastAmbientR || Math.abs(cbAmbient.g - this.lastAmbientG) > 0 || Math.abs(cbAmbient.b - this.lastAmbientB) > 0 ||
+                cbLight.r !== this.lastSunR || Math.abs(cbLight.g - this.lastSunG) > 0 || Math.abs(cbLight.b - this.lastSunB) > 0;
+            const alphaChanged = Math.abs(alpha - this.lastAlpha) >= 0.02 || shadowNextIndex !== this.lastShadowNextIndex;
+
+            if (colorsChanged || alphaChanged) {
+                staticCacheDirty = true;
+            }
         }
 
         let anyDynamicLightNeedsUpdate = false;
@@ -143,13 +159,8 @@ class Terrain extends Mesh implements ICollidable {
             }
             this.staticLightingCache.fill(0);
 
-            // 1. Apply Ambient with Shadow Map (TintMap logic)
             // Final = Ambient + (Light * Intensity)
-            env.getAmbientPlaneTerrainLight(cbAmbient);
-            env.getTerrainLightColor(cbLight);
-
-            // cbAmbient.setFromFloats(tmpAmbient.r, tmpAmbient.g, tmpAmbient.b);
-            // cbLight.setFromFloats(tmpSun.r, tmpSun.g, tmpSun.b);
+            // (cbAmbient and cbLight are already fetched above)
 
             const shadowMap = this.lightingInfo.shadowMaps[shadowIndex];
             const shadowMapNext = this.lightingInfo.shadowMaps[shadowNextIndex];
@@ -180,6 +191,14 @@ class Terrain extends Mesh implements ICollidable {
             }
 
             this.lastShadowIndex = shadowIndex;
+            this.lastShadowNextIndex = shadowNextIndex;
+            this.lastAlpha = alpha;
+            this.lastAmbientR = cbAmbient.r;
+            this.lastAmbientG = cbAmbient.g;
+            this.lastAmbientB = cbAmbient.b;
+            this.lastSunR = cbLight.r;
+            this.lastSunG = cbLight.g;
+            this.lastSunB = cbLight.b;
         }
 
         // Apply static cache to the vertex attribute
