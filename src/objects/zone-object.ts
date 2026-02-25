@@ -6,6 +6,7 @@ import { ColorByte } from "@client/utils/color-byte";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
+const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
@@ -755,7 +756,7 @@ class SectorObject extends Object3D {
         }
     }
 
-    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false) {
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity) {
         this.updateLights(environment);
 
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
@@ -903,7 +904,12 @@ class SectorObject extends Object3D {
                         const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
                         const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
-                        if (isFrustumVisible && isZoneVisible) {
+                        // Distance-based culling using ClippingRange multiplier
+                        const actorCenter = actorBox.getCenter(tmpVec3);
+                        const distSq = cameraPosition.distanceToSquared(actorCenter);
+                        const isInRange = distSq <= staticMeshCullDistanceSq;
+
+                        if (isFrustumVisible && isZoneVisible && isInRange) {
                             visibleActorUuids.add(actor.uuid);
                         }
                     }

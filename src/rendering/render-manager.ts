@@ -727,6 +727,11 @@ class RenderManager {
         const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
         const fogSphere = new Sphere(bspCullingPosition, fogFar + fogPadding);
 
+        // Distance culling for static mesh actors: fogFar × ClippingRange.StaticMesh (default 4.0 from l2.ini)
+        const STATIC_MESH_CLIPPING_RANGE = 1;
+        const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
+        const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
+
         const activeSector = this.getSector(bspCullingPosition);
 
         this.scene.traverse((object: THREE.Object3D) => {
@@ -748,7 +753,7 @@ class RenderManager {
                 // 2. Zone Visibility: If camera is not in the sector, only show top level
                 const topLevelOnly = !isCameraInSector;
 
-                sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly);
+                sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq);
             }
         });
 
