@@ -248,9 +248,9 @@ class RenderManager {
         // this.camera.position.set(13773.791753219824, -3153.232327352311, 122575.56746151186);
         // this.controls.orbit.target.set(13761.929509381232, -3152.8878889174143, 122674.86080737793);
 
-        // gludin can shouldn't see TI
-        this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
-        this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
+        // // gludin can shouldn't see TI
+        // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
+        // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

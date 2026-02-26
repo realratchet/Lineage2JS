@@ -536,15 +536,7 @@ class SectorObject extends Object3D {
                         const isFront = planeDot >= 0;
 
                         const currentZone = isFront ? nodeZone1 : nodeZone0; // Zone we're currently in
-                        const oppositeZone = isFront ? nodeZone0 : nodeZone1; // [0]=Back, [1]=Front ?? 
-                        // Wait, in previous code: oppositeZone = isFront ? nodeZone0 : nodeZone1;
-                        // If isFront, we are in Front. Portal connects Front and Back.
-                        // Opposite should be Back zone. 
-                        // zones[0] is Back zone? zones[1] is Front zone?
-                        // Checked findPositionZone: side >= 0 ? node.zones[1] : node.zones[0].
-                        // So zones[1] IS FRONT. zones[0] IS BACK.
-                        // If we are in Front (isFront=true), opposite is Back (zones[0]).
-                        // So `isFront ? nodeZone0 : nodeZone1` is CORRECT.
+                        const oppositeZone = isFront ? nodeZone0 : nodeZone1; // [0]=Back, [1]=Front
 
                         // CRITICAL: Only process portal if its current zone is in the active zone mask
                         // This ensures portals are only considered when their zone is actually visible

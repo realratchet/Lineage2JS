@@ -1,7 +1,7 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -209,10 +209,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             uniforms,
             side: info.side,
             transparent: info.transparent,
-            // depthWrite: info.depthWrite,
-            // depthTest: info.depthTest,
+            depthWrite: true,
+            depthTest: true,
             visible: info.visible,
-            premultipliedAlpha: true,
             lights: true,
             wireframe: false
         });
@@ -225,22 +224,49 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
         switch (info.blendingMode) {
             case "normal":
-                // case "masked":
                 this.blending = NormalBlending;
-                break;
-            case "brighten":
-                this.blending = AdditiveBlending;
-                this.transparent = true;
+                // UE2 OB_Normal: when opacity is present, forces ZWrite=0 and enables alpha blending
+                // (D3DMaterialState.cpp line 1506-1512)
+                if (info.opacity) {
+                    this.depthWrite = false;
+                }
                 break;
             case "masked":
+                // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending
+                // AlphaRef=127 (~0.498), ZWrite=1
                 this.blending = NormalBlending;
+                this.transparent = false;
+                uniforms.alphaTest.value = 127 / 255;
+                break;
+            case "brighten":
+                // UE2 FB_Brighten: SRC_ALPHA, ONE (alpha-weighted additive)
+                this.blending = CustomBlending;
+                this.blendSrc = SrcAlphaFactor;
+                this.blendDst = OneFactor;
                 this.transparent = true;
+                this.depthWrite = false;
                 break;
             case "translucent":
+                // UE2 FB_Translucent: ONE, INVSRCCOLOR (screen blend)
                 this.blending = CustomBlending;
                 this.blendSrc = OneFactor;
                 this.blendDst = OneMinusSrcColorFactor;
                 this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "modulate":
+                this.blending = CustomBlending;
+                this.blendSrc = DstColorFactor;
+                this.blendDst = SrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "darken":
+                this.blending = CustomBlending;
+                this.blendSrc = ZeroFactor;
+                this.blendDst = OneMinusSrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
