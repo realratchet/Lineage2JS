@@ -126,6 +126,7 @@ abstract class UStaticMeshActor extends UAActor {
         const isStatic = this.physics === EPhysics_T.PHYS_None;
         const isMoverWithoutDynamicLight = false; // TODO: Check if mover has bDynamicLightMover
 
+
         if (!isStatic && !isMoverWithoutDynamicLight) {
             this._exportActorToLibrary(library, meshInfo, null, predictedBox, null);
             return this.uuid;
@@ -202,6 +203,21 @@ abstract class UStaticMeshActor extends UAActor {
 
         const _position = this.location.getVectorElements();
 
+        // skip actors outside of the sector as it doesn't make sense
+        if (library.sector) {
+            const sectorSize = 256 * 128;
+            const gridMinX = (library.sector[0] - 20) * sectorSize;
+            const gridMaxX = gridMinX + sectorSize;
+            const gridMinY = (library.sector[1] - 18) * sectorSize;
+            const gridMaxY = gridMinY + sectorSize;
+            const loc = this.location;
+
+            if (loc.x < gridMinX || loc.x > gridMaxX ||
+                loc.y < gridMinY || loc.y > gridMaxY) {
+                return;
+            }
+        }
+
         const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
@@ -257,6 +273,8 @@ abstract class UStaticMeshActor extends UAActor {
         }
 
         (actorInfo as any).zoneMask = actorZoneMask;
+
+        library.exportedActors.add(this.uuid);
 
         library.geometryInstances[meshInfo.geometry]++;
 

@@ -39,12 +39,12 @@ class DecodeLibrary {
     } = { terrain: true, staticMeshes: true };
 
     public failed: any[] = [];
+    public readonly exportedActors = new Set<string>(); // UUIDs of actors that passed geographic filtering
     public failedLoad: any[] = [];
     public failedDecode: any[] = [];
     // public sun: GD.ISunDecodeInfo_T;
 
     public static fromPackage(pkg: C.APackage, {
-        env,
         loadBaseModel = true,
         loadStaticModels = true,
         loadStaticModelList = null,

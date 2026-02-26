@@ -113,6 +113,7 @@ class SectorObject extends Object3D {
     public brightness: number = 1.0;
     public lastZoneMask: bigint = 0n;
     public readonly worldBounds = new Box3();
+    public readonly gridBounds = new Box3();
 
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];

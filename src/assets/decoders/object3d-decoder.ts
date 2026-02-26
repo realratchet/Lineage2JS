@@ -312,7 +312,14 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.name = library.name;
     sector.brightness = library.brightness;
 
-    if (library.sector) sector.index = new Vector2().fromArray(library.sector);
+    if (library.sector) {
+        sector.index = new Vector2().fromArray(library.sector);
+        const sectorSize = 256 * 128;
+        const minX = (sector.index.x - 20) * sectorSize;
+        const minZ = (sector.index.y - 18) * sectorSize;
+        sector.gridBounds.min.set(minX, -262144, minZ);
+        sector.gridBounds.max.set(minX + sectorSize, 262144, minZ + sectorSize);
+    }
 
     library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
 
@@ -378,7 +385,7 @@ function decodeSector(library: GD.DecodeLibrary) {
 
     library.leafActors.forEach((leaf: GD.IBaseObjectOrInstanceDecodeInfo[]) => {
         leaf.forEach((actor: GD.IBaseObjectOrInstanceDecodeInfo) => {
-            if (actor.type === "StaticMeshActor") {
+            if (actor.type === "StaticMeshActor" && library.exportedActors.has(actor.uuid)) {
                 uniqueActors.set(actor.uuid, actor);
             }
         });
