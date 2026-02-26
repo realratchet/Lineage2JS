@@ -270,14 +270,16 @@ vec2 rotateUV(vec2 uv, vec3 rotation, float offsetU, float offsetV, float time, 
 }
 
 float oscillateAxis(float val, float rate, float phase, float amplitude, float offset, int type, float time, float size) {
-    float osc = amplitude * sin(time * rate + phase);
+    // UE2 UTexOscillator::GetMatrix: S = time * rate; osc = amplitude * sin(2π * frac(S) + 2π * phase)
+    float s = time * rate;
+    float osc = amplitude * sin(2.0 * 3.14159265 * fract(s) + 2.0 * 3.14159265 * phase);
     float off = offset / size;
-    if (type == 0) { // Pan
-        return val + (osc / size);
-    } else if (type == 1 || type == 2) { // Stretch
+    if (type == 0) { // Pan — UE2: M.M[2][0] = du (direct UV translation, no division by size)
+        return val + osc;
+    } else if (type == 1 || type == 2) { // Stretch — UE2: M.M[0][0] = 1.0 + du
         return (val - off) * (1.0 + osc) + off;
-    } else if (type == 3) { // Jitter
-        return val + (amplitude * sin(time * 100.0) / size);
+    } else if (type == 3) { // Jitter — UE2: M.M[2][0] = random * amplitude
+        return val + amplitude;
     }
     return val;
 }
