@@ -693,7 +693,6 @@ class RenderManager {
     protected _updateObjects(currentTime: number) {
         const globalTime = currentTime / 600;
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
-        const oldFar = this.camera.far;
 
         // Update helper camera: copy from main camera if inactive, otherwise keep frozen
         if (this.bspHelperCamera) {
@@ -723,16 +722,26 @@ class RenderManager {
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const bspCullingPosition = bspCullingCamera.position;
 
-        // Update frustum for BSP culling
+        // Pass 1: Visibility updates
+        // UE2: DistanceFogEnd IS the far clip plane — no padding needed
+        const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
+        const fogSphere = new Sphere(bspCullingPosition, fogFar);
+
+        // Build culling frustum from camera (Z-buffer far stays at DEFAULT_FAR for depth precision)
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
 
-        // Pass 1: Visibility updates
-        const fogPadding = 2048 * 2; // Increased padding
-        const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
-        const fogSphere = new Sphere(bspCullingPosition, fogFar + fogPadding);
+        // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
+        // Override the frustum's far plane at fogFar for visibility culling only
+        // This is separate from camera.far (depth buffer) — no Z-fighting artifacts
+        // THREE.js frustum plane indices: 0=right, 1=left, 2=bottom, 3=top, 4=far, 5=near
+        {
+            const camDir = new Vector3(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
+            const farPoint = bspCullingPosition.clone().add(camDir.multiplyScalar(fogFar));
+            this.frustum.planes[4].setFromNormalAndCoplanarPoint(camDir.clone().negate(), farPoint);
+        }
 
         // Distance culling for static mesh actors: fogFar × ClippingRange.StaticMesh (default 4.0 from l2.ini)
-        const STATIC_MESH_CLIPPING_RANGE = 1;
+        const STATIC_MESH_CLIPPING_RANGE = 4;
         const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
         const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
 
@@ -761,7 +770,7 @@ class RenderManager {
             }
         });
 
-        // Pass 2: Object & Material updates
+        // Pass 2: Object & Material updates (active sector only — skip distant sectors)
         this.scene.traverseVisible(child => {
             if ((child as any).isUpdatable) {
                 // Find the nearest sector for objects that need lighting updates
@@ -774,6 +783,9 @@ class RenderManager {
                     }
                     parent = parent.parent;
                 }
+
+                // Skip lighting updates for objects in non-active (distant) sectors
+                if (sector && sector !== activeSector) return;
 
                 if (sector && 'computeLighting' in child) {
                     (child as any).update(sector, this.environment);
@@ -794,8 +806,6 @@ class RenderManager {
                 }
             }
         });
-
-        if (this.camera.far !== oldFar) this.camera.updateProjectionMatrix();
 
         this._updateEnvironment();
     }

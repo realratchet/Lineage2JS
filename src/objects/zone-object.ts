@@ -752,7 +752,8 @@ class SectorObject extends Object3D {
     }
 
     public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity) {
-        this.updateLights(environment);
+        // Only update lights for the active (camera) sector, not distant sectors
+        if (!topLevelOnly) this.updateLights(environment);
 
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
 
