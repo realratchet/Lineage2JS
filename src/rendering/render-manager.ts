@@ -252,10 +252,6 @@ class RenderManager {
         // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
         // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
 
-        // bad trees
-        this.camera.position.set(-120190.66746550794, -1504.6234246351974, 230784.09282201753);
-        this.controls.orbit.target.set(-120156.69181121374, -1530.07852044397, 230874.63393429611);
-
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
 
