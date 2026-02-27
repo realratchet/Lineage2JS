@@ -319,6 +319,17 @@ class RenderManager {
         ].join("\n"));
     }
 
+    /**
+     * Captures the current frame and opens it in a new browser tab.
+     */
+    public takeScreenshot() {
+        this.renderer.domElement.toBlob((blob) => {
+            if (!blob) return;
+
+            window.open(URL.createObjectURL(blob), "_blank");
+        }, "image/jpeg", 0.98);
+    }
+
     public onPointerControlsLocked() {
         this.isOrbitControls = false;
         this.controls.orbit.enabled = false;

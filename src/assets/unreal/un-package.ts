@@ -283,6 +283,7 @@ class UNativePackage extends ANativePackage {
             case "AnimRep":
             case "Orientation":
             case "AccessoryType":
+            case "L2Event":
                 Constructor = UObject;
                 break;
 
