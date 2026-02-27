@@ -4,7 +4,8 @@
     "search.exclude": {
         "**/node_modules": true,
         "**/bower_components": true,
-        "**/*.code-search": true
+        "**/*.code-search": true,
+        "assets*": true
     },
     "typescript.preferences.importModuleSpecifier": "non-relative",
     "files.associations": {
@@ -87,6 +88,19 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        ".vscode-chrome": true,
+        "bin/": true,
+    },
+    "files.watcherExclude": {
+        "**/cpp/**": true,
+        "**/node_modules/**": true,
+        "assets*/**": true
     }
-    
 }

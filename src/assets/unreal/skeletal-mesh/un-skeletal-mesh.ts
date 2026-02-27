@@ -376,7 +376,7 @@ abstract class USkeletalMesh extends ULodMesh {
 
         const materials = await Promise.all(this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => mat?.getDecodeInfo(library) || null));
 
-        library.materials[this.uuid] = { materialType: "group", materials } as IMaterialGroupDecodeInfo;
+        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
         library.geometries[this.uuid] = {
             attributes: {
                 positions,

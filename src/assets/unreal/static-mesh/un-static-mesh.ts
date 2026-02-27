@@ -17,6 +17,8 @@ const triggerDebuggerOnUnsupported = true;
 
 
 abstract class UStaticMesh extends UPrimitive {
+    declare protected materials: C.FArray<GA.UStaticMeshMaterial>;
+
     declare protected sections: FArray<FStaticMeshSection>;
     declare protected vertexStream: FStaticMeshVertexStream;
     declare protected colorStream: FRawColorStream;
@@ -34,6 +36,9 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected isUsingBillboard: boolean;
     declare protected frequency: number;
 
+    declare protected swayObject: boolean;
+    declare protected maxSwayAngle: number;
+
     declare protected collisionFaces: FArray<FStaticMeshCollisionTriangle>;
     declare protected collisionNodes: FArray<FStaticMeshCollisionNode>;
     declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
@@ -41,19 +46,7 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected collisionModelId: number;
     declare protected collisionModel: GA.UModel;
 
-    declare protected unkInt_5x0: number;
-    declare protected unkInd_5x0: number;
-    declare protected unkInd_5x1: number;
-    declare protected unkInt_5x1: number;
-    declare protected unkInt_5x2: number;
-
-    declare protected unkInt_6x0: number;
-    declare protected unkInt_6x1: number;
-    declare protected unkInt_Ax0: number;
-    declare protected unkInt_Cx0: number;
-    declare protected unkInt_Dx0: number;
-    declare protected unkInt_Dx1: number;
-    declare protected unkInt_Ex0: number;
+    declare protected unkInt_Dx1: number; // maybe boolean
 
     declare protected internalVersion: number;
     declare protected kPhysicsProps: number;
@@ -65,20 +58,24 @@ abstract class UStaticMesh extends UPrimitive {
 
     public static getUnserializedProperties(): C.UnserializedProperty_T[] {
         return [
+            ["Materials", "ArrayProperty", ["Class", "StaticMeshMaterial"]],
+            ["bSwayObject", "BoolProperty"],
+            ["Frequency", "FloatProperty"],
+            ["MaxSwayAngle", "FloatProperty"],
             ["LodRange01", "FloatProperty"],
             ["StaticMeshLod01", "ObjectProperty"],
             ["LodRange02", "FloatProperty"],
             ["StaticMeshLod02", "ObjectProperty"],
             ["bStaticMeshLod", "BoolProperty"],
-            ["bMakeTwoSideMesh", "BoolProperty"],
             ["bStaticMeshLodBlend", "BoolProperty"],
-            ["Frequency", "FloatProperty"],
+            ["bMakeTwoSideMesh", "BoolProperty"],
             ["bUseBillBoard", "FloatProperty"],
         ];
     }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
+            "Materials": "materials",
             "StaticMeshLod02": "staticMeshLod2",
             "LodRange02": "lodRange2",
             "StaticMeshLod01": "staticMeshLod1",
@@ -87,7 +84,9 @@ abstract class UStaticMesh extends UPrimitive {
             "bMakeTwoSideMesh": "isMadeTwoSideMesh",
             "bStaticMeshLodBlend": "isStaticMeshLodBlend",
             "bUseBillBoard": "isUsingBillboard",
+            "bSwayObject": "swayObject",
             "Frequency": "frequency",
+            "MaxSwayAngle": "maxSwayAngle",
         });
     }
 
@@ -180,26 +179,29 @@ abstract class UStaticMesh extends UPrimitive {
         }
 
         if (5 < verLicense) {
-            this.unkInt_5x0 = pkg.read("int32");
-            this.unkInd_5x0 = pkg.read("compat32");
-            this.unkInd_5x1 = pkg.read("compat32");
-            this.unkInt_5x1 = pkg.read("int32");
-            this.unkInt_5x2 = pkg.read("int32");
+            // not sure why are these overwritten here again because these are part of unserialized props!
+            this.hasStaticMeshLod = pkg.read("int32") !== 0;
+            this.staticMeshLod1 = pkg.fetchObject(pkg.read("compat32"));
+            this.staticMeshLod2 = pkg.fetchObject(pkg.read("compat32"));
+            this.lodRange1 = pkg.read("float");
+            this.lodRange2 = pkg.read("float");
         }
 
         if (6 < verLicense) {
-            this.unkInt_6x0 = pkg.read("int32");
-            this.unkInt_6x1 = pkg.read("int32");
+            // ditto
+            this.swayObject = pkg.read("int32") !== 0;
+            this.frequency = pkg.read("float");
         }
 
-        if (11 < verLicense) this.unkInt_Ax0 = pkg.read("int32");
-        if (12 < verLicense) this.unkInt_Cx0 = pkg.read("int32");
+        // ditto
+        if (11 < verLicense) this.maxSwayAngle = pkg.read("float");
+        if (12 < verLicense) this.isStaticMeshLodBlend = pkg.read("int32") !== 0;
         if (13 < verLicense) {
-            this.unkInt_Dx0 = pkg.read("int32");
-            this.unkInt_Dx1 = pkg.read("int32");
+            this.isMadeTwoSideMesh = pkg.read("int32") !== 0;
+            this.unkInt_Dx1 = pkg.read("int32"); // likely boolean?
         }
 
-        if (14 < verLicense) this.unkInt_Ex0 = pkg.read("int32");
+        if (14 < verLicense) this.isUsingBillboard = pkg.read("int32") !== 0;
 
         if (verArchive < 92) {
             console.warn("Not supported yet");
@@ -302,7 +304,7 @@ abstract class UStaticMesh extends UPrimitive {
 
         const TypedIndicesArray = getTypedArrayConstructor(countVerts);
         const positions = new Float32Array(countVerts * 3);
-        const colors = new Float32Array(countVerts * 3);
+        const colors = new Uint8ClampedArray(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
         const uvs = new Float32Array(countVerts * 2);
         const indices = new TypedIndicesArray(countIndices);
@@ -313,7 +315,10 @@ abstract class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countVerts; i++) {
             const [px, py, pz, nx, ny, nz] = this.vertexStream.getElem(i);
             const [u, v] = this.uvStream.getElem(0).getUV(i);
-            // const color = this.colorStream.getColor(i);
+
+            // if (Math.abs(px - 241.79730224609375) < 1 && Math.abs(py + 235.71449279785156) < 1 && Math.abs(pz + 622.3489990234375) < 1) {
+            //     debugger;
+            // }
 
             positions[i * 3 + 0] = px;
             positions[i * 3 + 1] = pz;
@@ -323,17 +328,9 @@ abstract class UStaticMesh extends UPrimitive {
             normals[i * 3 + 1] = nz;
             normals[i * 3 + 2] = ny;
 
-            // colors[i * 3 + 0] = _colors[i * 4 + 1] / 255;
-            // colors[i * 3 + 1] = _colors[i * 4 + 0] / 255;
-            // colors[i * 3 + 2] = _colors[i * 4 + 3] / 255;
-
-            // colors[i * 3 + 0] = color.r / 255;
-            // colors[i * 3 + 1] = color.g / 255;
-            // colors[i * 3 + 2] = color.b / 255;
-
-            colors[i * 3 + 0] = 1;
-            colors[i * 3 + 1] = 1;
-            colors[i * 3 + 2] = 1;
+            colors[i * 3 + 0] = 255;
+            colors[i * 3 + 1] = 255;
+            colors[i * 3 + 2] = 255;
 
             uvs[i * 2 + 0] = u;
             uvs[i * 2 + 1] = v;
@@ -389,7 +386,7 @@ abstract class UStaticMesh extends UPrimitive {
             library.materials[uuid].color = true;
         });
 
-        library.materials[this.uuid] = { materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
+        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
 
         return {
             uuid: this.uuid,
@@ -413,10 +410,10 @@ abstract class UStaticMesh extends UPrimitive {
         for (let i = 0, len = trisCount; i < len; i++) {
             const indOffset = i * 4;
             const vIndOffset = i * 3, vertOffset = vIndOffset * 3;
-            const [ v0, v1, v2 ] = this.staticMeshTris.getElem(i).getVertices();
+            const [v0, v1, v2] = this.staticMeshTris.getElem(i).getVertices();
 
             [v0, v1, v2].forEach((v, j) => {
-                const [ x, y, z ] = v;
+                const [x, y, z] = v;
                 const offset = vertOffset + j * 3;
 
                 trisPositions[offset + 0] = x;

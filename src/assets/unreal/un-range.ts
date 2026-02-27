@@ -2,8 +2,8 @@ import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 
 abstract class FRange extends UObject {
-    declare protected min: number;
-    declare protected max: number;
+    declare public min: number;
+    declare public max: number;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

@@ -3,10 +3,10 @@ import { BufferValue } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import { indexToTime } from "@client/assets/unreal/un-l2env";
 
 
-class FStaticMeshLightInfo implements C.IConstructable {
+
+export class FStaticMeshLightInfo implements C.IConstructable {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public applied: boolean;
@@ -49,71 +49,86 @@ abstract class UStaticMeshInstance extends UObject {
 
 
 
-    public getDecodeInfo(library: GD.DecodeLibrary): any {
+    public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array | Uint8Array, lights: GD.ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
-        const color = new Float32Array(len * 3);
-        const envManager = this.actor.levelInfo.getL2Env();
-        const env = envManager.getCurrentEnvLight();
+        const color = new Uint8Array(len * 3);
 
         for (let i = 0; i < len; i++) {
             const [r, g, b] = this.colorStream.getColor(i);
             const offset = i * 3;
 
-            color[offset + 0] = r / 255;
-            color[offset + 1] = g / 255;
-            color[offset + 2] = b / 255;
+            color[offset + 0] = r;
+            color[offset + 1] = g;
+            color[offset + 2] = b;
         }
 
-        let validEnvironment: FStaticMeshLightInfo = null;
-        let startIndex: number;
-        let finishIndex: number;
-        // let startTime: number, finishTime: number;
 
-        let lightingColor: GD.ColorArr;
+        // let validEnvironment: FStaticMeshLightInfo = null;
+        // let startIndex: number;
+        // let finishIndex: number;
+        // // let startTime: number, finishTime: number;
 
-        for (let i = 0, len = this.environmentLights.length; i < len; i++) {
-            const timeForIndex = indexToTime(i, len);
+        // let lightingColor: GD.ColorArr;
 
-            if (timeForIndex > envManager.getTimeOfDay()) {
-                validEnvironment = this.environmentLights[i];
-                startIndex = i;
-                finishIndex = i + 1;
-                // startTime = timeForIndex;
-                // finishTime = indexToTime(finishIndex, len);
-                const light = envManager.selectByTime(env.lightStaticMesh);
-                lightingColor = light ? light.getColor() : [1, 1, 1, 1];
+        // for (let i = 0, len = this.environmentLights.length; i < len; i++) {
+        //     const timeForIndex = indexToTime(i, len);
 
-                break;
+        //     if (timeForIndex > envManager.timeOfDay) {
+        //         validEnvironment = this.environmentLights[i];
+        //         startIndex = i;
+        //         finishIndex = i + 1;
+        //         // startTime = timeForIndex;
+        //         // finishTime = indexToTime(finishIndex, len);
+        //         const light = envManager.selectByTime(env.lightStaticMesh);
+        //         lightingColor = light ? light.getColor() : [1, 1, 1, 1];
+
+        //         break;
+        //     }
+        // }
+
+        // // const rgb = this.sceneLights[0].light.hue;
+
+        // // debugger;
+
+        // // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "oren_curumadungeon19")
+        // //     console.warn("Mesh has lights:", this.sceneLights.length, "index:", this.actor.exportIndex+1);
+
+        // // debugger;
+
+        let offset = 0;
+
+        const sceneRanges: [string, number, number][] = [];
+        const environmentRanges: [string, number, number][] = [];
+
+        let totalLength = 0;
+
+        for (const l of this.sceneLights) totalLength += l.vertexFlags.getElemCount();
+        for (const l of this.environmentLights) totalLength += l.vertexFlags.getElemCount();
+
+        const flags = new Uint8Array(totalLength);
+
+        for (const [lights, container] of ([
+            [this.sceneLights, sceneRanges],
+            [this.environmentLights, environmentRanges]
+        ]) as ([FArray<FStaticMeshLightInfo>, [string, number, number][]][])) {
+            for (const light of lights) {
+                const arr = light.vertexFlags.getTypedArray(), arrLen = arr.length;
+
+                flags.set(arr, offset);
+                container.push([light.light.objectName, offset, arrLen]);
+                offset += arrLen;
             }
         }
-
-        // const rgb = this.sceneLights[0].light.hue;
-
-        // debugger;
-
-        // if (this.actor.mesh.exportIndex === 14 && this.actor.mesh.objectName === "Exp_oren_curumadungeon19")
-        //     console.warn("Mesh has lights:", this.sceneLights.length, "index:", this.actor.exportIndex+1);
-
-        // debugger;
 
         return {
             color,
             lights: {
-                // scene: [],
-                // environment: null
-                scene: this.sceneLights,
-                environment: validEnvironment ? {
-                    color: lightingColor,
-                    ...validEnvironment
-                } : null
+                matrix: this.actor.getWorldMatrixElements(),
+                flags: flags.buffer,
+                scene: sceneRanges,
+                environment: environmentRanges
             }
         };
-
-        // const allLights = [...this.sceneLights/*, ...this.unkLights1*/];
-        // const filteredMapsDict = Object.assign({}, ...allLights.map(x => ({ [x.lightIndex]: x.light })));
-        // const filteredMaps = (Object.values(filteredMapsDict) as ULight[]);//.filter(l => l.getZone() === this.actor.getZone());
-
-        // return await Promise.all(filteredMaps.map((l: ULight) => l.getDecodeInfo(library)));
     }
 
     protected doLoad(pkg: C.APackage, exp: C.UExport): this {
@@ -127,8 +142,8 @@ abstract class UStaticMeshInstance extends UObject {
         super.doLoad(pkg, exp);
 
         if (verArchive < 0x70) {
-            console.warn("Unsupported yet");
             debugger;
+            throw new Error("not implemented");
         } else this.colorStream.load(pkg);
 
         this.readHead = pkg.tell();

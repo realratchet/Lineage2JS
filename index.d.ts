@@ -74,7 +74,7 @@ declare global {
                 export type AActor = import("@unreal/un-aactor").UAActor;
 
                 export type AInfo = import("@unreal/un-info").AInfo;
-                export type FFogInfo = import("@unreal/un-fog-info").FFogInfo;
+                export type UL2FogInfo = import("@unreal/un-fog-info").UL2FogInfo;
                 export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
                 export type ATerrainInfo = import("@unreal/un-terrain-info").ATerrainInfo;
 
@@ -104,7 +104,7 @@ declare global {
                 export type FNTimeScale = import("@unreal/un-l2env").FNTimeScale;
                 export type UL2NEnvLight = import("@unreal/un-l2env").UL2NEnvLight;
                 export type UL2NTimeLight = import("@unreal/un-l2env").UL2NTimeLight;
-                export type UL2NEnvManager = import("@unreal/un-l2env").UL2NEnvManager;
+                export type EEnvCycle = import("@unreal/un-l2env").EEnvCycle;
             }
 
             namespace Decoding {
@@ -113,24 +113,47 @@ declare global {
 
                 export type Vector2Arr = [number, number];
                 export type Vector4Arr = [number, number, number, number];
+                export type Matrix4Arr = number[] & { length: 16 };
                 export type QuaternionArr = Vector4Arr;
-                export type ColorArr = Vector4Arr;
+                export type ColorArr = Vector3Arr | Vector4Arr;
                 export type Vector3Arr = [number, number, number];
                 export type EulerOrder = "XYZ" | "YZX" | "ZXY" | "XZY" | "YXZ" | "ZYX";
                 export type EulerArr = [...Vector3Arr, EulerOrder];
                 export type ArrGeometryGroup = [number, number, number];
 
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
+                export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
                 export type LoadSettings_T = {
-                    env: GA.UL2NEnvManager,
                     loadTerrain?: boolean,
                     loadBaseModel?: boolean,
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
                     helpersZoneBounds?: boolean,
+                    isSkyLevel?: boolean,
+                    batching?: {
+                        terrain?: boolean,
+                        staticMeshes?: boolean
+                    }
                 };
+
+
+
+                export interface IDecodedParameter {
+                    uniforms: Record<string, any>,
+                    defines: Record<string, any>,
+                    isUsingMap: boolean,
+                    transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap",
+                    sprites?: any[],
+                    framerate?: number
+                }
+
+                export interface IDecodedSpriteParameter extends IDecodedParameter {
+                    isSprite: true,
+                    sprites: any[],
+                    framerate: number
+                }
 
                 export interface IInfo { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; }
 
@@ -156,10 +179,17 @@ declare global {
                     | "StaticMesh"
                     | "Model"
                     | "Light"
+                    | "Sunlight"
                     | "Edges"
                     | "SkinnedMesh"
                     | "Bone"
-                    | "Emitter";
+                    | "Emitter"
+                    | "SpriteEmitter"
+                    | "MeshEmitter"
+                    | "Zone"
+                    | "Sky"
+                    | "SkyZoneInfo"
+                    | "L2FogInfo";
 
                 export interface IBaseObjectOrInstanceDecodeInfo {
                     uuid: string,
@@ -181,13 +211,89 @@ declare global {
                     actorName: string;
                     type: "StaticMeshActor",
                     instance: IStaticMeshInstanceDecodeInfo,
-                    bounds: IBoxDecodeInfo
+                    bounds: IBoxDecodeInfo,
+                    scaledGlow: number,
+                    isSunAffected?: boolean,
+                    ambient: {
+                        glow: number,
+                        vector: Vector3Arr,
+                        isUnlit: boolean
+                    }
                 }
 
-                export interface IStaticMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
-                    type: "StaticMesh",
+                export interface IBaseMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
                     geometry: string,
                     materials?: string
+                }
+
+                export interface IStaticMeshObjectDecodeInfo extends IBaseMeshObjectDecodeInfo {
+                    type: "StaticMesh"
+                }
+
+                export interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "SkinnedMesh";
+                    geometry: string;
+                    materials?: string;
+                    skeleton: IBoneDecodeInfo[];
+                    animations: Record<string, IKeyframeDecodeInfo_T[]>
+                }
+
+                export interface IEmitterDecodeInfo extends IBaseObjectDecodeInfo {
+                    acceleration: Vector3Arr,
+                    lifetime: [number, number],
+                    maxParticles: number,
+                    initial: {
+                        particlesPerSecond: number,
+                        scale: { min: Vector3Arr, max: Vector3Arr },
+                        velocity: { min: Vector3Arr, max: Vector3Arr },
+                        location: { min: Vector3Arr, max: Vector3Arr },
+                        angularVelocity: { min: Vector3Arr, max: Vector3Arr }
+                    },
+                    particlesPerSecond: number,
+                    blendingMode: ParticleBlendModes_T,
+                    opacity: number,
+                    changesOverLifetime: {
+                        scale: { values: [number, number][], repeats: number }
+                    },
+                    fadeIn: Fade_T,
+                    fadeOut: Fade_T,
+                    colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+                    allSettings: any
+                }
+
+                export interface ISpriteEmitterDecodeInfo extends IEmitterDecodeInfo {
+                    type: "SpriteEmitter",
+                    texture: string
+                }
+
+                export interface IMeshEmitterDecodeInfo extends IEmitterDecodeInfo {
+                    type: "MeshEmitter",
+                    mesh: {
+                        geometry: string,
+                        materials: string
+                    }
+                }
+
+                export interface ITerrainSegmentDecodeInfo extends IBaseMeshObjectDecodeInfo {
+                    type: "TerrainSegment",
+                    lighting?: {
+                        lights: { light: string, flags: Uint8Array }[],
+                        shadowMaps: Uint8Array[],
+                        shadowMapTimes: number[]
+                    },
+                    mapX: number,
+                    mapY: number,
+                    offsetX: number,
+                    offsetY: number,
+                    heightmapX: number,
+                    heightmapY: number
+                }
+
+                export interface ILightInstanceDecodeInfo {
+                    matrix: Matrix4Arr,
+                    flags: ArrayBuffer,
+                    scene: [string, number, number][],
+                    environment: [string, number, number][]
                 }
 
                 export interface IStaticMeshInstanceDecodeInfo {
@@ -195,9 +301,19 @@ declare global {
                     name?: string,
                     type: "StaticMeshInstance",
                     mesh: IStaticMeshObjectDecodeInfo,
+                    lights?: ILightInstanceDecodeInfo,
                     attributes?: {
-                        colors?: Float32Array
+                        colors?: Float32Array | Uint8Array
                     }
+                }
+
+                export interface IBoneDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "Bone",
+                    name: string,
+                    position: Vector3Arr,
+                    quaternion: QuaternionArr,
+                    scale: Vector3Arr,
+                    parent: number
                 }
 
                 export interface IBaseZoneDecodeInfo {
@@ -206,7 +322,17 @@ declare global {
                     name?: string,
                     bounds: IBoxDecodeInfo,
                     children: IBaseObjectOrInstanceDecodeInfo[],
-                    fog?: IZoneFogInfo
+                    fog?: IZoneFogInfo,
+                    isFogZone?: boolean,
+                    isSunAffected?: boolean,
+                    position?: Vector3Arr,
+                    affectRange?: Vector2Arr,
+                    fogRange1?: Vector2Arr,
+                    fogRange2?: Vector2Arr,
+                    fogRange3?: Vector2Arr,
+                    fogRange4?: Vector2Arr,
+                    fogRange5?: Vector2Arr,
+                    colors?: any[]
                 }
 
                 // BSP Types
@@ -239,6 +365,27 @@ declare global {
                     visibleZones: bigint
                 }
 
+                // Add IZoneFogInfo for L2FogInfo object
+                export interface IL2FogInfoDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "L2FogInfo",
+                    affectRange: { A: number, B: number },
+                    fogRange1: { A: number, B: number },
+                    fogRange2: { A: number, B: number },
+                    fogRange3: { A: number, B: number },
+                    fogRange4: { A: number, B: number },
+                    fogRange5: { A: number, B: number },
+                    colors: any[],
+                    cloudTexture: any,
+                    zoneMask: bigint
+                }
+
+                export type IKeyframeDecodeInfo_T = {
+                    name: string,
+                    times: Float32Array,
+                    values: Float32Array,
+                    type: "Vector" | "Quaternion"
+                }
+
                 export interface IBSPZoneDecodeInfo_T {
                     connectivity: bigint,
                     visibility: bigint,
@@ -248,23 +395,57 @@ declare global {
                 // NEW: BSP Section (material + lightmap combination)
                 export interface IBSPSectionDecodeInfo_T {
                     uuid: string,
+                    sectionName: string;
                     priority: "opaque" | "transparent",
                     material: string,  // material UUID
                     lightmap: string | null,  // lightmap UUID (null if no lightmap)
                     geometry: string,  // geometry UUID
-                    nodeIndices: number[]  // nodes in this section
+                    nodeIndices: number[],  // nodes in this section
+                    isUnlit?: boolean,
+                    isOutdoor?: boolean,
+                    depthTest?: boolean,
+                    depthWrite?: boolean,
+                    side?: THREE.Side,
+                    fog?: boolean,
+                    blendingMode?: GA.SupportedBlendingTypes_T
                 }
 
                 // Material and Geometry Types
                 export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
-                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle";
-                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture";
+                export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
+                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend";
 
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
                     materialType: DecodableMaterial_T,
                     color?: boolean
+                }
+
+                export interface IAnimatedSpriteDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "sprite",
+                    sprites: ITextureDecodeInfo[],
+                    framerate: number
+                }
+
+                export interface IMaterialTerrainDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "terrain";
+                    layers: { map: string, alphaMap: string }[]
+                }
+
+                export interface IMaterialTerrainSegmentDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "terrainSegment";
+                    terrainMaterial: string,
+                    uvs: ITextureDecodeInfo
+                }
+
+                export interface ISolidMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "solid",
+                    solidColor: number
+                }
+
+                export interface IDataTextureDecodeInfo extends ITextureDecodeInfo {
+                    format?: DataTextureFormats_T
                 }
 
                 export interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -278,18 +459,26 @@ declare global {
                     materials: string[]
                 }
 
+                export interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "particle",
+                    material: string,
+                    blendingMode: ParticleBlendModes_T,
+                    opacity: number
+                }
+
                 export type IndexLikeArray = number[] | Uint8Array | Uint16Array | Uint32Array;
 
                 export interface IGeometryDecodeInfo {
                     attributes: {
                         positions?: Float32Array;
                         normals?: Float32Array;
-                        colors?: Float32Array,
-                        colorsInstance?: Float32Array,
+                        colors?: Float32Array | Uint8Array | Uint8ClampedArray,
+                        colorsInstance?: Float32Array | Uint8Array | Uint8ClampedArray,
                         uvs?: Float32Array | Float32Array[];
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array;
                         skinWeight?: Float32Array;
+                        nodeIndex?: Uint32Array;
                     };
                     indices?: IndexLikeArray;
                     colliderIndices?: Uint32Array;
@@ -298,7 +487,25 @@ declare global {
                 }
 
                 export interface IMaterialModifier {
-                    type: "Lighting"
+                    type: string
+                }
+
+                export interface IBaseLightingMaterialModifier extends IMaterialModifier {
+                    type: "Lighting",
+                    mode: "Ambient" | "Directional"
+                }
+
+                export interface ILightAmbientMaterialModifier extends IBaseLightingMaterialModifier {
+                    mode: "Ambient",
+                    color: ColorArr,
+                    brightness: number
+                }
+
+                export interface ILightDirectionalMaterialModifier extends IBaseLightingMaterialModifier {
+                    mode: "Directional",
+                    color: ColorArr,
+                    brightness: number,
+                    direction: Vector3Arr
                 }
 
                 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
@@ -347,6 +554,9 @@ declare global {
                     buffer: ArrayBuffer,
                     wrapS?: number, wrapT?: number,
                     width: number, height: number,
+                    twoSided?: boolean,
+                    isMasked?: boolean,
+                    isAlphaTexture?: boolean
                 }
 
                 export interface IEdgesObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -359,13 +569,23 @@ declare global {
                 export interface ILightDecodeInfo extends IBaseObjectDecodeInfo {
                     type: "Light",
                     dynamic: boolean,
-                    color: [number, number, number],
+                    hsv: [number, number, number],
                     radius: number,
                     directional: boolean,
                     lightType: GA.LightType_T,
                     lightEffect: GA.LightEffect_T,
-                    cone: number
+                    cone: number,
+                    isSunlightColor: boolean,
+                    period: number,
+                    phase: number
                 }
+
+                export interface ISunLightDecodeInfo extends Omit<ILightDecodeInfo, "type"> {
+                    type: "Sunlight"
+                }
+
+
+
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "shader",
@@ -375,6 +595,7 @@ declare global {
                     specularMask: string,
                     blendingMode: GA.SupportedBlendingTypes_T,
                     depthWrite: boolean,
+                    depthTest: boolean,
                     doubleSide: boolean,
                     transparent: boolean,
                     alphaTest: number,
@@ -404,9 +625,138 @@ declare global {
                     }
                 }
 
+                export interface ITexRotatorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "rotateTexture",
+                    transform: {
+                        matrix: number[],
+                        map: string,
+                        type: "fixed" | "rotating" | "oscillating",
+                        rotation: EulerArr,
+                        offsetU: number,
+                        offsetV: number
+                    }
+                }
+
+                export interface ITexOscillatorDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "oscillateTexture",
+                    transform: {
+                        matrix: number[],
+                        map: string,
+                        rateU: number,
+                        rateV: number,
+                        phaseU: number,
+                        phaseV: number,
+                        amplitudeU: number,
+                        amplitudeV: number,
+                        typeU: "pan" | "stretch" | "stretchRepeat" | "jitter",
+                        typeV: "pan" | "stretch" | "stretchRepeat" | "jitter",
+                        offsetU: number,
+                        offsetV: number
+                    }
+                }
+
+                export interface ITexEnvMapDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "envMapTexture",
+                    envMapType: "world" | "camera",
+                    map: string
+                }
+
+                export interface IColorModifierDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "colorModifier",
+                    material: string,
+                    modifierColor: ColorArr,
+                    doubleSide: boolean,
+                    alphaBlend: boolean
+                }
+
+                export interface IFinalBlendDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "finalBlend",
+                    material: string,
+                    blendingMode: GA.SupportedBlendingTypes_T,
+                    doubleSide: boolean,
+                    alphaTest: boolean,
+                    alphaRef: number,
+                    transparent: boolean,
+                    depthWrite: boolean,
+                    depthTest: boolean
+                }
+
+                export interface ICombinerDecodeInfo extends IBaseMaterialDecodeInfo {
+                    materialType: "combiner",
+                    combineMode: number, // TODO: enum
+                    material1: string,
+                    material2: string,
+                    mask: string,
+                    invertMask: boolean,
+                    alphaFrom1: boolean,
+                    alphaFrom2: boolean
+                }
+
                 export interface IBoundsDecodeInfo {
                     sphere: ISphereDecodeInfo,
                     box: { min: Vector3Arr, max: Vector3Arr } | null
+                }
+
+                export type INTimeColorDecodeInfo = [number, number, number, number];
+                export type INTimeHSVDecodeInfo = [number, number, number, number];
+                export type INTimeScaleDecodeInfo = [number, number];
+                export interface IL2NTimeLightDecodeInfo {
+                    terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] }
+                }
+                export interface ILNEnvSetupDecodeInfo {
+                    isClock: boolean,
+                    startTime: number,
+                    timeRatio: number,
+                    shadowTick: number,
+                    staticLightingAdjust: number,
+                    slopeSunAngle: number,
+                    subLightNum: number
+                    timeEnv: { [key in GA.EEnvCycle]: IL2NEnvLightDecodeInfo }
+                    skybox: string,
+                    hazering: string,
+                    clouds: string[],
+                }
+                export interface IL2NEnvDecodeInfo {
+                    envSetup: ILNEnvSetupDecodeInfo,
+                    fog: {
+                        ranges: GD.Vector2Arr[];
+                        fogSpeed: number;
+                    },
+                    waterVolume: {
+                        fogColor: GD.ColorArr;
+                        fogStart: number;
+                        fogEnd: number;
+                        cellophaneColor: GD.ColorArr;
+                    }
+                }
+                export interface IL2NEnvLightDecodeInfo {
+                    type: GA.EEnvCycle,
+                    light: IL2NTimeLightDecodeInfo,
+                    color: {
+                        sky: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        indexHaze: { type: "TypedArray", array: Int32Array },
+                        haze: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        indexCloud: { type: "TypedArray", array: Int32Array },
+                        cloud1: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        cloud2: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        cloud3: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        star: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        sun: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+                        moon: { type: "TimeColor", array: INTimeColorDecodeInfo[] }
+                    },
+                    ambient: {
+                        terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                        actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                        staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                        bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+                    },
+                    scale: {
+                        sun: { type: "TimeScale", array: INTimeScaleDecodeInfo[] },
+                        moon: { type: "TimeScale", array: INTimeScaleDecodeInfo[] }
+                    }
                 }
             }
         }

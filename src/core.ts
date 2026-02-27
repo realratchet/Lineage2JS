@@ -7,6 +7,9 @@ import DecodeLibrary from "./assets/unreal/decode-library";
 import UDataFile from "./assets/unreal/datafile/un-datafile";
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
+import { EEnvCycle } from "@client/assets/unreal/env-consts";
+import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
+import decodeEnv from "@client/assets/decoders/env-decoder";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -15,13 +18,14 @@ async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLo
 
     pkg = await assetLoader.load(pkg);
 
-    const decodeLibrary = await DecodeLibrary.fromPackage(pkg, settings);
+    const decodeLibrary = DecodeLibrary.fromPackage(pkg, settings);
 
     // debugger;
 
     decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
 
     console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
+
 
     return decodePackage(decodeLibrary);
 }
@@ -185,10 +189,12 @@ async function _decodeDatFile(path: string) {
     debugger;
 }
 
-async function _decodTimeEnvFile(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<GA.UL2NEnvManager> {
-    const envFile = await (new UConfigTimeEnv(path).asReadable()).decode();
 
-    return envFile.load(pkgNative, pkgEngine);
+
+async function _decodeEnvConfig(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage, pkgL2Skies: C.APackage): Promise<UConfigEnv> {
+    const envFile = await (new UConfigEnv(path).asReadable()).decode();
+
+    return await envFile.load(pkgNative, pkgEngine, pkgL2Skies);
 }
 
 async function startCore() {
@@ -260,8 +266,6 @@ async function startCore() {
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
 
-
-    const env = await _decodTimeEnvFile("assets/system/timeenv0.int", pkgNative, pkgEngine);
 
     // const sound = await assetLoader.load(assetLoader.getPackage("MonSound3", "Sound"));
     // const ants = sound.exports.filter(x=>x.objectName.toLowerCase().includes("antaras"))
@@ -394,13 +398,17 @@ async function startCore() {
 
     // debugger;
 
+
     const loadSettings = {
-        env: env,
         helpersZoneBounds: false,
+        batching: {
+            terrain: true,
+            staticMeshes: true
+        },
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: true,
+        loadEmitters: false,
         _loadStaticModelList: [
             // 1441,
             // 1770,
@@ -439,13 +447,37 @@ async function startCore() {
 
             // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
             // ...["StaticMeshActor475"] // talking island village broken rock
-            "StaticMeshActor684", // cruma light
+            // "StaticMeshActor684", // cruma light
+            // "StaticMeshActor2841"
+            // "StaticMeshActor517", // cruma too dark
             // "StaticMeshActor1893" // cruma: broken floating platform light
+
+            // "StaticMeshActor495", /*"StaticMeshActor188",*/ //"StaticMeshActor6",
+            // "StaticMeshActor1042"
+
+            // "StaticMeshActor4596", /* too bright */ //"StaticMeshActor4195", /* okay */
+
+            "StaticMeshActor49", /* church indoors too dark */ "StaticMeshActor6", /* church outdoors */
         ]
     } as GD.LoadSettings_T;
 
+    const pkgL2Skies = await assetLoader.load(assetLoader.getPackage("l2_skies", "Texture"));
+    const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
+    const skyLevel = await _decodePackage(renderManager, assetLoader, "skylevel", {
+        ...loadSettings, isSkyLevel: true,
+        loadTerrain: true,
+        loadBaseModel: true,
+        loadStaticModels: false,
+        loadEmitters: false,
+        loadStaticModelList: undefined,
+        batching: { staticMeshes: false, terrain: false }
+    });
+
+
+
     // working (or mostly working)
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
@@ -466,13 +498,25 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // objectGroup.add(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+
+
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_23", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_22", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "18_22", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "18_21", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));
+
+
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "25_19", loadSettings));  // giants cave
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI
@@ -482,7 +526,13 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_22", loadSettings));  // gludin
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "skylevel", loadSettings));  // skylevel
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "lobby", loadSettings));  // lobby
+
+    // Load global sky level
+
+    renderManager.setEnv(decodeEnv(envConfig));
+    renderManager.setGlobalSky(skyLevel);
+
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 

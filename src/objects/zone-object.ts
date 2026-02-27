@@ -1,16 +1,36 @@
-import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh } from "three";
+import DynamicLight from "@client/objects/dynamic-light";
+import type { L2Environment } from "@client/rendering/l2-env";
+import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
+import type { Terrain } from "@client/objects/terrain";
+
+import { ColorByte } from "@client/utils/color-byte";
 
 const tmpColor = new Color();
+const tmpColorByte = new ColorByte();
+const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
+
+export class FogInfoObject extends Object3D {
+    public readonly isFogInfo = true;
+    public affectRange: { A: number, B: number };
+    public fogRange1: { A: number, B: number };
+    public fogRange2: { A: number, B: number };
+    public fogRange3: { A: number, B: number };
+    public fogRange4: { A: number, B: number };
+    public fogRange5: { A: number, B: number };
+    public colors: any[];
+    public zoneMask: bigint = 0n;
+}
 
 
 interface IStaticMeshActorDecodeInfo {
     uuid: string;
     type: "StaticMeshActor";
     zoneMask: bigint; // Added for conservative culling
+    dontBatch?: boolean;
     bounds: {
         min: number[];
         max: number[];
@@ -19,13 +39,16 @@ interface IStaticMeshActorDecodeInfo {
 
 class ZoneObject extends Object3D {
     public fog: Fog = null;
+    public isFogZone: boolean = false;
+    public isSunAffected: boolean = false;
+    public isSkyZoneInfo: boolean = false;
 
     public readonly boundsRender = new Box3();
     public readonly boundsRenderSphere = new Sphere();
 
     public readonly isCullable: boolean = true;
     public readonly isZoneObject = true;
-    public readonly type: "Zone" | "Sector" = "Zone";
+    public readonly type: "Zone" | "Sector" | "Sky" = "Zone";
 
     public setRenderBounds(min: GD.Vector3Arr, max: GD.Vector3Arr): this {
 
@@ -55,17 +78,42 @@ class ZoneObject extends Object3D {
     // }
 }
 
+export interface ILightInfo {
+    uuid: string;
+    type: "Light" | "Sunlight";
+    name: string;
+
+
+
+    position: Vector3,
+    quaternion: Quaternion,
+
+    isDynamic: boolean,
+    color: Color,
+    radius: number,
+    isDirectional: boolean,
+    lightType: GA.LightType_T,
+    lightEffect: GA.LightEffect_T,
+    cone: number
+}
+
 class SectorObject extends Object3D {
     public readonly isSectorObject = true;
     public readonly type = "Sector";
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
+    public readonly fogInfos: FogInfoObject[] = [];
 
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
     public bspLeaves: BSPLeafData[];
     public index: THREE.Vector2;
     public sunTexture: any; // MapData_T - texture with size info
+    public celestials: { type: string; sprite: any; data: any }[] = []; // Decoded celestial data with textures
+    public brightness: number = 1.0;
+    public lastZoneMask: bigint = 0n;
+    public readonly worldBounds = new Box3();
+    public readonly gridBounds = new Box3();
 
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];
@@ -74,13 +122,23 @@ class SectorObject extends Object3D {
     public bspGroup?: THREE.Group;
     public staticMeshGroup?: THREE.Group;
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
+    public readonly lights: Record<string, DynamicLight> = {};
+
     protected _lastLoggedStaticMeshLeaf: number | null = null;
 
     // Internal state for zone/leaf change tracking
     private _lastLoggedZone: number | null = null;
     private _lastLoggedLeaf: number | null = null;
 
-    constructor() {
+    public setLights(lights: DynamicLight[]): this {
+        for (const light of lights) {
+            this.lights[light.name] = light;
+        }
+
+        return this;
+    }
+
+    public constructor() {
         super();
 
         this.helpers.name = "SectorHelpers";
@@ -276,13 +334,45 @@ class SectorObject extends Object3D {
         cameraFrustum: THREE.Frustum,
         frustumCullingEnabled: boolean = true,
         recursionDepth: number = 0,
-        leafOnlyMode: boolean = false
+        leafOnlyMode: boolean = false,
+        topLevelOnly: boolean = false
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
 
         if (this.bspNodes.length === 0 || !this.nodeZoneMasks) {
+            this.lastZoneMask = activeZoneMask;
             return { visibleNodes, visibleLeaves, finalZoneMask: activeZoneMask, zonesAddedThroughPortals: new Set<number>() };
+        }
+
+        // top-level only mode: only render outdoor zones/sections
+        if (topLevelOnly) {
+            // Find nodes that belong to outdoor sections
+            for (let nodeIndex = 0; nodeIndex < this.bspNodes.length; nodeIndex++) {
+                const sectionIndex = this.nodeToSection ? this.nodeToSection[nodeIndex] : -1;
+                if (sectionIndex >= 0) {
+                    const sectionInfo = this.bspSections ? this.bspSections[sectionIndex] as any : null;
+                    if (sectionInfo?.isOutdoor) {
+                        visibleNodes.add(nodeIndex);
+                    }
+                } else if (this.nodeZoneMasks) {
+                    // Fallback to zone 1 if section info is missing but zone mask exists
+                    if (this.nodeZoneMasks[nodeIndex] & (1n << 1n)) {
+                        visibleNodes.add(nodeIndex);
+                    }
+                }
+            }
+
+            // For leaves, we also want those marked as outdoor if possible
+            // In the absence of a clear outdoor flag for leaves, we'll use zone 1 as a heuristic
+            if (this.bspLeaves) {
+                for (let leafIndex = 0; leafIndex < this.bspLeaves.length; leafIndex++) {
+                    if (this.bspLeaves[leafIndex].zone === 1) {
+                        visibleLeaves.add(leafIndex);
+                    }
+                }
+            }
+            return { visibleNodes, visibleLeaves, finalZoneMask: (1n << 1n), zonesAddedThroughPortals: new Set<number>() };
         }
 
         // Leaf-only mode: only render leaf 1 (no portal expansion, no traversal)
@@ -446,15 +536,7 @@ class SectorObject extends Object3D {
                         const isFront = planeDot >= 0;
 
                         const currentZone = isFront ? nodeZone1 : nodeZone0; // Zone we're currently in
-                        const oppositeZone = isFront ? nodeZone0 : nodeZone1; // [0]=Back, [1]=Front ?? 
-                        // Wait, in previous code: oppositeZone = isFront ? nodeZone0 : nodeZone1;
-                        // If isFront, we are in Front. Portal connects Front and Back.
-                        // Opposite should be Back zone. 
-                        // zones[0] is Back zone? zones[1] is Front zone?
-                        // Checked findPositionZone: side >= 0 ? node.zones[1] : node.zones[0].
-                        // So zones[1] IS FRONT. zones[0] IS BACK.
-                        // If we are in Front (isFront=true), opposite is Back (zones[0]).
-                        // So `isFront ? nodeZone0 : nodeZone1` is CORRECT.
+                        const oppositeZone = isFront ? nodeZone0 : nodeZone1; // [0]=Back, [1]=Front
 
                         // CRITICAL: Only process portal if its current zone is in the active zone mask
                         // This ensures portals are only considered when their zone is actually visible
@@ -464,7 +546,7 @@ class SectorObject extends Object3D {
                         // UE2 portal recursion limit: Recursion < MAX_RECURSION_DEPTH - 1
                         // This means we can see through portals up to depth 3 (0-indexed: 0, 1, 2, 3)
                         // Total of 4 levels: initial zone (0) + 3 portal hops (1, 2, 3)
-                        
+
                         // Distance-based portal culling: don't expand through portals that are too far away
                         // This prevents performance issues when hub zones (like zone 2) connect to many distant zones
                         // Portal sphere radius is typically 200-400 units, so 5000 units is a reasonable limit
@@ -472,8 +554,8 @@ class SectorObject extends Object3D {
                         const portalSphere = currentNode.exclusiveSphereBound;
                         const portalDistance = cameraPosition.distanceTo(portalSphere.center);
                         const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
-                        
-                        const portalVisible = isCurrentZoneActive && 
+
+                        const portalVisible = isCurrentZoneActive &&
                             isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
@@ -481,43 +563,43 @@ class SectorObject extends Object3D {
                         if (leafOnlyMode) {
                             // Don't expand portals when camera is outside sector
                         } else if (portalVisible && oppositeZone >= 0 && oppositeZone < 64) {
-                                // Check if opposite zone is already in the mask (avoid redundant work)
-                                const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
-                                
-                                if (!alreadyAdded) {
-                                    // UE2-style: the recursion depth for the new zone is based on the depth of the
-                                    // *current* zone, not the minimum depth of any active zone.
-                                    //
-                                    // IMPORTANT: The previous logic took the minimum depth across all active zones.
-                                    // Since the camera zone is always depth 0, that effectively made every portal hop
-                                    // look like depth 1 and allowed multi-portal chains to expand without increasing depth.
-                                    const sourceDepth = zoneDepthMap.get(currentZone) ?? recursionDepth;
+                            // Check if opposite zone is already in the mask (avoid redundant work)
+                            const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
 
-                                    // Connectivity is defined per-zone. Only allow expansion if the current zone
-                                    // is connected to the opposite zone.
-                                    let isConnected = true;
-                                    if (this.bspZones && currentZone >= 0 && currentZone < this.bspZones.length) {
-                                        const zoneData = this.bspZones[currentZone];
-                                        if (zoneData && zoneData.connectivity) {
-                                            isConnected = !!(zoneData.connectivity & (1n << BigInt(oppositeZone)));
-                                        }
+                            if (!alreadyAdded) {
+                                // UE2-style: the recursion depth for the new zone is based on the depth of the
+                                // *current* zone, not the minimum depth of any active zone.
+                                //
+                                // IMPORTANT: The previous logic took the minimum depth across all active zones.
+                                // Since the camera zone is always depth 0, that effectively made every portal hop
+                                // look like depth 1 and allowed multi-portal chains to expand without increasing depth.
+                                const sourceDepth = zoneDepthMap.get(currentZone) ?? recursionDepth;
+
+                                // Connectivity is defined per-zone. Only allow expansion if the current zone
+                                // is connected to the opposite zone.
+                                let isConnected = true;
+                                if (this.bspZones && currentZone >= 0 && currentZone < this.bspZones.length) {
+                                    const zoneData = this.bspZones[currentZone];
+                                    if (zoneData && zoneData.connectivity) {
+                                        isConnected = !!(zoneData.connectivity & (1n << BigInt(oppositeZone)));
                                     }
-                                    
-                                    if (isConnected) {
-                                        // Calculate new recursion depth for the portal expansion
-                                        const newDepth = sourceDepth + 1;
-                                        
-                                        // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
-                                        // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
-                                        if (newDepth < MAX_RECURSION_DEPTH) {
-                                            currentZoneMask |= (1n << BigInt(oppositeZone));
-                                            zoneDepthMap.set(oppositeZone, newDepth);
-                                            // Track that this zone was added through a portal
-                                            zonesAddedThroughPortals.add(oppositeZone);
-                                        }
+                                }
+
+                                if (isConnected) {
+                                    // Calculate new recursion depth for the portal expansion
+                                    const newDepth = sourceDepth + 1;
+
+                                    // UE2 check: Recursion < MAX_RECURSION_DEPTH - 1
+                                    // This means newDepth must be < MAX_RECURSION_DEPTH (i.e., <= MAX_RECURSION_DEPTH - 1)
+                                    if (newDepth < MAX_RECURSION_DEPTH) {
+                                        currentZoneMask |= (1n << BigInt(oppositeZone));
+                                        zoneDepthMap.set(oppositeZone, newDepth);
+                                        // Track that this zone was added through a portal
+                                        zonesAddedThroughPortals.add(oppositeZone);
                                     }
                                 }
                             }
+                        }
                     }
 
                     // Frustum Culling & Visibility
@@ -548,7 +630,7 @@ class SectorObject extends Object3D {
                 if (leaf && leaf.zone >= 0) {
                     const leafZoneBit = 1n << BigInt(leaf.zone);
                     const isZoneInMask = !!(leafZoneBit & currentZoneMask);
-                    
+
                     // Only include leaf if its zone is in the final zone mask
                     // If the zone was added through a portal, it's already been validated as visible
                     // (zonesAddedThroughPortals only contains zones added through visible portals)
@@ -561,6 +643,7 @@ class SectorObject extends Object3D {
             }
         }
 
+        this.lastZoneMask = currentZoneMask;
         return { visibleNodes, visibleLeaves: filteredVisibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
     }
 
@@ -576,10 +659,10 @@ class SectorObject extends Object3D {
         // Check if camera is within this sector (by finding valid leaf)
         const cameraLeaf = this.findPositionLeaf(cameraPosition);
         const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
-        
+
         // Hide helpers when camera is outside sector
         this.helpers.visible = isCameraInSector;
-        
+
         // If camera is outside sector, only render leaf 1 (no portal expansion)
         const leafOnlyMode = !isCameraInSector;
 
@@ -662,20 +745,307 @@ class SectorObject extends Object3D {
         }
     }
 
+    protected updateLights(environment: L2Environment) {
+        for (const light of Object.values(this.lights)) {
+            light.update(environment, this.brightness);
+        }
+    }
 
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity) {
+        // Only update lights for the active (camera) sector, not distant sectors
+        if (!topLevelOnly) this.updateLights(environment);
 
+        const library = (this as any).decodeLibrary as GD.DecodeLibrary;
 
-    public updateVisibleStaticMeshActors(cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
+        // Early return if no BSP data
+        if (!this.bspGroup && !this.staticMeshGroup) return;
+
+        const cameraLeaf = this.findPositionLeaf(cameraPosition);
+        const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
+
+        this.helpers.visible = isCameraInSector;
+
+        const leafOnlyMode = !isCameraInSector;
+        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition);
+
+        // Get camera zone from leaf (more reliable than findPositionZone)
+        let currentZone: number | null = null;
+        const leafIndex = this.findPositionLeaf(cameraPosition);
+        if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
+            currentZone = this.bspLeaves[leafIndex].zone;
+        }
+        // Fallback to findPositionZone if leaf lookup fails
+        if (currentZone === null || currentZone < 0) {
+            currentZone = this.findPositionZone(cameraPosition);
+        }
+
+        // Log zone/leaf changes (only when they actually change)
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+
+        if (zoneChanged || leafChanged) {
+            if (zoneChanged) {
+                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
+                this._lastLoggedZone = currentZone;
+            }
+            if (leafChanged) {
+                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
+                this._lastLoggedLeaf = leafIndex;
+            }
+        }
+
+        const { visibleNodes, visibleLeaves, finalZoneMask } = this.traverseBSP(
+            cameraPosition,
+            activeZoneMask,
+            cameraFrustum,
+            frustumCullingEnabled,
+            0,
+            leafOnlyMode,
+            topLevelOnly
+        );
+
+        if (this.bspGroup && this.bspSections && this.nodeToSection) {
+            // Find which sections contain visible nodes
+            const visibleSections = new Set<number>();
+            visibleNodes.forEach(nodeIndex => {
+                const sectionIndex = this.nodeToSection![nodeIndex];
+                if (sectionIndex !== undefined && sectionIndex >= 0) {
+                    visibleSections.add(sectionIndex);
+                }
+            });
+            let visibleMeshCount = 0;
+            let bspAmbientColor: ColorByte | null = null;
+            if (environment) {
+                bspAmbientColor = environment.getAmbientPlaneBSPLight(tmpColorByte);
+            }
+
+            let outdoorCount = 0, indoorCount = 0;
+            this.bspGroup.children.forEach((child) => {
+                if (child instanceof Mesh && child.userData.sectionIndex !== undefined) {
+                    const sectionIndex = child.userData.sectionIndex;
+                    child.visible = visibleSections.has(sectionIndex);
+                    if (child.visible) {
+                        const sectionInfo = this.bspSections![sectionIndex] as any;
+                        const isOutdoor = sectionInfo?.isOutdoor;
+
+                        if (isOutdoor) outdoorCount++; else indoorCount++;
+
+                        // Apply ambient color via MeshStaticMaterial's ambient uniform
+                        let material = child.material;
+                        const applyAmbient = (m: any) => {
+                            // MeshStaticMaterial uses uniforms.ambient.value.color (which is THREE.Color)
+                            if (m?.uniforms?.ambient?.value?.color) {
+                                if (isOutdoor && bspAmbientColor) {
+                                    bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
+                                    // Ensure defines exists before checking USE_AMBIENT
+                                    if (m.defines && m.defines.USE_AMBIENT === undefined) {
+                                        m.defines.USE_AMBIENT = "";
+                                        m.needsUpdate = true;
+                                    }
+                                } else {
+                                    m.uniforms.ambient.value.color.setRGB(1, 1, 1);
+                                }
+                            } else if (m?.color) {
+                                // Fallback for materials with .color (like MeshBasicMaterial)
+                                if (isOutdoor && bspAmbientColor) bspAmbientColor.toFloats(m.color);
+                                else m.color.setHex(0xffffff);
+                            }
+                        };
+
+                        if (Array.isArray(material)) {
+                            material.forEach(applyAmbient);
+                        } else {
+                            applyAmbient(material);
+                        }
+
+                        visibleMeshCount++;
+                    }
+                }
+            });
+
+            // Log BSP ambient status on zone changes (condensed debug)
+            if (zoneChanged && bspAmbientColor) {
+                console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
+            }
+
+            if (zoneChanged && currentZone !== null && currentZone >= 0) {
+                const finalActiveZones: number[] = [];
+                for (let i = 0; i < 64; i++) {
+                    if (finalZoneMask & (1n << BigInt(i))) {
+                        finalActiveZones.push(i);
+                    }
+                }
+                console.log(`[BSP Visibility] Zone: ${currentZone}, Active zones: [${finalActiveZones.join(', ')}], Visible nodes: ${visibleNodes.size}, Visible sections: ${visibleSections.size}/${this.bspSections!.length}, Visible meshes: ${visibleMeshCount}`);
+            }
+        }
+
+        if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
+            const visibleActorUuids = new Set<string>();
+            const actorBox = new Box3();
+
+            for (const leafIndex of visibleLeaves) {
+                const actors = library.leafActors[leafIndex];
+                if (actors) {
+                    for (const actorBase of actors) {
+                        if (actorBase.type !== "StaticMeshActor") continue;
+                        const actor = actorBase as IStaticMeshActorDecodeInfo;
+                        if (visibleActorUuids.has(actor.uuid)) continue;
+
+                        // Actor frustum and zone mask culling
+                        actorBox.min.fromArray(actor.bounds.min);
+                        actorBox.max.fromArray(actor.bounds.max);
+
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
+
+                        // Distance-based culling — skip for actors with bIgnoredRange
+                        const actorCenter = actorBox.getCenter(tmpVec3);
+                        const distSq = cameraPosition.distanceToSquared(actorCenter);
+                        const isRangeIgnored = !!(actor as any).isRangeIgnored;
+                        const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+
+                        if (isFrustumVisible && isZoneVisible && isInRange) {
+                            visibleActorUuids.add(actor.uuid);
+                        }
+                    }
+                }
+            }
+
+            let visibleCount = 0;
+            const processedBatches = new Set<string>();
+
+            this.staticMeshMap.forEach((object, uuid) => {
+                // For batched meshes, per-element culling via geometry.groups
+                if (object.userData.isBatch) {
+                    // Only process each batch mesh once (multiple UUIDs map to same object)
+                    const batchId = object.uuid;
+                    if (processedBatches.has(batchId)) return;
+                    processedBatches.add(batchId);
+
+                    const batchElements = object.userData.batchElements;
+                    const geometry = (object as any).geometry;
+                    if (!batchElements || !geometry) return;
+
+                    // Test each element's bounds individually
+                    const visibleGroups: { start: number; count: number; materialIndex: number }[] = [];
+
+                    for (const elem of batchElements) {
+                        // Check if this element is visible via the leaf/frustum pass
+                        let elemVisible = visibleActorUuids.has(elem.uuid);
+
+                        // If not found in leaf traversal, also check direct bounds
+                        if (!elemVisible) {
+                            actorBox.min.fromArray(elem.boundsMin);
+                            actorBox.max.fromArray(elem.boundsMax);
+
+                            const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                            const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
+                            const actorCenter = actorBox.getCenter(tmpVec3);
+                            const distSq = cameraPosition.distanceToSquared(actorCenter);
+                            const isInRange = elem.isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+
+                            elemVisible = isFrustumVisible && isZoneVisible && isInRange;
+                        }
+
+                        if (elemVisible) {
+                            for (const g of elem.groups) {
+                                visibleGroups.push(g);
+                            }
+                        }
+                    }
+
+                    // Rebuild geometry groups with only visible elements
+                    if (visibleGroups.length > 0) {
+                        geometry.clearGroups();
+                        for (const g of visibleGroups) {
+                            geometry.addGroup(g.start, g.count, g.materialIndex);
+                        }
+                        object.visible = true;
+                        visibleCount++;
+                    } else {
+                        object.visible = false;
+                    }
+
+                    if (object.visible && (object as any).isUpdatable) {
+                        (object as any)?.update(this, environment);
+                    }
+                } else {
+                    // Non-batch actors: simple visibility toggle
+                    const isVisible = visibleActorUuids.has(uuid);
+                    object.visible = isVisible;
+                    if (isVisible) {
+                        visibleCount++;
+                        if ((object as any).isUpdatable) {
+                            (object as any)?.update(this, environment);
+                        }
+                    }
+                }
+            });
+
+            // Update terrain lighting and batch visibility
+            this.zones.traverse((object) => {
+                const userData = (object as any).userData;
+                const isTerrainBatch = userData?.isTerrainBatch;
+                const isTerrain = (object as any).isTerrain;
+
+                if (isTerrainBatch) {
+                    const batch = object as Mesh;
+                    const batchGeo = batch.geometry as BufferGeometry;
+                    const sectors = userData.sectors as any[];
+                    const originalGroups = userData.originalGroups as any[];
+                    if (!sectors || !batchGeo || !originalGroups) return;
+
+                    const visibleGroups: any[] = [];
+                    sectors.forEach(sector => {
+                        // Terrain sectors have 'bounds' (THREE.Box3)
+                        const isVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds);
+
+                        if (isVisible) {
+                            sector.update(this, environment);
+                            // Add this sector's groups to visibility
+                            const start = sector.batchGroupOffset;
+                            const count = sector.batchGroupCount;
+                            for (let i = start; i < start + count; i++) {
+                                visibleGroups.push(originalGroups[i]);
+                            }
+                        }
+                    });
+
+                    if (visibleGroups.length > 0) {
+                        batch.visible = true;
+                        batchGeo.clearGroups();
+                        visibleGroups.forEach(g => {
+                            batchGeo.addGroup(g.start, g.count, g.materialIndex);
+                        });
+                    } else {
+                        batch.visible = false;
+                    }
+                } else if (isTerrain && object.visible && !(object as any).batchGeometry) {
+                    // Standalone terrain or fallback: update if visible
+                    (object as any).update?.(this, environment);
+                }
+            });
+
+            if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+                console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
+                this._lastLoggedStaticMeshLeaf = leafIndex;
+            }
+        }
+    }
+
+    public updateVisibleStaticMeshActors(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
         if (!library || !this.staticMeshGroup || this.staticMeshMap.size === 0) return;
 
         // Check if camera is within this sector (by finding valid leaf)
         const cameraLeaf = this.findPositionLeaf(cameraPosition);
         const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
-        
+
         // Hide helpers when camera is outside sector
         this.helpers.visible = isCameraInSector;
-        
+
         // If camera is outside sector, only render leaf 1 (no portal expansion)
         const leafOnlyMode = !isCameraInSector;
         const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition); // Zone 1 bitmask if leaf-only
@@ -710,10 +1080,64 @@ class SectorObject extends Object3D {
         }
 
         let visibleCount = 0;
+        const processedBatches = new Set<string>();
+
         this.staticMeshMap.forEach((object, uuid) => {
-            const isVisible = visibleActorUuids.has(uuid);
-            object.visible = isVisible;
-            if (isVisible) visibleCount++;
+            if (object.userData.isBatch) {
+                const batchId = object.uuid;
+                if (processedBatches.has(batchId)) return;
+                processedBatches.add(batchId);
+
+                const batchElements = object.userData.batchElements;
+                const geometry = (object as any).geometry;
+                if (!batchElements || !geometry) return;
+
+                const visibleGroups: { start: number; count: number; materialIndex: number }[] = [];
+
+                for (const elem of batchElements) {
+                    let elemVisible = visibleActorUuids.has(elem.uuid);
+
+                    if (!elemVisible) {
+                        actorBox.min.fromArray(elem.boundsMin);
+                        actorBox.max.fromArray(elem.boundsMax);
+
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
+
+                        elemVisible = isFrustumVisible && isZoneVisible;
+                    }
+
+                    if (elemVisible) {
+                        for (const g of elem.groups) {
+                            visibleGroups.push(g);
+                        }
+                    }
+                }
+
+                if (visibleGroups.length > 0) {
+                    geometry.clearGroups();
+                    for (const g of visibleGroups) {
+                        geometry.addGroup(g.start, g.count, g.materialIndex);
+                    }
+                    object.visible = true;
+                    visibleCount++;
+                } else {
+                    object.visible = false;
+                }
+
+                if (object.visible && (object as any).isUpdatable) {
+                    (object as any)?.update(this, environment);
+                }
+            } else {
+                const isVisible = visibleActorUuids.has(uuid);
+                object.visible = isVisible;
+                if (isVisible) {
+                    visibleCount++;
+                    if ((object as any).isUpdatable) {
+                        (object as any)?.update(this, environment);
+                    }
+                }
+            }
         });
 
         const leafIndex = this.findPositionLeaf(cameraPosition);
@@ -727,6 +1151,7 @@ class SectorObject extends Object3D {
 class BSPZoneData {
     public connectivity: bigint;
     public visibility: bigint;
+    public zoneInfo: any;
 
     protected constructor() { }
 
@@ -735,6 +1160,7 @@ class BSPZoneData {
 
         zone.connectivity = info.connectivity
         zone.visibility = info.visibility;
+        zone.zoneInfo = info.zoneInfo;
 
         return zone;
     }

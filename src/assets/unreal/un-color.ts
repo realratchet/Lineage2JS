@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import { APackage, UExport, UObject } from "@l2js/core";
 
 abstract class FColor extends UObject {
     declare public ["constructor"]: typeof FColor;
@@ -28,6 +28,28 @@ abstract class FColor extends UObject {
             "B": "b",
             "A": "a",
         });
+    }
+
+    protected doLoad(pkg: APackage, exp: UExport): void {
+        const bytes = pkg.read(4);
+
+        this.b = bytes.getUint8(0);
+        this.g = bytes.getUint8(1);
+        this.r = bytes.getUint8(2);
+        this.a = bytes.getUint8(3);
+
+        this.readHead = pkg.tell();
+
+        return super.doLoad(pkg, exp);
+    }
+
+    public static fromFloating(r: number, g: number, b: number, a?: number) {
+        return FColor.make(
+            Math.floor(Math.max(0, Math.min(255, r * 255))),
+            Math.floor(Math.max(0, Math.min(255, g * 255))),
+            Math.floor(Math.max(0, Math.min(255, b * 255))),
+            Math.floor(Math.max(0, Math.min(255, (a ?? 0) * 255)))
+        );
     }
 
     getBrightness() { return (this.g * 3.0 + this.b + this.b + this.r) * 0.0006510417; }

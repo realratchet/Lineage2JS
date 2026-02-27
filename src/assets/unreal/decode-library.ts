@@ -2,6 +2,7 @@ const ALLOW_FAILED_OBJECTS = false;
 
 class DecodeLibrary {
     public name: string = "Untitled";
+    public brightness: number = 1.0;
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
@@ -22,34 +23,53 @@ class DecodeLibrary {
     public readonly materials: Record<string, GD.IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
     public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
     public readonly leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][] = [];
+    public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
+    public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
+    public readonly celestials: any[] = []; // Stores Sun and Moon actors
+    public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
+    public readonly isSkyLevel: boolean;
+    public readonly skyLevel: {
+        skybox: string;
+        hazering: string;
+        clouds: string[]
+    }
+    public readonly batching: {
+        terrain: boolean,
+        staticMeshes: boolean
+    } = { terrain: true, staticMeshes: true };
 
     public failed: any[] = [];
+    public readonly exportedActors = new Set<string>(); // UUIDs of actors that passed geographic filtering
     public failedLoad: any[] = [];
     public failedDecode: any[] = [];
     // public sun: GD.ISunDecodeInfo_T;
 
-    public static async fromPackage(pkg: C.APackage, {
-        env,
+    public static fromPackage(pkg: C.APackage, {
         loadBaseModel = true,
         loadStaticModels = true,
         loadStaticModelList = null,
         loadTerrain = true,
         helpersZoneBounds = false,
         loadEmitters = true,
+        isSkyLevel = false,
+        batching = { terrain: true, staticMeshes: true }
     }: GD.LoadSettings_T) {
 
         const impGroups = pkg.importGroups;
         const expGroups = pkg.exportGroups;
 
         const decodeLibrary = new DecodeLibrary();
-        
+
         const uLevel = pkg.fetchObject<GA.ULevel>(expGroups.Level[0].index + 1).loadSelf();
         const uLevelInfo = uLevel.levelInfo.loadSelf();
 
-        uLevelInfo.setL2Env(env);
+        decodeLibrary.brightness = uLevelInfo.brightness;
 
         decodeLibrary.name = uLevel.url.map;
+        (decodeLibrary as any).isSkyLevel = isSkyLevel;
         decodeLibrary.helpersZoneBounds = helpersZoneBounds;
+        decodeLibrary.batching.terrain = batching?.terrain !== false;
+        decodeLibrary.batching.staticMeshes = batching?.staticMeshes !== false;
 
         // const sun = pkg.fetchObject<GA.UNSun>(expGroups["NSun"][0].index + 1).loadSelf();
 
@@ -63,14 +83,15 @@ class DecodeLibrary {
 
         if (isNotSector) {
             sectorIndex = [17, 25]
-            debugger;
+            // debugger;
         }
 
         decodeLibrary.sector = sectorIndex;
 
-        const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId).loadSelf(); // base model
+        const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId); // base model
 
-        uModel.setLevelInfo(uLevelInfo);
+        uModel.setLevelInfo(uLevelInfo).loadSelf();
+
         if (loadBaseModel) uModel.getDecodeInfo(decodeLibrary, uLevelInfo);
         else uModel.getZoneDecodeInfo(decodeLibrary, uLevelInfo);
 
@@ -78,6 +99,56 @@ class DecodeLibrary {
             const terrainInfo = pkg.fetchObject<GA.FZoneInfo>(expGroups.TerrainInfo[0].index + 1).loadSelf();
             terrainInfo.getDecodeInfo(decodeLibrary);
         }
+
+        {
+            const actorTypesToLoad = ["Light", "NMovableSunLight"];
+            const uActorsToLoad = actorTypesToLoad.map(t => expGroups[t] ?? []).flat();
+
+            uActorsToLoad
+                .map(exp => {
+                    const uActor = pkg.fetchObject<GA.ULight>(exp.index + 1).loadSelf();
+                    const dActor = uActor.getDecodeInfo(decodeLibrary);
+
+                    decodeLibrary.lightActors.push(dActor);
+                });
+        }
+
+        {
+            if (isSkyLevel) { // Load skylevel
+                const celestialTypes = ["NSun", "NMoon"];
+                const uCelestialsToLoad = celestialTypes.map(t => expGroups[t] ?? []).flat();
+
+                uCelestialsToLoad.forEach(exp => {
+                    const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                    if (uActor.getDecodeInfo) {
+                        decodeLibrary.celestials.push(uActor.getDecodeInfo(decodeLibrary));
+                    }
+                });
+            }
+
+            const skyZoneTypes = ["SkyZoneInfo"];
+            const uSkyZones = skyZoneTypes.map(t => expGroups[t] ?? []).flat();
+            uSkyZones.forEach(exp => {
+                const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                if (uActor.getDecodeInfo) {
+                    decodeLibrary.skyZoneInfos.push(uActor.getDecodeInfo(decodeLibrary));
+                }
+            });
+        }
+
+        {
+            const fogTypes = ["L2FogInfo"];
+            const uFogsToLoad = fogTypes.map(t => expGroups[t] ?? []).flat();
+
+            uFogsToLoad.forEach(exp => {
+                const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                if (uActor.getDecodeInfo) {
+                    decodeLibrary.fogInfos.push(uActor.getDecodeInfo(decodeLibrary));
+                }
+            });
+        }
+
+
 
         if (loadEmitters) {
             const actorsToLoad = expGroups["Emitter"] || [];

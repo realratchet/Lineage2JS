@@ -1304,7 +1304,7 @@ abstract class BaseEmitter extends Object3D {
     public update(currentTime: number) {
         if (currentTime === 0) return;
 
-        // if (this.name !== "Exp_SpriteEmitter3" || this.parent.name !== "Exp_Emitter7") return;
+        // if (this.name !== "SpriteEmitter3" || this.parent.name !== "Emitter7") return;
 
         if (this.isDisabled)
             return;

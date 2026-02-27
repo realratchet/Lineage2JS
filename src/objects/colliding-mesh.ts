@@ -1,8 +1,8 @@
-import RAPIER, { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { Intersection, Mesh, Raycaster } from "three";
+import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ICollidable } from "./objects";
+import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
 
-class CollidingMesh extends Mesh implements ICollidable {
+class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
 
     protected colliderDesc: ColliderDesc;
@@ -10,11 +10,11 @@ class CollidingMesh extends Mesh implements ICollidable {
     protected rigidbody: RigidBody;
     protected collider: Collider;
 
-    public constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], colliderIndices: Uint32Array) {
-        super(geometry, material);
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+        super(props);
 
-        if (colliderIndices && geometry.hasAttribute("position") && colliderIndices.length > 0)
-            this.makeCollider(colliderIndices, geometry.getAttribute("position").array as Float32Array);
+        if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)
+            this.makeCollider(props.colliderIndices, props.geometry.getAttribute("position").array as Float32Array);
         else this.isCollidable = false;
     }
 
@@ -35,8 +35,9 @@ class CollidingMesh extends Mesh implements ICollidable {
 
     public getCollider(): Collider { return this.collider; }
     public getRigidbody(): RigidBody { return this.rigidbody; }
-
 }
 
 export default CollidingMesh;
 export { CollidingMesh };
+
+

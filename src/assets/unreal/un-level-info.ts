@@ -1,14 +1,13 @@
 import FZoneInfo from "./un-zone-info";
 
 abstract class ULevelInfo extends FZoneInfo implements GD.IInfo {
-    declare protected l2env: GA.UL2NEnvManager;
     declare protected level: GA.ULevel;
-
-    public setL2Env(l2env: GA.UL2NEnvManager) { this.l2env = l2env; }
-    public getL2Env() { return this.l2env; }
 
     public setLevel(level: GA.ULevel) { this.level = level; }
     public getLevel() { return this.level; }
+
+    public setSkyZoneInfo(skyZone: any) { this.skyZone = skyZone; }
+    public getSkyZoneInfo() { return this.skyZone; }
 
     public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
         return {

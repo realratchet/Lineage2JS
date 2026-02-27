@@ -4,9 +4,7 @@ import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
-import { indexToTime, timeToIndex } from "@client/assets/unreal/un-l2env";
 import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
-import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
@@ -62,12 +60,10 @@ abstract class UTerrainSector extends UObject {
     declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
 
-    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oz, z: oy } = center;
 
-        const envManager = info.levelInfo.getL2Env();
-        const env = envManager.getCurrentEnvLight();
 
         if (this.uuid in library.geometries) return {
             uuid: this.uuid,
@@ -76,7 +72,7 @@ abstract class UTerrainSector extends UObject {
             geometry: this.uuid,
             materials: this.uuid,
             position: [ox, oy, oz]
-        };
+        } as GD.ITerrainSegmentDecodeInfo;
 
         library.geometries[this.uuid] = null;
         library.materials[this.uuid] = null;
@@ -88,15 +84,12 @@ abstract class UTerrainSector extends UObject {
         const width = iTerrainMap.width;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
-        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Float32Array(17 * 17 * 3);
+        const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Uint8ClampedArray(17 * 17 * 3);
         const indices = new TypedIndicesArray(16 * 16 * 6);
-        const ambient = envManager.getAmbientPlaneTerrainLight();
 
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
 
-        // Get appropriate shadow map for current time of day
-        const validShadowmap = this.getShadowMapForTime(envManager.getTimeOfDay());
 
         const v = FVector.make();
 
@@ -144,135 +137,10 @@ abstract class UTerrainSector extends UObject {
                 trueBoundingBox.expandByPoint(tmpVector.set(px, py, pz));
 
                 // Initialize vertex colors to black (lighting will be applied later)
-                colors[idxVertOffset + 0] = 0;
-                colors[idxVertOffset + 1] = 0;
-                colors[idxVertOffset + 2] = 0;
-
-                // {
-                //     const hmx = x + this.offsetX;
-                //     const hmy = y + this.offsetY;
-
-                //     const vertexIndex = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
-                //     const indexOffset = vertexIndex >> 5;
-                //     const vertexMask = 1 << (vertexIndex & 0x1F);
-
-                //     const isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask);
-
-                //     const idxOffset = y * 17 + x;
-                //     const idxVertOffset = idxOffset * 3;
-
-                //     if (isVisible > 32)
-                //         debugger;
-
-                //     colors[idxVertOffset + 0] = 0;
-                //     colors[idxVertOffset + 1] = Number(isVisible === 32);
-                //     colors[idxVertOffset + 2] = Number(isVisible === 0);
-                // }
             }
         }
 
-        for (let i = 0, len = this.lightInfos.length; i < len; i++) {
-            const lightInfo = this.lightInfos[i];
 
-            if (!lightInfo) continue;
-
-            if (!lightInfo || !lightInfo.light)
-                debugger;
-
-            // if (this.lightInfos.length === 4)
-            //     debugger;
-
-            const lightActor = lightInfo.light?.loadSelf();
-
-            const dynLight = lightActor.getRenderInfo(env);
-
-            const color = dynLight.color;
-
-            const bitPtrIter = lightInfo.visibilityBitmap.iter();
-
-            let bitMask = 0x1;
-            let bitPtr = bitPtrIter.next().value;
-
-
-            const DEBUG_LIGHTING_RED = false;
-
-            // Iterate through all vertices (17x17 grid)
-            for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) {
-                // Check visibility bitmap - only process if bit is set
-                if ((bitPtr & bitMask) !== 0) {
-                    const idxVertOffset = vertexIndex * 3;
-
-
-                    
-                    if (DEBUG_LIGHTING_RED) {
-                        // Debug mode: Force lit areas to be bright red
-                        colors[idxVertOffset + 0] = 1.0; // Red
-                        colors[idxVertOffset + 1] = 0.0; // Green
-                        colors[idxVertOffset + 2] = 0.0; // Blue
-                    } else {
-                        // Normal lighting calculation
-                        // Get vertex position in world space (add center offset)
-                        const vx = positions[idxVertOffset + 0] + ox;
-                        const vz = positions[idxVertOffset + 1] + oy;
-                        const vy = positions[idxVertOffset + 2] + oz;
-
-                        // Get vertex normal
-                        const nx = normals[idxVertOffset + 0];
-                        const nz = normals[idxVertOffset + 1];
-                        const ny = normals[idxVertOffset + 2];
-
-                        const samplingPoint = FVector.make(vx, vy, vz);
-                        const samplingNormal = FVector.make(nx, ny, nz);
-
-                        // Sample light intensity at this vertex
-                        const intensity = dynLight.sampleIntensity(samplingPoint, samplingNormal);
-
-                        if (intensity > 0) {
-                            // Add light contribution to vertex color
-                            colors[idxVertOffset + 0] += color.x * intensity;
-                            colors[idxVertOffset + 1] += color.y * intensity;
-                            colors[idxVertOffset + 2] += color.z * intensity;
-                        }
-                    }
-                }
-
-                // Advance bitmap position
-                bitMask = (bitMask << 1) % 0x100; // check for byte overflow
-                if (!bitMask) {
-                    const nextResult = bitPtrIter.next();
-                    if (nextResult.done) break; // End of bitmap
-                    bitPtr = nextResult.value;
-                    bitMask = 1;
-                }
-            }
-
-            //     // if()
-
-            // TODO: sample intensity
-            normals
-
-            // debugger;
-        }
-
-        // Apply shadow mapping and ambient light after all lighting calculations
-        for (let y = 0; y < 17; y++) {
-            for (let x = 0; x < 17; x++) {
-                const idxOffset = y * 17 + x;
-                const idxVertOffset = idxOffset * 3;
-
-                const shadowMap = validShadowmap ? validShadowmap.getElem(idxOffset) / 255 : 1;
-
-                // Add ambient light contribution
-                colors[idxVertOffset + 0] += ambient[0] * shadowMap;
-                colors[idxVertOffset + 1] += ambient[1] * shadowMap;
-                colors[idxVertOffset + 2] += ambient[2] * shadowMap;
-
-                // Clamp colors to [0, 1]
-                colors[idxVertOffset + 0] = Math.max(0, Math.min(1, colors[idxVertOffset + 0]));
-                colors[idxVertOffset + 1] = Math.max(0, Math.min(1, colors[idxVertOffset + 1]));
-                colors[idxVertOffset + 2] = Math.max(0, Math.min(1, colors[idxVertOffset + 2]));
-            }
-        }
 
         for (let y = 0; y < 16; y++) {
             for (let x = 0; x < 16; x++) {
@@ -288,17 +156,9 @@ abstract class UTerrainSector extends UObject {
                     const vertexMask = 1 << (vertexIndex & 0x1F);
 
                     isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask) !== 0;
-
-                    // const idxOffset = y * 17 + x;
-                    // const idxVertOffset = idxOffset * 3;
-
-                    // colors[idxVertOffset + 0] = 0;
-                    // colors[idxVertOffset + 1] = 0;
-                    // colors[idxVertOffset + 2] = Number(!isVisible);
                 }
 
                 if (!isVisible) {
-
                     indices[idxOffset + 0] = y * 17 + x;
                     indices[idxOffset + 1] = y * 17 + x;
                     indices[idxOffset + 2] = y * 17 + x;
@@ -309,31 +169,66 @@ abstract class UTerrainSector extends UObject {
                     continue;
                 }
 
-                indices[idxOffset + 0] = (y * 17 + x);
-                indices[idxOffset + 1] = ((y + 1) * 17 + x);
-                indices[idxOffset + 2] = (y * 17 + (x + 1));
+                const v1 = (y * 17 + x);
+                const v2 = (y * 17 + (x + 1));
+                const v3 = ((y + 1) * 17 + (x + 1));
+                const v4 = ((y + 1) * 17 + x);
 
-                indices[idxOffset + 3] = (y * 17 + (x + 1));
-                indices[idxOffset + 4] = ((y + 1) * 17 + x);
-                indices[idxOffset + 5] = ((y + 1) * 17 + (x + 1));
+                const isEdgeTurn = info.getEdgeTurnBitmapOrig(x + this.offsetX, y + this.offsetY);
+
+                if (isEdgeTurn) {
+                    // Turned (Diagonal 2): v4-v2 split (CCW)
+                    indices[idxOffset + 0] = v1;
+                    indices[idxOffset + 1] = v4;
+                    indices[idxOffset + 2] = v2;
+
+                    indices[idxOffset + 3] = v4;
+                    indices[idxOffset + 4] = v3;
+                    indices[idxOffset + 5] = v2;
+                } else {
+                    // Normal (Diagonal 1): v1-v3 split (CCW)
+                    indices[idxOffset + 0] = v1;
+                    indices[idxOffset + 1] = v4;
+                    indices[idxOffset + 2] = v3;
+
+                    indices[idxOffset + 3] = v1;
+                    indices[idxOffset + 4] = v3;
+                    indices[idxOffset + 5] = v2;
+                }
             }
         }
 
         const uvMultiplier = 2;
         const uvOffset = 17 * 17 * uvMultiplier;
         const layers = info.layers.filter(x => x);
-        const layerCount = layers.length;
-        const uvs = new Float32Array(uvOffset * (layerCount + 1));
+        const layerCount = layers.length; // blended layers
+        const uvs = new Float32Array(uvOffset * (layerCount + 2)); // base + blended + heightmap
 
-        // debugger;
+        const terrainIndices = new Float32Array(17 * 17);
 
+        // Row 0: Base Terrain Alignment UVs (used for triangulation)
+        for (let y = 0; y < 17; y++) {
+            for (let x = 0; x < 17; x++) {
+                const hmx = x + this.offsetX;
+                const hmy = y + this.offsetY;
+                const idxOffset = (y * 17 + x) * uvMultiplier;
+                const vIdx = y * 17 + x;
+
+                uvs[idxOffset + 0] = (hmx / info.terrainScale.x) * 2.0;
+                uvs[idxOffset + 1] = (hmy / info.terrainScale.y) * 2.0;
+
+                terrainIndices[vIdx] = vIdx;
+            }
+        }
+
+        // Rows 1..layerCount: Blended Layers
         for (let k = 0; k < layerCount; k++) {
             const layer = layers[k].loadSelf();
 
             if (!layer.alphaMap && !layer.map)
                 continue;
 
-            const layerOffset = uvOffset * k;
+            const layerOffset = uvOffset * (k + 1);
 
             for (let y = 0; y < 17; y++) {
                 for (let x = 0; x < 17; x++) {
@@ -341,34 +236,39 @@ abstract class UTerrainSector extends UObject {
                     const hmy = y + this.offsetY;
                     const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                    // Get world position for this vertex
+                    // let u = (hmx / layer.scaleW) * (layer.scale.x / info.terrainScale.x) * 2.0 + layer.panW;
+                    // let uvV = (hmy / layer.scaleH) * (layer.scale.y / info.terrainScale.y) * 2.0 + layer.panH;
+
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
-                    const worldPos = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
-                    // Use heightmap coordinates directly for UV calculation (matching L2 viewer approach)
-                    // This may be more accurate than using world coordinates
-                    const absHmx = hmx;
-                    const absHmy = hmy;
+                    // Reconstruct the Unified World Space vertex (Z-up) for this point
+                    // We reuse 'v' scratch vector if possible or create new one contextually. 
+                    // Note: 'v' is defined in outer scope but we should be careful. 
+                    // Let's use a new temporary vector to be safe/clean or reuse `v`.
+                    // The outer `v` is used in the geometry loop, this is the UV loop.
 
-                    let u = (absHmx / layer.scaleW) * (layer.scale.x / info.terrainScale.x) * 2.0 + layer.panW;
-                    let uvV = (absHmy / layer.scaleH) * (layer.scale.y / info.terrainScale.y) * 2.0 + layer.panH;
+                    // We must use info.toWorld to get the correct absolute position
+                    const worldVert = FVector.make(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
-                    uvs[layerOffset + idxOffset + 0] = u;
-                    uvs[layerOffset + idxOffset + 1] = uvV;
+                    // Transform by the layer's texture matrix to get UVs
+                    const uvVert = worldVert.applyMatrix4(layer.terrainMatrix);
+
+                    uvs[layerOffset + idxOffset + 0] = uvVert.x;
+                    uvs[layerOffset + idxOffset + 1] = uvVert.y;
                 }
             }
         }
 
-        // alpha uvs
-        const layerOffset = uvOffset * layerCount;
+        // Last Row: heightmap uvs
+        const hmLayerOffset = uvOffset * (layerCount + 1);
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
                 const hmx = x + this.offsetX;
                 const hmy = y + this.offsetY;
                 const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                uvs[layerOffset + idxOffset + 0] = hmx / info.heightmapX;
-                uvs[layerOffset + idxOffset + 1] = hmy / info.heightmapY;
+                uvs[hmLayerOffset + idxOffset + 0] = hmx / info.heightmapX;
+                uvs[hmLayerOffset + idxOffset + 1] = hmy / info.heightmapY;
             }
         }
 
@@ -376,8 +276,9 @@ abstract class UTerrainSector extends UObject {
             attributes: {
                 positions,
                 colors,
-                // uvs
-            },
+                normals,
+                terrainIndex: terrainIndices
+            } as any,
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
@@ -390,6 +291,7 @@ abstract class UTerrainSector extends UObject {
         // debugger;
 
         library.materials[this.uuid] = {
+            name: this.uuid,
             materialType: "terrainSegment",
             terrainMaterial: info.uuid,
             uvs: {
@@ -397,7 +299,7 @@ abstract class UTerrainSector extends UObject {
                 buffer: uvs,
                 materialType: "texture",
                 width: 17 * 17,
-                height: layerCount + 1,
+                height: layerCount + 2,
                 format: "rg"
             } as GD.IDataTextureDecodeInfo
         } as GD.IMaterialTerrainSegmentDecodeInfo;
@@ -405,11 +307,26 @@ abstract class UTerrainSector extends UObject {
         return {
             uuid: this.uuid,
             name: this.objectName,
+            terrainInfoUuid: info.uuid,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
-            position: [ox, oy, oz]
-        };
+            position: [ox, oy, oz],
+            lighting: {
+                lights: this.lightInfos.map(li => ({
+                    light: li.light?.objectName,
+                    flags: li.visibilityBitmap.getTypedArray() as Uint8Array
+                })).filter(li => li.light),
+                shadowMaps: this.shadowMaps?.map(sm => sm.getTypedArray() as Uint8Array) ?? [],
+                shadowMapTimes: this.shadowMapTimes ?? []
+            },
+            mapX: info.mapX,
+            mapY: info.mapY,
+            offsetX: this.offsetX,
+            offsetY: this.offsetY,
+            heightmapX: info.heightmapX,
+            heightmapY: info.heightmapY
+        } as any;
     }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
@@ -522,14 +439,6 @@ abstract class UTerrainSector extends UObject {
         return vertices[offset];
     }
 
-    protected getVertexColor(x: number, y: number): GA.FColor {
-        const info = this.info;
-        const colors = info.vertexColors;
-        const offset = info.getGlobalVertex(x, y);
-
-        return colors[offset];
-    }
-
     protected getVertexNormal(x: number, y: number): FVector {
         const info = this.info;
         const ox = this.offsetX, oy = this.offsetY;
@@ -549,7 +458,7 @@ abstract class UTerrainSector extends UObject {
         const vertices = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
-        const colors = new Float32Array(vertexCount * 4);
+        // const colors = new Float32Array(vertexCount * 4);
 
         if (info.texModifyInfo.loadSelf().colorOp !== 1) {
             debugger;
@@ -560,7 +469,6 @@ abstract class UTerrainSector extends UObject {
             for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
-                const color = this.getVertexColor(x, y);
 
                 const ix = this.offsetX + x, iy = this.offsetY + y;
                 const hix = ix + 0.5, hiy = iy + 0.5;
@@ -574,11 +482,6 @@ abstract class UTerrainSector extends UObject {
                 normals[it3 + 0] = normal.x;
                 normals[it3 + 1] = normal.y;
                 normals[it3 + 2] = normal.z;
-
-                colors[it4 + 0] = color.r / 255;
-                colors[it4 + 1] = color.g / 255;
-                colors[it4 + 2] = color.b / 255;
-                colors[it4 + 3] = color.a / 255;
 
                 uvs[it2 + 0] = u;
                 uvs[it2 + 1] = v;
@@ -646,9 +549,9 @@ abstract class UTerrainSector extends UObject {
                     pass.maxIndex = Math.max(pass.indices[j], pass.maxIndex);
                 }
             } else {
-                debugger;
+                // debugger;
                 // remove passess without triangles and adjust iterator
-                this.renderPasses.splice(i);
+                this.renderPasses.splice(i, 1);
 
                 len = len - 1;
                 i = i - 1;
@@ -659,9 +562,11 @@ abstract class UTerrainSector extends UObject {
             this: this,
             vertices,
             normals,
-            uvs,
-            colors
-        }
+            uvs
+        };
+
+        // if (this.objectName === "TerrainSector127")
+        //     debugger;
 
         // TODO: update decorators
 

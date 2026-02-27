@@ -13,3 +13,6 @@ layouts/*
 docker/*
 *.pyc
 py_scripts/*
+scripts/*
+!scripts/*.py
+traces/*

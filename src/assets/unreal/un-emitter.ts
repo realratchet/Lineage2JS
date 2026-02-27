@@ -136,7 +136,7 @@ abstract class UEmitter extends UAActor {
 
         //     // debugger;
 
-        //     // if (this.objectName === "Exp_Emitter7")
+        //     // if (this.objectName === "Emitter7")
         //     //     debugger;
 
         const level = this.getLevel();

@@ -4,7 +4,7 @@ function saturationToBrightness(s: number) {
 
 function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
     let r: number, g: number, b: number;
-    let lightness = (v & 0xff) * 0.005490196;
+    let lightness = v * 0.005882353; // 1.5 / 255.0
 
     const sqrLightness = Math.sqrt(lightness);
 
@@ -35,11 +35,17 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
 
     const saturation = saturationToBrightness(s);
 
+    // Calculate normalized values first (0.0-1.0) then scale to 255
     const x = (((1.0 - r) * saturation + r) * lightness);
     const y = (((1.0 - g) * saturation + g) * lightness);
     const z = (((1.0 - b) * saturation + b) * lightness);
 
-    return [x, y, z];
+    // Return as bytes (0-255)
+    return [
+        Math.floor(x * 255),
+        Math.floor(y * 255),
+        Math.floor(z * 255)
+    ];
 }
 
 export default hsvToRgb;

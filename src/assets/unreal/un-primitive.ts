@@ -6,15 +6,6 @@ import UObject from "@l2js/core";
 abstract class UPrimitive extends UObject {
     declare protected boundingBox: GA.FBox;
     declare protected boundingSphere: GA.FPlane;
-    declare protected readonly materials: C.FArray<GA.UStaticMeshMaterial>;
-    declare protected readonly swayObject: boolean;
-
-    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
-        return [
-            ["Materials", "ArrayProperty", ["Class", "StaticMeshMaterial"]],
-            ["bSwayObject", "BoolProperty"]
-        ];
-    }
 
     protected preLoad(pkg: C.APackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
@@ -34,13 +25,6 @@ abstract class UPrimitive extends UObject {
         this.boundingSphere.load(pkg);
 
         this.readHead = pkg.tell();
-    }
-
-    protected getPropertyMap() {
-        return Object.assign({}, super.getPropertyMap(), {
-            "Materials": "materials",
-            "bSwayObject": "swayObject"
-        });
     }
 
     public decodeBoundsInfo(): GD.IBoundsDecodeInfo {

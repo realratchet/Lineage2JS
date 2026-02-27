@@ -1,4 +1,5 @@
-import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry } from "three";
+import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry, SphereGeometry } from "three";
+import { ColorByte } from "../utils/color-byte";
 
 type SectorObject = import("../objects/zone-object").SectorObject;
 
@@ -7,6 +8,7 @@ export enum VisualizerMode {
     Portals = 1,
     Zones = 2,
     Leaves = 3,
+    Fogs = 4,
     // Future modes can be added here
 }
 
@@ -25,8 +27,36 @@ export enum LeafVisualizerDetail {
     PerZone = 2,
 }
 
+export interface FogSourceColors {
+    fog: ColorByte;
+    sky: ColorByte;
+    cloud: ColorByte;
+    haze: ColorByte;
+}
+
+export interface GlobalEnvColors {
+    fog: ColorByte;
+    sky: ColorByte;
+    cloud1: ColorByte;
+    cloud2: ColorByte;
+    cloud3: ColorByte;
+    sun: ColorByte;
+    haze: ColorByte;
+}
+
+export interface ZoneFogData {
+    isFogZone: boolean;
+    color: ColorByte;
+    start: number;
+    end: number;
+}
+
 class Visualizer {
+    private readonly HUD_NAME_WIDTH = 8;
     private readonly group: Group;
+    private readonly fogGroup: Group;
+    private readonly hudElement: HTMLElement;
+    private readonly hudColors: Map<string, { swatch: HTMLElement, hex: HTMLElement, alpha: HTMLElement }> = new Map();
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
 
@@ -37,6 +67,7 @@ class Visualizer {
     private portalVisualizations: Object3D[] = [];
     private zoneVisualizations: Object3D[] = [];
     private leafVisualizations: Object3D[] = [];
+    private fogVisualizations: Object3D[] = [];
     private leafDetail: LeafVisualizerDetail = LeafVisualizerDetail.Auto;
     private readonly leafAutoAggregateThreshold: number = 200;
 
@@ -47,6 +78,223 @@ class Visualizer {
         this.group.renderOrder = 999;
         // Don't participate in culling
         scene.add(this.group);
+
+        this.fogGroup = new Group();
+        this.fogGroup.name = "FogVisualizers";
+        this.fogGroup.renderOrder = 999;
+        scene.add(this.fogGroup);
+
+        this.hudElement = this.initHUD();
+        document.body.appendChild(this.hudElement);
+    }
+
+    private createHudRow(container: HTMLElement, name: string, prefix: string): void {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.marginBottom = "4px";
+
+        const swatch = document.createElement("div");
+        Object.assign(swatch.style, {
+            width: "16px",
+            height: "16px",
+            border: "1px solid #fff",
+            marginRight: "8px",
+            backgroundColor: "#000",
+            flexShrink: "0"
+        });
+
+        const label = document.createElement("span");
+        label.innerText = name.padEnd(this.HUD_NAME_WIDTH, " ");
+        label.style.whiteSpace = "pre";
+
+        const rgbDisplay = document.createElement("span");
+        rgbDisplay.innerText = "  0,   0,   0";
+        rgbDisplay.style.marginLeft = "12px";
+        rgbDisplay.style.color = "#aaa";
+        rgbDisplay.style.width = "100px";
+        rgbDisplay.style.textAlign = "right";
+
+        const alpha = document.createElement("span");
+        alpha.innerText = "255";
+        alpha.style.marginLeft = "12px";
+        alpha.style.color = "#888";
+        alpha.style.width = "24px";
+        alpha.style.textAlign = "right";
+
+        row.appendChild(swatch);
+        row.appendChild(label);
+        row.appendChild(rgbDisplay);
+        row.appendChild(alpha);
+        container.appendChild(row);
+
+        this.hudColors.set(`${prefix}:${name}`, { swatch, rgbDisplay, alpha } as any);
+    }
+
+    private initHUD(): HTMLElement {
+        const hud = document.createElement("div");
+        hud.id = "env-color-hud-container";
+        Object.assign(hud.style, {
+            position: "fixed",
+            top: "10px",
+            left: "10px",
+            display: "none",
+            flexDirection: "column",
+            gap: "10px",
+            pointerEvents: "none",
+            zIndex: "10001"
+        });
+
+        const createPanel = (titleText: string) => {
+            const panel = document.createElement("div");
+            Object.assign(panel.style, {
+                backgroundColor: "rgba(0, 0, 0, 0.7)",
+                color: "#fff",
+                padding: "10px",
+                borderRadius: "5px",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                border: "1px solid #444",
+                boxShadow: "0 0 10px rgba(0,0,0,0.5)"
+            });
+
+            const title = document.createElement("div");
+            title.innerText = titleText;
+            title.style.fontWeight = "bold";
+            title.style.marginBottom = "8px";
+            title.style.borderBottom = "1px solid #444";
+            title.style.paddingBottom = "4px";
+            panel.appendChild(title);
+            return panel;
+        };
+
+        // Panel 1: Fog Source Colors
+        const fogPanel = createPanel("FOG SOURCE COLORS");
+        ["Fog", "Sky", "Cloud", "Haze"].forEach(name => this.createHudRow(fogPanel, name, "fog"));
+        hud.appendChild(fogPanel);
+
+        // Panel 2: Global Environment Colors
+        const globalPanel = createPanel("GLOBAL ENVIRONMENT");
+        ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(name => this.createHudRow(globalPanel, name, "global"));
+        hud.appendChild(globalPanel);
+
+        // Panel 3: Mixed Colors
+        const mixedPanel = createPanel("MIXED COLORS");
+        ["Fog", "Sky", "Cloud", "Sun", "Haze"].forEach(name => this.createHudRow(mixedPanel, name, "mixed"));
+        hud.appendChild(mixedPanel);
+
+        // Panel 4: Zone Fog Colors
+        const zonePanel = createPanel("ZONE FOG COLORS");
+        this.createHudRow(zonePanel, "Fog Color", "zone");
+        this.createHudRow(zonePanel, "Fog Start", "zone");
+        this.createHudRow(zonePanel, "Fog End", "zone");
+        this.createHudRow(zonePanel, "Fog Zone", "zone");
+        hud.appendChild(zonePanel);
+
+        return hud;
+    }
+
+    public updateHUD(activeFogColors?: FogSourceColors, globalEnvColors?: GlobalEnvColors, zoneFogData?: ZoneFogData): void {
+        if (!this.enabled || this.mode !== VisualizerMode.Fogs) return;
+
+        const updateEntry = (prefix: string, name: string, color?: ColorByte) => {
+            const entry = this.hudColors.get(`${prefix}:${name}`) as any;
+            if (entry) {
+                if (color) {
+                    const hexValue = color.toHex();
+                    entry.swatch.style.backgroundColor = hexValue;
+
+                    const r = Math.round(color.r).toString().padStart(3, " ");
+                    const g = Math.round(color.g).toString().padStart(3, " ");
+                    const b = Math.round(color.b).toString().padStart(3, " ");
+                    entry.rgbDisplay.innerText = `${r}, ${g}, ${b}`;
+
+                    entry.alpha.innerText = Math.round(color.a).toString();
+                } else {
+                    entry.swatch.style.backgroundColor = "#000";
+                    entry.rgbDisplay.innerText = "---, ---, ---";
+                    entry.alpha.innerText = "---";
+                }
+            }
+        };
+
+        // Update Fog Source
+        if (activeFogColors) {
+            updateEntry("fog", "Fog", activeFogColors.fog);
+            updateEntry("fog", "Sky", activeFogColors.sky);
+            updateEntry("fog", "Cloud", activeFogColors.cloud);
+            updateEntry("fog", "Haze", activeFogColors.haze);
+        } else {
+            ["Fog", "Sky", "Cloud", "Haze"].forEach(n => updateEntry("fog", n));
+        }
+
+        // Update Global Environment
+        if (globalEnvColors) {
+            updateEntry("global", "Fog", globalEnvColors.fog);
+            updateEntry("global", "Sky", globalEnvColors.sky);
+            updateEntry("global", "Cloud 1", globalEnvColors.cloud1);
+            updateEntry("global", "Cloud 2", globalEnvColors.cloud2);
+            updateEntry("global", "Cloud 3", globalEnvColors.cloud3);
+            updateEntry("global", "Sun", globalEnvColors.sun);
+            updateEntry("global", "Haze", globalEnvColors.haze);
+        } else {
+            ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(n => updateEntry("global", n));
+        }
+
+        // Update Mixed Colors
+        if (globalEnvColors) {
+            const mix = (g: ColorByte, r: ColorByte | undefined) => {
+                if (!r) return g;
+                const alpha = r.a;
+                const invAlpha = 255 - alpha;
+                const result = new ColorByte();
+                result.r = (g.r * invAlpha + r.r * alpha) / 255;
+                result.g = (g.g * invAlpha + r.g * alpha) / 255;
+                result.b = (g.b * invAlpha + r.b * alpha) / 255;
+                result.a = 255; // Mixed result display is opaque
+                return result;
+            };
+
+            updateEntry("mixed", "Fog", mix(globalEnvColors.fog, activeFogColors?.fog));
+            updateEntry("mixed", "Sky", mix(globalEnvColors.sky, activeFogColors?.sky));
+            updateEntry("mixed", "Cloud", mix(globalEnvColors.cloud1, activeFogColors?.cloud));
+            updateEntry("mixed", "Sun", globalEnvColors.sun); // No source sun
+            updateEntry("mixed", "Haze", mix(globalEnvColors.haze, activeFogColors?.haze));
+        } else {
+            ["Fog", "Sky", "Cloud", "Sun", "Haze"].forEach(n => updateEntry("mixed", n));
+        }
+
+        // Update Zone Fog
+        if (zoneFogData) {
+            updateEntry("zone", "Fog Color", zoneFogData.color);
+
+            // Re-purpose RGB display for numbers
+            const startEntry = this.hudColors.get("zone:Fog Start") as any;
+            if (startEntry) {
+                startEntry.rgbDisplay.innerText = Math.round(zoneFogData.start).toString().padStart(11, " ");
+                startEntry.alpha.innerText = "";
+            }
+            const endEntry = this.hudColors.get("zone:Fog End") as any;
+            if (endEntry) {
+                endEntry.rgbDisplay.innerText = Math.round(zoneFogData.end).toString().padStart(11, " ");
+                endEntry.alpha.innerText = "";
+            }
+            const zoneEntry = this.hudColors.get("zone:Fog Zone") as any;
+            if (zoneEntry) {
+                zoneEntry.rgbDisplay.innerText = zoneFogData.isFogZone ? "        YES" : "         NO";
+                zoneEntry.alpha.innerText = "";
+                zoneEntry.swatch.style.backgroundColor = zoneFogData.isFogZone ? "#0f0" : "#f00";
+            }
+        } else {
+            updateEntry("zone", "Fog Color");
+            ["Fog Start", "Fog End", "Fog Zone"].forEach(n => {
+                const entry = this.hudColors.get(`zone:${n}`) as any;
+                if (entry) {
+                    entry.rgbDisplay.innerText = "---, ---, ---";
+                    entry.alpha.innerText = "---";
+                }
+            });
+        }
     }
 
     public toggle(): void {
@@ -99,6 +347,12 @@ class Visualizer {
 
     private updateVisibility(): void {
         this.group.visible = this.enabled && this.mode !== VisualizerMode.None;
+        // Fogs are only visible in Fogs mode
+        const isFogMode = this.enabled && this.mode === VisualizerMode.Fogs;
+        this.fogGroup.visible = isFogMode;
+        if (this.hudElement) {
+            this.hudElement.style.display = isFogMode ? "flex" : "none";
+        }
     }
 
     private updateVisualizations(): void {
@@ -118,6 +372,9 @@ class Visualizer {
                 break;
             case VisualizerMode.Leaves:
                 // Leaves will be added via updateLeaves()
+                break;
+            case VisualizerMode.Fogs:
+                // Fogs will be added via updateFogs()
                 break;
         }
     }
@@ -222,10 +479,10 @@ class Visualizer {
                         // You could enhance this with actual text rendering later
                         const zoneLabel = new Mesh(
                             new BoxGeometry(10, 10, 10),
-                            new MeshBasicMaterial({ 
-                                color: portalColor, 
-                                transparent: true, 
-                                opacity: 0.5, 
+                            new MeshBasicMaterial({
+                                color: portalColor,
+                                transparent: true,
+                                opacity: 0.5,
                                 depthTest: false,
                                 depthWrite: false
                             })
@@ -305,18 +562,18 @@ class Visualizer {
                             const node = sector.bspNodes[nodeIndex];
                             if (node.leaves[0] === leafIndex || node.leaves[1] === leafIndex) {
                                 let bounds: Box3 | null = null;
-                                
+
                                 // Try collision bounds first
                                 if (node.collision && node.collision.bounds) {
                                     const collisionBox = node.collision.bounds;
-                                    if (collisionBox.min && collisionBox.max && 
+                                    if (collisionBox.min && collisionBox.max &&
                                         collisionBox.max.x > collisionBox.min.x &&
                                         collisionBox.max.y > collisionBox.min.y &&
                                         collisionBox.max.z > collisionBox.min.z) {
                                         bounds = collisionBox.clone();
                                     }
                                 }
-                                
+
                                 // Fallback to sphere bounds
                                 if (!bounds) {
                                     const sphere = node.exclusiveSphereBound.radius > 0 ? node.exclusiveSphereBound : node.inclusiveSphereBound;
@@ -326,7 +583,7 @@ class Visualizer {
                                         bounds.setFromCenterAndSize(sphere.center, new Vector3(size, size, size));
                                     }
                                 }
-                                
+
                                 if (bounds) {
                                     const existing = zoneBounds.get(leaf.zone);
                                     if (existing) {
@@ -381,10 +638,10 @@ class Visualizer {
                     if (center) {
                         const zoneLabel = new Mesh(
                             new BoxGeometry(20, 20, 20),
-                            new MeshBasicMaterial({ 
-                                color: zoneColor, 
-                                transparent: true, 
-                                opacity: 0.5, 
+                            new MeshBasicMaterial({
+                                color: zoneColor,
+                                transparent: true,
+                                opacity: 0.5,
                                 depthTest: false,
                                 depthWrite: false
                             })
@@ -416,7 +673,7 @@ class Visualizer {
                     // Draw lines to connected zones
                     for (let targetZoneIndex = 0; targetZoneIndex < 64; targetZoneIndex++) {
                         if (targetZoneIndex === zoneIndex) continue;
-                        
+
                         const zoneBit = 1n << BigInt(targetZoneIndex);
                         if (zoneData.connectivity & zoneBit) {
                             const targetCenter = zoneCenters.get(targetZoneIndex);
@@ -512,7 +769,7 @@ class Visualizer {
         // Use exponential decay for smoother transitions
         const maxDarkness = 0.3; // Minimum brightness (30%)
         const darknessFactor = 1.0 - (1.0 - maxDarkness) * (depth / Math.max(maxDepth, 1));
-        
+
         const darkened = baseColor.clone();
         darkened.multiplyScalar(Math.max(darknessFactor, maxDarkness));
         return darkened;
@@ -554,7 +811,7 @@ class Visualizer {
                 // Get initial active zone mask (before portal expansion)
                 const initialZoneMask = sector.getActiveZoneMask(cameraPosition);
                 const frustum = cameraFrustum || new Frustum();
-                
+
                 // Traverse BSP to get visible leaves and zones added through portals
                 const { visibleLeaves, zonesAddedThroughPortals } = sector.traverseBSP(cameraPosition, initialZoneMask, frustum, frustumCullingEnabled);
 
@@ -574,12 +831,12 @@ class Visualizer {
                 // For each visible leaf, find the highest level (minimum depth) node that references it
                 // Map: leafIndex -> { nodeIndex, depth }
                 const leafToNodeMap = new Map<number, { nodeIndex: number; depth: number }>();
-                
+
                 // First pass: find the highest level (minimum depth) node for each visible leaf
                 for (let nodeIndex = 0; nodeIndex < sector.bspNodes.length; nodeIndex++) {
                     const node = sector.bspNodes[nodeIndex];
                     const nodeDepth = nodeDepths.get(nodeIndex) ?? Infinity;
-                    
+
                     // Check both leaves this node references
                     for (let i = 0; i < 2; i++) {
                         const leafIndex = node.leaves[i];
@@ -592,7 +849,7 @@ class Visualizer {
                         }
                     }
                 }
-                
+
                 // Second pass: compute bounds per leaf (from its highest-level node), then either
                 // visualize per-leaf or aggregate/union per-zone for decluttering.
                 const leafBoxes = new Map<number, { box: Box3; zone: number; depth: number; isPortalLeaf: boolean }>();
@@ -703,7 +960,7 @@ class Visualizer {
                         this.group.add(boxHelper);
                     }
                 }
-                
+
                 // Debug: log results (only on first visualization or when issues occur)
                 // Removed per-frame logging to avoid console spam
             }
@@ -726,10 +983,96 @@ class Visualizer {
         this.leafVisualizations = [];
     }
 
+    public updateFogs(sectors: Map<number, Map<number, SectorObject>>, activeFogUuid?: string): void {
+
+        this.clearFogVisualizations();
+
+        const activeFogColor = new Color(0x00ff00); // Green
+        const inactiveFogColor = new Color(0xff0000); // Red
+
+        for (const [, sectorYMap] of sectors) {
+            for (const [, sector] of sectorYMap) {
+                if (!sector.fogInfos) continue;
+
+                for (const fogInfo of sector.fogInfos) {
+                    const isActive = fogInfo.uuid === activeFogUuid;
+                    const color = isActive ? activeFogColor : inactiveFogColor;
+
+                    if (isActive) {
+                        const affectRange = (fogInfo as any).affectRange;
+                        const innerRadius = Math.min(affectRange.A, affectRange.B);
+                        const outerRadius = Math.max(affectRange.A, affectRange.B);
+
+                        const segments = 16;
+
+                        // Outer radius (max)
+                        const outerGeometry = new SphereGeometry(outerRadius, segments, segments);
+                        const outerMaterial = new MeshBasicMaterial({
+                            color: activeFogColor,
+                            wireframe: true,
+                            transparent: true,
+                            opacity: 0.3,
+                            depthTest: false,
+                            depthWrite: false
+                        });
+                        const outerMesh = new Mesh(outerGeometry, outerMaterial);
+                        outerMesh.position.copy(fogInfo.position);
+                        outerMesh.renderOrder = 1000;
+                        this.fogVisualizations.push(outerMesh);
+                        this.fogGroup.add(outerMesh);
+
+                        // Inner radius (min) - only if significantly different
+                        if (outerRadius - innerRadius > 10) {
+                            const innerGeometry = new SphereGeometry(innerRadius, segments, segments);
+                            const innerMaterial = new MeshBasicMaterial({
+                                color: new Color(0x00ffff), // Cyan for inner range
+                                wireframe: true,
+                                transparent: true,
+                                opacity: 0.15,
+                                depthTest: false,
+                                depthWrite: false
+                            });
+                            const innerMesh = new Mesh(innerGeometry, innerMaterial);
+                            innerMesh.position.copy(fogInfo.position);
+                            innerMesh.renderOrder = 1000;
+                            this.fogVisualizations.push(innerMesh);
+                            this.fogGroup.add(innerMesh);
+                        }
+                    }
+
+                    // Add a center point or label if needed
+                    const centerPoint = new Mesh(
+                        new BoxGeometry(20, 20, 20),
+                        new MeshBasicMaterial({ color: color, depthTest: false, depthWrite: false })
+                    );
+                    centerPoint.position.copy(fogInfo.position);
+                    centerPoint.renderOrder = 1000;
+                    this.fogVisualizations.push(centerPoint);
+                    this.fogGroup.add(centerPoint);
+                }
+            }
+        }
+    }
+
+    private clearFogVisualizations(): void {
+        this.fogVisualizations.forEach(viz => {
+            this.fogGroup.remove(viz);
+            if (viz instanceof Mesh) {
+                viz.geometry.dispose();
+                const material = Array.isArray(viz.material) ? viz.material[0] : viz.material;
+                if (material instanceof MeshBasicMaterial) {
+                    material.dispose();
+                }
+            }
+        });
+        this.fogVisualizations = [];
+    }
+
     private clearVisualizations(): void {
         this.clearPortalVisualizations();
         this.clearZoneVisualizations();
         this.clearLeafVisualizations();
+        this.clearFogVisualizations();
     }
 
     public getMode(): VisualizerMode {
@@ -742,6 +1085,10 @@ class Visualizer {
 
     public getGroup(): Group {
         return this.group;
+    }
+
+    public getFogGroup(): Group {
+        return this.fogGroup;
     }
 }
 

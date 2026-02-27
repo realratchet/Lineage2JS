@@ -89,6 +89,10 @@ abstract class UTexture extends UMaterial {
 
     public isTransparent() { return this.isAlphaTexture || this.isMasked; }
 
+    public getTextureSize(): { width: number; height: number; } | null {
+        return { width: this.width, height: this.height };
+    }
+
     public doLoad(pkg: C.APackage, exp: C.UExport) {    // 2785
         super.doLoad(pkg, exp);
 
@@ -144,7 +148,7 @@ abstract class UTexture extends UMaterial {
     protected decodeTexture(library: GD.DecodeLibrary) {
         const totalMipCount = this.mipmaps.length;
 
-        if (totalMipCount === 0) return null;
+        if (totalMipCount === 0) return { materialType: "empty" };
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
 
@@ -295,13 +299,16 @@ abstract class UTexture extends UMaterial {
         return {
             materialType: "texture",
             textureType,
-            name: this.objectName,
+            name: this.uuid,
             buffer: decodedBuffer,
             width,
             height,
             wrapS: this.wrapS,
             wrapT: this.wrapT,
-            useMipmaps: mipCount > 0
+            useMipmaps: mipCount > 0,
+            twoSided: this.isTwoSided,
+            isMasked: this.isMasked,
+            isAlphaTexture: this.isAlphaTexture
         } as GD.ITextureDecodeInfo;
     }
 
@@ -321,7 +328,7 @@ abstract class UTexture extends UMaterial {
             }
 
             library.materials[this.uuid] = {
-                name: `Sprite_${this.objectName}`,
+                name: `Sprite_${this.uuid}`,
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate

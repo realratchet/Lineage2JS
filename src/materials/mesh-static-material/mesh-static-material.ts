@@ -1,13 +1,13 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, SrcAlphaFactor, OneMinusSrcAlphaFactor, Vector3, UniformsLib, UniformsUtils, AdditiveBlending, NoBlending, NormalBlending, OneFactor, OneMinusSrcColorFactor, DoubleSide } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
 
-type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask";
+type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
-    parameters: IDecodedParameter,
+    parameters: GD.IDecodedParameter,
     uniforms: Record<string, Uniform>,
     defines: Record<string, any>
 }
@@ -26,18 +26,24 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         case "shOpacity": defName = "OPACITY"; break;
         case "shSpecular": defName = "SPECULAR"; break;
         case "shSpecularMask": defName = "SPECULAR_MASK"; break;
+        case "shMaterial2": defName = "MATERIAL2"; break;
     }
 
     defines[`USE_${defName}`] = "";
 
-    Object.assign(uniforms[name].value = {}, parameters.uniforms);
+    const { diffuse, opacity, ...restUniforms } = parameters.uniforms;
+
+    if (diffuse !== undefined) uniforms.diffuse.value.copy(diffuse);
+    if (opacity !== undefined) uniforms.opacity.value = opacity;
+
+    Object.assign(uniforms[name].value = {}, restUniforms);
     Object.assign(defines, parameters.defines);
 
     if (parameters.isUsingMap) {
-        if ((parameters as IDecodedSpriteParameter).isSprite) {
+        if ((parameters as GD.IDecodedSpriteParameter).isSprite) {
             sprites[name] = {
-                framerate: (parameters as IDecodedSpriteParameter).framerate,
-                sprites: (parameters as IDecodedSpriteParameter).sprites,
+                framerate: (parameters as GD.IDecodedSpriteParameter).framerate,
+                sprites: (parameters as GD.IDecodedSpriteParameter).sprites,
             } as SpriteParam_T;
         }
 
@@ -47,19 +53,22 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         if (parameters.transformType !== "none") {
             defines["PAN"] = 0;
             defines["ROTATE"] = 1;
+            defines["OSCILLATE"] = 2;
+            defines["ENVMAP"] = 3;
             defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
         }
     }
 }
 
-class MeshStaticMaterial extends ShaderMaterial {
-    protected sprites: Record<string, SpriteParam_T>;
-
+export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
-    public readonly isUpdatable = true;
+    public sprites: Record<string, SpriteParam_T> = {};
+    private spriteEntries: [string, SpriteParam_T][] = [];
+
+    public isUpdatable = false;
 
     // @ts-ignore
-    constructor(info: MeshStaticMaterialParameters) {
+    public constructor(info: MeshStaticMaterialParameters = {}) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -94,21 +103,22 @@ class MeshStaticMaterial extends ShaderMaterial {
                 shOpacity: new Uniform(null),
                 shSpecular: new Uniform(null),
                 shSpecularMask: new Uniform(null),
+                shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
-                    color: new Color(1, 1, 1),
+                    vector: new Color(1, 1, 1),
                     brightness: 1
                 }),
 
                 directionalAmbient: new Uniform({
                     direction: new Vector3(),
-                    color: new Color(1, 1, 1),
+                    vector: new Color(1, 1, 1),
                     brightness: 1
                 })
             }
         ]));
 
-        function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
+        function apply(name: SupportedShaderParams_T, parameters: GD.IDecodedParameter) {
             if (!parameters) return;
 
             applyParameters({
@@ -125,10 +135,28 @@ class MeshStaticMaterial extends ShaderMaterial {
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
 
-        if (info.opacity) defines["USE_ALPHATEST"] = "";
+        if (info.alphaTest !== undefined) uniforms.alphaTest.value = info.alphaTest;
+
+        if (info.opacity || info.alphaTest !== undefined) defines["USE_ALPHATEST"] = "";
         if (info.blendingMode === "masked") {
             defines["USE_MASKING"] = "";
             defines["USE_ALPHATEST"] = "";
+        }
+
+        if (info.transparent && !info.opacity) {
+            defines["USE_MASKING"] = "";
+            defines["USE_ALPHATEST"] = "";
+        }
+
+        if (info.combiner) {
+            defines["USE_COMBINER"] = "";
+            apply("shMaterial2", info.combiner.material2);
+            uniforms["combiner"] = new Uniform({
+                combineMode: info.combiner.combineMode,
+                invertMask: info.combiner.invertMask,
+                alphaFrom1: info.combiner.alphaFrom1 ?? true,
+                alphaFrom2: info.combiner.alphaFrom2 ?? true
+            });
         }
 
         // defines["USE_DIRECTIONAL_AMBIENT"] = "";
@@ -172,7 +200,7 @@ class MeshStaticMaterial extends ShaderMaterial {
         // debugger
 
         // console.log(info);
-        
+
 
         super({
             vertexShader: VERTEX_SHADER,
@@ -181,41 +209,70 @@ class MeshStaticMaterial extends ShaderMaterial {
             uniforms,
             side: info.side,
             transparent: info.transparent,
-            // depthWrite: info.depthWrite,
+            depthWrite: true,
+            depthTest: true,
             visible: info.visible,
-            premultipliedAlpha: true,
             lights: true,
             wireframe: false
         });
 
         this.sprites = sprites;
+        this.spriteEntries = Object.entries(sprites);
+        this.isUpdatable = this.spriteEntries.length > 0;
 
         if (info.opacity) this.transparent = true;
 
         switch (info.blendingMode) {
             case "normal":
-                // case "masked":
                 this.blending = NormalBlending;
-                break;
-            case "brighten":
-                this.blending = AdditiveBlending;
-                this.transparent = true;
+                // UE2 OB_Normal: when opacity is present, forces ZWrite=0 and enables alpha blending
+                // (D3DMaterialState.cpp line 1506-1512)
+                if (info.opacity) {
+                    this.depthWrite = false;
+                }
                 break;
             case "masked":
+                // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending
+                // AlphaRef=127 (~0.498), ZWrite=1
                 this.blending = NormalBlending;
+                this.transparent = false;
+                uniforms.alphaTest.value = 127 / 255;
+                break;
+            case "brighten":
+                // UE2 FB_Brighten: SRC_ALPHA, ONE (alpha-weighted additive)
+                this.blending = CustomBlending;
+                this.blendSrc = SrcAlphaFactor;
+                this.blendDst = OneFactor;
                 this.transparent = true;
+                this.depthWrite = false;
                 break;
             case "translucent":
+                // UE2 FB_Translucent: ONE, INVSRCCOLOR (screen blend)
                 this.blending = CustomBlending;
                 this.blendSrc = OneFactor;
                 this.blendDst = OneMinusSrcColorFactor;
                 this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "modulate":
+                this.blending = CustomBlending;
+                this.blendSrc = DstColorFactor;
+                this.blendDst = SrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "darken":
+                this.blending = CustomBlending;
+                this.blendSrc = ZeroFactor;
+                this.blendDst = OneMinusSrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
     }
 
-    public setLightmap(lightmap: MapData_T) {
+    public setLightmap(lightmap: GD.MapData_T) {
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -234,10 +291,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableAmbient({ color, brightness }: IAmbientLighting) {
+    public enableAmbient({ vector, brightness }: IAmbientLighting) {
         const u = this.uniforms.ambient.value;
 
-        u.color.copy(color);
+        u.vector.copy(vector);
         u.brightness = brightness / 5;
 
         this.defines["USE_AMBIENT"] = "";
@@ -247,10 +304,10 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableDirectionalAmbient({ color, direction, brightness }: IDirectionalAmbientLighting) {
+    public enableDirectionalAmbient({ vector, direction, brightness }: IDirectionalAmbientLighting) {
         const u = this.uniforms.directionalAmbient.value;
 
-        u.color.copy(color);
+        u.vector.copy(vector);
         u.direction.copy(direction);
         u.brightness = brightness;
 
@@ -269,26 +326,41 @@ class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    public setLit() {
+        this.defines["USE_LIT_ATTRIBUTES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    public setUnlit() {
+        delete this.defines["USE_AMBIENT"];
+        delete this.defines["USE_LIGHTMAP"];
+        this.needsUpdate = true;
+        return this;
+    }
+
     public update(time: number) {
-        Object.entries(this.sprites).forEach(([k, { sprites, framerate }]) => {
+        if (!this.isUpdatable) return;
+
+        for (let i = 0; i < this.spriteEntries.length; i++) {
+            const [k, { sprites, framerate }] = this.spriteEntries[i];
             const frameCount = sprites.length;
 
-            if (frameCount <= 1) return;
+            if (frameCount <= 1) continue;
 
             const uniform = this.uniforms[k];
             const activeFrameIndex = Math.floor(time / framerate) % frameCount;
             const activeFrame = sprites[activeFrameIndex];
 
             uniform.value.map = activeFrame;
-        });
+        }
     }
 }
 
-export default MeshStaticMaterial;
-export { MeshStaticMaterial };
-
 type IBaseLighting = {
-    color: THREE.Color,
+    vector: THREE.Color,
     brightness: number
 };
 
@@ -296,13 +368,23 @@ type IAmbientLighting = IBaseLighting;
 type IDirectionalAmbientLighting = IBaseLighting & { direction: THREE.Vector3 };
 
 type MeshStaticMaterialParameters = {
-    diffuse: IDecodedParameter,
-    opacity: IDecodedParameter,
-    specular: IDecodedParameter,
-    specularMask: IDecodedParameter,
+    diffuse: GD.IDecodedParameter,
+    opacity: GD.IDecodedParameter,
+    specular: GD.IDecodedParameter,
+    specularMask: GD.IDecodedParameter,
     side: THREE.Side,
-    blendingMode: SupportedBlendingTypes_T,
+    blendingMode: GA.SupportedBlendingTypes_T,
     transparent: boolean,
+    alphaTest?: number,
     depthWrite: boolean,
-    visible: boolean
+    depthTest: boolean,
+    visible: boolean,
+    combiner?: {
+        combineMode: number,
+        material1: GD.IDecodedParameter,
+        material2: GD.IDecodedParameter,
+        invertMask: boolean,
+        alphaFrom1: boolean,
+        alphaFrom2: boolean
+    }
 };
