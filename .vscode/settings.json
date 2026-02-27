@@ -4,7 +4,8 @@
     "search.exclude": {
         "**/node_modules": true,
         "**/bower_components": true,
-        "**/*.code-search": true
+        "**/*.code-search": true,
+        "assets*": true
     },
     "typescript.preferences.importModuleSpecifier": "non-relative",
     "files.associations": {
@@ -96,5 +97,10 @@
         "**/Thumbs.db": true,
         ".vscode-chrome": true,
         "bin/": true,
+    },
+    "files.watcherExclude": {
+        "**/cpp/**": true,
+        "**/node_modules/**": true,
+        "assets*/**": true
     }
 }
