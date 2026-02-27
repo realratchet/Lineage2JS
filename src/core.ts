@@ -452,7 +452,8 @@ async function startCore() {
             // "StaticMeshActor517", // cruma too dark
             // "StaticMeshActor1893" // cruma: broken floating platform light
 
-            "StaticMeshActor495", /*"StaticMeshActor188",*/ "StaticMeshActor6"
+            // "StaticMeshActor495", /*"StaticMeshActor188",*/ //"StaticMeshActor6",
+            "StaticMeshActor1042"
         ]
     } as GD.LoadSettings_T;
 
