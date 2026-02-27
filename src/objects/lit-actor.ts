@@ -34,7 +34,7 @@ class LitActorMesh extends Mesh {
         this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
         this.ambient = props.ambient;
 
-        if (this.lightInfo || (this.ambient && !this.ambient.isUnlit)) {
+        if (this.lightInfo || (this.ambient && !this.ambient.isUnlit) || this.isSunAffected) {
             const attrPositions = this.geometry.getAttribute("position");
 
             (
@@ -114,7 +114,7 @@ class LitActorMesh extends Mesh {
     protected lastEnvVersion: number = -1;
 
     public update(sector: SectorObject, env: L2Environment) {
-        if (!this.lightInfo && !this.ambient) return;
+        if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
 
 
         const attrColors = this.geometry.getAttribute("lighting");

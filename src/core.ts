@@ -453,7 +453,9 @@ async function startCore() {
             // "StaticMeshActor1893" // cruma: broken floating platform light
 
             // "StaticMeshActor495", /*"StaticMeshActor188",*/ //"StaticMeshActor6",
-            "StaticMeshActor1042"
+            // "StaticMeshActor1042"
+
+            "StaticMeshActor4596", /* too bright */ //"StaticMeshActor4195", /* okay */
         ]
     } as GD.LoadSettings_T;
 
@@ -494,12 +496,12 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_18", loadSettings));  // tower of insolence
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "23_21", loadSettings));  // dragon valley
 
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_24", loadSettings));  // TI
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_24", loadSettings));  // TI - north of talking island
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_24", loadSettings));  // TI
 
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
-    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
 

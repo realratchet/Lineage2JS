@@ -196,11 +196,11 @@ class RenderManager {
         // this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
         // this.controls.orbit.target.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
 
-        // // // tower ceiling fixture (too red)
+        // // tower ceiling fixture (too red)
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
-        // // tower outside
+        // tower outside
         this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
         this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
 
@@ -251,6 +251,10 @@ class RenderManager {
         // // gludin can shouldn't see TI
         // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
         // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
+
+        // bad trees
+        this.camera.position.set(-120190.66746550794, -1504.6234246351974, 230784.09282201753);
+        this.controls.orbit.target.set(-120156.69181121374, -1530.07852044397, 230874.63393429611);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
