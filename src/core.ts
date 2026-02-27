@@ -408,7 +408,7 @@ async function startCore() {
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: false,
+        loadEmitters: true,
         _loadStaticModelList: [
             // 1441,
             // 1770,
@@ -480,7 +480,7 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
@@ -504,7 +504,7 @@ async function startCore() {
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_25", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_25", loadSettings));  // TI - elven ruins
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "17_25", loadSettings));  // TI - talking island village
 
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_23", loadSettings));
@@ -515,6 +515,8 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));
 
+
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "25_19", loadSettings));  // giants cave
 
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "15_26", loadSettings));  // TI
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "16_26", loadSettings));  // TI

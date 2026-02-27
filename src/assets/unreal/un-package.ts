@@ -287,6 +287,7 @@ class UNativePackage extends ANativePackage {
                 break;
 
             case "ParticleColorScale": Constructor = PEmitter.UParticleColorScale; break;
+            case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
 
             default:
                 debugger;

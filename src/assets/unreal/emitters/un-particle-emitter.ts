@@ -472,20 +472,19 @@ abstract class UParticleRevolutionScale extends UObject {
 };
 
 abstract class UParticleTimeScale extends UObject {
+    public relSize: number;
+    public relTime: number;
 
-    // public relSize: number;
-    // public relTime: number;
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "RelativeSize": "relSize",
+            "RelativeTime": "relTime"
+        });
+    }
 
-    // public getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "RelativeSize": "relSize",
-    //         "RelativeTime": "relTime"
-    //     });
-    // }
+    public getDecodeInfo(library: GD.DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
 
-    // public getDecodeInfo(library: DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
-
-    // public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
+    public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
 };
 
 abstract class UParticleVelocityScale extends UObject {
