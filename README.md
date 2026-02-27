@@ -1,4 +1,5 @@
-# A Lineage II Chronicle 3: Rise of Darkness client emulator for the browser
+# A Lineage II Chronicle ~~3: Rise of Darkness~~ 4: Scions of Destiny client emulator for the browser
+
 _At least it might be someday, hopefully._
 
 ## Why?
@@ -31,3 +32,7 @@ I don't know of the legality of providing assets, technically it wouldn't be pir
 [![Cruma Tower Test](https://img.youtube.com/vi/9ktRGp1N0yQ/0.jpg)](https://www.youtube.com/watch?v=9ktRGp1N0yQ)
 [![Giran Test](https://img.youtube.com/vi/LCDgQTZQXXw/0.jpg)](https://www.youtube.com/watch?v=LCDgQTZQXXw)
 [![Taling Island Test](https://img.youtube.com/vi/Gmn6JR9sJz4/0.jpg)](https://www.youtube.com/watch?v=Gmn6JR9sJz4)
+
+## Why switch to C4?
+
+This was actually a switch that was done couple years ago but I never updated the readme. It was mostly done because at the time it was easier to find a functioning client & L2J server combo. While it may not be permanent change, there are some codebase changes between C3 & C4 that are not fully compatibly although MOST of the stuff in C4 is forwards compatible to C3 so I may eventually switch back to C3 or support both.
