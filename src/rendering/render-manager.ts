@@ -12,6 +12,9 @@ import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import Terrain from "../objects/terrain";
+import { ColorByte } from "@client/utils/color-byte";
+import EnvInfo from "@client/rendering/env-info";
+import AudioManager from "@client/rendering/audio-manager";
 import * as dat from "dat.gui";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
@@ -34,9 +37,6 @@ document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
-import { ColorByte } from "@client/utils/color-byte";
-import EnvInfo from "@client/rendering/env-info";
-import AudioManager from "@client/rendering/audo-files";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte(); // For sky color blending
