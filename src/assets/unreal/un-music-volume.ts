@@ -1,8 +1,6 @@
 import UPhysicsVolume from "./un-physics-volume";
 
 abstract class UMusicVolume extends UPhysicsVolume {
-    // public readonly careUnread = false;
-
     protected musicId: number;
     protected isMusicForced: boolean;
     protected isMusicLooped: boolean;
