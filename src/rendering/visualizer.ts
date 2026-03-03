@@ -178,12 +178,7 @@ class Visualizer {
         ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(name => this.createHudRow(globalPanel, name, "global"));
         hud.appendChild(globalPanel);
 
-        // Panel 3: Mixed Colors
-        const mixedPanel = createPanel("MIXED COLORS");
-        ["Fog", "Sky", "Cloud", "Sun", "Haze"].forEach(name => this.createHudRow(mixedPanel, name, "mixed"));
-        hud.appendChild(mixedPanel);
-
-        // Panel 4: Zone Fog Colors
+        // Panel 3: Zone Fog Colors
         const zonePanel = createPanel("ZONE FOG COLORS");
         this.createHudRow(zonePanel, "Fog Color", "zone");
         this.createHudRow(zonePanel, "Fog Start", "zone");

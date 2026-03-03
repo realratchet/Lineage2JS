@@ -30,9 +30,8 @@ class NumberContainerType implements IDatContainerType {
 
         const elements = new Array<number>(count);
 
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < count; i++)
             elements[i] = pkg.read(this.dtype).value as number;
-        }
 
         return elements;
     }

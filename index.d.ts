@@ -59,6 +59,7 @@ declare global {
 
                 export type USound = import("@unreal/un-sound").USound;
                 export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;
+                export type UMusicVolume = import("@unreal/un-music-volume").UMusicVolume;
 
                 export type UNSun = import("@unreal/un-nsun").UNSun;
                 export type UNMoon = import("@unreal/un-nmoon").UNMoon;
@@ -130,6 +131,7 @@ declare global {
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
+                    loadAudio?: boolean,
                     helpersZoneBounds?: boolean,
                     isSkyLevel?: boolean,
                     batching?: {

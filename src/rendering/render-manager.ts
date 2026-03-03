@@ -36,6 +36,7 @@ const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
+import AudioManager from "@client/rendering/audo-files";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte(); // For sky color blending
@@ -99,7 +100,7 @@ class RenderManager {
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
-
+    public readonly audioManager: AudioManager = new AudioManager();
 
     public envConfig = {
         showLevel: true,
@@ -1378,10 +1379,7 @@ class RenderManager {
         // this.collidables.push(this.player.createCollider(this.physicsWorld));
     }
 
-    public globalSkyLoaded = false;
-
-    public setGlobalSky(sector: SectorObject) {
-        this.globalSkyLoaded = true;
+    public setSky(sector: SectorObject) {
         this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
 
         // Add GUI specific for Moons

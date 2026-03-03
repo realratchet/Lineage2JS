@@ -49,6 +49,7 @@ class DecodeLibrary {
         loadStaticModels = true,
         loadStaticModelList = null,
         loadTerrain = true,
+        loadAudio = true,
         helpersZoneBounds = false,
         loadEmitters = true,
         isSkyLevel = false,
@@ -205,6 +206,19 @@ class DecodeLibrary {
                     actor.getDecodeInfo(decodeLibrary);
                 }
             }
+        }
+
+        if (loadAudio) {
+            const audioTypes = ["MusicVolume"];
+            const uAudiosToLoad = audioTypes.map(t => expGroups[t] ?? []).flat();
+
+            uAudiosToLoad.forEach(exp => {
+                const uActor = pkg.fetchObject<GA.UMusicVolume>(exp.index + 1).loadSelf();
+                
+                const decoded = uActor.getDecodeInfo(decodeLibrary);
+
+                // debugger;
+            });
         }
 
         // debugger;
