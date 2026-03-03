@@ -1,6 +1,6 @@
-import UPhysicsVolume from "./un-physics-volume";
+import UVolume from "@client/assets/unreal/un-volume";
 
-abstract class UMusicVolume extends UPhysicsVolume {
+abstract class UMusicVolume extends UVolume {
     protected musicId: number;
     protected isMusicForced: boolean;
     protected isMusicLooped: boolean;
