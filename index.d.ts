@@ -586,8 +586,23 @@ declare global {
                     type: "Sunlight"
                 }
 
+                export interface IAudioDecodeInfo {
+                    uuid: string,
+                    name: string,
+                    type: "MusicVolume" | "AmbientSoundObject"
+                }
 
+                export interface IMusicVolumeDecodeInfo extends IAudioDecodeInfo {
+                    type: "MusicVolume",
+                    musicId: number,
+                    isForced: boolean,
+                    isLooping: boolean,
+                    bounds: GD.IBoundsDecodeInfo
+                }
 
+                export interface IAmbientSoundObjectDecodeInfo extends IAudioDecodeInfo {
+                    type: "AmbientSoundObject",
+                }
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "shader",

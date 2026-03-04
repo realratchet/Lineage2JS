@@ -14,7 +14,13 @@ abstract class UMusicVolume extends UVolume {
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
-        // debugger;
+        return {
+            ...super.getDecodeInfo(),
+            type: "MusicVolume",
+            musicId: this.musicId,
+            isMusicForced: this.isMusicForced ?? false,
+            isMusicLooped: this.isMusicLooped ?? false
+        };
     }
 }
 

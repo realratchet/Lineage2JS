@@ -236,29 +236,6 @@ class Visualizer {
             ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(n => updateEntry("global", n));
         }
 
-        // Update Mixed Colors
-        if (globalEnvColors) {
-            const mix = (g: ColorByte, r: ColorByte | undefined) => {
-                if (!r) return g;
-                const alpha = r.a;
-                const invAlpha = 255 - alpha;
-                const result = new ColorByte();
-                result.r = (g.r * invAlpha + r.r * alpha) / 255;
-                result.g = (g.g * invAlpha + r.g * alpha) / 255;
-                result.b = (g.b * invAlpha + r.b * alpha) / 255;
-                result.a = 255; // Mixed result display is opaque
-                return result;
-            };
-
-            updateEntry("mixed", "Fog", mix(globalEnvColors.fog, activeFogColors?.fog));
-            updateEntry("mixed", "Sky", mix(globalEnvColors.sky, activeFogColors?.sky));
-            updateEntry("mixed", "Cloud", mix(globalEnvColors.cloud1, activeFogColors?.cloud));
-            updateEntry("mixed", "Sun", globalEnvColors.sun); // No source sun
-            updateEntry("mixed", "Haze", mix(globalEnvColors.haze, activeFogColors?.haze));
-        } else {
-            ["Fog", "Sky", "Cloud", "Sun", "Haze"].forEach(n => updateEntry("mixed", n));
-        }
-
         // Update Zone Fog
         if (zoneFogData) {
             updateEntry("zone", "Fog Color", zoneFogData.color);
