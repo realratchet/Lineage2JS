@@ -27,6 +27,7 @@ class DecodeLibrary {
     public readonly audioList: GD.IAudioDecodeInfo[] = []
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
+    public readonly musicVolumes: GD.IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public readonly isSkyLevel: boolean;
     public readonly skyLevel: {
@@ -215,10 +216,10 @@ class DecodeLibrary {
 
             uAudiosToLoad.forEach(exp => {
                 const uActor = pkg.fetchObject<GA.UMusicVolume>(exp.index + 1).loadSelf();
-                
-                decodeLibrary.audioList.push(uActor.getDecodeInfo(decodeLibrary));
+                const musicInfo = uActor.getDecodeInfo(decodeLibrary);
+                decodeLibrary.audioList.push(musicInfo);
 
-                // debugger;
+                // Mapping is now handled internally inside uActor.getDecodeInfo()
             });
         }
 

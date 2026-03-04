@@ -9,7 +9,7 @@ export enum VisualizerMode {
     Zones = 2,
     Leaves = 3,
     Fogs = 4,
-    // Future modes can be added here
+    MusicVolumes = 5,
 }
 
 export enum LeafVisualizerDetail {
@@ -68,6 +68,7 @@ class Visualizer {
     private zoneVisualizations: Object3D[] = [];
     private leafVisualizations: Object3D[] = [];
     private fogVisualizations: Object3D[] = [];
+    private musicVolumeVisualizations: Object3D[] = [];
     private leafDetail: LeafVisualizerDetail = LeafVisualizerDetail.Auto;
     private readonly leafAutoAggregateThreshold: number = 200;
 
@@ -347,6 +348,9 @@ class Visualizer {
                 break;
             case VisualizerMode.Fogs:
                 // Fogs will be added via updateFogs()
+                break;
+            case VisualizerMode.MusicVolumes:
+                // MusicVolumes will be added via updateMusicVolumes()
                 break;
         }
     }
@@ -1045,6 +1049,97 @@ class Visualizer {
         this.clearZoneVisualizations();
         this.clearLeafVisualizations();
         this.clearFogVisualizations();
+        this.clearMusicVolumeVisualizations();
+    }
+
+    public updateMusicVolumes(sectors: Map<number, Map<number, SectorObject>>, cameraPosition?: Vector3): void {
+        if (!this.enabled || this.mode !== VisualizerMode.MusicVolumes) return;
+        this.clearMusicVolumeVisualizations();
+        if (!cameraPosition) return;
+
+        const cx = cameraPosition.x, cy = cameraPosition.y, cz = cameraPosition.z;
+        const insideColor = new Color(0x00ff00);
+        const outsideColor = new Color(0xff4444);
+
+        for (const [, sectorYMap] of sectors) {
+            for (const [, sector] of sectorYMap) {
+                if (!sector.musicVolumes || sector.musicVolumes.length === 0) continue;
+
+                for (const vol of sector.musicVolumes) {
+                    const nodes = vol.bsp.nodes;
+                    if (nodes.length === 0) continue;
+
+                    // Run PointCheck to determine if camera is inside
+                    let outside = vol.bsp.isRootOutside;
+                    if (nodes.length > 0) {
+                        let iNode = 0;
+                        let isFront = false;
+                        do {
+                            const node = nodes[iNode];
+                            const p = node.plane;
+                            const dist = p[0] * cx + p[1] * cy + p[2] * cz - p[3];
+                            isFront = dist > 0;
+                            if (isFront) outside = outside || node.isCsg;
+                            else outside = outside && !node.isCsg;
+                            iNode = isFront ? node.iFront : node.iBack;
+                        } while (iNode !== -1);
+                    }
+
+                    const volColor = outside ? outsideColor : insideColor;
+
+                    // Visualize each BSP plane as a small arrow
+                    for (const node of nodes) {
+                        const [nx, ny, nz, w] = node.plane;
+                        // Point on plane: normal * w
+                        const origin = new Vector3(nx * w, ny * w, nz * w);
+                        const dir = new Vector3(nx, ny, nz);
+                        const arrow = new ArrowHelper(dir, origin, 200, volColor.getHex(), 40, 20);
+                        if (arrow.line) {
+                            const lm = Array.isArray(arrow.line.material) ? arrow.line.material[0] : arrow.line.material;
+                            if (lm) { lm.transparent = true; lm.depthTest = false; lm.depthWrite = false; }
+                            arrow.line.renderOrder = 1000;
+                        }
+                        if (arrow.cone) {
+                            const cm = Array.isArray(arrow.cone.material) ? arrow.cone.material[0] : arrow.cone.material;
+                            if (cm) { cm.transparent = true; cm.depthTest = false; cm.depthWrite = false; }
+                            arrow.cone.renderOrder = 1000;
+                        }
+                        arrow.renderOrder = 1000;
+                        this.musicVolumeVisualizations.push(arrow);
+                        this.group.add(arrow);
+                    }
+
+                    // Label at volume center (average of plane origins)
+                    let sumX = 0, sumY = 0, sumZ = 0;
+                    for (const node of nodes) {
+                        const [nx, ny, nz, w] = node.plane;
+                        sumX += nx * w; sumY += ny * w; sumZ += nz * w;
+                    }
+                    const label = new Mesh(
+                        new BoxGeometry(30, 30, 30),
+                        new MeshBasicMaterial({ color: volColor, transparent: true, opacity: 0.6, depthTest: false, depthWrite: false })
+                    );
+                    label.position.set(sumX / nodes.length, sumY / nodes.length, sumZ / nodes.length);
+                    label.renderOrder = 1000;
+                    label.userData.musicId = vol.musicId;
+                    label.userData.inside = !outside;
+                    this.musicVolumeVisualizations.push(label);
+                    this.group.add(label);
+                }
+            }
+        }
+    }
+
+    private clearMusicVolumeVisualizations(): void {
+        this.musicVolumeVisualizations.forEach(viz => {
+            this.group.remove(viz);
+            if (viz instanceof Mesh) {
+                viz.geometry.dispose();
+                const material = Array.isArray(viz.material) ? viz.material[0] : viz.material;
+                if (material instanceof MeshBasicMaterial) material.dispose();
+            }
+        });
+        this.musicVolumeVisualizations = [];
     }
 
     public getMode(): VisualizerMode {

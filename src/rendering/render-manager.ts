@@ -101,6 +101,7 @@ class RenderManager {
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
     public readonly audioManager: AudioManager = new AudioManager();
+    protected activeMusicId: number = -1;
 
     public envConfig = {
         showLevel: true,
@@ -233,9 +234,9 @@ class RenderManager {
         // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
         // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
-        // // ti church
-        // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
-        // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
+        // ti church
+        this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
+        this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
         // // should see moon
         // this.camera.position.set(18345, -3583, 115670);
@@ -398,6 +399,8 @@ class RenderManager {
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
                 } else if (this.visualizer.getMode() === 4) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
+                } else if (this.visualizer.getMode() === 5) { // MusicVolumes
+                    this.visualizer.updateMusicVolumes(currentSectorMap, cameraPos);
                 }
 
                 // Overlay fogs if in other modes
@@ -436,6 +439,8 @@ class RenderManager {
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
                 } else if (this.visualizer.getMode() === 4) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
+                } else if (this.visualizer.getMode() === 5) { // MusicVolumes
+                    this.visualizer.updateMusicVolumes(currentSectorMap, cameraPos);
                 }
 
                 // Overlay fogs if in other modes
@@ -1210,6 +1215,21 @@ class RenderManager {
 
         this._updateObjects(currentTime);
 
+        const activeSector = this.getSector(this.camera.position);
+        const musicId = activeSector ? activeSector.getMusicIdAt(this.camera.position) ?? -1 : -1;
+
+        if (musicId !== this.activeMusicId) {
+            this.activeMusicId = musicId;
+
+            if (musicId >= 0) {
+                console.log(`[Music] Playing track ${musicId} (leaf-based)`);
+                this.audioManager.playMusic(musicId);
+            } else {
+                console.log(`[Music] Letting current track finish (left music volume)`);
+                this.audioManager.letTrackFinish();
+            }
+        }
+
         this.renderer.clear();
     }
 
@@ -1283,6 +1303,8 @@ class RenderManager {
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
                 } else if (this.visualizer.getMode() === 4) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
+                } else if (this.visualizer.getMode() === 5) { // MusicVolumes
+                    this.visualizer.updateMusicVolumes(currentSectorMap, cameraPos);
                 }
             }
         }
@@ -1405,6 +1427,8 @@ class RenderManager {
         }
 
     }
+
+
 
     public addSector(sector: SectorObject) {
         if (sector.index) {

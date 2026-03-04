@@ -1,6 +1,14 @@
 import UBrush from "./un-brush";
 
 abstract class UVolume extends UBrush {
+    protected locationPriority: number;
+
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "LocationPriority": "locationPriority"
+        })
+    }
+
     public getDecodeInfo(library?: any): any {
         return {
             uuid: this.uuid,

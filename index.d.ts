@@ -364,7 +364,15 @@ declare global {
                     zone: number,
                     permiating: number,
                     volumetric: number,
-                    visibleZones: bigint
+                    visibleZones: bigint,
+                    musicId?: number
+                }
+
+                export interface IMusicVolumeBspNode {
+                    plane: Vector4Arr;
+                    iFront: number;
+                    iBack: number;
+                    isCsg: boolean;
                 }
 
                 // Add IZoneFogInfo for L2FogInfo object
@@ -595,9 +603,15 @@ declare global {
                 export interface IMusicVolumeDecodeInfo extends IAudioDecodeInfo {
                     type: "MusicVolume",
                     musicId: number,
-                    isForced: boolean,
-                    isLooping: boolean,
-                    bounds: GD.IBoundsDecodeInfo
+                    isMusicForced: boolean,
+                    isMusicLooped: boolean,
+                    zoneNumber: number,
+                    priority: number,
+                    bsp: {
+                        isRootOutside: boolean,
+                        worldToLocal: Matrix4Arr,
+                        nodes: IMusicVolumeBspNode[]
+                    }
                 }
 
                 export interface IAmbientSoundObjectDecodeInfo extends IAudioDecodeInfo {

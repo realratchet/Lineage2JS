@@ -3,6 +3,7 @@ class FLeaf implements C.IConstructable {
     public iPermeating: number;
     public iVolumetric: number;
     public visibleZones: bigint;
+    public musicId?: number;
 
     public load(pkg: C.APackage): this {
         this.iZone = pkg.read("compat32");
@@ -18,7 +19,8 @@ class FLeaf implements C.IConstructable {
             zone: this.iZone,
             permiating: this.iPermeating,
             volumetric: this.iVolumetric,
-            visibleZones: this.visibleZones
+            visibleZones: this.visibleZones,
+            musicId: this.musicId
         };
     }
 }

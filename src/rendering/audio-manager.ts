@@ -9,9 +9,10 @@ class AudioManager {
     protected unlocked = false;
     protected currentSource?: AudioBufferSourceNode;
     protected currentIndex?: number;
+    protected playingIndex?: number;
     protected nextBuffer?: AudioBuffer;
 
-    protected constructor() {
+    public constructor() {
         this.audioContext = new AudioContext();
 
         this.masterGain = this.audioContext.createGain();
@@ -21,32 +22,63 @@ class AudioManager {
         this.setupUnlock();
     }
 
-
     public setMusicInfo(musicAssets: Record<number, string[]>) {
         Object.assign(this.musicFiles, musicAssets);
     }
 
+    protected currentPlayId = 0;
+
     public async playMusic(index: number) {
-        this.currentIndex = index;
+        // If same track is still audibly playing (e.g. finishing after leaving volume), just resume looping
+        if (this.playingIndex === index && this.currentSource) {
+            this.currentIndex = index;
+            this.preloadNext(index);
+            return;
+        }
+
+        const playId = ++this.currentPlayId;
 
         await this.ensureUnlocked();
-        await this.stopMusic();
+
+        // If another play request has started while we were unlocking, abort this one
+        if (this.currentPlayId !== playId) return;
+
+        await this.stopMusic(false);
+
+        this.currentIndex = index;
+        this.playingIndex = index;
 
         const buffer = await this.fetchRandomBuffer(index);
-        if (!buffer) return;
+        
+        // If another play request has started while fetching, abort and do not play
+        if (this.currentPlayId !== playId || !buffer) return;
 
         this.playBuffer(buffer);
         this.preloadNext(index);
     }
 
-    public async stopMusic() {
+    public async stopMusic(incrementPlayId = true) {
+        if (incrementPlayId) {
+            this.currentPlayId++;
+        }
+        this.currentIndex = undefined;
+        this.playingIndex = undefined;
+        this.nextBuffer = undefined;
+
         if (this.currentSource) {
+            this.currentSource.onended = null;
             try {
                 this.currentSource.stop();
             } catch { }
             this.currentSource.disconnect();
             this.currentSource = undefined;
         }
+    }
+
+    public letTrackFinish() {
+        this.currentPlayId++;
+        this.currentIndex = undefined;
+        this.nextBuffer = undefined;
     }
 
     protected playBuffer(buffer: AudioBuffer) {
@@ -61,15 +93,21 @@ class AudioManager {
     }
 
     protected async handleTrackEnd() {
-        if (this.currentIndex === undefined) return;
+        if (this.currentIndex === undefined) {
+            this.playingIndex = undefined;
+            this.currentSource = undefined;
+            return;
+        }
 
+        const playId = this.currentPlayId;
         let buffer = this.nextBuffer;
 
         if (!buffer) {
             buffer = await this.fetchRandomBuffer(this.currentIndex);
         }
 
-        if (!buffer) return;
+        // Check if playback was stopped or changed while we were fetching
+        if (this.currentPlayId !== playId || !buffer || this.currentIndex === undefined) return;
 
         this.playBuffer(buffer);
         this.preloadNext(this.currentIndex);
@@ -93,7 +131,7 @@ class AudioManager {
 
             const rawBuffer = await res.arrayBuffer();
             const binary = new Uint8Array(rawBuffer);
-            binary.set(replaceBytes, 0); // path the "encrypted" l2 oggs
+            binary.set(replaceBytes, 0); // patch the "encrypted" l2 oggs
 
             return await this.audioContext.decodeAudioData(binary.buffer);
         } catch (e) {

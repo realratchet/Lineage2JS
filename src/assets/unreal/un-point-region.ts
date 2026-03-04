@@ -6,6 +6,7 @@ abstract class UPointRegion extends UObject {
     declare protected readonly zoneNumber: number;
 
     public getZone() { return this.zone; }
+    public getZoneNumber() { return this.zoneNumber; }
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
