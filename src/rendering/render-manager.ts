@@ -1221,14 +1221,15 @@ class RenderManager {
         this._updateObjects(currentTime);
 
         const activeSector = this.getSector(this.camera.position);
-        const musicId = activeSector ? activeSector.getMusicIdAt(this.camera.position) ?? -1 : -1;
+        const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };
+        const musicId = musicInfo.musicId ?? -1;
 
         if (musicId !== this.activeMusicId) {
             this.activeMusicId = musicId;
 
             if (musicId >= 0) {
-                console.log(`[Music] Playing track ${musicId} (leaf-based)`);
-                this.audioManager.playMusic(musicId);
+                console.log(`[Music] Playing track ${musicId} (forced: ${musicInfo.isForced})`);
+                this.audioManager.playMusic(musicId, musicInfo.isLooped, musicInfo.isForced);
             } else {
                 console.log(`[Music] Letting current track finish (left music volume)`);
                 this.audioManager.letTrackFinish();

@@ -222,7 +222,7 @@ class SectorObject extends Object3D {
 
     public setSun(sunMaterial: any) { this.sunTexture = sunMaterial; }
 
-    public getMusicIdAt(cameraPosition: THREE.Vector3): number | null {
+    public getMusicIdAt(cameraPosition: THREE.Vector3): { musicId: number | null, isLooped: boolean, isForced: boolean } {
         let highestPriority = -9999;
         let selectedMusicId: number | null = null;
         let isLooped = false, isForced = false;
@@ -267,7 +267,7 @@ class SectorObject extends Object3D {
             }
         }
 
-        return selectedMusicId;
+        return { musicId: selectedMusicId, isLooped, isForced };
     }
 
     /**

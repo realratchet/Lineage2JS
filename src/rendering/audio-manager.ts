@@ -44,9 +44,17 @@ class AudioManager {
 
     protected currentPlayId = 0;
 
-    public async playMusic(index: number) {
-        // If same track is still audibly playing (e.g. finishing after leaving volume), just resume looping
+    public async playMusic(index: number, isLooped: boolean = false, isForced: boolean = false) {
+        // If same track is already playing or queued, just update loop state
         if (this.playingIndex === index && this.currentSource) {
+            this.currentIndex = index;
+            // TODO: handle looping logic if needed
+            return;
+        }
+
+        // If not forced and something is currently playing, just queue it for next
+        if (!isForced && this.currentSource && this.playingIndex !== undefined) {
+            console.log(`[Music] Queuing track ${index} (not forced)`);
             this.currentIndex = index;
             this.preloadNext(index);
             return;
