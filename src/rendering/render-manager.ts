@@ -1285,6 +1285,8 @@ class RenderManager {
                     snd.volume,
                     snd.pitch,
                     snd.radius,
+                    snd.randomDelay,
+                    snd.looping,
                 );
             }
 

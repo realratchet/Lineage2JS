@@ -56,7 +56,7 @@ abstract class UAmbientSoundObject extends UAActor {
         const radius = this.radius * 25;
         const volume = this.volume / 255;
         const pitch = this.pitch / 64;
-        const randomDelay = this.randomAmbient / 10; // L2 AmbientRandom=100 → max 10s delay
+        const randomDelay = this.randomAmbient; // L2 AmbientRandom=100 → max 100s delay
 
         const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
             uuid: generateUUID(),

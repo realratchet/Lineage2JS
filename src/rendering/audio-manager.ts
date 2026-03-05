@@ -183,9 +183,19 @@ class AudioManager {
     // --- Ambient Sound Spatial Playback ---
 
     protected readonly activeAmbientSounds = new Map<string, {
-        source: AudioBufferSourceNode,
+        source?: AudioBufferSourceNode,
         panner: PannerNode,
         gain: GainNode,
+        timer?: any,
+        info: {
+            dataUri: string,
+            position: [number, number, number],
+            volume: number,
+            pitch: number,
+            radius: number,
+            randomDelay: number,
+            looping: boolean
+        }
     }>();
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
 
@@ -196,8 +206,15 @@ class AudioManager {
         volume: number,
         pitch: number,
         radius: number,
+        randomDelay: number, // max delay between plays
+        looping: boolean,    // seamless loop (randomDelay should be 0)
     ) {
-        if (this.activeAmbientSounds.has(id)) return; // already playing
+        if (this.activeAmbientSounds.has(id)) return; // already playing or waiting
+
+        // Register immediately to prevent race conditions during async decoding
+        this.activeAmbientSounds.set(id, {
+            info: { dataUri, position, volume, pitch, radius, randomDelay, looping }
+        } as any);
 
         await this.ensureUnlocked();
 
@@ -210,17 +227,13 @@ class AudioManager {
                 this.ambientBufferCache.set(dataUri, buffer);
             } catch (e) {
                 console.warn(`Failed to decode ambient sound ${id}`, e);
+                this.activeAmbientSounds.delete(id);
                 return;
             }
         }
 
-        // Don't start if it was stopped while decoding
-        if (this.activeAmbientSounds.has(id)) return;
-
-        const source = this.audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        source.playbackRate.value = pitch;
+        const entry = this.activeAmbientSounds.get(id);
+        if (!entry) return; // Stopped while decoding
 
         const panner = this.audioContext.createPanner();
         panner.panningModel = "HRTF";
@@ -235,22 +248,65 @@ class AudioManager {
         const gain = this.audioContext.createGain();
         gain.gain.value = volume;
 
-        source.connect(gain);
         gain.connect(panner);
         panner.connect(this.ambientGainNode);
 
-        source.start(0);
+        entry.panner = panner;
+        entry.gain = gain;
 
-        this.activeAmbientSounds.set(id, { source, panner, gain });
+        if (!entry.info.looping && entry.info.randomDelay > 0) {
+            const delay = Math.random() * entry.info.randomDelay * 1000;
+            // console.log(`[AudioManager] Initial delay for ${id} in ${delay.toFixed(0)}ms (max ${entry.info.randomDelay}s)`);
+            entry.timer = setTimeout(() => {
+                const finalEntry = this.activeAmbientSounds.get(id);
+                if (finalEntry) {
+                    this.startAmbientSource(id, buffer, finalEntry);
+                }
+            }, delay);
+        } else {
+            this.startAmbientSource(id, buffer, entry);
+        }
+    }
+
+    protected startAmbientSource(id: string, buffer: AudioBuffer, entry: any) {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.loop = entry.info.looping;
+        source.playbackRate.value = entry.info.pitch;
+        source.connect(entry.gain);
+
+        if (!entry.info.looping && entry.info.randomDelay > 0) {
+            source.onended = () => {
+                const updatedEntry = this.activeAmbientSounds.get(id);
+                if (!updatedEntry || updatedEntry.source !== source) return;
+
+                updatedEntry.source = undefined;
+                const delay = Math.random() * entry.info.randomDelay * 1000;
+                // console.log(`[AudioManager] Scheduled replay for ${id} in ${delay.toFixed(0)}ms (max ${entry.info.randomDelay}s)`);
+                updatedEntry.timer = setTimeout(() => {
+                    const finalEntry = this.activeAmbientSounds.get(id);
+                    if (finalEntry) {
+                        this.startAmbientSource(id, buffer, finalEntry);
+                    }
+                }, delay);
+            };
+        }
+
+        entry.source = source;
+        // console.log(`[AudioManager] Playing ambient ${id} (looping: ${entry.info.looping}, randomDelay: ${entry.info.randomDelay}s)`);
+        source.start(0);
     }
 
     public stopAmbientSound(id: string) {
         const entry = this.activeAmbientSounds.get(id);
         if (!entry) return;
 
-        entry.source.onended = null;
-        try { entry.source.stop(); } catch { }
-        entry.source.disconnect();
+        if (entry.timer) clearTimeout(entry.timer);
+        if (entry.source) {
+            entry.source.onended = null;
+            try { entry.source.stop(); } catch { }
+            entry.source.disconnect();
+        }
         entry.gain.disconnect();
         entry.panner.disconnect();
 
