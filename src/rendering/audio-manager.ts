@@ -10,11 +10,17 @@ class AudioManager {
     protected ambientGainNode: GainNode;
     protected unlocked = false;
     protected currentSource?: AudioBufferSourceNode;
+    protected currentGain?: GainNode;
     protected currentIndex?: number;
     protected playingIndex?: number;
     protected currentIsLooped = false;
     protected nextBuffer?: AudioBuffer;
     protected nextMusicTrackTime?: number;
+    protected nextMusicPlayId?: number;
+    protected fadeEndTime?: number;
+    protected lastTime = 0;
+
+    protected currentPlayId = 0;
 
     public constructor() {
         this.audioContext = new AudioContext();
@@ -29,7 +35,7 @@ class AudioManager {
 
         this.ambientGainNode = this.audioContext.createGain();
         this.ambientGainNode.connect(this.masterGain);
-        this.ambientGainNode.gain.value = 0.9;
+        this.ambientGainNode.gain.value = 0.3;
 
         this.setupUnlock();
     }
@@ -44,20 +50,18 @@ class AudioManager {
         Object.assign(this.musicFiles, musicAssets);
     }
 
-    protected currentPlayId = 0;
-
-    public async playMusic(index: number, isLooped: boolean = false, isForced: boolean = false) {
+    public async playMusic(index: number, isLooped: boolean = false, isForced: boolean = false, currentTime?: number) {
+        const time = currentTime ?? this.lastTime;
+        
         // If same track is already playing or queued, just update loop state
-        if (this.playingIndex === index && this.currentSource) {
+        if (this.playingIndex === index && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
             return;
         }
 
-        this.nextMusicTrackTime = undefined;
-
-        // If not forced and something is currently playing, just queue it for next
-        if (!isForced && (this.currentSource || this.nextMusicTrackTime !== undefined) && this.playingIndex !== undefined) {
+        // If not forced and something is currently playing/queued, just queue it for after current finishes
+        if (!isForced && this.playingIndex !== undefined && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
             console.log(`[Music] Queuing track ${index} (not forced)`);
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
@@ -66,44 +70,81 @@ class AudioManager {
         }
 
         const playId = ++this.currentPlayId;
+        console.log(`[Music] playMusic index=${index} forced=${isForced} playId=${playId}`);
 
         await this.ensureUnlocked();
-
-        // If another play request has started while we were unlocking, abort this one
         if (this.currentPlayId !== playId) return;
 
-        await this.stopMusic(false);
+        const wasPlaying = !!this.currentSource || (this.fadeEndTime !== undefined && time < this.fadeEndTime);
+        
+        await this.stopMusicInternal(false, time);
 
         this.currentIndex = index;
         this.playingIndex = index;
         this.currentIsLooped = isLooped;
 
+        if (wasPlaying && isForced) {
+            console.log(`[Music] Fading out old track, scheduling ${index} in 500ms...`);
+            this.nextMusicTrackTime = time + 500;
+            this.nextMusicPlayId = playId;
+            this.preloadNext(index);
+            return;
+        }
+
         const buffer = await this.fetchRandomBuffer(index);
-        
-        // If another play request has started while fetching, abort and do not play
         if (this.currentPlayId !== playId || !buffer) return;
 
-        this.playBuffer(buffer);
+        this.playBuffer(buffer, time);
         this.preloadNext(index);
     }
 
-    public async stopMusic(incrementPlayId = true) {
+    public async stopMusic(incrementPlayId = true, currentTime?: number) {
         if (incrementPlayId) {
             this.currentPlayId++;
         }
+        await this.stopMusicInternal(incrementPlayId, currentTime ?? this.lastTime);
+    }
+
+    protected async stopMusicInternal(_incrementPlayId: boolean, currentTime: number) {
         this.nextMusicTrackTime = undefined;
+        this.nextMusicPlayId = undefined;
         this.currentIndex = undefined;
         this.playingIndex = undefined;
         this.currentIsLooped = false;
         this.nextBuffer = undefined;
 
         if (this.currentSource) {
-            this.currentSource.onended = null;
-            try {
-                this.currentSource.stop();
-            } catch { }
-            this.currentSource.disconnect();
+            const source = this.currentSource;
+            const gain = this.currentGain;
+            
+            source.onended = null;
             this.currentSource = undefined;
+            this.currentGain = undefined;
+
+            if (gain) {
+                const now = this.audioContext.currentTime;
+                this.fadeEndTime = currentTime + 500;
+                
+                // Force an anchor point for the ramp
+                gain.gain.setValueAtTime(gain.gain.value, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.5);
+                
+                try {
+                    source.stop(now + 0.5);
+                } catch (e) {
+                    console.warn("[Music] Failed to schedule source stop", e);
+                    try { source.stop(); } catch {}
+                }
+
+                // Cleanup connections after fade
+                setTimeout(() => {
+                    try { source.disconnect(); } catch {}
+                    try { gain.disconnect(); } catch {}
+                }, 1000);
+            } else {
+                try { source.stop(); } catch {}
+                try { source.disconnect(); } catch {}
+            }
         }
     }
 
@@ -114,19 +155,25 @@ class AudioManager {
         this.nextBuffer = undefined;
     }
 
-    protected playBuffer(buffer: AudioBuffer) {
+    protected playBuffer(buffer: AudioBuffer, _startTime: number) {
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
-        source.connect(this.musicGainNode);
+        
+        const gain = this.audioContext.createGain();
+        gain.connect(this.musicGainNode);
+        source.connect(gain);
 
-        source.onended = () => this.handleTrackEnd();
+        source.onended = () => this.handleTrackEnd(this.lastTime);
         source.start(0);
 
         this.currentSource = source;
+        this.currentGain = gain;
+        this.fadeEndTime = undefined;
     }
 
-    protected async handleTrackEnd() {
+    protected async handleTrackEnd(endTime: number) {
         this.currentSource = undefined;
+        this.currentGain = undefined;
 
         if (this.currentIndex === undefined) {
             this.playingIndex = undefined;
@@ -138,23 +185,31 @@ class AudioManager {
             console.log(`[Music] Track finished. Waiting ${waitTime / 1000}s before next track...`);
         }
 
-        this.nextMusicTrackTime = performance.now() + waitTime;
+        this.nextMusicTrackTime = endTime + waitTime;
+        this.nextMusicPlayId = this.currentPlayId;
     }
 
     public async update(currentTime: number) {
+        this.lastTime = currentTime;
+
         // Handle music delays
         if (this.nextMusicTrackTime !== undefined && currentTime >= this.nextMusicTrackTime) {
+            const playId = this.nextMusicPlayId;
             this.nextMusicTrackTime = undefined;
-            const playId = this.currentPlayId;
-            let buffer = this.nextBuffer;
+            this.nextMusicPlayId = undefined;
 
-            if (!buffer && this.currentIndex !== undefined) {
-                buffer = await this.fetchRandomBuffer(this.currentIndex);
+            if (playId !== undefined && this.currentPlayId !== playId) return;
+
+            let buffer = this.nextBuffer;
+            const targetIndex = this.currentIndex;
+
+            if (!buffer && targetIndex !== undefined) {
+                buffer = await this.fetchRandomBuffer(targetIndex);
             }
 
-            if (this.currentPlayId === playId && buffer && this.currentIndex !== undefined) {
-                this.playBuffer(buffer);
-                this.preloadNext(this.currentIndex);
+            if (buffer && targetIndex !== undefined && (playId === undefined || this.currentPlayId === playId)) {
+                this.playBuffer(buffer, currentTime);
+                this.preloadNext(targetIndex);
             }
         }
 
@@ -164,7 +219,7 @@ class AudioManager {
                 entry.nextReplayTime = undefined;
                 const buffer = this.ambientBufferCache.get(entry.info.dataUri);
                 if (buffer) {
-                    this.startAmbientSource(id, buffer, entry);
+                    this.startAmbientSource(id, buffer, entry, currentTime);
                 }
             }
         }
@@ -183,8 +238,7 @@ class AudioManager {
 
         try {
             const res = await fetch(path);
-            if (!res.ok)
-                throw new Error(res.statusText);
+            if (!res.ok) throw new Error(res.statusText);
 
             const rawBuffer = await res.arrayBuffer();
             const binary = new Uint8Array(rawBuffer);
@@ -200,7 +254,6 @@ class AudioManager {
     protected setupUnlock() {
         const unlock = async () => {
             if (this.unlocked) return;
-
             try {
                 await this.audioContext.resume();
             } finally {
@@ -209,7 +262,6 @@ class AudioManager {
                 window.removeEventListener("keydown", unlock);
             }
         };
-
         window.addEventListener("pointerdown", unlock);
         window.addEventListener("keydown", unlock);
     }
@@ -247,12 +299,14 @@ class AudioManager {
         volume: number,
         pitch: number,
         radius: number,
-        randomDelay: number, // max delay between plays
-        looping: boolean,    // seamless loop (randomDelay should be 0)
+        randomDelay: number,
+        looping: boolean,
+        currentTime?: number
     ) {
-        if (this.activeAmbientSounds.has(id)) return; // already playing or waiting
+        if (this.activeAmbientSounds.has(id)) return;
 
-        // Register immediately to prevent race conditions during async decoding
+        const time = currentTime ?? this.lastTime;
+
         this.activeAmbientSounds.set(id, {
             info: { dataUri, position, volume, pitch, radius, randomDelay, looping }
         } as any);
@@ -274,7 +328,7 @@ class AudioManager {
         }
 
         const entry = this.activeAmbientSounds.get(id);
-        if (!entry) return; // Stopped while decoding
+        if (!entry) return;
 
         const panner = this.audioContext.createPanner();
         panner.panningModel = "HRTF";
@@ -296,13 +350,13 @@ class AudioManager {
         entry.gain = gain;
 
         if (!entry.info.looping && entry.info.randomDelay > 0) {
-            entry.nextReplayTime = performance.now() + Math.random() * entry.info.randomDelay * 1000;
+            entry.nextReplayTime = time + Math.random() * entry.info.randomDelay * 1000;
         } else {
-            this.startAmbientSource(id, buffer, entry);
+            this.startAmbientSource(id, buffer, entry, time);
         }
     }
 
-    protected startAmbientSource(id: string, buffer: AudioBuffer, entry: any) {
+    protected startAmbientSource(id: string, buffer: AudioBuffer, entry: any, _startTime: number) {
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
         source.loop = entry.info.looping;
@@ -315,12 +369,11 @@ class AudioManager {
                 if (!updatedEntry || updatedEntry.source !== source) return;
 
                 updatedEntry.source = undefined;
-                updatedEntry.nextReplayTime = performance.now() + Math.random() * entry.info.randomDelay * 1000;
+                updatedEntry.nextReplayTime = this.lastTime + Math.random() * entry.info.randomDelay * 1000;
             };
         }
 
         entry.source = source;
-        // console.log(`[AudioManager] Playing ambient ${id} (looping: ${entry.info.looping}, randomDelay: ${entry.info.randomDelay}s)`);
         source.start(0);
     }
 

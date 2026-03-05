@@ -1231,7 +1231,7 @@ class RenderManager {
 
             if (musicId >= 0) {
                 console.log(`[Music] Playing track ${musicId} (forced: ${musicInfo.isForced})`);
-                this.audioManager.playMusic(musicId, musicInfo.isLooped, musicInfo.isForced);
+                this.audioManager.playMusic(musicId, musicInfo.isLooped, musicInfo.isForced, currentTime);
             } else {
                 console.log(`[Music] Letting current track finish (left music volume)`);
                 this.audioManager.letTrackFinish();
@@ -1290,6 +1290,7 @@ class RenderManager {
                     snd.radius,
                     snd.randomDelay,
                     snd.looping,
+                    currentTime
                 );
             }
 
