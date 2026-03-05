@@ -12,7 +12,9 @@ class AudioManager {
     protected currentSource?: AudioBufferSourceNode;
     protected currentIndex?: number;
     protected playingIndex?: number;
+    protected currentIsLooped = false;
     protected nextBuffer?: AudioBuffer;
+    protected musicTimer?: any;
 
     public constructor() {
         this.audioContext = new AudioContext();
@@ -48,14 +50,20 @@ class AudioManager {
         // If same track is already playing or queued, just update loop state
         if (this.playingIndex === index && this.currentSource) {
             this.currentIndex = index;
-            // TODO: handle looping logic if needed
+            this.currentIsLooped = isLooped;
             return;
         }
 
+        if (this.musicTimer) {
+            clearTimeout(this.musicTimer);
+            this.musicTimer = undefined;
+        }
+
         // If not forced and something is currently playing, just queue it for next
-        if (!isForced && this.currentSource && this.playingIndex !== undefined) {
+        if (!isForced && (this.currentSource || this.musicTimer) && this.playingIndex !== undefined) {
             console.log(`[Music] Queuing track ${index} (not forced)`);
             this.currentIndex = index;
+            this.currentIsLooped = isLooped;
             this.preloadNext(index);
             return;
         }
@@ -71,6 +79,7 @@ class AudioManager {
 
         this.currentIndex = index;
         this.playingIndex = index;
+        this.currentIsLooped = isLooped;
 
         const buffer = await this.fetchRandomBuffer(index);
         
@@ -85,8 +94,13 @@ class AudioManager {
         if (incrementPlayId) {
             this.currentPlayId++;
         }
+        if (this.musicTimer) {
+            clearTimeout(this.musicTimer);
+            this.musicTimer = undefined;
+        }
         this.currentIndex = undefined;
         this.playingIndex = undefined;
+        this.currentIsLooped = false;
         this.nextBuffer = undefined;
 
         if (this.currentSource) {
@@ -102,6 +116,7 @@ class AudioManager {
     public letTrackFinish() {
         this.currentPlayId++;
         this.currentIndex = undefined;
+        this.currentIsLooped = false;
         this.nextBuffer = undefined;
     }
 
@@ -117,24 +132,34 @@ class AudioManager {
     }
 
     protected async handleTrackEnd() {
+        this.currentSource = undefined;
+
         if (this.currentIndex === undefined) {
             this.playingIndex = undefined;
-            this.currentSource = undefined;
             return;
         }
 
-        const playId = this.currentPlayId;
-        let buffer = this.nextBuffer;
-
-        if (!buffer) {
-            buffer = await this.fetchRandomBuffer(this.currentIndex);
+        const waitTime = this.currentIsLooped ? 0 : 10000;
+        if (waitTime > 0) {
+            console.log(`[Music] Track finished. Waiting ${waitTime / 1000}s before next track...`);
         }
 
-        // Check if playback was stopped or changed while we were fetching
-        if (this.currentPlayId !== playId || !buffer || this.currentIndex === undefined) return;
+        const playId = this.currentPlayId;
+        this.musicTimer = setTimeout(async () => {
+            this.musicTimer = undefined;
+            
+            let buffer = this.nextBuffer;
 
-        this.playBuffer(buffer);
-        this.preloadNext(this.currentIndex);
+            if (!buffer) {
+                buffer = await this.fetchRandomBuffer(this.currentIndex as number);
+            }
+
+            // Check if playback was stopped or changed while we were fetching/waiting
+            if (this.currentPlayId !== playId || !buffer || this.currentIndex === undefined) return;
+
+            this.playBuffer(buffer);
+            this.preloadNext(this.currentIndex);
+        }, waitTime);
     }
 
     protected async preloadNext(index: number) {
