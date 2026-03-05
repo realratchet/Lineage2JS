@@ -1,7 +1,7 @@
 import UBrush from "./un-brush";
 
 abstract class UVolume extends UBrush {
-    protected locationPriority: number;
+    declare protected locationPriority: number;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {

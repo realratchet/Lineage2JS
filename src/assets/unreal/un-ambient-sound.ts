@@ -32,6 +32,12 @@ abstract class UAmbientSoundObject extends UAActor {
         const snd = (this.sound as any).loadSelf();
         if (!snd) return null;
 
+        console.assert(isFinite(this.radius));
+        console.assert(isFinite(this.volume));
+        console.assert(isFinite(this.pitch));
+        console.assert(isFinite(this.soundType));
+        console.assert(isFinite(this.randomAmbient));
+
         const soundKey = snd.objectName ?? snd.uuid;
         let soundDataUri = library.soundBlobCache.get(soundKey);
 
@@ -46,15 +52,11 @@ abstract class UAmbientSoundObject extends UAActor {
             library.soundBlobCache.set(soundKey, soundDataUri);
         }
 
-        // UE2 coords → Three.js coords: swap Y↔Z
-        const loc = this.location;
-        const position: GD.Vector3Arr = [loc.x, loc.z, loc.y];
-
-        // L2 defaults: SoundRadius=64, SoundVolume=190(0-255), SoundPitch=64(=1.0)
-        const radius = (this.radius ?? 64) * 25;
-        const volume = (this.volume ?? 190) / 255;
-        const pitch = (this.pitch ?? 64) / 64;
-        const randomDelay = (this.randomAmbient ?? 100) / 10; // L2 AmbientRandom=100 → max 10s delay
+        const position = this.location.getVectorElements();
+        const radius = this.radius * 25;
+        const volume = this.volume / 255;
+        const pitch = this.pitch / 64;
+        const randomDelay = this.randomAmbient / 10; // L2 AmbientRandom=100 → max 10s delay
 
         const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
             uuid: generateUUID(),
@@ -66,7 +68,7 @@ abstract class UAmbientSoundObject extends UAActor {
             pitch,
             soundDataUri,
             looping: randomDelay === 0, // seamless loop only when no random delay
-            soundType: this.soundType ?? 0, // 0=Always, 1=Day, 2=Night, 3=Water
+            soundType: this.soundType, // 0=Always, 1=Day, 2=Night, 3=Water
             randomDelay,
         };
 

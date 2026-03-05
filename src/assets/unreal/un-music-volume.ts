@@ -1,9 +1,9 @@
 import UVolume from "@client/assets/unreal/un-volume";
 
 abstract class UMusicVolume extends UVolume {
-    protected musicId: number;
-    protected isMusicForced: boolean;
-    protected isMusicLooped: boolean;
+    declare protected musicId: number;
+    declare protected isMusicForced: boolean;
+    declare protected isMusicLooped: boolean;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -65,10 +65,10 @@ abstract class UMusicVolume extends UVolume {
             ...super.getDecodeInfo(),
             type: "MusicVolume",
             musicId: this.musicId,
-            isMusicForced: this.isMusicForced ?? false,
-            isMusicLooped: this.isMusicLooped ?? false,
-            zoneNumber: region?.getZoneNumber() ?? -1,
-            priority: this.locationPriority ?? 0,
+            isMusicForced: this.isMusicForced,
+            isMusicLooped: this.isMusicLooped,
+            zoneNumber: region.getZoneNumber(),
+            priority: this.locationPriority,
             bsp: {
                 isRootOutside: brush.getIsRootOutside(),
                 worldToLocal: localToWorld.toArray(),
