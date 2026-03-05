@@ -607,6 +607,7 @@ declare global {
                     isMusicLooped: boolean,
                     zoneNumber: number,
                     priority: number,
+                    bounds: IBoundsDecodeInfo,
                     bsp: {
                         isRootOutside: boolean,
                         worldToLocal: Matrix4Arr,
@@ -616,6 +617,14 @@ declare global {
 
                 export interface IAmbientSoundObjectDecodeInfo extends IAudioDecodeInfo {
                     type: "AmbientSoundObject",
+                    position: Vector3Arr,
+                    radius: number,
+                    volume: number,
+                    pitch: number,
+                    soundDataUri: string,
+                    looping: boolean,
+                    soundType: number, // 0=Always, 1=Day, 2=Night, 3=Water
+                    randomDelay: number, // max seconds between repetitions (0 = seamless loop)
                 }
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {

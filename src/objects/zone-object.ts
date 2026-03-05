@@ -117,6 +117,7 @@ class SectorObject extends Object3D {
 
     // NEW: Precise Geometric volumes for runtime intersection
     public musicVolumes?: GD.IMusicVolumeDecodeInfo[];
+    public ambientSounds?: GD.IAmbientSoundObjectDecodeInfo[];
 
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];
@@ -224,6 +225,7 @@ class SectorObject extends Object3D {
     public getMusicIdAt(cameraPosition: THREE.Vector3): number | null {
         let highestPriority = -9999;
         let selectedMusicId: number | null = null;
+        let isLooped = false, isForced = false;
         
         if (this.musicVolumes) {
             const cx = cameraPosition.x, cy = cameraPosition.y, cz = cameraPosition.z;
@@ -259,6 +261,8 @@ class SectorObject extends Object3D {
                 if (!outside) {
                     highestPriority = vol.priority;
                     selectedMusicId = vol.musicId;
+                    isLooped = vol.isMusicLooped;
+                    isForced = vol.isMusicForced;
                 }
             }
         }

@@ -1,4 +1,5 @@
 import UAActor from "./un-aactor";
+import { generateUUID } from "three/src/math/MathUtils";
 
 abstract class UAmbientSoundObject extends UAActor {
     declare public readonly sound: GA.USound;
@@ -23,6 +24,55 @@ abstract class UAmbientSoundObject extends UAActor {
             "bHiddenEd": "isHiddenEd",
             "AmbientSoundType": "soundType"
         });
+    }
+
+    public getDecodeInfo(library: GD.DecodeLibrary) {
+        if (!this.sound) return null;
+
+        const snd = (this.sound as any).loadSelf();
+        if (!snd) return null;
+
+        const soundKey = snd.objectName ?? snd.uuid;
+        let soundDataUri = library.soundBlobCache.get(soundKey);
+
+        if (!soundDataUri) {
+            const audioData = snd.getAudioData();
+            if (!audioData || audioData.length === 0) return null;
+
+            const fileType = snd.getFileType()?.toLowerCase() ?? "wav";
+            const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
+            const blob = new Blob([audioData.buffer], { type: mimeType });
+            soundDataUri = URL.createObjectURL(blob);
+            library.soundBlobCache.set(soundKey, soundDataUri);
+        }
+
+        // UE2 coords → Three.js coords: swap Y↔Z
+        const loc = this.location;
+        const position: GD.Vector3Arr = [loc.x, loc.z, loc.y];
+
+        // L2 defaults: SoundRadius=64, SoundVolume=190(0-255), SoundPitch=64(=1.0)
+        const radius = (this.radius ?? 64) * 25;
+        const volume = (this.volume ?? 190) / 255;
+        const pitch = (this.pitch ?? 64) / 64;
+        const randomDelay = (this.randomAmbient ?? 100) / 10; // L2 AmbientRandom=100 → max 10s delay
+
+        const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
+            uuid: generateUUID(),
+            name: this.objectName,
+            type: "AmbientSoundObject",
+            position,
+            radius,
+            volume,
+            pitch,
+            soundDataUri,
+            looping: randomDelay === 0, // seamless loop only when no random delay
+            soundType: this.soundType ?? 0, // 0=Always, 1=Day, 2=Night, 3=Water
+            randomDelay,
+        };
+
+        library.ambientSounds.push(decodeInfo);
+
+        return decodeInfo;
     }
 }
 

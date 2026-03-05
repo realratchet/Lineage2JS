@@ -1087,13 +1087,31 @@ class Visualizer {
 
                     const volColor = outside ? outsideColor : insideColor;
 
-                    // Visualize each BSP plane as a small arrow
+                    // Use bounds center (in UE2 coords, swap Y/Z for Three.js)
+                    const box = vol.bounds.box;
+                    if (!box) continue;
+                    const bcx = (box.min[0] + box.max[0]) * 0.5;
+                    const bcy = (box.min[2] + box.max[2]) * 0.5; // Y↔Z swap
+                    const bcz = (box.min[1] + box.max[1]) * 0.5;
+                    const bExtent = Math.max(
+                        box.max[0] - box.min[0],
+                        box.max[1] - box.min[1],
+                        box.max[2] - box.min[2]
+                    ) * 0.5;
+
+                    // Visualize each BSP plane as an arrow projected from bounds center onto the plane
                     for (const node of nodes) {
                         const [nx, ny, nz, w] = node.plane;
-                        // Point on plane: normal * w
-                        const origin = new Vector3(nx * w, ny * w, nz * w);
+                        // Project bounds center onto the plane: point = center + normal * (w - dot(center, normal))
+                        const dot = nx * bcx + ny * bcy + nz * bcz;
+                        const t = w - dot;
+                        const ox = bcx + nx * t;
+                        const oy = bcy + ny * t;
+                        const oz = bcz + nz * t;
+                        const origin = new Vector3(ox, oy, oz);
                         const dir = new Vector3(nx, ny, nz);
-                        const arrow = new ArrowHelper(dir, origin, 200, volColor.getHex(), 40, 20);
+                        const arrowLen = Math.min(bExtent * 0.3, 500);
+                        const arrow = new ArrowHelper(dir, origin, arrowLen, volColor.getHex(), arrowLen * 0.2, arrowLen * 0.1);
                         if (arrow.line) {
                             const lm = Array.isArray(arrow.line.material) ? arrow.line.material[0] : arrow.line.material;
                             if (lm) { lm.transparent = true; lm.depthTest = false; lm.depthWrite = false; }
@@ -1109,17 +1127,12 @@ class Visualizer {
                         this.group.add(arrow);
                     }
 
-                    // Label at volume center (average of plane origins)
-                    let sumX = 0, sumY = 0, sumZ = 0;
-                    for (const node of nodes) {
-                        const [nx, ny, nz, w] = node.plane;
-                        sumX += nx * w; sumY += ny * w; sumZ += nz * w;
-                    }
+                    // Label at volume bounds center
                     const label = new Mesh(
-                        new BoxGeometry(30, 30, 30),
+                        new BoxGeometry(50, 50, 50),
                         new MeshBasicMaterial({ color: volColor, transparent: true, opacity: 0.6, depthTest: false, depthWrite: false })
                     );
-                    label.position.set(sumX / nodes.length, sumY / nodes.length, sumZ / nodes.length);
+                    label.position.set(bcx, bcy, bcz);
                     label.renderOrder = 1000;
                     label.userData.musicId = vol.musicId;
                     label.userData.inside = !outside;

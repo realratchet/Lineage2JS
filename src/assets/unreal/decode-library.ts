@@ -28,6 +28,8 @@ class DecodeLibrary {
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly musicVolumes: GD.IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
+    public readonly ambientSounds: GD.IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
+    public readonly soundBlobCache = new Map<string, string>(); // USound name → blob URL (deduplication)
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public readonly isSkyLevel: boolean;
     public readonly skyLevel: {
@@ -211,15 +213,23 @@ class DecodeLibrary {
         }
 
         if (loadAudio) {
-            const audioTypes = ["MusicVolume"];
-            const uAudiosToLoad = audioTypes.map(t => expGroups[t] ?? []).flat();
-
-            uAudiosToLoad.forEach(exp => {
+            const musicVolumeExports = expGroups["MusicVolume"] ?? [];
+            musicVolumeExports.forEach(exp => {
                 const uActor = pkg.fetchObject<GA.UMusicVolume>(exp.index + 1).loadSelf();
                 const musicInfo = uActor.getDecodeInfo(decodeLibrary);
                 decodeLibrary.audioList.push(musicInfo);
+            });
 
-                // Mapping is now handled internally inside uActor.getDecodeInfo()
+            const ambientSoundExports = expGroups["AmbientSoundObject"] ?? [];
+            ambientSoundExports.forEach(exp => {
+                try {
+                    const uActor = pkg.fetchObject<any>(exp.index + 1).loadSelf();
+                    if (uActor.getDecodeInfo) {
+                        uActor.getDecodeInfo(decodeLibrary);
+                    }
+                } catch (e) {
+                    // Skip ambient sounds that fail to load (e.g. missing sound reference)
+                }
             });
         }
 

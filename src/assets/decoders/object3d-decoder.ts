@@ -327,6 +327,7 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
     library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
     sector.musicVolumes = library.musicVolumes;
+    sector.ambientSounds = library.ambientSounds;
 
     // NEW: Render BSP sections (UE2-style section-based rendering)
     if (library.bspSections && library.bspSections.length > 0) {

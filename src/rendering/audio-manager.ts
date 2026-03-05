@@ -6,6 +6,8 @@ class AudioManager {
     protected readonly musicFiles: Record<number, string[]> = {};
     protected audioContext: AudioContext;
     protected masterGain: GainNode;
+    protected musicGainNode: GainNode;
+    protected ambientGainNode: GainNode;
     protected unlocked = false;
     protected currentSource?: AudioBufferSourceNode;
     protected currentIndex?: number;
@@ -19,8 +21,22 @@ class AudioManager {
         this.masterGain.connect(this.audioContext.destination);
         this.masterGain.gain.value = 1;
 
+        this.musicGainNode = this.audioContext.createGain();
+        this.musicGainNode.connect(this.masterGain);
+        this.musicGainNode.gain.value = 0;
+
+        this.ambientGainNode = this.audioContext.createGain();
+        this.ambientGainNode.connect(this.masterGain);
+        this.ambientGainNode.gain.value = 0.9;
+
         this.setupUnlock();
     }
+
+    public get musicVolume(): number { return this.musicGainNode.gain.value; }
+    public set musicVolume(v: number) { this.musicGainNode.gain.value = v; }
+
+    public get ambientVolume(): number { return this.ambientGainNode.gain.value; }
+    public set ambientVolume(v: number) { this.ambientGainNode.gain.value = v; }
 
     public setMusicInfo(musicAssets: Record<number, string[]>) {
         Object.assign(this.musicFiles, musicAssets);
@@ -84,7 +100,7 @@ class AudioManager {
     protected playBuffer(buffer: AudioBuffer) {
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
-        source.connect(this.masterGain);
+        source.connect(this.musicGainNode);
 
         source.onended = () => this.handleTrackEnd();
         source.start(0);
@@ -162,6 +178,106 @@ class AudioManager {
             await this.audioContext.resume();
             this.unlocked = true;
         }
+    }
+
+    // --- Ambient Sound Spatial Playback ---
+
+    protected readonly activeAmbientSounds = new Map<string, {
+        source: AudioBufferSourceNode,
+        panner: PannerNode,
+        gain: GainNode,
+    }>();
+    protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
+
+    public async playAmbientSound(
+        id: string,
+        dataUri: string,
+        position: [number, number, number],
+        volume: number,
+        pitch: number,
+        radius: number,
+    ) {
+        if (this.activeAmbientSounds.has(id)) return; // already playing
+
+        await this.ensureUnlocked();
+
+        let buffer = this.ambientBufferCache.get(dataUri);
+        if (!buffer) {
+            try {
+                const res = await fetch(dataUri);
+                const raw = await res.arrayBuffer();
+                buffer = await this.audioContext.decodeAudioData(raw);
+                this.ambientBufferCache.set(dataUri, buffer);
+            } catch (e) {
+                console.warn(`Failed to decode ambient sound ${id}`, e);
+                return;
+            }
+        }
+
+        // Don't start if it was stopped while decoding
+        if (this.activeAmbientSounds.has(id)) return;
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.playbackRate.value = pitch;
+
+        const panner = this.audioContext.createPanner();
+        panner.panningModel = "HRTF";
+        panner.distanceModel = "linear";
+        panner.refDistance = 1;
+        panner.maxDistance = radius;
+        panner.rolloffFactor = 1;
+        panner.positionX.value = position[0];
+        panner.positionY.value = position[1];
+        panner.positionZ.value = position[2];
+
+        const gain = this.audioContext.createGain();
+        gain.gain.value = volume;
+
+        source.connect(gain);
+        gain.connect(panner);
+        panner.connect(this.ambientGainNode);
+
+        source.start(0);
+
+        this.activeAmbientSounds.set(id, { source, panner, gain });
+    }
+
+    public stopAmbientSound(id: string) {
+        const entry = this.activeAmbientSounds.get(id);
+        if (!entry) return;
+
+        entry.source.onended = null;
+        try { entry.source.stop(); } catch { }
+        entry.source.disconnect();
+        entry.gain.disconnect();
+        entry.panner.disconnect();
+
+        this.activeAmbientSounds.delete(id);
+    }
+
+    public updateListenerPosition(px: number, py: number, pz: number, fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) {
+        const listener = this.audioContext.listener;
+
+        if (listener.positionX) {
+            listener.positionX.value = px;
+            listener.positionY.value = py;
+            listener.positionZ.value = pz;
+            listener.forwardX.value = fx;
+            listener.forwardY.value = fy;
+            listener.forwardZ.value = fz;
+            listener.upX.value = ux;
+            listener.upY.value = uy;
+            listener.upZ.value = uz;
+        } else {
+            listener.setPosition(px, py, pz);
+            listener.setOrientation(fx, fy, fz, ux, uy, uz);
+        }
+    }
+
+    public get activeAmbientSoundIds(): Set<string> {
+        return new Set(this.activeAmbientSounds.keys());
     }
 }
 

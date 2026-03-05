@@ -152,6 +152,11 @@ class RenderManager {
 
         skyFolder.open();
 
+        const audioFolder = gui.addFolder("Audio");
+        audioFolder.add(this.audioManager, "musicVolume", 0, 1, 0.01).name("Music Volume");
+        audioFolder.add(this.audioManager, "ambientVolume", 0, 1, 0.01).name("Ambient Volume");
+        audioFolder.open();
+
         this.renderer.autoClear = false;
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
@@ -1228,6 +1233,69 @@ class RenderManager {
                 console.log(`[Music] Letting current track finish (left music volume)`);
                 this.audioManager.letTrackFinish();
             }
+        }
+
+        // Ambient sound spatial update (UE2: MAX_AUDIOCHANNELS=32, priority-sorted by distance)
+        {
+            const MAX_AMBIENT_CHANNELS = 24; // leave headroom for music/effects
+            const camPos = this.camera.position;
+            const timeOfDay = this.environment.getTimeOfDay(); // 0-24 hours
+            const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
+            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, distSq: number }[] = [];
+
+            for (const [, sectorYMap] of this.sectors) {
+                for (const [, sector] of sectorYMap) {
+                    if (!sector.ambientSounds) continue;
+                    for (const snd of sector.ambientSounds) {
+                        // L2 AmbientSoundType: 0=Always, 1=Day, 2=Night, 3=Water
+                        if (snd.soundType === 1 && !isDaytime) continue; // Day-only sound at night
+                        if (snd.soundType === 2 && isDaytime) continue;  // Night-only sound during day
+
+                        const dx = snd.position[0] - camPos.x;
+                        const dy = snd.position[1] - camPos.y;
+                        const dz = snd.position[2] - camPos.z;
+                        const distSq = dx * dx + dy * dy + dz * dz;
+                        if (distSq <= snd.radius * snd.radius) {
+                            candidates.push({ uuid: snd.uuid, snd, distSq });
+                        }
+                    }
+                }
+            }
+
+            // Sort by distance (closest = highest priority), take only top N
+            candidates.sort((a, b) => a.distSq - b.distSq);
+            const inRangeSounds = new Map<string, GD.IAmbientSoundObjectDecodeInfo>();
+            for (let i = 0; i < Math.min(candidates.length, MAX_AMBIENT_CHANNELS); i++) {
+                inRangeSounds.set(candidates[i].uuid, candidates[i].snd);
+            }
+
+            // Stop sounds no longer in range or below priority cutoff
+            for (const id of this.audioManager.activeAmbientSoundIds) {
+                if (!inRangeSounds.has(id)) {
+                    this.audioManager.stopAmbientSound(id);
+                }
+            }
+
+            // Start sounds newly in range
+            for (const [id, snd] of inRangeSounds) {
+                this.audioManager.playAmbientSound(
+                    id,
+                    snd.soundDataUri,
+                    snd.position,
+                    snd.volume,
+                    snd.pitch,
+                    snd.radius,
+                );
+            }
+
+            // Update listener position from camera
+            const fwd = this.camera.getWorldDirection(new Vector3());
+            const up = this.camera.up;
+            this.audioManager.updateListenerPosition(
+                camPos.x, camPos.y, camPos.z,
+                fwd.x, fwd.y, fwd.z,
+                up.x, up.y, up.z,
+            );
         }
 
         this.renderer.clear();
