@@ -241,9 +241,10 @@ class Visualizer {
 
         const ambientPanel = createPanel("AMBIENT SOUNDS");
         this.ambientListElement = document.createElement("div");
-        this.ambientListElement.style.display = "flex";
-        this.ambientListElement.style.flexDirection = "column";
-        this.ambientListElement.style.gap = "4px";
+        this.ambientListElement.style.display = "grid";
+        this.ambientListElement.style.gridTemplateRows = "repeat(15, auto)";
+        this.ambientListElement.style.gridAutoFlow = "column";
+        this.ambientListElement.style.gap = "4px 20px";
         ambientPanel.appendChild(this.ambientListElement);
         hud.appendChild(ambientPanel);
 
@@ -291,18 +292,31 @@ class Visualizer {
                     line.style.borderLeft = "2px solid #444";
                     line.style.paddingLeft = "6px";
                     line.style.fontSize = "11px";
-                    this.ambientListElement.appendChild(line);
                     this.audioLines.set(s.id, line);
                 }
+                
+                // Re-appending naturally moves the element, keeping the DOM sorted 
+                this.ambientListElement.appendChild(line);
 
                 const sndName = s.info.soundName;
                 const distText = Math.round(s.dist).toString().padStart(6, " ");
-                const volText = Math.round(s.info.volume * 100).toString().padStart(3, " ");
+                const baseVol = s.info.volume;
+                
+                // Calculate AL_INVERSE_DISTANCE_CLAMPED attenuation
+                const ref = s.info.refDistance;
+                let attenuation = 1.0;
+                if (s.dist > ref) {
+                    attenuation = ref / (ref + 1.0 * (s.dist - ref));
+                }
+                const actualVol = baseVol * attenuation;
+
+                const baseVolText = Math.round(baseVol * 100).toString().padStart(3, " ");
+                const actualVolText = Math.round(actualVol * 100).toString().padStart(3, " ");
                 const status = s.isPlaying ? "PLAYING" : "WAITING";
                 const delayText = s.nextReplayTime !== undefined ? 
                     ` (next: ${Math.round((s.nextReplayTime - currentTime) / 100) / 10}s)` : "";
 
-                line.innerText = `[${distText}] ${sndName}\n      Vol: ${volText}% | ${status}${delayText}`;
+                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${delayText}`;
                 line.style.color = s.isPlaying ? "#fff" : "#888";
                 line.style.borderColor = s.isPlaying ? "#0f0" : "#444";
             });

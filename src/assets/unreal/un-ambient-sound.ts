@@ -53,7 +53,8 @@ abstract class UAmbientSoundObject extends UAActor {
         }
 
         const position = this.location.getVectorElements();
-        const radius = this.radius * 25;
+        const refDistance = this.radius;
+        const maxDistance = this.radius * 100; // GAudioMaxRadiusMultiplier = 100 in UE2
         const volume = this.volume / 255;
         const pitch = this.pitch / 64;
         const randomDelay = this.randomAmbient; // L2 AmbientRandom=100 → max 100s delay
@@ -63,7 +64,8 @@ abstract class UAmbientSoundObject extends UAActor {
             name: this.objectName,
             type: "AmbientSoundObject",
             position,
-            radius,
+            refDistance,
+            maxDistance,
             volume,
             pitch,
             soundDataUri,

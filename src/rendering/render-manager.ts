@@ -1254,7 +1254,7 @@ class RenderManager {
                         const dy = snd.position[1] - camPos.y;
                         const dz = snd.position[2] - camPos.z;
                         const distSq = dx * dx + dy * dy + dz * dz;
-                        if (distSq <= snd.radius * snd.radius) {
+                        if (distSq <= snd.maxDistance * snd.maxDistance) {
                             candidates.push({ uuid: snd.uuid, snd, distSq });
                         }
                     }
@@ -1284,7 +1284,8 @@ class RenderManager {
                     snd.position,
                     snd.volume,
                     snd.pitch,
-                    snd.radius,
+                    snd.refDistance,
+                    snd.maxDistance,
                     snd.randomDelay,
                     snd.looping,
                     currentTime

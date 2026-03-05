@@ -618,7 +618,8 @@ declare global {
                 export interface IAmbientSoundObjectDecodeInfo extends IAudioDecodeInfo {
                     type: "AmbientSoundObject",
                     position: Vector3Arr,
-                    radius: number,
+                    refDistance: number,
+                    maxDistance: number,
                     volume: number,
                     pitch: number,
                     soundDataUri: string,

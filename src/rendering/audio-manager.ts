@@ -286,7 +286,8 @@ class AudioManager {
             position: [number, number, number],
             volume: number,
             pitch: number,
-            radius: number,
+            refDistance: number,
+            maxDistance: number,
             randomDelay: number,
             looping: boolean
         }
@@ -300,7 +301,8 @@ class AudioManager {
         position: [number, number, number],
         volume: number,
         pitch: number,
-        radius: number,
+        refDistance: number,
+        maxDistance: number,
         randomDelay: number,
         looping: boolean,
         currentTime?: number
@@ -310,7 +312,7 @@ class AudioManager {
         const time = currentTime ?? this.lastTime;
 
         this.activeAmbientSounds.set(id, {
-            info: { dataUri, soundName, position, volume, pitch, radius, randomDelay, looping }
+            info: { dataUri, soundName, position, volume, pitch, refDistance, maxDistance, randomDelay, looping }
         } as any);
 
         await this.ensureUnlocked();
@@ -334,10 +336,10 @@ class AudioManager {
 
         const panner = this.audioContext.createPanner();
         panner.panningModel = "HRTF";
-        panner.distanceModel = "linear";
-        panner.refDistance = 1;
-        panner.maxDistance = radius;
-        panner.rolloffFactor = 1;
+        panner.distanceModel = "inverse";
+        panner.refDistance = refDistance;
+        panner.maxDistance = maxDistance;
+        panner.rolloffFactor = 1.0;
         panner.positionX.value = position[0];
         panner.positionY.value = position[1];
         panner.positionZ.value = position[2];
