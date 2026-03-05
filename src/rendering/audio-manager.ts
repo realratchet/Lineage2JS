@@ -148,6 +148,33 @@ class AudioManager {
         }
     }
 
+    public cancelMusic() {
+        this.currentPlayId++;
+        this.currentIndex = undefined;
+        this.playingIndex = undefined;
+        this.currentIsLooped = false;
+        this.nextBuffer = undefined;
+        this.nextMusicTrackTime = undefined;
+        this.nextMusicPlayId = undefined;
+        this.fadeEndTime = undefined;
+
+        if (this.currentSource) {
+            this.currentSource.onended = null;
+            try {
+                this.currentSource.stop();
+            } catch (e) {
+                // Ignore InvalidStateError if already stopped
+            }
+            this.currentSource.disconnect();
+            this.currentSource = undefined;
+        }
+
+        if (this.currentGain) {
+            this.currentGain.disconnect();
+            this.currentGain = undefined;
+        }
+    }
+
     public letTrackFinish() {
         this.currentPlayId++;
         this.currentIndex = undefined;

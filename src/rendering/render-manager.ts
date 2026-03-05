@@ -481,41 +481,43 @@ class RenderManager {
 
         switch (event.key.toLowerCase()) {
             case "1":
+                this.cancelMusic();
                 this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
                 this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
                 this.controls.orbit.update();
                 break;
             case "2":
+                this.cancelMusic();
                 this.camera.position.set(17635.20575146492, -11784.939422516854, 116150.5713219522);
                 this.controls.orbit.target.set(18067.654677822546, -10987.479065394222, 113781.22799780089);
                 this.controls.orbit.update();
                 break;
             case "3":
+                this.cancelMusic();
                 this.camera.position.set(15072.881710902564, -11862.167696361777, 110387.91067628124);
                 this.controls.orbit.target.set(14711.102749053878, -11434.303788147914, 110872.50292405237);
                 this.controls.orbit.update();
                 break;
             case "4":
+                this.cancelMusic();
                 this.camera.position.set(12918.803737500606, -11769.26992456535, 109998.28664096774);
                 this.controls.orbit.target.set(12961.940094338941, -11789.664021556502, 110631.6332572824);
                 this.controls.orbit.update();
                 break;
             case "5":
+                this.cancelMusic();
                 this.camera.position.set(23756.20212599347, -8869.681711370744, 116491.99214326135);
                 this.controls.orbit.target.set(23706.65317650355, -9178.136467533635, 118330.62193563695);
                 this.controls.orbit.update();
                 break;
             case "6":
+                this.cancelMusic();
                 this.camera.position.set(17436.46445202629, -6351.127037466889, 109469.23150265992);
                 this.controls.orbit.target.set(18965.828211115713, -6064.126549127763, 106770.89206042158);
                 this.controls.orbit.update();
                 break;
-            case "+":
-                this.nextSector();
-                break;
-            case "-":
-                this.prevSector();
-                break;
+            case "+": this.nextSector(); break;
+            case "-": this.prevSector(); break;
             case "w": if (!this.isOrbitControls) this.dirKeys.up = true; break;
             case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
             case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
@@ -527,9 +529,15 @@ class RenderManager {
         }
     }
 
+    protected cancelMusic() {
+        this.activeMusicId = null;
+        this.audioManager.cancelMusic();
+    }
+
     protected setSector(index: number) {
         const sector = this.sectorBounds[index];
 
+        this.cancelMusic();
         this.camera.position.copy(sector.max);
         this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
         this.controls.orbit.update();
