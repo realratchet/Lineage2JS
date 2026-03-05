@@ -59,7 +59,7 @@ abstract class UAmbientSoundObject extends UAActor {
         const randomDelay = this.randomAmbient; // L2 AmbientRandom=100 → max 100s delay
 
         const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
-            uuid: generateUUID(),
+            uuid: this.uuid,
             name: this.objectName,
             type: "AmbientSoundObject",
             position,
@@ -67,6 +67,7 @@ abstract class UAmbientSoundObject extends UAActor {
             volume,
             pitch,
             soundDataUri,
+            soundName: soundKey,
             looping: randomDelay === 0, // seamless loop only when no random delay
             soundType: this.soundType, // 0=Always, 1=Day, 2=Night, 3=Water
             randomDelay,

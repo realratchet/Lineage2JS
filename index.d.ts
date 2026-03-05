@@ -622,6 +622,7 @@ declare global {
                     volume: number,
                     pitch: number,
                     soundDataUri: string,
+                    soundName: string,
                     looping: boolean,
                     soundType: number, // 0=Always, 1=Day, 2=Night, 3=Water
                     randomDelay: number, // max seconds between repetitions (0 = seamless loop)

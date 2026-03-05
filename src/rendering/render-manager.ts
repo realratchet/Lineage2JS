@@ -396,20 +396,18 @@ class RenderManager {
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
 
-                if (this.visualizer.getMode() === 1) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 2) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 3) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === 4) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                } else if (this.visualizer.getMode() === 5) { // MusicVolumes
-                    this.visualizer.updateMusicVolumes(currentSectorMap, cameraPos);
                 }
 
                 // Overlay fogs if in other modes
-                if (this.visualizer.getMode() !== 4) {
+                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
@@ -436,20 +434,18 @@ class RenderManager {
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
 
-                if (this.visualizer.getMode() === 1) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 2) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 3) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === 4) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                } else if (this.visualizer.getMode() === 5) { // MusicVolumes
-                    this.visualizer.updateMusicVolumes(currentSectorMap, cameraPos);
                 }
 
                 // Overlay fogs if in other modes
-                if (this.visualizer.getMode() !== 4) {
+                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
@@ -1283,6 +1279,7 @@ class RenderManager {
             for (const [id, snd] of inRangeSounds) {
                 this.audioManager.playAmbientSound(
                     id,
+                    snd.soundName,
                     snd.soundDataUri,
                     snd.position,
                     snd.volume,
@@ -1328,6 +1325,7 @@ class RenderManager {
                 const currentMode = this.visualizer.getMode();
 
                 // Remove old visualizer
+                this.visualizer.destroy();
                 this.scene.remove(this.visualizer.getGroup());
                 this.scene.remove(this.visualizer.getFogGroup());
 
@@ -1369,22 +1367,20 @@ class RenderManager {
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
 
-                if (this.visualizer.getMode() === 1) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 2) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 3) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === 4) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                } else if (this.visualizer.getMode() === 5) { // MusicVolumes
-                    this.visualizer.updateMusicVolumes(currentSectorMap, cameraPos);
                 }
             }
         }
 
-        // Always update HUD in Fogs mode to prevent stale data when transitioning between sectors or leaving them
-        if (this.visualizer.isEnabled() && this.visualizer.getMode() === 4) {
+        // Always update HUD in Fogs/Audio mode to prevent stale data when transitioning between sectors or leaving them
+        if (this.visualizer.isEnabled()) {
             // Capture raw source colors from the active fog if available
             let activeFogColors: import("./visualizer").FogSourceColors | undefined;
             if (this.activeFogId) {
@@ -1430,7 +1426,13 @@ class RenderManager {
                 }
             }
 
-            this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);
+            if (this.visualizer.getMode() === VisualizerMode.Fogs) {
+                this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);
+            } else if (this.visualizer.getMode() === VisualizerMode.Audio) {
+                const musicState = this.audioManager.getMusicState();
+                const ambientSounds = this.audioManager.getAmbientSounds();
+                this.visualizer.updateAudioHUD(musicState, ambientSounds, _currentTime, this.camera.position);
+            }
         }
 
         this.renderer.autoClear = false;

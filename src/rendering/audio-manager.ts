@@ -282,6 +282,7 @@ class AudioManager {
         nextReplayTime?: number,
         info: {
             dataUri: string,
+            soundName: string,
             position: [number, number, number],
             volume: number,
             pitch: number,
@@ -294,6 +295,7 @@ class AudioManager {
 
     public async playAmbientSound(
         id: string,
+        soundName: string,
         dataUri: string,
         position: [number, number, number],
         volume: number,
@@ -308,7 +310,7 @@ class AudioManager {
         const time = currentTime ?? this.lastTime;
 
         this.activeAmbientSounds.set(id, {
-            info: { dataUri, position, volume, pitch, radius, randomDelay, looping }
+            info: { dataUri, soundName, position, volume, pitch, radius, randomDelay, looping }
         } as any);
 
         await this.ensureUnlocked();
@@ -388,8 +390,8 @@ class AudioManager {
             entry.source.disconnect();
             entry.source = undefined;
         }
-        entry.gain.disconnect();
-        entry.panner.disconnect();
+        if (entry.gain) entry.gain.disconnect();
+        if (entry.panner) entry.panner.disconnect();
 
         this.activeAmbientSounds.delete(id);
     }
@@ -411,6 +413,30 @@ class AudioManager {
             listener.setPosition(px, py, pz);
             listener.setOrientation(fx, fy, fz, ux, uy, uz);
         }
+    }
+
+    public getMusicState() {
+        return {
+            currentIndex: this.currentIndex,
+            playingIndex: this.playingIndex,
+            isLooped: this.currentIsLooped,
+            isFading: this.fadeEndTime !== undefined && this.lastTime < this.fadeEndTime,
+            nextTrackTime: this.nextMusicTrackTime,
+            volume: this.musicVolume
+        };
+    }
+
+    public getAmbientSounds() {
+        const results: any[] = [];
+        for (const [id, entry] of this.activeAmbientSounds) {
+            results.push({
+                id,
+                info: entry.info,
+                isPlaying: !!entry.source,
+                nextReplayTime: entry.nextReplayTime
+            });
+        }
+        return results;
     }
 
     public get activeAmbientSoundIds(): Set<string> {

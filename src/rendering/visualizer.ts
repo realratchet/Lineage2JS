@@ -9,7 +9,7 @@ export enum VisualizerMode {
     Zones = 2,
     Leaves = 3,
     Fogs = 4,
-    MusicVolumes = 5,
+    Audio = 5,
 }
 
 export enum LeafVisualizerDetail {
@@ -56,7 +56,11 @@ class Visualizer {
     private readonly group: Group;
     private readonly fogGroup: Group;
     private readonly hudElement: HTMLElement;
-    private readonly hudColors: Map<string, { swatch: HTMLElement, hex: HTMLElement, alpha: HTMLElement }> = new Map();
+    private readonly audioHudElement: HTMLElement;
+    private readonly hudColors: Map<string, { swatch: HTMLElement, rgbDisplay: HTMLElement, alpha: HTMLElement }> = new Map();
+    private readonly audioLines: Map<string, HTMLElement> = new Map();
+    private musicInfoElement: HTMLElement | null = null;
+    private ambientListElement: HTMLElement | null = null;
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
 
@@ -68,7 +72,6 @@ class Visualizer {
     private zoneVisualizations: Object3D[] = [];
     private leafVisualizations: Object3D[] = [];
     private fogVisualizations: Object3D[] = [];
-    private musicVolumeVisualizations: Object3D[] = [];
     private leafDetail: LeafVisualizerDetail = LeafVisualizerDetail.Auto;
     private readonly leafAutoAggregateThreshold: number = 200;
 
@@ -86,7 +89,9 @@ class Visualizer {
         scene.add(this.fogGroup);
 
         this.hudElement = this.initHUD();
+        this.audioHudElement = this.initAudioHUD();
         document.body.appendChild(this.hudElement);
+        document.body.appendChild(this.audioHudElement);
     }
 
     private createHudRow(container: HTMLElement, name: string, prefix: string): void {
@@ -190,11 +195,125 @@ class Visualizer {
         return hud;
     }
 
+    private initAudioHUD(): HTMLElement {
+        const hud = document.createElement("div");
+        hud.id = "audio-hud-container";
+        Object.assign(hud.style, {
+            position: "fixed",
+            top: "10px",
+            left: "10px",
+            display: "none",
+            flexDirection: "column",
+            gap: "10px",
+            pointerEvents: "none",
+            zIndex: "10001"
+        });
+
+        const createPanel = (titleText: string) => {
+            const panel = document.createElement("div");
+            Object.assign(panel.style, {
+                backgroundColor: "rgba(0, 0, 0, 0.7)",
+                color: "#fff",
+                padding: "10px",
+                borderRadius: "5px",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                border: "1px solid #444",
+                boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+                minWidth: "300px"
+            });
+
+            const title = document.createElement("div");
+            title.innerText = titleText;
+            title.style.fontWeight = "bold";
+            title.style.marginBottom = "8px";
+            title.style.borderBottom = "1px solid #444";
+            title.style.paddingBottom = "4px";
+            panel.appendChild(title);
+            return panel;
+        };
+
+        const musicPanel = createPanel("MUSIC STATUS");
+        this.musicInfoElement = document.createElement("div");
+        this.musicInfoElement.style.whiteSpace = "pre";
+        musicPanel.appendChild(this.musicInfoElement);
+        hud.appendChild(musicPanel);
+
+        const ambientPanel = createPanel("AMBIENT SOUNDS");
+        this.ambientListElement = document.createElement("div");
+        this.ambientListElement.style.display = "flex";
+        this.ambientListElement.style.flexDirection = "column";
+        this.ambientListElement.style.gap = "4px";
+        ambientPanel.appendChild(this.ambientListElement);
+        hud.appendChild(ambientPanel);
+
+        return hud;
+    }
+
+    public updateAudioHUD(musicData: any, ambientSounds: any[], currentTime: number, cameraPosition: Vector3): void {
+        if (!this.enabled || this.mode !== VisualizerMode.Audio) return;
+
+        if (this.musicInfoElement) {
+            const lines = [
+                `Current ID: ${musicData.currentIndex !== undefined ? musicData.currentIndex : "None"}`,
+                `Playing ID: ${musicData.playingIndex !== undefined ? musicData.playingIndex : "None"}`,
+                `Looping:    ${musicData.isLooped ? "YES" : "NO"}`,
+                `Fading:     ${musicData.isFading ? "YES" : "NO"}`,
+                `Next Track: ${musicData.nextTrackTime !== undefined ? Math.round((musicData.nextTrackTime - currentTime) / 100) / 10 + "s" : "---"}`,
+                `Volume:     ${Math.round(musicData.volume * 100)}%`
+            ];
+            this.musicInfoElement.innerText = lines.join("\n");
+        }
+
+        if (this.ambientListElement) {
+            const sorted = [...ambientSounds].map(s => {
+                const dx = s.info.position[0] - cameraPosition.x;
+                const dy = s.info.position[1] - cameraPosition.y;
+                const dz = s.info.position[2] - cameraPosition.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                return { ...s, dist };
+            }).sort((a, b) => a.dist - b.dist);
+
+            const currentIds = new Set(sorted.map(s => s.id));
+            const existingIds = new Set(this.audioLines.keys());
+
+            for (const id of existingIds) {
+                if (!currentIds.has(id)) {
+                    this.audioLines.get(id)?.remove();
+                    this.audioLines.delete(id);
+                }
+            }
+
+            sorted.forEach(s => {
+                let line = this.audioLines.get(s.id);
+                if (!line) {
+                    line = document.createElement("div");
+                    line.style.borderLeft = "2px solid #444";
+                    line.style.paddingLeft = "6px";
+                    line.style.fontSize = "11px";
+                    this.ambientListElement.appendChild(line);
+                    this.audioLines.set(s.id, line);
+                }
+
+                const sndName = s.info.soundName;
+                const distText = Math.round(s.dist).toString().padStart(6, " ");
+                const volText = Math.round(s.info.volume * 100).toString().padStart(3, " ");
+                const status = s.isPlaying ? "PLAYING" : "WAITING";
+                const delayText = s.nextReplayTime !== undefined ? 
+                    ` (next: ${Math.round((s.nextReplayTime - currentTime) / 100) / 10}s)` : "";
+
+                line.innerText = `[${distText}] ${sndName}\n      Vol: ${volText}% | ${status}${delayText}`;
+                line.style.color = s.isPlaying ? "#fff" : "#888";
+                line.style.borderColor = s.isPlaying ? "#0f0" : "#444";
+            });
+        }
+    }
+
     public updateHUD(activeFogColors?: FogSourceColors, globalEnvColors?: GlobalEnvColors, zoneFogData?: ZoneFogData): void {
         if (!this.enabled || this.mode !== VisualizerMode.Fogs) return;
 
         const updateEntry = (prefix: string, name: string, color?: ColorByte) => {
-            const entry = this.hudColors.get(`${prefix}:${name}`) as any;
+            const entry = this.hudColors.get(`${prefix}:${name}`);
             if (entry) {
                 if (color) {
                     const hexValue = color.toHex();
@@ -320,11 +439,14 @@ class Visualizer {
 
     private updateVisibility(): void {
         this.group.visible = this.enabled && this.mode !== VisualizerMode.None;
-        // Fogs are only visible in Fogs mode
         const isFogMode = this.enabled && this.mode === VisualizerMode.Fogs;
+        const isAudioMode = this.enabled && this.mode === VisualizerMode.Audio;
         this.fogGroup.visible = isFogMode;
         if (this.hudElement) {
             this.hudElement.style.display = isFogMode ? "flex" : "none";
+        }
+        if (this.audioHudElement) {
+            this.audioHudElement.style.display = isAudioMode ? "flex" : "none";
         }
     }
 
@@ -349,8 +471,7 @@ class Visualizer {
             case VisualizerMode.Fogs:
                 // Fogs will be added via updateFogs()
                 break;
-            case VisualizerMode.MusicVolumes:
-                // MusicVolumes will be added via updateMusicVolumes()
+            case VisualizerMode.Audio:
                 break;
         }
     }
@@ -1049,110 +1170,6 @@ class Visualizer {
         this.clearZoneVisualizations();
         this.clearLeafVisualizations();
         this.clearFogVisualizations();
-        this.clearMusicVolumeVisualizations();
-    }
-
-    public updateMusicVolumes(sectors: Map<number, Map<number, SectorObject>>, cameraPosition?: Vector3): void {
-        if (!this.enabled || this.mode !== VisualizerMode.MusicVolumes) return;
-        this.clearMusicVolumeVisualizations();
-        if (!cameraPosition) return;
-
-        const cx = cameraPosition.x, cy = cameraPosition.y, cz = cameraPosition.z;
-        const insideColor = new Color(0x00ff00);
-        const outsideColor = new Color(0xff4444);
-
-        for (const [, sectorYMap] of sectors) {
-            for (const [, sector] of sectorYMap) {
-                if (!sector.musicVolumes || sector.musicVolumes.length === 0) continue;
-
-                for (const vol of sector.musicVolumes) {
-                    const nodes = vol.bsp.nodes;
-                    if (nodes.length === 0) continue;
-
-                    // Run PointCheck to determine if camera is inside
-                    let outside = vol.bsp.isRootOutside;
-                    if (nodes.length > 0) {
-                        let iNode = 0;
-                        let isFront = false;
-                        do {
-                            const node = nodes[iNode];
-                            const p = node.plane;
-                            const dist = p[0] * cx + p[1] * cy + p[2] * cz - p[3];
-                            isFront = dist > 0;
-                            if (isFront) outside = outside || node.isCsg;
-                            else outside = outside && !node.isCsg;
-                            iNode = isFront ? node.iFront : node.iBack;
-                        } while (iNode !== -1);
-                    }
-
-                    const volColor = outside ? outsideColor : insideColor;
-
-                    // Use bounds center (in UE2 coords, swap Y/Z for Three.js)
-                    const box = vol.bounds.box;
-                    if (!box) continue;
-                    const bcx = (box.min[0] + box.max[0]) * 0.5;
-                    const bcy = (box.min[2] + box.max[2]) * 0.5; // Y↔Z swap
-                    const bcz = (box.min[1] + box.max[1]) * 0.5;
-                    const bExtent = Math.max(
-                        box.max[0] - box.min[0],
-                        box.max[1] - box.min[1],
-                        box.max[2] - box.min[2]
-                    ) * 0.5;
-
-                    // Visualize each BSP plane as an arrow projected from bounds center onto the plane
-                    for (const node of nodes) {
-                        const [nx, ny, nz, w] = node.plane;
-                        // Project bounds center onto the plane: point = center + normal * (w - dot(center, normal))
-                        const dot = nx * bcx + ny * bcy + nz * bcz;
-                        const t = w - dot;
-                        const ox = bcx + nx * t;
-                        const oy = bcy + ny * t;
-                        const oz = bcz + nz * t;
-                        const origin = new Vector3(ox, oy, oz);
-                        const dir = new Vector3(nx, ny, nz);
-                        const arrowLen = Math.min(bExtent * 0.3, 500);
-                        const arrow = new ArrowHelper(dir, origin, arrowLen, volColor.getHex(), arrowLen * 0.2, arrowLen * 0.1);
-                        if (arrow.line) {
-                            const lm = Array.isArray(arrow.line.material) ? arrow.line.material[0] : arrow.line.material;
-                            if (lm) { lm.transparent = true; lm.depthTest = false; lm.depthWrite = false; }
-                            arrow.line.renderOrder = 1000;
-                        }
-                        if (arrow.cone) {
-                            const cm = Array.isArray(arrow.cone.material) ? arrow.cone.material[0] : arrow.cone.material;
-                            if (cm) { cm.transparent = true; cm.depthTest = false; cm.depthWrite = false; }
-                            arrow.cone.renderOrder = 1000;
-                        }
-                        arrow.renderOrder = 1000;
-                        this.musicVolumeVisualizations.push(arrow);
-                        this.group.add(arrow);
-                    }
-
-                    // Label at volume bounds center
-                    const label = new Mesh(
-                        new BoxGeometry(50, 50, 50),
-                        new MeshBasicMaterial({ color: volColor, transparent: true, opacity: 0.6, depthTest: false, depthWrite: false })
-                    );
-                    label.position.set(bcx, bcy, bcz);
-                    label.renderOrder = 1000;
-                    label.userData.musicId = vol.musicId;
-                    label.userData.inside = !outside;
-                    this.musicVolumeVisualizations.push(label);
-                    this.group.add(label);
-                }
-            }
-        }
-    }
-
-    private clearMusicVolumeVisualizations(): void {
-        this.musicVolumeVisualizations.forEach(viz => {
-            this.group.remove(viz);
-            if (viz instanceof Mesh) {
-                viz.geometry.dispose();
-                const material = Array.isArray(viz.material) ? viz.material[0] : viz.material;
-                if (material instanceof MeshBasicMaterial) material.dispose();
-            }
-        });
-        this.musicVolumeVisualizations = [];
     }
 
     public getMode(): VisualizerMode {
@@ -1169,6 +1186,16 @@ class Visualizer {
 
     public getFogGroup(): Group {
         return this.fogGroup;
+    }
+
+    public destroy(): void {
+        this.clearVisualizations();
+        if (this.hudElement && this.hudElement.parentNode) {
+            this.hudElement.parentNode.removeChild(this.hudElement);
+        }
+        if (this.audioHudElement && this.audioHudElement.parentNode) {
+            this.audioHudElement.parentNode.removeChild(this.audioHudElement);
+        }
     }
 }
 
