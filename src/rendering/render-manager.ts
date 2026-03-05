@@ -1214,6 +1214,8 @@ class RenderManager {
             this.nextPhysicsTick = currentTime + 1000 / 30;
         }
 
+        this.audioManager.update(currentTime);
+
         const desiredPosition = new Vector3().copy(this.player.getRigidbody().translation() as THREE.Vector3).add(new Vector3(0, -this.player.getColliderSize().y * 0.5 - this.player.getStepHeight(), 0));
 
         this.player.position.lerp(desiredPosition, 0.1);

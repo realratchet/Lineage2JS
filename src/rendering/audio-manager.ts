@@ -14,7 +14,7 @@ class AudioManager {
     protected playingIndex?: number;
     protected currentIsLooped = false;
     protected nextBuffer?: AudioBuffer;
-    protected musicTimer?: any;
+    protected nextMusicTrackTime?: number;
 
     public constructor() {
         this.audioContext = new AudioContext();
@@ -54,13 +54,10 @@ class AudioManager {
             return;
         }
 
-        if (this.musicTimer) {
-            clearTimeout(this.musicTimer);
-            this.musicTimer = undefined;
-        }
+        this.nextMusicTrackTime = undefined;
 
         // If not forced and something is currently playing, just queue it for next
-        if (!isForced && (this.currentSource || this.musicTimer) && this.playingIndex !== undefined) {
+        if (!isForced && (this.currentSource || this.nextMusicTrackTime !== undefined) && this.playingIndex !== undefined) {
             console.log(`[Music] Queuing track ${index} (not forced)`);
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
@@ -94,10 +91,7 @@ class AudioManager {
         if (incrementPlayId) {
             this.currentPlayId++;
         }
-        if (this.musicTimer) {
-            clearTimeout(this.musicTimer);
-            this.musicTimer = undefined;
-        }
+        this.nextMusicTrackTime = undefined;
         this.currentIndex = undefined;
         this.playingIndex = undefined;
         this.currentIsLooped = false;
@@ -144,22 +138,36 @@ class AudioManager {
             console.log(`[Music] Track finished. Waiting ${waitTime / 1000}s before next track...`);
         }
 
-        const playId = this.currentPlayId;
-        this.musicTimer = setTimeout(async () => {
-            this.musicTimer = undefined;
-            
+        this.nextMusicTrackTime = performance.now() + waitTime;
+    }
+
+    public async update(currentTime: number) {
+        // Handle music delays
+        if (this.nextMusicTrackTime !== undefined && currentTime >= this.nextMusicTrackTime) {
+            this.nextMusicTrackTime = undefined;
+            const playId = this.currentPlayId;
             let buffer = this.nextBuffer;
 
-            if (!buffer) {
-                buffer = await this.fetchRandomBuffer(this.currentIndex as number);
+            if (!buffer && this.currentIndex !== undefined) {
+                buffer = await this.fetchRandomBuffer(this.currentIndex);
             }
 
-            // Check if playback was stopped or changed while we were fetching/waiting
-            if (this.currentPlayId !== playId || !buffer || this.currentIndex === undefined) return;
+            if (this.currentPlayId === playId && buffer && this.currentIndex !== undefined) {
+                this.playBuffer(buffer);
+                this.preloadNext(this.currentIndex);
+            }
+        }
 
-            this.playBuffer(buffer);
-            this.preloadNext(this.currentIndex);
-        }, waitTime);
+        // Handle ambient delays
+        for (const [id, entry] of this.activeAmbientSounds) {
+            if (entry.nextReplayTime !== undefined && currentTime >= entry.nextReplayTime) {
+                entry.nextReplayTime = undefined;
+                const buffer = this.ambientBufferCache.get(entry.info.dataUri);
+                if (buffer) {
+                    this.startAmbientSource(id, buffer, entry);
+                }
+            }
+        }
     }
 
     protected async preloadNext(index: number) {
@@ -219,7 +227,7 @@ class AudioManager {
         source?: AudioBufferSourceNode,
         panner: PannerNode,
         gain: GainNode,
-        timer?: any,
+        nextReplayTime?: number,
         info: {
             dataUri: string,
             position: [number, number, number],
@@ -288,14 +296,7 @@ class AudioManager {
         entry.gain = gain;
 
         if (!entry.info.looping && entry.info.randomDelay > 0) {
-            const delay = Math.random() * entry.info.randomDelay * 1000;
-            // console.log(`[AudioManager] Initial delay for ${id} in ${delay.toFixed(0)}ms (max ${entry.info.randomDelay}s)`);
-            entry.timer = setTimeout(() => {
-                const finalEntry = this.activeAmbientSounds.get(id);
-                if (finalEntry) {
-                    this.startAmbientSource(id, buffer, finalEntry);
-                }
-            }, delay);
+            entry.nextReplayTime = performance.now() + Math.random() * entry.info.randomDelay * 1000;
         } else {
             this.startAmbientSource(id, buffer, entry);
         }
@@ -314,14 +315,7 @@ class AudioManager {
                 if (!updatedEntry || updatedEntry.source !== source) return;
 
                 updatedEntry.source = undefined;
-                const delay = Math.random() * entry.info.randomDelay * 1000;
-                // console.log(`[AudioManager] Scheduled replay for ${id} in ${delay.toFixed(0)}ms (max ${entry.info.randomDelay}s)`);
-                updatedEntry.timer = setTimeout(() => {
-                    const finalEntry = this.activeAmbientSounds.get(id);
-                    if (finalEntry) {
-                        this.startAmbientSource(id, buffer, finalEntry);
-                    }
-                }, delay);
+                updatedEntry.nextReplayTime = performance.now() + Math.random() * entry.info.randomDelay * 1000;
             };
         }
 
@@ -334,11 +328,12 @@ class AudioManager {
         const entry = this.activeAmbientSounds.get(id);
         if (!entry) return;
 
-        if (entry.timer) clearTimeout(entry.timer);
+        entry.nextReplayTime = undefined;
         if (entry.source) {
             entry.source.onended = null;
             try { entry.source.stop(); } catch { }
             entry.source.disconnect();
+            entry.source = undefined;
         }
         entry.gain.disconnect();
         entry.panner.disconnect();
