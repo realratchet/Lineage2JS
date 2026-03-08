@@ -890,8 +890,8 @@ class RenderManager {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-            if (zone && zone.fog) {
-                if (zone.isFogZone && zone.isSunAffected) {
+            if (zone && zone.isFogZone && zone.fog) {
+                if (zone.isSunAffected) {
                     const zR = zone.fog.color.r * 255;
                     const zG = zone.fog.color.g * 255;
                     const zB = zone.fog.color.b * 255;
@@ -1437,22 +1437,22 @@ class RenderManager {
 
             // Capture active zone fog data
             let zoneFogData: import("./visualizer").ZoneFogData | undefined;
-            const sector = this.getSector(this.camera.position);
-            if (sector) {
-                const zoneIndex = sector.findPositionZone(this.camera.position);
-                if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
-                    const zoneData = sector.bspZones[zoneIndex];
-                    const zi = zoneData.zoneInfo;
-                    if (zi) {
-                        zoneFogData = {
-                            isFogZone: !!zi.isFogZone,
-                            color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
-                            start: zi.fog ? zi.fog.start : 0,
-                            end: zi.fog ? zi.fog.end : 0
-                        };
+                const sector = this.getSector(this.camera.position);
+                if (sector) {
+                    const zoneIndex = sector.findPositionZone(this.camera.position);
+                    if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
+                        const zoneData = sector.bspZones[zoneIndex];
+                        const zi = zoneData.zoneInfo;
+                        if (zi) {
+                            zoneFogData = {
+                                isFogZone: !!zi.isFogZone,
+                                color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
+                                start: zi.fog ? zi.fog.start : 0,
+                                end: zi.fog ? zi.fog.end : 0
+                            };
+                        }
                     }
                 }
-            }
 
             if (this.visualizer.getMode() === VisualizerMode.Fogs) {
                 this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);

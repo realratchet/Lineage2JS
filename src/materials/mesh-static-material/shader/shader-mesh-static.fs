@@ -508,7 +508,16 @@ void main() {
     #include <tonemapping_fragment>
     #include <encodings_fragment>
 
-    #include <fog_fragment>
+    // #include <fog_fragment>
+    #ifdef USE_FOG
+        #ifdef FOG_EXP2
+            float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+        #else
+            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+        #endif
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+        gl_FragColor.a = max(gl_FragColor.a, 0.0);
+    #endif
 
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
