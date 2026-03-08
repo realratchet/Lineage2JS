@@ -295,11 +295,18 @@ class RenderManager {
             set time(v) {
                 environment.setTimeOfDay(v);
                 self.needsUpdate = true;
+            },
+            get timeScale() { return environment.getTimeScale(); },
+            set timeScale(v) {
+                environment.setTimeScale(v);
+                self.needsUpdate = true;
             }
         };
 
         guiFolders.world.add(timeState, "time", 0, 24, 0.01)
             .name("Time");
+        guiFolders.world.add(timeState, "timeScale", 0, 100, 0.01)
+            .name("Time Scale");
 
         const envSignsSkyState = {
             get signsSky() { return environment.getActiveEnv(); },
@@ -1164,6 +1171,18 @@ class RenderManager {
 
     protected _preRender(currentTime: number, deltaTime: number) {
         this.mixer.update(deltaTime / 1000);
+
+        const timeScale = this.environment.getTimeScale();
+
+        if (timeScale !== 0) {
+            const t = this.environment.getTimeOfDay();
+            const dt = deltaTime / 100000 * timeScale;
+
+            const nt = (t + dt) % 24;
+
+            this.environment.setTimeOfDay(nt);
+            this.needsUpdate = true;
+        }
 
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);

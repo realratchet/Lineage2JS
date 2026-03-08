@@ -507,15 +507,9 @@ void main() {
     #include <output_fragment>
     #include <tonemapping_fragment>
     #include <encodings_fragment>
-    // Haze uses black fog for atmospheric depth (trace shows FOGCOLOR=0 for haze)
-    #ifdef HAZE_BLACK_FOG
-        #ifdef USE_FOG
-            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
-            gl_FragColor.rgb = mix( gl_FragColor.rgb, vec3(0.0), fogFactor );
-        #endif
-    #else
-        #include <fog_fragment>
-    #endif
+
+    #include <fog_fragment>
+
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>
 

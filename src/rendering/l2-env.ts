@@ -116,11 +116,15 @@ class L2Environment {
 
     protected time: number = 1 * 60 * 60; // in seconds
     protected envVersion: number = 0; // Incremented when activeEnv changes
+    protected timeScale: number = 0;
 
     public constructor(env: EnvInfo) {
         this.env = env;
         this.envColors = env.setup.timeEnv;
     }
+
+    public getTimeScale() { return this.timeScale; }
+    public setTimeScale(scale: number) { this.timeScale = scale; }
 
     public getTimeOfDay() { return this.time / 3600 % 24; }
     public setTimeOfDay(hours: number) { this.time = (hours % 24) * 3600; }
