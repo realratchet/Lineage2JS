@@ -19,7 +19,7 @@ class ParticleMaterial extends MeshBasicMaterial {
 
 class AnimatedParticleMaterial extends MeshBasicMaterial {
     protected framerate: number;
-    protected sprites: IDecodedParameter[];
+    protected sprites: GD.IDecodedParameter[];
     protected readonly isUpdatable = true;
 
     constructor({ blendingMode, opacity, name, framerate, sprites }: ParticleMaterialInitSettings_T) {
@@ -54,7 +54,7 @@ class AnimatedParticleMaterial extends MeshBasicMaterial {
 export default ParticleMaterial;
 export { ParticleMaterial, AnimatedParticleMaterial };
 
-function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {
+function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_T) {
     switch (blendingMode) {
         case "normal": return { blending: NormalBlending };
         case "alpha": return {

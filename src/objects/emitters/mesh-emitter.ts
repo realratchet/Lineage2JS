@@ -30,7 +30,7 @@ class ParticleMesh extends Mesh {
     }
 }
 
-type MeshEmitterConfig_T = EmitterConfig_T & {
+type MeshEmitterConfig_T = GD.EmitterConfig_T & {
     geometry: THREE.BufferGeometry,
     materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[]
 };
