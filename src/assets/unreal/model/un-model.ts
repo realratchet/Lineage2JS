@@ -52,6 +52,8 @@ abstract class UModel extends UPrimitive {
 
     public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; return this; }
     public getLevelInfo() { return this.levelInfo; }
+    public getBspNodes() { return this.bspNodes; }
+    public getIsRootOutside() { return this.isRootOutside; }
 
     protected preLoad(pkg: C.APackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
@@ -225,6 +227,19 @@ abstract class UModel extends UPrimitive {
         const extent = box.getExtents();
 
         return this.boxLeavesRecursive(0, origin, extent).map(i => this.leaves[i]);
+    }
+
+    public boxLeafIndices(box: GA.FBox): number[] {
+        if (this.bspNodes.length === 0) return [];
+
+        const origin = box.getCenter();
+        const extent = box.getExtents();
+
+        return this.boxLeavesRecursive(0, origin, extent);
+    }
+
+    public isCsg(node: FBSPNode): boolean {
+        return (node.numVertices > 0) && !(node.flags & (BspNodeFlags_T.NF_IsNew | BspNodeFlags_T.NF_NotCsg));
     }
 
     public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): void {

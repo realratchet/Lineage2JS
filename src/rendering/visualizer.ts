@@ -9,7 +9,7 @@ export enum VisualizerMode {
     Zones = 2,
     Leaves = 3,
     Fogs = 4,
-    // Future modes can be added here
+    Audio = 5,
 }
 
 export enum LeafVisualizerDetail {
@@ -56,7 +56,11 @@ class Visualizer {
     private readonly group: Group;
     private readonly fogGroup: Group;
     private readonly hudElement: HTMLElement;
-    private readonly hudColors: Map<string, { swatch: HTMLElement, hex: HTMLElement, alpha: HTMLElement }> = new Map();
+    private readonly audioHudElement: HTMLElement;
+    private readonly hudColors: Map<string, { swatch: HTMLElement, rgbDisplay: HTMLElement, alpha: HTMLElement }> = new Map();
+    private readonly audioLines: Map<string, HTMLElement> = new Map();
+    private musicInfoElement: HTMLElement | null = null;
+    private ambientListElement: HTMLElement | null = null;
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
 
@@ -85,7 +89,9 @@ class Visualizer {
         scene.add(this.fogGroup);
 
         this.hudElement = this.initHUD();
+        this.audioHudElement = this.initAudioHUD();
         document.body.appendChild(this.hudElement);
+        document.body.appendChild(this.audioHudElement);
     }
 
     private createHudRow(container: HTMLElement, name: string, prefix: string): void {
@@ -178,12 +184,7 @@ class Visualizer {
         ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(name => this.createHudRow(globalPanel, name, "global"));
         hud.appendChild(globalPanel);
 
-        // Panel 3: Mixed Colors
-        const mixedPanel = createPanel("MIXED COLORS");
-        ["Fog", "Sky", "Cloud", "Sun", "Haze"].forEach(name => this.createHudRow(mixedPanel, name, "mixed"));
-        hud.appendChild(mixedPanel);
-
-        // Panel 4: Zone Fog Colors
+        // Panel 3: Zone Fog Colors
         const zonePanel = createPanel("ZONE FOG COLORS");
         this.createHudRow(zonePanel, "Fog Color", "zone");
         this.createHudRow(zonePanel, "Fog Start", "zone");
@@ -194,11 +195,139 @@ class Visualizer {
         return hud;
     }
 
+    private initAudioHUD(): HTMLElement {
+        const hud = document.createElement("div");
+        hud.id = "audio-hud-container";
+        Object.assign(hud.style, {
+            position: "fixed",
+            top: "10px",
+            left: "10px",
+            display: "none",
+            flexDirection: "column",
+            gap: "10px",
+            pointerEvents: "none",
+            zIndex: "10001"
+        });
+
+        const createPanel = (titleText: string) => {
+            const panel = document.createElement("div");
+            Object.assign(panel.style, {
+                backgroundColor: "rgba(0, 0, 0, 0.7)",
+                color: "#fff",
+                padding: "10px",
+                borderRadius: "5px",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                border: "1px solid #444",
+                boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+                minWidth: "300px"
+            });
+
+            const title = document.createElement("div");
+            title.innerText = titleText;
+            title.style.fontWeight = "bold";
+            title.style.marginBottom = "8px";
+            title.style.borderBottom = "1px solid #444";
+            title.style.paddingBottom = "4px";
+            panel.appendChild(title);
+            return panel;
+        };
+
+        const musicPanel = createPanel("MUSIC STATUS");
+        this.musicInfoElement = document.createElement("div");
+        this.musicInfoElement.style.whiteSpace = "pre";
+        musicPanel.appendChild(this.musicInfoElement);
+        hud.appendChild(musicPanel);
+
+        const ambientPanel = createPanel("AMBIENT SOUNDS");
+        this.ambientListElement = document.createElement("div");
+        this.ambientListElement.style.display = "grid";
+        this.ambientListElement.style.gridTemplateRows = "repeat(15, auto)";
+        this.ambientListElement.style.gridAutoFlow = "column";
+        this.ambientListElement.style.gap = "4px 20px";
+        ambientPanel.appendChild(this.ambientListElement);
+        hud.appendChild(ambientPanel);
+
+        return hud;
+    }
+
+    public updateAudioHUD(musicData: any, ambientSounds: any[], currentTime: number, cameraPosition: Vector3): void {
+        if (!this.enabled || this.mode !== VisualizerMode.Audio) return;
+
+        if (this.musicInfoElement) {
+            const lines = [
+                `Current ID: ${musicData.currentIndex !== undefined ? musicData.currentIndex : "None"}`,
+                `Playing ID: ${musicData.playingIndex !== undefined ? musicData.playingIndex : "None"}`,
+                `Looping:    ${musicData.isLooped ? "YES" : "NO"}`,
+                `Fading:     ${musicData.isFading ? "YES" : "NO"}`,
+                `Next Track: ${musicData.nextTrackTime !== undefined ? Math.round((musicData.nextTrackTime - currentTime) / 100) / 10 + "s" : "---"}`,
+                `Volume:     ${Math.round(musicData.volume * 100)}%`
+            ];
+            this.musicInfoElement.innerText = lines.join("\n");
+        }
+
+        if (this.ambientListElement) {
+            const sorted = [...ambientSounds].map(s => {
+                const dx = s.info.position[0] - cameraPosition.x;
+                const dy = s.info.position[1] - cameraPosition.y;
+                const dz = s.info.position[2] - cameraPosition.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                return { ...s, dist };
+            }).sort((a, b) => a.dist - b.dist);
+
+            const currentIds = new Set(sorted.map(s => s.id));
+            const existingIds = new Set(this.audioLines.keys());
+
+            for (const id of existingIds) {
+                if (!currentIds.has(id)) {
+                    this.audioLines.get(id)?.remove();
+                    this.audioLines.delete(id);
+                }
+            }
+
+            sorted.forEach(s => {
+                let line = this.audioLines.get(s.id);
+                if (!line) {
+                    line = document.createElement("div");
+                    line.style.borderLeft = "2px solid #444";
+                    line.style.paddingLeft = "6px";
+                    line.style.fontSize = "11px";
+                    this.audioLines.set(s.id, line);
+                }
+                
+                // Re-appending naturally moves the element, keeping the DOM sorted 
+                this.ambientListElement.appendChild(line);
+
+                const sndName = s.info.soundName;
+                const distText = Math.round(s.dist).toString().padStart(6, " ");
+                const baseVol = s.info.volume;
+                
+                // Calculate AL_INVERSE_DISTANCE_CLAMPED attenuation
+                const ref = s.info.refDistance;
+                let attenuation = 1.0;
+                if (s.dist > ref) {
+                    attenuation = ref / (ref + 1.0 * (s.dist - ref));
+                }
+                const actualVol = baseVol * attenuation;
+
+                const baseVolText = Math.round(baseVol * 100).toString().padStart(3, " ");
+                const actualVolText = Math.round(actualVol * 100).toString().padStart(3, " ");
+                const status = s.isPlaying ? "PLAYING" : "WAITING";
+                const delayText = s.nextReplayTime !== undefined ? 
+                    ` (next: ${Math.round((s.nextReplayTime - currentTime) / 100) / 10}s)` : "";
+
+                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${delayText}`;
+                line.style.color = s.isPlaying ? "#fff" : "#888";
+                line.style.borderColor = s.isPlaying ? "#0f0" : "#444";
+            });
+        }
+    }
+
     public updateHUD(activeFogColors?: FogSourceColors, globalEnvColors?: GlobalEnvColors, zoneFogData?: ZoneFogData): void {
         if (!this.enabled || this.mode !== VisualizerMode.Fogs) return;
 
         const updateEntry = (prefix: string, name: string, color?: ColorByte) => {
-            const entry = this.hudColors.get(`${prefix}:${name}`) as any;
+            const entry = this.hudColors.get(`${prefix}:${name}`);
             if (entry) {
                 if (color) {
                     const hexValue = color.toHex();
@@ -239,29 +368,6 @@ class Visualizer {
             updateEntry("global", "Haze", globalEnvColors.haze);
         } else {
             ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(n => updateEntry("global", n));
-        }
-
-        // Update Mixed Colors
-        if (globalEnvColors) {
-            const mix = (g: ColorByte, r: ColorByte | undefined) => {
-                if (!r) return g;
-                const alpha = r.a;
-                const invAlpha = 255 - alpha;
-                const result = new ColorByte();
-                result.r = (g.r * invAlpha + r.r * alpha) / 255;
-                result.g = (g.g * invAlpha + r.g * alpha) / 255;
-                result.b = (g.b * invAlpha + r.b * alpha) / 255;
-                result.a = 255; // Mixed result display is opaque
-                return result;
-            };
-
-            updateEntry("mixed", "Fog", mix(globalEnvColors.fog, activeFogColors?.fog));
-            updateEntry("mixed", "Sky", mix(globalEnvColors.sky, activeFogColors?.sky));
-            updateEntry("mixed", "Cloud", mix(globalEnvColors.cloud1, activeFogColors?.cloud));
-            updateEntry("mixed", "Sun", globalEnvColors.sun); // No source sun
-            updateEntry("mixed", "Haze", mix(globalEnvColors.haze, activeFogColors?.haze));
-        } else {
-            ["Fog", "Sky", "Cloud", "Sun", "Haze"].forEach(n => updateEntry("mixed", n));
         }
 
         // Update Zone Fog
@@ -347,11 +453,14 @@ class Visualizer {
 
     private updateVisibility(): void {
         this.group.visible = this.enabled && this.mode !== VisualizerMode.None;
-        // Fogs are only visible in Fogs mode
         const isFogMode = this.enabled && this.mode === VisualizerMode.Fogs;
+        const isAudioMode = this.enabled && this.mode === VisualizerMode.Audio;
         this.fogGroup.visible = isFogMode;
         if (this.hudElement) {
             this.hudElement.style.display = isFogMode ? "flex" : "none";
+        }
+        if (this.audioHudElement) {
+            this.audioHudElement.style.display = isAudioMode ? "flex" : "none";
         }
     }
 
@@ -375,6 +484,8 @@ class Visualizer {
                 break;
             case VisualizerMode.Fogs:
                 // Fogs will be added via updateFogs()
+                break;
+            case VisualizerMode.Audio:
                 break;
         }
     }
@@ -1089,6 +1200,16 @@ class Visualizer {
 
     public getFogGroup(): Group {
         return this.fogGroup;
+    }
+
+    public destroy(): void {
+        this.clearVisualizations();
+        if (this.hudElement && this.hudElement.parentNode) {
+            this.hudElement.parentNode.removeChild(this.hudElement);
+        }
+        if (this.audioHudElement && this.audioHudElement.parentNode) {
+            this.audioHudElement.parentNode.removeChild(this.audioHudElement);
+        }
     }
 }
 

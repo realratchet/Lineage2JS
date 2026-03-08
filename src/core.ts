@@ -1,4 +1,5 @@
 import * as dat from "dat.gui";
+import * as schemas from "@unreal/datafile/schema/schema-types";
 import RenderManager from "./rendering/render-manager";
 import AssetLoader from "./assets/asset-loader";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
@@ -181,15 +182,13 @@ async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLo
     action.play();
 }
 
-async function _decodeDatFile(path: string) {
+async function _decodeDatFile(schema: ISchemaValue[], path: string) {
     // const ini = await (new UEncodedFile("assets/system/l2.ini").asReadable()).decode();
 
-    const file = await (new UDataFile(path).asReadable()).decode();
+    const file = await (new UDataFile(schema, path).asReadable()).decode();
 
-    debugger;
+    return file;
 }
-
-
 
 async function _decodeEnvConfig(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage, pkgL2Skies: C.APackage): Promise<UConfigEnv> {
     const envFile = await (new UConfigEnv(path).asReadable()).decode();
@@ -213,6 +212,8 @@ async function startCore() {
     const objectGroup = renderManager.objectGroup;
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
+
+    const datMusicInfo = await _decodeDatFile(schemas.SCHEMA_MUSICINFO_DAT, "assets/system/musicinfo.dat");
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
@@ -409,6 +410,7 @@ async function startCore() {
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: false,
+        loadAudio: true,
         _loadStaticModelList: [
             // 1441,
             // 1770,
@@ -470,6 +472,7 @@ async function startCore() {
         loadStaticModels: false,
         loadEmitters: false,
         loadStaticModelList: undefined,
+        loadAudio: false,
         batching: { staticMeshes: false, terrain: false }
     });
 
@@ -531,8 +534,13 @@ async function startCore() {
     // Load global sky level
 
     renderManager.setEnv(decodeEnv(envConfig));
-    renderManager.setGlobalSky(skyLevel);
-
+    renderManager.setSky(skyLevel);
+    renderManager.audioManager.setMusicInfo(
+        Object.fromEntries(datMusicInfo.datarows.map(x => [
+            x.id,
+            (x.sounds as string[]).map(x => assetLoader.getPackage(x, "Music").path)
+        ]))
+    );
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 

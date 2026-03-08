@@ -59,6 +59,7 @@ declare global {
 
                 export type USound = import("@unreal/un-sound").USound;
                 export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;
+                export type UMusicVolume = import("@unreal/un-music-volume").UMusicVolume;
 
                 export type UNSun = import("@unreal/un-nsun").UNSun;
                 export type UNMoon = import("@unreal/un-nmoon").UNMoon;
@@ -130,6 +131,7 @@ declare global {
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
+                    loadAudio?: boolean,
                     helpersZoneBounds?: boolean,
                     isSkyLevel?: boolean,
                     batching?: {
@@ -362,7 +364,15 @@ declare global {
                     zone: number,
                     permiating: number,
                     volumetric: number,
-                    visibleZones: bigint
+                    visibleZones: bigint,
+                    musicId?: number
+                }
+
+                export interface IMusicVolumeBspNode {
+                    plane: Vector4Arr;
+                    iFront: number;
+                    iBack: number;
+                    isCsg: boolean;
                 }
 
                 // Add IZoneFogInfo for L2FogInfo object
@@ -584,8 +594,40 @@ declare global {
                     type: "Sunlight"
                 }
 
+                export interface IAudioDecodeInfo {
+                    uuid: string,
+                    name: string,
+                    type: "MusicVolume" | "AmbientSoundObject"
+                }
 
+                export interface IMusicVolumeDecodeInfo extends IAudioDecodeInfo {
+                    type: "MusicVolume",
+                    musicId: number,
+                    isMusicForced: boolean,
+                    isMusicLooped: boolean,
+                    zoneNumber: number,
+                    priority: number,
+                    bounds: IBoundsDecodeInfo,
+                    bsp: {
+                        isRootOutside: boolean,
+                        worldToLocal: Matrix4Arr,
+                        nodes: IMusicVolumeBspNode[]
+                    }
+                }
 
+                export interface IAmbientSoundObjectDecodeInfo extends IAudioDecodeInfo {
+                    type: "AmbientSoundObject",
+                    position: Vector3Arr,
+                    refDistance: number,
+                    maxDistance: number,
+                    volume: number,
+                    pitch: number,
+                    soundDataUri: string,
+                    soundName: string,
+                    looping: boolean,
+                    soundType: number, // 0=Always, 1=Day, 2=Night, 3=Water
+                    randomDelay: number, // max seconds between repetitions (0 = seamless loop)
+                }
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "shader",

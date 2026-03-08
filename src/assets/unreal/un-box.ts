@@ -46,6 +46,11 @@ abstract class FBox extends UObject {
         return `Box=(min=${this.min}, max=${this.max}, valid=${this.isValid ? "true" : "false"}, size=${this.getSize()})`;
     }
 
+    public translate(offset: GA.FVector): FBox {
+        if (!this.isValid) return this;
+        return FBox.make(this.min.add(offset), this.max.add(offset), 1);
+    }
+
     public add(other: FVector): FBox {
         if (this.isValid) {
             const minx = Math.min(this.min.x, other.x);

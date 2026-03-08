@@ -374,6 +374,7 @@ class UNativePackage extends ANativePackage {
             case "L2NTimeLight": Constructor = NEnv.UL2NTimeLight; break;
 
 
+            case "MusicVolume": Constructor = UMusicVolume; break;
             case "AmbientSoundObject": Constructor = UAmbientSoundObject; break;
             case "Sound": Constructor = USound; break;
 
@@ -386,6 +387,7 @@ class UNativePackage extends ANativePackage {
             case "PathNode": Constructor = UObject; break;
             case "InterpolationPoint": Constructor = UObject; break;
             case "VertexColor": Constructor = UObject; break;
+
 
             default:
                 debugger;

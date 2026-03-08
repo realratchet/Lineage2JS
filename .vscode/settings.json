@@ -101,6 +101,7 @@
     "files.watcherExclude": {
         "**/cpp/**": true,
         "**/node_modules/**": true,
-        "assets*/**": true
+        "assets*/**": true,
+        "assets*/**/dec/*": false
     }
 }

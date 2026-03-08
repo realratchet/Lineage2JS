@@ -12,6 +12,9 @@ import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import Terrain from "../objects/terrain";
+import { ColorByte } from "@client/utils/color-byte";
+import EnvInfo from "@client/rendering/env-info";
+import AudioManager from "@client/rendering/audio-manager";
 import * as dat from "dat.gui";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
@@ -34,8 +37,6 @@ document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
-import { ColorByte } from "@client/utils/color-byte";
-import EnvInfo from "@client/rendering/env-info";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte(); // For sky color blending
@@ -99,7 +100,8 @@ class RenderManager {
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
-
+    public readonly audioManager: AudioManager = new AudioManager();
+    protected activeMusicId: number = -1;
 
     public envConfig = {
         showLevel: true,
@@ -149,6 +151,11 @@ class RenderManager {
         // skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
 
         skyFolder.open();
+
+        const audioFolder = gui.addFolder("Audio");
+        audioFolder.add(this.audioManager, "musicVolume", 0, 1, 0.01).name("Music Volume");
+        audioFolder.add(this.audioManager, "ambientVolume", 0, 1, 0.01).name("Ambient Volume");
+        audioFolder.open();
 
         this.renderer.autoClear = false;
 
@@ -288,11 +295,18 @@ class RenderManager {
             set time(v) {
                 environment.setTimeOfDay(v);
                 self.needsUpdate = true;
+            },
+            get timeScale() { return environment.getTimeScale(); },
+            set timeScale(v) {
+                environment.setTimeScale(v);
+                self.needsUpdate = true;
             }
         };
 
         guiFolders.world.add(timeState, "time", 0, 24, 0.01)
             .name("Time");
+        guiFolders.world.add(timeState, "timeScale", 0, 100, 0.01)
+            .name("Time Scale");
 
         const envSignsSkyState = {
             get signsSky() { return environment.getActiveEnv(); },
@@ -389,18 +403,18 @@ class RenderManager {
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
 
-                if (this.visualizer.getMode() === 1) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 2) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 3) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === 4) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
 
                 // Overlay fogs if in other modes
-                if (this.visualizer.getMode() !== 4) {
+                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
@@ -427,18 +441,18 @@ class RenderManager {
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
 
-                if (this.visualizer.getMode() === 1) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 2) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 3) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === 4) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
 
                 // Overlay fogs if in other modes
-                if (this.visualizer.getMode() !== 4) {
+                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
@@ -474,41 +488,43 @@ class RenderManager {
 
         switch (event.key.toLowerCase()) {
             case "1":
+                this.cancelMusic();
                 this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
                 this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
                 this.controls.orbit.update();
                 break;
             case "2":
+                this.cancelMusic();
                 this.camera.position.set(17635.20575146492, -11784.939422516854, 116150.5713219522);
                 this.controls.orbit.target.set(18067.654677822546, -10987.479065394222, 113781.22799780089);
                 this.controls.orbit.update();
                 break;
             case "3":
+                this.cancelMusic();
                 this.camera.position.set(15072.881710902564, -11862.167696361777, 110387.91067628124);
                 this.controls.orbit.target.set(14711.102749053878, -11434.303788147914, 110872.50292405237);
                 this.controls.orbit.update();
                 break;
             case "4":
+                this.cancelMusic();
                 this.camera.position.set(12918.803737500606, -11769.26992456535, 109998.28664096774);
                 this.controls.orbit.target.set(12961.940094338941, -11789.664021556502, 110631.6332572824);
                 this.controls.orbit.update();
                 break;
             case "5":
+                this.cancelMusic();
                 this.camera.position.set(23756.20212599347, -8869.681711370744, 116491.99214326135);
                 this.controls.orbit.target.set(23706.65317650355, -9178.136467533635, 118330.62193563695);
                 this.controls.orbit.update();
                 break;
             case "6":
+                this.cancelMusic();
                 this.camera.position.set(17436.46445202629, -6351.127037466889, 109469.23150265992);
                 this.controls.orbit.target.set(18965.828211115713, -6064.126549127763, 106770.89206042158);
                 this.controls.orbit.update();
                 break;
-            case "+":
-                this.nextSector();
-                break;
-            case "-":
-                this.prevSector();
-                break;
+            case "+": this.nextSector(); break;
+            case "-": this.prevSector(); break;
             case "w": if (!this.isOrbitControls) this.dirKeys.up = true; break;
             case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
             case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
@@ -520,9 +536,15 @@ class RenderManager {
         }
     }
 
+    protected cancelMusic() {
+        this.activeMusicId = null;
+        this.audioManager.cancelMusic();
+    }
+
     protected setSector(index: number) {
         const sector = this.sectorBounds[index];
 
+        this.cancelMusic();
         this.camera.position.copy(sector.max);
         this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
         this.controls.orbit.update();
@@ -868,8 +890,8 @@ class RenderManager {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-            if (zone && zone.fog) {
-                if (zone.isFogZone && zone.isSunAffected) {
+            if (zone && zone.isFogZone && zone.fog) {
+                if (zone.isSunAffected) {
                     const zR = zone.fog.color.r * 255;
                     const zG = zone.fog.color.g * 255;
                     const zB = zone.fog.color.b * 255;
@@ -1150,6 +1172,18 @@ class RenderManager {
     protected _preRender(currentTime: number, deltaTime: number) {
         this.mixer.update(deltaTime / 1000);
 
+        const timeScale = this.environment.getTimeScale();
+
+        if (timeScale !== 0) {
+            const t = this.environment.getTimeOfDay();
+            const dt = deltaTime / 100000 * timeScale;
+
+            const nt = (t + dt) % 24;
+
+            this.environment.setTimeOfDay(nt);
+            this.needsUpdate = true;
+        }
+
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
 
@@ -1203,11 +1237,97 @@ class RenderManager {
             this.nextPhysicsTick = currentTime + 1000 / 30;
         }
 
+        this.audioManager.update(currentTime);
+
         const desiredPosition = new Vector3().copy(this.player.getRigidbody().translation() as THREE.Vector3).add(new Vector3(0, -this.player.getColliderSize().y * 0.5 - this.player.getStepHeight(), 0));
 
         this.player.position.lerp(desiredPosition, 0.1);
 
         this._updateObjects(currentTime);
+
+        const activeSector = this.getSector(this.camera.position);
+        const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };
+        const musicId = musicInfo.musicId ?? -1;
+
+        if (musicId !== this.activeMusicId) {
+            this.activeMusicId = musicId;
+
+            if (musicId >= 0) {
+                console.log(`[Music] Playing track ${musicId} (forced: ${musicInfo.isForced})`);
+                this.audioManager.playMusic(musicId, musicInfo.isLooped, musicInfo.isForced, currentTime);
+            } else {
+                console.log(`[Music] Letting current track finish (left music volume)`);
+                this.audioManager.letTrackFinish();
+            }
+        }
+
+        // Ambient sound spatial update (UE2: MAX_AUDIOCHANNELS=32, priority-sorted by distance)
+        {
+            const MAX_AMBIENT_CHANNELS = 24; // leave headroom for music/effects
+            const camPos = this.camera.position;
+            const timeOfDay = this.environment.getTimeOfDay(); // 0-24 hours
+            const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
+            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, distSq: number }[] = [];
+
+            for (const [, sectorYMap] of this.sectors) {
+                for (const [, sector] of sectorYMap) {
+                    if (!sector.ambientSounds) continue;
+                    for (const snd of sector.ambientSounds) {
+                        // L2 AmbientSoundType: 0=Always, 1=Day, 2=Night, 3=Water
+                        if (snd.soundType === 1 && !isDaytime) continue; // Day-only sound at night
+                        if (snd.soundType === 2 && isDaytime) continue;  // Night-only sound during day
+
+                        const dx = snd.position[0] - camPos.x;
+                        const dy = snd.position[1] - camPos.y;
+                        const dz = snd.position[2] - camPos.z;
+                        const distSq = dx * dx + dy * dy + dz * dz;
+                        if (distSq <= snd.maxDistance * snd.maxDistance) {
+                            candidates.push({ uuid: snd.uuid, snd, distSq });
+                        }
+                    }
+                }
+            }
+
+            // Sort by distance (closest = highest priority), take only top N
+            candidates.sort((a, b) => a.distSq - b.distSq);
+            const inRangeSounds = new Map<string, GD.IAmbientSoundObjectDecodeInfo>();
+            for (let i = 0; i < Math.min(candidates.length, MAX_AMBIENT_CHANNELS); i++) {
+                inRangeSounds.set(candidates[i].uuid, candidates[i].snd);
+            }
+
+            // Stop sounds no longer in range or below priority cutoff
+            for (const id of this.audioManager.activeAmbientSoundIds) {
+                if (!inRangeSounds.has(id)) {
+                    this.audioManager.stopAmbientSound(id);
+                }
+            }
+
+            // Start sounds newly in range
+            for (const [id, snd] of inRangeSounds) {
+                this.audioManager.playAmbientSound(
+                    id,
+                    snd.soundName,
+                    snd.soundDataUri,
+                    snd.position,
+                    snd.volume,
+                    snd.pitch,
+                    snd.refDistance,
+                    snd.maxDistance,
+                    snd.randomDelay,
+                    snd.looping,
+                    currentTime
+                );
+            }
+
+            // Update listener position from camera
+            const fwd = this.camera.getWorldDirection(new Vector3());
+            const up = this.camera.up;
+            this.audioManager.updateListenerPosition(
+                camPos.x, camPos.y, camPos.z,
+                fwd.x, fwd.y, fwd.z,
+                up.x, up.y, up.z,
+            );
+        }
 
         this.renderer.clear();
     }
@@ -1233,6 +1353,7 @@ class RenderManager {
                 const currentMode = this.visualizer.getMode();
 
                 // Remove old visualizer
+                this.visualizer.destroy();
                 this.scene.remove(this.visualizer.getGroup());
                 this.scene.remove(this.visualizer.getFogGroup());
 
@@ -1274,20 +1395,20 @@ class RenderManager {
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
 
-                if (this.visualizer.getMode() === 1) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 2) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === 3) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === 4) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
         }
 
-        // Always update HUD in Fogs mode to prevent stale data when transitioning between sectors or leaving them
-        if (this.visualizer.isEnabled() && this.visualizer.getMode() === 4) {
+        // Always update HUD in Fogs/Audio mode to prevent stale data when transitioning between sectors or leaving them
+        if (this.visualizer.isEnabled()) {
             // Capture raw source colors from the active fog if available
             let activeFogColors: import("./visualizer").FogSourceColors | undefined;
             if (this.activeFogId) {
@@ -1316,24 +1437,30 @@ class RenderManager {
 
             // Capture active zone fog data
             let zoneFogData: import("./visualizer").ZoneFogData | undefined;
-            const sector = this.getSector(this.camera.position);
-            if (sector) {
-                const zoneIndex = sector.findPositionZone(this.camera.position);
-                if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
-                    const zoneData = sector.bspZones[zoneIndex];
-                    const zi = zoneData.zoneInfo;
-                    if (zi) {
-                        zoneFogData = {
-                            isFogZone: !!zi.isFogZone,
-                            color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
-                            start: zi.fog ? zi.fog.start : 0,
-                            end: zi.fog ? zi.fog.end : 0
-                        };
+                const sector = this.getSector(this.camera.position);
+                if (sector) {
+                    const zoneIndex = sector.findPositionZone(this.camera.position);
+                    if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
+                        const zoneData = sector.bspZones[zoneIndex];
+                        const zi = zoneData.zoneInfo;
+                        if (zi) {
+                            zoneFogData = {
+                                isFogZone: !!zi.isFogZone,
+                                color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
+                                start: zi.fog ? zi.fog.start : 0,
+                                end: zi.fog ? zi.fog.end : 0
+                            };
+                        }
                     }
                 }
-            }
 
-            this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);
+            if (this.visualizer.getMode() === VisualizerMode.Fogs) {
+                this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);
+            } else if (this.visualizer.getMode() === VisualizerMode.Audio) {
+                const musicState = this.audioManager.getMusicState();
+                const ambientSounds = this.audioManager.getAmbientSounds();
+                this.visualizer.updateAudioHUD(musicState, ambientSounds, _currentTime, this.camera.position);
+            }
         }
 
         this.renderer.autoClear = false;
@@ -1378,10 +1505,7 @@ class RenderManager {
         // this.collidables.push(this.player.createCollider(this.physicsWorld));
     }
 
-    public globalSkyLoaded = false;
-
-    public setGlobalSky(sector: SectorObject) {
-        this.globalSkyLoaded = true;
+    public setSky(sector: SectorObject) {
         this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
 
         // Add GUI specific for Moons
@@ -1407,6 +1531,8 @@ class RenderManager {
         }
 
     }
+
+
 
     public addSector(sector: SectorObject) {
         if (sector.index) {

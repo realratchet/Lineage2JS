@@ -115,6 +115,10 @@ class SectorObject extends Object3D {
     public readonly worldBounds = new Box3();
     public readonly gridBounds = new Box3();
 
+    // NEW: Precise Geometric volumes for runtime intersection
+    public musicVolumes?: GD.IMusicVolumeDecodeInfo[];
+    public ambientSounds?: GD.IAmbientSoundObjectDecodeInfo[];
+
     // NEW: BSP rendering data
     public bspSections?: GD.IBSPSectionDecodeInfo_T[];
     public nodeToSection?: number[];
@@ -217,6 +221,54 @@ class SectorObject extends Object3D {
     }
 
     public setSun(sunMaterial: any) { this.sunTexture = sunMaterial; }
+
+    public getMusicIdAt(cameraPosition: THREE.Vector3): { musicId: number | null, isLooped: boolean, isForced: boolean } {
+        let highestPriority = -9999;
+        let selectedMusicId: number | null = null;
+        let isLooped = false, isForced = false;
+        
+        if (this.musicVolumes) {
+            const cx = cameraPosition.x, cy = cameraPosition.y, cz = cameraPosition.z;
+
+            for (const vol of this.musicVolumes) {
+                if (vol.priority < highestPriority) continue;
+
+                // Planes are pre-baked to world space, just PlaneDot directly
+                let outside = vol.bsp.isRootOutside;
+                const nodes = vol.bsp.nodes;
+
+                if (nodes.length > 0) {
+                    let iNode = 0;
+                    let isFront = false;
+
+                    do {
+                        const node = nodes[iNode];
+                        const p = node.plane;
+                        // UE2 PlaneDot: X*P.X + Y*P.Y + Z*P.Z - W
+                        const dist = p[0] * cx + p[1] * cy + p[2] * cz - p[3];
+                        isFront = dist > 0;
+                        
+                        if (isFront) {
+                            outside = outside || node.isCsg;
+                        } else {
+                            outside = outside && !node.isCsg;
+                        }
+                        
+                        iNode = isFront ? node.iFront : node.iBack;
+                    } while (iNode !== -1);
+                }
+
+                if (!outside) {
+                    highestPriority = vol.priority;
+                    selectedMusicId = vol.musicId;
+                    isLooped = vol.isMusicLooped;
+                    isForced = vol.isMusicForced;
+                }
+            }
+        }
+
+        return { musicId: selectedMusicId, isLooped, isForced };
+    }
 
     /**
      * Find camera leaf and build active zone mask.
@@ -1171,6 +1223,7 @@ class BSPLeafData {
     public permiating: number
     public volumetric: number
     public visibleZones: bigint
+    public musicId?: number
 
     protected constructor() { }
 
@@ -1181,6 +1234,7 @@ class BSPLeafData {
         leaf.permiating = info.permiating;
         leaf.volumetric = info.volumetric;
         leaf.visibleZones = info.visibleZones;
+        leaf.musicId = info.musicId;
 
         return leaf;
     }
