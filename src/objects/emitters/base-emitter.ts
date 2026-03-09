@@ -1339,8 +1339,21 @@ abstract class BaseEmitter extends Object3D {
             const visualizer = p.children[0] as THREE.Mesh;
             const mats = visualizer.material instanceof Array ? visualizer.material : [visualizer.material];
             for (const mat of mats) {
-                (mat as any).color.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
-                mat.opacity = settings.Color.w;
+                if ((mat as any).isMeshEmitterMaterial) {
+                    const emat = mat as any;
+                    if (emat.isUpdatable) emat.update(settings.Time);
+                    emat.uniforms.diffuse.value.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
+                    emat.uniforms.opacity.value = settings.Color.w;
+                } else if ((mat as any).isStaticMeshMaterial) {
+                    const smat = mat as any;
+                    if (smat.isUpdatable) smat.update(settings.Time);
+                    
+                    smat.uniforms.diffuse.value.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
+                    smat.uniforms.opacity.value = settings.Color.w;
+                } else {
+                    (mat as any).color.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
+                    mat.opacity = settings.Color.w;
+                }
             }
 
             if (i > 0) return;
@@ -1395,7 +1408,7 @@ abstract class BaseEmitter extends Object3D {
     //     this.lastSpawned = currentTime;
     // }
 
-    protected abstract initSettings(info: EmitterConfig_T): void;
+    protected abstract initSettings(info: GD.EmitterConfig_T): void;
     protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>;
 }
 
