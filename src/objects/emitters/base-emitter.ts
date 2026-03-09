@@ -116,12 +116,12 @@ abstract class BaseEmitter extends Object3D {
         };
 
         this.generalSettings = {
-            colorMultiplierRange: { min: new Vector3().fromArray(config.colorMultiplierRange?.min || [1, 1, 1]), max: new Vector3().fromArray(config.colorMultiplierRange?.max || [1, 1, 1]) },
-            opacity: config.opacity || 1,
-            maxParticles: 2 || config.maxParticles,
-            acceleration: new Vector3().fromArray(config.acceleration || [0, 0, 0]),
+            colorMultiplierRange: { min: new Vector3().fromArray(config.colorMultiplierRange?.min ?? [1, 1, 1]), max: new Vector3().fromArray(config.colorMultiplierRange?.max ?? [1, 1, 1]) },
+            opacity: config.opacity ?? 1,
+            maxParticles: config.maxParticles ?? 2,
+            acceleration: new Vector3().fromArray(config.acceleration ?? [0, 0, 0]),
             lifetime: { min: config.lifetime[0] * 1000, max: config.lifetime[1] * 1000 },
-            particlesPerSecond: config.particlesPerSecond || 0
+            particlesPerSecond: config.particlesPerSecond ?? 0
         };
 
         this.changesOverLifetimeSettings = {
@@ -1318,8 +1318,10 @@ abstract class BaseEmitter extends Object3D {
         this.particlePool.forEach((p, i) => {
             const settings = this.particles[i];
 
-            p.visible = true;
-            p.position.set(settings.position.x, settings.position.z, settings.position.y).multiplyScalar(1);
+            p.visible = (settings.Flags & PTF_Active) !== 0;
+            if (!p.visible) return;
+
+            p.position.set(settings.position.x, settings.position.z, settings.position.y);
             p.scale.set(settings.scale.x, settings.scale.z, settings.scale.y);
 
 
@@ -1332,6 +1334,13 @@ abstract class BaseEmitter extends Object3D {
                 // UE Yaw (Z) -> Three Y
                 // UE Roll (X) -> Three X
                 p.rotation.set(rotRoll, rotYaw, rotPitch, "XZY");
+            }
+
+            const visualizer = p.children[0] as THREE.Mesh;
+            const mats = visualizer.material instanceof Array ? visualizer.material : [visualizer.material];
+            for (const mat of mats) {
+                (mat as any).color.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
+                mat.opacity = settings.Color.w;
             }
 
             if (i > 0) return;
