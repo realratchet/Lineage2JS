@@ -102,6 +102,8 @@ abstract class BaseEmitter extends Object3D {
 
     protected currentTime: number;
     protected lastSpawned: number;
+    protected isSpinning: boolean;
+    protected SpinParticles: boolean;
 
     public getCurrentTime() { return this.currentTime; }
 
@@ -1320,6 +1322,17 @@ abstract class BaseEmitter extends Object3D {
             p.position.set(settings.position.x, settings.position.z, settings.position.y).multiplyScalar(1);
             p.scale.set(settings.scale.x, settings.scale.z, settings.scale.y);
 
+
+            if (this.isSpinning || this.SpinParticles) {
+                const rotYaw = (settings.StartSpin.x + settings.Time * settings.SpinsPerSecond.x) * (Math.PI * 2 / 65536);
+                const rotPitch = (settings.StartSpin.y + settings.Time * settings.SpinsPerSecond.y) * (Math.PI * 2 / 65536);
+                const rotRoll = (settings.StartSpin.z + settings.Time * settings.SpinsPerSecond.z) * (Math.PI * 2 / 65536);
+                
+                // UE Pitch (Y) -> Three Z
+                // UE Yaw (Z) -> Three Y
+                // UE Roll (X) -> Three X
+                p.rotation.set(rotRoll, rotYaw, rotPitch, "XZY");
+            }
 
             if (i > 0) return;
 
