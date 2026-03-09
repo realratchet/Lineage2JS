@@ -408,9 +408,9 @@ async function startCore() {
         },
         loadTerrain: true,
         loadBaseModel: true,
-        loadStaticModels: true,
+        loadStaticModels: false,
         loadEmitters: true,
-        loadAudio: true,
+        loadAudio: false,
         _loadStaticModelList: [
             // 1441,
             // 1770,

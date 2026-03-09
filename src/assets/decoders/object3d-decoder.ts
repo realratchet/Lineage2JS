@@ -737,7 +737,11 @@ function decodeSpriteEmitter(library: GD.DecodeLibrary, info: GD.ISpriteEmitterD
 
     // debugger;
 
-    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { material }));
+    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { 
+        material,
+        spriteDirection: info.spriteDirection,
+        projectionNormal: info.projectionNormal 
+    }));
 
     applySimpleProperties(library, emitter, info);
 

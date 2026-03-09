@@ -265,7 +265,9 @@ declare global {
 
                 export interface ISpriteEmitterDecodeInfo extends IEmitterDecodeInfo {
                     type: "SpriteEmitter",
-                    texture: string
+                    texture: string,
+                    spriteDirection?: string,
+                    projectionNormal?: [number, number, number]
                 }
 
                 export interface IMeshEmitterDecodeInfo extends IEmitterDecodeInfo {

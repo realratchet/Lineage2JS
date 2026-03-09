@@ -20,9 +20,12 @@ abstract class USpriteEmitter extends UParticleEmitter {
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
+        // debugger;
+
         return Object.assign(super.getDecodeInfo(library), {
             type: "SpriteEmitter",
             spriteDirection: directionNames[this.spriteDirection],
+            projectionNormal: this.projectionNormal ? this.projectionNormal.getVectorElements() : [0, 0, 1],
             texture: this.texture?.loadSelf().getDecodeInfo(library)
         });
     }
