@@ -17,7 +17,7 @@ abstract class FRange extends UObject {
         this.max = max;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): Range_T { return [this.min, this.max]; }
+    public getDecodeInfo(_library: GD.DecodeLibrary): Range_T { return [this.min, this.max]; }
 
     public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
 

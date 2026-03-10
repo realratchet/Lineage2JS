@@ -689,7 +689,8 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
             particlesPerSecond: info.initial.particlesPerSecond,
             scale: info.initial.scale,
             velocity: info.initial.velocity,
-            position: info.initial.location,
+            position: info.initial.position,
+            offset: info.initial.offset,
             angularVelocity: info.initial.angularVelocity,
         },
         particlesPerSecond: info.particlesPerSecond,
@@ -701,6 +702,15 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
         colorMultiplierRange: info.colorMultiplierRange,
+        angularVelocity: info.angularVelocity,
+        revolutionCenterOffsetRange: info.revolutionCenterOffsetRange,
+        revolutionsPerSecondRange: info.revolutionsPerSecondRange,
+        initialTimeRange: info.initialTimeRange,
+        startMassRange: info.startMassRange,
+        sphereRadiusRange: info.sphereRadiusRange,
+        startLocationPolarRange: info.startLocationPolarRange,
+        addVelocityMultiplierRange: info.addVelocityMultiplierRange,
+        velocityLossRange: info.velocityLossRange,
         allSettings: info.allSettings
     };
 }

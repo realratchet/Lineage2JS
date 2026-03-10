@@ -17,6 +17,7 @@ class SpriteEmitter extends BaseEmitter {
     // }
 
     protected initSettings(config: SpriteEmitterConfig_T): void {
+        this.isSpriteEmitter = true;
         this.material = config.material;
         this.spriteDirection = config.spriteDirection || "camera";
         
@@ -130,22 +131,23 @@ class ParticleMesh extends Mesh {
             right.copy(projRight);
         }
 
+        // Apply Roll (Spin)
+        if (particle && particle.spin !== 0) {
+            const spin = particle.spin;
+            const cos = Math.cos(spin);
+            const sin = Math.sin(spin);
+            
+            const origRight = right.clone();
+            const origUp = up.clone();
+            
+            // Rotate Right/Up vectors around the Normal axis
+            // In RH: NewRight = Right*cos + Up*sin; NewUp = Up*cos - Right*sin;
+            right.copy(origRight).multiplyScalar(cos).add(origUp.clone().multiplyScalar(sin));
+            up.copy(origUp).multiplyScalar(cos).sub(origRight.clone().multiplyScalar(sin));
+        }
+
         // We negate the projection front to point *towards* the camera (Standard PlaneGeometry face)
-        // V1 (Bottom Right) = -Up +Right
-        // V2 (Top Left) = +Up -Right
-        // V3 (Top Right) = +Up +Right
-        //
-        // Three.js PlaneGeometry builds:
-        // V0 (Top Left) = -X, +Y
-        // V1 (Top Right) = +X, +Y
-        // V2 (Bottom Left) = -X, -Y
-        // V3 (Bottom Right) = +X, -Y
-        // 
-        // When we apply a texture to this, if we just use normal basis, Three.js 
-        // will align X with Right and Y with Up.
-        // However, Three.js UVs are usually Top-Left (0,1) to Bottom-Right (1,0).
-        // Let's negate the Right and Up vectors to flip the plane around the normal facing direction.
-        // Threejs applies textures mirrored if we look at the backface, so we just negate the basis.
+        // ...
         right.negate();
         up.negate();
 
