@@ -255,6 +255,7 @@ declare global {
                     particlesPerSecond: number,
                     blendingMode: ParticleBlendModes_T,
                     opacity: number,
+                    drawScale?: number,
                     changesOverLifetime: {
                         scale: { values: [number, number][], repeats: number }
                     },
@@ -270,6 +271,8 @@ declare global {
                     startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
                     addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
                     velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+                    warmupTime?: number,
+                    warmupTicksPerSecond?: number,
                     allSettings: any
                 }
 
@@ -538,6 +541,7 @@ declare global {
                     blendingMode: ParticleBlendModes_T,
                     uniformScale?: boolean,
                     maxParticles: number,
+                    drawScale?: number,
                     opacity: number,
                     lifetime: [number, number],
                     acceleration: GD.Vector3Arr,
@@ -557,6 +561,7 @@ declare global {
                     startLocationPolarRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     addVelocityMultiplierRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     velocityLossRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    forcedMaxParticles?: boolean,
                     initial: {
                         particlesPerSecond: number,
                         angularVelocity: { min: GD.Vector3Arr, max: GD.Vector3Arr },
@@ -568,6 +573,18 @@ declare global {
                     changesOverLifetime: {
                         scale: {
                             values: [number, number][],
+                            repeats: number
+                        },
+                        color?: {
+                            values: [number, GD.Vector4Arr][],
+                            repeats: number
+                        },
+                        velocity?: {
+                            values: [number, GD.Vector3Arr][],
+                            repeats: number
+                        },
+                        revolution?: {
+                            values: [number, GD.Vector3Arr][],
                             repeats: number
                         }
                     },

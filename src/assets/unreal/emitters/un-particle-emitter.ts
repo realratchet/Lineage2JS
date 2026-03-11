@@ -4,6 +4,7 @@ import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
 import FVector from "../un-vector";
+import FColor from "../un-color";
 import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
 
 abstract class UParticleEmitter extends UObject {
@@ -432,6 +433,7 @@ abstract class UParticleEmitter extends UObject {
         return {
             name: this.uuid,
             maxParticles: this.maxParticles,
+            drawScale: this.actor?.drawScale ?? 1,
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
             fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
@@ -457,6 +459,7 @@ abstract class UParticleEmitter extends UObject {
             startLocationPolarRange: this.startLocationPolarRange?.loadSelf().getDecodeInfo(library),
             addVelocityMultiplierRange: this.addVelocityMultiplierRange?.loadSelf().getDecodeInfo(library),
             velocityLossRange: this.velocityLossRange?.loadSelf().getDecodeInfo(library),
+            forcedMaxParticles: this._forcedMaxParticles,
             particlesPerSecond: this.particlesPerSecond,
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
@@ -464,6 +467,18 @@ abstract class UParticleEmitter extends UObject {
                 scale: this.isUsingSizeScale && this.sizeScale.length > 1 ? {
                     values: this.sizeScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.sizeScaleRepeats
+                } : null,
+                color: this.isUsingColorScale && this.colorScale.length > 1 ? {
+                    values: this.colorScale.map(s => s.getDecodeInfo(library)),
+                    repeats: this.colorScaleRepeats
+                } : null,
+                velocity: this.isUsingVelocityScale && this.velocityScale.length > 1 ? {
+                    values: this.velocityScale.map(s => s.getDecodeInfo(library)),
+                    repeats: this.velocityScaleRepeats
+                } : null,
+                revolution: this.isUsingRevolutionScale && this.revolutionScale.length > 1 ? {
+                    values: this.revolutionScale.map(s => s.getDecodeInfo(library)),
+                    repeats: this.revolutionScaleRepeats
                 } : null
             },
             /**
@@ -478,12 +493,24 @@ abstract class UParticleEmitter extends UObject {
 }
 
 abstract class UParticleRevolutionScale extends UObject {
+    declare public relTime: number;
+    declare public relRevolution: FVector;
 
-};
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "RelativeTime": "relTime",
+            "RelativeRevolution": "relRevolution"
+        });
+    }
+
+    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
+        return [this.relTime, this.relRevolution?.getVectorElements() || [0, 0, 0]];
+    }
+}
 
 abstract class UParticleTimeScale extends UObject {
-    public relSize: number;
-    public relTime: number;
+    declare public relSize: number;
+    declare public relTime: number;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -498,8 +525,20 @@ abstract class UParticleTimeScale extends UObject {
 };
 
 abstract class UParticleVelocityScale extends UObject {
+    declare public relTime: number;
+    declare public relVelocity: FVector;
 
-};
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "RelativeTime": "relTime",
+            "RelativeVelocity": "relVelocity"
+        });
+    }
+
+    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
+        return [this.relTime, this.relVelocity?.getVectorElements() || [0, 0, 0]];
+    }
+}
 
 abstract class UParticleSound extends UObject {
 
@@ -510,8 +549,20 @@ abstract class UParticle extends UObject {
 };
 
 abstract class UParticleColorScale extends UObject {
+    declare public relTime: number;
+    declare public color: FColor;
 
-};
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "RelativeTime": "relTime",
+            "Color": "color"
+        });
+    }
+
+    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector4Arr] {
+        return [this.relTime, this.color?.toArray() as GD.Vector4Arr || [255, 255, 255, 255]];
+    }
+}
 
 export default UParticleEmitter;
 export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale };

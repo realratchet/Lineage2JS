@@ -711,6 +711,8 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         startLocationPolarRange: info.startLocationPolarRange,
         addVelocityMultiplierRange: info.addVelocityMultiplierRange,
         velocityLossRange: info.velocityLossRange,
+        warmupTime: info.warmupTime,
+        warmupTicksPerSecond: info.warmupTicksPerSecond,
         allSettings: info.allSettings
     };
 }
