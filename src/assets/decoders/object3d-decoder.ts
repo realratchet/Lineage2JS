@@ -87,7 +87,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibra
 function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDecodeInfo) {
     const object = decodeSimpleObject(library, Object3D, info);
 
-    object.add(new AxesHelper(100));
+    // object.add(new AxesHelper(100));
 
     return object;
 }

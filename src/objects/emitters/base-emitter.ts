@@ -205,27 +205,30 @@ abstract class BaseEmitter extends Object3D {
             max: new Vector3().fromArray(config.angularVelocity.max)
         } : { min: new Vector3(), max: new Vector3() };
 
-        // this.maxParticles = 2;
 
         this.activeParticles = 0;
         this.particleIndex = 0;
         this.allParticlesDead = false;
         this.warmedUp = false;
-        this.particles = new Array(this.maxParticles).fill(1).map(() => new Particle_T())
+
+        // Soft limit: when ForcedMaxParticles is NOT set, the particle pool is
+        // larger than maxParticles so the emitter can temporarily exceed the
+        // target count instead of recycling active particles prematurely.
+        const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
+
+        this.particles = new Array(poolSize).fill(1).map(() => new Particle_T())
         this.RealMeshNormal = new Vector3().copy(this.meshNormal).normalize();
 
-        this.maxActiveParticles = this.maxParticles;
+        this.maxActiveParticles = poolSize;
 
         // debugger;
 
         this.initSettings(config);
 
-        this.particlePool = new Array(this.maxParticles);
+        this.particlePool = new Array(poolSize);
 
-        // console.log(this.generalSettings.acceleration);
-        console.log(config);
 
-        for (let i = 0; i < this.maxParticles; i++) {
+        for (let i = 0; i < poolSize; i++) {
             const particle = this.particlePool[i] = Particle.init(this, this.initParticleMesh());
 
             particle.name = this.name + "_" + i;
@@ -841,10 +844,11 @@ abstract class BaseEmitter extends Object3D {
 
         // Spawning.
         let rate;
-        // UE2 logic: Use initial/automatic rate while filling up, then switch to PPS
-        if (this.activeParticles < this.maxActiveParticles) {
+        // UE2 logic: Use initial/automatic rate while filling up to the TARGET count, then switch to PPS.
+        // Note: maxParticles is the target count; maxActiveParticles may be larger (soft limit buffer).
+        if (this.activeParticles < this.maxParticles) {
             if (this.isAutomaticInitialSpawning) {
-                rate = this.maxActiveParticles / ((this.lifetimeRange.min + this.lifetimeRange.max) / 2);
+                rate = this.maxParticles / ((this.lifetimeRange.min + this.lifetimeRange.max) / 2);
             } else {
                 rate = this.initialParticlesPerSecond;
             }
@@ -1137,18 +1141,6 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            // Fading logic.
-            if (this.isFadingIn) {
-                if (this.fadeInEndTime >= Time) {
-                    Color.w *= Time / this.fadeInEndTime;
-                }
-            }
-
-            if (this.isFadingOut) {
-                if (this.fadeOutStartTime <= Time) {
-                    Color.w *= clamp(1.0 - (Time - this.fadeOutStartTime) / (Particle.MaxLifetime - this.fadeOutStartTime), 0.0, 1.0);
-                }
-            }
 
             if (!this.isRespawningDeadParticles) {
                 if (this.particlesPerSecond === 0 && this.initialParticlesPerSecond === 0) {
@@ -1184,7 +1176,7 @@ abstract class BaseEmitter extends Object3D {
                         0.5,
                         0.5,
                         0.5,
-                        1 - this.FadeFactor * MaxFade.w
+                        1 - FadeFactor * MaxFade.w
                     );
                 }
                 else if (this.drawStyle.valueOf() === PTDS_AlphaBlend) {
@@ -1285,8 +1277,8 @@ abstract class BaseEmitter extends Object3D {
                 // Jump-start the population by pre-filling the pool with particles at random ages
                 if (this.maxParticles > 0) {
                     const numToSpawn = (this.forcedMaxParticles || this.isAutomaticInitialSpawning)
-                        ? this.maxActiveParticles
-                        : Math.min(this.maxActiveParticles, Math.floor(Math.max((this.lifetimeRange.min + this.lifetimeRange.max) / 2, 0) * this.initialSettings.particlesPerSecond));
+                        ? this.maxParticles
+                        : Math.min(this.maxParticles, Math.floor(Math.max((this.lifetimeRange.min + this.lifetimeRange.max) / 2, 0) * this.initialSettings.particlesPerSecond));
                     
                     for (let i = 0; i < numToSpawn; i++) {
                         const randomAge = lerp(this.initialTimeRange.min, this.initialTimeRange.max, Math.random());
@@ -1347,6 +1339,12 @@ abstract class BaseEmitter extends Object3D {
                     
                     smat.uniforms.diffuse.value.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
                     smat.uniforms.opacity.value = settings.Color.w;
+                } else if ((mat as any).isParticleMaterial) {
+                    const pmat = mat as any;
+                    if (pmat.isUpdatable) pmat.update(settings.Time);
+
+                    pmat.uniforms.diffuse.value.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
+                    pmat.uniforms.opacity.value = settings.Color.w;
                 } else {
                     (mat as any).color.setRGB(settings.Color.x, settings.Color.y, settings.Color.z);
                     mat.opacity = settings.Color.w;
