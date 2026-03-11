@@ -625,7 +625,6 @@ class RenderManager {
                     const nodeIndex = nodeIndexAttr.getX(vertexIndex);
                     console.log(`Node ID: ${nodeIndex}`);
                 }
-
             }
         } catch (e) {
             console.error(e);
@@ -1326,7 +1325,7 @@ class RenderManager {
 
             // Update listener position from camera
             const fwd = this.camera.getWorldDirection(new Vector3());
-            const up = this.camera.up;
+            const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
             this.audioManager.updateListenerPosition(
                 camPos.x, camPos.y, camPos.z,
                 fwd.x, fwd.y, fwd.z,
