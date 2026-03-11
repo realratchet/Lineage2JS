@@ -3,7 +3,7 @@ import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
 import BaseEmitter from "./base-emitter";
 
-const geometry = new PlaneGeometry(1, 1);
+const geometry = new PlaneGeometry(2, 2);
 
 class SpriteEmitter extends BaseEmitter {
 
@@ -37,11 +37,11 @@ class SpriteEmitter extends BaseEmitter {
 export default SpriteEmitter;
 export { SpriteEmitter };
 
-class ParticleMesh extends Mesh {
+class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
     public spriteDirection: string = "camera";
     public projectionNormal: Vector3 = new Vector3(0, 0, 1);
 
-    constructor(material: THREE.Material) {
+    constructor(material: ParticleMaterial) {
         super(geometry, material);
     }
 
