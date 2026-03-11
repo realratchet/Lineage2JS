@@ -159,8 +159,12 @@ class DecodeLibrary {
             const actorsToLoad = expGroups["Emitter"] || [];
             const uEmitters = actorsToLoad.map(exp => pkg.fetchObject<GA.UEmitter>(exp.index + 1).loadSelf());
 
-            for (const actor of uEmitters)
+            for (const actor of uEmitters) {
+                // if (actor.objectName !== "Emitter7")
+                //     continue;
+
                 actor.getDecodeInfo(decodeLibrary);
+            }
         }
 
         if (loadStaticModels) {

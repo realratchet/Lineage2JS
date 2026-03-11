@@ -243,6 +243,10 @@ class RenderManager {
         // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
         // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
+        // // ti emitter
+        // this.camera.position.set(-85696.00014079512, -3058.804150841089, 242023.70085962766);
+        // this.controls.orbit.target.set(-85624.11634173596, -3062.40244455436, 241954.27628389848);
+
         // // should see moon
         // this.camera.position.set(18345, -3583, 115670);
         // this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
@@ -1321,7 +1325,7 @@ class RenderManager {
 
             // Update listener position from camera
             const fwd = this.camera.getWorldDirection(new Vector3());
-            const up = this.camera.up;
+            const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
             this.audioManager.updateListenerPosition(
                 camPos.x, camPos.y, camPos.z,
                 fwd.x, fwd.y, fwd.z,

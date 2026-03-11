@@ -87,7 +87,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibra
 function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDecodeInfo) {
     const object = decodeSimpleObject(library, Object3D, info);
 
-    object.add(new AxesHelper(100));
+    // object.add(new AxesHelper(100));
 
     return object;
 }
@@ -689,7 +689,8 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
             particlesPerSecond: info.initial.particlesPerSecond,
             scale: info.initial.scale,
             velocity: info.initial.velocity,
-            position: info.initial.location,
+            position: info.initial.position,
+            offset: info.initial.offset,
             angularVelocity: info.initial.angularVelocity,
         },
         particlesPerSecond: info.particlesPerSecond,
@@ -701,6 +702,17 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
         colorMultiplierRange: info.colorMultiplierRange,
+        angularVelocity: info.angularVelocity,
+        revolutionCenterOffsetRange: info.revolutionCenterOffsetRange,
+        revolutionsPerSecondRange: info.revolutionsPerSecondRange,
+        initialTimeRange: info.initialTimeRange,
+        startMassRange: info.startMassRange,
+        sphereRadiusRange: info.sphereRadiusRange,
+        startLocationPolarRange: info.startLocationPolarRange,
+        addVelocityMultiplierRange: info.addVelocityMultiplierRange,
+        velocityLossRange: info.velocityLossRange,
+        warmupTime: info.warmupTime,
+        warmupTicksPerSecond: info.warmupTicksPerSecond,
         allSettings: info.allSettings
     };
 }
@@ -737,7 +749,11 @@ function decodeSpriteEmitter(library: GD.DecodeLibrary, info: GD.ISpriteEmitterD
 
     // debugger;
 
-    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { material }));
+    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { 
+        material,
+        spriteDirection: info.spriteDirection,
+        projectionNormal: info.projectionNormal 
+    }));
 
     applySimpleProperties(library, emitter, info);
 

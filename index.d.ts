@@ -248,24 +248,39 @@ declare global {
                         particlesPerSecond: number,
                         scale: { min: Vector3Arr, max: Vector3Arr },
                         velocity: { min: Vector3Arr, max: Vector3Arr },
-                        location: { min: Vector3Arr, max: Vector3Arr },
+                        position: { min: Vector3Arr, max: Vector3Arr },
+                        offset?: Vector3Arr,
                         angularVelocity: { min: Vector3Arr, max: Vector3Arr }
                     },
                     particlesPerSecond: number,
                     blendingMode: ParticleBlendModes_T,
                     opacity: number,
+                    drawScale?: number,
                     changesOverLifetime: {
                         scale: { values: [number, number][], repeats: number }
                     },
                     fadeIn: Fade_T,
                     fadeOut: Fade_T,
                     colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+                    angularVelocity?: { min: Vector3Arr, max: Vector3Arr },
+                    revolutionCenterOffsetRange?: { min: Vector3Arr, max: Vector3Arr },
+                    revolutionsPerSecondRange?: { min: Vector3Arr, max: Vector3Arr },
+                    initialTimeRange: [number, number],
+                    startMassRange: [number, number],
+                    sphereRadiusRange?: [number, number],
+                    startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
+                    addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
+                    velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+                    warmupTime?: number,
+                    warmupTicksPerSecond?: number,
                     allSettings: any
                 }
 
                 export interface ISpriteEmitterDecodeInfo extends IEmitterDecodeInfo {
                     type: "SpriteEmitter",
-                    texture: string
+                    texture: string,
+                    spriteDirection?: string,
+                    projectionNormal?: [number, number, number]
                 }
 
                 export interface IMeshEmitterDecodeInfo extends IEmitterDecodeInfo {
@@ -522,28 +537,58 @@ declare global {
                 export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
 
                 export type EmitterConfig_T = {
+                    name?: string,
                     blendingMode: ParticleBlendModes_T,
+                    uniformScale?: boolean,
                     maxParticles: number,
+                    drawScale?: number,
                     opacity: number,
                     lifetime: [number, number],
                     acceleration: GD.Vector3Arr,
+                    maxAbsVelocity?: GD.Vector3Arr,
                     particlesPerSecond: number,
                     fadeIn: Fade_T
                     fadeOut: Fade_T,
+                    warmupTime?: number,
+                    warmupTicksPerSecond?: number,
                     colorMultiplierRange: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    angularVelocity?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    revolutionCenterOffsetRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    revolutionsPerSecondRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    initialTimeRange: [number, number],
+                    startMassRange: [number, number],
+                    sphereRadiusRange?: [number, number],
+                    startLocationPolarRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    addVelocityMultiplierRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    velocityLossRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                    forcedMaxParticles?: boolean,
                     initial: {
                         particlesPerSecond: number,
-                        angularVelocity: { min: GD.Vector3Arr, max: GD.Vector3Arr }
-                        velocity: { min: GD.Vector3Arr, max: GD.Vector3Arr }
-                        position: { min: GD.Vector3Arr, max: GD.Vector3Arr }
-                        scale: { min: GD.Vector3Arr, max: GD.Vector3Arr }
+                        angularVelocity: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                        velocity: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                        position: { min: GD.Vector3Arr, max: GD.Vector3Arr },
+                        offset?: GD.Vector3Arr,
+                        scale: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     },
                     changesOverLifetime: {
                         scale: {
                             values: [number, number][],
                             repeats: number
+                        },
+                        color?: {
+                            values: [number, GD.Vector4Arr][],
+                            repeats: number
+                        },
+                        velocity?: {
+                            values: [number, GD.Vector3Arr][],
+                            repeats: number
+                        },
+                        revolution?: {
+                            values: [number, GD.Vector3Arr][],
+                            repeats: number
                         }
-                    }
+                    },
+                    allSettings: any
                 };
 
                 export type Fade_T = {

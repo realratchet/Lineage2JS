@@ -31,7 +31,7 @@ class AudioManager {
 
         this.musicGainNode = this.audioContext.createGain();
         this.musicGainNode.connect(this.masterGain);
-        this.musicGainNode.gain.value = 0;
+        this.musicGainNode.gain.value = 0.1;
 
         this.ambientGainNode = this.audioContext.createGain();
         this.ambientGainNode.connect(this.masterGain);
