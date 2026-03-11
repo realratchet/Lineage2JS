@@ -208,8 +208,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // tower outside
-        this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-        this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+        this.camera.position.set(13202.948810614555, -3573.003864493672, 114479.97315173852);
+        this.controls.orbit.target.set(13298.353862721668, -3547.92988464792, 114463.56670278899);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
@@ -493,20 +493,20 @@ class RenderManager {
         switch (event.key.toLowerCase()) {
             case "1":
                 this.cancelMusic();
-                this.camera.position.set(14620.304790735074, -3252.6686447271395, 113939.32109701027);
-                this.controls.orbit.target.set(19313.26359342052, -1077.117687144737, 114494.24459571407);
+                this.camera.position.set(13202.948810614555, -3573.003864493672, 114479.97315173852);
+                this.controls.orbit.target.set(13298.353862721668, -3547.92988464792, 114463.56670278899);
                 this.controls.orbit.update();
                 break;
             case "2":
                 this.cancelMusic();
-                this.camera.position.set(17635.20575146492, -11784.939422516854, 116150.5713219522);
-                this.controls.orbit.target.set(18067.654677822546, -10987.479065394222, 113781.22799780089);
+                this.camera.position.set(17046.05501814811, -12013.89353241769, 117471.20102308583);
+                this.controls.orbit.target.set(17083.7099694609, -11980.75765759009, 117384.69022352276);
                 this.controls.orbit.update();
                 break;
             case "3":
                 this.cancelMusic();
-                this.camera.position.set(15072.881710902564, -11862.167696361777, 110387.91067628124);
-                this.controls.orbit.target.set(14711.102749053878, -11434.303788147914, 110872.50292405237);
+                this.camera.position.set(15242.674545699758, -12078.741557239728, 110436.41811293362);
+                this.controls.orbit.target.set(15174.047463755987, -12027.349302874225, 110487.88810239462);
                 this.controls.orbit.update();
                 break;
             case "4":
@@ -518,7 +518,7 @@ class RenderManager {
             case "5":
                 this.cancelMusic();
                 this.camera.position.set(23756.20212599347, -8869.681711370744, 116491.99214326135);
-                this.controls.orbit.target.set(23706.65317650355, -9178.136467533635, 118330.62193563695);
+                this.controls.orbit.target.set(23753.308437823456, -8868.697361740096, 116591.94542046914);
                 this.controls.orbit.update();
                 break;
             case "6":
@@ -1441,22 +1441,22 @@ class RenderManager {
 
             // Capture active zone fog data
             let zoneFogData: import("./visualizer").ZoneFogData | undefined;
-                const sector = this.getSector(this.camera.position);
-                if (sector) {
-                    const zoneIndex = sector.findPositionZone(this.camera.position);
-                    if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
-                        const zoneData = sector.bspZones[zoneIndex];
-                        const zi = zoneData.zoneInfo;
-                        if (zi) {
-                            zoneFogData = {
-                                isFogZone: !!zi.isFogZone,
-                                color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
-                                start: zi.fog ? zi.fog.start : 0,
-                                end: zi.fog ? zi.fog.end : 0
-                            };
-                        }
+            const sector = this.getSector(this.camera.position);
+            if (sector) {
+                const zoneIndex = sector.findPositionZone(this.camera.position);
+                if (zoneIndex !== null && sector.bspZones && sector.bspZones[zoneIndex]) {
+                    const zoneData = sector.bspZones[zoneIndex];
+                    const zi = zoneData.zoneInfo;
+                    if (zi) {
+                        zoneFogData = {
+                            isFogZone: !!zi.isFogZone,
+                            color: zi.fog ? new ColorByte().set(zi.fog.color[0] * 255, zi.fog.color[1] * 255, zi.fog.color[2] * 255, 255) : new ColorByte().set(0, 0, 0, 0),
+                            start: zi.fog ? zi.fog.start : 0,
+                            end: zi.fog ? zi.fog.end : 0
+                        };
                     }
                 }
+            }
 
             if (this.visualizer.getMode() === VisualizerMode.Fogs) {
                 this.visualizer.updateHUD(activeFogColors, globalEnvColors, zoneFogData);
