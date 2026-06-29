@@ -463,7 +463,7 @@ async function startCore() {
         ]
     } as GD.LoadSettings_T;
 
-    const pkgL2Skies = await assetLoader.load(assetLoader.getPackage("l2_skies", "Texture"));
+    const pkgL2Skies = await assetLoader.load(assetLoader.getPackage("l2_skies", "Texture")) as GA.UPackage;
     const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
     const skyLevel = await _decodePackage(renderManager, assetLoader, "skylevel", {
         ...loadSettings, isSkyLevel: true,
@@ -476,7 +476,9 @@ async function startCore() {
         batching: { staticMeshes: false, terrain: false }
     });
 
+    const deps = pkgL2Skies.getDependencies();
 
+    debugger;
 
     // working (or mostly working)
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower

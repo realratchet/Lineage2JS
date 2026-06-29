@@ -17,7 +17,8 @@
                 "./src/assets/unreal/*"
             ],
             "@l2js/core/*": [
-                "./node_modules/@l2js/core/src/*"
+                // "./node_modules/@l2js/core/src/*"
+                "./l2js-core/src/*"
             ],
         },
         "noImplicitAny": true,

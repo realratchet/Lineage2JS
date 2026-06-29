@@ -1,5 +1,5 @@
 
-import { UEncodedFile, BufferValue } from "@l2js/core";
+import { UEncodedFile, BufferValue, BufferStream } from "@l2js/core";
 
 class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
@@ -11,15 +11,7 @@ class UDataFile extends UEncodedFile {
         this.schema = schema;
     }
 
-    protected async readArrayBuffer(): Promise<ArrayBuffer> {
-        const response = await fetch(this.path);
-
-        if (!response.ok) throw new Error(response.statusText);
-
-        const buffer = await response.arrayBuffer();
-
-        return buffer;
-    }
+    protected async readArrayBuffer(): Promise<BufferStream> { return await BufferStream.initialize(this.path); }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 

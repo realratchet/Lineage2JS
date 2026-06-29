@@ -343,7 +343,7 @@ abstract class UStaticMesh extends UPrimitive {
         const collision = new Uint32Array(this.collisionFaces.length * 3);
 
         for (let i = 0; i < collisionFaces; i++) {
-            const face = this.collisionFaces[i];
+            const face = this.collisionFaces.getElem(i);
             const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
             const offset = i * 3;
 
