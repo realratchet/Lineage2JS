@@ -17,7 +17,7 @@ import decodeEnv from "@client/assets/decoders/env-decoder";
 async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, settings: GD.LoadSettings_T) {
     if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
-    pkg = await assetLoader.load(pkg);
+    pkg = await assetLoader.using(pkg);
 
     const decodeLibrary = DecodeLibrary.fromPackage(pkg, settings);
 
@@ -199,6 +199,9 @@ async function _decodeEnvConfig(path: string, pkgNative: C.ANativePackage, pkgEn
 async function startCore() {
     // await ensureWasmInitialized();
 
+    if ("storage" in navigator)
+        await navigator.storage.persist();
+
     const startTime = performance.now();
 
     // debugger;
@@ -219,9 +222,7 @@ async function startCore() {
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
 
-    const pkgCore = await assetLoader.load(assetLoader.getCorePackage());
-
-    // debugger;
+    const pkgCore = await assetLoader.using(assetLoader.getCorePackage(), { neverUnload: true });
 
     // const classess = [];
 
@@ -262,7 +263,7 @@ async function startCore() {
 
 
     const pkgNative = assetLoader.getNativePackage();
-    const pkgEngine = await assetLoader.load<C.AEnginePackage>(assetLoader.getEnginePackage());
+    const pkgEngine = await assetLoader.using<C.AEnginePackage>(assetLoader.getEnginePackage(), { neverUnload: true });
 
     pkgCore.loadNativeClasses();
     // pkgEngine.loadNativeClasses();
@@ -463,8 +464,10 @@ async function startCore() {
         ]
     } as GD.LoadSettings_T;
 
-    const pkgL2Skies = await assetLoader.load(assetLoader.getPackage("l2_skies", "Texture")) as GA.UPackage;
+    const pkgL2Skies = await assetLoader.using(assetLoader.getPackage("l2_skies", "Texture"), { neverUnload: true }) as GA.UPackage;
     const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
+    const pkgSkyLevel = await assetLoader.using(assetLoader.getPackage("skylevel", "Level"), { neverUnload: true }) as GA.UPackage;
+
     const skyLevel = await _decodePackage(renderManager, assetLoader, "skylevel", {
         ...loadSettings, isSkyLevel: true,
         loadTerrain: true,
@@ -476,12 +479,18 @@ async function startCore() {
         batching: { staticMeshes: false, terrain: false }
     });
 
-    const deps = pkgL2Skies.getDependencies();
+    // working (or mostly working)
+    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+
+    assetLoader.free(assetLoader.getPackage("20_21", "Level"));
 
     debugger;
 
-    // working (or mostly working)
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    await _decodePackage(renderManager, assetLoader, "20_21", loadSettings)
+
+    debugger;
+
+    debugger;
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest

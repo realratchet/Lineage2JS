@@ -1,5 +1,6 @@
 
-import { UEncodedFile, BufferValue, BufferStream } from "@l2js/core";
+import fetchAssetHandle from "@client/assets/asset-handle";
+import { UEncodedFile, BufferValue } from "@l2js/core";
 
 class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
@@ -11,7 +12,12 @@ class UDataFile extends UEncodedFile {
         this.schema = schema;
     }
 
-    protected async readArrayBuffer(): Promise<BufferStream> { return await BufferStream.initialize(this.path); }
+    protected async readArrayBuffer() {
+        const response = await fetchAssetHandle(this.path);
+        const readable = await response.getReadable();
+
+        return readable.buffer;
+    }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 

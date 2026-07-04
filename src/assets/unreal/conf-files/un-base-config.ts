@@ -1,4 +1,5 @@
-import { UEncodedFile, BufferStream } from "@l2js/core";
+import fetchAssetHandle from "@client/assets/asset-handle";
+import { UEncodedFile } from "@l2js/core";
 
 let decoder: TextDecoder = null;
 
@@ -6,7 +7,12 @@ function getInstance() { return decoder = decoder ?? new TextDecoder("euc-kr"); 
 
 abstract class BaseConfigFile extends UEncodedFile {
     protected decoder = getInstance();
-    protected async readArrayBuffer() { return await BufferStream.initialize(this.path); }
+    protected async readArrayBuffer() {
+        const response = await fetchAssetHandle(this.path);
+        const readable = await response.getReadable();
+
+        return readable.buffer;
+    }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 

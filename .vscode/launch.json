@@ -128,7 +128,8 @@
                 "--password-store=basic",
                 "--user-data-dir=${workspaceFolder}/.vscode-chrome",
                 "--no-first-run",
-                "--no-default-browser-check"
+                "--no-default-browser-check",
+                "--unsafely-treat-insecure-origin-as-secure=http://ratchet-pc:8080"
             ],
             "sourceMapPathOverrides": {
                 "webpack:///../*": "${workspaceFolder}/*",

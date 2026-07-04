@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
+const { initChunkerMiddleware } = require("./chunker-middleware");
 // const { SourceMapDevToolPlugin } = require("webpack");
 
 function* walkSync(dir) {
@@ -47,7 +48,6 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
         }
 
         fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
-
 
         const plugins = [
             new CopyWebpackPlugin({
@@ -115,6 +115,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 plugins: [
                     ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
+                    // "@babel/plugin-transform-explicit-resource-management",
                     ["@babel/plugin-proposal-class-properties", { "loose": true }],
                     ["@babel/plugin-proposal-private-methods", { "loose": true }],
                     ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
@@ -143,6 +144,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                         plugins: [
                             ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                             "@babel/transform-runtime",
+                            // "@babel/plugin-transform-explicit-resource-management",
                             ["@babel/plugin-proposal-class-properties", { "loose": true }],
                             ["@babel/plugin-proposal-private-methods", { "loose": true }],
                             ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
@@ -169,6 +171,10 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 static: {
                     directory: path.resolve(__dirname, "../", dirAssets),
                     publicPath: "/assets"
+                },
+                setupMiddlewares: (middlewares, devServer) => {
+                    // middlewares.unshift(initChunkerMiddleware(dirAssets));
+                    return middlewares;
                 }
             },
             devtool,

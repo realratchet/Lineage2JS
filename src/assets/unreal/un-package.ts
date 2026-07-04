@@ -54,7 +54,7 @@ import * as NEnv from "@client/assets/unreal/un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
-import BufferStream from "@l2js/core/buffer-stream";
+import { fetchAssetHandle } from "@client/assets/asset-handle";
 
 type CoreStructs_T =
     | "Vector"
@@ -74,36 +74,14 @@ type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : never;
 
 
-class FetchBufferStream extends BufferStream {
-    protected response: Response;
-
-    protected constructor(response: Response, byteLength: number, bytesLoaded: number) {
-        super(byteLength, bytesLoaded);
-
-        this.response = response;
-    }
-
-    public static async initialize(path: string): Promise<FetchBufferStream> {
-        const response = await fetch(path);
-
-        if (!response.ok) throw new Error(response.statusText);
-
-        const contentLength = response.headers.get("content-length");
-        const contentSize = parseInt(contentLength);
-
-        if (!isFinite(contentSize) || contentSize < 0) throw new Error(`bad content length: ${contentLength}`)
-
-        return new FetchBufferStream(response, contentSize, 0);
-    }
-
-}
 
 class UPackage extends APackage {
-    public getDependencies() {
-        throw new Error("not implemented")
-    }
+    protected async readArrayBuffer() {
+        const response = await fetchAssetHandle(this.path);
+        const readable = await response.getReadable();
 
-    protected async readArrayBuffer() { return FetchBufferStream.initialize(this.path); }
+        return readable.buffer;
+    }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 
