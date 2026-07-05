@@ -427,11 +427,11 @@ class Terrain extends Mesh implements ICollidable {
         // If both are in batch mode, vertices are absolute and should match perfectly.
         // Otherwise, use relative offsets.
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
-        const hDiff = useAbsolute ? 0 : neighbor.position.y - this.position.y;
+        const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
 
         for (let y = 0; y < 17; y++) {
-            const selfIdx = selfOffset + (y * 17 + 16) * 3 + 1; // Right Edge (x=16)
-            const neighborIdx = neighborOffset + (y * 17 + 0) * 3 + 1; // Neighbor Left Edge (x=0)
+            const selfIdx = selfOffset + (y * 17 + 16) * 3 + 2; // Right Edge (x=16)
+            const neighborIdx = neighborOffset + (y * 17 + 0) * 3 + 2; // Neighbor Left Edge (x=0)
             pos[selfIdx] = nPos[neighborIdx] + hDiff;
         }
 
@@ -457,11 +457,11 @@ class Terrain extends Mesh implements ICollidable {
         const neighborOffset = neighbor.batchVertexOffset * 3;
 
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
-        const hDiff = useAbsolute ? 0 : neighbor.position.y - this.position.y;
+        const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
 
         for (let x = 0; x < 17; x++) {
-            const selfIdx = selfOffset + (16 * 17 + x) * 3 + 1; // Bottom Edge (y=16)
-            const neighborIdx = neighborOffset + (0 * 17 + x) * 3 + 1; // Neighbor Top Edge (y=0)
+            const selfIdx = selfOffset + (16 * 17 + x) * 3 + 2; // Bottom Edge (y=16)
+            const neighborIdx = neighborOffset + (0 * 17 + x) * 3 + 2; // Neighbor Top Edge (y=0)
             pos[selfIdx] = nPos[neighborIdx] + hDiff;
         }
 
@@ -487,10 +487,10 @@ class Terrain extends Mesh implements ICollidable {
         const neighborOffset = neighbor.batchVertexOffset * 3;
 
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
-        const hDiff = useAbsolute ? 0 : neighbor.position.y - this.position.y;
+        const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
 
-        const selfIdx = selfOffset + (16 * 17 + 16) * 3 + 1; // Bottom-Right corner
-        const neighborIdx = neighborOffset + (0 * 17 + 0) * 3 + 1; // Neighbor Top-Left corner
+        const selfIdx = selfOffset + (16 * 17 + 16) * 3 + 2; // Bottom-Right corner
+        const neighborIdx = neighborOffset + (0 * 17 + 0) * 3 + 2; // Neighbor Top-Left corner
         pos[selfIdx] = nPos[neighborIdx] + hDiff;
 
         attr.needsUpdate = true;
