@@ -1,8 +1,8 @@
 import "./ue2-conventions";
 import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import { ZUpOrbitControls as OrbitControls } from "./zup-orbit-controls";
-import { ZUpPointerLockControls } from "./zup-pointer-lock-controls";
+import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbit-controls";
+import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
 import RAPIER from "@dimforge/rapier3d";
