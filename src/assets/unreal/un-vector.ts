@@ -155,68 +155,9 @@ abstract class FVector extends UObject {
     }
 
     applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
+        let [qx, qy, qz, qw] = rotator.getQuaternionElements();
 
-        let [x, y, z, order] = rotator.getEulerElements();
-
-        if (negate) x = -x, y = -y, z = -z;
-
-        // http://www.mathworks.com/matlabcentral/fileexchange/
-        // 	20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/
-        //	content/SpinCalc.m
-
-        const cos = Math.cos;
-        const sin = Math.sin;
-
-        const c1 = cos(x / 2);
-        const c2 = cos(y / 2);
-        const c3 = cos(z / 2);
-
-        const s1 = sin(x / 2);
-        const s2 = sin(y / 2);
-        const s3 = sin(z / 2);
-
-        let qx: number, qy: number, qz: number, qw: number;
-
-        switch (order) {
-            case "XYZ":
-                qx = s1 * c2 * c3 + c1 * s2 * s3;
-                qy = c1 * s2 * c3 - s1 * c2 * s3;
-                qz = c1 * c2 * s3 + s1 * s2 * c3;
-                qw = c1 * c2 * c3 - s1 * s2 * s3;
-                break;
-            case "YXZ":
-                qx = s1 * c2 * c3 + c1 * s2 * s3;
-                qy = c1 * s2 * c3 - s1 * c2 * s3;
-                qz = c1 * c2 * s3 - s1 * s2 * c3;
-                qw = c1 * c2 * c3 + s1 * s2 * s3;
-                break;
-            case "ZXY":
-                qx = s1 * c2 * c3 - c1 * s2 * s3;
-                qy = c1 * s2 * c3 + s1 * c2 * s3;
-                qz = c1 * c2 * s3 + s1 * s2 * c3;
-                qw = c1 * c2 * c3 - s1 * s2 * s3;
-                break;
-
-            case "ZYX":
-                qx = s1 * c2 * c3 - c1 * s2 * s3;
-                qy = c1 * s2 * c3 + s1 * c2 * s3;
-                qz = c1 * c2 * s3 - s1 * s2 * c3;
-                qw = c1 * c2 * c3 + s1 * s2 * s3;
-                break;
-            case "YZX":
-                qx = s1 * c2 * c3 + c1 * s2 * s3;
-                qy = c1 * s2 * c3 + s1 * c2 * s3;
-                qz = c1 * c2 * s3 - s1 * s2 * c3;
-                qw = c1 * c2 * c3 - s1 * s2 * s3;
-                break;
-            case "XZY":
-                qx = s1 * c2 * c3 - c1 * s2 * s3;
-                qy = c1 * s2 * c3 - s1 * c2 * s3;
-                qz = c1 * c2 * s3 + s1 * s2 * c3;
-                qw = c1 * c2 * c3 + s1 * s2 * s3;
-                break;
-            default: throw new Error(`Unsupported order: ${order}`)
-        }
+        if (negate) qx = -qx, qy = -qy, qz = -qz;
 
         return this.applyQuaternion(qx, qy, qz, qw);
     }

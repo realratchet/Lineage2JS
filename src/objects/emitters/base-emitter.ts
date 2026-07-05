@@ -1317,11 +1317,9 @@ abstract class BaseEmitter extends Object3D {
                 if (this.isSpriteEmitter) {
                     (p as any).spin = rotRoll;
                 } else {
-                    // Restore old (working) mapping for Mesh Emitters:
-                    // Three X = Roll (UE Z)
-                    // Three Y = Pitch (UE X)
-                    // Three Z = Yaw (UE Y)
-                    p.rotation.set(rotRoll, rotPitch, rotYaw, "XZY");
+                    // Native-axis mapping for Mesh Emitters (Z up, no axis swap):
+                    // X = Roll, Y = Yaw, Z = Pitch
+                    p.rotation.set(rotRoll, rotYaw, rotPitch, "XYZ");
                 }
             }
 

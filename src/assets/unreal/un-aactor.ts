@@ -2,7 +2,6 @@
 // import FRotator from "./un-rotator";
 import GMath from "@client/assets/unreal/un-gmath";
 import FMatrix from "@client/assets/unreal/un-matrix";
-import FVector from "@client/assets/unreal/un-vector";
 import UObject, { APackage, UExport } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
@@ -160,17 +159,12 @@ abstract class UAActor extends UObject {
         const ue2_WY = LY - (CR * CY * DY * PY + CY * DZ * PZ * SR + CP * DX * PX * SY - CR * DZ * PZ * SP * SY + DY * PY * SP * SR * SY);
         const ue2_WZ = LZ - (CP * CR * DZ * PZ + DX * PX * SP - CP * DY * PY * SR);
 
-        // Convert to Three.js coordinate system by swapping Y and Z axes
-        // UE2: X=forward, Y=right, Z=up
-        // Three.js: X=right, Y=up, Z=forward (when vertices are stored as X,Z,Y)
-        // Mapping: Three.X = UE2.X, Three.Y = UE2.Z, Three.Z = UE2.Y
-
-        // Return in column-major order for Three.js Matrix4
+        // Native UE2 local-to-world matrix, column-major, no axis reordering
         return [
-            ue2_XX, ue2_XZ, ue2_XY, 0,  // Column 0 (Three.js X axis = UE2 X axis)
-            ue2_ZX, ue2_ZZ, ue2_ZY, 0,  // Column 1 (Three.js Y axis = UE2 Z axis)
-            ue2_YX, ue2_YZ, ue2_YY, 0,  // Column 2 (Three.js Z axis = UE2 Y axis)
-            ue2_WX, ue2_WZ, ue2_WY, 1   // Column 3 (position)
+            ue2_XX, ue2_XY, ue2_XZ, 0,
+            ue2_YX, ue2_YY, ue2_YZ, 0,
+            ue2_ZX, ue2_ZY, ue2_ZZ, 0,
+            ue2_WX, ue2_WY, ue2_WZ, 1
         ];
     }
 
@@ -179,10 +173,7 @@ abstract class UAActor extends UObject {
         const _a = this.region.getZone().location;
         const _b = this.location;
 
-        const a = FVector.make(_a.x, _a.z, _a.y);
-        const b = FVector.make(_b.x, _b.z, _b.y);
-
-        const geoPosition = a.sub(b).applyRotator(this.rotation, true);
+        const geoPosition = _a.sub(_b).applyRotator(this.rotation, true);
         const regionHelper = {
             type: "Edges",
             geometry: lineGeometryUuid,

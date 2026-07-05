@@ -95,8 +95,8 @@ abstract class FBox extends UObject {
     public getDecodeInfo(): GD.IBoxDecodeInfo {
         return {
             isValid: !!this.isValid,
-            min: this.min.getVectorElements(),
-            max: this.max.getVectorElements()
+            min: this.min.getElements(),
+            max: this.max.getElements()
         };
     }
 

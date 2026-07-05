@@ -62,7 +62,7 @@ abstract class UTerrainSector extends UObject {
 
     public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
         const center = this.boundingBox.getCenter();
-        const { x: ox, y: oz, z: oy } = center;
+        const { x: ox, y: oy, z: oz } = center;
 
 
         if (this.uuid in library.geometries) return {
@@ -105,7 +105,7 @@ abstract class UTerrainSector extends UObject {
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
 
-                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+                const { x: px, y: py, z: pz } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
                 // const [nx, nz, ny] = [
                 //     this.triangles.normals[0 + 3 * iii],
                 //     this.triangles.normals[1 + 3 * iii],
@@ -282,8 +282,8 @@ abstract class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getVectorElements() as GD.Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getVectorElements() as GD.Vector3Arr
+                    min: this.boundingBox.min.sub(center).getElements() as GD.Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getElements() as GD.Vector3Arr
                 } : null
             }
         };

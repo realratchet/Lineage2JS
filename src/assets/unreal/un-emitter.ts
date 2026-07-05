@@ -145,14 +145,14 @@ abstract class UEmitter extends UAActor {
         const zone = this.getZone();
         const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
 
-        const _position = this.location.getVectorElements();
+        const _position = this.location.getElements();
 
         const actorInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
             position: _position,
-            scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
+            scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
             children: emittersInfo.filter(x => x)
         } as GD.IBaseObjectDecodeInfo;

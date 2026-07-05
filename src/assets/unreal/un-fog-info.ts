@@ -36,7 +36,7 @@ abstract class UL2FogInfo extends AInfo {
 
         return {
             type: "L2FogInfo",
-            position: this.location.getVectorElements(),
+            position: this.location.getElements(),
             affectRange: this.affectRange.getDecodeInfo(library),
             fogRange1: this.fogRange1.getDecodeInfo(library),
             fogRange2: this.fogRange2.getDecodeInfo(library),

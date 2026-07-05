@@ -52,7 +52,7 @@ abstract class UAmbientSoundObject extends UAActor {
             library.soundBlobCache.set(soundKey, soundDataUri);
         }
 
-        const position = this.location.getVectorElements();
+        const position = this.location.getElements();
         const refDistance = this.radius;
         const maxDistance = this.radius * 100; // GAudioMaxRadiusMultiplier = 100 in UE2
         const volume = this.volume / 255;

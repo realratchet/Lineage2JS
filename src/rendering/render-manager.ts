@@ -1,7 +1,8 @@
+import "./ue2-conventions";
 import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls";
+import { ZUpOrbitControls as OrbitControls } from "./zup-orbit-controls";
+import { ZUpPointerLockControls } from "./zup-pointer-lock-controls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
 import RAPIER from "@dimforge/rapier3d";
@@ -60,7 +61,7 @@ class RenderManager {
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
-    public readonly controls: { orbit: OrbitControls, fps: PointerLockControls } = { orbit: null, fps: null };
+    public readonly controls: { orbit: OrbitControls, fps: ZUpPointerLockControls } = { orbit: null, fps: null };
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public readonly raycaster = new Raycaster();
@@ -160,9 +161,10 @@ class RenderManager {
         this.renderer.autoClear = false;
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
+        this.camera.up.set(0, 0, 1);
         this.controls.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.fps = new PointerLockControls(this.camera, this.renderer.domElement);
-        this.camera.position.set(0, 5, 15);
+        this.controls.fps = new ZUpPointerLockControls(this.camera, this.renderer.domElement);
+        this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxGeometry()));
 
@@ -172,7 +174,7 @@ class RenderManager {
         // Create visualizer system (will be recreated when sector changes)
         this.visualizer = new Visualizer(this.scene);
 
-        this.physicsWorld = new RAPIER.World(new Vector3(0, -9.8 * 100, 0));
+        this.physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
 
 
         // lightmapped water
@@ -196,8 +198,8 @@ class RenderManager {
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
 
         // elven ruins colon
-        this.camera.position.set(-113423.1583509125, -3347.4875149571467, 235975.71810164873);
-        this.controls.orbit.target.set(-113585.15625, -3498.14697265625, 235815.328125);
+        this.camera.position.set(-113423.1583509125, 235975.71810164873, -3347.4875149571467);
+        this.controls.orbit.target.set(-113585.15625, 235815.328125, -3498.14697265625);
 
         // // elven ruins light fixture with two lights
         // this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
@@ -208,8 +210,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // tower outside
-        this.camera.position.set(13202.948810614555, -3573.003864493672, 114479.97315173852);
-        this.controls.orbit.target.set(13298.353862721668, -3547.92988464792, 114463.56670278899);
+        this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
+        this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
@@ -493,38 +495,38 @@ class RenderManager {
         switch (event.key.toLowerCase()) {
             case "1":
                 this.cancelMusic();
-                this.camera.position.set(13202.948810614555, -3573.003864493672, 114479.97315173852);
-                this.controls.orbit.target.set(13298.353862721668, -3547.92988464792, 114463.56670278899);
+                this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
+                this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
                 this.controls.orbit.update();
                 break;
             case "2":
                 this.cancelMusic();
-                this.camera.position.set(17046.05501814811, -12013.89353241769, 117471.20102308583);
-                this.controls.orbit.target.set(17083.7099694609, -11980.75765759009, 117384.69022352276);
+                this.camera.position.set(17046.05501814811, 117471.20102308583, -12013.89353241769);
+                this.controls.orbit.target.set(17083.7099694609, 117384.69022352276, -11980.75765759009);
                 this.controls.orbit.update();
                 break;
             case "3":
                 this.cancelMusic();
-                this.camera.position.set(15242.674545699758, -12078.741557239728, 110436.41811293362);
-                this.controls.orbit.target.set(15174.047463755987, -12027.349302874225, 110487.88810239462);
+                this.camera.position.set(15242.674545699758, 110436.41811293362, -12078.741557239728);
+                this.controls.orbit.target.set(15174.047463755987, 110487.88810239462, -12027.349302874225);
                 this.controls.orbit.update();
                 break;
             case "4":
                 this.cancelMusic();
-                this.camera.position.set(12918.803737500606, -11769.26992456535, 109998.28664096774);
-                this.controls.orbit.target.set(12961.940094338941, -11789.664021556502, 110631.6332572824);
+                this.camera.position.set(12918.803737500606, 109998.28664096774, -11769.26992456535);
+                this.controls.orbit.target.set(12961.940094338941, 110631.6332572824, -11789.664021556502);
                 this.controls.orbit.update();
                 break;
             case "5":
                 this.cancelMusic();
-                this.camera.position.set(23756.20212599347, -8869.681711370744, 116491.99214326135);
-                this.controls.orbit.target.set(23753.308437823456, -8868.697361740096, 116591.94542046914);
+                this.camera.position.set(23756.20212599347, 116491.99214326135, -8869.681711370744);
+                this.controls.orbit.target.set(23753.308437823456, 116591.94542046914, -8868.697361740096);
                 this.controls.orbit.update();
                 break;
             case "6":
                 this.cancelMusic();
-                this.camera.position.set(17436.46445202629, -6351.127037466889, 109469.23150265992);
-                this.controls.orbit.target.set(18965.828211115713, -6064.126549127763, 106770.89206042158);
+                this.camera.position.set(17436.46445202629, 109469.23150265992, -6351.127037466889);
+                this.controls.orbit.target.set(18965.828211115713, 106770.89206042158, -6064.126549127763);
                 this.controls.orbit.update();
                 break;
             case "+": this.nextSector(); break;
@@ -701,7 +703,7 @@ class RenderManager {
     public getSector(position: THREE.Vector3): SectorObject | null {
         const sectorSize = 256 * 128;
         const sectorX = Math.floor(position.x / sectorSize) + 20;
-        const sectorY = Math.floor(position.z / sectorSize) + 18;
+        const sectorY = Math.floor(position.y / sectorSize) + 18;
 
         return this.getSectorByCoords(sectorX, sectorY);
     }
@@ -931,7 +933,7 @@ class RenderManager {
             const fogInfosAll: any[] = [];
             const sectorSize = 256 * 128;
             const currentX = Math.floor(this.camera.position.x / sectorSize) + 20;
-            const currentY = Math.floor(this.camera.position.z / sectorSize) + 18;
+            const currentY = Math.floor(this.camera.position.y / sectorSize) + 18;
 
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
@@ -1207,7 +1209,10 @@ class RenderManager {
             if (this.dirKeys.down) forwardVelocity -= 1;
 
             dirForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion).multiplyScalar(forwardVelocity);
-            dirRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion).multiplyScalar(sidewaysVelocity);
+            // Negated: the final image is mirrored horizontally (see ue2-conventions.ts),
+            // so strafing along the camera's true local +X would otherwise visibly
+            // move the view in the opposite screen direction.
+            dirRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion).multiplyScalar(-sidewaysVelocity);
 
             cameraVelocity.addVectors(dirForward, dirRight).setLength(camSpeed);
 

@@ -28,7 +28,7 @@ function sampleLightIntensity(light: GD.ILightRenderInfo, sampPosition /* param_
     debugger;
 
     if (lightEffect === LightEffect_T.LE_Sunlight) {
-        const dotProduct = sampNormal.x * light.direction.x + sampNormal.z * light.direction.z + sampNormal.y * light.direction.y;
+        const dotProduct = sampNormal.x * light.direction.x + sampNormal.y * light.direction.y + sampNormal.z * light.direction.z;
 
         if (dotProduct < 0.0) {
             return dotProduct * -2.0;

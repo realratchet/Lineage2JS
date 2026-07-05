@@ -301,8 +301,8 @@ abstract class UModel extends UPrimitive {
                     flags: [...hullFlags],
                     bounds: {
                         isValid: true,
-                        min: [initialVector[0], initialVector[2], initialVector[1]],
-                        max: [initialVector[3], initialVector[5], initialVector[4]]
+                        min: [initialVector[0], initialVector[1], initialVector[2]],
+                        max: [initialVector[3], initialVector[4], initialVector[5]]
                     }
                 };
             }
@@ -457,13 +457,8 @@ abstract class UModel extends UPrimitive {
 
                     const vOffset = dstVertices * 3, uOffset = dstVertices * 2;
 
-                    positions[vOffset + 0] = position.x;
-                    positions[vOffset + 1] = position.z;
-                    positions[vOffset + 2] = position.y;
-
-                    normals[vOffset + 0] = tangentZ.x;
-                    normals[vOffset + 1] = tangentZ.z;
-                    normals[vOffset + 2] = tangentZ.y;
+                    position.toArray(positions, vOffset);
+                    tangentZ.toArray(normals, vOffset);
 
                     uvs[uOffset + 0] = texU;
                     uvs[uOffset + 1] = texV;

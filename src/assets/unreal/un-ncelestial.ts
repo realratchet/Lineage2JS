@@ -25,16 +25,14 @@ abstract class UNCelestial extends UAActor {
     }
 
     /**
-     * Get common celestial decode info with coordinate conversion to Three.js Y-up
+     * Get common celestial decode info
      */
     protected getCelestialDecodeInfo() {
         const self = this.loadSelf();
 
-        // Convert position from Unreal (Z-up) to Three.js (Y-up): [x, y, z] -> [x, z, -y]
         let position: [number, number, number] | undefined;
         if (self.celestialPosition) {
-            const [x, y, z] = self.celestialPosition.getVectorElements();
-            position = [x, z, -y];
+            position = self.celestialPosition.getElements() as [number, number, number];
         }
 
         return {

@@ -321,12 +321,12 @@ abstract class UStaticMesh extends UPrimitive {
             // }
 
             positions[i * 3 + 0] = px;
-            positions[i * 3 + 1] = pz;
-            positions[i * 3 + 2] = py;
+            positions[i * 3 + 1] = py;
+            positions[i * 3 + 2] = pz;
 
             normals[i * 3 + 0] = nx;
-            normals[i * 3 + 1] = nz;
-            normals[i * 3 + 2] = ny;
+            normals[i * 3 + 1] = ny;
+            normals[i * 3 + 2] = nz;
 
             colors[i * 3 + 0] = 255;
             colors[i * 3 + 1] = 255;
@@ -417,8 +417,8 @@ abstract class UStaticMesh extends UPrimitive {
                 const offset = vertOffset + j * 3;
 
                 trisPositions[offset + 0] = x;
-                trisPositions[offset + 1] = z;
-                trisPositions[offset + 2] = y;
+                trisPositions[offset + 1] = y;
+                trisPositions[offset + 2] = z;
             });
 
             trisIndices[indOffset + 0] = vIndOffset + 0;

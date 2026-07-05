@@ -373,7 +373,7 @@ export default class SkyRenderer {
         if (lat === NEG_PI) return new Vector3(0, 0, 0);
         const spherical = TMP_VEC3.set(radius * Math.sin(lat) * Math.cos(lon), radius * Math.sin(lat) * Math.sin(lon), radius * Math.cos(lat));
         spherical.applyAxisAngle(new Vector3(1, 0, 0), X_ROTATION_ANGLE);
-        return new Vector3(spherical.x, spherical.z, spherical.y);
+        return spherical.clone();
     }
 
     private calculateCelestialScale(celestialType: "sun" | "moon", baseScale: number, actorDrawScale: number, env: L2Environment): number {

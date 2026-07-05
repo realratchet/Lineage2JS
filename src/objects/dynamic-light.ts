@@ -91,12 +91,10 @@ function pitchYawToDirection(pitch: number, yaw: number, target: Vector3): Vecto
     const cosYaw = Math.cos(yaw);
     const sinYaw = Math.sin(yaw);
 
-    // Convert to Three.js coordinate system (Y-up)
-    // UE2: X-forward, Y-right, Z-up -> Three.js: X-right, Y-up, Z-forward
     target.set(
-        cosPitch * sinYaw,   // X (was Y in UE2)
-        sinPitch,            // Y (was Z in UE2)
-        cosPitch * cosYaw    // Z (was X in UE2)
+        cosPitch * cosYaw,   // X
+        cosPitch * sinYaw,   // Y
+        sinPitch             // Z
     );
 
     return target;

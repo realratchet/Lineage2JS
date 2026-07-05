@@ -439,7 +439,7 @@ abstract class UParticleEmitter extends UObject {
             fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
             fadeOut: this.isFadingOut ? { time: (this.fadeOutStartTime as any)?.x ?? 0, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
             uniformScale: this.isUniformScale,
-            acceleration: this.acceleration?.getVectorElements(),
+            acceleration: this.acceleration?.getElements(),
             warmupTime: this.relativeWarmupTime,
             warmupTicksPerSecond: this.warmupTicksPerSecond,
             initial: {
@@ -448,7 +448,7 @@ abstract class UParticleEmitter extends UObject {
                 angularVelocity: this.startSpinRange?.loadSelf().getDecodeInfo(library),
                 velocity: this.startVelocityRange?.loadSelf().getDecodeInfo(library),
                 position: this.startLocationRange?.loadSelf().getDecodeInfo(library),
-                offset: this.startLocationOffset?.getVectorElements() || [0, 0, 0]
+                offset: this.startLocationOffset?.getElements() || [0, 0, 0]
             },
             colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
             revolutionCenterOffsetRange: this.revolutionCenterOffsetRange?.loadSelf().getDecodeInfo(library),
@@ -504,7 +504,7 @@ abstract class UParticleRevolutionScale extends UObject {
     }
 
     public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
-        return [this.relTime, this.relRevolution?.getVectorElements() || [0, 0, 0]];
+        return [this.relTime, this.relRevolution?.getElements() || [0, 0, 0]];
     }
 }
 
@@ -536,7 +536,7 @@ abstract class UParticleVelocityScale extends UObject {
     }
 
     public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
-        return [this.relTime, this.relVelocity?.getVectorElements() || [0, 0, 0]];
+        return [this.relTime, this.relVelocity?.getElements() || [0, 0, 0]];
     }
 }
 

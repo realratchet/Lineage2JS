@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat, OneFactor, CustomBlending, RepeatWrapping, LinearFilter } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, CustomBlending, RepeatWrapping, LinearFilter } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -118,7 +118,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
             defines,
             uniforms,
             vertexShader: VERTEX_SHADER,
-            fragmentShader: fragmentShader
+            fragmentShader: fragmentShader,
+            side: FrontSide
         });
     }
 }

@@ -98,17 +98,15 @@ class FBSPNode implements C.IConstructable {
     public getBSPDecodeInfo(surfFlags: number): Omit<GD.IBSPNodeDecodeInfo_T, "sectionIndex" | "collision" | "zoneMask"> {
         return {
             children: [this.iFront, this.iBack],
-            // plane: [this.plane.x, this.plane.z, -this.plane.y, -this.plane.w] as GD.Vector4Arr,  // rotation just not sure if correct portal normal (rotate around Y axis)
-            // plane: [-this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,   // rotation just not sure if correct portal normal (rotate around X axis)
-            plane: [this.plane.x, this.plane.z, this.plane.y, this.plane.w] as GD.Vector4Arr,    // (old) just swizzling, likely invalid rotation
+            plane: [this.plane.x, this.plane.y, this.plane.z, this.plane.w] as GD.Vector4Arr,
             leaves: [this.iLeaf[0], this.iLeaf[1]],
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
             iPlane: this.iPlane,
             iRenderBound: this.iRenderBound !== -1 ? this.iRenderBound : undefined, // INDEX_NONE = -1
             spheres: {
-                exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.z, this.exclusiveSphereBound.y, this.exclusiveSphereBound.w],
-                inclusive: [this.inclusiveSphereBound.x, this.inclusiveSphereBound.z, this.inclusiveSphereBound.y, this.inclusiveSphereBound.w]
+                exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.y, this.exclusiveSphereBound.z, this.exclusiveSphereBound.w],
+                inclusive: [this.inclusiveSphereBound.x, this.inclusiveSphereBound.y, this.inclusiveSphereBound.z, this.inclusiveSphereBound.w]
             }
         };
     }

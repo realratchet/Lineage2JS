@@ -201,7 +201,7 @@ abstract class UStaticMeshActor extends UAActor {
         const bspZoneIndex = library.bspZoneIndexMap[zone.uuid];
         const zoneInfo = library.bspZones[bspZoneIndex].zoneInfo;
 
-        const _position = this.location.getVectorElements();
+        const _position = this.location.getElements();
 
         // skip actors outside of the sector as it doesn't make sense
         if (library.sector) {
@@ -228,7 +228,7 @@ abstract class UStaticMeshActor extends UAActor {
             ambient,
             dontBatch: !!this.dontBatch,
             isRangeIgnored: !!this.isRangeIgnored,
-            scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
+            scale: this.scale?.multiplyScalar(this.drawScale).getElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
             instance: {
                 mesh: meshInfo,
@@ -239,8 +239,8 @@ abstract class UStaticMeshActor extends UAActor {
                 lights
             } as GD.IStaticMeshInstanceDecodeInfo,
             bounds: {
-                min: [predictedBox.min.x, predictedBox.min.z, predictedBox.min.y],
-                max: [predictedBox.max.x, predictedBox.max.z, predictedBox.max.y]
+                min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
+                max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
             }
         } as GD.IStaticMeshActorDecodeInfo;
 
@@ -250,8 +250,8 @@ abstract class UStaticMeshActor extends UAActor {
 
         actorInfo.bounds = {
             isValid: true,
-            min: [inflatedBox.min.x, inflatedBox.min.z, inflatedBox.min.y],
-            max: [inflatedBox.max.x, inflatedBox.max.z, inflatedBox.max.y]
+            min: [inflatedBox.min.x, inflatedBox.min.y, inflatedBox.min.z],
+            max: [inflatedBox.max.x, inflatedBox.max.y, inflatedBox.max.z]
         };
 
         let actorZoneMask = 0n;

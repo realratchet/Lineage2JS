@@ -482,15 +482,15 @@ async function startCore() {
     // working (or mostly working)
     renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
 
-    assetLoader.free(assetLoader.getPackage("20_21", "Level"));
+    // assetLoader.free(assetLoader.getPackage("20_21", "Level"));
 
-    debugger;
+    // debugger;
 
-    await _decodePackage(renderManager, assetLoader, "20_21", loadSettings)
+    // await _decodePackage(renderManager, assetLoader, "20_21", loadSettings)
 
-    debugger;
+    // debugger;
 
-    debugger;
+    // debugger;
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
