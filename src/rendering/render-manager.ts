@@ -17,6 +17,7 @@ import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
 import AudioManager from "@client/rendering/audio-manager";
 import * as dat from "dat.gui";
+import type AssetManager from "@client/assets/asset-manager";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -67,10 +68,11 @@ class RenderManager {
     public readonly raycaster = new Raycaster();
     public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
-
     public readonly skyRenderer = new SkyRenderer();
-    private uGlowPass: UGlowPass;
-    private mainRenderTarget: WebGLRenderTarget;
+
+    protected assetManager: AssetManager;
+    protected uGlowPass: UGlowPass;
+    protected mainRenderTarget: WebGLRenderTarget;
 
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
@@ -109,8 +111,9 @@ class RenderManager {
         fogPreset: "4"
     };
 
-    public constructor(viewport: HTMLViewportElement) {
+    public constructor(viewport: HTMLViewportElement, assetManager: AssetManager) {
         this.viewport = viewport;
+        this.assetManager = assetManager;
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
@@ -700,12 +703,16 @@ class RenderManager {
 
     public enableZoneCulling = true;
 
-    public getSector(position: THREE.Vector3): SectorObject | null {
+    public getSectorId(position: THREE.Vector3): [number, number] {
         const sectorSize = 256 * 128;
         const sectorX = Math.floor(position.x / sectorSize) + 20;
         const sectorY = Math.floor(position.y / sectorSize) + 18;
 
-        return this.getSectorByCoords(sectorX, sectorY);
+        return [sectorX, sectorY];
+    }
+
+    public getSector(position: THREE.Vector3): SectorObject | null {
+        return this.getSectorByCoords(...this.getSectorId(position));
     }
 
     public getSectorByCoords(sectorX: number, sectorY: number): SectorObject | null {
@@ -719,8 +726,6 @@ class RenderManager {
 
         return xsect.get(sectorY);
     }
-
-
 
     protected _updateObjects(currentTime: number) {
         const globalTime = currentTime / 600;
@@ -1176,6 +1181,7 @@ class RenderManager {
     protected nextPhysicsTick: number;
 
     protected _preRender(currentTime: number, deltaTime: number) {
+        this.assetManager.tick(this);
         this.mixer.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
@@ -1538,10 +1544,19 @@ class RenderManager {
 
             moonFolder.close();
         }
-
     }
 
+    public getLoadedSectors() {
+        const activeSectors: SectorObject[] = [];
 
+        for (const secs of this.sectors.values()) {
+            for (const sec of secs.values()) {
+                activeSectors.push(sec);
+            }
+        }
+
+        return activeSectors;
+    }
 
     public addSector(sector: SectorObject) {
         if (sector.index) {

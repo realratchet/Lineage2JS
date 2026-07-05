@@ -5,31 +5,17 @@ import AssetLoader from "./assets/asset-loader";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneBufferGeometry, Mesh, SphereBufferGeometry, MeshBasicMaterial, Box3Helper, Color, BoxBufferGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 import decodeObject3D, { decodePackage } from "./assets/decoders/object3d-decoder";
 import DecodeLibrary from "./assets/unreal/decode-library";
-import UDataFile from "./assets/unreal/datafile/un-datafile";
+
 import UConfigEnv from "@client/assets/unreal/conf-files/un-conf-env";
 import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
 import { EEnvCycle } from "@client/assets/unreal/env-consts";
 import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
+import AssetManager from "@client/assets/asset-manager";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
-async function _decodePackage(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, settings: GD.LoadSettings_T) {
-    if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
 
-    pkg = await assetLoader.using(pkg);
-
-    const decodeLibrary = DecodeLibrary.fromPackage(pkg, settings);
-
-    // debugger;
-
-    decodeLibrary.anisotropy = renderManager.renderer.capabilities.getMaxAnisotropy();
-
-    console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
-
-
-    return decodePackage(decodeLibrary);
-}
 
 async function _decodeCharacter(renderManager: RenderManager, assetLoader: AssetLoader, pkg: string | C.APackage, pkgTex: string | C.APackage) {
     if (typeof (pkg) === "string") pkg = await assetLoader.getPackage(pkg, "Animation");
@@ -182,19 +168,9 @@ async function _decodeMonster(renderManager: RenderManager, assetLoader: AssetLo
     action.play();
 }
 
-async function _decodeDatFile(schema: ISchemaValue[], path: string) {
-    // const ini = await (new UEncodedFile("assets/system/l2.ini").asReadable()).decode();
 
-    const file = await (new UDataFile(schema, path).asReadable()).decode();
 
-    return file;
-}
 
-async function _decodeEnvConfig(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage, pkgL2Skies: C.APackage): Promise<UConfigEnv> {
-    const envFile = await (new UConfigEnv(path).asReadable()).decode();
-
-    return await envFile.load(pkgNative, pkgEngine, pkgL2Skies);
-}
 
 async function startCore() {
     // await ensureWasmInitialized();
@@ -203,26 +179,91 @@ async function startCore() {
         await navigator.storage.persist();
 
     const startTime = performance.now();
+    const loadSettings = {
+        helpersZoneBounds: false,
+        batching: {
+            terrain: true,
+            staticMeshes: true
+        },
+        loadTerrain: true,
+        loadBaseModel: true,
+        loadStaticModels: true,
+        loadEmitters: true,
+        loadAudio: true,
+        _loadStaticModelList: [
+            // 1441,
+            // 1770,
+            // 1802,
+            // 1804,
+            // 4284,
+            // 10253, // scluptures
+            // 10254, // scluptures
+            // 8028,
+            // 1370, // wall object
+            // 9742, // some ground from cruma loaded first, fails lighting
+            // ...[9742, 9646, 10157, 9675], // some ground from cruma loaded first, fails lighting
+            // 5680, // floor near wall objects
+            // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
+            // 555,// elven ruins colon
+            // 47, // rock with ambient light
+            // 2369,
+            // 2011, // cruma: ceiling fixture that's too red
+            // "StaticMeshActor2028", "StaticMeshActor2030", "StaticMeshActor2119", "StaticMeshActor1792", // cruma: why is this black
+            // 2774, // necropolis entrance
+            //4718, // cruma base
+            // 4609, // transparency issue
+            // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
+            // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
+            // 610, // light fixture with 2 lights near elven ruins
+            // 591,
+            // 602 // 0x42
+            // "StaticMeshActor613",
+            // "StaticMeshActor9", // elven ruins colon thats flipped improperly
+            // "StaticMeshActor1484", // elven ruins entrance
+            // "StaticMeshActor338", // fallen elven ruins colon beneath the StaticMeshActor9
+            // // "StaticMeshActor6", // talking island church (3705 vertices)
+            // 470,    // first object with scene lights near elven ruins
+            // 1755, // light fixture with 3 lights near elven ruins
+            // ...[608, 610, 1755, 1781] // elven ruins light fixtures
+
+            // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
+            // ...["StaticMeshActor475"] // talking island village broken rock
+            // "StaticMeshActor684", // cruma light
+            // "StaticMeshActor2841"
+            // "StaticMeshActor517", // cruma too dark
+            // "StaticMeshActor1893" // cruma: broken floating platform light
+
+            // "StaticMeshActor495", /*"StaticMeshActor188",*/ //"StaticMeshActor6",
+            // "StaticMeshActor1042"
+
+            // "StaticMeshActor4596", /* too bright */ //"StaticMeshActor4195", /* okay */
+
+            "StaticMeshActor49", /* church indoors too dark */ "StaticMeshActor6", /* church outdoors */
+        ]
+    } as GD.LoadSettings_T;
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
-    const renderManager = new RenderManager(viewport);
+    const assetList = await (await fetch("asset-list.json")).json();
+    const assetLoader = await AssetLoader.Instantiate(assetList.supported);
+    const assetManager = new AssetManager(loadSettings, assetLoader);
+    const renderManager = new RenderManager(viewport, assetManager);
 
     (global as any).renderManager = renderManager;
 
-    const assetList = await (await fetch("asset-list.json")).json();
-    const assetLoader = await AssetLoader.Instantiate(assetList.supported);
     const objectGroup = renderManager.objectGroup;
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
-    const datMusicInfo = await _decodeDatFile(schemas.SCHEMA_MUSICINFO_DAT, "assets/system/musicinfo.dat");
+    await assetManager.initialize(renderManager);
+
+    
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
 
-    const pkgCore = await assetLoader.using(assetLoader.getCorePackage(), { neverUnload: true });
+    
 
     // const classess = [];
 
@@ -262,10 +303,7 @@ async function startCore() {
     // debugger;
 
 
-    const pkgNative = assetLoader.getNativePackage();
-    const pkgEngine = await assetLoader.using<C.AEnginePackage>(assetLoader.getEnginePackage(), { neverUnload: true });
-
-    pkgCore.loadNativeClasses();
+    
     // pkgEngine.loadNativeClasses();
 
 
@@ -401,86 +439,15 @@ async function startCore() {
     // debugger;
 
 
-    const loadSettings = {
-        helpersZoneBounds: false,
-        batching: {
-            terrain: true,
-            staticMeshes: true
-        },
-        loadTerrain: true,
-        loadBaseModel: true,
-        loadStaticModels: true,
-        loadEmitters: true,
-        loadAudio: true,
-        _loadStaticModelList: [
-            // 1441,
-            // 1770,
-            // 1802,
-            // 1804,
-            // 4284,
-            // 10253, // scluptures
-            // 10254, // scluptures
-            // 8028,
-            // 1370, // wall object
-            // 9742, // some ground from cruma loaded first, fails lighting
-            // ...[9742, 9646, 10157, 9675], // some ground from cruma loaded first, fails lighting
-            // 5680, // floor near wall objects
-            // ...[6157, 6101, 6099, 6096, 6095, 6128, 8386, 7270, 9861, 1759, 7273, 9046, 1370, 1195, 10242, 9628, 5665, 5668, 9034, 10294, 9219, 7312, 5662, 5663] // wall objects
-            // 555,// elven ruins colon
-            // 47, // rock with ambient light
-            // 2369,
-            // 2011, // cruma: ceiling fixture that's too red
-            // "StaticMeshActor2028", "StaticMeshActor2030", "StaticMeshActor2119", "StaticMeshActor1792", // cruma: why is this black
-            // 2774, // necropolis entrance
-            //4718, // cruma base
-            // 4609, // transparency issue
-            // ...[2011, /*6100, 6130*/], // ceiling fixture that's too red with 0xe lights
-            // ...[1463, 1500, 2011, 2012, 6100, 6127, 6129, 6130, 7290, 7334, 1380, 1386,], // all ceiling fixture that's too red
-            // 610, // light fixture with 2 lights near elven ruins
-            // 591,
-            // 602 // 0x42
-            // "StaticMeshActor613",
-            // "StaticMeshActor9", // elven ruins colon thats flipped improperly
-            // "StaticMeshActor1484", // elven ruins entrance
-            // "StaticMeshActor338", // fallen elven ruins colon beneath the StaticMeshActor9
-            // // "StaticMeshActor6", // talking island church (3705 vertices)
-            // 470,    // first object with scene lights near elven ruins
-            // 1755, // light fixture with 3 lights near elven ruins
-            // ...[608, 610, 1755, 1781] // elven ruins light fixtures
-
-            // ...[/*2092,*/ /*3052,*/ 2517], // talking island collision
-            // ...["StaticMeshActor475"] // talking island village broken rock
-            // "StaticMeshActor684", // cruma light
-            // "StaticMeshActor2841"
-            // "StaticMeshActor517", // cruma too dark
-            // "StaticMeshActor1893" // cruma: broken floating platform light
-
-            // "StaticMeshActor495", /*"StaticMeshActor188",*/ //"StaticMeshActor6",
-            // "StaticMeshActor1042"
-
-            // "StaticMeshActor4596", /* too bright */ //"StaticMeshActor4195", /* okay */
-
-            "StaticMeshActor49", /* church indoors too dark */ "StaticMeshActor6", /* church outdoors */
-        ]
-    } as GD.LoadSettings_T;
-
-    const pkgL2Skies = await assetLoader.using(assetLoader.getPackage("l2_skies", "Texture"), { neverUnload: true }) as GA.UPackage;
-    const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
-    const pkgSkyLevel = await assetLoader.using(assetLoader.getPackage("skylevel", "Level"), { neverUnload: true }) as GA.UPackage;
-
-    const skyLevel = await _decodePackage(renderManager, assetLoader, "skylevel", {
-        ...loadSettings, isSkyLevel: true,
-        loadTerrain: true,
-        loadBaseModel: true,
-        loadStaticModels: false,
-        loadEmitters: false,
-        loadStaticModelList: undefined,
-        loadAudio: false,
-        batching: { staticMeshes: false, terrain: false }
-    });
-
     // working (or mostly working)
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  // cruma tower
+    // await assetManager.setAlwaysLoaded(renderManager, assetLoader.getPackage("20_21", "Level")); // cruma tower
+    // await assetManager.setAlwaysLoaded(renderManager, assetLoader.getPackage("20_22", "Level")); // dion
+
+
+    
+
+    
+    // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  
 
     // assetLoader.free(assetLoader.getPackage("20_21", "Level"));
 
@@ -494,7 +461,6 @@ async function startCore() {
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_17", loadSettings));  // olympiad
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_20", loadSettings));  // elven fortress
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_19", loadSettings));  // elven forest
-    renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_22", loadSettings));  // dion
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "21_22", loadSettings));  // execution grounds
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "19_21", loadSettings));  // gludio
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "22_22", loadSettings));  // giran
@@ -544,14 +510,7 @@ async function startCore() {
 
     // Load global sky level
 
-    renderManager.setEnv(decodeEnv(envConfig));
-    renderManager.setSky(skyLevel);
-    renderManager.audioManager.setMusicInfo(
-        Object.fromEntries(datMusicInfo.datarows.map(x => [
-            x.id,
-            (x.sounds as string[]).map(x => assetLoader.getPackage(x, "Music").path)
-        ]))
-    );
+    
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 

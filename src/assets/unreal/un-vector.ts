@@ -80,8 +80,8 @@ abstract class FVector extends UObject {
         );
     }
 
-    distanceTo(other: FVector) { return this.distanceToSquared(other) ** 0.5; }
-    distanceToSquared(other: FVector) {
+    public distanceTo(other: FVector) { return this.distanceToSquared(other) ** 0.5; }
+    public distanceToSquared(other: FVector) {
         const dx = this.x - other.x;
         const dy = this.y - other.y;
         const dz = this.z - other.z;
@@ -89,8 +89,8 @@ abstract class FVector extends UObject {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    length() { return this.lengthSq() ** 0.5; }
-    lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
+    public length() { return this.lengthSq() ** 0.5; }
+    public lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
 
     /**
      * operator ^
@@ -113,7 +113,7 @@ abstract class FVector extends UObject {
      */
     public dot(other: FVector) { return this.x * other.x + this.y * other.y + this.z * other.z; }
 
-    fromArray(array: number[] | ArrayLike<number> = [], offset = 0, restoreOrder = false) {
+    public fromArray(array: number[] | ArrayLike<number> = [], offset = 0, restoreOrder = false) {
         const [a, b, c] = restoreOrder ? [0, 2, 1] : [0, 1, 2];
 
         this.x = array[offset + a];
@@ -123,7 +123,7 @@ abstract class FVector extends UObject {
         return this;
     }
 
-    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
+    public toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.x;
         (array as number[])[offset + 1] = this.y;
@@ -132,7 +132,7 @@ abstract class FVector extends UObject {
         return array;
     }
 
-    normalized() {
+    public normalized() {
         const lenSq = this.lengthSq();
 
         if (lenSq < 1e-8)
@@ -150,11 +150,7 @@ abstract class FVector extends UObject {
 
     public negate() { return this.multiplyScalar(-1); }
 
-    getVectorElements(): GD.Vector3Arr {
-        return [this.x, this.z, this.y];
-    }
-
-    applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
+    public applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
         let [qx, qy, qz, qw] = rotator.getQuaternionElements();
 
         if (negate) qx = -qx, qy = -qy, qz = -qz;
@@ -162,7 +158,7 @@ abstract class FVector extends UObject {
         return this.applyQuaternion(qx, qy, qz, qw);
     }
 
-    applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
+    public applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
         const x = this.x, y = this.y, z = this.z;
 
         // calculate quat * vector
@@ -182,7 +178,7 @@ abstract class FVector extends UObject {
     }
 
 
-    applyMatrix4(m: GA.FMatrix) {
+    public applyMatrix4(m: GA.FMatrix) {
         const x = this.x, y = this.y, z = this.z;
         const e = m.getElements4x4();
 
@@ -205,7 +201,7 @@ abstract class FVector extends UObject {
         return FVector.make(this.dot(coord.xAxis), this.dot(coord.yAxis), this.dot(coord.zAxis));
     }
 
-    transformBy(coord: GA.FCoords) {
+    public transformBy(coord: GA.FCoords) {
         const inVector = this;
         const outVector = FVector.make();
 
