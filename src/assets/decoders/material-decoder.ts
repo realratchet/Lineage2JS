@@ -463,6 +463,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
         switch (info.materialType) {
             case "texture": return decodeTexture(library, info as GD.ITextureDecodeInfo);
             case "sprite": return decodeSprite(library, info as GD.IAnimatedSpriteDecodeInfo);
+            case "empty": return decodeEmptyMaterial();
             default: throw new Error(`Unknown decodable type: ${info.materialType}`);
         }
     }
@@ -474,6 +475,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
     switch (baseMaterial.materialType) {
         case "group": return decodeGroup(library, baseMaterial as GD.IMaterialGroupDecodeInfo);
         case "texture": return decodeMaterial(library, baseMaterial as GD.ITextureDecodeInfo);
+        case "empty": return decodeEmptyMaterial();
         default: throw new Error(`Unknown decodable type: ${baseMaterial.materialType}`);
     }
 }

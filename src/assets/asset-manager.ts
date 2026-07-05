@@ -107,8 +107,12 @@ class AssetManager {
                 await this.loadSector(renderManager, this.assetLoader.getPackage(originIdx, "Level"));
 
 
-            // for(const secIdx of sectorsToLoad) {
-            //     await this.loadSector(renderManager, this.assetLoader.getPackage(secIdx, "Level"));
+            // for (const secIdx of sectorsToLoad) { // commented out until loading is more on-demand instead of laggy
+            //     try {
+            //         await this.loadSector(renderManager, this.assetLoader.getPackage(secIdx, "Level"));
+            //     } catch (e) {
+            //         console.error(`failed to load terrain: ${secIdx}`, e);
+            //     }
             // }
 
             // console.log(validSectors.join(", "))
