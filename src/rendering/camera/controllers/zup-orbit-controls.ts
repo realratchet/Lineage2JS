@@ -811,7 +811,7 @@ class ZUpOrbitControls extends EventDispatcher {
 
             if (pointers.length === 0) {
 
-                scope.domElement.csetPointerCapture(event.pointerId);
+                scope.domElement.setPointerCapture(event.pointerId);
 
                 scope.domElement.addEventListener("pointermove", onPointerMove);
                 scope.domElement.addEventListener("pointerup", onPointerUp);
