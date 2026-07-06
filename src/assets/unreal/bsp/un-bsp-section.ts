@@ -1,4 +1,3 @@
-import { BufferValue } from "@l2js/core";
 import FArray from "@l2js/core/src/unreal/un-array";
 
 class FBSPSection implements C.IConstructable {
@@ -21,7 +20,6 @@ class FBSPSection implements C.IConstructable {
         this.unkInt2 = pkg.read("int32");
         this.unkInt3 = pkg.read("int32");
 
-
         this.texture = pkg.fetchObject<GA.UTexture>(this.textureId);
 
         return this;
@@ -29,17 +27,17 @@ class FBSPSection implements C.IConstructable {
 }
 
 class FBSPVertex implements C.IConstructable {
-    public unkArr0: number[];
-    public unkArr1: number[];
+    public unkArr0: DataView;
+    public unkArr1: DataView;
 
     public load(pkg: C.APackage): this {
 
         const ver = pkg.header.getArchiveFileVersion();
 
-        this.unkArr0 = new Array(7).fill(1).map(_ => pkg.read("float"));
+        this.unkArr0 = pkg.read(7 * 4); // 7 floats;
 
         if (0x6c < ver)
-            this.unkArr1 = new Array(3).fill(1).map(_ => pkg.read("float"));
+            this.unkArr1 = pkg.read(3 * 4); // 3 floats
 
         return this;
     }

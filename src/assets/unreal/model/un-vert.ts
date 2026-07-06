@@ -1,5 +1,3 @@
-import { BufferValue, } from "@l2js/core";
-
 class FVert implements C.IConstructable {
     public pVertex: number;
     public side: number;

@@ -5,7 +5,6 @@ import FBSPSurf from "../bsp/un-bsp-surf";
 import { PolyFlags_T } from "../un-polys";
 import { BufferValue } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
-import USkyZoneInfo from "../un-sky-zone-info";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
@@ -15,9 +14,6 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
-import { anyFlags } from "@l2js/core/utils/flags";
-import { decodeTextureAsB64 } from "@client/assets/decoders/texture-decoder";
-
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
@@ -27,11 +23,77 @@ const PF_Unlit = 0x00400000; // from UnObj.h line 254
 
 const nodeCache = new Array<number>();
 
+class FVectorArray implements C.IConstructable {
+    declare protected elementCount: number;
+    declare protected data: DataView;
+
+    public readonly elementSize = 3 * 4;
+
+    public getElem(index: number, out: FVector): FVector {
+        const off = index * this.elementSize;
+
+        out.set(
+            this.data.getFloat32(off, true),
+            this.data.getFloat32(off + 4, true),
+            this.data.getFloat32(off + 8, true),
+        );
+
+        return out;
+    }
+
+    public getElemCount() { return this.elementCount };
+
+    public load(pkg: C.APackage): this {
+        this.elementCount = pkg.read("compat32");
+        this.data = pkg.read(this.elementCount * this.elementSize);
+
+        return this;
+    }
+}
+
+class FBoxArray implements C.IConstructable {
+    declare private elementCount: number;
+    declare private data: DataView;
+
+    public readonly elementSize = 3 * 4 * 2 + 1;
+
+    public getElem(index: number, out: FBox): FBox {
+        const off = index * this.elementSize;
+
+        out.min.set(
+            this.data.getFloat32(off, true),
+            this.data.getFloat32(off + 4, true),
+            this.data.getFloat32(off + 8, true),
+        );
+
+        out.max.set(
+            this.data.getFloat32(off + 12, true),
+            this.data.getFloat32(off + 16, true),
+            this.data.getFloat32(off + 20, true),
+        );
+
+        out.isValid = this.data.getUint8(off + 24) as 0 | 1;
+
+        return out;
+    }
+
+    public getElemCount() { return this.elementCount };
+
+    public load(pkg: C.APackage): this {
+        this.elementCount = pkg.read("compat32");
+        this.data = pkg.read(this.elementCount * this.elementSize);
+
+        return this;
+    }
+}
+
+
+
 abstract class UModel extends UPrimitive {
     protected levelInfo: GA.ULevelInfo
 
-    declare protected vectors: C.FArray<GA.FVector>;
-    declare protected points: C.FArray<GA.FVector>;
+    declare protected vectors: FVectorArray;
+    declare protected points: FVectorArray;
     declare protected vertices: C.FArray<FVert>;
     declare protected bspNodes: C.FArray<FBSPNode>;
     declare protected bspSurfs: C.FArray<FBSPSurf>;
@@ -41,7 +103,7 @@ abstract class UModel extends UPrimitive {
     declare protected numSharedSides: number;
     declare protected polys: GA.UPolys;
     declare protected zones: FZoneProperties[];
-    declare protected bounds: FArray<GA.FBox>;
+    declare protected bounds: FBoxArray;
     declare protected leafHulls: FPrimitiveArray<"int32">;
     declare protected leaves: FArray<FLeaf>
     declare protected isRootOutside: boolean;
@@ -58,8 +120,8 @@ abstract class UModel extends UPrimitive {
     protected preLoad(pkg: C.APackage, exp: C.UExport): void {
         super.preLoad(pkg, exp);
 
-        this.vectors = new FArray(FVector.class());
-        this.points = new FArray(FVector.class());
+        this.vectors = new FVectorArray();
+        this.points = new FVectorArray();
         this.vertices = new FArray(FVert);
         this.bspNodes = new FArray(FBSPNode);
         this.bspSurfs = new FArray(FBSPSurf);
@@ -68,7 +130,7 @@ abstract class UModel extends UPrimitive {
         this.multiLightmaps = new FArray(FMultiLightmapTexture);
         this.polys = null;
         this.zones = [];
-        this.bounds = new FArray(FBox.class());
+        this.bounds = new FBoxArray();
         this.leafHulls = new FPrimitiveArray(BufferValue.int32);
         this.leaves = new FArray(FLeaf);
         this.lights = new FObjectArray();
@@ -262,7 +324,7 @@ abstract class UModel extends UPrimitive {
         library.leafActors.length = library.bspLeaves.length;
         library.nodeToSection.length = this.bspNodes.length;
         library.nodeZoneMasks.length = this.bspNodes.length;
-        library.bspRenderBounds.length = this.bounds.length;
+        library.bspRenderBounds.length = this.bounds.getElemCount();
 
         for (let i = 0; i < library.bspLeaves.length; i++)
             library.leafActors[i] = [];
@@ -270,9 +332,10 @@ abstract class UModel extends UPrimitive {
         for (let i = 0; i < this.bspNodes.length; i++)
             library.nodeToSection[i] = -1;
 
-        for (let i = 0; i < this.bounds.length; i++)
-            library.bspRenderBounds[i] = this.bounds[i]?.getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
+        const _box = FBox.make();
 
+        for (let i = 0, len = this.bounds.getElemCount(); i < len; i++)
+            library.bspRenderBounds[i] = this.bounds.getElem(i, _box).getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
 
         const sectionMap = new Map<PriorityGroups_T, Map<string, ObjectsForSection_T>>();
 
@@ -416,6 +479,10 @@ abstract class UModel extends UPrimitive {
             section.nodes.push({ node, surf, light, nodeIndex });
         }
 
+        const _textureBase = FVector.make(), _position = FVector.make();
+        const _textureX: FVector = FVector.make(), _textureY: FVector = FVector.make();
+        const _tangentZ: FVector = FVector.make();
+
         // Create sections from sectionMap (UE2-style: material + lightmap only, NOT split by zone)
         const createSection = (priority: PriorityGroups_T, sectionKey: string, sectionData: ObjectsForSection_T): number => {
             const { material, lightmap, totalVertices, nodes } = sectionData;
@@ -433,10 +500,10 @@ abstract class UModel extends UPrimitive {
 
             // Process all nodes in this section (UE2: sections can span multiple zones)
             for (const { node, surf, light, nodeIndex } of nodes) {
-                const textureBase: FVector = this.points.getElem(surf.pBase);
-                const textureX: FVector = this.vectors.getElem(surf.vTextureU);
-                const textureY: FVector = this.vectors.getElem(surf.vTextureV);
-                const tangentZ: FVector = this.vectors.getElem(surf.vNormal);
+                const textureBase: FVector = this.points.getElem(surf.pBase, _textureBase);
+                const textureX: FVector = this.vectors.getElem(surf.vTextureU, _textureX);
+                const textureY: FVector = this.vectors.getElem(surf.vTextureV, _textureY);
+                const tangentZ: FVector = this.vectors.getElem(surf.vNormal, _tangentZ);
 
                 // Extract material dimensions for correct UV scaling (UE2 standard)
                 const texSize = surf.material?.loadSelf?.().getTextureSize();
@@ -449,7 +516,7 @@ abstract class UModel extends UPrimitive {
                 // Process vertices first (so we know the correct vertex count)
                 for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
                     const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
-                    const position: FVector = this.points.getElem(vert.pVertex);
+                    const position: FVector = this.points.getElem(vert.pVertex, _position);
 
                     const texB = position.sub(textureBase);
                     const texU = texB.dot(textureX) / texWidth;
