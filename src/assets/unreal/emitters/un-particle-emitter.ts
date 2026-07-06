@@ -482,14 +482,78 @@ abstract class UParticleEmitter extends UObject {
                 } : null
             },
             /**
-             * 
-             * 
-             * 
-             * 
+             *
+             *
+             *
+             *
              */
-            allSettings: this
+            allSettings: this.getSettingsSnapshot()
         };
     }
+
+    /**
+     * BaseEmitter Object.assign's these onto itself; it must not receive live UObjects
+     * because mapped defaults now live on the class prototype (not own properties) and
+     * because the snapshot crosses the decode-worker boundary via structured clone.
+     * Math structs are flattened to plain {x, y, z}-style objects (BaseEmitter only
+     * reads fields, never calls methods); full UObject values are dropped.
+     */
+    protected getSettingsSnapshot(): Record<string, any> {
+        const snapshot: Record<string, any> = {};
+
+        for (const varName of Object.values(this.getPropertyMap())) {
+            const value = toCloneSafeSetting((this as any)[varName]);
+
+            if (value !== CLONE_UNSAFE) snapshot[varName] = value;
+        }
+
+        return snapshot;
+    }
+}
+
+const CLONE_UNSAFE = Symbol("clone-unsafe");
+
+function toCloneSafeSetting(value: any): any {
+    if (value === null || value === undefined) return value;
+
+    const t = typeof value;
+
+    if (t === "number" || t === "string" || t === "boolean" || t === "bigint") return value;
+    if (t === "function") return CLONE_UNSAFE;
+
+    if (Array.isArray(value)) {
+        const result = value.map(toCloneSafeSetting);
+
+        return result.some(v => v === CLONE_UNSAFE) ? CLONE_UNSAFE : result;
+    }
+
+    if (t === "object") {
+        const ctor = value.constructor as any;
+
+        if (ctor === Object) return value;
+
+        if (ctor?.plainStructFields || value.isObject === true) {
+            // flatten the struct's mapped fields into a plain object
+            const propMap: Record<string, string> = ctor?._propertyMapCache ?? value.getPropertyMap?.() ?? null;
+
+            if (!propMap) return CLONE_UNSAFE;
+            if (!ctor?.plainStructFields) return CLONE_UNSAFE; // full UObject (texture, actor, ...) - drop
+
+            const flat: Record<string, any> = {};
+
+            for (const varName of Object.values(propMap)) {
+                const fieldValue = toCloneSafeSetting(value[varName]);
+
+                if (fieldValue !== CLONE_UNSAFE) flat[varName] = fieldValue;
+            }
+
+            return flat;
+        }
+
+        return CLONE_UNSAFE;
+    }
+
+    return CLONE_UNSAFE;
 }
 
 abstract class UParticleRevolutionScale extends UObject {

@@ -39,18 +39,22 @@ abstract class UAmbientSoundObject extends UAActor {
         console.assert(isFinite(this.randomAmbient));
 
         const soundKey = snd.objectName ?? snd.uuid;
-        let soundDataUri = library.soundBlobCache.get(soundKey);
+        let soundEntry = library.soundBlobCache.get(soundKey);
 
-        if (!soundDataUri) {
+        if (!soundEntry) {
             const audioData = snd.getAudioData();
             if (!audioData || audioData.length === 0) return null;
 
             const fileType = snd.getFileType()?.toLowerCase() ?? "wav";
             const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
             const blob = new Blob([audioData.buffer], { type: mimeType });
-            soundDataUri = URL.createObjectURL(blob);
-            library.soundBlobCache.set(soundKey, soundDataUri);
+
+            /* raw bytes ride along so the decode cache can re-mint the session-scoped blob URL */
+            soundEntry = { uri: URL.createObjectURL(blob), data: audioData, mimeType };
+            library.soundBlobCache.set(soundKey, soundEntry);
         }
+
+        const soundDataUri = soundEntry.uri;
 
         const position = this.location.getElements();
         const refDistance = this.radius;

@@ -383,18 +383,10 @@ function decodeSector(library: GD.DecodeLibrary) {
 
     const staticMeshGroup = new Group();
     staticMeshGroup.name = "StaticMeshActors";
-    const uniqueActors = new Map<string, GD.IBaseObjectOrInstanceDecodeInfo>();
 
-    library.leafActors.forEach((leaf: GD.IBaseObjectOrInstanceDecodeInfo[]) => {
-        leaf.forEach((actor: GD.IBaseObjectOrInstanceDecodeInfo) => {
-            if (actor.type === "StaticMeshActor" && library.exportedActors.has(actor.uuid)) {
-                uniqueActors.set(actor.uuid, actor);
-            }
-        });
-    });
-
-    // --- Static Mesh Batching ---
-    batchStaticMeshActors(library, sector, staticMeshGroup, uniqueActors, fetchGeometry, decodeObject3D);
+    // --- Static Mesh Batching --- (merge data is precomputed by the decode worker,
+    // or built synchronously inside if absent; see batch-data.ts)
+    batchStaticMeshActors(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
 
     // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {

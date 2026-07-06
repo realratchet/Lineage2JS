@@ -137,6 +137,10 @@ declare global {
                     batching?: {
                         terrain?: boolean,
                         staticMeshes?: boolean
+                    },
+                    cache?: {
+                        enabled?: boolean,
+                        version?: number      // bump when decode logic changes to invalidate cached sectors
                     }
                 };
 

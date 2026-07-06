@@ -2,6 +2,8 @@ import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 
 abstract class FRange extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public min: number;
     declare public max: number;
 
@@ -26,6 +28,8 @@ abstract class FRange extends UObject {
 }
 
 abstract class FRangeVector extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare protected x: FRange;
     declare protected y: FRange;
     declare protected z: FRange;

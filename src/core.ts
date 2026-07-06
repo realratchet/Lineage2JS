@@ -185,11 +185,15 @@ async function startCore() {
             terrain: true,
             staticMeshes: true
         },
+        cache: {
+            enabled: true,
+            version: 1
+        },
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: true,
-        loadAudio: true,
+        loadEmitters: false,
+        loadAudio: false,
         _loadStaticModelList: [
             // 1441,
             // 1770,

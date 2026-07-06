@@ -29,7 +29,7 @@ class DecodeLibrary {
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly musicVolumes: GD.IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
     public readonly ambientSounds: GD.IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
-    public readonly soundBlobCache = new Map<string, string>(); // USound name → blob URL (deduplication)
+    public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public readonly isSkyLevel: boolean;
     public readonly skyLevel: {
@@ -41,6 +41,8 @@ class DecodeLibrary {
         terrain: boolean,
         staticMeshes: boolean
     } = { terrain: true, staticMeshes: true };
+
+    public staticMeshBatches?: import("../decoders/batch-data").StaticMeshBatchManifest; // precomputed batch manifest (decode worker or lazy sync build); merged geometries live in `geometries`
 
     public failed: any[] = [];
     public readonly exportedActors = new Set<string>(); // UUIDs of actors that passed geographic filtering

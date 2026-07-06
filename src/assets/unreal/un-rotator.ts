@@ -16,6 +16,8 @@ enum RotName {
 }
 
 abstract class FRotator extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public readonly pitch: number;
     declare public readonly yaw: number;
     declare public readonly roll: number;

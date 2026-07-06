@@ -8,6 +8,8 @@ import { UObject } from "@l2js/core";
 abstract class FCoords extends UObject {
     declare public ["constructor"]: typeof FCoords;
 
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public origin: GA.FVector;
     declare public xAxis: GA.FVector;
     declare public yAxis: GA.FVector;

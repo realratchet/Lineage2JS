@@ -313,11 +313,12 @@ abstract class UTerrainSector extends UObject {
             materials: this.uuid,
             position: [ox, oy, oz],
             lighting: {
+                /* .slice(): the library must not alias the package buffer (see collect-transferables.ts) */
                 lights: this.lightInfos.map(li => ({
                     light: li.light?.objectName,
-                    flags: li.visibilityBitmap.getTypedArray() as Uint8Array
+                    flags: (li.visibilityBitmap.getTypedArray() as Uint8Array).slice()
                 })).filter(li => li.light),
-                shadowMaps: this.shadowMaps?.map(sm => sm.getTypedArray() as Uint8Array) ?? [],
+                shadowMaps: this.shadowMaps?.map(sm => (sm.getTypedArray() as Uint8Array).slice()) ?? [],
                 shadowMapTimes: this.shadowMapTimes ?? []
             },
             mapX: info.mapX,

@@ -1,6 +1,8 @@
 import { UObject } from "@l2js/core";
 
 abstract class FScale extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public readonly scale: GA.FVector;
 
     declare public readonly sheerRate: number;

@@ -7,6 +7,8 @@ import UObject from "@l2js/core";
 const eps = 1e-8;
 
 abstract class FMatrix extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public readonly planeX: GA.FPlane;
     declare public readonly planeY: GA.FPlane;
     declare public readonly planeZ: GA.FPlane;

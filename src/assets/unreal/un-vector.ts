@@ -3,6 +3,8 @@ import { UObject } from "@l2js/core";
 abstract class FVector extends UObject {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public x: number;
     declare public y: number;
     declare public z: number;
