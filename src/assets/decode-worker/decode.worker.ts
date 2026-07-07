@@ -1,7 +1,10 @@
 import AssetLoader from "@client/assets/asset-loader";
-import DecodeLibrary from "@client/assets/unreal/decode-library";
+import UConfigEnv from "@unreal/conf-files/un-conf-env";
+import UDataFile from "@unreal/datafile/un-datafile";
+import { SCHEMA_MUSICINFO_DAT } from "@unreal/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "@client/assets/decoders/batch-data";
 import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
+import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import { loadCachedLibrary, storeCachedLibrary, sweepDecodeCache, refreshSoundBlobUris } from "./decode-cache";
 import type { MainToWorkerMessage, WorkerToMainMessage } from "./decode-protocol";
@@ -64,7 +67,7 @@ async function decodeSector(sectorName: string, settings: GD.LoadSettings_T): Pr
     }
 
     const pkg = await assetLoader.using(assetLoader.getPackage(sectorName, "Level"));
-    const library = DecodeLibrary.fromPackage(pkg, settings);
+    const library = buildDecodeLibrary(pkg, settings);
 
     buildStaticMeshBatchData(library);
 
@@ -115,7 +118,51 @@ async function handleMessage(msg: MainToWorkerMessage) {
             }
             break;
         }
+        case "free": {
+            try {
+                assetLoader.free(assetLoader.getPackage(msg.sectorName, "Level"));
+            } catch (e) { } // sector was decoded from cache - its packages were never loaded here
+            break;
+        }
+        case "decode-env": {
+            try {
+                const info = await decodeEnvConfig();
+                const transfer = prepareLibraryForTransfer(info, collectPackageBuffers());
+
+                post({ type: "env-decoded", requestId: msg.requestId, info }, transfer);
+            } catch (e) {
+                console.error("[decode-worker] failed to decode env config:", e);
+                post({ type: "decode-error", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
+            }
+            break;
+        }
+        case "music-info": {
+            try {
+                post({ type: "music-info-decoded", requestId: msg.requestId, music: await decodeMusicInfo() });
+            } catch (e) {
+                console.error("[decode-worker] failed to decode music info:", e);
+                post({ type: "decode-error", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
+            }
+            break;
+        }
     }
+}
+
+async function decodeEnvConfig(): Promise<any> {
+    const pkgL2Skies = await assetLoader.using(assetLoader.getPackage("l2_skies", "Texture"), { neverUnload: true });
+    const envFile = await (new UConfigEnv("assets/system/env.int").asReadable()).decode();
+    const envConfig = await envFile.load(assetLoader.getNativePackage(), assetLoader.getEnginePackage(), pkgL2Skies);
+
+    return envConfig.getDecodeInfo();
+}
+
+async function decodeMusicInfo(): Promise<Record<number, string[]>> {
+    const file = await (new UDataFile(SCHEMA_MUSICINFO_DAT, "assets/system/musicinfo.dat").asReadable()).decode();
+
+    return Object.fromEntries(file.datarows.map((row: any) => [
+        row.id,
+        (row.sounds as string[]).map(sound => assetLoader.getPackage(sound, "Music").path)
+    ]));
 }
 
 /* process messages strictly in order - a decode must not start before init finishes */

@@ -17,7 +17,7 @@ function* walkSync(dir) {
 
 const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
-function createModuleConfig({ name, resolve, entry: _entry, library }) {
+function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {
         const pluginsSASS = (mode === "production"
             ? [{ loader: MiniCssExtractPlugin.loader }]
@@ -28,36 +28,39 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             ]);
 
         const dirAssets = "assets-c4/";
-        const fileList = {
-            comment: "This file is auto-generated, any changes will be lost.",
-            supported: {},
-            unsupported: []
-        };
+        const plugins = [];
 
-        for (const fname of walkSync(dirAssets)) {
+        /* the worker compilation reuses the artifacts the client compilation produces */
+        if (!isWorker) {
+            const fileList = {
+                comment: "This file is auto-generated, any changes will be lost.",
+                supported: {},
+                unsupported: []
+            };
 
-            const ext = path.extname(fname).slice(1).toUpperCase();
-            const relPath = fname.replace(dirAssets, "");
+            for (const fname of walkSync(dirAssets)) {
 
-            if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-                fileList.unsupported.push(relPath);
-                continue;
+                const ext = path.extname(fname).slice(1).toUpperCase();
+                const relPath = fname.replace(dirAssets, "");
+
+                if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+                    fileList.unsupported.push(relPath);
+                    continue;
+                }
+
+                fileList.supported[relPath.toLowerCase()] = relPath;
             }
 
-            fileList.supported[relPath.toLowerCase()] = relPath;
-        }
+            fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
 
-        fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
-
-        const plugins = [
-            new CopyWebpackPlugin({
+            plugins.push(new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
                     { from: "../asset-list.json", to: "asset-list.json" },
                     // ...copyFiles
                 ],
-            })
-        ];
+            }));
+        }
 
         if (devtool) {
             // plugins.unshift(new SourceMapDevToolPlugin({
@@ -153,10 +156,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 }]
         });
 
-        return {
+        const config = {
             entry,
             mode,
             stats,
+            target: isWorker ? "webworker" : "web",
             resolve,
             optimization: {
                 minimize
@@ -164,7 +168,16 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             module: { rules },
             plugins,
             output,
-            devServer: {
+            devtool,
+            context: __dirname,
+            experiments: {
+                asyncWebAssembly: true
+            }
+        };
+
+        /* only one compilation may define the dev server - the worker rides along */
+        if (!isWorker) {
+            config.devServer = {
                 port: 8080,
                 allowedHosts: "all",
                 hot: false,
@@ -176,29 +189,37 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
                     return middlewares;
                 }
-            },
-            devtool,
-            context: __dirname,
-            experiments: {
-                asyncWebAssembly: true
-            }
-        };
+            };
+        }
+
+        return config;
     }
 }
 
+const resolve = {
+    fallback: {
+        "buffer": false,
+        "path": require.resolve("path-browserify")
+    },
+    extensions: [".tsx", ".ts", ".js"],
+    alias: {
+        "@client": path.resolve(__dirname, "../src"),
+        "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
+        "@l2js/core": "@l2js/core/src"
+    }
+};
+
+/* renderer bundle - must stay free of ue2 asset code (that all lives in the worker bundle) */
 module.exports.createConfigBundle = createModuleConfig({
     name: "client",
-    resolve: {
-        fallback: {
-            "buffer": false,
-            "path": require.resolve("path-browserify")
-        },
-        extensions: [".tsx", ".ts", ".js"],
-        alias: {
-            "@client": path.resolve(__dirname, "../src"),
-            "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
-            "@l2js/core": "@l2js/core/src"
-        }
-    },
+    resolve,
     entry: "../src/index.ts"
+});
+
+/* decode worker bundle - owns the entire ue2 asset pipeline */
+module.exports.createConfigWorker = createModuleConfig({
+    name: "decode-worker",
+    resolve,
+    entry: "../src/assets/decode-worker/decode.worker.ts",
+    isWorker: true
 });

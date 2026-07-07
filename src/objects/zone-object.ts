@@ -100,6 +100,7 @@ export interface ILightInfo {
 class SectorObject extends Object3D {
     public readonly isSectorObject = true;
     public readonly type = "Sector";
+    public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
     public readonly fogInfos: FogInfoObject[] = [];

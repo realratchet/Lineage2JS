@@ -212,9 +212,9 @@ class RenderManager {
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
-        // tower outside
-        this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-        this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
+        // // tower outside
+        // this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
+        // this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
@@ -224,7 +224,7 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // talking island
+        // // talking island
         // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
         // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
 
@@ -1566,9 +1566,8 @@ class RenderManager {
             this.sectors.get(sector.index.x).set(sector.index.y, sector);
         }
 
-        const sectorBounds = new Box3().setFromObject(sector);
-        sector.worldBounds.copy(sectorBounds);
-        this.sectorBounds.push(sectorBounds);
+        sector.worldBounds.setFromObject(sector);
+        this.sectorBounds.push(sector.worldBounds);
 
         this.objectGroup.add(sector);
         this.stitchTerrains();
@@ -1597,6 +1596,26 @@ class RenderManager {
                 this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
         }
+    }
+
+    /**
+     * Inverse of addSector: unregisters the sector, removes it from the scene and
+     * re-stitches the remaining terrains. GPU resources are NOT freed - the sector can
+     * be re-added as is; call disposeSector once it is certain not to return.
+     */
+    public removeSector(sector: SectorObject) {
+        if (sector.index)
+            this.sectors.get(sector.index.x)?.delete(sector.index.y);
+
+        const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
+        if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
+
+        this.objectGroup.remove(sector);
+        this.stitchTerrains();
+    }
+
+    public disposeSector(sector: SectorObject) {
+        disposeSectorResources(sector);
     }
 
     /**
@@ -1673,4 +1692,45 @@ export { RenderManager }
 function addResizeListeners(manager: RenderManager) {
     global.addEventListener("resize", (manager as any).onHandleResize.bind(manager));
     (manager as any).onHandleResize();
+}
+
+/**
+ * Frees GPU resources owned by a sector: geometries, materials and their textures
+ * (both direct texture slots and shader uniforms). Textures and geometries are never
+ * shared across sectors - every sector decodes from its own library - so disposing
+ * everything under it is safe. dispose() is idempotent, shared-within-sector
+ * resources getting disposed twice is fine.
+ */
+function disposeSectorResources(sector: SectorObject) {
+    sector.traverse(child => {
+        const mesh = child as THREE.Mesh;
+
+        if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
+
+        mesh.geometry?.dispose();
+
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+        for (const material of materials) {
+            if (!material) continue;
+
+            for (const value of Object.values(material)) {
+                if ((value as THREE.Texture)?.isTexture) (value as THREE.Texture).dispose();
+            }
+
+            const uniforms = (material as any).uniforms;
+
+            if (uniforms) {
+                for (const uniform of Object.values(uniforms) as any[]) {
+                    if (uniform?.value?.isTexture) uniform.value.dispose();
+                }
+            }
+
+            material.dispose();
+        }
+    });
+
+    for (const celestial of sector.celestials) {
+        if (celestial.sprite?.isTexture) celestial.sprite.dispose();
+    }
 }

@@ -1,52 +1,67 @@
-import type AssetLoader from "@client/assets/asset-loader";
-import * as schemas from "@unreal/datafile/schema/schema-types";
-import UDataFile from "@unreal/datafile/un-datafile";
-import UConfigEnv from "@unreal/conf-files/un-conf-env";
-import UPackage, { UCorePackage, UEnginePackage, UNativePackage } from "@unreal/un-package";
 import RenderManager from "@client/rendering/render-manager";
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import DecodeLibrary from "@client/assets/unreal/decode-library";
 import { decodePackage } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
-import { APackage } from "@l2js/core";
 import { Vector3 } from "three";
+import type { SectorObject } from "@client/objects/zone-object";
 
 const tmpCameraPosition = new Vector3();
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
+const RETIRED_SECTOR_DISPOSE_MS = 30_000;
+const SECTOR_WORLD_SIZE = 256 * 128;
 
+/**
+ * Streams the world in and out around the camera. All ue2 asset decoding happens in
+ * the decode worker (its own webpack bundle) - this side only ever sees plain decoded
+ * data and instantiates three.js objects from it.
+ */
 class AssetManager {
     protected isTicking: boolean = false;
-    protected assetLoader: AssetLoader;
     protected loadSettings: GD.LoadSettings_T;
     protected glCapabilities: WebGLCapabilities
     protected decodeWorker: DecodeWorkerClient = null;
     protected isWorkerReady = false;
     protected failedSectors = new Map<string, number>(); // sector id -> retry-after timestamp
+    protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
+    protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
 
-    public constructor(loadSettings: GD.LoadSettings_T, assetLoader: AssetLoader) {
+    /**
+     * Sectors whose bounds intersect this radius around the camera get loaded. At half
+     * a sector this needs at most 4 sectors (own + up to 3 at a corner); unloading only
+     * kicks in past the larger radius so boundary crossings don't thrash.
+     */
+    protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
+    protected readonly unloadDistance = SECTOR_WORLD_SIZE;
+
+    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>) {
         this.loadSettings = loadSettings;
-        this.assetLoader = assetLoader;
+
+        /* level packages are <x>_<y>.unr - keep the sector ids for map-edge validity checks */
+        for (const path of Object.keys(assetList)) {
+            if (!path.endsWith(".unr")) continue;
+
+            this.levelSectors.add(path.slice(path.lastIndexOf("/") + 1, -".unr".length));
+        }
+    }
+
+    public hasSector(sectorIdx: string): boolean {
+        return this.levelSectors.has(sectorIdx.toLowerCase());
     }
 
     public async initialize(renderManager: RenderManager): Promise<void> {
         this.glCapabilities = renderManager.renderer.capabilities;
 
-        const assetLoader = this.assetLoader;
-        const loadSettings = this.loadSettings;
-        const pkgNative = await assetLoader.using(assetLoader.getNativePackage(), { neverUnload: true });
-        const pkgCore = await assetLoader.using(assetLoader.getCorePackage(), { neverUnload: true });
-        const pkgEngine = await assetLoader.using(assetLoader.getEnginePackage(), { neverUnload: true });
+        /* everything below comes out of the decode worker - the app cannot run without it */
+        this.decodeWorker = new DecodeWorkerClient();
+        await this.decodeWorker.ready;
+        this.isWorkerReady = true;
 
-        pkgCore.loadNativeClasses();
-
-        const datMusicInfo = await _decodeDatFile(schemas.SCHEMA_MUSICINFO_DAT, "assets/system/musicinfo.dat");
-        const pkgL2Skies = await assetLoader.using(assetLoader.getPackage("l2_skies", "Texture"), { neverUnload: true });
-        const envConfig = (await _decodeEnvConfig("assets/system/env.int", pkgNative, pkgEngine, pkgL2Skies)).getDecodeInfo();
-        const pkgSkyLevel = await assetLoader.using(assetLoader.getPackage("skylevel", "Level"), { neverUnload: true });
-        const skyLevel = await _decodePackage(this.glCapabilities, assetLoader, pkgSkyLevel, {
-            ...loadSettings, isSkyLevel: true,
+        const envInfo = await this.decodeWorker.decodeEnv();
+        const musicInfo = await this.decodeWorker.getMusicInfo();
+        const skyLibrary = await this.decodeWorker.decodeSector("skylevel", {
+            ...this.loadSettings, isSkyLevel: true,
             loadTerrain: true,
             loadBaseModel: true,
             loadStaticModels: false,
@@ -56,55 +71,44 @@ class AssetManager {
             batching: { staticMeshes: false, terrain: false }
         });
 
-        renderManager.setEnv(decodeEnv(envConfig));
-        renderManager.setSky(skyLevel);
-        renderManager.audioManager.setMusicInfo(
-            Object.fromEntries(datMusicInfo.datarows.map(x => [
-                x.id,
-                (x.sounds as string[]).map(x => assetLoader.getPackage(x, "Music").path)
-            ]))
-        );
+        skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
 
-        /*
-         * Kick off the sector decode worker after main-thread init so both sides don't
-         * race to populate the OPFS cache with core/engine packages. Ticks fall back to
-         * synchronous decoding if it never comes up.
-         */
-        this.decodeWorker = new DecodeWorkerClient();
-        this.decodeWorker.ready.then(
-            () => {
-                this.isWorkerReady = true;
-                console.log("Sector decode worker ready.");
-            },
-            e => console.warn("Sector decode worker unavailable, falling back to main-thread decoding:", e)
-        );
+        renderManager.setEnv(decodeEnv(envInfo));
+        renderManager.setSky(decodePackage(skyLibrary));
+        renderManager.audioManager.setMusicInfo(musicInfo);
     }
 
-    public async setAlwaysLoaded(renderManager: RenderManager, pkg: APackage) {
-        renderManager.addSector(await _decodePackage(this.glCapabilities, this.assetLoader, pkg, this.loadSettings, { neverUnload: true }));
-    }
+    public async setAlwaysLoaded(renderManager: RenderManager, sectorName: string) {
+        const decodeLibrary = await this.decodeWorker.decodeSector(sectorName, this.loadSettings);
 
-    protected async loadSector(renderManager: RenderManager, pkg: APackage) {
-        renderManager.addSector(await _decodePackage(this.glCapabilities, this.assetLoader, pkg, this.loadSettings));
+        decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+
+        const sector = decodePackage(decodeLibrary);
+
+        sector.neverUnload = true;
+        renderManager.addSector(sector);
     }
 
     /**
-     * Decodes the sector off the main thread; only the three.js instantiation
-     * (decodePackage) runs here. Falls back to the synchronous path if the worker died.
-     * Returns true when a load was attempted (successfully or not), false when the
-     * sector was skipped (failure cooldown, worker still initializing).
+     * Decodes the sector in the worker; only the three.js instantiation (decodePackage)
+     * runs here. Returns true when a load was attempted (successfully or not), false
+     * when the sector was skipped (failure cooldown, worker not available).
      */
     protected async requestSector(renderManager: RenderManager, sectorIdx: string): Promise<boolean> {
+        const retired = this.retiredSectors.get(sectorIdx);
+
+        if (retired) {
+            /* still in its disposal grace period - reuse it as is, no re-decode */
+            this.retiredSectors.delete(sectorIdx);
+            renderManager.addSector(retired.sector);
+            return true;
+        }
+
         const retryAt = this.failedSectors.get(sectorIdx);
 
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
-        if (this.decodeWorker?.isDead) {
-            await this.loadSector(renderManager, this.assetLoader.getPackage(sectorIdx, "Level"));
-            return true;
-        }
-
-        if (!this.isWorkerReady) return false; // still initializing - retry on a later tick
+        if (!this.isWorkerReady || this.decodeWorker.isDead) return false;
 
         try {
             const decodeLibrary = await this.decodeWorker.decodeSector(sectorIdx, this.loadSettings);
@@ -121,6 +125,39 @@ class AssetManager {
         return true;
     }
 
+    /**
+     * Hides the sector immediately but keeps it (and its package refcounts) intact for
+     * RETIRED_SECTOR_DISPOSE_MS - returning within that window re-adds the retained
+     * object with no re-decode. destroyExpiredSectors does the real cleanup afterwards.
+     */
+    protected retireSector(renderManager: RenderManager, sector: SectorObject) {
+        const sectorIdx = `${sector.index.x}_${sector.index.y}`;
+
+        console.log(`Retiring sector '${sectorIdx}'.`);
+
+        renderManager.removeSector(sector);
+        this.retiredSectors.set(sectorIdx, { sector, retiredAt: performance.now() });
+    }
+
+    /**
+     * Disposes retired sectors past their grace period and releases the package
+     * refcounts they took in the decode worker.
+     */
+    protected destroyExpiredSectors(renderManager: RenderManager) {
+        const now = performance.now();
+
+        for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
+            if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS) continue;
+
+            console.log(`Disposing sector '${sectorIdx}'.`);
+
+            this.retiredSectors.delete(sectorIdx);
+            renderManager.disposeSector(sector);
+
+            this.decodeWorker?.freeSector(sectorIdx);
+        }
+    }
+
     public async tick(renderManager: RenderManager) {
         if (this.isTicking) return; // avoid too many ticks running at the same time as the tick is done on before render so we defer sector loading
 
@@ -130,64 +167,62 @@ class AssetManager {
             const cameraPosition = renderManager.camera.getWorldPosition(tmpCameraPosition);
             const [sx, sy] = renderManager.getSectorId(cameraPosition);
             const originIdx = `${sx}_${sy}`;
-            const validSectors = [originIdx];
             const sectorsLoaded = renderManager.getLoadedSectors();
             const sectorsLoadedIds = sectorsLoaded.map(({ index }) => `${index.x}_${index.y}`)
-            const isValidOrigin = this.assetLoader.hasPackage(originIdx, "Level");
+            const isValidOrigin = this.hasSector(originIdx);
+
+            /*
+             * Retire sectors past the unload radius; the gap between renderDistance and
+             * unloadDistance keeps boundary crossings from thrashing. Retired sectors
+             * stay reusable for a grace period before actually being disposed.
+             */
+            for (const sector of sectorsLoaded) {
+                if (sector.neverUnload || !sector.index) continue;
+                if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= this.unloadDistance) continue;
+
+                this.retireSector(renderManager, sector);
+            }
+
+            this.destroyExpiredSectors(renderManager);
 
             /*
              * Sectors wanted this tick, most-important first: the sector the camera is
-             * in, then unloaded neighbours nearest-first. Only one is requested per tick
-             * (isTicking stays up while it decodes), so the origin always wins and
-             * neighbours trickle in one by one; recomputing the list every tick makes
-             * crossing a boundary immediately re-prioritize the new origin.
+             * in, then any sector whose bounds intersect renderDistance, nearest-first.
+             * Only one is requested per tick (isTicking stays up while it decodes), so
+             * the origin always wins and the rest trickle in one by one; recomputing the
+             * list every tick makes crossing a boundary re-prioritize the new origin.
              */
             const sectorsToLoad: string[] = [];
 
             if (isValidOrigin && !sectorsLoadedIds.includes(originIdx))
                 sectorsToLoad.push(originIdx);
 
-            const sectorSize = 256 * 128;
-            const neighbours: { idx: string, distSq: number }[] = [];
+            const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
+            const neighbours: { idx: string, dist: number }[] = [];
 
-            for (let x = sx - 1, xmax = sx + 1; x <= xmax; x++) {
-                for (let y = sy - 1, ymax = sy + 1; y <= ymax; y++) {
+            for (let x = sx - ring, xmax = sx + ring; x <= xmax; x++) {
+                for (let y = sy - ring, ymax = sy + ring; y <= ymax; y++) {
                     const levelIdx = `${x}_${y}`;
 
-                    if (levelIdx === originIdx || !this.assetLoader.hasPackage(levelIdx, "Level"))
+                    if (levelIdx === originIdx || !this.hasSector(levelIdx))
                         continue; // skip origin and invalid sectors
 
-                    validSectors.push(levelIdx);
+                    if (sectorsLoadedIds.includes(levelIdx)) continue;
 
-                    if (!sectorsLoadedIds.includes(levelIdx)) {
-                        /* same sector -> world mapping as RenderManager.getSectorId */
-                        const dx = cameraPosition.x - (x - 20 + 0.5) * sectorSize;
-                        const dy = cameraPosition.y - (y - 18 + 0.5) * sectorSize;
+                    const dist = sectorDistance(cameraPosition, x, y);
 
-                        neighbours.push({ idx: levelIdx, distSq: dx * dx + dy * dy });
-                    }
+                    if (dist <= this.renderDistance)
+                        neighbours.push({ idx: levelIdx, dist });
                 }
             }
 
-            neighbours.sort((a, b) => a.distSq - b.distSq);
-
-            /* prefetch only makes sense off-thread - the sync fallback would freeze a frame per sector */
-            if (this.isWorkerReady && !this.decodeWorker?.isDead)
-                sectorsToLoad.push(...neighbours.map(n => n.idx));
-
-            const sectorsToUnload = sectorsLoaded.filter(({ index }) => {
-                const levelIdx = `${index.x}_${index.y}`;
-
-                return !validSectors.includes(levelIdx);
-            })
+            neighbours.sort((a, b) => a.dist - b.dist);
+            sectorsToLoad.push(...neighbours.map(n => n.idx));
 
             for (const secIdx of sectorsToLoad) {
                 if (await this.requestSector(renderManager, secIdx))
                     break; // one sector per tick - the rest re-enter the list next tick
             }
-
-            // console.log(validSectors.join(", "))
-
         } finally {
             this.isTicking = false;
         }
@@ -197,33 +232,16 @@ class AssetManager {
 export default AssetManager;
 export { AssetManager };
 
-async function _decodeDatFile(schema: ISchemaValue[], path: string) {
-    // const ini = await (new UEncodedFile("assets/system/l2.ini").asReadable()).decode();
+/**
+ * Distance from the camera to a sector's bounds (0 inside it), using the same
+ * sector -> world mapping as RenderManager.getSectorId.
+ */
+function sectorDistance(cameraPosition: THREE.Vector3, x: number, y: number): number {
+    const minX = (x - 20) * SECTOR_WORLD_SIZE, maxX = minX + SECTOR_WORLD_SIZE;
+    const minY = (y - 18) * SECTOR_WORLD_SIZE, maxY = minY + SECTOR_WORLD_SIZE;
 
-    const file = await (new UDataFile(schema, path).asReadable()).decode();
+    const dx = Math.max(minX - cameraPosition.x, 0, cameraPosition.x - maxX);
+    const dy = Math.max(minY - cameraPosition.y, 0, cameraPosition.y - maxY);
 
-    return file;
-}
-
-async function _decodeEnvConfig(path: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage, pkgL2Skies: C.APackage): Promise<UConfigEnv> {
-    const envFile = await (new UConfigEnv(path).asReadable()).decode();
-
-    return await envFile.load(pkgNative, pkgEngine, pkgL2Skies);
-}
-
-async function _decodePackage(glCapabilities: WebGLCapabilities, assetLoader: AssetLoader, pkg: string | C.APackage, settings: GD.LoadSettings_T, pkgProps?: { neverUnload?: boolean }) {
-    if (typeof (pkg) === "string") pkg = assetLoader.getPackage(pkg, "Level");
-
-    pkg = await assetLoader.using(pkg, pkgProps);
-
-    const decodeLibrary = DecodeLibrary.fromPackage(pkg, settings);
-
-    // debugger;
-
-    decodeLibrary.anisotropy = glCapabilities.getMaxAnisotropy();
-
-    console.log(`Decode library '${decodeLibrary.name}' created, building scene.`)
-
-
-    return decodePackage(decodeLibrary);
+    return Math.sqrt(dx * dx + dy * dy);
 }

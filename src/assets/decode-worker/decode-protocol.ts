@@ -11,7 +11,22 @@ interface DecodeMessage {
     settings: GD.LoadSettings_T;
 }
 
-type MainToWorkerMessage = InitMessage | DecodeMessage;
+interface FreeMessage {
+    type: "free";
+    sectorName: string;
+}
+
+interface DecodeEnvMessage {
+    type: "decode-env";
+    requestId: number;
+}
+
+interface MusicInfoMessage {
+    type: "music-info";
+    requestId: number;
+}
+
+type MainToWorkerMessage = InitMessage | DecodeMessage | FreeMessage | DecodeEnvMessage | MusicInfoMessage;
 
 interface ReadyMessage {
     type: "ready";
@@ -34,6 +49,18 @@ interface DecodeErrorMessage {
     message: string;
 }
 
-type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | DecodeErrorMessage;
+interface EnvDecodedMessage {
+    type: "env-decoded";
+    requestId: number;
+    info: any; // plain env decode info (UConfigEnv.getDecodeInfo)
+}
 
-export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage };
+interface MusicInfoDecodedMessage {
+    type: "music-info-decoded";
+    requestId: number;
+    music: Record<number, string[]>; // music id -> package paths
+}
+
+type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | DecodeErrorMessage | EnvDecodedMessage | MusicInfoDecodedMessage;
+
+export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, FreeMessage, DecodeEnvMessage, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };
