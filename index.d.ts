@@ -277,7 +277,7 @@ declare global {
                     velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
                     warmupTime?: number,
                     warmupTicksPerSecond?: number,
-                    allSettings: any
+                    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
                 }
 
                 export interface ISpriteEmitterDecodeInfo extends IEmitterDecodeInfo {
@@ -592,7 +592,7 @@ declare global {
                             repeats: number
                         }
                     },
-                    allSettings: any
+                    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
                 };
 
                 export type Fade_T = {

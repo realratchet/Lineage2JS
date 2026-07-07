@@ -705,7 +705,7 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         velocityLossRange: info.velocityLossRange,
         warmupTime: info.warmupTime,
         warmupTicksPerSecond: info.warmupTicksPerSecond,
-        allSettings: info.allSettings
+        settings: info.settings
     };
 }
 

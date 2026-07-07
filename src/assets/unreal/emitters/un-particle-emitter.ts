@@ -481,27 +481,20 @@ abstract class UParticleEmitter extends UObject {
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
-            /**
-             *
-             *
-             *
-             *
-             */
-            allSettings: this.getSettingsSnapshot()
+            settings: this.getSettingsSnapshot()
         };
     }
 
     /**
-     * BaseEmitter Object.assign's these onto itself; it must not receive live UObjects
-     * because mapped defaults now live on the class prototype (not own properties) and
-     * because the snapshot crosses the decode-worker boundary via structured clone.
-     * Math structs are flattened to plain {x, y, z}-style objects (BaseEmitter only
-     * reads fields, never calls methods); full UObject values are dropped.
+     * BaseEmitter Object.assign's these onto itself. Only the properties the emitter
+     * objects actually read are exported, as plain values - math structs are flattened
+     * to {x, y, z}-style objects (BaseEmitter only reads fields, never calls methods),
+     * so no live UObject ever crosses the decode-worker boundary.
      */
     protected getSettingsSnapshot(): Record<string, any> {
         const snapshot: Record<string, any> = {};
 
-        for (const varName of Object.values(this.getPropertyMap())) {
+        for (const varName of REQUIRED_SETTINGS) {
             const value = toCloneSafeSetting((this as any)[varName]);
 
             if (value !== CLONE_UNSAFE) snapshot[varName] = value;
@@ -510,6 +503,28 @@ abstract class UParticleEmitter extends UObject {
         return snapshot;
     }
 }
+
+/**
+ * Settings BaseEmitter/SpriteEmitter/MeshEmitter read off themselves after the assign
+ * and which are not already covered by explicit EmitterConfig_T fields. UObject-valued
+ * properties (skeletal actors, sounds, scale FArrays) are deliberately absent - scale
+ * curves travel via changesOverLifetime/scales in the decode info instead.
+ */
+const REQUIRED_SETTINGS = [
+    "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter",
+    "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle",
+    "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
+    "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
+    "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
+    "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
+    "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",
+    "isUsingRevolution", "isUsingRevolutionScale", "isUsingSizeScale", "isUsingVelocityScale",
+    "isVelocityFromMesh", "maxAbsVelocity", "meshNormal", "meshScaleRange", "meshSpawning",
+    "rotateVelocityLossRange", "rotationNormal", "rotationSource", "sizeScaleRepeats",
+    "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSoundIndex",
+    "startLocationShape", "startSpinRange", "subdivEnd", "subdivStart", "texSubdivU",
+    "texSubdivV", "useSkeletalLocationAs", "velocityScaleRepeats"
+];
 
 const CLONE_UNSAFE = Symbol("clone-unsafe");
 

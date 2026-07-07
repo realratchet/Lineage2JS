@@ -152,7 +152,7 @@ abstract class BaseEmitter extends Object3D {
         };
         this.drawScale = config.drawScale ?? 1;
 
-        Object.assign(this, config.allSettings);
+        Object.assign(this, config.settings);
 
         this.acceleration = new Vector3().fromArray(config.acceleration ?? [0, 0, 0]);
         this.maxAbsVelocity = config.maxAbsVelocity ? new Vector3().fromArray(config.maxAbsVelocity) : new Vector3(0, 0, 0);
