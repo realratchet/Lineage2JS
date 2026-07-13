@@ -105,7 +105,12 @@ class DecodeWorkerClient {
                 if (!request) break;
 
                 this.pending.delete(msg.requestId);
-                request.reject(new Error(msg.message));
+
+                const error = new Error(msg.message);
+
+                if (msg.stack) error.stack = msg.stack; // worker-side stack, not this handler's
+
+                request.reject(error);
                 break;
             }
             case "env-decoded": {

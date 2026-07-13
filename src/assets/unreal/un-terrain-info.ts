@@ -307,7 +307,7 @@ abstract class ATerrainInfo extends AInfo {
         this.toHeightMap = FCoords.make();
         this.vertexColors = new FArray(FColor.class());
 
-        if (verLicense >= 17) {
+        {
             this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();
 
             this.readHead = pkg.tell();
@@ -319,11 +319,22 @@ abstract class ATerrainInfo extends AInfo {
 
             pkg.seek(this.readHead, "set");
 
+            if (verLicense < 17) {
+                // stock layout: Sectors << Vertices << SectorsX/Y << FaceNormals,
+                // l2 dropped both arrays at licensee 17 (recomputed in updateVertices)
+                const vertexCount = pkg.read("compat32");
+
+                pkg.seek(vertexCount * 12); // FVector
+            }
+
             this.sectorsX = pkg.read("int32");
             this.sectorsY = pkg.read("int32");
-        } else {
-            console.warn("Unsupported yet");
-            debugger;
+
+            if (verLicense < 17) {
+                const normalCount = pkg.read("compat32");
+
+                pkg.seek(normalCount * 24); // FTerrainNormalPair (two FVectors)
+            }
         }
 
         if (verArchive < 0x53) {
@@ -649,9 +660,10 @@ abstract class ATerrainInfo extends AInfo {
                 continue;
             }
 
-            if (layer.map?.loadSelf().mipmaps.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps.getElemCount() === 0) {
+            // non-texture maps (shaders) have no mipmaps, only skip when both sides
+            // are plain textures without any texture data
+            if (layer.map?.loadSelf().mipmaps?.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps?.getElemCount() === 0) {
                 layers[k] = { map: null, alphaMap: null };
-                debugger;
                 continue;
             }
 

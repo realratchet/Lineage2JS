@@ -10,6 +10,11 @@ abstract class UMeshEmitter extends UParticleEmitter {
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
+        if (!this.mesh) {
+            console.warn(`MeshEmitter '${this.objectName}' has no static mesh, skipping`);
+            return null;
+        }
+
         return Object.assign(super.getDecodeInfo(library), {
             type: "MeshEmitter",
             mesh: this.mesh.loadSelf().getDecodeInfo(library)

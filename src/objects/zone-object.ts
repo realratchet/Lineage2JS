@@ -129,6 +129,8 @@ class SectorObject extends Object3D {
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     public readonly lights: Record<string, DynamicLight> = {};
 
+    public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
+
     protected _lastLoggedStaticMeshLeaf: number | null = null;
 
     // Internal state for zone/leaf change tracking
@@ -156,6 +158,19 @@ class SectorObject extends Object3D {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
+
+        // outdoor = sun-affected zone (zone 0 is the LevelInfo zone), this is what a
+        // camera standing outside the sector can see into
+        let outdoorMask = 1n << 0n;
+
+        this.bspZones.forEach((zone, index) => {
+            if (index === 0 || zone.zoneInfo?.isSunAffected) outdoorMask |= 1n << BigInt(index);
+        });
+
+        // no flags at all -> fall back to the old zone 1 heuristic
+        if (outdoorMask === (1n << 0n)) outdoorMask |= 1n << 1n;
+
+        this.outdoorZoneMask = outdoorMask;
     }
 
     public findPositionZone(position: THREE.Vector3) {
@@ -409,23 +424,24 @@ class SectorObject extends Object3D {
                         visibleNodes.add(nodeIndex);
                     }
                 } else if (this.nodeZoneMasks) {
-                    // Fallback to zone 1 if section info is missing but zone mask exists
-                    if (this.nodeZoneMasks[nodeIndex] & (1n << 1n)) {
+                    // Fallback to the outdoor zones if section info is missing
+                    if (this.nodeZoneMasks[nodeIndex] & this.outdoorZoneMask) {
                         visibleNodes.add(nodeIndex);
                     }
                 }
             }
 
-            // For leaves, we also want those marked as outdoor if possible
-            // In the absence of a clear outdoor flag for leaves, we'll use zone 1 as a heuristic
+            // leaves in any sun-affected zone count as outdoor, zone 1 alone hides
+            // actors of the other outdoor zones (e.g. bee hives of 20_23 seen from dion)
             if (this.bspLeaves) {
                 for (let leafIndex = 0; leafIndex < this.bspLeaves.length; leafIndex++) {
-                    if (this.bspLeaves[leafIndex].zone === 1) {
+                    const zone = this.bspLeaves[leafIndex].zone;
+
+                    if (zone >= 0 && (this.outdoorZoneMask & (1n << BigInt(zone))))
                         visibleLeaves.add(leafIndex);
-                    }
                 }
             }
-            return { visibleNodes, visibleLeaves, finalZoneMask: (1n << 1n), zonesAddedThroughPortals: new Set<number>() };
+            return { visibleNodes, visibleLeaves, finalZoneMask: this.outdoorZoneMask, zonesAddedThroughPortals: new Set<number>() };
         }
 
         // Leaf-only mode: only render leaf 1 (no portal expansion, no traversal)
@@ -720,7 +736,7 @@ class SectorObject extends Object3D {
         const leafOnlyMode = !isCameraInSector;
 
         // Find active zone mask and camera zone (from leaf for reliability)
-        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition); // Zone 1 bitmask if leaf-only
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition); // outdoor zones if camera is outside the bsp
 
         // Get camera zone from leaf (more reliable than findPositionZone)
         let currentZone: number | null = null;
@@ -810,8 +826,11 @@ class SectorObject extends Object3D {
 
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
 
-        // Early return if no BSP data
-        if (!this.bspGroup && !this.staticMeshGroup) return;
+        // Early return if no BSP data - but terrain still needs its lighting pass
+        if (!this.bspGroup && !this.staticMeshGroup) {
+            this.updateTerrainSectors(environment, cameraFrustum, frustumCullingEnabled);
+            return;
+        }
 
         const cameraLeaf = this.findPositionLeaf(cameraPosition);
         const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
@@ -819,7 +838,7 @@ class SectorObject extends Object3D {
         this.helpers.visible = isCameraInSector;
 
         const leafOnlyMode = !isCameraInSector;
-        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
 
         // Get camera zone from leaf (more reliable than findPositionZone)
         let currentZone: number | null = null;
@@ -1025,8 +1044,24 @@ class SectorObject extends Object3D {
                         (object as any)?.update(this, environment);
                     }
                 } else {
-                    // Non-batch actors: simple visibility toggle
-                    const isVisible = visibleActorUuids.has(uuid);
+                    // Non-batch actors: leaf visibility with the same direct bounds
+                    // fallback batched elements get (no leaves when camera is outside the bsp)
+                    let isVisible = visibleActorUuids.has(uuid);
+
+                    if (!isVisible && object.userData.actorBoundsMin) {
+                        actorBox.min.fromArray(object.userData.actorBoundsMin);
+                        actorBox.max.fromArray(object.userData.actorBoundsMax);
+
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const zoneMask = object.userData.actorZoneMask as bigint;
+                        const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
+                        const actorCenter = actorBox.getCenter(tmpVec3);
+                        const distSq = cameraPosition.distanceToSquared(actorCenter);
+                        const isInRange = object.userData.actorRangeIgnored || distSq <= staticMeshCullDistanceSq;
+
+                        isVisible = isFrustumVisible && isZoneVisible && isInRange;
+                    }
+
                     object.visible = isVisible;
                     if (isVisible) {
                         visibleCount++;
@@ -1037,55 +1072,61 @@ class SectorObject extends Object3D {
                 }
             });
 
-            // Update terrain lighting and batch visibility
-            this.zones.traverse((object) => {
-                const userData = (object as any).userData;
-                const isTerrainBatch = userData?.isTerrainBatch;
-                const isTerrain = (object as any).isTerrain;
-
-                if (isTerrainBatch) {
-                    const batch = object as Mesh;
-                    const batchGeo = batch.geometry as BufferGeometry;
-                    const sectors = userData.sectors as any[];
-                    const originalGroups = userData.originalGroups as any[];
-                    if (!sectors || !batchGeo || !originalGroups) return;
-
-                    const visibleGroups: any[] = [];
-                    sectors.forEach(sector => {
-                        // Terrain sectors have 'bounds' (THREE.Box3)
-                        const isVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds);
-
-                        if (isVisible) {
-                            sector.update(this, environment);
-                            // Add this sector's groups to visibility
-                            const start = sector.batchGroupOffset;
-                            const count = sector.batchGroupCount;
-                            for (let i = start; i < start + count; i++) {
-                                visibleGroups.push(originalGroups[i]);
-                            }
-                        }
-                    });
-
-                    if (visibleGroups.length > 0) {
-                        batch.visible = true;
-                        batchGeo.clearGroups();
-                        visibleGroups.forEach(g => {
-                            batchGeo.addGroup(g.start, g.count, g.materialIndex);
-                        });
-                    } else {
-                        batch.visible = false;
-                    }
-                } else if (isTerrain && object.visible && !(object as any).batchGeometry) {
-                    // Standalone terrain or fallback: update if visible
-                    (object as any).update?.(this, environment);
-                }
-            });
-
             if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
                 this._lastLoggedStaticMeshLeaf = leafIndex;
             }
         }
+
+        // must run for every sector, terrain colors start black and sectors without
+        // any StaticMeshActor (ocean tiles) would never get lit otherwise
+        this.updateTerrainSectors(environment, cameraFrustum, frustumCullingEnabled);
+    }
+
+    // Update terrain lighting and batch visibility
+    protected updateTerrainSectors(environment: L2Environment, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean) {
+        this.zones.traverse((object) => {
+            const userData = (object as any).userData;
+            const isTerrainBatch = userData?.isTerrainBatch;
+            const isTerrain = (object as any).isTerrain;
+
+            if (isTerrainBatch) {
+                const batch = object as Mesh;
+                const batchGeo = batch.geometry as BufferGeometry;
+                const sectors = userData.sectors as any[];
+                const originalGroups = userData.originalGroups as any[];
+                if (!sectors || !batchGeo || !originalGroups) return;
+
+                const visibleGroups: any[] = [];
+                sectors.forEach(sector => {
+                    // Terrain sectors have 'bounds' (THREE.Box3)
+                    const isVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds);
+
+                    if (isVisible) {
+                        sector.update(this, environment);
+                        // Add this sector's groups to visibility
+                        const start = sector.batchGroupOffset;
+                        const count = sector.batchGroupCount;
+                        for (let i = start; i < start + count; i++) {
+                            visibleGroups.push(originalGroups[i]);
+                        }
+                    }
+                });
+
+                if (visibleGroups.length > 0) {
+                    batch.visible = true;
+                    batchGeo.clearGroups();
+                    visibleGroups.forEach(g => {
+                        batchGeo.addGroup(g.start, g.count, g.materialIndex);
+                    });
+                } else {
+                    batch.visible = false;
+                }
+            } else if (isTerrain && object.visible && !(object as any).batchGeometry) {
+                // Standalone terrain or fallback: update if visible
+                (object as any).update?.(this, environment);
+            }
+        });
     }
 
     public updateVisibleStaticMeshActors(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
@@ -1101,7 +1142,7 @@ class SectorObject extends Object3D {
 
         // If camera is outside sector, only render leaf 1 (no portal expansion)
         const leafOnlyMode = !isCameraInSector;
-        const activeZoneMask = leafOnlyMode ? (1n << 1n) : this.getActiveZoneMask(cameraPosition); // Zone 1 bitmask if leaf-only
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition); // outdoor zones if camera is outside the bsp
 
         // CONSERVATIVE UE2: Use specific actor traversal with portal frustum checks
         // CONSERVATIVE UE2: Use specific actor traversal with portal frustum checks

@@ -130,6 +130,14 @@ abstract class BaseEmitter extends Object3D {
             scale: buildChangeRanges(config.changesOverLifetime.scale)
         };
 
+        // rebuild the raw ue curve arrays the simulation iterates over
+        this.sizeScale = (config.changesOverLifetime.scale?.values ?? [])
+            .map(([relTime, relSize]) => ({ relTime, relSize }));
+        this.velocityScale = ((config.changesOverLifetime as any).velocity?.values ?? [])
+            .map(([relTime, v]: [number, [number, number, number]]) => ({ RelativeTime: relTime, RelativeVelocity: new Vector3().fromArray(v) }));
+        this.colorScale = ((config.changesOverLifetime as any).color?.values ?? [])
+            .map(([relTime, c]: [number, number[]]) => ({ RelativeTime: relTime, Color: new Vector4().fromArray(c.map(v => v / 255)) }));
+
         this.initialSettings = {
             particlesPerSecond: config.initial.particlesPerSecond || 0,
             scale: {
@@ -154,8 +162,40 @@ abstract class BaseEmitter extends Object3D {
 
         Object.assign(this, config.settings);
 
+        // enum properties are absent from the data when left at class defaults (all 0
+        // in ue2) - the simulation calls .valueOf() on them, so they must be numbers
+        this.startLocationShape ??= 0;    // PTLS_Box
+        this.meshSpawning ??= 0;          // PTMS_None
+        this.rotationSource ??= 0;        // PTRS_None
+        this.coordinateSystem ??= 0;      // PTCS_Independent
+        this.effectAxis ??= 0;            // PTEA_NegativeX
+        this.getVelocityDirectionFrom ??= 0; // PTVD_None
+        this.useSkeletalLocationAs ??= 0; // PTSU_None
+        this.spawningSound ??= 0;         // PTSC_None
+        this.drawStyle ??= 0;             // PTDS_Regular
+        this.ScaleSizeByVelocityMax ??= Infinity; // no cap unless the data provides one
+
+        // Struct settings arrive in the canonical decode encodings ([x,y,z] tuples,
+        // [min,max] ranges) - rehydrate into the shapes the ue-ported simulation reads.
+        const vec3 = (v: any) => Array.isArray(v) ? new Vector3().fromArray(v) : v;
+        const vec4 = (v: any) => Array.isArray(v) ? new Vector4().fromArray(v) : v;
+        const range = (v: any) => Array.isArray(v) ? { min: v[0], max: v[1] } : v;
+        const rangeVec3 = (v: any) => v && Array.isArray(v.min) ? { min: new Vector3().fromArray(v.min), max: new Vector3().fromArray(v.max) } : v;
+
+        this.maxAbsVelocity = vec3(this.maxAbsVelocity) ?? new Vector3();
+        this.meshNormal = vec3(this.meshNormal) ?? new Vector3(0, 0, 1);
+        this.rotationNormal = vec3(this.rotationNormal);
+        this.clockwiseSpinChance = vec3(this.clockwiseSpinChance) ?? new Vector3();
+        this.skeletalScale = vec3(this.skeletalScale);
+        this.scaleSizeByVelocityMultiplier = vec3(this.scaleSizeByVelocityMultiplier) ?? new Vector3(1, 1, 1);
+        this.spawningSoundIndex = range(this.spawningSoundIndex) ?? { min: 0, max: 0 };
+        this.meshScaleRange = rangeVec3(this.meshScaleRange);
+        this.startSpinRange = rangeVec3(this.startSpinRange);
+        // Vector4.copy on the raw array reads undefined x/y/z (NaN rgb) but defaults w
+        this.fadeInFactor = vec4(this.fadeInFactor);
+        this.fadeOutFactor = vec4(this.fadeOutFactor);
+
         this.acceleration = new Vector3().fromArray(config.acceleration ?? [0, 0, 0]);
-        this.maxAbsVelocity = config.maxAbsVelocity ? new Vector3().fromArray(config.maxAbsVelocity) : new Vector3(0, 0, 0);
         this.realVelocityLossRange = config.velocityLossRange ? {
             min: new Vector3().fromArray(config.velocityLossRange.min),
             max: new Vector3().fromArray(config.velocityLossRange.max)
@@ -210,6 +250,9 @@ abstract class BaseEmitter extends Object3D {
         this.particleIndex = 0;
         this.allParticlesDead = false;
         this.warmedUp = false;
+
+        // MaxParticles is not always serialized - fall back to the config default
+        this.maxParticles ??= this.generalSettings.maxParticles;
 
         // Soft limit: when ForcedMaxParticles is NOT set, the particle pool is
         // larger than maxParticles so the emitter can temporarily exceed the
@@ -447,7 +490,6 @@ abstract class BaseEmitter extends Object3D {
         if (ApplyAll || this.startLocationShape.valueOf() === PTLS_Sphere)
             Particle.position.add(new Vector3().randomDirection().multiplyScalar(randRange(this.sphereRadiusRange.min, this.sphereRadiusRange.max)));
         if (ApplyAll || this.startLocationShape.valueOf() === PTLS_Polar) {
-            __break__();
             const Polar = this.tmpVec;
             randVector(Polar, this.startLocationPolarRange.min, this.startLocationPolarRange.max);
             let X, Y, Z;
@@ -538,10 +580,10 @@ abstract class BaseEmitter extends Object3D {
 
         this.otherIndex++;
         if (this.addLocationFromOtherEmitter >= 0) {
-            __break__();
-            let OtherEmitter = Owner.Emitters[this.addLocationFromOtherEmitter] as BaseEmitter;
-            if (OtherEmitter.activeParticles > 0)
-                Particle.position.add(OtherEmitter.particles[this.otherIndex % OtherEmitter.activeParticles].position.clone().sub(ownerLocation()));
+            __break__(); // needs a handle to the sibling emitters, which decode info doesn't carry
+            // let OtherEmitter = Owner.Emitters[this.addLocationFromOtherEmitter] as BaseEmitter;
+            // if (OtherEmitter.activeParticles > 0)
+            //     Particle.position.add(OtherEmitter.particles[this.otherIndex % OtherEmitter.activeParticles].position.clone().sub(ownerLocation()));
         }
 
         // Handle Rotation.
@@ -556,13 +598,13 @@ abstract class BaseEmitter extends Object3D {
                 break;
             case PTRS_Normal:
                 __break__();
-                {
-                    let Rotator = this.rotationNormal.Rotation();
-                    // Map Z to -X if effect was created along the Z axis instead of negative X
-                    if (this.effectAxis.valueOf() === PTEA_PositiveZ)
-                        Rotator.Pitch -= 16384;
-                    // Particle.position.copy(Particle.position.TransformVectorBy(GMath.UnitCoords * Rotator));
-                }
+                // {
+                //     let Rotator = this.rotationNormal.Rotation();
+                //     // Map Z to -X if effect was created along the Z axis instead of negative X
+                //     if (this.effectAxis.valueOf() === PTEA_PositiveZ)
+                //         Rotator.Pitch -= 16384;
+                //     Particle.position.copy(Particle.position.TransformVectorBy(GMath.UnitCoords * Rotator));
+                // }
                 break;
         }
 
@@ -635,8 +677,8 @@ abstract class BaseEmitter extends Object3D {
                     Particle.Velocity.copy(Particle.Velocity.clone().multiply(Direction));
                     break;
                 case PTVD_AddRadial:
-                    __break__();
-                    randVector(this.tmpVec, this.StartVelocityRadialRange.min, this.StartVelocityRadialRange.max), Particle.Velocity.add(this.tmpVec.clone().multiply(Direction));
+                    __break__(); // StartVelocityRadialRange is not carried by the decode info yet
+                    // randVector(this.tmpVec, this.startVelocityRadialRange.min, this.startVelocityRadialRange.max), Particle.Velocity.add(this.tmpVec.clone().multiply(Direction));
                     break;
                 default:
                     break;
@@ -648,10 +690,10 @@ abstract class BaseEmitter extends Object3D {
             __break__() && Particle.Velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(Owner.AbsoluteVelocity));
 
         if (this.addVelocityFromOtherEmitter >= 0) {
-            __break__();
-            let OtherEmitter = Owner.Emitters[this.addVelocityFromOtherEmitter];
-            if (OtherEmitter.ActiveParticles > 0)
-                Particle.Velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(OtherEmitter.Particles[this.otherIndex % OtherEmitter.ActiveParticles].Velocity));
+            __break__(); // needs a handle to the sibling emitters, which decode info doesn't carry
+            // let OtherEmitter = Owner.Emitters[this.addVelocityFromOtherEmitter];
+            // if (OtherEmitter.ActiveParticles > 0)
+            //     Particle.Velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(OtherEmitter.Particles[this.otherIndex % OtherEmitter.ActiveParticles].Velocity));
         }
 
         // Location.
@@ -1034,7 +1076,6 @@ abstract class BaseEmitter extends Object3D {
 
             // Velocity scale.
             if (this.isUsingVelocityScale) {
-                __break__();
                 if (Particle.MaxLifetime) {
                     let VelocityRelativeTime = (RelativeTime * (this.velocityScaleRepeats + 1)) % 1;
                     for (let n = 0; n < this.velocityScale.length; n++) {
@@ -1067,7 +1108,6 @@ abstract class BaseEmitter extends Object3D {
 
             // Scale size by velocity.
             if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
-                __break__();
                 let VelocitySize = this.determineVelocityByLocationDifference ? (Particle.position.clone().sub(Particle.OldLocation)).length() * OneOverDeltaTime : (Particle.Velocity.clone().multiply(Particle.VelocityMultiplier)).length();
                 MaxVelocityScale = Math.max(MaxVelocityScale, VelocitySize);
                 if (this.scaleSizeXByVelocity)
@@ -1595,7 +1635,9 @@ function randVector(dst: THREE.Vector3, min: THREE.Vector3, max: THREE.Vector3) 
 function buildChangeRanges(ranges: { values: [number, number][], repeats: number }): { times: number[], values: number[] } {
     if (!ranges) return null;
 
-    const repeats = ranges.repeats || 1;
+    // repeats comes straight from level data - garbage values would blow up the
+    // arrays below (and the loop), so clamp to a sane whole number
+    const repeats = Math.min(Math.max(Math.floor(ranges.repeats) || 1, 1), 1000);
     const totalSegments = ranges.values.length * repeats;
 
     const times = new Array<number>(totalSegments);
@@ -1622,4 +1664,16 @@ type FadeSettings_T = { fadeIn: Fade_T; fadeOut: Fade_T; };
 type Range3_T = { min: THREE.Vector3, max: THREE.Vector3 };
 type ChangesOverTime_T = { scale?: { times: number[], values: number[] }; };
 
-const __break__ = () => { debugger; throw new Error("dunno") };
+// unimplemented particle feature marker, warns once per call site instead of
+// throwing so an exotic emitter can't kill the render loop
+const __warnedBreaks = new Set<string>();
+const __break__ = (): boolean => {
+    const site = new Error().stack?.split("\n")[2]?.trim() ?? "unknown";
+
+    if (!__warnedBreaks.has(site)) {
+        __warnedBreaks.add(site);
+        console.warn("[emitter] unimplemented particle feature hit at", site);
+    }
+
+    return false;
+};

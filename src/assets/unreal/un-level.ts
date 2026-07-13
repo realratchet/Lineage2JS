@@ -30,8 +30,13 @@ abstract class ULevelBase extends UObject {
 
             this.actors = FObjectArray.loadOfSize(dbNum, pkg);
         } else {
-            debugger
-            throw new Error("not implemented");
+            // stock ue2 layout (older chronicle maps): a single actor array, no ambient pair
+            const dbNum = pkg.read("int32");
+
+            pkg.read("int32"); // dbMax
+
+            this.ambientActors = FObjectArray.loadOfSize(0, pkg);
+            this.actors = FObjectArray.loadOfSize(dbNum, pkg);
         }
 
         this.url.load(pkg);

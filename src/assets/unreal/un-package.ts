@@ -37,6 +37,9 @@ import UCubemap from "./un-cubemap";
 import FMatrix from "./un-matrix";
 import UTerrainLayer from "./un-terrain-layer";
 import UDecoLayer from "./un-deco-layer";
+import * as UnStubs from "./un-stubs";
+import UWetTexture, { UADrop } from "./un-wet-texture";
+import UBeamEmitter from "./emitters/un-beam-emitter";
 import FRange, { FRangeVector } from "./un-range";
 import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
@@ -283,8 +286,9 @@ class UNativePackage extends ANativePackage {
             case "Orientation":
             case "AccessoryType":
             case "L2Event":
-                Constructor = UObject;
-                break;
+            case "ParticleBeamEndPoint": Constructor = PEmitter.UParticleBeamEndPoint; break;
+            case "ParticleBeamScale": Constructor = PEmitter.UParticleBeamScale; break;
+            case "ADrop": Constructor = UADrop; break;
 
             case "ParticleColorScale": Constructor = PEmitter.UParticleColorScale; break;
             case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
@@ -345,11 +349,13 @@ class UNativePackage extends ANativePackage {
             //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
             case "Texture": Constructor = UTexture; break;
+            case "WetTexture": Constructor = UWetTexture; break;
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
+            case "BeamEmitter": Constructor = UBeamEmitter; break;
 
 
 
@@ -385,7 +391,12 @@ class UNativePackage extends ANativePackage {
             case "SceneManager": Constructor = UObject; break;
             case "PathNode": Constructor = UObject; break;
             case "InterpolationPoint": Constructor = UObject; break;
-            case "VertexColor": Constructor = UObject; break;
+            case "VertexColor": Constructor = UnMaterials.UVertexColor; break;
+            case "Projector": Constructor = UnStubs.UProjector; break;
+            case "AntiPortalActor": Constructor = UnStubs.UAntiPortalActor; break;
+            case "Pawn": Constructor = UnStubs.UPawn; break;
+            case "LineagePlayerController": Constructor = UnStubs.ULineagePlayerController; break;
+            case "AmbientSound": Constructor = UnStubs.UAmbientSound; break;
 
 
             default:

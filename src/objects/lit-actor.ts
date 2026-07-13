@@ -113,6 +113,11 @@ class LitActorMesh extends Mesh {
     protected lastEnvTime: number = -1;
     protected lastEnvVersion: number = -1;
 
+    // true until the first lighting pass ran (see Terrain.needsInitialLighting)
+    public get needsInitialLighting(): boolean {
+        return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+    }
+
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
 

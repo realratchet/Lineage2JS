@@ -57,11 +57,17 @@ function collectPackageBuffers(): Set<ArrayBuffer> {
 }
 
 async function decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
-    const cached = await loadCachedLibrary(sectorName, settings);
+    const convertToRGBA = (settings as any).rgbaTextures !== false; // false = client uploads DDS as-is (s3tc)
+
+    // never cache the skylevel, sky renderer matches its sections against env config
+    // material uuids which are session-random - a cached skylevel never matches
+    const cacheable = !(settings as any).isSkyLevel;
+
+    const cached = cacheable ? await loadCachedLibrary(sectorName, settings) : null;
 
     if (cached) {
-        convertDDSMaterialsToRGBA(cached); /* the cache stores DDS (4-8x smaller than RGBA) */
-        refreshSoundBlobUris(cached);      /* blob URLs are session-scoped */
+        if (convertToRGBA) convertDDSMaterialsToRGBA(cached); /* the cache stores DDS (4-8x smaller than RGBA) */
+        refreshSoundBlobUris(cached);                         /* blob URLs are session-scoped */
 
         return { library: cached, fromCache: true };
     }
@@ -77,9 +83,10 @@ async function decodeSector(sectorName: string, settings: GD.LoadSettings_T): Pr
      * storeCachedLibrary serializes now and writes in the background.
      */
     prepareLibraryForTransfer(library, collectPackageBuffers());
-    storeCachedLibrary(sectorName, settings, library);
 
-    convertDDSMaterialsToRGBA(library);
+    if (cacheable) storeCachedLibrary(sectorName, settings, library);
+
+    if (convertToRGBA) convertDDSMaterialsToRGBA(library);
 
     return { library, fromCache: false };
 }
@@ -114,7 +121,7 @@ async function handleMessage(msg: MainToWorkerMessage) {
                 post({ type: "decoded", requestId: msg.requestId, library }, transfer);
             } catch (e) {
                 console.error(`[decode-worker] failed to decode sector '${msg.sectorName}':`, e);
-                post({ type: "decode-error", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
+                post({ type: "decode-error", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
             }
             break;
         }

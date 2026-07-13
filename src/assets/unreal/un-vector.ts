@@ -1,6 +1,6 @@
 import { UObject } from "@l2js/core";
 
-abstract class FVector extends UObject {
+abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3Arr> {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -32,6 +32,8 @@ abstract class FVector extends UObject {
     }
 
     public getElements(): GD.Vector3Arr { return [this.x, this.y, this.z]; }
+
+    public getDecodeInfo(_library: GD.DecodeLibrary): GD.Vector3Arr { return this.getElements(); }
 
     public addScalar(scalar: number) {
         return FVector.make(

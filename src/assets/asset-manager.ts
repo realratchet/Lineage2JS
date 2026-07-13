@@ -26,6 +26,7 @@ class AssetManager {
     protected failedSectors = new Map<string, number>(); // sector id -> retry-after timestamp
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
+    protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
 
     /**
      * Sectors whose bounds intersect this radius around the camera get loaded. At half
@@ -53,6 +54,16 @@ class AssetManager {
     public async initialize(renderManager: RenderManager): Promise<void> {
         this.glCapabilities = renderManager.renderer.capabilities;
 
+        // with s3tc the dxt data uploads as-is (full mip chain, 4-8x less vram),
+        // otherwise the worker converts to rgba like before
+        const textureMode = (this.loadSettings as any).textures ?? "auto";
+        const hasS3TC = !!renderManager.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
+
+        this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && hasS3TC);
+        (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
+
+        console.info(`[textures] mode=${textureMode}, s3tc=${hasS3TC} -> uploading ${this.preferCompressedTextures ? "compressed DDS" : "converted RGBA"}`);
+
         /* everything below comes out of the decode worker - the app cannot run without it */
         this.decodeWorker = new DecodeWorkerClient();
         await this.decodeWorker.ready;
@@ -72,6 +83,7 @@ class AssetManager {
         });
 
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         renderManager.setEnv(decodeEnv(envInfo));
         renderManager.setSky(decodePackage(skyLibrary));
@@ -82,6 +94,7 @@ class AssetManager {
         const decodeLibrary = await this.decodeWorker.decodeSector(sectorName, this.loadSettings);
 
         decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         const sector = decodePackage(decodeLibrary);
 
@@ -114,6 +127,7 @@ class AssetManager {
             const decodeLibrary = await this.decodeWorker.decodeSector(sectorIdx, this.loadSettings);
 
             decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+            (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
             renderManager.addSector(decodePackage(decodeLibrary));
             this.failedSectors.delete(sectorIdx);

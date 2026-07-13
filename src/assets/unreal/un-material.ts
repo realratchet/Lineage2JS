@@ -587,16 +587,17 @@ abstract class UTexOscillator extends UBaseModifier {
 }
 
 abstract class UTexCoordSource extends UBaseModifier {
-    // public getDecodeInfo(library: DecodeLibrary): string {
-    //     if (this.uuid in library.materials) return this.material.uuid;
+    // the texcoord generation itself isn't supported - pass the source material through
+    public getDecodeInfo(library: DecodeLibrary): string {
+        return this.material?.loadSelf().getDecodeInfo(library) || null;
+    }
+}
 
-    //     library.materials[this.uuid] = null;
-
-
-    //     this.material.loadSelf().getDecodeInfo(library);
-
-    //     return this.material.uuid;
-    // }
+abstract class UVertexColor extends UBaseModifier {
+    // vertex color modulation isn't supported - combiners treat a null material as absent
+    public getDecodeInfo(library: DecodeLibrary): string {
+        return this.material?.loadSelf().getDecodeInfo(library) || null;
+    }
 }
 
 abstract class UTexPanner extends UBaseModifier {
@@ -682,4 +683,4 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UCombiner };
+export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UVertexColor, UCombiner };

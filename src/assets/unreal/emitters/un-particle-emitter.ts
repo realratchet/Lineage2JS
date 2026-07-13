@@ -464,38 +464,35 @@ abstract class UParticleEmitter extends UObject {
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
             changesOverLifetime: {
-                scale: this.isUsingSizeScale && this.sizeScale.length > 1 ? {
+                scale: this.isUsingSizeScale && (this.sizeScale?.length ?? 0) > 1 ? {
                     values: this.sizeScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.sizeScaleRepeats
                 } : null,
-                color: this.isUsingColorScale && this.colorScale.length > 1 ? {
+                color: this.isUsingColorScale && (this.colorScale?.length ?? 0) > 1 ? {
                     values: this.colorScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.colorScaleRepeats
                 } : null,
-                velocity: this.isUsingVelocityScale && this.velocityScale.length > 1 ? {
+                velocity: this.isUsingVelocityScale && (this.velocityScale?.length ?? 0) > 1 ? {
                     values: this.velocityScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.velocityScaleRepeats
                 } : null,
-                revolution: this.isUsingRevolutionScale && this.revolutionScale.length > 1 ? {
+                revolution: this.isUsingRevolutionScale && (this.revolutionScale?.length ?? 0) > 1 ? {
                     values: this.revolutionScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
-            settings: this.getSettingsSnapshot()
+            settings: this.getSettingsSnapshot(library)
         };
     }
 
-    /**
-     * BaseEmitter Object.assign's these onto itself. Only the properties the emitter
-     * objects actually read are exported, as plain values - math structs are flattened
-     * to {x, y, z}-style objects (BaseEmitter only reads fields, never calls methods),
-     * so no live UObject ever crosses the decode-worker boundary.
-     */
-    protected getSettingsSnapshot(): Record<string, any> {
+    // BaseEmitter Object.assign's these onto itself. Structs serialize through their
+    // regular getDecodeInfo and BaseEmitter rehydrates the array forms, so no live
+    // UObject ever crosses the decode-worker boundary.
+    protected getSettingsSnapshot(library: GD.DecodeLibrary): Record<string, any> {
         const snapshot: Record<string, any> = {};
 
         for (const varName of REQUIRED_SETTINGS) {
-            const value = toCloneSafeSetting((this as any)[varName]);
+            const value = toCloneSafeSetting((this as any)[varName], library);
 
             if (value !== CLONE_UNSAFE) snapshot[varName] = value;
         }
@@ -504,15 +501,11 @@ abstract class UParticleEmitter extends UObject {
     }
 }
 
-/**
- * Settings BaseEmitter/SpriteEmitter/MeshEmitter read off themselves after the assign
- * and which are not already covered by explicit EmitterConfig_T fields. UObject-valued
- * properties (skeletal actors, sounds, scale FArrays) are deliberately absent - scale
- * curves travel via changesOverLifetime/scales in the decode info instead.
- */
+// settings the emitters read off themselves after the assign and which aren't already
+// covered by explicit EmitterConfig_T fields, scale curves travel via changesOverLifetime
 const REQUIRED_SETTINGS = [
     "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter",
-    "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle",
+    "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
     "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
     "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
@@ -528,7 +521,7 @@ const REQUIRED_SETTINGS = [
 
 const CLONE_UNSAFE = Symbol("clone-unsafe");
 
-function toCloneSafeSetting(value: any): any {
+function toCloneSafeSetting(value: any, library: GD.DecodeLibrary): any {
     if (value === null || value === undefined) return value;
 
     const t = typeof value;
@@ -537,33 +530,18 @@ function toCloneSafeSetting(value: any): any {
     if (t === "function") return CLONE_UNSAFE;
 
     if (Array.isArray(value)) {
-        const result = value.map(toCloneSafeSetting);
+        const result = value.map(v => toCloneSafeSetting(v, library));
 
         return result.some(v => v === CLONE_UNSAFE) ? CLONE_UNSAFE : result;
     }
 
     if (t === "object") {
-        const ctor = value.constructor as any;
+        if (value.constructor === Object) return value;
 
-        if (ctor === Object) return value;
-
-        if (ctor?.plainStructFields || value.isObject === true) {
-            // flatten the struct's mapped fields into a plain object
-            const propMap: Record<string, string> = ctor?._propertyMapCache ?? value.getPropertyMap?.() ?? null;
-
-            if (!propMap) return CLONE_UNSAFE;
-            if (!ctor?.plainStructFields) return CLONE_UNSAFE; // full UObject (texture, actor, ...) - drop
-
-            const flat: Record<string, any> = {};
-
-            for (const varName of Object.values(propMap)) {
-                const fieldValue = toCloneSafeSetting(value[varName]);
-
-                if (fieldValue !== CLONE_UNSAFE) flat[varName] = fieldValue;
-            }
-
-            return flat;
-        }
+        // math structs serialize through their regular getDecodeInfo, anything else
+        // (textures, actors, FArrays) has no business in the settings snapshot
+        if (value instanceof FVector || value instanceof UPlane || value instanceof FRange || value instanceof FRangeVector)
+            return value.getDecodeInfo(library);
 
         return CLONE_UNSAFE;
     }
@@ -623,6 +601,32 @@ abstract class UParticleSound extends UObject {
 
 };
 
+// BeamEmitter.uc structs
+abstract class UParticleBeamEndPoint extends UObject {
+    declare public offset: FRangeVector;
+    declare public weight: number;
+
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "ActorTag": "_actorTag",
+            "Offset": "offset",
+            "Weight": "weight"
+        });
+    }
+}
+
+abstract class UParticleBeamScale extends UObject {
+    declare public frequencyScale: FVector;
+    declare public relativeLength: number;
+
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "FrequencyScale": "frequencyScale",
+            "RelativeLength": "relativeLength"
+        });
+    }
+}
+
 abstract class UParticle extends UObject {
 
 };
@@ -644,7 +648,7 @@ abstract class UParticleColorScale extends UObject {
 }
 
 export default UParticleEmitter;
-export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale };
+export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale, UParticleBeamEndPoint, UParticleBeamScale };
 
 enum EParticleCoordinateSystem_T {
     PTCS_Independent, //Initial values (Start Location, Starting Velocity, etc.) are relative to the Emitter actor. Values that change over time, such as acceleration, are relative to the world. (aka absolute)

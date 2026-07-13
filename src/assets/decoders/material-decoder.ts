@@ -435,8 +435,18 @@ function decodeEmptyMaterial(): MeshStaticMaterial {
 }
 
 function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMaterialDecodeInfo): THREE.Material | THREE.Material[] {
-    const baseMaterial = library.materials[info.material];
+    const baseMaterial = info.material ? library.materials[info.material] : null;
     const { blendingMode, opacity } = info;
+
+    // particle materials are plain init-settings objects, the empty fallback must match that shape
+    function decodeEmpty(): any {
+        return { name: "empty", type: "texture", map: null, blendingMode, opacity };
+    }
+
+    if (!baseMaterial) {
+        console.warn("Particle emitter without a material, using empty material");
+        return decodeEmpty();
+    }
 
     function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): any {
         return {
@@ -460,10 +470,17 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
     }
 
     function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+        if (!info) return decodeEmpty();
+
         switch (info.materialType) {
             case "texture": return decodeTexture(library, info as GD.ITextureDecodeInfo);
             case "sprite": return decodeSprite(library, info as GD.IAnimatedSpriteDecodeInfo);
-            case "empty": return decodeEmptyMaterial();
+            case "empty": return decodeEmpty();
+            // particles can't render full shaders, approximate with the shader's diffuse map
+            case "shader": {
+                const shader = info as GD.IShaderDecodeInfo;
+                return decodeMaterial(library, shader.diffuse ? library.materials[shader.diffuse] : null);
+            }
             default: throw new Error(`Unknown decodable type: ${info.materialType}`);
         }
     }
@@ -474,9 +491,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
 
     switch (baseMaterial.materialType) {
         case "group": return decodeGroup(library, baseMaterial as GD.IMaterialGroupDecodeInfo);
-        case "texture": return decodeMaterial(library, baseMaterial as GD.ITextureDecodeInfo);
-        case "empty": return decodeEmptyMaterial();
-        default: throw new Error(`Unknown decodable type: ${baseMaterial.materialType}`);
+        default: return decodeMaterial(library, baseMaterial);
     }
 }
 

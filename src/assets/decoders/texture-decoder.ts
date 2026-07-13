@@ -1,6 +1,7 @@
-import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter } from "three";
+import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import DecodeLibrary from "../unreal/decode-library";
+import WetWaterTexture from "@client/materials/wet-water-texture";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dxt-decode";
 
 function getClamping(mode: number): THREE.Wrapping {
@@ -34,8 +35,32 @@ function getFormat(type: GD.DataTextureFormats_T) {
     }
 }
 
+// Uploads the DDS mip chain as an S3TC CompressedTexture. Our DDS header never sets
+// the alpha flag so DDSLoader reports DXT1 as RGB - force the RGBA variant which
+// decodes DXT1's 1-bit alpha correctly (identical block data).
+function decodeCompressedDDS(buffer: ArrayBuffer): THREE.Texture {
+    const dds = new DDSLoader().parse(buffer, true);
+    const format = dds.format === RGB_S3TC_DXT1_Format ? RGBA_S3TC_DXT1_Format : dds.format;
+    const texture = new CompressedTexture(dds.mipmaps as ImageData[], dds.width, dds.height, format as THREE.CompressedPixelFormat);
+
+    texture.minFilter = dds.mipmapCount === 1 ? LinearFilter : LinearMipmapLinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.flipY = false;
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
 // Replaced CompressedTexture with DataTexture (Software Decode) to fix Alpha Issues
-function decodeDDS(buffer: ArrayBuffer): THREE.Texture {
+function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THREE.Texture {
+    if (preferCompressed) {
+        try {
+            return decodeCompressedDDS(buffer);
+        } catch (e) {
+            console.warn("[decodeDDS] compressed upload failed, falling back to software decode:", e);
+        }
+    }
+
     // 1. Try Manual Software Decompression (Matches B64 Export Logic)
     try {
         const header = new Int32Array(buffer, 0, 31);
@@ -83,7 +108,20 @@ function decodeDDS(buffer: ArrayBuffer): THREE.Texture {
 }
 
 function decodeRGBA(info: GD.IDataTextureDecodeInfo): DataTexture {
-    const image = new Uint8Array(info.buffer, 0, info.width * info.height * 4);
+    const byteLength = info.width * info.height * 4;
+
+    if (info.buffer.byteLength < byteLength) {
+        // bad/unsupported texture data must not kill the whole sector
+        console.warn(`Texture '${info.name}' has ${info.buffer.byteLength} bytes, expected ${byteLength} - using placeholder`);
+
+        const placeholder = new DataTexture(new Uint8Array([255, 0, 255, 255]), 1, 1);
+
+        placeholder.needsUpdate = true;
+
+        return placeholder;
+    }
+
+    const image = new Uint8Array(info.buffer, 0, byteLength);
     const texture = new DataTexture(image, info.width, info.height, getFormat(info.format));
 
     texture.generateMipmaps = true;
@@ -136,7 +174,8 @@ function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.
     let texture: THREE.Texture;
 
     switch (info.textureType) {
-        case "dds": texture = decodeDDS(info.buffer); break;
+        case "dds": texture = decodeDDS(info.buffer, (library as any).preferCompressedTextures === true); break;
+        case "wet": texture = new WetWaterTexture(info as any); break;
         case "rgba": texture = decodeRGBA(info); break;
         case "g16": texture = decodeG16(info); break;
         case "float": texture = decodeFloat(info); break;

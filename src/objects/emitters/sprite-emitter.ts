@@ -7,23 +7,17 @@ const geometry = new PlaneGeometry(2, 2);
 
 class SpriteEmitter extends BaseEmitter {
 
-    protected material: ParticleMaterialInitSettings_T;
-    public spriteDirection: string = "camera";
-    public projectionNormal: Vector3 = new Vector3(0, 0, 1);
-
-    // public constructor(props: any) {
-    //     debugger;
-    //     super(props);
-    // }
+    // declare matters, initSettings runs from the BaseEmitter constructor so field
+    // initializers here would clobber whatever it assigned
+    declare protected material: ParticleMaterialInitSettings_T;
+    declare public spriteDirection: string;
+    declare public projectionNormal: Vector3;
 
     protected initSettings(config: SpriteEmitterConfig_T): void {
         this.isSpriteEmitter = true;
         this.material = config.material;
         this.spriteDirection = config.spriteDirection || "camera";
-        
-        if (config.projectionNormal) {
-            this.projectionNormal.fromArray(config.projectionNormal);
-        }
+        this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
     }
 
     protected initParticleMesh() { 

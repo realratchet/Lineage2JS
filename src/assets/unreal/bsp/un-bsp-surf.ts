@@ -43,7 +43,9 @@ class FBSPSurf implements C.IConstructable {
 
         this.lightMapScale = pkg.read("float");
 
-        this.unkInt32 = pkg.read("int32");
+        // l2 addition, stock-format maps (older chronicles) end at lightMapScale
+        if (pkg.header.getLicenseeVersion() >= 23)
+            this.unkInt32 = pkg.read("int32");
 
         const offset = pkg.tell();
 

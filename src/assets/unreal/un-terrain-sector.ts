@@ -508,7 +508,8 @@ abstract class UTerrainSector extends UObject {
                 if (!other || !other.map || !other.alphaMap)
                     break;
 
-                if (!other.map.isTransparent() && this.isSectorAll(indexOther, 255))
+                // non-texture maps (shaders) don't expose isTransparent, assume transparent
+                if (other.map.isTransparent?.() === false && this.isSectorAll(indexOther, 255))
                     continue;
 
             }
@@ -665,7 +666,7 @@ abstract class UTerrainSector extends UObject {
 
                 for (const layerIndex of otherComb.layers) {
                     const layer = layers[layerIndex];
-                    if (!layer.map.isTransparent() && this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 255)) {
+                    if (layer.map?.isTransparent?.() === false && this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 255)) {
                         return false;
                     }
                 }

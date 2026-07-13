@@ -111,6 +111,11 @@ abstract class UStaticMeshActor extends UAActor {
     }
 
     public getDecodeInfo(library: GD.DecodeLibrary): string {
+        if (!this.mesh) {
+            console.warn(`StaticMeshActor '${this.objectName}' has no static mesh, skipping`);
+            return null;
+        }
+
         const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
         const meshInfo = mesh.getDecodeInfo(library, null);
 

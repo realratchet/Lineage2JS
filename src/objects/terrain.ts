@@ -106,6 +106,11 @@ class Terrain extends Mesh implements ICollidable {
      * - Dynamic scene lights (bDynamicLight=true or moving lights)
      * - Time-based lights (LT_Pulse, LT_Blink, etc.)
      */
+    // true until the first lighting pass ran, vertex colors start out black
+    public get needsInitialLighting(): boolean {
+        return !!this.lightingInfo && !this.staticLightingCache;
+    }
+
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightingInfo) return;
 

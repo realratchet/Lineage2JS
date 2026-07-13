@@ -24,8 +24,9 @@ function isCacheEnabled(settings: GD.LoadSettings_T): boolean {
 }
 
 function hashSettings(settings: GD.LoadSettings_T): string {
-    /* the cache config itself must not affect the content hash */
-    const json = JSON.stringify({ ...settings, cache: undefined });
+    /* the cache config must not affect the content hash; texture mode neither -
+       conversion happens after the cache, which always stores DDS */
+    const json = JSON.stringify({ ...settings, cache: undefined, textures: undefined, rgbaTextures: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)

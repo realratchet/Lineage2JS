@@ -3,8 +3,9 @@ import { DoubleSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
 
 class MeshEmitter extends BaseEmitter {
-    protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
-    protected geometry: THREE.BufferGeometry;
+    // declare matters, see sprite-emitter
+    declare protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
+    declare protected geometry: THREE.BufferGeometry;
 
     protected initSettings(config: MeshEmitterConfig_T): void {
         this.geometry = config.geometry;
@@ -15,9 +16,9 @@ class MeshEmitter extends BaseEmitter {
         const materialConfigs = this.materials instanceof Array ? this.materials : [this.materials];
         const materials = materialConfigs.map(m => {
             const isSprite = m.type === "sprite";
-            
+
             return new MeshEmitterMaterial({
-                map: isSprite ? m.sprites[0].uniforms.map.texture : m.map.uniforms.map.texture,
+                map: (isSprite ? m.sprites[0]?.uniforms.map.texture : m.map?.uniforms.map.texture) ?? null,
                 sprites: isSprite ? m.sprites.map(s => s.uniforms.map.texture) : undefined,
                 framerate: m.framerate,
                 blendingMode: m.blendingMode as any,

@@ -4,6 +4,8 @@ import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 
 class ParticleMaterial extends ShaderMaterial {
+    public isUpdatable = false;
+
     constructor({ map, blendingMode, opacity, name }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
@@ -11,12 +13,16 @@ class ParticleMaterial extends ShaderMaterial {
             UniformsLib.fog
         ]));
 
-        uniforms.map.value = map.uniforms.map.texture;
+        uniforms.map.value = map?.uniforms.map.texture ?? null; // missing textures still simulate
         if (opacity !== undefined) uniforms.opacity.value = opacity;
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
 
-        const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
+        const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
+
+        if (uniforms.map.value) {
+            defines.USE_MAP = "";
+        }
         const { blending, blendSrc, blendDst, isAdditive } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
@@ -38,7 +44,12 @@ class ParticleMaterial extends ShaderMaterial {
 
         (this as any).isParticleMaterial = true;
 
+        this.isUpdatable = (uniforms.map.value as any)?.isUpdatable === true;
         this.name = name;
+    }
+
+    public update(time: number) {
+        (this.uniforms.map.value as any)?.update(time);
     }
 }
 

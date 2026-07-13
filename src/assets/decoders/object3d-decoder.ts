@@ -6,6 +6,7 @@ import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
 import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 import MeshEmitter from "@client/objects/emitters/mesh-emitter";
+import BeamEmitter from "@client/objects/emitters/beam-emitter";
 import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
 import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance } from "./object-batching";
@@ -689,7 +690,9 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         blendingMode: info.blendingMode,
         opacity: info.opacity,
         changesOverLifetime: {
-            scale: info.changesOverLifetime.scale
+            scale: info.changesOverLifetime.scale,
+            velocity: (info.changesOverLifetime as any).velocity ?? null,
+            color: (info.changesOverLifetime as any).color ?? null
         },
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
@@ -752,6 +755,24 @@ function decodeSpriteEmitter(library: GD.DecodeLibrary, info: GD.ISpriteEmitterD
     return emitter;
 }
 
+function decodeBeamEmitter(library: GD.DecodeLibrary, info: any) {
+    const material = decodeMaterial(library, {
+        materialType: "particle",
+        material: info.texture,
+        opacity: info.opacity,
+        blendingMode: info.blendingMode
+    } as GD.IParticleMaterialDecodeInfo) as any as GD.ParticleMaterialInitSettings_T;
+
+    const emitter = new BeamEmitter(Object.assign(decodeEmitterConfig(info), {
+        material,
+        beam: info.beam
+    }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
+}
+
 function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) {
     const object = new FogInfoObject();
 
@@ -788,6 +809,7 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as GD.ISkinnedMeshObjectDecodeInfo);
         case "SpriteEmitter": return decodeSpriteEmitter(library, info as GD.ISpriteEmitterDecodeInfo);
         case "MeshEmitter": return decodeMeshEmitter(library, info as GD.IMeshEmitterDecodeInfo);
+        case "BeamEmitter": return decodeBeamEmitter(library, info);
         case "L2FogInfo": return decodeFogInfo(library, info as GD.IBaseZoneDecodeInfo);
         case "Zone":
         case "Sky":

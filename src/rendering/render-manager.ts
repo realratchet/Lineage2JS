@@ -821,8 +821,9 @@ class RenderManager {
                     parent = parent.parent;
                 }
 
-                // Skip lighting updates for objects in non-active (distant) sectors
-                if (sector && sector !== activeSector) return;
+                // Skip lighting updates for objects in non-active (distant) sectors,
+                // except objects that were never lit at all (freshly streamed sectors)
+                if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
 
                 if (sector && 'computeLighting' in child) {
                     (child as any).update(sector, this.environment);

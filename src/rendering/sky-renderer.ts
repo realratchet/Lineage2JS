@@ -250,6 +250,8 @@ export default class SkyRenderer {
                 children.filter(o => o.name.includes(pattern)).forEach(m => processMesh(m, "cloud", i));
             }
         });
+
+        console.log(`[SkyRenderer] layers: skybox=${this.skyLayers.skybox.length}, haze=${this.skyLayers.haze.length}, clouds=${this.skyLayers.clouds.length} (of ${children.length} bsp meshes; patterns: skybox='${skybox}', haze='${hazering}', clouds=[${clouds.join(", ")}])`);
     }
 
     public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], _fogColor: ColorByte, fogStart: number, fogEnd: number, _sector: SectorObject | null, clearColor: ColorByte, skyVisibility: number) {

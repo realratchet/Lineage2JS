@@ -23,13 +23,14 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 1
+            version: 5 // v4 libraries predate wet textures and beam emitters
         },
+        textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: false,
-        loadAudio: false,
+        loadEmitters: true,
+        loadAudio: true,
         _loadStaticModelList: [
             // 1441,
             // 1770,

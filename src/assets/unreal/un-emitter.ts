@@ -126,7 +126,19 @@ abstract class UEmitter extends UAActor {
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
 
-        const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as GD.IBaseObjectOrInstanceDecodeInfo[];
+        const emittersInfo = this.emitters.loadSelf()
+            .filter(e => {
+                if (!e) return false; // deleted sub-emitters serialize as None
+
+                // unsupported emitter types decode as plain objects
+                if (typeof (e as any).setActor !== "function") {
+                    console.warn(`Emitter '${this.objectName}' skipping unsupported sub-emitter '${(e as any).objectName}'`);
+                    return false;
+                }
+
+                return true;
+            })
+            .map(e => e.setActor(this).getDecodeInfo(library)) as any as GD.IBaseObjectOrInstanceDecodeInfo[];
         // if (this.emitters.length > 0)
         //     debugger;
 

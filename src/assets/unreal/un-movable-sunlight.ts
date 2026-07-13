@@ -18,9 +18,9 @@ abstract class UNMovableSunLight extends ULight {
     // 
 
     public getDecodeInfo(library: GD.DecodeLibrary): GD.ISunLightDecodeInfo {
+        // no live object refs here, the transfer sanitizer nulls them anyway
         return {
             ...super.getDecodeInfo(library),
-            light: this,
             type: "Sunlight"
         };
     }

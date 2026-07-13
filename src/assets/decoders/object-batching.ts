@@ -140,6 +140,18 @@ export function batchStaticMeshActors(
     for (const actor of manifest.unbatchable) {
         try {
             const object = decodeObject3D(library, actor);
+
+            // visibility fallback data, same role as batchElements bounds/zoneMask
+            const bounds = (actor as any).bounds;
+
+            if (bounds?.min && bounds?.max) {
+                object.userData.actorBoundsMin = bounds.min;
+                object.userData.actorBoundsMax = bounds.max;
+            }
+
+            object.userData.actorZoneMask = (actor as any).zoneMask || 0n;
+            object.userData.actorRangeIgnored = !!(actor as any).isRangeIgnored;
+
             staticMeshGroup.add(object);
             (sector as any).staticMeshMap.set(actor.uuid, object);
         } catch (e) {

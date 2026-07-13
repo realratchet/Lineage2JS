@@ -47,6 +47,7 @@ interface DecodeErrorMessage {
     type: "decode-error";
     requestId: number;
     message: string;
+    stack?: string; // worker-side stack for the main thread console
 }
 
 interface EnvDecodedMessage {

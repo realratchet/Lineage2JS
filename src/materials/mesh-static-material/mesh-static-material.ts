@@ -64,6 +64,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
     private spriteEntries: [string, SpriteParam_T][] = [];
+    private proceduralMaps: any[] = [];
 
     public isUpdatable = false;
 
@@ -218,7 +219,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
         this.sprites = sprites;
         this.spriteEntries = Object.entries(sprites);
-        this.isUpdatable = this.spriteEntries.length > 0;
+
+        // procedural maps (water) drive their own animation through update()
+        this.proceduralMaps = Object.values(uniforms)
+            .map((u: any) => u?.value)
+            .filter((v: any) => v?.isTexture && v.isUpdatable);
+
+        this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0;
 
         if (info.opacity) this.transparent = true;
 
@@ -343,6 +350,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public update(time: number) {
         if (!this.isUpdatable) return;
+
+        for (const map of this.proceduralMaps)
+            map.update(time);
 
         for (let i = 0; i < this.spriteEntries.length; i++) {
             const [k, { sprites, framerate }] = this.spriteEntries[i];
