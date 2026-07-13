@@ -362,7 +362,7 @@ class AudioManager {
         if (!entry) return;
 
         const panner = this.audioContext.createPanner();
-        panner.panningModel = "HRTF";
+        panner.panningModel = "equalpower"; // hrtf convolution is too costly at 24 concurrent panners
         panner.distanceModel = "inverse";
         panner.refDistance = refDistance;
         panner.maxDistance = maxDistance;

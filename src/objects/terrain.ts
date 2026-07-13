@@ -143,10 +143,9 @@ class Terrain extends Mesh implements ICollidable {
 
         let anyDynamicLightNeedsUpdate = false;
 
-        // Collect and augment light info
-        const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
-
-        for (const { instance: light } of lights) {
+        // dirty scan without allocating, this runs per sector per frame
+        for (const l of this.lightingInfo.lights) {
+            const light = sector.lights[l.light];
             if (!light) continue;
 
             if (light.isDynamic || light.isTimeBased) {
@@ -156,6 +155,9 @@ class Terrain extends Mesh implements ICollidable {
 
         // Only recalculate if something changed (time or light)
         if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
+
+        // Collect and augment light info
+        const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
 
         // In batch mode, we use the shared geometry's color attribute
         const targetGeometry = this.batchGeometry || this.geometry;

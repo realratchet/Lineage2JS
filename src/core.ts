@@ -23,7 +23,7 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 5 // v4 libraries predate wet textures and beam emitters
+            version: 8 // v7 batch elements lack the leaf lists for pvs culling
         },
         textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
         loadTerrain: true,

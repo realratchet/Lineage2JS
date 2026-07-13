@@ -1,5 +1,5 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
-import decodeMaterial from "./material-decoder";
+import decodeMaterial, { decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
@@ -122,16 +122,8 @@ function decodeStaticMeshData(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     const infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
 
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, false) || new MeshBasicMaterial({ color: 0xff00ff });
     const geometry = fetchGeometry(infoGeo as GD.IGeometryDecodeInfo);
-
-    if (infoGeo.attributes.colors) {
-        (materials instanceof Array ? materials : [materials]).forEach(mat => {
-            if (!mat) return;
-
-            mat.vertexColors = true;
-        });
-    }
 
     return { geometry, materials };
 }

@@ -24,6 +24,7 @@ interface BatchElement {
     groups: BatchElementGroup[];
     zoneMask: bigint;
     isRangeIgnored: boolean;
+    leaves: number[] | null; // bsp leaves holding the actor, for per-element pvs culling
 }
 
 interface BatchLightEntry {
@@ -68,23 +69,6 @@ interface PreparedActorGeometryData {
     collider: Uint32Array | null;
 }
 
-function isMaterialTransparent(library: GD.DecodeLibrary, materialInfo: GD.IBaseMaterialDecodeInfo): boolean {
-    if (!materialInfo) return false;
-    switch (materialInfo.materialType) {
-        case "shader": return !!(materialInfo as GD.IShaderDecodeInfo).transparent;
-        case "modifier": {
-            const mod = materialInfo as GD.IBaseMaterialModifierDecodeInfo;
-            if (mod.modifierType === "finalBlend") return !!(mod as GD.IFinalBlendDecodeInfo).transparent;
-            return false;
-        }
-        case "group": {
-            const group = materialInfo as GD.IMaterialGroupDecodeInfo;
-            return group.materials.some(uuid => isMaterialTransparent(library, library.materials[uuid]));
-        }
-        default: return false;
-    }
-}
-
 function groupActorsForBatching(
     library: GD.DecodeLibrary,
     uniqueActors: Map<string, GD.IBaseObjectOrInstanceDecodeInfo>,
@@ -102,12 +86,8 @@ function groupActorsForBatching(
             return;
         }
 
-        const materialInfo = library.materials[meshMaterials];
-        if (isMaterialTransparent(library, materialInfo)) {
-            unbatchable.push(actor);
-            return;
-        }
-
+        // transparent sections are fine to batch - three render-lists each geometry
+        // group by its own material, so they still sort into the transparent pass
         const batchKey = meshMaterials;
         if (!batchGroups.has(batchKey)) batchGroups.set(batchKey, []);
         batchGroups.get(batchKey)!.push(actor);
@@ -414,10 +394,40 @@ function rewriteLeafActors(
     }
 }
 
+// spatial sort keeps frustum-visible elements contiguous in the merged index buffer,
+// so their per-material runs collapse into few draws at rebuild time
+function mortonKey(position: number[] | undefined): number {
+    if (!position) return 0;
+
+    let x = Math.max(0, Math.min(0xffff, ((position[0] + 165000) / 6) | 0));
+    let y = Math.max(0, Math.min(0xffff, ((position[1] + 165000) / 6) | 0));
+    let key = 0;
+
+    for (let i = 0; i < 16; i++)
+        key += ((x >> i) & 1) * Math.pow(2, 2 * i) + ((y >> i) & 1) * Math.pow(2, 2 * i + 1);
+
+    return key;
+}
+
 function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchManifest {
     const manifest: StaticMeshBatchManifest = { batches: [], unbatchable: [] };
 
     (library as any).staticMeshBatches = manifest;
+
+    // per-actor leaf lists, collected before rewriteLeafActors replaces the
+    // entries with batch-level ones
+    const actorLeaves = new Map<string, number[]>();
+
+    library.leafActors.forEach((actors, leafIndex) => {
+        for (const a of actors) {
+            if (a.type !== "StaticMeshActor") continue;
+
+            let list = actorLeaves.get(a.uuid);
+
+            if (!list) actorLeaves.set(a.uuid, list = []);
+            list.push(leafIndex);
+        }
+    });
 
     const uniqueActors = new Map<string, GD.IBaseObjectOrInstanceDecodeInfo>();
 
@@ -438,6 +448,8 @@ function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchMan
 
     batchGroups.forEach((actors, batchKey) => {
         try {
+            actors.sort((a, b) => mortonKey(a.position) - mortonKey(b.position));
+
             const actorGeometries = prepareActorGeometriesData(library, actors);
             const {
                 attributes,
@@ -458,7 +470,8 @@ function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchMan
                     .filter(g => g.actorIndex === ai)
                     .map(g => ({ start: g.start, count: g.count, materialIndex: g.materialIndex })),
                 zoneMask: (a as any).zoneMask || 0n,
-                isRangeIgnored: !!(a as any).isRangeIgnored
+                isRangeIgnored: !!(a as any).isRangeIgnored,
+                leaves: actorLeaves.get(a.uuid) ?? null
             }));
 
             // Regroup indices per material if multi-material

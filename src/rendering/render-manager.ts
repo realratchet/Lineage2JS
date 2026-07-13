@@ -1,5 +1,5 @@
 import "./ue2-conventions";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbit-controls";
 import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
@@ -88,6 +88,8 @@ class RenderManager {
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
     protected lastRender: number = 0;
+    protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
+    protected readonly _lastListenerQuat = new Quaternion(0, 0, 0, 0);
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
@@ -267,6 +269,10 @@ class RenderManager {
         // // gludin can shouldn't see TI
         // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
         // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
+
+        // dion castle entrance
+        this.camera.position.set(22052.797714747463, 159177.43425453003, -2671.964680416157);
+        this.controls.orbit.target.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -784,6 +790,18 @@ class RenderManager {
 
         const activeSector = this.getSector(bspCullingPosition);
 
+        // inside a windowless indoor zone the outside world is unreachable - the
+        // neighbor sectors would draw straight through the walls otherwise. uses the
+        // previous frame's portal-expanded mask, one frame of lag doesn't show
+        let indoorsOnly = false;
+
+        if (activeSector && activeSector.bspNodes?.length > 0) {
+            const cameraZone = activeSector.findPositionZone(bspCullingPosition);
+
+            if (cameraZone !== null && cameraZone >= 0 && !(activeSector.outdoorZoneMask & (1n << BigInt(cameraZone))))
+                indoorsOnly = !(activeSector.lastZoneMask & activeSector.outdoorZoneMask);
+        }
+
         this.scene.traverse((object: THREE.Object3D) => {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
@@ -792,7 +810,7 @@ class RenderManager {
                 // 1. Z-Culling: If outside fog range, hide entire sector
                 // NEVER cull the active sector
                 if (!isCameraInSector) {
-                    if (!fogSphere.intersectsBox(sector.worldBounds)) {
+                    if (indoorsOnly || !fogSphere.intersectsBox(sector.worldBounds)) {
                         sector.visible = false;
                         return;
                     }
@@ -1335,14 +1353,20 @@ class RenderManager {
                 );
             }
 
-            // Update listener position from camera
-            const fwd = this.camera.getWorldDirection(new Vector3());
-            const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
-            this.audioManager.updateListenerPosition(
-                camPos.x, camPos.y, camPos.z,
-                fwd.x, fwd.y, fwd.z,
-                up.x, up.y, up.z,
-            );
+            // Update listener position from camera - AudioParam writes cross to the
+            // audio thread, skip them while the camera is still
+            if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
+                this._lastListenerPos.copy(camPos);
+                this._lastListenerQuat.copy(this.camera.quaternion);
+
+                const fwd = this.camera.getWorldDirection(new Vector3());
+                const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
+                this.audioManager.updateListenerPosition(
+                    camPos.x, camPos.y, camPos.z,
+                    fwd.x, fwd.y, fwd.z,
+                    up.x, up.y, up.z,
+                );
+            }
         }
 
         this.renderer.clear();
@@ -1572,6 +1596,17 @@ class RenderManager {
 
         this.objectGroup.add(sector);
         this.stitchTerrains();
+
+        // sector content never moves - stop three recomposing every node's matrix per
+        // frame. emitters are frozen too (they don't move), but their pool wrappers
+        // stay live - they toggle matrixAutoUpdate themselves with particle visibility
+        sector.updateMatrixWorld(true);
+        const freeze = (node: THREE.Object3D) => {
+            node.matrixAutoUpdate = false;
+            if ((node as any).particlePool) return;
+            for (const child of node.children) freeze(child);
+        };
+        freeze(sector);
 
         // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);

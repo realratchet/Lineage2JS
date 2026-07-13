@@ -1342,6 +1342,7 @@ abstract class BaseEmitter extends Object3D {
             const settings = this.particles[i];
 
             p.visible = (settings.Flags & PTF_Active) !== 0;
+            p.matrixAutoUpdate = p.visible; // hidden pool entries skip matrix composition
             if (!p.visible) return;
 
             p.position.copy(settings.position);

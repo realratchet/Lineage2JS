@@ -6,6 +6,34 @@ import DecodeLibrary from "../unreal/decode-library";
 
 const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
 
+// static meshes reuse one material instance per (info, vertexColors, instanced) combo,
+// per-section duplicates otherwise dominate the draw loop with redundant uniform uploads
+const cacheStaticMaterials = new WeakMap<GD.IBaseMaterialDecodeInfo, Map<string, THREE.Material | THREE.Material[]>>();
+
+function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean): THREE.Material | THREE.Material[] {
+    if (!info) return null;
+
+    let variants = cacheStaticMaterials.get(info);
+
+    if (!variants) cacheStaticMaterials.set(info, variants = new Map());
+
+    const key = (vertexColors ? "v" : "") + (instanced ? "i" : "");
+
+    if (variants.has(key)) return variants.get(key);
+
+    const materials = decodeMaterial(library, info);
+
+    (materials instanceof Array ? materials : [materials]).forEach((mat: any) => {
+        if (!mat) return;
+        if (instanced) mat.setInstanced?.();
+        if (vertexColors) mat.vertexColors = true;
+    });
+
+    variants.set(key, materials);
+
+    return materials;
+}
+
 let emptyMapData: GD.MapData_T;
 
 function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.MapData_T {
@@ -531,5 +559,5 @@ function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo
 }
 
 export default decodeMaterial;
-export { decodeMaterial };
+export { decodeMaterial, decodeStaticMeshMaterial };
 

@@ -176,6 +176,8 @@ class DynamicLight extends Object3D {
 
     // Internal state for LT_STROBE
     private strobeState: { lastUpdateTime: number, toggle: number } | null = null;
+    private flickerTime?: number;
+    private flickerIntensity = 0;
 
     // Track last computed color for change detection
     private lastComputedColor: ColorByte | null = null;
@@ -254,11 +256,17 @@ class DynamicLight extends Object3D {
                 intensity = 1.0;
         }
         else if (this.lightType === LT_FLICKER) {
-            const rand = Math.random();
-            if (rand < 0.5)
-                intensity = 0.0;
-            else
-                intensity = rand;
+            // re-roll at ~12hz - a fresh random every frame flags needsUpdate every
+            // frame, which relights every affected vertex-lit actor per frame
+            const now = performance.now();
+
+            if (this.flickerTime === undefined || now - this.flickerTime >= 83) {
+                this.flickerTime = now;
+                const rand = Math.random();
+                this.flickerIntensity = rand < 0.5 ? 0.0 : rand;
+            }
+
+            intensity = this.flickerIntensity;
         }
         else if (this.lightType === LT_STROBE) {
             if (!this.strobeState) {

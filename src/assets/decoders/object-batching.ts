@@ -2,7 +2,7 @@ import {
     BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D,
     Material, MeshBasicMaterial
 } from "three";
-import decodeMaterial from "./material-decoder";
+import { decodeStaticMeshMaterial } from "./material-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
@@ -36,6 +36,25 @@ function createBatchObject(
     mergedObject.userData.perActorAmbient = perActorAmbient;
     mergedObject.userData.batchElements = batchElements;
     mergedObject.userData.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
+
+    // transparent sections can't render through the batch - the renderer sorts
+    // transparent objects by matrixWorld position and the batch has a single one, so
+    // far foliage draws over near foliage. the batch keeps only the opaque groups;
+    // batchStaticMeshActors emits per-actor meshes for the transparent sections
+    const matList = materials instanceof Array ? materials : [materials];
+    const transparentMats = new Set<number>();
+
+    matList.forEach((m, i) => { if (m?.transparent) transparentMats.add(i); });
+
+    mergedObject.userData.transparentMaterialIndexes = transparentMats;
+    mergedObject.userData.transparentElems = [];
+
+    if (transparentMats.size > 0) {
+        const opaque = mergedGeometry.groups.filter(g => !transparentMats.has(g.materialIndex));
+
+        mergedGeometry.clearGroups();
+        for (const g of opaque) mergedGeometry.addGroup(g.start, g.count, g.materialIndex);
+    }
 
     return mergedObject;
 }
@@ -75,18 +94,7 @@ export function decodeStaticMeshInstance(
 
     const infoMats = library.materials[meshInfo.materials];
 
-    const materials = decodeMaterial(library, infoMats) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
-
-    (materials instanceof Array ? materials : [materials]).forEach(mat => {
-        if (info.attributes.colors) (mat as any)?.setInstanced?.();
-    });
-
-    if (infoGeo.attributes.colors) {
-        (materials instanceof Array ? materials : [materials]).forEach(mat => {
-            if (!mat) return;
-            mat.vertexColors = true;
-        });
-    }
+    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, !!info.attributes.colors) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
 
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
@@ -131,6 +139,42 @@ export function batchStaticMeshActors(
             staticMeshGroup.add(batchObject);
             for (const actor of batch.actors) (sector as any).staticMeshMap.set(actor.uuid, batchObject);
             (sector as any).staticMeshMap.set(batch.uuid, batchObject);
+
+            // per-actor meshes for the transparent sections, with real transforms so
+            // the renderer depth-sorts them like the unbatched path did
+            const transparentMats = batchObject.userData.transparentMaterialIndexes as Set<number>;
+
+            if (transparentMats.size > 0) {
+                for (let ei = 0; ei < batch.actors.length; ei++) {
+                    const actor = batch.actors[ei];
+                    const { geometry: srcGeo, materials: srcMats, lights: srcLights } = decodeStaticMeshInstance(library, actor.instance, fetchGeometry);
+                    const transparentGroups = srcGeo.groups.filter(g => transparentMats.has(g.materialIndex));
+
+                    if (transparentGroups.length === 0) continue;
+
+                    srcGeo.clearGroups();
+                    for (const g of transparentGroups) srcGeo.addGroup(g.start, g.count, g.materialIndex);
+
+                    const subMesh = new CollidingMesh({
+                        geometry: srcGeo,
+                        materials: srcMats,
+                        lightInfo: srcLights,
+                        colliderIndices: null, // the batch already carries the collider
+                        scaledGlow: actor.scaledGlow,
+                        isSunAffected: actor.isSunAffected ?? true,
+                        ambient: actor.ambient
+                    });
+
+                    subMesh.name = `${batch.name}_transparent_${ei}`;
+                    subMesh.position.fromArray(actor.position ?? [0, 0, 0]);
+                    if (actor.quaternion) subMesh.quaternion.fromArray(actor.quaternion);
+                    if (actor.scale) subMesh.scale.fromArray(actor.scale);
+                    subMesh.visible = false;
+
+                    batchObject.userData.transparentElems.push({ index: ei, mesh: subMesh });
+                    staticMeshGroup.add(subMesh);
+                }
+            }
         } catch (e) {
             /* leafActors already reference the batch entry - the actors cannot be recovered individually */
             console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
