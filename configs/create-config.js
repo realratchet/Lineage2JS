@@ -181,12 +181,24 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 port: 8080,
                 allowedHosts: "all",
                 hot: false,
+                /* LIVE_RELOAD=0 is for automated ?sectorTest sweeps only - a mid-sweep
+                   rebuild would restart the sweep page and corrupt its report */
+                liveReload: process.env.LIVE_RELOAD !== "0",
                 static: {
                     directory: path.resolve(__dirname, "../", dirAssets),
                     publicPath: "/assets"
                 },
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
+
+                    /* the ?sectorTest sweep posts one JSON result per sector here */
+                    const reportFile = path.join(__dirname, "../sector-test-report.jsonl");
+
+                    devServer.app.post("/sector-test/report", require("express").json({ limit: "4mb" }), (req, res) => {
+                        fs.appendFileSync(reportFile, JSON.stringify({ t: new Date().toISOString(), ...req.body }) + "\n");
+                        res.sendStatus(204);
+                    });
+
                     return middlewares;
                 }
             };

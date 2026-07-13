@@ -192,10 +192,17 @@ declare global {
                     | "Emitter"
                     | "SpriteEmitter"
                     | "MeshEmitter"
+                    | "BeamEmitter"
                     | "Zone"
                     | "Sky"
                     | "SkyZoneInfo"
                     | "L2FogInfo";
+
+                // math structs that serialize through the standard decode method,
+                // same encodings ([x,y,z] tuples, [min,max]) as the rest of decoding
+                export interface IDecodableStruct<T = unknown> {
+                    getDecodeInfo(library: DecodeLibrary): T;
+                }
 
                 export interface IBaseObjectOrInstanceDecodeInfo {
                     uuid: string,
@@ -440,7 +447,7 @@ declare global {
                 }
 
                 // Material and Geometry Types
-                export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
+                export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
                 export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
                 export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend";
