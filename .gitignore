@@ -16,4 +16,4 @@ py_scripts/*
 scripts/*
 !scripts/*.py
 traces/*
-l2js-coresector-test-report.jsonl
+/*-report.jsonl

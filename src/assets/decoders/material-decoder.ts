@@ -56,6 +56,11 @@ function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.M
     return data;
 }
 
+function fetchMapTexture(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): GD.MapData_T {
+    if (!info || info.materialType === "empty") return fetchTexture(library, info as GD.ITextureDecodeInfo);
+    return decodeParameter(library, info)?.uniforms?.map ?? null;
+}
+
 function decodeFadeColorModifier(library: DecodeLibrary, info: GD.IFadeColorDecodeInfo): GD.IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
@@ -94,7 +99,7 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
             USE_GLOBAL_TIME: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: Array.isArray(info.transform.rate) ? new Vector2().fromArray(info.transform.rate) : info.transform.rate,
@@ -116,7 +121,7 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
             USE_GLOBAL_TIME: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rotation: [info.transform.rotation[0], info.transform.rotation[1], info.transform.rotation[2]],
@@ -140,7 +145,7 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
             USE_GLOBAL_TIME: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rateU: info.transform.rateU,
@@ -169,7 +174,7 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
             USE_ENVMAP: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[info.map] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchMapTexture(library, library.materials[info.map]) : null,
             envMapType: info.envMapType
         }
     };
