@@ -10,7 +10,6 @@ const tmpColorByte = new ColorByte();
 const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
 
-
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
@@ -135,7 +134,6 @@ class SectorObject extends Object3D {
     // per-frame caches, both derive from data that is static after decode
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[] };
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
-
     protected _lastLoggedStaticMeshLeaf: number | null = null;
 
     // Internal state for zone/leaf change tracking

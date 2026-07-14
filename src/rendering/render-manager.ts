@@ -52,7 +52,7 @@ const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (wa
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
 
-
+const frozenUpdateMatrixWorld = function () { };
 
 class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
@@ -790,18 +790,6 @@ class RenderManager {
 
         const activeSector = this.getSector(bspCullingPosition);
 
-        // inside a windowless indoor zone the outside world is unreachable - the
-        // neighbor sectors would draw straight through the walls otherwise. uses the
-        // previous frame's portal-expanded mask, one frame of lag doesn't show
-        let indoorsOnly = false;
-
-        if (activeSector && activeSector.bspNodes?.length > 0) {
-            const cameraZone = activeSector.findPositionZone(bspCullingPosition);
-
-            if (cameraZone !== null && cameraZone >= 0 && !(activeSector.outdoorZoneMask & (1n << BigInt(cameraZone))))
-                indoorsOnly = !(activeSector.lastZoneMask & activeSector.outdoorZoneMask);
-        }
-
         this.scene.traverse((object: THREE.Object3D) => {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
@@ -810,7 +798,7 @@ class RenderManager {
                 // 1. Z-Culling: If outside fog range, hide entire sector
                 // NEVER cull the active sector
                 if (!isCameraInSector) {
-                    if (indoorsOnly || !fogSphere.intersectsBox(sector.worldBounds)) {
+                    if (!fogSphere.intersectsBox(sector.worldBounds)) {
                         sector.visible = false;
                         return;
                     }
@@ -841,7 +829,16 @@ class RenderManager {
 
                 // Skip lighting updates for objects in non-active (distant) sectors,
                 // except objects that were never lit at all (freshly streamed sectors)
-                if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
+                if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
+                    // emitters this far never simulate, so their pool never moves -
+                    // skip the render-time matrix walk into them too (three's own
+                    // render() still recurses into every visible node regardless of
+                    // matrixAutoUpdate). Reversed the instant this sector goes active.
+                    if ((child as any).particlePool) (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
+                    return;
+                }
+
+                if ((child as any).particlePool) (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
 
                 if (sector && 'computeLighting' in child) {
                     (child as any).update(sector, this.environment);
@@ -1597,14 +1594,32 @@ class RenderManager {
         this.objectGroup.add(sector);
         this.stitchTerrains();
 
-        // sector content never moves - stop three recomposing every node's matrix per
-        // frame. emitters are frozen too (they don't move), but their pool wrappers
-        // stay live - they toggle matrixAutoUpdate themselves with particle visibility
+        // sector content never moves. matrixAutoUpdate=false alone only skips the
+        // local matrix recompose - three's own render() still calls
+        // scene.updateMatrixWorld() every frame, which unconditionally recurses into
+        // every child regardless of that flag, just skipping the multiply once
+        // there. Overriding updateMatrixWorld itself to a no-op skips the descent
+        // too, so a subtree only gets that override once every node under it is
+        // confirmed static - an emitter's own node freezes (it doesn't move) but
+        // keeps the default implementation so the walk still reaches its live
+        // particle-pool children every frame; that in turn means none of its
+        // ancestors can take the no-op shortcut either, or the walk would never
+        // reach the emitter at all.
         sector.updateMatrixWorld(true);
-        const freeze = (node: THREE.Object3D) => {
+
+        const freeze = (node: THREE.Object3D): boolean => {
             node.matrixAutoUpdate = false;
-            if ((node as any).particlePool) return;
-            for (const child of node.children) freeze(child);
+
+            if ((node as any).particlePool) return false;
+
+            let allChildrenFrozen = true;
+
+            for (const child of node.children)
+                if (!freeze(child)) allChildrenFrozen = false;
+
+            if (allChildrenFrozen) node.updateMatrixWorld = frozenUpdateMatrixWorld;
+
+            return allChildrenFrozen;
         };
         freeze(sector);
 

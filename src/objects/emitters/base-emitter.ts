@@ -1,6 +1,8 @@
 import { Box3, Matrix4, Object3D, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 
+const frozenUpdateMatrixWorld = function () { };
+
 
 class Particle_T {
     public readonly position = new Vector3();
@@ -1343,6 +1345,16 @@ abstract class BaseEmitter extends Object3D {
 
             p.visible = (settings.Flags & PTF_Active) !== 0;
             p.matrixAutoUpdate = p.visible; // hidden pool entries skip matrix composition
+
+            // matrixAutoUpdate alone only skips composing this particle's own local
+            // matrix - three's per-frame scene walk still recurses into it (and its
+            // visualizer child) regardless. A pool is typically 2x oversized, so half
+            // its entries are inactive at any moment; skip the walk into them
+            // entirely while hidden. Active particles are untouched - restoring the
+            // prototype method keeps onBeforeRender-driven behavior (billboarding,
+            // beam meshes) exactly as before.
+            p.updateMatrixWorld = p.visible ? Object3D.prototype.updateMatrixWorld : frozenUpdateMatrixWorld;
+
             if (!p.visible) return;
 
             p.position.copy(settings.position);
