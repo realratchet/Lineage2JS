@@ -9,6 +9,7 @@ const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
 const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
+const tmpSphere = new Sphere();
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
@@ -930,7 +931,18 @@ class SectorObject extends Object3D {
             this.bspGroup.children.forEach((child) => {
                 if (child instanceof Mesh && child.userData.sectionIndex !== undefined) {
                     const sectionIndex = child.userData.sectionIndex;
-                    child.visible = visibleSections.has(sectionIndex);
+                    let visible = visibleSections.has(sectionIndex);
+
+                    // topLevelOnly's node set is cached camera-independent (see
+                    // traverseBSP), so it carries no frustum info - a neighbor
+                    // sector's outdoor sections need their own per-frame test here
+                    if (visible && topLevelOnly && frustumCullingEnabled) {
+                        if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere();
+                        tmpSphere.copy(child.geometry.boundingSphere).applyMatrix4(child.matrixWorld);
+                        visible = cameraFrustum.intersectsSphere(tmpSphere);
+                    }
+
+                    child.visible = visible;
                     if (child.visible) {
                         const sectionInfo = this.bspSections![sectionIndex] as any;
                         const isOutdoor = sectionInfo?.isOutdoor;
