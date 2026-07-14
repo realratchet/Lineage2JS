@@ -298,15 +298,11 @@ abstract class UStaticMesh extends UPrimitive {
         const countIndices = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
 
-        if (countUvs > 1) debugger;
-
-        // debugger;
-
         const TypedIndicesArray = getTypedArrayConstructor(countVerts);
         const positions = new Float32Array(countVerts * 3);
         const colors = new Uint8ClampedArray(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
-        const uvs = new Float32Array(countVerts * 2);
+        const uvs = Array.from({ length: countUvs }, () => new Float32Array(countVerts * 2));
         const indices = new TypedIndicesArray(countIndices);
 
         // if (countVerts === 0x42)
@@ -314,7 +310,6 @@ abstract class UStaticMesh extends UPrimitive {
 
         for (let i = 0; i < countVerts; i++) {
             const [px, py, pz, nx, ny, nz] = this.vertexStream.getElem(i);
-            const [u, v] = this.uvStream.getElem(0).getUV(i);
 
             // if (Math.abs(px - 241.79730224609375) < 1 && Math.abs(py + 235.71449279785156) < 1 && Math.abs(pz + 622.3489990234375) < 1) {
             //     debugger;
@@ -332,8 +327,12 @@ abstract class UStaticMesh extends UPrimitive {
             colors[i * 3 + 1] = 255;
             colors[i * 3 + 2] = 255;
 
-            uvs[i * 2 + 0] = u;
-            uvs[i * 2 + 1] = v;
+            for (let s = 0; s < countUvs; s++) {
+                const [u, v] = this.uvStream.getElem(s).getUV(i);
+
+                uvs[s][i * 2 + 0] = u;
+                uvs[s][i * 2 + 1] = v;
+            }
         }
 
         for (let i = 0; i < countIndices; i++)

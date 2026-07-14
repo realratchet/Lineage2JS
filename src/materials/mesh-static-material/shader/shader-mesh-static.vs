@@ -1,6 +1,13 @@
 #include <common>
 #include <uv_pars_vertex>
-#include <uv2_pars_vertex>
+
+// three's uv2 chunk only gates on USE_LIGHTMAP/USE_AOMAP, extended with USE_UV2
+#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+    attribute vec2 uv2;
+    varying vec2 vUv2;
+    uniform mat3 uv2Transform;
+#endif
+
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
@@ -294,10 +301,17 @@ void main() {
     #endif
 
     #include <uv_vertex>
-    #include <uv2_vertex>
+
+    #if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+        vUv2 = ( uv2Transform * vec3( uv2, 1 ) ).xy;
+    #endif
 
     #if defined(USE_UV) && defined(USE_MAP_DIFFUSE) && defined(USE_MAP_DIFFUSE_TRANSFORM)
-        vUvTransformedDiffuse = uv;
+        #ifdef USE_MAP_DIFFUSE_UV2
+            vUvTransformedDiffuse = vUv2;
+        #else
+            vUvTransformedDiffuse = uv;
+        #endif
         #if USE_MAP_DIFFUSE_TRANSFORM == PAN
             mat3 transformDiffuseMatrix = shDiffuse.transform.matrix;
             transformDiffuseMatrix[2].xy += (shDiffuse.transform.rate * globalTime);
@@ -313,7 +327,11 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
-        vUvTransformedOpacity = uv;
+        #ifdef USE_MAP_OPACITY_UV2
+            vUvTransformedOpacity = vUv2;
+        #else
+            vUvTransformedOpacity = uv;
+        #endif
         #if USE_MAP_OPACITY_TRANSFORM == PAN
             mat3 transformOpacityMatrix = shOpacity.transform.matrix;
             transformOpacityMatrix[2].xy += (shOpacity.transform.rate * globalTime);
@@ -329,7 +347,11 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
-        vUvTransformedSpecular = uv;
+        #ifdef USE_MAP_SPECULAR_UV2
+            vUvTransformedSpecular = vUv2;
+        #else
+            vUvTransformedSpecular = uv;
+        #endif
         #if USE_MAP_SPECULAR_TRANSFORM == PAN
             mat3 transformSpecularMatrix = shSpecular.transform.matrix;
             transformSpecularMatrix[2].xy += (shSpecular.transform.rate * globalTime);
@@ -345,7 +367,11 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
-        vUvTransformedSpecularMask = uv;
+        #ifdef USE_MAP_SPECULAR_MASK_UV2
+            vUvTransformedSpecularMask = vUv2;
+        #else
+            vUvTransformedSpecularMask = uv;
+        #endif
         #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
             mat3 transformSpecularMaskMatrix = shSpecularMask.transform.matrix;
             transformSpecularMaskMatrix[2].xy += (shSpecularMask.transform.rate * globalTime);

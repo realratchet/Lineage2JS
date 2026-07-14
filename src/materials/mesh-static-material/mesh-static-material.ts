@@ -50,6 +50,11 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
 
+        if (parameters.uvIndex === 1) {
+            defines["USE_UV2"] = "";
+            defines[`USE_MAP_${defName}_UV2`] = "";
+        }
+
         if (parameters.transformType !== "none") {
             defines["PAN"] = 0;
             defines["ROTATE"] = 1;

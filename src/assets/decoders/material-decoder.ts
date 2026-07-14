@@ -185,6 +185,22 @@ function decodeFinalBlendModifier(library: DecodeLibrary, info: GD.IFinalBlendDe
     return decodeParameter(library, library.materials[materialIndex]);
 }
 
+// three.js only exposes vUv/vUv2 - anything past channel 1 isn't supported
+function decodeTexCoordSourceModifier(library: DecodeLibrary, info: GD.ITexCoordSourceDecodeInfo): GD.IDecodedParameter {
+    const parameter = decodeParameter(library, library.materials[info.material]);
+
+    if (!parameter) return parameter;
+
+    if (info.uvIndex !== 0 && info.uvIndex !== 1) {
+        debugger;
+        throw new Error(`Unsupported texture coordinate channel: ${info.uvIndex}`);
+    }
+
+    parameter.uvIndex = info.uvIndex;
+
+    return parameter;
+}
+
 function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.material;
     const parameter = decodeParameter(library, library.materials[materialIndex]);
@@ -223,6 +239,7 @@ function _decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierD
         case "envMapTexture": param = decodeTexEnvMapModifer(library, info as GD.ITexEnvMapDecodeInfo); break;
         case "colorModifier": param = decodeColorModifier(library, info as GD.IColorModifierDecodeInfo, overrideMaterial); break;
         case "finalBlend": param = decodeFinalBlendModifier(library, info as GD.IFinalBlendDecodeInfo, overrideMaterial); break;
+        case "texCoordSource": param = decodeTexCoordSourceModifier(library, info as GD.ITexCoordSourceDecodeInfo); break;
         default: throw new Error(`Unknown modifier type: ${info.modifierType}`);
     }
 

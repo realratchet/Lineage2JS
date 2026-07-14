@@ -152,7 +152,8 @@ declare global {
                     isUsingMap: boolean,
                     transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap",
                     sprites?: any[],
-                    framerate?: number
+                    framerate?: number,
+                    uvIndex?: number
                 }
 
                 export interface IDecodedSpriteParameter extends IDecodedParameter {
@@ -450,7 +451,7 @@ declare global {
                 export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
                 export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
-                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend";
+                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend" | "texCoordSource";
 
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
@@ -777,6 +778,12 @@ declare global {
                     transparent: boolean,
                     depthWrite: boolean,
                     depthTest: boolean
+                }
+
+                export interface ITexCoordSourceDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "texCoordSource",
+                    material: string,
+                    uvIndex: number
                 }
 
                 export interface ICombinerDecodeInfo extends IBaseMaterialDecodeInfo {

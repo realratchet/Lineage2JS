@@ -7,7 +7,12 @@ uniform float opacity;
 #include <dithering_pars_fragment>
 #include <color_pars_fragment>
 #include <uv_pars_fragment>
-#include <uv2_pars_fragment>
+
+// extended to match shader-mesh-static.vs's uv2 gating (adds USE_UV2)
+#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+    varying vec2 vUv2;
+#endif
+
 // #include <map_pars_fragment>
 // #include <alphamap_pars_fragment>
 #include <alphatest_pars_fragment>
@@ -73,6 +78,8 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_DIFFUSE) && defined(USE_MAP_DIFFUSE_TRANSFORM)
             #define UV_DIFFUSE vUvTransformedDiffuse
+        #elif defined(USE_MAP_DIFFUSE_UV2)
+            #define UV_DIFFUSE vUv2
         #else
             #define UV_DIFFUSE vUv
         #endif
@@ -124,6 +131,8 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
             #define UV_OPACITY vUvTransformedOpacity
+        #elif defined(USE_MAP_OPACITY_UV2)
+            #define UV_OPACITY vUv2
         #else
             #define UV_OPACITY vUv
         #endif
@@ -187,6 +196,8 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
             #define UV_SPECULAR vUvTransformedSpecular
+        #elif defined(USE_MAP_SPECULAR_UV2)
+            #define UV_SPECULAR vUv2
         #else
             #define UV_SPECULAR vUv
         #endif
@@ -238,6 +249,8 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
             #define UV_SPECULAR_MASK vUvTransformedSpecularMask
+        #elif defined(USE_MAP_SPECULAR_MASK_UV2)
+            #define UV_SPECULAR_MASK vUv2
         #else
             #define UV_SPECULAR_MASK vUv
         #endif
@@ -289,6 +302,8 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_MATERIAL2) && defined(USE_MAP_MATERIAL2_TRANSFORM)
             #define UV_MATERIAL2 vUvTransformedMaterial2
+        #elif defined(USE_MAP_MATERIAL2_UV2)
+            #define UV_MATERIAL2 vUv2
         #else
             #define UV_MATERIAL2 vUv
         #endif

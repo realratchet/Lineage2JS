@@ -48,17 +48,17 @@ abstract class UBaseMaterial extends UObject {
 }
 
 abstract class UBaseModifier extends UBaseMaterial {
-    // protected texCoordSource: number;
+    declare protected texCoordSource: number;
     // protected texCoordCount: number;
     // protected texCoordProjected: number;
 
-    // protected getPropertyMap() {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "TexCoordSource": "texCoordSource",
-    //         "TexCoordCount": "texCoordCount",
-    //         "TexCoordProjected": "texCoordProjected",
-    //     });
-    // }
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "TexCoordSource": "texCoordSource",
+            // "TexCoordCount": "texCoordCount",
+            // "TexCoordProjected": "texCoordProjected",
+        });
+    }
 
     public getTextureSize(): { width: number; height: number; } | null {
         return this.material?.loadSelf?.().getTextureSize() || null;
@@ -587,9 +587,18 @@ abstract class UTexOscillator extends UBaseModifier {
 }
 
 abstract class UTexCoordSource extends UBaseModifier {
-    // the texcoord generation itself isn't supported - pass the source material through
     public getDecodeInfo(library: DecodeLibrary): string {
-        return this.material?.loadSelf().getDecodeInfo(library) || null;
+        if (this.uuid in library.materials) return this.uuid;
+
+        library.materials[this.uuid] = {
+            name: this.uuid,
+            materialType: "modifier",
+            modifierType: "texCoordSource",
+            material: this.material?.loadSelf().getDecodeInfo(library) || null,
+            uvIndex: this.texCoordSource
+        } as GD.ITexCoordSourceDecodeInfo;
+
+        return this.uuid;
     }
 }
 
