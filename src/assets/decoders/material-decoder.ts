@@ -278,6 +278,9 @@ function decodeParameter(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInf
         case "shader":
             // Shaders nested in modifiers (like ColorModifier) should return the diffuse parameter
             param = decodeParameter(library, library.materials[(info as GD.IShaderDecodeInfo).diffuse]); break;
+        case "combiner":
+            // Combiners nested in a single map slot can't run their own blend - approximate with material1
+            param = decodeParameter(library, library.materials[(info as GD.ICombinerDecodeInfo).material1]); break;
         default: throw new Error(`Unsupported decoder parameter: ${info.materialType}`);
     }
 

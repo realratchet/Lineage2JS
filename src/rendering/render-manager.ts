@@ -272,13 +272,13 @@ class RenderManager {
         // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
         // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
 
-        // dion castle entrance
-        this.camera.position.set(22052.797714747463, 159177.43425453003, -2671.964680416157);
-        this.controls.orbit.target.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
+        // // dion castle entrance
+        // this.camera.position.set(22052.797714747463, 159177.43425453003, -2671.964680416157);
+        // this.controls.orbit.target.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
 
-        // ruins floaties
-        this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
-        this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
+        // // ruins floaties
+        // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
+        // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
