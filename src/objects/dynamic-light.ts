@@ -8,6 +8,9 @@ import ColorByte from "@client/utils/color-byte";
 const tmpVec3_1 = new Vector3();
 const tmpColorByte_1 = new ColorByte();
 
+// ~0.1 degree of rotation on a unit direction vector, squared
+const DIRECTION_CHANGE_EPSILON_SQ = 3e-6;
+
 // Constants for sun/moon direction calculation (from IDA analysis)
 const DEG2RAD = 0.017453292519943295;
 const HALF_PI = Math.PI / 2;  // 1.5707963267948966
@@ -353,9 +356,12 @@ class DynamicLight extends Object3D {
                     this.lastComputedColor = this.color.clone();
                     this.lastComputedDirection = this.lightDirection.clone();
                 } else {
-                    // Check if color or direction changed
+                    // Check if color or direction changed - direction is a continuously
+                    // rotating unit vector for Sunlight actors, so exact float equality
+                    // is never true two frames in a row once time is advancing; a small
+                    // angular threshold avoids relighting every affected mesh every frame
                     const colorChanged = !this.color.equals(this.lastComputedColor);
-                    const directionChanged = !this.lightDirection.equals(this.lastComputedDirection);
+                    const directionChanged = this.lightDirection.distanceToSquared(this.lastComputedDirection) > DIRECTION_CHANGE_EPSILON_SQ;
                     this.needsUpdate = colorChanged || directionChanged;
 
                     if (colorChanged) {

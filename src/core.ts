@@ -83,10 +83,15 @@ async function startCore() {
         ]
     } as GD.LoadSettings_T;
 
+    // number of decode workers streaming sectors in parallel - real peak concurrent need
+    // is small (own sector + up to 3 corner neighbors, see AssetManager.renderDistance),
+    // each worker duplicates the core/engine/native package memory, so keep this low
+    const DECODE_WORKER_POOL_SIZE = 3;
+
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const assetList = await (await fetch("asset-list.json")).json();
-    const assetManager = new AssetManager(loadSettings, assetList.supported);
+    const assetManager = new AssetManager(loadSettings, assetList.supported, DECODE_WORKER_POOL_SIZE);
     const renderManager = new RenderManager(viewport, assetManager);
 
     (global as any).renderManager = renderManager;

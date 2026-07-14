@@ -25,8 +25,10 @@ class AssetManager {
     protected isWorkerReady = false;
     protected failedSectors = new Map<string, number>(); // sector id -> retry-after timestamp
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
+    protected inFlightSectors = new Set<string>(); // sector ids currently decoding, so a boundary crossing can't re-request them
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
+    protected readonly decodeWorkerPoolSize: number;
 
     /**
      * Sectors whose bounds intersect this radius around the camera get loaded. At half
@@ -36,8 +38,9 @@ class AssetManager {
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
 
-    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>) {
+    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>, decodeWorkerPoolSize: number = 3) {
         this.loadSettings = loadSettings;
+        this.decodeWorkerPoolSize = decodeWorkerPoolSize;
 
         /* level packages are <x>_<y>.unr - keep the sector ids for map-edge validity checks */
         for (const path of Object.keys(assetList)) {
@@ -65,7 +68,7 @@ class AssetManager {
         console.info(`[textures] mode=${textureMode}, s3tc=${hasS3TC} -> uploading ${this.preferCompressedTextures ? "compressed DDS" : "converted RGBA"}`);
 
         /* everything below comes out of the decode worker - the app cannot run without it */
-        this.decodeWorker = new DecodeWorkerClient();
+        this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
@@ -103,11 +106,13 @@ class AssetManager {
     }
 
     /**
-     * Decodes the sector in the worker; only the three.js instantiation (decodePackage)
-     * runs here. Returns true when a load was attempted (successfully or not), false
-     * when the sector was skipped (failure cooldown, worker not available).
+     * Dispatches a sector decode to the worker pool without waiting for it to finish, so
+     * a boundary crossing can request the newly-important sector on a free worker instead
+     * of queueing behind whatever a previous tick already asked for. Returns true when a
+     * load was attempted (dispatched, or reused from the retired grace period), false when
+     * the sector was skipped (already in flight, failure cooldown, pool full, worker dead).
      */
-    protected async requestSector(renderManager: RenderManager, sectorIdx: string): Promise<boolean> {
+    protected requestSector(renderManager: RenderManager, sectorIdx: string): boolean {
         const retired = this.retiredSectors.get(sectorIdx);
 
         if (retired) {
@@ -117,24 +122,32 @@ class AssetManager {
             return true;
         }
 
+        if (this.inFlightSectors.has(sectorIdx)) return false;
+
         const retryAt = this.failedSectors.get(sectorIdx);
 
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
         if (!this.isWorkerReady || this.decodeWorker.isDead) return false;
+        if (this.inFlightSectors.size >= this.decodeWorkerPoolSize) return false; // pool full, retry next tick
 
-        try {
-            const decodeLibrary = await this.decodeWorker.decodeSector(sectorIdx, this.loadSettings);
+        this.inFlightSectors.add(sectorIdx);
 
-            decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
-            (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+        this.decodeWorker.decodeSector(sectorIdx, this.loadSettings)
+            .then(decodeLibrary => {
+                decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+                (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-            renderManager.addSector(decodePackage(decodeLibrary));
-            this.failedSectors.delete(sectorIdx);
-        } catch (e) {
-            console.error(`Failed to decode sector '${sectorIdx}':`, e);
-            this.failedSectors.set(sectorIdx, performance.now() + FAILED_SECTOR_RETRY_MS);
-        }
+                renderManager.addSector(decodePackage(decodeLibrary));
+                this.failedSectors.delete(sectorIdx);
+            })
+            .catch(e => {
+                console.error(`Failed to decode sector '${sectorIdx}':`, e);
+                this.failedSectors.set(sectorIdx, performance.now() + FAILED_SECTOR_RETRY_MS);
+            })
+            .finally(() => {
+                this.inFlightSectors.delete(sectorIdx);
+            });
 
         return true;
     }
@@ -233,10 +246,10 @@ class AssetManager {
             neighbours.sort((a, b) => a.dist - b.dist);
             sectorsToLoad.push(...neighbours.map(n => n.idx));
 
-            for (const secIdx of sectorsToLoad) {
-                if (await this.requestSector(renderManager, secIdx))
-                    break; // one sector per tick - the rest re-enter the list next tick
-            }
+            // dispatches up to decodeWorkerPoolSize concurrently; requestSector's own
+            // in-flight/pool-full checks skip the rest, which re-enter the list next tick
+            for (const secIdx of sectorsToLoad)
+                this.requestSector(renderManager, secIdx);
         } finally {
             this.isTicking = false;
         }

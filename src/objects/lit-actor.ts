@@ -110,8 +110,13 @@ class LitActorMesh extends Mesh {
         }
     }
 
-    protected lastEnvTime: number = -1;
     protected lastEnvVersion: number = -1;
+    // the blended env-light index/lerp that actually drives the static cache, not raw
+    // time - matches Terrain.update, since raw time is never equal frame to frame once
+    // timeScale != 0 and was forcing a full per-vertex recompute every single frame
+    protected lastStaticEnvIndex: number = -1;
+    protected lastStaticEnvNextIndex: number = -1;
+    protected lastStaticEnvLerp: number = -1;
 
     // true until the first lighting pass ran (see Terrain.needsInitialLighting)
     public get needsInitialLighting(): boolean {
@@ -128,13 +133,8 @@ class LitActorMesh extends Mesh {
         // Check if any lights need updating
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
 
-        // Check if environment time/version changed
-        const currentEnvTime = env.getTimeSeconds();
         const currentEnvVersion = env.getEnvVersion();
-        let envChanged = false;
-        if (this.lastEnvTime !== currentEnvTime || this.lastEnvVersion !== currentEnvVersion) {
-            envChanged = true;
-            this.lastEnvTime = currentEnvTime;
+        if (this.lastEnvVersion !== currentEnvVersion) {
             this.lastEnvVersion = currentEnvVersion;
             staticCacheDirty = true;
         }
@@ -143,6 +143,20 @@ class LitActorMesh extends Mesh {
         const scene = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
         const environment = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
         const allLights = [...scene, ...environment];
+
+        const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
+        const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
+
+        if (staticEnv.length >= 2) {
+            const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
+
+            if (currEnvIndex !== this.lastStaticEnvIndex || nextEnvIndex !== this.lastStaticEnvNextIndex || Math.abs(lerp - this.lastStaticEnvLerp) >= 0.02) {
+                this.lastStaticEnvIndex = currEnvIndex;
+                this.lastStaticEnvNextIndex = nextEnvIndex;
+                this.lastStaticEnvLerp = lerp;
+                staticCacheDirty = true;
+            }
+        }
 
         let anyDynamicLightNeedsUpdate = false;
         for (const { instance: light } of allLights) {
@@ -154,15 +168,13 @@ class LitActorMesh extends Mesh {
         }
 
         // Return early if no lighting parameters have changed
-        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !envChanged) return;
+        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
-            const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
-            const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
             if (this.userData.perActorAmbient) {
                 const perActorAmbient = this.userData.perActorAmbient as { startVertex: number, count: number, ambient: typeof this.ambient }[];
                 for (const actor of perActorAmbient) {
