@@ -38,6 +38,8 @@ stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom);
 
 const tmpBox = new Box3();
+const tmpCamDir = new Vector3();
+const tmpFarPoint = new Vector3();
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
@@ -273,6 +275,10 @@ class RenderManager {
         // dion castle entrance
         this.camera.position.set(22052.797714747463, 159177.43425453003, -2671.964680416157);
         this.controls.orbit.target.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
+
+        // ruins floaties
+        this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
+        this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -778,13 +784,13 @@ class RenderManager {
         // This is separate from camera.far (depth buffer) — no Z-fighting artifacts
         // THREE.js frustum plane indices: 0=right, 1=left, 2=bottom, 3=top, 4=far, 5=near
         {
-            const camDir = new Vector3(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
-            const farPoint = bspCullingPosition.clone().add(camDir.multiplyScalar(fogFar));
-            this.frustum.planes[4].setFromNormalAndCoplanarPoint(camDir.clone().negate(), farPoint);
+            tmpCamDir.set(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
+            tmpFarPoint.copy(bspCullingPosition).addScaledVector(tmpCamDir, fogFar);
+            this.frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
         }
 
-        // Distance culling for static mesh actors: fogFar × ClippingRange.StaticMesh (default 4.0 from l2.ini)
-        const STATIC_MESH_CLIPPING_RANGE = 4;
+        // static meshes clip at the same distance as fog/terrain, no padding (isRangeIgnored is the real per-actor exemption)
+        const STATIC_MESH_CLIPPING_RANGE = 1;
         const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
         const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
 

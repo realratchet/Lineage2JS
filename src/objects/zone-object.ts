@@ -508,8 +508,9 @@ class SectorObject extends Object3D {
                 // If node has a render bound, check if it's visible through portals
                 // UE2: Model->Bounds(Node.iRenderBound) - bounds are precomputed and stored in Model
                 // We access precomputed bounds from library.bspRenderBounds (populated from this.bounds in un-model.ts)
+                // requires bspGroup - section-free sectors only get the degenerate world-hull box, which would wrongly cull every leaf
                 const library = (this as any).decodeLibrary as GD.DecodeLibrary;
-                if (hasViewZone && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
+                if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
                         // UE2: Check if bounding box is visible through portals for any active zone

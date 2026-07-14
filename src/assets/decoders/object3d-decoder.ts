@@ -322,6 +322,11 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.musicVolumes = library.musicVolumes;
     sector.ambientSounds = library.ambientSounds;
 
+    // traverseBSP/static mesh visibility need these even without renderable BSP sections
+    (sector as any).decodeLibrary = library;
+    sector.nodeToSection = library.nodeToSection;
+    sector.nodeZoneMasks = library.nodeZoneMasks;
+
     // NEW: Render BSP sections (UE2-style section-based rendering)
     if (library.bspSections && library.bspSections.length > 0) {
         const bspGroup = new Group();
@@ -329,11 +334,7 @@ function decodeSector(library: GD.DecodeLibrary) {
 
         // Store BSP rendering data in sector for dynamic visibility updates
         sector.bspSections = library.bspSections;
-        sector.nodeToSection = library.nodeToSection;
-        sector.nodeZoneMasks = library.nodeZoneMasks;
         sector.bspGroup = bspGroup;
-        // Store library reference for updateVisibleBSPSections
-        (sector as any).decodeLibrary = library;
 
         // Separate opaque and transparent sections for proper rendering order
         const opaqueSections: GD.IBSPSectionDecodeInfo_T[] = [];
