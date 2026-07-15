@@ -18,6 +18,13 @@ import type { MainToWorkerMessage, WorkerToMainMessage } from "./decode-protocol
 
 const ctx = self as any;
 
+/* webpack-dev-server injects its live-reload client into this worker too (target
+   "webworker" counts as a web target), and WorkerLocation has no reload() - without
+   this it throws uncaught on every save */
+if (typeof ctx.location.reload !== "function") {
+    ctx.location.reload = () => { };
+}
+
 let assetLoader: AssetLoader = null;
 let hasSweptCache = false;
 

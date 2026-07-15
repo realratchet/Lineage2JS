@@ -134,7 +134,11 @@
             "sourceMapPathOverrides": {
                 "webpack:///../*": "${workspaceFolder}/*",
             },
-            "pauseForSourceMap": true
+            "pauseForSourceMap": true,
+            "skipFiles": [
+                "<node_internals>/**",
+                "**/node_modules/**"
+            ]
         }
     ]
 }

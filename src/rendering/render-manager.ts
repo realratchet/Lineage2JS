@@ -943,12 +943,17 @@ class RenderManager {
                 // Skip lighting updates for objects in non-active (distant) sectors,
                 // except objects that were never lit at all (freshly streamed sectors)
                 if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
-                    // emitters this far never simulate - skip the matrix walk too, freezeEmitterParticles hides via particle flags
+                    // emitters outside the camera's sector still simulate, just throttled to OFFSCREEN_EMITTER_HZ
                     if ((child as any).particlePool) {
-                        if (!(child as any)._simFrozen) {
+                        const nextUpdate = (child as any).nextOffscreenUpdate || 0;
+
+                        if (currentTime >= nextUpdate) {
+                            (child as any).nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS;
+                            (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+                            (child as any).update(currentTime);
                             freezeEmitterParticles(child);
-                            (child as any)._simFrozen = true;
                         }
+
                         (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
                     }
                     return;
@@ -956,8 +961,6 @@ class RenderManager {
 
                 // within the active sector, reuse zone-object.ts's BSP visibility (Pass 1 fills visibleEmitterUuids) instead of a standalone frustum test
                 if ((child as any).particlePool) {
-                    (child as any)._simFrozen = false; // so a later cross-sector transition re-runs the hide pass
-
                     const emitterUuid = (child as any).emitterActorUuid;
                     const isVisible = !!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid);
 
