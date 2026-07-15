@@ -447,6 +447,12 @@ class Visualizer {
                 }
             }
 
+            // reorders group/line elements to match sort order, but only touches the DOM when
+            // position actually changed - an unconditional move (even to the same spot) can
+            // detach/reattach the node between a checkbox's mousedown and mouseup, which silently
+            // swallows the click (the browser only synthesizes "click" if both land on the same node)
+            let prevGroupWrapper: HTMLElement | null = null;
+
             for (const groupId of orderedGroupIds) {
                 const members = groups.get(groupId)!.sort((a, b) => a.distance - b.distance);
                 const minDist = members[0].distance;
@@ -473,11 +479,16 @@ class Visualizer {
                     this.emitterGroups.set(groupId, group);
                 }
 
-                this.emitterListElement.appendChild(group.wrapper); // re-append keeps DOM order == sort order
+                const expectedNext = prevGroupWrapper ? prevGroupWrapper.nextElementSibling : this.emitterListElement.firstElementChild;
+                if (expectedNext !== group.wrapper) {
+                    this.emitterListElement.insertBefore(group.wrapper, expectedNext);
+                }
+                prevGroupWrapper = group.wrapper;
 
                 const distText = Math.round(minDist).toString().padStart(6, " ");
                 group.header.innerText = `[${distText}] ${members[0].parentName} (${members.length} sub${members.length === 1 ? "" : "s"})`;
 
+                let prevLine: HTMLElement | null = null;
                 members.forEach(e => {
                     let line = this.emitterLines.get(e.uuid);
                     let checkbox = this.emitterCheckboxes.get(e.uuid);
@@ -509,7 +520,11 @@ class Visualizer {
                         textEl = line.lastElementChild as HTMLElement;
                     }
 
-                    group!.body.appendChild(line); // re-append keeps DOM order == sort order
+                    const expectedNextLine = prevLine ? prevLine.nextElementSibling : group!.body.firstElementChild;
+                    if (expectedNextLine !== line) {
+                        group!.body.insertBefore(line, expectedNextLine);
+                    }
+                    prevLine = line;
 
                     checkbox!.checked = !e.isManuallyHidden;
 

@@ -771,11 +771,17 @@ class RenderManager {
 
     public collectEmitterDebugInfo(): EmitterDebugInfo[] {
         const cameraPosition = this.camera.position;
+        const currentSector = this.getSector(cameraPosition);
         const results: EmitterDebugInfo[] = [];
 
         this.scene.traverse(obj => {
             const emitter = obj as any;
             if (!emitter.particlePool) return;
+
+            // only the sector the camera is actually in, not streamed-in neighbors
+            let sectorParent = emitter.parent;
+            while (sectorParent && !sectorParent.isSectorObject) sectorParent = sectorParent.parent;
+            if (sectorParent !== currentSector) return;
 
             const worldPos = new Vector3().setFromMatrixPosition(emitter.matrixWorld);
             const isVisible = emitter.visible && (emitter.instancedMesh
