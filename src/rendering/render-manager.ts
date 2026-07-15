@@ -8,7 +8,7 @@ import Player from "@client/player";
 import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
-import Visualizer, { VisualizerMode } from "./visualizer";
+import Visualizer, { VisualizerMode, EmitterDebugInfo } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
@@ -40,6 +40,13 @@ document.body.appendChild(stats.dom);
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
+const tmpBillboardUp = new Vector3();
+const tmpBillboardFront = new Vector3();
+const tmpBillboardRight = new Vector3();
+// off-screen emitters (in range but outside the frustum) simulate at this rate instead
+// of a hard freeze, so particle state doesn't go stale and pop when re-entering view
+const OFFSCREEN_EMITTER_HZ = 10;
+const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
@@ -55,6 +62,25 @@ type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
 
 const frozenUpdateMatrixWorld = function () { };
+
+// hides every particle in a hard-frozen emitter's pool. Never touch the emitter's own
+// .visible for this: Pass 2 runs inside scene.traverseVisible, whose three.js
+// implementation is `if (this.visible === false) return` BEFORE invoking the callback -
+// so an object hidden that way is silently excluded from every future frame's
+// traversal too, permanently stranding it even once back in range/frustum.
+function freezeEmitterParticles(emitter: any) {
+    for (const p of emitter.particlePool) {
+        p.visible = false;
+        p.updateMatrixWorld = frozenUpdateMatrixWorld;
+    }
+
+    // instanced sprite emitters render from a single shared mesh, not per-particle
+    // Object3D visibility - particlePool entries above don't touch it, so hide it
+    // explicitly (base-emitter.ts's update() sets it visible=true again on its own).
+    if (emitter.instancedMesh) {
+        emitter.instancedMesh.visible = false;
+    }
+}
 
 class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
@@ -204,9 +230,9 @@ class RenderManager {
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
         // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
 
-        // elven ruins colon
-        this.camera.position.set(-113423.1583509125, 235975.71810164873, -3347.4875149571467);
-        this.controls.orbit.target.set(-113585.15625, 235815.328125, -3498.14697265625);
+        // // elven ruins colon
+        // this.camera.position.set(-113512.77219040602, 235526.6777673793, -3451.3266495528937);
+        // this.controls.orbit.target.set(-113585.56931966537, 235592.2972700526, -3471.192671814631);
 
         // // elven ruins light fixture with two lights
         // this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
@@ -229,8 +255,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
         // // talking island
-        // this.camera.position.set(-81557.82679558189, -2819.5704971954897, 242774.90441893184);
-        // this.controls.orbit.target.set(-81647.1623503648, -2864.2521455152955, 242770.13902754657);
+        // this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
+        // this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -279,6 +305,10 @@ class RenderManager {
         // // ruins floaties
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
+
+        // heine
+        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
+        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -739,9 +769,61 @@ class RenderManager {
         return xsect.get(sectorY);
     }
 
+    // F4 (Emitters visualizer mode) debug feed - every currently-decoded emitter
+    // (particlePool-bearing object), nearest-camera-first. Capped rather than
+    // exhaustive: this redraws a canvas-texture label per entry every call, so an
+    // uncapped list in a dense sector would stall the debug overlay itself.
+    private static readonly EMITTER_DEBUG_MAX = 80;
+
+    public collectEmitterDebugInfo(): EmitterDebugInfo[] {
+        const cameraPosition = this.camera.position;
+        const results: EmitterDebugInfo[] = [];
+
+        this.scene.traverse(obj => {
+            const emitter = obj as any;
+            if (!emitter.particlePool) return;
+
+            const worldPos = new Vector3().setFromMatrixPosition(emitter.matrixWorld);
+            const isVisible = emitter.instancedMesh
+                ? !!emitter.instancedMesh.visible
+                : (emitter.particlePool as any[]).some(p => p.visible);
+
+            results.push({
+                uuid: emitter.uuid,
+                name: emitter.name || emitter.uuid,
+                type: emitter.constructor?.name ?? "Emitter",
+                worldPos,
+                distance: worldPos.distanceTo(cameraPosition),
+                activeCount: emitter.activeCount ?? 0,
+                maxParticles: emitter.maxParticles ?? 0,
+                isDisabled: !!emitter.isDisabled,
+                isVisible,
+                parentUuid: emitter.parent?.uuid ?? "",
+                parentName: emitter.parent?.name || "?",
+            });
+        });
+
+        results.sort((a, b) => a.distance - b.distance);
+        return results.slice(0, RenderManager.EMITTER_DEBUG_MAX);
+    }
+
     protected _updateObjects(currentTime: number) {
         const globalTime = currentTime / 600;
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
+
+        // Camera-facing billboard basis for instanced sprite particles - same formula
+        // sprite-emitter.ts used to run per-particle every frame (see its onBeforeRender),
+        // now computed once here and read by every instanced particle shader as a uniform.
+        // Per-particle spin is still applied per-instance in the vertex shader.
+        {
+            const camera = this.camera;
+            const projUp = tmpBillboardUp.copy(camera.up).normalize();
+            const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
+            const projRight = tmpBillboardRight.crossVectors(projFront, projUp).normalize();
+            projUp.crossVectors(projRight, projFront).normalize();
+            (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight).negate();
+            (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp).negate();
+        }
 
         // Update helper camera: copy from main camera if inactive, otherwise keep frozen
         if (this.bspHelperCamera) {
@@ -836,15 +918,58 @@ class RenderManager {
                 // Skip lighting updates for objects in non-active (distant) sectors,
                 // except objects that were never lit at all (freshly streamed sectors)
                 if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
-                    // emitters this far never simulate, so their pool never moves -
-                    // skip the render-time matrix walk into them too (three's own
-                    // render() still recurses into every visible node regardless of
-                    // matrixAutoUpdate). Reversed the instant this sector goes active.
-                    if ((child as any).particlePool) (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
+                    // emitters this far never simulate, so their pool never moves - skip
+                    // the render-time matrix walk into them too. The emitter's own
+                    // .visible is never touched (see freezeEmitterParticles) - hide via
+                    // each particle's own flag instead, once per freeze transition.
+                    if ((child as any).particlePool) {
+                        if (!(child as any)._simFrozen) {
+                            freezeEmitterParticles(child);
+                            (child as any)._simFrozen = true;
+                        }
+                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
+                    }
                     return;
                 }
 
-                if ((child as any).particlePool) (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+                // the "active sector" check above only excludes OTHER sectors. Within the
+                // active sector, reuse the BSP-leaf-based visibility zone-object.ts's
+                // updateVisibility already computed this frame for static meshes (portal/
+                // zone/distance aware - not just camera FOV) instead of a standalone
+                // frustum test; Pass 1 runs before this loop and fills visibleEmitterUuids.
+                if ((child as any).particlePool) {
+                    // not currently cross-sector-frozen (that branch returned above) -
+                    // reset so a *later* cross-sector transition re-runs the hide pass
+                    // instead of skipping it as "already done" from a stale flag
+                    (child as any)._simFrozen = false;
+
+                    const emitterUuid = (child as any).emitterActorUuid;
+                    const isVisible = !!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid);
+
+                    if (!isVisible) {
+                        // in range or not, throttle instead of freezing outright so
+                        // particle state doesn't go stale and pop back in once visible
+                        const nextUpdate = (child as any).nextOffscreenUpdate || 0;
+
+                        if (currentTime >= nextUpdate) {
+                            // simulate on schedule so particle state stays live, then hide
+                            // the result again immediately - update() sets "true" per-
+                            // particle visibility from live/dead state, which has nothing
+                            // to do with the camera frustum
+                            (child as any).nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS;
+                            (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+                            (child as any).update(currentTime);
+                            freezeEmitterParticles(child);
+                        }
+
+                        // between ticks, particles are already hidden from the last tick's
+                        // post-update hide above - just keep the matrix walk skipped
+                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
+                        return;
+                    }
+
+                    (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+                }
 
                 if (sector && 'computeLighting' in child) {
                     (child as any).update(sector, this.environment);
@@ -1399,6 +1524,7 @@ class RenderManager {
                 this.visualizer.destroy();
                 this.scene.remove(this.visualizer.getGroup());
                 this.scene.remove(this.visualizer.getFogGroup());
+                this.scene.remove(this.visualizer.getEmitterLabelGroup());
 
                 // Create new visualizer
                 (this as any).visualizer = new Visualizer(this.scene);
@@ -1503,6 +1629,8 @@ class RenderManager {
                 const musicState = this.audioManager.getMusicState();
                 const ambientSounds = this.audioManager.getAmbientSounds();
                 this.visualizer.updateAudioHUD(musicState, ambientSounds, _currentTime, this.camera.position);
+            } else if (this.visualizer.getMode() === VisualizerMode.Emitters) {
+                this.visualizer.updateEmitters(this.collectEmitterDebugInfo());
             }
         }
 

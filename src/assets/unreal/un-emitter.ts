@@ -126,6 +126,10 @@ abstract class UEmitter extends UAActor {
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
 
+        // set by build-decode-library.ts from loadSettings.loadEmitterList - null means
+        // "load every sub-emitter" (default), matching this actor not being in the list at all
+        const subEmitterFilter: string[] | null = (this as any).__subEmitterFilter ?? null;
+
         const emittersInfo = this.emitters.loadSelf()
             .filter(e => {
                 if (!e) return false; // deleted sub-emitters serialize as None
@@ -135,6 +139,8 @@ abstract class UEmitter extends UAActor {
                     console.warn(`Emitter '${this.objectName}' skipping unsupported sub-emitter '${(e as any).objectName}'`);
                     return false;
                 }
+
+                if (subEmitterFilter && !subEmitterFilter.includes((e as any).objectName)) return false;
 
                 return true;
             })
@@ -166,34 +172,40 @@ abstract class UEmitter extends UAActor {
             position: _position,
             scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
-            children: emittersInfo.filter(x => x)
+            children: emittersInfo.filter(x => x),
+            isRangeIgnored: !!this.isRangeIgnored
         } as GD.IBaseObjectDecodeInfo;
 
-        // Calculate bounding box for emitter
-        // Estimate bounding box based on emitter properties or use default size
-        // The C++ code accumulates bounding boxes from particle emitters, but for static decoding
-        // we estimate based on collision radius/height or a reasonable default
-        const defaultRadius = this.collisionRadius || 100;
-        const defaultHeight = this.collisionHeight || 100;
-        const extents = FVector.make(defaultRadius, defaultRadius, defaultHeight);
-        const localBox = FBox.make(extents.negate(), extents, 1);
-        
-        // Transform bounding box to world space
-        const predictedBox = localBox.transformBy(localToWorld);
-        
-        // Create inflated box with margin (similar to static mesh actor)
-        const extent = predictedBox.getExtents();
-        const margin = extent.multiplyScalar(0.05);
-        const inflatedBox = FBox.make(predictedBox.min.sub(margin), predictedBox.max.add(margin), 1);
+        // UParticleEmitter::UpdateParticles (UnParticleEmitter.cpp) rebuilds BoundingBox
+        // every tick from live particle positions - there's no static radius/height that
+        // predicts it, and CollisionRadius/Height are physical collision footprint, unrelated
+        // to visual spread. We can't replicate a per-frame accumulated box at decode time.
+        // But the BSP is static and the actor's origin isn't going anywhere: register the
+        // actor at its own origin point (zero-extent box - boxLeavesRecursive degenerates to
+        // a plane-side point classification), exactly like UE2's own zone/PVS association
+        // does (AActor::SetZone uses Model->PointRegion(Location), a point query, not a box).
+        // A guessed box here only ever caused trouble: too small and the emitter never
+        // registers into the leaf it's actually visible from (particles don't render), too
+        // large (even a modest fixed floor) and it registers into every leaf the box happens
+        // to span - one leaf ended up with ~200 emitters riding on it, all marked "visible"
+        // and simulated/drawn at once the moment the camera entered that leaf.
+        const worldOrigin = FBox.make(FVector.make(0, 0, 0), FVector.make(0, 0, 0), 1)
+            .transformBy(localToWorld).getCenter();
 
-        // debugger;
+        // bounds/zoneMask mirror UStaticMeshActor.getDecodeInfo - lets the runtime BSP
+        // visibility pass (zone-object.ts) cull emitter simulation the same way it
+        // already culls static meshes, instead of a standalone frustum test. min===max:
+        // this is a point, not a real box.
+        (actorInfo as any).bounds = {
+            isValid: true,
+            min: [worldOrigin.x, worldOrigin.y, worldOrigin.z],
+            max: [worldOrigin.x, worldOrigin.y, worldOrigin.z]
+        };
 
         let actorZoneMask = 0n;
 
         if (baseModel) {
-            const origin = inflatedBox.getCenter();
-            const inflatedExtent = inflatedBox.getExtents();
-            const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+            const leafIndices = baseModel.boxLeavesRecursive(0, worldOrigin, FVector.make(0, 0, 0));
 
             for (const leafIndex of leafIndices) {
                 if (library.leafActors[leafIndex]) {
@@ -205,6 +217,13 @@ abstract class UEmitter extends UAActor {
                 }
             }
         }
+
+        (actorInfo as any).zoneMask = actorZoneMask;
+
+        // see allEmitterActors' own comment (decode-library.ts) - leafActors alone
+        // double-gates a point-registered emitter behind both its single leaf AND
+        // its zone; this flat list lets the runtime check the zone mask on its own
+        library.allEmitterActors.push(actorInfo);
 
         zoneInfo.children.push(actorInfo);
 

@@ -15,6 +15,21 @@ async function startCore() {
         await navigator.storage.persist();
 
     const startTime = performance.now();
+
+    // Debug emitter whitelist, persisted across reloads (a plain `window` global
+    // wouldn't survive one). Set from the console, then reload:
+    //   localStorage.setItem("loadEmitterList", JSON.stringify([
+    //       { name: "Emitter290", emitters: ["SpriteEmitter393"] } // omit `emitters` for all subs
+    //   ]));
+    //   localStorage.removeItem("loadEmitterList"); // back to loading everything
+    let loadEmitterList: { name: string, emitters?: string[] }[] | null = null;
+    try {
+        const raw = localStorage.getItem("loadEmitterList");
+        if (raw) loadEmitterList = JSON.parse(raw);
+    } catch (e) {
+        console.warn("[loadEmitterList] failed to parse localStorage entry, ignoring", e);
+    }
+
     const loadSettings = {
         helpersZoneBounds: false,
         batching: {
@@ -23,13 +38,14 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 8 // v7 batch elements lack the leaf lists for pvs culling
+            version: 17 // v16 tried making particle emitter drawScale read the owner actor's combined DrawScale3D*DrawScale instead of the scalar DrawScale alone - reverted, it regressed particle spread/position - bump forces stale v16 caches (wrong drawScale baked in) to redecode with the reverted, known-good logic
         },
         textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
         loadEmitters: true,
+        loadEmitterList,
         loadAudio: true,
         _loadStaticModelList: [
             // 1441,

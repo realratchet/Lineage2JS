@@ -90,6 +90,13 @@ function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDeco
 
     // object.add(new AxesHelper(100));
 
+    // library.leafActors (and this wrapper's bounds/zoneMask) are keyed by info.uuid,
+    // not each sub-emitter's own uuid - propagate it down so render-manager's Pass 2
+    // can look up BSP visibility for the actual particlePool-bearing children
+    for (const child of object.children) {
+        (child as any).emitterActorUuid = info.uuid;
+    }
+
     return object;
 }
 

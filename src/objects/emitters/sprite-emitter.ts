@@ -1,9 +1,29 @@
 import ParticleMaterial from "@client/materials/particle-material/particle-material";
+import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
 import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
 import BaseEmitter from "./base-emitter";
+import InstancedSpriteMesh from "./instanced-sprite-mesh";
 
 const geometry = new PlaneGeometry(2, 2);
+
+// onBeforeRender runs per particle per frame - reused across calls to avoid allocating
+// a dozen-odd Vector3/Matrix4 for every visible particle every frame
+const tmpProjUp = new Vector3();
+const tmpProjFront = new Vector3();
+const tmpProjRight = new Vector3();
+const tmpDirection = new Vector3();
+const tmpUp = new Vector3();
+const tmpRight = new Vector3();
+const tmpNonParallel = new Vector3();
+const tmpProjTemp = new Vector3();
+const tmpRealProj = new Vector3();
+const tmpViewDir = new Vector3();
+const tmpOrigRight = new Vector3();
+const tmpOrigUp = new Vector3();
+const tmpSpinScaled = new Vector3();
+const tmpNormal = new Vector3();
+const tmpMatrix = new THREE.Matrix4();
 
 class SpriteEmitter extends BaseEmitter {
 
@@ -18,13 +38,26 @@ class SpriteEmitter extends BaseEmitter {
         this.material = config.material;
         this.spriteDirection = config.spriteDirection || "camera";
         this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
+
+        // "camera" (the default) needs only a fixed camera-facing basis, which
+        // render-manager.ts now computes once per frame and shares via
+        // GLOBAL_UNIFORMS - that's the case the GPU-instanced path covers. The other
+        // directions derive their basis from per-particle velocity/normal
+        // (ParticleMesh.onBeforeRender below) and stay on the legacy per-particle path.
+        this.isInstancedRendering = this.spriteDirection === "camera";
     }
 
-    protected initParticleMesh() { 
-        const mesh = new ParticleMesh(new ParticleMaterial(this.material)); 
+    protected initParticleMesh() {
+        const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
+        const mesh = new ParticleMesh(new ParticleMaterial({ ...this.material, usesSubdivision }));
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
         return mesh;
+    }
+
+    protected createInstancedMesh(capacity: number): InstancedSpriteMesh {
+        const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
+        return new InstancedSpriteMesh(new InstancedParticleMaterial({ ...this.material, usesSubdivision }), capacity);
     }
 }
 
@@ -51,20 +84,20 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
         // ProjFront is the negative look direction (since camera looks down -Z)
         // ProjRight is the cross product of Front and Up
         
-        const projUp = camera.up.clone().normalize();
-        const projFront = new Vector3(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
-        
+        const projUp = tmpProjUp.copy(camera.up).normalize();
+        const projFront = tmpProjFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
+
         // In Left-Handed UE: ProjRight = Up x Front
         // In Right-Handed ThreeJS: Right = Front x Up
-        const projRight = new Vector3().crossVectors(projFront, projUp).normalize();
-        
+        const projRight = tmpProjRight.crossVectors(projFront, projUp).normalize();
+
         // Ensure projUp is exactly orthogonal
         projUp.crossVectors(projRight, projFront).normalize();
 
-        const direction = new Vector3();
-        let up = new Vector3();
-        let right = new Vector3();
-        
+        const direction = tmpDirection;
+        const up = tmpUp;
+        const right = tmpRight;
+
         // Get velocity direction if particle is attached
         const particle = (this as any).particleRef;
         const velocity = particle ? particle.velocity : null;
@@ -72,38 +105,39 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
 
         if (this.spriteDirection === "normal") {
             direction.set(this.projectionNormal.x, this.projectionNormal.y, this.projectionNormal.z).normalize();
-            
+
             // PTDU_Normal:
             // Up    = (Direction ^ Direction.GetNonParallel()) * Size.Y;
             // Right = (Direction ^ Up).SafeNormal() * Size.X;
             // GetNonParallel: returns a vector not parallel to this
-            const nonParallel = Math.abs(direction.x) < 0.5 ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0);
-            
+            const nonParallel = tmpNonParallel.set(1, 0, 0);
+            if (Math.abs(direction.x) >= 0.5) nonParallel.set(0, 1, 0);
+
             // Note: UE uses Left-handed Cross Product (A ^ B)
             // Three.js cross product is right-handed, so the order is reversed: B x A = Right-handed Cross(A, B)
             up.crossVectors(nonParallel, direction).normalize();
             right.crossVectors(up, direction).normalize();
-            
+
             // But wait, Three.js right is X, up is Y. UE is X forward, Y right, Z up.
-            // When translating: 
+            // When translating:
             // - UE +Right maps to Threejs +X
             // - UE +Up maps to Threejs +Y
             // Let's just follow UE math directly but reverse the cross product order due to handedness.
-            
-        } else if (hasVelocity && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" || 
+
+        } else if (hasVelocity && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" ||
                    this.spriteDirection === "right" || this.spriteDirection === "rightNormal" ||
                    this.spriteDirection === "forward")) {
-            
+
             direction.copy(velocity).normalize();
-            let projTemp = new Vector3();
+            const projTemp = tmpProjTemp;
 
             if (this.spriteDirection === "upNormal" || this.spriteDirection === "rightNormal") {
-                const realProj = new Vector3(this.projectionNormal.x, this.projectionNormal.y, this.projectionNormal.z).normalize();
+                const realProj = tmpRealProj.set(this.projectionNormal.x, this.projectionNormal.y, this.projectionNormal.z).normalize();
                 // ProjTemp = Direction ^ RealProjectionNormal;
                 projTemp.crossVectors(realProj, direction).normalize();
             } else {
                 // ProjTemp = Direction ^ (Particle->Location - ViewLocation);
-                const viewDir = new Vector3().subVectors(particle.position, camera.position);
+                const viewDir = tmpViewDir.subVectors(particle.position, camera.position);
                 projTemp.crossVectors(viewDir, direction).normalize();
             }
 
@@ -114,11 +148,12 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
                 up.copy(projTemp);
                 right.copy(direction);
             } else if (this.spriteDirection === "forward") {
-                const nonParallel = Math.abs(direction.x) < 0.5 ? new Vector3(1, 0, 0) : new Vector3(0, 1, 0);
+                const nonParallel = tmpNonParallel.set(1, 0, 0);
+                if (Math.abs(direction.x) >= 0.5) nonParallel.set(0, 1, 0);
                 up.crossVectors(nonParallel, direction).normalize();
                 right.crossVectors(up, direction).normalize();
             }
-             
+
         } else {
             // PTDU_None and PTDU_Scale
             up.copy(projUp);
@@ -130,14 +165,14 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             const spin = particle.spin;
             const cos = Math.cos(spin);
             const sin = Math.sin(spin);
-            
-            const origRight = right.clone();
-            const origUp = up.clone();
-            
+
+            const origRight = tmpOrigRight.copy(right);
+            const origUp = tmpOrigUp.copy(up);
+
             // Rotate Right/Up vectors around the Normal axis
             // In RH: NewRight = Right*cos + Up*sin; NewUp = Up*cos - Right*sin;
-            right.copy(origRight).multiplyScalar(cos).add(origUp.clone().multiplyScalar(sin));
-            up.copy(origUp).multiplyScalar(cos).sub(origRight.clone().multiplyScalar(sin));
+            right.copy(origRight).multiplyScalar(cos).add(tmpSpinScaled.copy(origUp).multiplyScalar(sin));
+            up.copy(origUp).multiplyScalar(cos).sub(tmpSpinScaled.copy(origRight).multiplyScalar(sin));
         }
 
         // We negate the projection front to point *towards* the camera (Standard PlaneGeometry face)
@@ -146,9 +181,9 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
         up.negate();
 
         // Ensure we supply a pure 1-determinant rotation matrix by computing normal exactly matching right/up cross
-        const normal = new Vector3().crossVectors(right, up).normalize();
+        const normal = tmpNormal.crossVectors(right, up).normalize();
 
-        const matrix = new THREE.Matrix4().makeBasis(right, up, normal);
+        const matrix = tmpMatrix.makeBasis(right, up, normal);
         this.quaternion.setFromRotationMatrix(matrix);
     };
 }

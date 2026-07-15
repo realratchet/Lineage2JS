@@ -21,6 +21,17 @@ class DecodeLibrary {
     public readonly materials: Record<string, GD.IBaseMaterialDecodeInfo> = {};      // a dictionary containing all material decode info
     public readonly materialModifiers: Record<string, GD.IMaterialModifier> = {};    // a dictionary containing all material modifiers
     public readonly leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][] = [];
+    // Emitter actors, flat (not leaf-indexed like leafActors). A static mesh's
+    // bounding box naturally spans many leaves, giving it many chances to land in
+    // whatever leaf set the camera's BSP traversal actually visits; an emitter is
+    // registered at a single origin *point* (un-emitter.ts - matches UE2's own
+    // Model->PointRegion(Location) zone/PVS association) and so lives in exactly one
+    // leaf. Requiring that one leaf to be in visibleLeaves on top of the zone-mask
+    // test double-gates it far more strictly than static meshes ever are, and drops
+    // emitters whose single leaf the traversal didn't happen to walk into even
+    // though their zone is genuinely portal-reachable. zone-object.ts's emitter
+    // visibility pass iterates this flat list and checks only the zone mask.
+    public readonly allEmitterActors: GD.IBaseObjectOrInstanceDecodeInfo[] = [];
     public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
     public readonly audioList: GD.IAudioDecodeInfo[] = []
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)

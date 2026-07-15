@@ -16,6 +16,7 @@ function buildDecodeLibrary(pkg: C.APackage, {
     loadAudio = true,
     helpersZoneBounds = false,
     loadEmitters = true,
+    loadEmitterList = null,
     isSkyLevel = false,
     batching = { terrain: true, staticMeshes: true }
 }: GD.LoadSettings_T) {
@@ -120,8 +121,16 @@ function buildDecodeLibrary(pkg: C.APackage, {
         const uEmitters = actorsToLoad.map(exp => pkg.fetchObject<GA.UEmitter>(exp.index + 1).loadSelf());
 
         for (const actor of uEmitters) {
-            // if (actor.objectName !== "Emitter7")
-            //     continue;
+            // debug whitelist (core.ts loadSettings.loadEmitterList, see loadEmitterList
+            // JSDoc in unreal.d.ts) - unset/empty loads everything as before
+            if (loadEmitterList && loadEmitterList.length) {
+                const entry = loadEmitterList.find(e => e.name === actor.objectName);
+                if (!entry) continue;
+                // stashed for un-emitter.ts's getDecodeInfo to filter sub-emitters by -
+                // getDecodeInfo(library) has no room for a second argument without
+                // threading it through every override in the emitter class hierarchy
+                (actor as any).__subEmitterFilter = entry.emitters ?? null;
+            }
 
             actor.getDecodeInfo(decodeLibrary);
         }

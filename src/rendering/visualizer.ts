@@ -1,4 +1,4 @@
-import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry, SphereGeometry } from "three";
+import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry, SphereGeometry, Sprite, SpriteMaterial, CanvasTexture } from "three";
 import { ColorByte } from "../utils/color-byte";
 
 type SectorObject = import("../objects/zone-object").SectorObject;
@@ -10,6 +10,24 @@ export enum VisualizerMode {
     Leaves = 3,
     Fogs = 4,
     Audio = 5,
+    Emitters = 6,
+}
+
+export interface EmitterDebugInfo {
+    uuid: string;
+    name: string;
+    type: string;
+    worldPos: Vector3;
+    distance: number;
+    activeCount: number;
+    maxParticles: number;
+    isDisabled: boolean;
+    isVisible: boolean;
+    // the wrapping "Emitter" actor (un-emitter.ts) that this sub-emitter (SpriteEmitter/
+    // MeshEmitter/BeamEmitter, un-particle-emitter.ts) lives under - one actor can carry
+    // several sub-emitters, and the HUD groups by this rather than listing them flat
+    parentUuid: string;
+    parentName: string;
 }
 
 export enum LeafVisualizerDetail {
@@ -55,12 +73,20 @@ class Visualizer {
     private readonly HUD_NAME_WIDTH = 8;
     private readonly group: Group;
     private readonly fogGroup: Group;
+    private readonly emitterLabelGroup: Group;
     private readonly hudElement: HTMLElement;
     private readonly audioHudElement: HTMLElement;
+    private readonly emittersHudElement: HTMLElement;
     private readonly hudColors: Map<string, { swatch: HTMLElement, rgbDisplay: HTMLElement, alpha: HTMLElement }> = new Map();
     private readonly audioLines: Map<string, HTMLElement> = new Map();
+    private readonly emitterLines: Map<string, HTMLElement> = new Map();
+    // one wrapper per parent "Emitter" actor - `body` is where that actor's own
+    // sub-emitter lines (from emitterLines) get appended, `header` shows its name/count
+    private readonly emitterGroups: Map<string, { wrapper: HTMLElement, header: HTMLElement, body: HTMLElement }> = new Map();
+    private readonly emitterLabels: Map<string, Sprite> = new Map();
     private musicInfoElement: HTMLElement | null = null;
     private ambientListElement: HTMLElement | null = null;
+    private emitterListElement: HTMLElement | null = null;
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
 
@@ -88,10 +114,17 @@ class Visualizer {
         this.fogGroup.renderOrder = 999;
         scene.add(this.fogGroup);
 
+        this.emitterLabelGroup = new Group();
+        this.emitterLabelGroup.name = "EmitterLabels";
+        this.emitterLabelGroup.renderOrder = 1000;
+        scene.add(this.emitterLabelGroup);
+
         this.hudElement = this.initHUD();
         this.audioHudElement = this.initAudioHUD();
+        this.emittersHudElement = this.initEmittersHUD();
         document.body.appendChild(this.hudElement);
         document.body.appendChild(this.audioHudElement);
+        document.body.appendChild(this.emittersHudElement);
     }
 
     private createHudRow(container: HTMLElement, name: string, prefix: string): void {
@@ -249,6 +282,224 @@ class Visualizer {
         hud.appendChild(ambientPanel);
 
         return hud;
+    }
+
+    private initEmittersHUD(): HTMLElement {
+        const hud = document.createElement("div");
+        hud.id = "emitters-hud-container";
+        Object.assign(hud.style, {
+            position: "fixed",
+            top: "10px",
+            left: "10px",
+            display: "none",
+            flexDirection: "column",
+            gap: "10px",
+            pointerEvents: "none",
+            zIndex: "10001"
+        });
+
+        const panel = document.createElement("div");
+        Object.assign(panel.style, {
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            color: "#fff",
+            padding: "10px",
+            borderRadius: "5px",
+            fontFamily: "monospace",
+            fontSize: "12px",
+            border: "1px solid #444",
+            boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+            maxHeight: "80vh",
+            overflowY: "auto",
+            // the hud wrapper is pointer-events:none so empty space around the panel
+            // doesn't eat clicks meant for camera control - the panel itself needs
+            // pointer events back or its own scrollbar is inert
+            pointerEvents: "auto"
+        });
+
+        const title = document.createElement("div");
+        title.innerText = "EMITTERS (decoded, nearest first)";
+        title.style.fontWeight = "bold";
+        title.style.marginBottom = "8px";
+        title.style.borderBottom = "1px solid #444";
+        title.style.paddingBottom = "4px";
+        panel.appendChild(title);
+
+        this.emitterListElement = document.createElement("div");
+        Object.assign(this.emitterListElement.style, {
+            // CSS multi-column instead of grid-auto-flow: entries are grouped by
+            // parent actor (see updateEmitters) and a grid's column-then-row fill
+            // order would happily slice a group in half at the column boundary;
+            // multi-column text flow + break-inside:avoid on each group keeps a
+            // parent and all its sub-emitters together in one column.
+            columnCount: "3",
+            columnGap: "20px"
+        });
+        panel.appendChild(this.emitterListElement);
+
+        hud.appendChild(panel);
+        return hud;
+    }
+
+    private makeTextSprite(text: string, color: string): Sprite {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d")!;
+        const fontSize = 48;
+        ctx.font = `${fontSize}px monospace`;
+        const width = Math.ceil(ctx.measureText(text).width) + 20;
+        const height = fontSize + 20;
+        canvas.width = width;
+        canvas.height = height;
+
+        // measureText above ran against a freshly-resized (and thus cleared) canvas
+        // context, so font/fill state needs reapplying after the resize
+        ctx.font = `${fontSize}px monospace`;
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = color;
+        ctx.fillText(text, 10, height / 2);
+
+        const texture = new CanvasTexture(canvas);
+        const material = new SpriteMaterial({
+            map: texture,
+            depthTest: false,
+            depthWrite: false,
+            transparent: true
+        });
+        const sprite = new Sprite(material);
+        // world-unit size independent of camera distance would need per-frame
+        // rescaling; a fixed world size is good enough for a debug overlay and
+        // keeps this update-free between label content changes
+        const scale = 40;
+        sprite.scale.set(scale * (width / height), scale, 1);
+        sprite.renderOrder = 1000;
+        return sprite;
+    }
+
+    /**
+     * Updates both the Emitters HUD list and the floating in-world labels.
+     * `emitters` should already be sorted nearest-first and pre-filtered to a
+     * reasonable count - this redraws a canvas texture per label, so it isn't meant
+     * to run against thousands of entries per frame.
+     */
+    public updateEmitters(emitters: EmitterDebugInfo[]): void {
+        if (!this.enabled || this.mode !== VisualizerMode.Emitters) return;
+
+        if (this.emitterListElement) {
+            // one "Emitter" actor can carry several sub-emitters (SpriteEmitter/
+            // MeshEmitter/BeamEmitter) - group the flat feed back by parent so they
+            // read as one unit instead of being scattered across the sort order
+            const groups = new Map<string, EmitterDebugInfo[]>();
+            for (const e of emitters) {
+                let members = groups.get(e.parentUuid);
+                if (!members) groups.set(e.parentUuid, members = []);
+                members.push(e);
+            }
+
+            const orderedGroupIds = [...groups.keys()].sort((a, b) => {
+                const da = Math.min(...groups.get(a)!.map(e => e.distance));
+                const db = Math.min(...groups.get(b)!.map(e => e.distance));
+                return da - db;
+            });
+
+            const currentGroupIds = new Set(orderedGroupIds);
+            for (const id of this.emitterGroups.keys()) {
+                if (!currentGroupIds.has(id)) {
+                    this.emitterGroups.get(id)!.wrapper.remove();
+                    this.emitterGroups.delete(id);
+                }
+            }
+
+            const currentLineIds = new Set(emitters.map(e => e.uuid));
+            for (const id of this.emitterLines.keys()) {
+                if (!currentLineIds.has(id)) {
+                    this.emitterLines.get(id)?.remove();
+                    this.emitterLines.delete(id);
+                }
+            }
+
+            for (const groupId of orderedGroupIds) {
+                const members = groups.get(groupId)!.sort((a, b) => a.distance - b.distance);
+                const minDist = members[0].distance;
+
+                let group = this.emitterGroups.get(groupId);
+                if (!group) {
+                    const wrapper = document.createElement("div");
+                    Object.assign(wrapper.style, {
+                        breakInside: "avoid", // keep a group's rows out of a column split
+                        marginBottom: "8px"
+                    });
+
+                    const header = document.createElement("div");
+                    header.style.fontWeight = "bold";
+                    header.style.color = "#8cf";
+                    wrapper.appendChild(header);
+
+                    const body = document.createElement("div");
+                    body.style.paddingLeft = "10px";
+                    body.style.borderLeft = "2px solid #345";
+                    wrapper.appendChild(body);
+
+                    group = { wrapper, header, body };
+                    this.emitterGroups.set(groupId, group);
+                }
+
+                this.emitterListElement.appendChild(group.wrapper); // re-append keeps DOM order == sort order
+
+                const distText = Math.round(minDist).toString().padStart(6, " ");
+                group.header.innerText = `[${distText}] ${members[0].parentName} (${members.length} sub${members.length === 1 ? "" : "s"})`;
+
+                members.forEach(e => {
+                    let line = this.emitterLines.get(e.uuid);
+                    if (!line) {
+                        line = document.createElement("div");
+                        line.style.borderLeft = "2px solid #444";
+                        line.style.paddingLeft = "6px";
+                        line.style.marginTop = "2px";
+                        this.emitterLines.set(e.uuid, line);
+                    }
+
+                    group!.body.appendChild(line); // re-append keeps DOM order == sort order
+
+                    const eDistText = Math.round(e.distance).toString().padStart(6, " ");
+                    const activeText = `${e.activeCount}/${e.maxParticles}`;
+                    const state = e.isDisabled ? "DISABLED" : (e.isVisible ? "VISIBLE" : "hidden");
+                    line.innerText = `[${eDistText}] ${this.shortEmitterName(e.name)} (${e.type})\n      active: ${activeText} | ${state}`;
+                    line.style.color = e.isDisabled ? "#888" : (e.isVisible ? "#fff" : "#f80");
+                    line.style.borderColor = e.isVisible ? "#0f0" : "#444";
+                });
+            }
+        }
+
+        const currentIds = new Set(emitters.map(e => e.uuid));
+        for (const id of this.emitterLabels.keys()) {
+            if (!currentIds.has(id)) {
+                const sprite = this.emitterLabels.get(id)!;
+                this.emitterLabelGroup.remove(sprite);
+                sprite.material.map?.dispose();
+                sprite.material.dispose();
+                this.emitterLabels.delete(id);
+            }
+        }
+
+        for (const e of emitters) {
+            let sprite = this.emitterLabels.get(e.uuid);
+            if (!sprite) {
+                sprite = this.makeTextSprite(this.shortEmitterName(e.name), e.isVisible ? "#0f0" : "#f80");
+                this.emitterLabels.set(e.uuid, sprite);
+                this.emitterLabelGroup.add(sprite);
+            }
+            sprite.position.copy(e.worldPos);
+        }
+    }
+
+    // full name is "{ClassName}_{objectName}_{uuid}" (un-object-mixin.ts) - both the
+    // HUD list and world-space labels only want objectName (the middle segment),
+    // which is also exactly what loadEmitterList's `emitters` array expects, so it
+    // doubles as copy-pasteable output.
+    private shortEmitterName(fullName: string): string {
+        const parts = fullName.split("_");
+        return parts.length >= 3 ? parts[1] : fullName;
     }
 
     public updateAudioHUD(musicData: any, ambientSounds: any[], currentTime: number, cameraPosition: Vector3): void {
@@ -455,12 +706,31 @@ class Visualizer {
         this.group.visible = this.enabled && this.mode !== VisualizerMode.None;
         const isFogMode = this.enabled && this.mode === VisualizerMode.Fogs;
         const isAudioMode = this.enabled && this.mode === VisualizerMode.Audio;
+        const isEmittersMode = this.enabled && this.mode === VisualizerMode.Emitters;
         this.fogGroup.visible = isFogMode;
+        this.emitterLabelGroup.visible = isEmittersMode;
         if (this.hudElement) {
             this.hudElement.style.display = isFogMode ? "flex" : "none";
         }
         if (this.audioHudElement) {
             this.audioHudElement.style.display = isAudioMode ? "flex" : "none";
+        }
+        if (this.emittersHudElement) {
+            this.emittersHudElement.style.display = isEmittersMode ? "flex" : "none";
+        }
+        if (!isEmittersMode) {
+            // labels are cheap to rebuild but not free (canvas + texture per entry) -
+            // drop them the instant the mode isn't active instead of leaving them
+            // parked offscreen
+            for (const sprite of this.emitterLabels.values()) {
+                this.emitterLabelGroup.remove(sprite);
+                sprite.material.map?.dispose();
+                sprite.material.dispose();
+            }
+            this.emitterLabels.clear();
+            this.emitterLines.clear();
+            this.emitterGroups.clear();
+            if (this.emitterListElement) this.emitterListElement.innerHTML = "";
         }
     }
 
@@ -1202,13 +1472,26 @@ class Visualizer {
         return this.fogGroup;
     }
 
+    public getEmitterLabelGroup(): Group {
+        return this.emitterLabelGroup;
+    }
+
     public destroy(): void {
         this.clearVisualizations();
+        for (const sprite of this.emitterLabels.values()) {
+            this.emitterLabelGroup.remove(sprite);
+            sprite.material.map?.dispose();
+            sprite.material.dispose();
+        }
+        this.emitterLabels.clear();
         if (this.hudElement && this.hudElement.parentNode) {
             this.hudElement.parentNode.removeChild(this.hudElement);
         }
         if (this.audioHudElement && this.audioHudElement.parentNode) {
             this.audioHudElement.parentNode.removeChild(this.audioHudElement);
+        }
+        if (this.emittersHudElement && this.emittersHudElement.parentNode) {
+            this.emittersHudElement.parentNode.removeChild(this.emittersHudElement);
         }
     }
 }

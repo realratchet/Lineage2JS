@@ -1,12 +1,29 @@
-import { Color, CustomBlending, DoubleSide, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib } from "three";
+import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, NoBlending, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib, Vector4 } from "three";
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 
+// Billboard quads never need to tile, so always clamp. Mip-disable is opt-in
+// (atlas-cropped textures only) since low mips blend neighboring atlas cells.
+export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean = false) {
+    if (!texture) return;
+    let changed = false;
+    if (texture.wrapS !== ClampToEdgeWrapping || texture.wrapT !== ClampToEdgeWrapping) {
+        texture.wrapS = ClampToEdgeWrapping;
+        texture.wrapT = ClampToEdgeWrapping;
+        changed = true;
+    }
+    if (disableMipmaps && texture.minFilter !== LinearFilter && texture.mipmaps?.length > 1) {
+        texture.minFilter = LinearFilter;
+        changed = true;
+    }
+    if (changed) texture.needsUpdate = true;
+}
+
 class ParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
-    constructor({ map, blendingMode, opacity, name }: ParticleMaterialInitSettings_T) {
+    constructor({ map, blendingMode, opacity, name, usesSubdivision }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -14,9 +31,11 @@ class ParticleMaterial extends ShaderMaterial {
         ]));
 
         uniforms.map.value = map?.uniforms.map.texture ?? null; // missing textures still simulate
+        fixParticleTextureSampling(uniforms.map.value, usesSubdivision === true);
         if (opacity !== undefined) uniforms.opacity.value = opacity;
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
+        uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
 
         const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
 
@@ -66,9 +85,11 @@ class AnimatedParticleMaterial extends ShaderMaterial {
         ]));
 
         uniforms.map.value = sprites[0].uniforms.map.texture;
+        fixParticleTextureSampling(uniforms.map.value);
         if (opacity !== undefined) uniforms.opacity.value = opacity;
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
+        uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
 
         const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
         const { blending, blendSrc, blendDst, isAdditive } = getPartcileBlendingSettings(blendingMode);
@@ -107,42 +128,49 @@ class AnimatedParticleMaterial extends ShaderMaterial {
         const activeFrameIndex = Math.floor(time / framerate) % frameCount;
 
         this.uniforms.map.value = this.sprites[activeFrameIndex].uniforms.map.texture;
+        fixParticleTextureSampling(this.uniforms.map.value);
     }
 }
 
 export default ParticleMaterial;
 export { ParticleMaterial, AnimatedParticleMaterial };
 
-function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_T) {
+// Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
+export function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_T) {
     switch (blendingMode as string) {
-        case "normal": return { blending: NormalBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor };
-        case "alpha": return { blending: NormalBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor };
+        case "normal": return { blending: NoBlending }; // PTDS_Regular: ONE, ZERO
+        case "alpha": return { blending: NormalBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor }; // PTDS_AlphaBlend
+        // PTDS_Modulated: DST_COLOR, SRC_COLOR.
         case "modulate": return {
             blending: CustomBlending,
             blendSrc: DstColorFactor,
             blendDst: SrcColorFactor
         };
+        // PTDS_Translucent: ONE, ONE - pure additive, alpha ignored.
         case "translucent": return {
             blending: CustomBlending,
             blendSrc: OneFactor,
-            blendDst: OneMinusSrcColorFactor,
+            blendDst: OneFactor,
             isAdditive: true
         };
+        // PTDS_AlphaModulate: ONE, ONE_MINUS_SRC_ALPHA.
         case "alphaModulate": return {
             blending: CustomBlending,
             blendSrc: OneFactor,
             blendDst: OneMinusSrcAlphaFactor,
             isAdditive: true
         };
+        // PTDS_Darken: ZERO, ONE_MINUS_SRC_COLOR.
         case "darken": return {
             blending: CustomBlending,
             blendSrc: ZeroFactor,
             blendDst: OneMinusSrcColorFactor
         };
+        // PTDS_Brighten: ONE, ONE_MINUS_SRC_COLOR (screen blend).
         case "brighten": return {
             blending: CustomBlending,
-            blendSrc: SrcAlphaFactor, // UE2 FB_Brighten
-            blendDst: OneFactor,
+            blendSrc: OneFactor,
+            blendDst: OneMinusSrcColorFactor,
             isAdditive: true
         };
         default:
@@ -157,5 +185,6 @@ type ParticleMaterialInitSettings_T = {
     framerate?: number,
     blendingMode: GD.ParticleBlendModes_T,
     opacity: number,
-    name: string
+    name: string,
+    usesSubdivision?: boolean
 };

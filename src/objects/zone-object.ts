@@ -128,6 +128,9 @@ class SectorObject extends Object3D {
     public bspGroup?: THREE.Group;
     public staticMeshGroup?: THREE.Group;
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
+    // BSP-leaf-based emitter visibility, rebuilt each updateVisibility call - render
+    // manager's Pass 2 checks membership directly instead of its own frustum test
+    public visibleEmitterUuids: Set<string> = new Set();
     public readonly lights: Record<string, DynamicLight> = {};
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
@@ -1177,6 +1180,40 @@ class SectorObject extends Object3D {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
                 this._lastLoggedStaticMeshLeaf = leafIndex;
             }
+        }
+
+        // Emitter simulation visibility: unlike the static mesh pass above, this does
+        // NOT filter through visibleLeaves/leafActors first. Emitters are registered
+        // at a single origin leaf (see un-emitter.ts / allEmitterActors' own comment
+        // in decode-library.ts), so gating on leaf-traversal membership on top of the
+        // zone-mask test double-gates them - a leaf the BSP walk didn't happen to
+        // visit could still drop an emitter whose zone is genuinely portal-reachable.
+        // library.allEmitterActors is a flat, sector-wide list (a few hundred entries
+        // at most) so a per-actor test with no leaf pre-filter is still trivial.
+        if (library) {
+            const visibleEmitterUuids = new Set<string>();
+
+            for (const actorBase of library.allEmitterActors) {
+                // bounds is a zero-extent box (min===max) holding the actor's world
+                // origin - see un-emitter.ts for why this isn't a real bounding box
+                const bounds = (actorBase as any).bounds;
+                if (!bounds) continue;
+
+                const origin = tmpVec3.fromArray(bounds.min);
+
+                const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin);
+                const zoneMask = (actorBase as any).zoneMask as bigint;
+                const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
+                const distSq = cameraPosition.distanceToSquared(origin);
+                const isRangeIgnored = !!(actorBase as any).isRangeIgnored;
+                const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+
+                if (isFrustumVisible && isZoneVisible && isInRange) {
+                    visibleEmitterUuids.add(actorBase.uuid);
+                }
+            }
+
+            this.visibleEmitterUuids = visibleEmitterUuids;
         }
 
         // must run for every sector, terrain colors start black and sectors without
