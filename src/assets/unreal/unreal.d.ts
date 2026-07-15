@@ -253,12 +253,6 @@
 //     loadStaticModels?: boolean,
 //     loadStaticModelList?: number[],
 //     loadEmitters?: boolean,
-//     // Whitelist of top-level "Emitter" actors to decode, keyed by their UnrealScript
-//     // objectName (e.g. "Emitter290" - matches the middle segment of the runtime
-//     // "SpriteEmitter_SpriteEmitter347_<uuid>"-style scene names, see
-//     // un-object-mixin.ts's uuid getter). Unset/empty = load every Emitter actor
-//     // (default). Entries omitting `emitters` load every sub-emitter under that actor;
-//     // otherwise only sub-emitters whose own objectName is listed are decoded.
 //     loadEmitterList?: { name: string, emitters?: string[] }[],
 //     helpersZoneBounds?: boolean
 // };

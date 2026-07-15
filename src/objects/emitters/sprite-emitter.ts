@@ -7,8 +7,7 @@ import InstancedSpriteMesh from "./instanced-sprite-mesh";
 
 const geometry = new PlaneGeometry(2, 2);
 
-// onBeforeRender runs per particle per frame - reused across calls to avoid allocating
-// a dozen-odd Vector3/Matrix4 for every visible particle every frame
+// scratch vectors for onBeforeRender, reused per particle per frame to avoid allocating
 const tmpProjUp = new Vector3();
 const tmpProjFront = new Vector3();
 const tmpProjRight = new Vector3();
@@ -39,11 +38,7 @@ class SpriteEmitter extends BaseEmitter {
         this.spriteDirection = config.spriteDirection || "camera";
         this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
 
-        // "camera" (the default) needs only a fixed camera-facing basis, which
-        // render-manager.ts now computes once per frame and shares via
-        // GLOBAL_UNIFORMS - that's the case the GPU-instanced path covers. The other
-        // directions derive their basis from per-particle velocity/normal
-        // (ParticleMesh.onBeforeRender below) and stay on the legacy per-particle path.
+        // only "camera" (the default) has a fixed basis (GLOBAL_UNIFORMS) that the GPU-instanced path can use
         this.isInstancedRendering = this.spriteDirection === "camera";
     }
 

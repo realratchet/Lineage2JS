@@ -126,8 +126,7 @@ abstract class UEmitter extends UAActor {
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
 
-        // set by build-decode-library.ts from loadSettings.loadEmitterList - null means
-        // "load every sub-emitter" (default), matching this actor not being in the list at all
+        // set by build-decode-library.ts from loadSettings.loadEmitterList; null loads every sub-emitter
         const subEmitterFilter: string[] | null = (this as any).__subEmitterFilter ?? null;
 
         const emittersInfo = this.emitters.loadSelf()
@@ -145,17 +144,6 @@ abstract class UEmitter extends UAActor {
                 return true;
             })
             .map(e => e.setActor(this).getDecodeInfo(library)) as any as GD.IBaseObjectOrInstanceDecodeInfo[];
-        // if (this.emitters.length > 0)
-        //     debugger;
-
-        //     // this.rotation.pitch = 0;
-        //     // this.rotation.yaw = 0;
-        //     // this.rotation.roll = 0;
-
-        //     // debugger;
-
-        //     // if (this.objectName === "Emitter7")
-        //     //     debugger;
 
         const level = this.getLevel();
         const baseModel = level.getModel();
@@ -177,25 +165,12 @@ abstract class UEmitter extends UAActor {
         } as GD.IBaseObjectDecodeInfo;
 
         // UParticleEmitter::UpdateParticles (UnParticleEmitter.cpp) rebuilds BoundingBox
-        // every tick from live particle positions - there's no static radius/height that
-        // predicts it, and CollisionRadius/Height are physical collision footprint, unrelated
-        // to visual spread. We can't replicate a per-frame accumulated box at decode time.
-        // But the BSP is static and the actor's origin isn't going anywhere: register the
-        // actor at its own origin point (zero-extent box - boxLeavesRecursive degenerates to
-        // a plane-side point classification), exactly like UE2's own zone/PVS association
-        // does (AActor::SetZone uses Model->PointRegion(Location), a point query, not a box).
-        // A guessed box here only ever caused trouble: too small and the emitter never
-        // registers into the leaf it's actually visible from (particles don't render), too
-        // large (even a modest fixed floor) and it registers into every leaf the box happens
-        // to span - one leaf ended up with ~200 emitters riding on it, all marked "visible"
-        // and simulated/drawn at once the moment the camera entered that leaf.
+        // every tick from live particles - can't replicate at decode time, so register
+        // at a zero-extent point (its origin) instead of guessing a static box.
         const worldOrigin = FBox.make(FVector.make(0, 0, 0), FVector.make(0, 0, 0), 1)
             .transformBy(localToWorld).getCenter();
 
-        // bounds/zoneMask mirror UStaticMeshActor.getDecodeInfo - lets the runtime BSP
-        // visibility pass (zone-object.ts) cull emitter simulation the same way it
-        // already culls static meshes, instead of a standalone frustum test. min===max:
-        // this is a point, not a real box.
+        // mirrors UStaticMeshActor.getDecodeInfo for zone-object.ts's BSP visibility pass; min===max, a point not a box
         (actorInfo as any).bounds = {
             isValid: true,
             min: [worldOrigin.x, worldOrigin.y, worldOrigin.z],
@@ -220,9 +195,7 @@ abstract class UEmitter extends UAActor {
 
         (actorInfo as any).zoneMask = actorZoneMask;
 
-        // see allEmitterActors' own comment (decode-library.ts) - leafActors alone
-        // double-gates a point-registered emitter behind both its single leaf AND
-        // its zone; this flat list lets the runtime check the zone mask on its own
+        // flat list (see decode-library.ts) - avoids double-gating on both leaf and zone mask
         library.allEmitterActors.push(actorInfo);
 
         zoneInfo.children.push(actorInfo);

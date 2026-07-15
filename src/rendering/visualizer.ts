@@ -23,6 +23,7 @@ export interface EmitterDebugInfo {
     maxParticles: number;
     isDisabled: boolean;
     isVisible: boolean;
+    isManuallyHidden: boolean;
     // the wrapping "Emitter" actor (un-emitter.ts) that this sub-emitter (SpriteEmitter/
     // MeshEmitter/BeamEmitter, un-particle-emitter.ts) lives under - one actor can carry
     // several sub-emitters, and the HUD groups by this rather than listing them flat
@@ -84,11 +85,20 @@ class Visualizer {
     // sub-emitter lines (from emitterLines) get appended, `header` shows its name/count
     private readonly emitterGroups: Map<string, { wrapper: HTMLElement, header: HTMLElement, body: HTMLElement }> = new Map();
     private readonly emitterLabels: Map<string, Sprite> = new Map();
+    private readonly emitterCheckboxes: Map<string, HTMLInputElement> = new Map();
+    private emitterMasterCheckbox: HTMLInputElement | null = null;
+    private onEmitterToggle?: (uuid: string, visible: boolean) => void;
+    private onEmitterToggleAll?: (visible: boolean) => void;
     private musicInfoElement: HTMLElement | null = null;
     private ambientListElement: HTMLElement | null = null;
     private emitterListElement: HTMLElement | null = null;
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
+
+    public setEmitterVisibilityHandlers(onToggle: (uuid: string, visible: boolean) => void, onToggleAll: (visible: boolean) => void): void {
+        this.onEmitterToggle = onToggle;
+        this.onEmitterToggleAll = onToggleAll;
+    }
 
     public setMode(mode: VisualizerMode): void {
         this.mode = mode;
@@ -319,10 +329,28 @@ class Visualizer {
         const title = document.createElement("div");
         title.innerText = "EMITTERS (decoded, nearest first)";
         title.style.fontWeight = "bold";
-        title.style.marginBottom = "8px";
-        title.style.borderBottom = "1px solid #444";
-        title.style.paddingBottom = "4px";
+        title.style.marginBottom = "4px";
         panel.appendChild(title);
+
+        const masterRow = document.createElement("label");
+        Object.assign(masterRow.style, {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            marginBottom: "8px",
+            borderBottom: "1px solid #444",
+            paddingBottom: "8px",
+            cursor: "pointer"
+        });
+        this.emitterMasterCheckbox = document.createElement("input");
+        this.emitterMasterCheckbox.type = "checkbox";
+        this.emitterMasterCheckbox.checked = true;
+        this.emitterMasterCheckbox.onchange = () => this.onEmitterToggleAll?.(this.emitterMasterCheckbox!.checked);
+        const masterLabel = document.createElement("span");
+        masterLabel.innerText = "Show all";
+        masterRow.appendChild(this.emitterMasterCheckbox);
+        masterRow.appendChild(masterLabel);
+        panel.appendChild(masterRow);
 
         this.emitterListElement = document.createElement("div");
         Object.assign(this.emitterListElement.style, {
@@ -415,6 +443,7 @@ class Visualizer {
                 if (!currentLineIds.has(id)) {
                     this.emitterLines.get(id)?.remove();
                     this.emitterLines.delete(id);
+                    this.emitterCheckboxes.delete(id);
                 }
             }
 
@@ -451,21 +480,44 @@ class Visualizer {
 
                 members.forEach(e => {
                     let line = this.emitterLines.get(e.uuid);
+                    let checkbox = this.emitterCheckboxes.get(e.uuid);
+                    let textEl: HTMLElement;
                     if (!line) {
                         line = document.createElement("div");
-                        line.style.borderLeft = "2px solid #444";
-                        line.style.paddingLeft = "6px";
-                        line.style.marginTop = "2px";
+                        Object.assign(line.style, {
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "4px",
+                            borderLeft: "2px solid #444",
+                            paddingLeft: "6px",
+                            marginTop: "2px"
+                        });
+
+                        checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.style.marginTop = "3px";
+                        checkbox.onchange = () => this.onEmitterToggle?.(e.uuid, checkbox!.checked);
+                        this.emitterCheckboxes.set(e.uuid, checkbox);
+                        line.appendChild(checkbox);
+
+                        textEl = document.createElement("span");
+                        textEl.style.whiteSpace = "pre";
+                        line.appendChild(textEl);
+
                         this.emitterLines.set(e.uuid, line);
+                    } else {
+                        textEl = line.lastElementChild as HTMLElement;
                     }
 
                     group!.body.appendChild(line); // re-append keeps DOM order == sort order
 
+                    checkbox!.checked = !e.isManuallyHidden;
+
                     const eDistText = Math.round(e.distance).toString().padStart(6, " ");
                     const activeText = `${e.activeCount}/${e.maxParticles}`;
                     const state = e.isDisabled ? "DISABLED" : (e.isVisible ? "VISIBLE" : "hidden");
-                    line.innerText = `[${eDistText}] ${this.shortEmitterName(e.name)} (${e.type})\n      active: ${activeText} | ${state}`;
-                    line.style.color = e.isDisabled ? "#888" : (e.isVisible ? "#fff" : "#f80");
+                    textEl.innerText = `[${eDistText}] ${this.shortEmitterName(e.name)} (${e.type})\n      active: ${activeText} | ${state}`;
+                    textEl.style.color = e.isDisabled ? "#888" : (e.isVisible ? "#fff" : "#f80");
                     line.style.borderColor = e.isVisible ? "#0f0" : "#444";
                 });
             }

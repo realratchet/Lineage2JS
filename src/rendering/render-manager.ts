@@ -63,20 +63,15 @@ type SectorObject = import("../objects/zone-object").SectorObject;
 
 const frozenUpdateMatrixWorld = function () { };
 
-// hides every particle in a hard-frozen emitter's pool. Never touch the emitter's own
-// .visible for this: Pass 2 runs inside scene.traverseVisible, whose three.js
-// implementation is `if (this.visible === false) return` BEFORE invoking the callback -
-// so an object hidden that way is silently excluded from every future frame's
-// traversal too, permanently stranding it even once back in range/frustum.
+// never touch the emitter's own .visible here - scene.traverseVisible skips `if (!this.visible)` before
+// the callback, so that would permanently strand it out of future traversal even once back in range
 function freezeEmitterParticles(emitter: any) {
     for (const p of emitter.particlePool) {
         p.visible = false;
         p.updateMatrixWorld = frozenUpdateMatrixWorld;
     }
 
-    // instanced sprite emitters render from a single shared mesh, not per-particle
-    // Object3D visibility - particlePool entries above don't touch it, so hide it
-    // explicitly (base-emitter.ts's update() sets it visible=true again on its own).
+    // instanced sprite emitters render from one shared mesh - particlePool.visible above doesn't touch it
     if (emitter.instancedMesh) {
         emitter.instancedMesh.visible = false;
     }
@@ -107,6 +102,7 @@ class RenderManager {
     public bspHelperActive: boolean = false;
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
+    private readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
@@ -206,6 +202,7 @@ class RenderManager {
 
         // Create visualizer system (will be recreated when sector changes)
         this.visualizer = new Visualizer(this.scene);
+        this.wireEmitterVisibilityHandlers();
 
         this.physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
 
@@ -254,9 +251,9 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // // talking island
-        // this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
-        // this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
+        // talking island
+        this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
+        this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -306,9 +303,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // heine
-        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
-        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // // heine
+        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
+        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -769,10 +766,7 @@ class RenderManager {
         return xsect.get(sectorY);
     }
 
-    // F4 (Emitters visualizer mode) debug feed - every currently-decoded emitter
-    // (particlePool-bearing object), nearest-camera-first. Capped rather than
-    // exhaustive: this redraws a canvas-texture label per entry every call, so an
-    // uncapped list in a dense sector would stall the debug overlay itself.
+    // F4 Emitters HUD feed, nearest first - capped since each entry redraws a canvas-texture label
     private static readonly EMITTER_DEBUG_MAX = 80;
 
     public collectEmitterDebugInfo(): EmitterDebugInfo[] {
@@ -784,9 +778,9 @@ class RenderManager {
             if (!emitter.particlePool) return;
 
             const worldPos = new Vector3().setFromMatrixPosition(emitter.matrixWorld);
-            const isVisible = emitter.instancedMesh
+            const isVisible = emitter.visible && (emitter.instancedMesh
                 ? !!emitter.instancedMesh.visible
-                : (emitter.particlePool as any[]).some(p => p.visible);
+                : (emitter.particlePool as any[]).some((p: any) => p.visible));
 
             results.push({
                 uuid: emitter.uuid,
@@ -798,6 +792,7 @@ class RenderManager {
                 maxParticles: emitter.maxParticles ?? 0,
                 isDisabled: !!emitter.isDisabled,
                 isVisible,
+                isManuallyHidden: this.manuallyHiddenEmitterUuids.has(emitter.uuid),
                 parentUuid: emitter.parent?.uuid ?? "",
                 parentName: emitter.parent?.name || "?",
             });
@@ -807,14 +802,38 @@ class RenderManager {
         return results.slice(0, RenderManager.EMITTER_DEBUG_MAX);
     }
 
+    // The BSP offscreen freeze only ever touches instancedMesh.visible/particle.visible, never the emitter's own .visible, so this sticks.
+    public setEmitterVisible(uuid: string, visible: boolean): void {
+        if (visible) this.manuallyHiddenEmitterUuids.delete(uuid);
+        else this.manuallyHiddenEmitterUuids.add(uuid);
+
+        const obj = this.scene.getObjectByProperty("uuid", uuid);
+        if (obj) obj.visible = visible;
+        this.needsUpdate = true;
+    }
+
+    public setAllEmittersVisible(visible: boolean): void {
+        this.scene.traverse(obj => {
+            if (!(obj as any).particlePool) return;
+            if (visible) this.manuallyHiddenEmitterUuids.delete(obj.uuid);
+            else this.manuallyHiddenEmitterUuids.add(obj.uuid);
+            obj.visible = visible;
+        });
+        this.needsUpdate = true;
+    }
+
+    private wireEmitterVisibilityHandlers(): void {
+        this.visualizer.setEmitterVisibilityHandlers(
+            (uuid, visible) => this.setEmitterVisible(uuid, visible),
+            (visible) => this.setAllEmittersVisible(visible)
+        );
+    }
+
     protected _updateObjects(currentTime: number) {
         const globalTime = currentTime / 600;
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
 
-        // Camera-facing billboard basis for instanced sprite particles - same formula
-        // sprite-emitter.ts used to run per-particle every frame (see its onBeforeRender),
-        // now computed once here and read by every instanced particle shader as a uniform.
-        // Per-particle spin is still applied per-instance in the vertex shader.
+        // camera-facing billboard basis, computed once and shared as a uniform (was per-particle in sprite-emitter.ts's onBeforeRender)
         {
             const camera = this.camera;
             const projUp = tmpBillboardUp.copy(camera.up).normalize();
@@ -918,10 +937,7 @@ class RenderManager {
                 // Skip lighting updates for objects in non-active (distant) sectors,
                 // except objects that were never lit at all (freshly streamed sectors)
                 if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
-                    // emitters this far never simulate, so their pool never moves - skip
-                    // the render-time matrix walk into them too. The emitter's own
-                    // .visible is never touched (see freezeEmitterParticles) - hide via
-                    // each particle's own flag instead, once per freeze transition.
+                    // emitters this far never simulate - skip the matrix walk too, freezeEmitterParticles hides via particle flags
                     if ((child as any).particlePool) {
                         if (!(child as any)._simFrozen) {
                             freezeEmitterParticles(child);
@@ -932,39 +948,25 @@ class RenderManager {
                     return;
                 }
 
-                // the "active sector" check above only excludes OTHER sectors. Within the
-                // active sector, reuse the BSP-leaf-based visibility zone-object.ts's
-                // updateVisibility already computed this frame for static meshes (portal/
-                // zone/distance aware - not just camera FOV) instead of a standalone
-                // frustum test; Pass 1 runs before this loop and fills visibleEmitterUuids.
+                // within the active sector, reuse zone-object.ts's BSP visibility (Pass 1 fills visibleEmitterUuids) instead of a standalone frustum test
                 if ((child as any).particlePool) {
-                    // not currently cross-sector-frozen (that branch returned above) -
-                    // reset so a *later* cross-sector transition re-runs the hide pass
-                    // instead of skipping it as "already done" from a stale flag
-                    (child as any)._simFrozen = false;
+                    (child as any)._simFrozen = false; // so a later cross-sector transition re-runs the hide pass
 
                     const emitterUuid = (child as any).emitterActorUuid;
                     const isVisible = !!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid);
 
                     if (!isVisible) {
-                        // in range or not, throttle instead of freezing outright so
-                        // particle state doesn't go stale and pop back in once visible
+                        // throttle instead of freezing outright so particle state doesn't go stale and pop back in once visible
                         const nextUpdate = (child as any).nextOffscreenUpdate || 0;
 
                         if (currentTime >= nextUpdate) {
-                            // simulate on schedule so particle state stays live, then hide
-                            // the result again immediately - update() sets "true" per-
-                            // particle visibility from live/dead state, which has nothing
-                            // to do with the camera frustum
                             (child as any).nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS;
                             (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
                             (child as any).update(currentTime);
                             freezeEmitterParticles(child);
                         }
 
-                        // between ticks, particles are already hidden from the last tick's
-                        // post-update hide above - just keep the matrix walk skipped
-                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
+                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld; // between ticks, already hidden by the last tick's freeze
                         return;
                     }
 
@@ -1528,6 +1530,7 @@ class RenderManager {
 
                 // Create new visualizer
                 (this as any).visualizer = new Visualizer(this.scene);
+                this.wireEmitterVisibilityHandlers();
 
                 // Restore state
                 this.visualizer.setMode(currentMode);

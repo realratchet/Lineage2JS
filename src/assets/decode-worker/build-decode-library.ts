@@ -121,15 +121,11 @@ function buildDecodeLibrary(pkg: C.APackage, {
         const uEmitters = actorsToLoad.map(exp => pkg.fetchObject<GA.UEmitter>(exp.index + 1).loadSelf());
 
         for (const actor of uEmitters) {
-            // debug whitelist (core.ts loadSettings.loadEmitterList, see loadEmitterList
-            // JSDoc in unreal.d.ts) - unset/empty loads everything as before
+            // debug whitelist, see core.ts loadSettings.loadEmitterList
             if (loadEmitterList && loadEmitterList.length) {
                 const entry = loadEmitterList.find(e => e.name === actor.objectName);
                 if (!entry) continue;
-                // stashed for un-emitter.ts's getDecodeInfo to filter sub-emitters by -
-                // getDecodeInfo(library) has no room for a second argument without
-                // threading it through every override in the emitter class hierarchy
-                (actor as any).__subEmitterFilter = entry.emitters ?? null;
+                (actor as any).__subEmitterFilter = entry.emitters ?? null; // read by un-emitter.ts's getDecodeInfo
             }
 
             actor.getDecodeInfo(decodeLibrary);

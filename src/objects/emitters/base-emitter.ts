@@ -117,9 +117,7 @@ abstract class BaseEmitter extends Object3D {
     protected isSpriteEmitter: boolean = false;
     protected SpinParticles: boolean;
 
-    // Opt-in set by a subclass's initSettings() (before the pool loop runs) - when
-    // set, createInstancedMesh() replaces the per-particle Object3D+unique-Material
-    // rendering path with a single instanced draw call for the whole pool.
+    // set by a subclass's initSettings() - swaps to a single instanced draw call for the whole pool
     protected isInstancedRendering: boolean = false;
     protected instancedMesh: InstancedSpriteMesh | null = null;
 
@@ -175,12 +173,7 @@ abstract class BaseEmitter extends Object3D {
             }
         };
         this.drawScale = config.drawScale ?? 1;
-        // this.generalSettings.opacity (above) is a copy nothing reads - the fade
-        // logic in updateParticles reads this.opacity directly, which was never
-        // assigned anywhere (confirmed: no other `this.opacity =` in the codebase),
-        // so a genuine, level-designer-authored Opacity value (e.g. 0.6 on this
-        // lighthouse flare, meant to dim it) silently never took effect.
-        this.opacity = config.opacity ?? 1;
+        this.opacity = config.opacity ?? 1; // updateParticles' fade logic reads this.opacity, not generalSettings.opacity above
 
         Object.assign(this, config.settings);
 
@@ -276,17 +269,8 @@ abstract class BaseEmitter extends Object3D {
         // MaxParticles is not always serialized - fall back to the config default
         this.maxParticles ??= this.generalSettings.maxParticles;
 
-        // poolSize oversizes the renderable buffer (instancedMesh / particlePool)
-        // for slack, but UParticleEmitter::Initialize in UnParticleEmitter.cpp does
-        // Particles.Add(InMaxParticles); MaxActiveParticles = InMaxParticles - UE2
-        // has no such buffer at all, MaxParticles is a hard cap on both the array
-        // and the active count. maxActiveParticles gates spawn-count clamping
-        // (spawnParticles below) and must stay equal to the true maxParticles, or
-        // an emitter can end up with up to 2x as many simultaneously active
-        // particles as authored - invisible for a large pool, but for something
-        // like a maxParticles=1 "single lens flare" sprite, two overlapping
-        // instances of the same additive/screen-blended sprite reads as one
-        // impossibly bright, opaque blob instead of the intended single faint one.
+        // poolSize is just render-buffer slack; maxActiveParticles must stay the true cap
+        // (UnParticleEmitter.cpp has no such buffer) or e.g. maxParticles=1 can double-spawn
         const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
 
         this.particles = new Array(poolSize).fill(1).map(() => new Particle_T())
@@ -307,11 +291,7 @@ abstract class BaseEmitter extends Object3D {
         if (this.instancedMesh) {
             this.add(this.instancedMesh);
 
-            // Lightweight handles only - no visualizer, not added to the scene graph
-            // (nothing to traverse/composite per-particle; the single instancedMesh
-            // above is what actually renders). freezeEmitterParticles/throttling in
-            // render-manager.ts iterate particlePool directly, not the scene graph,
-            // so p.visible stays the freeze contract for these too.
+            // lightweight handles only - the instancedMesh above is what actually renders
             for (let i = 0; i < poolSize; i++) {
                 this.particlePool[i] = Particle.init(this, null);
             }
@@ -522,21 +502,10 @@ abstract class BaseEmitter extends Object3D {
         const ownerLocation = () => Owner.position;
         const oldOwnerLocation = () => ownerLocation();
 
-        // debugger;
-
         const Particle = this.particles[index];
 
-        // The wrapper Emitter actor's DrawScale shrinks its rendered position via the
-        // normal parent-child matrix chain (this emitter is a child of that actor),
-        // but UE2 doesn't apply owner scale to particle spawn ranges at all - only
-        // translation (Owner->Location). Left uncancelled, a wrapper placed at less
-        // than 1x scale (common in this game's decorative torch/lantern actors)
-        // shrinks the whole spawn spread along with it - StartLocationRange's
-        // authored ±20 units rendering as a barely-visible ±2 cluster. Cancelling it
-        // only for position/velocity (not size, not via the decode layer) keeps the
-        // blast radius to exactly what's affected: an emitter with zero spread
-        // (StartLocationRange all zeros, the common "single static sprite" case)
-        // stays at zero regardless of this multiplier.
+        // UE2 doesn't apply owner scale to particle spawn ranges, only translation - cancel
+        // the wrapper actor's DrawScale here so a scaled-down wrapper doesn't shrink spread too
         const spawnRangeScale = this.parent?.scale.x ? 1 / this.parent.scale.x : 1;
 
         Particle.position.copy(this.initialSettings.offset);
@@ -1064,12 +1033,7 @@ abstract class BaseEmitter extends Object3D {
                 }
 
                 if (this.isUsingRevolution) {
-                    // UnParticleEmitter.cpp UpdateParticles: orbit position around
-                    // RevolutionCenter, one axis-angle rotation per axis in sequence
-                    // (not a combined Euler rotation - matches RotateAngleAxis called
-                    // three times in the original). RevolutionsPerSecond is turns/sec;
-                    // *0xFFFF converts to UE's 16-bit angle unit like the spin code
-                    // above, then the usual (2*PI/65536) brings it to radians.
+                    // one axis-angle rotation per axis in sequence, not a combined Euler rotation (matches UnParticleEmitter.cpp)
                     const revCenter = Particle.RevolutionCenter;
                     const loc = this.tmpVec.copy(Particle.position).sub(revCenter);
                     const angleScale = deltaTime * 0xFFFF * (Math.PI * 2 / 65536);
@@ -1294,13 +1258,7 @@ abstract class BaseEmitter extends Object3D {
                     Color.sub(new Vector4().copy(MaxFade).multiplyScalar(FadeFactor));
                 }
 
-                // UnParticleEmitter.cpp clamps every channel to [0,255] after the fade
-                // subtraction above (Clamp<FLOAT>(Color.R - FadeFactor*MaxFade.X, 0, 255),
-                // same for G/B/A) - our port skipped that clamp, so a FadeFactor or
-                // MaxFade outside [0,1] (e.g. mid-fade at spawn, or a >1 MaxFade
-                // component) drove Color negative, corrupting the additive-blended
-                // render into dark/inverted patches instead of a clean fade.
-                Color.clampScalar(0, 1);
+                Color.clampScalar(0, 1); // UnParticleEmitter.cpp clamps post-fade too, else Color can go negative
             }
 
             // Laurent -- Global Opacity
@@ -1415,12 +1373,7 @@ abstract class BaseEmitter extends Object3D {
             this.updateParticles(dt);
         }
 
-        // render-manager.ts's offscreen throttle calls update() to keep simulation
-        // state live, then immediately calls freezeEmitterParticles() to hide the
-        // result again - that only touches particlePool entries (p.visible), which
-        // don't drive the instanced mesh's rendering. Mirror the legacy path's
-        // contract explicitly: every call to update() implies "should be visible
-        // right now" and a subsequent freeze call is what hides it again.
+        // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
         if (this.instancedMesh) this.instancedMesh.visible = true;
 
         this.particlePool.forEach((p, i) => {
@@ -1468,12 +1421,7 @@ abstract class BaseEmitter extends Object3D {
             this.computeSubdivUV(this.resolveSubdivision(settings), tmpSubdivUV);
 
             if (this.instancedMesh) {
-                // settings.scale carries a *drawScale bake-in (see updateParticles)
-                // meant to cancel this emitter's own 1/drawScale local scale when
-                // composed through the normal scene-graph parent chain - the
-                // instanced shader's billboard offset bypasses that chain (it stays
-                // camera-facing regardless of the emitter's own rotation), so undo
-                // the bake-in here instead.
+                // undo the 1/drawScale bake-in (updateParticles) - the instanced billboard bypasses the scene-graph parent chain that normally cancels it
                 const scaleFactor = this.scale.x;
                 this.instancedMesh.setInstance(i, settings.position, settings.scale.x * scaleFactor, settings.scale.y * scaleFactor, spin, settings.Color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3]);
                 return;
@@ -1508,14 +1456,10 @@ abstract class BaseEmitter extends Object3D {
 
             if (i > 0) return;
 
-            // console.log(p.position.toArray().map(x => x.toFixed(2)).join(", ") + " |" + settings.Velocity.toArray().map(x => x.toFixed(2)).join(", "));
         })
 
         if (this.instancedMesh) {
-            // One shared material for the whole pool - unlike the per-particle path,
-            // there's no per-particle Time to drive this with, so use the emitter's
-            // own clock (matches how other isUpdatable materials elsewhere already
-            // update off a single shared currentTime, not a per-instance age).
+            // shared material for the whole pool - driven off the emitter's own clock, no per-particle Time
             if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
             this.instancedMesh.commit();
         }
@@ -1567,31 +1511,9 @@ abstract class BaseEmitter extends Object3D {
     //     this.lastSpawned = currentTime;
     // }
 
-    // 2026-07-15: tried a "cancel the parent Emitter actor's DrawScale" correction
-    // here (and in the instanced billboard-size path below) after finding this
-    // lighthouse's sparkle emitter's spawn spread suspiciously small relative to its
-    // ~0.1-scaled wrapper actor. Reverted both: a scene-wide survey found 628 of 653
-    // emitters (96%) share that same parent scale of 0.1, meaning it is not a rare,
-    // deliberately-scaled-down decoration - it is the norm for this sector, and
-    // blindly "fixing" it regressed size/spread broadly across previously-correct
-    // emitters. Whatever's actually wrong with this one flare's brightness and this
-    // one sparkle emitter's spread, it isn't "the wrapper's DrawScale should be
-    // cancelled out of spatial ranges" - that theory doesn't survive contact with how
-    // common this scale value actually is. Needs a narrower, sector/actor-specific
-    // diagnosis instead of a change to the shared spawn/render path.
-
-    // ParticleEmitter's Texture(U/V)Subdivisions carve the texture into a grid;
-    // Particle.Subdivision (set at spawn, base-emitter.ts spawnParticle, or advanced
-    // per-frame by resolveSubdivision below) picks a cell. -1 means "not using
-    // subdivisions" - full texture, no cropping. Row 0 is taken to be the top row of
-    // the atlas (matches how these grids are normally authored), which is why row
-    // maps to V from 1 downward here rather than three.js's native bottom-up V.
-    //
-    // Index order matches UnSpriteEmitter.cpp exactly: VMin = (Section % VSubdivisions)
-    // * FV; UMin = (Section / VSubdivisions) * FU - V is the fast-varying index (cells
-    // stack downward within a column before moving to the next column), not U. Using
-    // U as the fast axis (as an earlier version of this method did) reads cells out of
-    // the wrong order for any atlas that isn't square.
+    // matches UnSpriteEmitter.cpp: V is the fast-varying index (cells stack downward within
+    // a column before the next column), not U; row 0 is the atlas's top row, so V counts
+    // down from 1 here rather than three.js's native bottom-up V. subdivision -1 = no cropping.
     protected computeSubdivUV(subdivision: number, out: [number, number, number, number]) {
         if (subdivision < 0 || !this.texSubdivU || !this.texSubdivV) {
             out[0] = 0; out[1] = 0; out[2] = 1; out[3] = 1;
@@ -1611,14 +1533,8 @@ abstract class BaseEmitter extends Object3D {
         return out;
     }
 
-    // UnSpriteEmitter.cpp's render loop: when Subdivision is -1 (UseRandomSubdivision
-    // was off at spawn - see spawnParticle), the cell isn't fixed at spawn at all - it's
-    // derived every frame from how far the particle is through its lifetime, cycling
-    // through the atlas as the particle ages. Our port previously treated -1 as a
-    // permanent "no cropping" signal and never implemented this branch, so any emitter
-    // relying on sequential frame animation (rather than one random cell per particle)
-    // rendered the entire uncropped atlas for its whole life - a multi-frame sprite
-    // sheet shown all at once looks exactly like a static grid of unrelated icons.
+    // Subdivision -1 (UseRandomSubdivision off) isn't a permanent "no cropping" signal -
+    // UnSpriteEmitter.cpp derives the cell every frame from lifetime progress instead
     protected resolveSubdivision(settings: { Subdivision: number, Time: number, MaxLifetime: number }): number {
         if (settings.Subdivision !== -1) return settings.Subdivision;
         if (!this.texSubdivU || !this.texSubdivV || !settings.MaxLifetime) return -1;

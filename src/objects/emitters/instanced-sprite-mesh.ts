@@ -1,9 +1,7 @@
 import { DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, PlaneGeometry, Vector3, Vector4 } from "three";
 import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
 
-// Every InstancedSpriteMesh shares this same per-vertex quad data (position/uv/index) -
-// only the instance attributes differ per emitter, so there's no reason to duplicate
-// the 4-vertex buffer per emitter.
+// shared per-vertex quad data - only instance attributes differ per emitter
 const baseGeometry = new PlaneGeometry(2, 2);
 
 class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticleMaterial> {
@@ -27,8 +25,7 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
         this.spinAttr = new InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(DynamicDrawUsage);
         this.colorAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(DynamicDrawUsage);
 
-        // default to the identity cell (whole texture, no atlas) - a fresh buffer is
-        // all-zero, which would collapse every UV sample onto a single texel
+        // default to the identity cell - an all-zero buffer would collapse every UV sample onto one texel
         const uvData = new Float32Array(capacity * 4);
         for (let i = 0; i < capacity; i++) { uvData[i * 4 + 2] = 1; uvData[i * 4 + 3] = 1; }
         this.uvAttr = new InstancedBufferAttribute(uvData, 4).setUsage(DynamicDrawUsage);
@@ -39,11 +36,7 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
         geometry.setAttribute("instanceColor", this.colorAttr);
         geometry.setAttribute("instanceUV", this.uvAttr);
 
-        // Per-instance world offsets are computed in the vertex shader from a
-        // camera-facing basis - three's automatic bounding-sphere culling can't see
-        // that and would judge visibility from the raw (tiny, origin-centered) quad
-        // geometry. Emitter-level BSP/frustum visibility (zone-object.ts) already
-        // gates whether this mesh's parent emitter renders at all.
+        // vertex shader computes world offsets from a camera-facing basis, invisible to three's bounding-sphere culling
         this.frustumCulled = false;
 
         (this as any).isInstancedSpriteMesh = true;
