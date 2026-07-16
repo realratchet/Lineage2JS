@@ -22,7 +22,7 @@ class InstancedParticleMaterial extends ShaderMaterial {
         if (uniforms.map.value) {
             defines.USE_MAP = "";
         }
-        const { blending, blendSrc, blendDst, isAdditive } = getPartcileBlendingSettings(blendingMode);
+        const { blending, blendSrc, blendDst, blendSrcAlpha, blendDstAlpha, isAdditive } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
             defines.USE_ADDITIVE_FOG = "";
@@ -38,7 +38,9 @@ class InstancedParticleMaterial extends ShaderMaterial {
             side: DoubleSide,
             blending,
             blendSrc,
-            blendDst
+            blendDst,
+            blendSrcAlpha,
+            blendDstAlpha
         });
 
         (this as any).isParticleMaterial = true;

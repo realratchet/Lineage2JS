@@ -10,6 +10,8 @@ const tmpColorByte = new ColorByte();
 const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
 const tmpSphere = new Sphere();
+const tmpEmitterBox = new Box3();
+const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
@@ -1142,9 +1144,10 @@ class SectorObject extends Object3D {
 
                     if (object.visible || object.userData.anyTransparentVisible) visibleCount++;
 
-                    if (object.visible && (object as any).isUpdatable) {
-                        (object as any)?.update(this, environment);
-                    }
+                    // no update() here: render-manager's Pass 2 (traverseVisible)
+                    // relights visible meshes the same frame - a light's needsUpdate
+                    // stays set for the whole frame, so updating in both passes ran
+                    // every relight twice
                 } else {
                     // Non-batch actors: leaf visibility, with the direct bounds fallback
                     // only for cameras outside the bsp (inside, the leaves are exact and
@@ -1166,12 +1169,7 @@ class SectorObject extends Object3D {
                     }
 
                     object.visible = isVisible;
-                    if (isVisible) {
-                        visibleCount++;
-                        if ((object as any).isUpdatable) {
-                            (object as any)?.update(this, environment);
-                        }
-                    }
+                    if (isVisible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
                 }
             });
 
@@ -1192,7 +1190,25 @@ class SectorObject extends Object3D {
 
                 const origin = tmpVec3.fromArray(bounds.min);
 
-                const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin);
+                let isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin);
+
+                // UE2 frustum-tests the per-tick particle bounding box rebuilt in
+                // UpdateParticles (UnParticleEmitter.cpp), not the actor origin - a
+                // tall effect (mother tree column) otherwise vanishes as soon as its
+                // base leaves the frustum even though particles fill the screen
+                if (!isFrustumVisible) {
+                    for (const child of this.getEmitterObjects(actorBase.uuid)) {
+                        const box = (child as any).boundingBox as THREE.Box3;
+                        if (!box || box.isEmpty()) continue;
+
+                        tmpEmitterBox.copy(box).applyMatrix4(child.matrixWorld);
+
+                        if (cameraFrustum.intersectsBox(tmpEmitterBox)) {
+                            isFrustumVisible = true;
+                            break;
+                        }
+                    }
+                }
                 const zoneMask = (actorBase as any).zoneMask as bigint;
                 const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
                 const distSq = cameraPosition.distanceToSquared(origin);
@@ -1209,11 +1225,37 @@ class SectorObject extends Object3D {
 
         // must run for every sector, terrain colors start black and sectors without
         // any StaticMeshActor (ocean tiles) would never get lit otherwise
-        this.updateTerrainSectors(environment, cameraFrustum, frustumCullingEnabled);
+        //
+        // UE2 renders terrain per zone (UnRenderVisibility.cpp: bTerrainZone &&
+        // ActiveZoneMask & (1 << ZoneIndex)) - when the visible-zone set is fully
+        // indoor (sealed dungeon), the outdoor terrain must not draw or relight;
+        // a portal to the outside entering the frustum re-adds the outdoor zones
+        const terrainZoneVisible = !frustumCullingEnabled || (finalZoneMask & this.outdoorZoneMask) !== 0n;
+        this.updateTerrainSectors(environment, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
+    }
+
+    protected emitterObjectsByUuid?: Map<string, THREE.Object3D[]>;
+
+    // the subtree is static after decode, collect the particle-bearing children once
+    protected getEmitterObjects(actorUuid: string): THREE.Object3D[] {
+        if (!this.emitterObjectsByUuid) {
+            const map = new Map<string, THREE.Object3D[]>();
+
+            this.traverse(obj => {
+                const uuid = (obj as any).emitterActorUuid;
+                if (!uuid || !(obj as any).particlePool) return;
+                if (!map.has(uuid)) map.set(uuid, []);
+                map.get(uuid).push(obj);
+            });
+
+            this.emitterObjectsByUuid = map;
+        }
+
+        return this.emitterObjectsByUuid.get(actorUuid) ?? EMPTY_EMITTER_LIST;
     }
 
     // Update terrain lighting and batch visibility
-    protected updateTerrainSectors(environment: L2Environment, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean) {
+    protected updateTerrainSectors(environment: L2Environment, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, zoneVisible: boolean = true) {
         // the zones subtree is static after decode, collect the terrain nodes once
         if (!this.terrainRenderables) {
             const batches: Mesh[] = [];
@@ -1239,7 +1281,7 @@ class SectorObject extends Object3D {
 
             sectors.forEach(sector => {
                 // Terrain sectors have 'bounds' (THREE.Box3)
-                const isVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds);
+                const isVisible = zoneVisible && (!frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds));
 
                 if (isVisible) {
                     sector.update(this, environment);

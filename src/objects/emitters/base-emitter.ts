@@ -522,10 +522,15 @@ abstract class BaseEmitter extends Object3D {
         if (ApplyAll || this.startLocationShape.valueOf() === PTLS_Polar) {
             const Polar = this.tmpVec;
             randVector(Polar, this.startLocationPolarRange.min, this.startLocationPolarRange.max);
+            // L2's authored polar ranges use degrees (commonly azimuth 0..360 and
+            // inclination 0..180), with Z as the radius. The old Y/Z assignment also
+            // put the polar axis sideways instead of along the scene's native UE Z-up.
+            const azimuth = Polar.x * Math.PI / 180;
+            const inclination = Polar.y * Math.PI / 180;
             let X, Y, Z;
-            X = Polar.z * Math.cos(Polar.x * Math.PI / 32768) * Math.sin(Polar.y * Math.PI / 32768);
-            Z = Polar.z * Math.sin(Polar.x * Math.PI / 32768) * Math.sin(Polar.y * Math.PI / 32768);
-            Y = Polar.z * Math.cos(Polar.y * Math.PI / 32768);
+            X = Polar.z * Math.cos(azimuth) * Math.sin(inclination);
+            Y = Polar.z * Math.sin(azimuth) * Math.sin(inclination);
+            Z = Polar.z * Math.cos(inclination);
             Particle.position.add(new Vector3(X, Y, Z));
         }
 
@@ -1511,9 +1516,10 @@ abstract class BaseEmitter extends Object3D {
     //     this.lastSpawned = currentTime;
     // }
 
-    // matches UnSpriteEmitter.cpp: V is the fast-varying index (cells stack downward within
-    // a column before the next column), not U; row 0 is the atlas's top row, so V counts
-    // down from 1 here rather than three.js's native bottom-up V. subdivision -1 = no cropping.
+    // Matches UnSpriteEmitter.cpp: V is the fast-varying index (cells stack downward within
+    // a column before the next column), not U. Native assigns VMin to the quad's top vertices
+    // and VMax to its bottom vertices; PlaneGeometry uses UV.y=1 at the top, so the atlas cell
+    // needs a negative V scale. subdivision -1 = no cropping.
     protected computeSubdivUV(subdivision: number, out: [number, number, number, number]) {
         if (subdivision < 0 || !this.texSubdivU || !this.texSubdivV) {
             out[0] = 0; out[1] = 0; out[2] = 1; out[3] = 1;
@@ -1526,9 +1532,9 @@ abstract class BaseEmitter extends Object3D {
         const scaleY = 1 / this.texSubdivV;
 
         out[0] = uIndex * scaleX;
-        out[1] = 1 - (vIndex + 1) * scaleY;
+        out[1] = (vIndex + 1) * scaleY;
         out[2] = scaleX;
-        out[3] = scaleY;
+        out[3] = -scaleY;
 
         return out;
     }

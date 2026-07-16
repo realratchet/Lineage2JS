@@ -10,12 +10,33 @@ const tmpNormal = new Vector3();
 // const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
 
-function* iterFlags(arr: Uint8Array): Generator<number, null, unknown> {
-    for (let i = 0, len = arr.length; i < len; i++)
-        yield arr[i];
+// Vertex indices a light actually influences, decoded once from its flags bitmask
+// (LSB-first per byte). The dynamic pass runs per animated light per frame, and
+// walking every vertex of a batched geometry just to test bits dominated the frame
+// time (~20M vertex×light iterations/frame in the 18_20 necropolis).
+const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
 
-    return null;
+function getAffectedVertices(flags: Uint8Array, vertexCount: number): Uint32Array {
+    let indices = affectedVertexCache.get(flags);
+
+    if (!indices) {
+        let count = 0;
+
+        for (let vi = 0; vi < vertexCount; vi++)
+            if (flags[vi >> 3] & (1 << (vi & 7))) count++;
+
+        indices = new Uint32Array(count);
+
+        for (let vi = 0, k = 0; vi < vertexCount; vi++)
+            if (flags[vi >> 3] & (1 << (vi & 7))) indices[k++] = vi;
+
+        affectedVertexCache.set(flags, indices);
+    }
+
+    return indices;
 }
+
+type AugmentedLight_T = { light: string, flags: Uint8Array, instance?: DynamicLight };
 
 class LitActorMesh extends Mesh {
     public readonly isUpdatable: boolean = true;
@@ -54,7 +75,37 @@ class LitActorMesh extends Mesh {
         }
     }
 
-    protected computeLighting(_sector: SectorObject, lights: { light: string, flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, multiplier: number) {
+    protected perVertexGlow?: Float32Array;
+    protected perVertexGlowSource?: unknown;
+
+    // Per-vertex scaledGlow lookup, replicating the original sequential range scan:
+    // an actor's glow applies until its range ends, the last actor's glow carries
+    // past the end. Built once - batch ranges never change after decode.
+    protected getPerVertexGlow(perActorAmbient: { startVertex: number, count: number, scaledGlow: number }[], vertexCount: number): Float32Array {
+        if (this.perVertexGlowSource !== perActorAmbient || this.perVertexGlow?.length !== vertexCount) {
+            const arr = new Float32Array(vertexCount);
+
+            let currentActorIndex = 0;
+            let currentActor = perActorAmbient[0] ?? null;
+            let scaleGlow = currentActor ? currentActor.scaledGlow : this.scaledGlow;
+
+            for (let vi = 0; vi < vertexCount; vi++) {
+                if (currentActor && vi >= currentActor.startVertex + currentActor.count) {
+                    currentActorIndex++;
+                    currentActor = perActorAmbient[currentActorIndex] ?? null;
+                    if (currentActor) scaleGlow = currentActor.scaledGlow;
+                }
+                arr[vi] = scaleGlow;
+            }
+
+            this.perVertexGlow = arr;
+            this.perVertexGlowSource = perActorAmbient;
+        }
+
+        return this.perVertexGlow;
+    }
+
+    protected computeLighting(_sector: SectorObject, lights: AugmentedLight_T[], target: Uint8ClampedArray, multiplier: number) {
         if (lights.length === 0) return;
 
         const attrPositions = this.geometry.getAttribute("position");
@@ -65,46 +116,31 @@ class LitActorMesh extends Mesh {
 
         const vertexArrayLen = attrPositions.count;
         const perActorAmbient: { startVertex: number, count: number, scaledGlow: number }[] | undefined = this.userData.perActorAmbient;
+        const glowPerVertex = perActorAmbient ? this.getPerVertexGlow(perActorAmbient, vertexArrayLen) : null;
+        const uniformGlow = this.scaledGlow;
 
         for (const { instance: light, flags } of lights) {
             if (!light) continue;
-            const bitPtrIter = iterFlags(flags);
 
-            let bitMask = 0x1;
-            let bitPtr = bitPtrIter.next().value;
+            const indices = getAffectedVertices(flags, vertexArrayLen);
             const col = light.color;
 
-            let currentActorIndex = 0;
-            let currentActor = perActorAmbient ? perActorAmbient[0] : null;
-            let scaleGlow = currentActor ? currentActor.scaledGlow : this.scaledGlow;
+            for (let k = 0, len = indices.length; k < len; k++) {
+                const vi = indices[k];
 
-            for (let vi = 0; vi < vertexArrayLen; vi++) {
-                if (currentActor && vi >= currentActor.startVertex + currentActor.count) {
-                    currentActorIndex++;
-                    currentActor = perActorAmbient![currentActorIndex];
-                    if (currentActor) scaleGlow = currentActor.scaledGlow;
-                }
-                if ((bitPtr & bitMask) !== 0) {
-                    vertex.fromBufferAttribute(attrPositions, vi);
-                    tmpNormal.fromBufferAttribute(attrNormals, vi);
+                vertex.fromBufferAttribute(attrPositions, vi);
+                tmpNormal.fromBufferAttribute(attrNormals, vi);
 
-                    const samplingPoint = vertex.applyMatrix4(localToWorld);
-                    const samplingNormal = tmpNormal.transformDirection(localToWorld);
+                const samplingPoint = vertex.applyMatrix4(localToWorld);
+                const samplingNormal = tmpNormal.transformDirection(localToWorld);
 
-                    const intensity = multiplier * scaleGlow * this.sampleIntensity(light, samplingPoint, samplingNormal);
+                const scaleGlow = glowPerVertex ? glowPerVertex[vi] : uniformGlow;
+                const intensity = multiplier * scaleGlow * this.sampleIntensity(light, samplingPoint, samplingNormal);
 
-                    if (intensity > 0) {
-                        target[vi * 3 + 0] += Math.floor(col.r * intensity);
-                        target[vi * 3 + 1] += Math.floor(col.g * intensity);
-                        target[vi * 3 + 2] += Math.floor(col.b * intensity);
-                    }
-                }
-
-                bitMask = (bitMask << 1) % 0x100;
-
-                if (!bitMask) {
-                    bitPtr = bitPtrIter.next().value;
-                    bitMask = 1;
+                if (intensity > 0) {
+                    target[vi * 3 + 0] += Math.floor(col.r * intensity);
+                    target[vi * 3 + 1] += Math.floor(col.g * intensity);
+                    target[vi * 3 + 2] += Math.floor(col.b * intensity);
                 }
             }
         }
@@ -123,6 +159,36 @@ class LitActorMesh extends Mesh {
         return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
     }
 
+    protected lightSets?: {
+        all: AugmentedLight_T[],
+        staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[],
+        dynamicScene: AugmentedLight_T[], dynamicEnv: AugmentedLight_T[]
+    };
+
+    protected resolveLightSets(sector: SectorObject) {
+        if (this.lightSets) return this.lightSets;
+
+        const scene: AugmentedLight_T[] = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
+        const environment: AugmentedLight_T[] = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
+
+        const isStatic = (l: AugmentedLight_T) => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight");
+        const isDynamic = (l: AugmentedLight_T) => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight"));
+
+        const sets = {
+            all: [...scene, ...environment],
+            staticScene: scene.filter(isStatic),
+            staticEnv: environment.filter(isStatic),
+            dynamicScene: scene.filter(isDynamic),
+            dynamicEnv: environment.filter(isDynamic)
+        };
+
+        // only cache once every referenced light resolved, so lights that stream in
+        // later than the mesh still get picked up by a retry on the next update
+        if (sets.all.every(l => l.instance)) this.lightSets = sets;
+
+        return sets;
+    }
+
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
 
@@ -139,13 +205,10 @@ class LitActorMesh extends Mesh {
             staticCacheDirty = true;
         }
 
-        // Collect and augment light info
-        const scene = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
-        const environment = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
-        const allLights = [...scene, ...environment];
-
-        const staticScene = scene.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
-        const staticEnv = environment.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
+        // Collect and augment light info (cached - a light's static/dynamic
+        // classification is immutable, and this used to allocate fresh arrays of
+        // hundreds of entries on every update of every mesh)
+        const { all: allLights, staticScene, staticEnv, dynamicScene, dynamicEnv } = this.resolveLightSets(sector);
 
         if (staticEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
@@ -277,9 +340,6 @@ class LitActorMesh extends Mesh {
         }
 
         // Apply dynamic pass (lights that change over time or move)
-        const dynamicScene = scene.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
-        const dynamicEnv = environment.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
-
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0);
         if (dynamicEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);

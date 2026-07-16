@@ -223,7 +223,11 @@ class DynamicLight extends Object3D {
     }
 
     public update(envManager: L2Environment, levelBrightness: number) {
-        const timeSeconds = envManager.getTimeSeconds();
+        // Animation cycles (pulse/blink/strobe) run on Level->TimeSeconds in UE2
+        // (UnRenderLight.cpp) - real elapsed time, like breathing textures - NOT the
+        // day/night world clock, which freezes at timeScale=0 and runs ~36x real time
+        // at timeScale=1. Sun color/direction below still use world time of day.
+        const timeSeconds = performance.now() / 1000;
 
         // if (this.name === "Light104")
         //     debugger;

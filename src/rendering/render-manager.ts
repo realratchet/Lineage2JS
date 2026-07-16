@@ -307,6 +307,18 @@ class RenderManager {
         // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
         // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
+        // d.elf village emitters
+        this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
+        this.controls.orbit.target.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
+
+        // // mother tree, sprites out of place
+        // this.camera.position.set(49328.8568559967, 42729.35547846491, -2762.193021570927);
+        // this.controls.orbit.target.set(49252.46811535074, 42664.84372426251, -2760.462740595816);
+
+        // // negropolis near delf forest
+        // this.camera.position.set(-48757.64540781602, 81179.19605056658, -4673.552599009336);
+        // this.controls.orbit.target.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
+
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
 

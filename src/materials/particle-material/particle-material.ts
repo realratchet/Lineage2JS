@@ -42,7 +42,7 @@ class ParticleMaterial extends ShaderMaterial {
         if (uniforms.map.value) {
             defines.USE_MAP = "";
         }
-        const { blending, blendSrc, blendDst, isAdditive } = getPartcileBlendingSettings(blendingMode);
+        const { blending, blendSrc, blendDst, blendSrcAlpha, blendDstAlpha, isAdditive } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
             defines.USE_ADDITIVE_FOG = "";
@@ -58,7 +58,9 @@ class ParticleMaterial extends ShaderMaterial {
             side: DoubleSide,
             blending,
             blendSrc,
-            blendDst
+            blendDst,
+            blendSrcAlpha,
+            blendDstAlpha
         });
 
         (this as any).isParticleMaterial = true;
@@ -92,7 +94,7 @@ class AnimatedParticleMaterial extends ShaderMaterial {
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
 
         const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
-        const { blending, blendSrc, blendDst, isAdditive } = getPartcileBlendingSettings(blendingMode);
+        const { blending, blendSrc, blendDst, blendSrcAlpha, blendDstAlpha, isAdditive } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
             defines.USE_ADDITIVE_FOG = "";
@@ -108,7 +110,9 @@ class AnimatedParticleMaterial extends ShaderMaterial {
             side: DoubleSide,
             blending,
             blendSrc,
-            blendDst
+            blendDst,
+            blendSrcAlpha,
+            blendDstAlpha
         });
 
         (this as any).isParticleMaterial = true;
@@ -137,6 +141,15 @@ export { ParticleMaterial, AnimatedParticleMaterial };
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
 export function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_T) {
+    // UE2 renders these modes into a backbuffer whose alpha is irrelevant. Our
+    // transparent intermediate target uses alpha for later compositing, so custom
+    // RGB blends must leave destination alpha alone. Applying e.g. Darken's
+    // ZERO/ONE_MINUS_SRC_COLOR to alpha punches a rectangular transparent hole.
+    const preserveDestinationAlpha = {
+        blendSrcAlpha: ZeroFactor,
+        blendDstAlpha: OneFactor
+    };
+
     switch (blendingMode as string) {
         case "normal": return { blending: NoBlending }; // PTDS_Regular: ONE, ZERO
         case "alpha": return { blending: NormalBlending, blendSrc: SrcAlphaFactor, blendDst: OneMinusSrcAlphaFactor }; // PTDS_AlphaBlend
@@ -144,13 +157,15 @@ export function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_
         case "modulate": return {
             blending: CustomBlending,
             blendSrc: DstColorFactor,
-            blendDst: SrcColorFactor
+            blendDst: SrcColorFactor,
+            ...preserveDestinationAlpha
         };
         // PTDS_Translucent: ONE, ONE - pure additive, alpha ignored.
         case "translucent": return {
             blending: CustomBlending,
             blendSrc: OneFactor,
             blendDst: OneFactor,
+            ...preserveDestinationAlpha,
             isAdditive: true
         };
         // PTDS_AlphaModulate: ONE, ONE_MINUS_SRC_ALPHA.
@@ -158,19 +173,22 @@ export function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_
             blending: CustomBlending,
             blendSrc: OneFactor,
             blendDst: OneMinusSrcAlphaFactor,
+            ...preserveDestinationAlpha,
             isAdditive: true
         };
         // PTDS_Darken: ZERO, ONE_MINUS_SRC_COLOR.
         case "darken": return {
             blending: CustomBlending,
             blendSrc: ZeroFactor,
-            blendDst: OneMinusSrcColorFactor
+            blendDst: OneMinusSrcColorFactor,
+            ...preserveDestinationAlpha
         };
         // PTDS_Brighten: ONE, ONE_MINUS_SRC_COLOR (screen blend).
         case "brighten": return {
             blending: CustomBlending,
             blendSrc: OneFactor,
             blendDst: OneMinusSrcColorFactor,
+            ...preserveDestinationAlpha,
             isAdditive: true
         };
         default:
