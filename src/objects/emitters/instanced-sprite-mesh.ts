@@ -10,13 +10,14 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
     private readonly spinAttr: InstancedBufferAttribute;
     private readonly colorAttr: InstancedBufferAttribute;
     private readonly uvAttr: InstancedBufferAttribute;
+    private renderCount = 0;
 
     constructor(material: InstancedParticleMaterial, capacity: number) {
         const geometry = new InstancedBufferGeometry();
         geometry.setIndex(baseGeometry.index);
         geometry.setAttribute("position", baseGeometry.attributes.position);
         geometry.setAttribute("uv", baseGeometry.attributes.uv);
-        geometry.instanceCount = capacity;
+        geometry.instanceCount = 0;
 
         super(geometry, material);
 
@@ -48,6 +49,7 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
         this.spinAttr.setX(index, spin);
         this.colorAttr.setXYZW(index, color.x, color.y, color.z, color.w);
         this.uvAttr.setXYZW(index, uvOffsetX, uvOffsetY, uvScaleX, uvScaleY);
+        this.renderCount = Math.max(this.renderCount, index + 1);
     }
 
     public setInactive(index: number) {
@@ -55,6 +57,8 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
     }
 
     public commit() {
+        this.geometry.instanceCount = this.renderCount;
+        this.renderCount = 0;
         this.positionAttr.needsUpdate = true;
         this.scaleAttr.needsUpdate = true;
         this.spinAttr.needsUpdate = true;

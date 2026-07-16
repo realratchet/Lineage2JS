@@ -303,13 +303,13 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // // heine
-        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
-        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // heine
+        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
+        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
-        // d.elf village emitters
-        this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
-        this.controls.orbit.target.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
+        // // d.elf village emitters
+        // this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
+        // this.controls.orbit.target.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
 
         // // mother tree, sprites out of place
         // this.camera.position.set(49328.8568559967, 42729.35547846491, -2762.193021570927);

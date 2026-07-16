@@ -38,8 +38,10 @@ class SpriteEmitter extends BaseEmitter {
         this.spriteDirection = config.spriteDirection || "camera";
         this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
 
-        // only "camera" (the default) has a fixed basis (GLOBAL_UNIFORMS) that the GPU-instanced path can use
-        this.isInstancedRendering = this.spriteDirection === "camera";
+        // Both camera-facing sprites and PTDU_Normal use one basis for the whole
+        // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
+        // modes still require a per-particle basis and stay on the legacy path.
+        this.isInstancedRendering = this.spriteDirection === "camera" || this.spriteDirection === "normal";
     }
 
     protected initParticleMesh() {
@@ -52,7 +54,12 @@ class SpriteEmitter extends BaseEmitter {
 
     protected createInstancedMesh(capacity: number): InstancedSpriteMesh {
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
-        return new InstancedSpriteMesh(new InstancedParticleMaterial({ ...this.material, usesSubdivision }), capacity);
+        return new InstancedSpriteMesh(new InstancedParticleMaterial({
+            ...this.material,
+            usesSubdivision,
+            spriteDirection: this.spriteDirection,
+            projectionNormal: this.projectionNormal
+        }), capacity);
     }
 }
 
