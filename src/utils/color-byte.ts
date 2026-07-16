@@ -94,12 +94,8 @@ class ColorByte {
         return this.set(this.r, this.g, this.b, this.a);
     }
 
-    /**
-     * Set from L2-style HSV.
-     * v is Brightness (0-255, can be higher).
-     * Formula: Final = ((1.0 - HueRGB) * Saturation/255 + HueRGB) * Lightness
-     * Multiplier updated to 1.5/255.0 per common L2 engine revisions.
-     */
+    // L2-style HSV, v is brightness (0-255, can exceed): Final = ((1.0 - HueRGB) * Saturation/255 + HueRGB) * Lightness
+    // multiplier 1.5/255.0 per common L2 engine revisions
     public setFromHSV(h: number, s: number, v: number): this {
         h &= 0xFF;
         let r: number, g: number, b: number;

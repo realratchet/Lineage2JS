@@ -43,7 +43,7 @@ class DecodeLibrary {
         staticMeshes: boolean
     } = { terrain: true, staticMeshes: true };
 
-    public staticMeshBatches?: import("../decoders/batch-data").StaticMeshBatchManifest; // precomputed batch manifest (decode worker or lazy sync build); merged geometries live in `geometries`
+    public staticMeshBatches?: import("../decoders/batch-data").StaticMeshBatchManifest_T; // precomputed batch manifest (decode worker or lazy sync build); merged geometries live in `geometries`
 
     public failed: any[] = [];
     public readonly exportedActors = new Set<string>(); // UUIDs of actors that passed geographic filtering

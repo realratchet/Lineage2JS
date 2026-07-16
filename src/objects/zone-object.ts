@@ -26,7 +26,7 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
     geometry.clearGroups();
 
     const index = geometry.index;
-    const source = object.userData.batchIndices as Uint8Array | Uint16Array | Uint32Array | null;
+    const source = (object as any).batchIndices as Uint8Array | Uint16Array | Uint32Array | null;
 
     if (!index || !source) {
         let run: BatchGroup_T = null;
@@ -422,9 +422,7 @@ class SectorObject extends Object3D {
             }
         }
 
-        // If we have PVS data, intersect it with connectivity to ensure only connected zones are included.
-        // IMPORTANT: If PVS is "invalid" (all zones or zero), DO NOT fall back to connectivity as visibility.
-        // Connectivity describes potential reachability, not what is currently visible through portals.
+        // intersect PVS with connectivity, but invalid PVS (all zones or zero) must not fall back to connectivity - reachability is not visibility
         if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
             const leaf = this.bspLeaves[leafIndex];
             const pvsMask = leaf.visibleZones;
@@ -443,8 +441,7 @@ class SectorObject extends Object3D {
             }
         }
 
-        // Note: Portals will dynamically add more zones during BSP traversal (see traverseBSP)
-        // Portal expansion is also constrained to connectivity
+        // portals add more zones during traverseBSP, expansion is also constrained to connectivity
 
         return activeZoneMask;
     }
@@ -565,18 +562,16 @@ class SectorObject extends Object3D {
             const node = this.bspNodes[nodeIndex];
 
             if (pass === "front") {
-                // 1. Zone Mask Culling (skip subtree if not visible)
+                // zone mask culling
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
                     if (!(nodeZoneMask & currentZoneMask)) {
-                        continue; // Cull this subtree
+                        continue;
                     }
                 }
 
-                // 2. Bounding Box Portal Visibility Check (UE2: UnRenderVisibility.cpp lines 1800-1819)
-                // If node has a render bound, check if it's visible through portals
-                // UE2: Model->Bounds(Node.iRenderBound) - bounds are precomputed and stored in Model
-                // We access precomputed bounds from library.bspRenderBounds (populated from this.bounds in un-model.ts)
+                // bounding box portal visibility (UE2: UnRenderVisibility.cpp lines 1800-1819)
+                // UE2: Model->Bounds(Node.iRenderBound), precomputed bounds come from library.bspRenderBounds (populated from this.bounds in un-model.ts)
                 // requires bspGroup - section-free sectors only get the degenerate world-hull box, which would wrongly cull every leaf
                 const library = (this as any).decodeLibrary as GD.DecodeLibrary;
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
@@ -612,7 +607,6 @@ class SectorObject extends Object3D {
                     }
                 }
 
-                // 3. Determine side
                 const planeDot = cameraPos.dot(node.plane);
                 const isFront = planeDot >= 0;
 
@@ -712,16 +706,10 @@ class SectorObject extends Object3D {
                             const alreadyAdded = !!(currentZoneMask & (1n << BigInt(oppositeZone)));
 
                             if (!alreadyAdded) {
-                                // UE2-style: the recursion depth for the new zone is based on the depth of the
-                                // *current* zone, not the minimum depth of any active zone.
-                                //
-                                // IMPORTANT: The previous logic took the minimum depth across all active zones.
-                                // Since the camera zone is always depth 0, that effectively made every portal hop
-                                // look like depth 1 and allowed multi-portal chains to expand without increasing depth.
+                                // ue2 bases new-zone recursion depth on the *current* zone's depth, min-depth across active zones would flatten multi-portal chains to depth 1
                                 const sourceDepth = zoneDepthMap.get(currentZone) ?? recursionDepth;
 
-                                // Connectivity is defined per-zone. Only allow expansion if the current zone
-                                // is connected to the opposite zone.
+                                // connectivity is per-zone, expand only into connected zones
                                 let isConnected = true;
                                 if (this.bspZones && currentZone >= 0 && currentZone < this.bspZones.length) {
                                     const zoneData = this.bspZones[currentZone];
@@ -865,8 +853,8 @@ class SectorObject extends Object3D {
         const visibleMeshNames: string[] = [];
         const hiddenMeshNames: string[] = [];
         this.bspGroup.children.forEach((child) => {
-            if (child instanceof Mesh && child.userData.sectionIndex !== undefined) {
-                const sectionIndex = child.userData.sectionIndex;
+            if (child instanceof Mesh && (child as any).sectionIndex !== undefined) {
+                const sectionIndex = (child as any).sectionIndex;
                 const wasVisible = child.visible;
                 child.visible = visibleSections.has(sectionIndex);
                 if (child.visible) {
@@ -1039,8 +1027,8 @@ class SectorObject extends Object3D {
 
             let outdoorCount = 0, indoorCount = 0;
             this.bspGroup.children.forEach((child) => {
-                if (child instanceof Mesh && child.userData.sectionIndex !== undefined) {
-                    const sectionIndex = child.userData.sectionIndex;
+                if (child instanceof Mesh && (child as any).sectionIndex !== undefined) {
+                    const sectionIndex = (child as any).sectionIndex;
                     let visible = visibleSections.has(sectionIndex);
 
                     // topLevelOnly's node set is cached camera-independent (see
@@ -1153,7 +1141,7 @@ class SectorObject extends Object3D {
                 this.staticMeshVisibilityEntries = [];
 
                 this.staticMeshMap.forEach((object, uuid) => {
-                    if (object.userData.isBatch) {
+                    if ((object as any).isBatch) {
                         if (processedBatches.has(object.uuid)) return;
                         processedBatches.add(object.uuid);
                     }
@@ -1164,21 +1152,21 @@ class SectorObject extends Object3D {
 
             for (const { object, uuid } of this.staticMeshVisibilityEntries) {
                 // For batched meshes, per-element culling via geometry.groups
-                if (object.userData.isBatch) {
-                    const batchElements = object.userData.batchElements;
+                if ((object as any).isBatch) {
+                    const batchElements = (object as any).batchElements;
                     const geometry = (object as any).geometry;
                     if (!batchElements || !geometry) continue;
 
                     // Test each element's bounds individually
-                    const sortedTransparentMats = object.userData.sortedTransparentMaterialIndexes as Set<number> | undefined;
-                    let elemVisibility = object.userData.elemVisibility as Uint8Array;
+                    const sortedTransparentMats = (object as any).sortedTransparentMaterialIndexes as Set<number> | undefined;
+                    let elemVisibility = (object as any).elemVisibility as Uint8Array;
                     if (!elemVisibility || elemVisibility.length !== batchElements.length) {
-                        elemVisibility = object.userData.elemVisibility = new Uint8Array(batchElements.length);
+                        elemVisibility = (object as any).elemVisibility = new Uint8Array(batchElements.length);
                         elemVisibility.fill(2);
                     }
-                    let elemDistances = object.userData.elemDistances as Float64Array;
+                    let elemDistances = (object as any).elemDistances as Float64Array;
                     if (!elemDistances || elemDistances.length !== batchElements.length)
-                        elemDistances = object.userData.elemDistances = new Float64Array(batchElements.length);
+                        elemDistances = (object as any).elemDistances = new Float64Array(batchElements.length);
                     let visibilityChanged = false;
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
@@ -1222,7 +1210,7 @@ class SectorObject extends Object3D {
                         }
                     }
 
-                    const transparentSortPosition = object.userData.transparentSortPosition as Vector3;
+                    const transparentSortPosition = (object as any).transparentSortPosition as Vector3;
                     const sortChanged = !!sortedTransparentMats?.size && (!transparentSortPosition || transparentSortPosition.distanceToSquared(cameraPosition) >= TRANSPARENT_SORT_DISTANCE_SQ);
 
                     if (visibilityChanged || sortChanged) {
@@ -1244,7 +1232,7 @@ class SectorObject extends Object3D {
                         object.visible = visibleGroups.length > 0;
                         if (sortedTransparentMats?.size) {
                             if (transparentSortPosition) transparentSortPosition.copy(cameraPosition);
-                            else object.userData.transparentSortPosition = cameraPosition.clone();
+                            else (object as any).transparentSortPosition = cameraPosition.clone();
                         }
                     }
 
@@ -1260,16 +1248,16 @@ class SectorObject extends Object3D {
                     // the fallback would see through walls)
                     let isVisible = visibleActorUuids.has(uuid);
 
-                    if (!isVisible && object.userData.actorBoundsMin && !isCameraInSector) {
-                        tmpActorBox.min.fromArray(object.userData.actorBoundsMin);
-                        tmpActorBox.max.fromArray(object.userData.actorBoundsMax);
+                    if (!isVisible && (object as any).actorBoundsMin && !isCameraInSector) {
+                        tmpActorBox.min.fromArray((object as any).actorBoundsMin);
+                        tmpActorBox.max.fromArray((object as any).actorBoundsMax);
 
                         const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
-                        const zoneMask = object.userData.actorZoneMask as bigint;
+                        const zoneMask = (object as any).actorZoneMask as bigint;
                         const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
                         const actorCenter = tmpActorBox.getCenter(tmpVec3);
                         const distSq = cameraPosition.distanceToSquared(actorCenter);
-                        const isInRange = object.userData.actorRangeIgnored || distSq <= staticMeshCullDistanceSq;
+                        const isInRange = (object as any).actorRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
                         isVisible = isFrustumVisible && isZoneVisible && isInRange;
                     }
@@ -1368,7 +1356,7 @@ class SectorObject extends Object3D {
             const standalone: any[] = [];
 
             this.zones.traverse((object) => {
-                if ((object as any).userData?.isTerrainBatch) batches.push(object as Mesh);
+                if ((object as any).isTerrainBatch) batches.push(object as Mesh);
                 else if ((object as any).isTerrain && !(object as any).batchGeometry) standalone.push(object);
             });
 
@@ -1376,10 +1364,9 @@ class SectorObject extends Object3D {
         }
 
         for (const batch of this.terrainRenderables.batches) {
-            const userData = batch.userData;
             const batchGeo = batch.geometry as BufferGeometry;
-            const sectors = userData.sectors as any[];
-            const originalGroups = userData.originalGroups as any[];
+            const sectors = (batch as any).sectors as any[];
+            const originalGroups = (batch as any).originalGroups as any[];
             if (!sectors || !batchGeo || !originalGroups) continue;
 
             let groupKey = "";
@@ -1402,8 +1389,8 @@ class SectorObject extends Object3D {
             });
 
             // rebuilding groups dirties the geometry, only do it when the selection changed
-            if (groupKey === userData.visibleGroupKey) continue;
-            userData.visibleGroupKey = groupKey;
+            if (groupKey === (batch as any).visibleGroupKey) continue;
+            (batch as any).visibleGroupKey = groupKey;
 
             if (visibleGroups.length > 0) {
                 batch.visible = true;
@@ -1437,8 +1424,6 @@ class SectorObject extends Object3D {
         const leafOnlyMode = !isCameraInSector;
         const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition); // outdoor zones if camera is outside the bsp
 
-        // CONSERVATIVE UE2: Use specific actor traversal with portal frustum checks
-        // CONSERVATIVE UE2: Use specific actor traversal with portal frustum checks
         const { finalZoneMask, visibleLeaves } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
 
         const visibleActorUuids = new Set<string>();
@@ -1470,12 +1455,12 @@ class SectorObject extends Object3D {
         const processedBatches = new Set<string>();
 
         this.staticMeshMap.forEach((object, uuid) => {
-            if (object.userData.isBatch) {
+            if ((object as any).isBatch) {
                 const batchId = object.uuid;
                 if (processedBatches.has(batchId)) return;
                 processedBatches.add(batchId);
 
-                const batchElements = object.userData.batchElements;
+                const batchElements = (object as any).batchElements;
                 const geometry = (object as any).geometry;
                 if (!batchElements || !geometry) return;
 

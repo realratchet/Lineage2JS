@@ -16,13 +16,7 @@ const DEG2RAD = 0.017453292519943295;
 const HALF_PI = Math.PI / 2;  // 1.5707963267948966
 const NEG_PI = -Math.PI;      // -3.1415927
 
-/**
- * Calculate sun modifier info based on time of day.
- * Extracted from UL2NEnvManager::GetSunModifierInfo
- * @param timeOfDay - Time in hours (0-24)
- * @param baseYawDegrees - Base yaw angle in degrees (from envManager.field_0x170)
- * @returns [pitch, yaw, brightness] in radians
- */
+// UL2NEnvManager::GetSunModifierInfo, baseYawDegrees comes from envManager.field_0x170, returns [pitch, yaw, brightness] in radians
 function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
@@ -42,13 +36,7 @@ function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [n
     return [pitch, yaw, brightness];
 }
 
-/**
- * Calculate moon modifier info based on time of day.
- * Extracted from UL2NEnvManager::GetMoonModifierInfo
- * @param timeOfDay - Time in hours (0-24)
- * @param baseYawDegrees - Base yaw angle in degrees (from envManager.field_0x170)
- * @returns [pitch, yaw, brightness] in radians
- */
+// UL2NEnvManager::GetMoonModifierInfo, baseYawDegrees comes from envManager.field_0x170, returns [pitch, yaw, brightness] in radians
 function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
@@ -76,14 +64,7 @@ function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [
     return [pitch, yaw, brightness];
 }
 
-/**
- * Convert pitch and yaw angles to a direction vector.
- * Uses the formula from ANMovableSunLight::GetSunLightDirection
- * @param pitch - Pitch angle in radians
- * @param yaw - Yaw angle in radians
- * @param target - Target vector to store result
- * @returns Direction vector
- */
+// ANMovableSunLight::GetSunLightDirection
 function pitchYawToDirection(pitch: number, yaw: number, target: Vector3): Vector3 {
     // Direction calculation based on spherical coordinates
     // X = cos(pitch) * cos(yaw)
@@ -103,12 +84,7 @@ function pitchYawToDirection(pitch: number, yaw: number, target: Vector3): Vecto
     return target;
 }
 
-/**
- * Determine if it's "night" based on EnvNight logic.
- * EnvNight == 3 means night in the game.
- * @param timeOfDay - Time in hours (0-24)
- * @returns true if nighttime (moon should be used)
- */
+// EnvNight == 3 means night in the game
 function isNightTime(timeOfDay: number): boolean {
     // Night is roughly 7pm to 7am based on the moon modifier logic
     return timeOfDay < 7.0 || timeOfDay >= 23.0;
@@ -347,23 +323,15 @@ class DynamicLight extends Object3D {
         }
 
         if (this.isDynamic) {
-            // Dynamic lights can move/change properties, always need updates
             this.needsUpdate = true;
         } else {
-            // Static lights: check if time-based animation changed the color or direction
-            // Also force update if environment changed (Normal/Dusk/Dawn switch)
             if (this.isTimeBased || envChanged) {
-                // Compare computed color and direction with last frame
                 if (this.lastComputedColor === null || this.lastComputedDirection === null || envChanged) {
-                    // First update or environment changed
                     this.needsUpdate = true;
                     this.lastComputedColor = this.color.clone();
                     this.lastComputedDirection = this.lightDirection.clone();
                 } else {
-                    // Check if color or direction changed - direction is a continuously
-                    // rotating unit vector for Sunlight actors, so exact float equality
-                    // is never true two frames in a row once time is advancing; a small
-                    // angular threshold avoids relighting every affected mesh every frame
+                    // sunlight direction rotates continuously so exact equality never holds, a small angular threshold avoids relighting every frame
                     const colorChanged = !this.color.equals(this.lastComputedColor);
                     const directionChanged = this.lightDirection.distanceToSquared(this.lastComputedDirection) > DIRECTION_CHANGE_EPSILON_SQ;
                     this.needsUpdate = colorChanged || directionChanged;

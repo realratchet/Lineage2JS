@@ -241,13 +241,7 @@ abstract class UTerrainSector extends UObject {
 
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
 
-                    // Reconstruct the Unified World Space vertex (Z-up) for this point
-                    // We reuse 'v' scratch vector if possible or create new one contextually. 
-                    // Note: 'v' is defined in outer scope but we should be careful. 
-                    // Let's use a new temporary vector to be safe/clean or reuse `v`.
-                    // The outer `v` is used in the geometry loop, this is the UV loop.
-
-                    // We must use info.toWorld to get the correct absolute position
+                    // rebuild the world-space (Z-up) vertex via info.toWorld
                     const worldVert = FVector.make(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
                     // Transform by the layer's texture matrix to get UVs

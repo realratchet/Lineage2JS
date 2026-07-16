@@ -997,8 +997,7 @@ class RenderManager {
                 const isCameraInSector = activeSector === sector;
                 const wasVisible = sector.visible;
 
-                // 1. Z-Culling: If outside fog range, hide entire sector
-                // NEVER cull the active sector
+                // fog-range z-culling, never the active sector
                 if (!isCameraInSector) {
                     if (!fogSphere.intersectsBox(sector.worldBounds)) {
                         sector.visible = false;
@@ -1008,7 +1007,6 @@ class RenderManager {
 
                 sector.visible = true;
 
-                // 2. Zone Visibility: If camera is not in the sector, only show top level
                 const topLevelOnly = !isCameraInSector;
 
                 if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
@@ -1142,18 +1140,14 @@ class RenderManager {
         const env = this.environment;
         if (!env) return;
 
-        // 1. Get Base Sky Color (from timeenv - will be blended with L2FogInfo later)
+        // base sky color from timeenv, blended with L2FogInfo later
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
-        // 2. Get Fog Settings
-        // Default Fog Settings (from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u))
-
-        // Fix: Load Fog Presets Dynamically from EnvInfo (Env.int)
-        // Scaling Factor: 2048 (Derived from Trace: 2.5 * 2048 = 5120)
+        // fog defaults from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u)
+        // range scale factor 2048, derived from trace: 2.5 * 2048 = 5120
         const presetIndex = parseInt(String(this.envConfig.fogPreset).split(" ")[0]);
         const range = env.getEnv().fog.ranges[presetIndex - 1]; // 0-based array
 
-        // Default or Fallback
         let targetFogStart = 2000;
         let targetFogEnd = 8000;
 
@@ -1161,7 +1155,6 @@ class RenderManager {
             targetFogStart = range.x * 2048;
             targetFogEnd = range.y * 2048;
         } else {
-            // Fallback to Preset 1 if invalid
             const defRange = env.getEnv().fog.ranges[0];
             if (defRange) {
                 targetFogStart = defRange.x * 2048;
@@ -1174,10 +1167,9 @@ class RenderManager {
         // targetFogStart = 1;
         // targetFogEnd = 10
 
-        // 3. Zone Overrides
+        // zone overrides
         const sector = this.getSector(this.camera.position);
-        // Initialize with base haze gradient from EnvLight (via indexHaze)
-        // L2FogInfo blending will modify these values if in range
+        // base haze gradient from EnvLight (via indexHaze), L2FogInfo blending modifies it in range
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
 
@@ -1253,7 +1245,7 @@ class RenderManager {
             let maxHArrLen = 0;
             const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
 
-            // First pass: Find the closest active fog (closest wins logic)
+            // closest active fog wins
             fogInfos.forEach(fogInfo => {
                 const visibleMask = sector.lastZoneMask;
                 if (fogInfo.zoneMask && visibleMask && !(fogInfo.zoneMask & visibleMask)) {
@@ -1274,13 +1266,11 @@ class RenderManager {
                 }
             });
 
-            // Second pass: Use only the active fog if one was found, otherwise fallback to default
-            // Note: The user requested "closest wins", so we only process the active one.
             fogInfos.forEach(fogInfo => {
                 const isActive = fogInfo.uuid === this.activeFogId;
                 if (!isActive) return;
 
-                const weight = 1.0; // The closest one wins with full weight
+                const weight = 1.0;
                 const timeOfDay = env.getTimeOfDay();
 
                 const hArr = interpolateFogInfoHazeColors(timeOfDay, fogInfo.colors);
@@ -1307,8 +1297,7 @@ class RenderManager {
                     interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, new ColorByte(), 2)
                 ];
 
-                // 1. Fog Blending
-                // Ranges in EnvInfo are KiloUnits (scaled by 2048), but FogInfo (Zones) are already Units
+                // EnvInfo ranges are kilounits (x2048), FogInfo zone ranges are already units
                 accStart += range.A * weight;
                 accEnd += range.B * weight;
                 accR += fogColor.r * weight;
@@ -1316,8 +1305,7 @@ class RenderManager {
                 accB += fogColor.b * weight;
                 totalFogWeight += weight;
 
-                // 2. Sky Blending
-                // Alpha 0 in assets usually means fallback to 255 (fully opaque)
+                // alpha 0 in assets means fallback to 255 (fully opaque)
                 const skyAlpha = skyColor.a === 0 ? 255 : skyColor.a;
                 const skyWeight = weight * (skyAlpha / 255);
                 accSkyR += skyColor.r * skyWeight;
@@ -1325,7 +1313,6 @@ class RenderManager {
                 accSkyB += skyColor.b * skyWeight;
                 totalSkyWeight += skyWeight;
 
-                // 3. Haze Blending
                 const hAlpha = hazeColor.a === 0 ? 255 : hazeColor.a;
                 const hazeWeight = weight * (hAlpha / 255);
                 accHazeR += hazeColor.r * hazeWeight;
@@ -1333,7 +1320,6 @@ class RenderManager {
                 accHazeB += hazeColor.b * hazeWeight;
                 totalHazeWeight += hazeWeight;
 
-                // 4. Cloud Blending (Calculated for all 3 indices)
                 cloudColors.forEach((c, idx) => {
                     if (!c) return;
                     const cAlpha = c.a === 0 ? 255 : c.a;
@@ -1344,7 +1330,6 @@ class RenderManager {
                     totalCloudWeight[idx] += weightC;
                 });
 
-                // 5. Haze Array Blending
                 if (hArr.length > 0) {
                     for (let i = 0; i < maxHArrLen; i++) {
                         const color = hArr[i] || hArr[hArr.length - 1];
@@ -1402,9 +1387,8 @@ class RenderManager {
                 }
             });
 
-            // 5. Apply Haze Array Blending to the final gradient
             if (totalHArrWeight > 0) {
-                // Aggressive override: If weight is high, prioritize regional color (reduces global bleed)
+                // high weight prioritizes regional color, reduces global bleed
                 const haW = totalHArrWeight >= 0.95 ? 1.0 : Math.min(totalHArrWeight, 1.0);
                 for (let i = 0; i < blendedHazeColors.length; i++) {
                     const baseColor = blendedHazeColors[i];
@@ -2002,8 +1986,8 @@ class RenderManager {
         this.scene.traverse(child => {
             if ((child as any).isTerrain) {
                 terrains.push(child as Terrain);
-            } else if ((child as any).userData?.isTerrainBatch) {
-                const batchSectors = (child as any).userData.sectors as Terrain[];
+            } else if ((child as any).isTerrainBatch) {
+                const batchSectors = (child as any).sectors as Terrain[];
                 if (batchSectors) {
                     batchSectors.forEach(s => terrains.push(s));
                 }

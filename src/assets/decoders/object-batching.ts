@@ -8,7 +8,7 @@ import CollidingMesh from "@client/objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import { MeshLight } from "@client/objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
-import type { StaticMeshBatchManifest, BatchElement } from "./batch-data";
+import type { StaticMeshBatchManifest_T, BatchElement_T } from "./batch-data";
 
 function createBatchObject(
     name: string,
@@ -18,7 +18,7 @@ function createBatchObject(
     mergedColliderIndices: Uint32Array | null,
     actors: GD.IStaticMeshActorDecodeInfo[],
     perActorAmbient: any[],
-    batchElements: BatchElement[]
+    batchElements: BatchElement_T[]
 ): CollidingMesh {
     const mergedObject = new CollidingMesh({
         geometry: mergedGeometry,
@@ -33,12 +33,12 @@ function createBatchObject(
     mergedObject.material = canonicalizeStaticMeshMaterials(mergedObject.material);
 
     mergedObject.name = name;
-    mergedObject.userData.isBatch = true;
-    mergedObject.userData.batchActorUuids = actors.map(a => a.uuid);
-    mergedObject.userData.perActorAmbient = perActorAmbient;
-    mergedObject.userData.batchElements = batchElements;
-    mergedObject.userData.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
-    mergedObject.userData.batchIndices = mergedGeometry.index ? mergedGeometry.index.array.slice() : null;
+    mergedObject.isBatch = true;
+    mergedObject.batchActorUuids = actors.map(a => a.uuid);
+    mergedObject.perActorAmbient = perActorAmbient;
+    mergedObject.batchElements = batchElements;
+    mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
+    mergedObject.batchIndices = mergedGeometry.index ? mergedGeometry.index.array.slice() as Uint8Array | Uint16Array | Uint32Array : null;
 
     // Transparent actor indices are depth-sorted during visibility updates.
     const matList = materials instanceof Array ? materials : [materials];
@@ -51,8 +51,8 @@ function createBatchObject(
         if (m.blending === NormalBlending) sortedTransparentMats.add(i);
     });
 
-    mergedObject.userData.transparentMaterialIndexes = transparentMats;
-    mergedObject.userData.sortedTransparentMaterialIndexes = sortedTransparentMats;
+    mergedObject.transparentMaterialIndexes = transparentMats;
+    mergedObject.sortedTransparentMaterialIndexes = sortedTransparentMats;
 
     if (transparentMats.size > 0) {
         const opaque = mergedGeometry.groups.filter(g => !transparentMats.has(g.materialIndex));
@@ -119,7 +119,7 @@ export function batchStaticMeshActors(
      * arrives precomputed with the library; synchronous paths (skylevel, worker fallback)
      * build it here on demand. Either way only scene objects are instantiated here.
      */
-    const manifest: StaticMeshBatchManifest = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
+    const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
 
     for (const batch of manifest.batches) {
         try {
@@ -162,12 +162,12 @@ export function batchStaticMeshActors(
             const bounds = (actor as any).bounds;
 
             if (bounds?.min && bounds?.max) {
-                object.userData.actorBoundsMin = bounds.min;
-                object.userData.actorBoundsMax = bounds.max;
+                (object as any).actorBoundsMin = bounds.min;
+                (object as any).actorBoundsMax = bounds.max;
             }
 
-            object.userData.actorZoneMask = (actor as any).zoneMask || 0n;
-            object.userData.actorRangeIgnored = !!(actor as any).isRangeIgnored;
+            (object as any).actorZoneMask = (actor as any).zoneMask || 0n;
+            (object as any).actorRangeIgnored = !!(actor as any).isRangeIgnored;
 
             staticMeshGroup.add(object);
             (sector as any).staticMeshMap.set(actor.uuid, object);
@@ -321,13 +321,12 @@ export function batchTerrainSectors(
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
         batchedTerrain.name = `${group.name}_Batch`;
 
-        // Match expected structure in zone-object.ts for lighting and culling
-        batchedTerrain.userData.isTerrainBatch = true;
-        batchedTerrain.userData.sectors = sectors;
+        (batchedTerrain as any).isTerrainBatch = true;
+        (batchedTerrain as any).sectors = sectors;
 
         const originalGroups: any[] = [];
         mergedGeometry.groups.forEach(g => originalGroups.push({ ...g }));
-        batchedTerrain.userData.originalGroups = originalGroups;
+        (batchedTerrain as any).originalGroups = originalGroups;
 
         group.add(batchedTerrain);
         for (let i = 0; i < batchSectorInfo.length; i++) {

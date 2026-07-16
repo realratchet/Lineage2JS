@@ -152,14 +152,13 @@ export default class SkyRenderer {
         const skyZoneInfo = skyZoneInfos[0];
 
         if (skyZoneInfo) {
-            // USkyZoneInfo position is the canonical origin for sky rendering.
-            // Use userData.skyOrigin if available (to avoid scene graph transform issues), otherwise fallback to position.
-            if (skyZoneInfo.userData && skyZoneInfo.userData.skyOrigin) {
-                skyOrigin.copy(skyZoneInfo.userData.skyOrigin);
+            // USkyZoneInfo position is the canonical sky origin, skyOrigin avoids scene graph transform issues
+            if ((skyZoneInfo as any).skyOrigin) {
+                skyOrigin.copy((skyZoneInfo as any).skyOrigin);
             } else {
                 skyOrigin.copy(skyZoneInfo.position);
             }
-            console.log(`[SkyRenderer] Using USkyZoneInfo as canonical origin: ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
+            // console.log(`[SkyRenderer] Using USkyZoneInfo as canonical origin: ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
         } else {
             const skyboxPattern = envInfo.setup.skybox;
             let skyboxMesh = skyboxPattern ? children.find(m => m.name.includes(skyboxPattern)) : null;
@@ -181,9 +180,7 @@ export default class SkyRenderer {
         const processMesh = (mesh: Mesh, type: "skybox" | "haze" | "cloud" | "star", index: number = 0) => {
             if (!mesh) return;
 
-            // Enable Fog for all sky components to blend with horizon (as seen in trace: D3DRS_FOGENABLE=TRUE)
-            // Note: This is now handled by the decodeBSPSection based on sectionInfo.fog
-            // which we set to true for isSky in un-model.ts
+            // sky fog comes from decodeBSPSection via sectionInfo.fog, set for isSky in un-model.ts (trace: D3DRS_FOGENABLE=TRUE)
 
             mesh.frustumCulled = false; // Always render sky components
 
@@ -221,8 +218,7 @@ export default class SkyRenderer {
                     mesh.renderOrder = -6500 + meshCount;
                 }
 
-                // Note: Material properties like blending, transparency, depth, and fog 
-                // are now handled by the decoding pipeline (un-model.ts + object3d-decoder.ts).
+                // material blending/transparency/depth/fog come from the decoding pipeline (un-model.ts + object3d-decoder.ts)
 
                 mesh.visible = true;
 

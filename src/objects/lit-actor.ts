@@ -47,6 +47,22 @@ class LitActorMesh extends Mesh {
     protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
 
+    public isBatch?: boolean;
+    public batchActorUuids?: string[];
+    public perActorAmbient?: any[];
+    public batchElements?: any[];
+    public allGroups?: { start: number, count: number, materialIndex: number }[];
+    public batchIndices?: Uint8Array | Uint16Array | Uint32Array | null;
+    public transparentMaterialIndexes?: Set<number>;
+    public sortedTransparentMaterialIndexes?: Set<number>;
+    public elemVisibility?: Uint8Array;
+    public elemDistances?: Float64Array;
+    public transparentSortPosition?: THREE.Vector3;
+    public actorBoundsMin?: number[];
+    public actorBoundsMax?: number[];
+    public actorZoneMask?: bigint;
+    public actorRangeIgnored?: boolean;
+
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
         super(props.geometry, props.materials);
 
@@ -115,7 +131,7 @@ class LitActorMesh extends Mesh {
         const localToWorld = this.lightInfo!.matrix;
 
         const vertexArrayLen = attrPositions.count;
-        const perActorAmbient: { startVertex: number, count: number, scaledGlow: number }[] | undefined = this.userData.perActorAmbient;
+        const perActorAmbient: { startVertex: number, count: number, scaledGlow: number }[] | undefined = this.perActorAmbient;
         const glowPerVertex = perActorAmbient ? this.getPerVertexGlow(perActorAmbient, vertexArrayLen) : null;
         const uniformGlow = this.scaledGlow;
 
@@ -238,8 +254,8 @@ class LitActorMesh extends Mesh {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
-            if (this.userData.perActorAmbient) {
-                const perActorAmbient = this.userData.perActorAmbient as { startVertex: number, count: number, ambient: typeof this.ambient }[];
+            if (this.perActorAmbient) {
+                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, ambient: typeof this.ambient }[];
                 for (const actor of perActorAmbient) {
                     if (actor.ambient && actor.ambient.isUnlit) {
                         for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
@@ -307,14 +323,14 @@ class LitActorMesh extends Mesh {
         colorArray.set(this.staticLightingCache!);
 
         // Apply sun ambient
-        if (this.userData.perActorAmbient) {
+        if (this.perActorAmbient) {
             const ambientSun = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
             if (ambientSun.r !== 0 || ambientSun.g !== 0 || ambientSun.b !== 0) {
                 const r = ambientSun.r;
                 const g = ambientSun.g;
                 const b = ambientSun.b;
 
-                for (const actor of this.userData.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean }[]) {
+                for (const actor of this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean }[]) {
                     if (actor.isSunAffected) {
                         for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
                             colorArray[i] += r;

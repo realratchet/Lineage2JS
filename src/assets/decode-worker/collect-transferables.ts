@@ -1,17 +1,6 @@
-/**
- * Prepares a decoded library for postMessage:
- *
- * 1. Sanitizes it in place - values structured clone either rejects (Promises,
- *    functions) or would silently drag the package graph along (live UObjects;
- *    FArray subclasses, whose non-index own fields like `pkg` are cloned because
- *    they are Array exotics) are normalized to plain equivalents or nulled, each
- *    with a path-tagged warning pointing at the producer to fix.
- * 2. Collects every reachable ArrayBuffer as the transfer list. Buffers in `exclude`
- *    (loaded package buffers - transferring one would detach the package inside the
- *    worker) are skipped with a warning and end up deep-copied instead.
- *
- * The library is not reused worker-side after posting, so in-place mutation is safe.
- */
+// prepares a decoded library for postMessage: sanitizes in place (values structured clone rejects or that
+// would drag the package graph along are normalized/nulled with path-tagged warnings) and collects every
+// reachable ArrayBuffer as the transfer list - `exclude` buffers skip transfer, they would detach worker-side
 
 function isNonIndexKey(key: string): boolean {
     return !/^\d+$/.test(key);

@@ -284,7 +284,7 @@ class InstancedSpriteBatcher {
             const material = mesh?.material;
             if (!mesh?.visible || !mesh.isWorldBatchCandidate || !emitter.activeCount || !isOrderIndependentAdditive(material)) continue;
 
-            emitter.worldBatchSubdivUV ??= [0, 0, 1, 1];
+            if (!emitter.worldBatchSubdivUV) emitter.worldBatchSubdivUV = [0, 0, 1, 1];
 
             mesh.updateWorldMatrix(true, false);
             tmpAnchor.setFromMatrixPosition(mesh.matrixWorld);

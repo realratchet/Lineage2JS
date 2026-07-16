@@ -938,8 +938,8 @@ class Visualizer {
                         zoneLabel.position.copy(sphere.center);
                         zoneLabel.position.y += sphere.radius + 20;
                         zoneLabel.renderOrder = 1000; // Render on top
-                        zoneLabel.userData.zone0 = node.zones[0];
-                        zoneLabel.userData.zone1 = node.zones[1];
+                        (zoneLabel as any).zone0 = node.zones[0];
+                        (zoneLabel as any).zone1 = node.zones[1];
                         this.portalVisualizations.push(zoneLabel);
                         this.group.add(zoneLabel);
                     }
@@ -1077,7 +1077,7 @@ class Visualizer {
                         boxMaterial.depthWrite = false;
                     }
                     boxHelper.renderOrder = 1000;
-                    boxHelper.userData.zoneIndex = zoneIndex;
+                    (boxHelper as any).zoneIndex = zoneIndex;
                     this.zoneVisualizations.push(boxHelper);
                     this.group.add(boxHelper);
 
@@ -1097,7 +1097,7 @@ class Visualizer {
                         zoneLabel.position.copy(center);
                         zoneLabel.position.y += bounds.max.y - bounds.min.y + 30;
                         zoneLabel.renderOrder = 1000;
-                        zoneLabel.userData.zoneIndex = zoneIndex;
+                        (zoneLabel as any).zoneIndex = zoneIndex;
                         this.zoneVisualizations.push(zoneLabel);
                         this.group.add(zoneLabel);
                     }
@@ -1143,8 +1143,8 @@ class Visualizer {
                             });
                             const line = new Line(geometry, material);
                             line.renderOrder = 999; // Slightly below zone boxes
-                            line.userData.sourceZone = zoneIndex;
-                            line.userData.targetZone = targetZoneIndex;
+                            (line as any).sourceZone = zoneIndex;
+                            (line as any).targetZone = targetZoneIndex;
                             this.zoneVisualizations.push(line);
                             this.group.add(line);
                         }
@@ -1280,7 +1280,7 @@ class Visualizer {
                 // Map: leafIndex -> { nodeIndex, depth }
                 const leafToNodeMap = new Map<number, { nodeIndex: number; depth: number }>();
 
-                // First pass: find the highest level (minimum depth) node for each visible leaf
+                // find the highest level (minimum depth) node for each visible leaf
                 for (let nodeIndex = 0; nodeIndex < sector.bspNodes.length; nodeIndex++) {
                     const node = sector.bspNodes[nodeIndex];
                     const nodeDepth = nodeDepths.get(nodeIndex) ?? Infinity;
@@ -1298,8 +1298,7 @@ class Visualizer {
                     }
                 }
 
-                // Second pass: compute bounds per leaf (from its highest-level node), then either
-                // visualize per-leaf or aggregate/union per-zone for decluttering.
+                // compute bounds per leaf (from its highest-level node), visualize per-leaf or union per-zone
                 const leafBoxes = new Map<number, { box: Box3; zone: number; depth: number; isPortalLeaf: boolean }>();
 
                 for (const [leafIndex, { nodeIndex, depth }] of leafToNodeMap) {
@@ -1359,9 +1358,9 @@ class Visualizer {
                             boxMaterial.depthWrite = false;
                         }
                         boxHelper.renderOrder = 1000;
-                        boxHelper.userData.leafIndex = leafIndex;
-                        boxHelper.userData.zone = info.zone;
-                        boxHelper.userData.depth = info.depth;
+                        (boxHelper as any).leafIndex = leafIndex;
+                        (boxHelper as any).zone = info.zone;
+                        (boxHelper as any).depth = info.depth;
                         this.leafVisualizations.push(boxHelper);
                         this.group.add(boxHelper);
                     }
@@ -1400,10 +1399,10 @@ class Visualizer {
                             boxMaterial.depthWrite = false;
                         }
                         boxHelper.renderOrder = 1000;
-                        boxHelper.userData.zone = zone;
-                        boxHelper.userData.leafCount = agg.leafCount;
-                        boxHelper.userData.depth = agg.minDepth;
-                        boxHelper.userData.aggregated = true;
+                        (boxHelper as any).zone = zone;
+                        (boxHelper as any).leafCount = agg.leafCount;
+                        (boxHelper as any).depth = agg.minDepth;
+                        (boxHelper as any).aggregated = true;
                         this.leafVisualizations.push(boxHelper);
                         this.group.add(boxHelper);
                     }

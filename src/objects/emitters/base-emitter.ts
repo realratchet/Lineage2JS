@@ -188,22 +188,20 @@ abstract class BaseEmitter extends Object3D {
 
         Object.assign(this, config.settings);
 
-        // enum properties are absent from the data when left at class defaults (all 0
-        // in ue2) - the simulation calls .valueOf() on them, so they must be numbers
-        this.startLocationShape ??= 0;    // PTLS_Box
-        this.meshSpawning ??= 0;          // PTMS_None
-        this.rotationSource ??= 0;        // PTRS_None
-        this.coordinateSystem ??= 0;      // PTCS_Independent
-        this.effectAxis ??= 0;            // PTEA_NegativeX
-        this.getVelocityDirectionFrom ??= 0; // PTVD_None
-        this.useSkeletalLocationAs ??= 0; // PTSU_None
-        this.spawningSound ??= 0;         // PTSC_None
-        this.drawStyle ??= 0;             // PTDS_Regular
-        this.ScaleSizeByVelocityMax ??= Infinity; // no cap unless the data provides one
-        this.secondsBeforeInactive ??= 0; // Lineage II overrides stock UE2's one-second default
+        // enum properties are absent from the data when left at class defaults, the simulation calls .valueOf() on them so they must be numbers
+        this.startLocationShape = this.startLocationShape ?? PTLS_Box;
+        this.meshSpawning = this.meshSpawning ?? PTMS_None;
+        this.rotationSource = this.rotationSource ?? PTRS_None;
+        this.coordinateSystem = this.coordinateSystem ?? PTCS_Independent;
+        this.effectAxis = this.effectAxis ?? PTEA_NegativeX;
+        this.getVelocityDirectionFrom = this.getVelocityDirectionFrom ?? PTVD_None;
+        this.useSkeletalLocationAs = this.useSkeletalLocationAs ?? PTSU_None;
+        this.spawningSound = this.spawningSound ?? PTSC_None;
+        this.drawStyle = this.drawStyle ?? PTDS_Regular;
+        this.ScaleSizeByVelocityMax = this.ScaleSizeByVelocityMax ?? Infinity; // no cap unless the data provides one
+        this.secondsBeforeInactive = this.secondsBeforeInactive ?? 0; // Lineage II overrides stock UE2's one-second default
 
-        // Struct settings arrive in the canonical decode encodings ([x,y,z] tuples,
-        // [min,max] ranges) - rehydrate into the shapes the ue-ported simulation reads.
+        // struct settings arrive as canonical decode encodings ([x,y,z] tuples, [min,max] ranges), rehydrate for the ue-ported simulation
         const vec3 = (v: any) => Array.isArray(v) ? new Vector3().fromArray(v) : v;
         const vec4 = (v: any) => Array.isArray(v) ? new Vector4().fromArray(v) : v;
         const range = (v: any) => Array.isArray(v) ? { min: v[0], max: v[1] } : v;
@@ -279,7 +277,7 @@ abstract class BaseEmitter extends Object3D {
         this.warmedUp = false;
 
         // MaxParticles is not always serialized - fall back to the config default
-        this.maxParticles ??= this.generalSettings.maxParticles;
+        this.maxParticles = this.maxParticles ?? this.generalSettings.maxParticles;
 
         // poolSize is just render-buffer slack; maxActiveParticles must stay the true cap
         // (UnParticleEmitter.cpp has no such buffer) or e.g. maxParticles=1 can double-spawn
@@ -320,10 +318,7 @@ abstract class BaseEmitter extends Object3D {
 
 
 
-        // Neutralize actor scaling for particle simulation space.
-        // The Emitter actor's world matrix already includes DrawScale.
-        // By setting our local scale to 1/DrawScale, we ensure our local units
-        // (positions, velocities) are 1:1 with world units.
+        // world matrix already includes DrawScale, local 1/DrawScale keeps simulation units 1:1 with world units
         if (this.drawScale > 0) {
             this.scale.setScalar(1 / this.drawScale);
         }
@@ -533,9 +528,7 @@ abstract class BaseEmitter extends Object3D {
         if (ApplyAll || this.startLocationShape.valueOf() === PTLS_Polar) {
             const Polar = this.tmpVec;
             randVector(Polar, this.startLocationPolarRange.min, this.startLocationPolarRange.max);
-            // L2's authored polar ranges use degrees (commonly azimuth 0..360 and
-            // inclination 0..180), with Z as the radius. The old Y/Z assignment also
-            // put the polar axis sideways instead of along the scene's native UE Z-up.
+            // L2 authors polar ranges in degrees (azimuth 0..360, inclination 0..180) with Z as radius, polar axis along UE Z-up
             const azimuth = Polar.x * Math.PI / 180;
             const inclination = Polar.y * Math.PI / 180;
             let X, Y, Z;
@@ -594,7 +587,7 @@ abstract class BaseEmitter extends Object3D {
         // Handle Skeletal mesh spawning.
         // Replicate C++ logic from UnParticleEmitter.cpp:226-232
         // C++: INT NumBones = MeshVertsAndNormals.Num();
-        // Note: MeshVertsAndNormals contains [bone0_vertex, bone0_normal, bone1_vertex, bone1_normal, ...]
+        // MeshVertsAndNormals contains [bone0_vertex, bone0_normal, bone1_vertex, bone1_normal, ...]
         // So array length = actual_bone_count * 2, but C++ uses total array length as NumBones
         // Only execute if skeletal mesh actor is set and meshVertsAndNormals is populated
         if (this.useSkeletalLocationAs && this.useSkeletalLocationAs.valueOf() !== PTSU_None && 
@@ -929,7 +922,7 @@ abstract class BaseEmitter extends Object3D {
         // Spawning.
         let rate;
         // UE2 logic: Use initial/automatic rate while filling up to the TARGET count, then switch to PPS.
-        // Note: maxParticles is the target count; maxActiveParticles may be larger (soft limit buffer).
+        // maxParticles is the target count, maxActiveParticles may be larger (soft limit buffer)
         if (this.activeParticles < this.maxParticles) {
             if (this.isAutomaticInitialSpawning) {
                 rate = this.maxParticles / ((this.lifetimeRange.min + this.lifetimeRange.max) / 2);
@@ -1010,7 +1003,7 @@ abstract class BaseEmitter extends Object3D {
         }
         currentAcceleration.multiplyScalar(deltaTime);
 
-        // 2. Physics & Movement Update
+        // Update particles.
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
             let Particle = this.particles[index];
 
@@ -1057,7 +1050,7 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            // 3. Collision Detection
+            // Handle collision.
             let Collided = false;
 
             if (TickParticle && (coordinateSystem !== PTCS_Relative)) {

@@ -115,7 +115,7 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             const nonParallel = tmpNonParallel.set(1, 0, 0);
             if (Math.abs(direction.x) >= 0.5) nonParallel.set(0, 1, 0);
 
-            // Note: UE uses Left-handed Cross Product (A ^ B)
+            // UE uses left-handed cross product (A ^ B)
             // Three.js cross product is right-handed, so the order is reversed: B x A = Right-handed Cross(A, B)
             up.crossVectors(nonParallel, direction).normalize();
             right.crossVectors(up, direction).normalize();

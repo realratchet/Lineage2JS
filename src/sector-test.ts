@@ -109,7 +109,7 @@ class SectorRenderTester {
         sector.traverse(object => {
             const o = object as any;
 
-            if (o.isMesh && o.visible && !o.isTerrain && !o.userData?.isTerrainBatch) {
+            if (o.isMesh && o.visible && !o.isTerrain && !o.isTerrainBatch) {
                 o.visible = false;
                 hidden.push(object);
             }
@@ -148,7 +148,7 @@ class SectorRenderTester {
         sector.traverse(object => {
             const o = object as any;
 
-            if (!o.isTerrain && !o.userData?.isTerrainBatch) return;
+            if (!o.isTerrain && !o.isTerrainBatch) return;
 
             const attr = o.geometry?.getAttribute?.("color");
 

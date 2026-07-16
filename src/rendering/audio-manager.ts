@@ -52,17 +52,15 @@ class AudioManager {
 
     public async playMusic(index: number, isLooped: boolean = false, isForced: boolean = false, currentTime?: number) {
         const time = currentTime ?? this.lastTime;
-        
-        // If same track is already playing or queued, just update loop state
+
         if (this.playingIndex === index && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
             return;
         }
 
-        // If not forced and something is currently playing/queued, just queue it for after current finishes
         if (!isForced && this.playingIndex !== undefined && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
-            console.log(`[Music] Queuing track ${index} (not forced)`);
+            // console.log(`[Music] Queuing track ${index} (not forced)`);
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
             this.preloadNext(index);
@@ -70,7 +68,7 @@ class AudioManager {
         }
 
         const playId = ++this.currentPlayId;
-        console.log(`[Music] playMusic index=${index} forced=${isForced} playId=${playId}`);
+        // console.log(`[Music] playMusic index=${index} forced=${isForced} playId=${playId}`);
 
         await this.ensureUnlocked();
         if (this.currentPlayId !== playId) return;
@@ -84,7 +82,7 @@ class AudioManager {
         this.currentIsLooped = isLooped;
 
         if (wasPlaying && isForced) {
-            console.log(`[Music] Fading out old track, scheduling ${index} in 500ms...`);
+            // console.log(`[Music] Fading out old track, scheduling ${index} in 500ms...`);
             this.nextMusicTrackTime = time + 500;
             this.nextMusicPlayId = playId;
             this.preloadNext(index);
@@ -136,7 +134,6 @@ class AudioManager {
                     try { source.stop(); } catch {}
                 }
 
-                // Cleanup connections after fade
                 setTimeout(() => {
                     try { source.disconnect(); } catch {}
                     try { gain.disconnect(); } catch {}
@@ -208,9 +205,7 @@ class AudioManager {
         }
 
         const waitTime = this.currentIsLooped ? 0 : 10000;
-        if (waitTime > 0) {
-            console.log(`[Music] Track finished. Waiting ${waitTime / 1000}s before next track...`);
-        }
+        // if (waitTime > 0) console.log(`[Music] Track finished. Waiting ${waitTime / 1000}s before next track...`);
 
         this.nextMusicTrackTime = endTime + waitTime;
         this.nextMusicPlayId = this.currentPlayId;
@@ -299,8 +294,6 @@ class AudioManager {
             this.unlocked = true;
         }
     }
-
-    // --- Ambient Sound Spatial Playback ---
 
     protected readonly activeAmbientSounds = new Map<string, {
         source?: AudioBufferSourceNode,

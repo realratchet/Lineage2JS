@@ -176,12 +176,12 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
 
     // debugger;
 
-    object.userData.meshInstance = {
+    (object as any).meshInstance = {
         uuid: instanceInfo.uuid,
         name: instanceInfo.name
     };
 
-    object.userData.mesh = {
+    (object as any).mesh = {
         uuid: instanceInfo.mesh.uuid,
         name: instanceInfo.mesh.name
     };
@@ -218,12 +218,11 @@ function decodeZoneObject(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInf
         (object as any).type = "Sky";
         (object as any).isSkyZoneInfo = true;
 
-        // Store the original position for SkyRenderer, but DON'T apply it to the object
-        // to avoid double-transforming children (which are already in world space).
+        // original position for SkyRenderer only, applying it would double-transform the already-world-space children
         if (info.position) {
-            object.userData.skyOrigin = new Vector3().fromArray(info.position);
+            (object as any).skyOrigin = new Vector3().fromArray(info.position);
         } else if ((info as any).location) {
-            object.userData.skyOrigin = new Vector3().fromArray((info as any).location);
+            (object as any).skyOrigin = new Vector3().fromArray((info as any).location);
         }
     }
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
@@ -270,8 +269,8 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
     const mesh = new Mesh(geometry, materials);
 
     mesh.name = `BSPSection_${sectionInfo.sectionName}`;
-    mesh.userData.sectionIndex = sectionIndex;
-    mesh.userData.priority = sectionInfo.priority;
+    (mesh as any).sectionIndex = sectionIndex;
+    (mesh as any).priority = sectionInfo.priority;
 
     return mesh;
 }
@@ -669,7 +668,7 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
         return acc;
     }, {} as Record<string, AnimationClip>);
 
-    mesh.userData.animations = animations;
+    (mesh as any).meshAnimations = animations; // .animations is taken by three's own AnimationClip[] slot
 
 
     return mesh;
