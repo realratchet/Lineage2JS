@@ -514,7 +514,7 @@ const REQUIRED_SETTINGS = [
     "isUsingRevolution", "isUsingRevolutionScale", "isUsingSizeScale", "isUsingVelocityScale",
     "isVelocityFromMesh", "maxAbsVelocity", "meshNormal", "meshScaleRange", "meshSpawning",
     "rotateVelocityLossRange", "rotationNormal", "rotationSource", "sizeScaleRepeats",
-    "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSoundIndex",
+    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSoundIndex",
     "startLocationShape", "startSpinRange", "subdivEnd", "subdivStart", "texSubdivU",
     "texSubdivV", "useSkeletalLocationAs", "velocityScaleRepeats"
 ];

@@ -10,11 +10,63 @@ const tmpColorByte = new ColorByte();
 const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
 const tmpSphere = new Sphere();
+const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
 const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
+const TRANSPARENT_SORT_DISTANCE_SQ = 128 * 128;
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
+
+type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
+type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number };
+
+function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups: BatchGroup_T[], transparentMaterials: Set<number>) {
+    visibleGroups.sort((a, b) => (a.materialIndex - b.materialIndex) || (transparentMaterials.has(a.materialIndex) ? b.distance - a.distance : a.start - b.start));
+    geometry.clearGroups();
+
+    const index = geometry.index;
+    const source = object.userData.batchIndices as Uint8Array | Uint16Array | Uint32Array | null;
+
+    if (!index || !source) {
+        let run: BatchGroup_T = null;
+
+        for (const group of visibleGroups) {
+            if (run && run.materialIndex === group.materialIndex && run.start + run.count === group.start) {
+                run.count += group.count;
+            } else {
+                if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
+                run = { ...group };
+            }
+        }
+
+        if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
+        return;
+    }
+
+    const target = index.array as Uint8Array | Uint16Array | Uint32Array;
+    let offset = 0;
+    let run: BatchGroup_T = null;
+
+    for (const group of visibleGroups) {
+        target.set(source.subarray(group.start, group.start + group.count), offset);
+
+        if (run && run.materialIndex === group.materialIndex) {
+            run.count += group.count;
+        } else {
+            if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
+            run = { start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance };
+        }
+
+        offset += group.count;
+    }
+
+    if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
+
+    index.updateRange.offset = 0;
+    index.updateRange.count = offset;
+    index.needsUpdate = true;
+}
 
 export class FogInfoObject extends Object3D {
     public readonly isFogInfo = true;
@@ -138,7 +190,19 @@ class SectorObject extends Object3D {
 
     // per-frame caches, both derive from data that is static after decode
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[] };
+    protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
+    protected readonly candidateStaticActorUuids = new Set<string>();
+    protected readonly visibleStaticActorUuids = new Set<string>();
+    protected readonly visibleStaticActorDistances = new Map<string, number>();
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
+    protected visibilityCacheInitialized = false;
+    protected readonly visibilityCachePosition = new Vector3();
+    protected readonly visibilityCachePlanes = new Float64Array(24);
+    protected visibilityCacheFrustumCulling = true;
+    protected visibilityCacheTopLevelOnly = false;
+    protected visibilityCacheDistanceSq = Infinity;
+    protected visibilityCacheEnvVersion = -1;
+    protected visibilityCacheTimeStep = -1;
     protected _lastLoggedStaticMeshLeaf: number | null = null;
 
     // Internal state for zone/leaf change tracking
@@ -856,11 +920,53 @@ class SectorObject extends Object3D {
         for (const light of this._animatedLights) light.update(environment, this.brightness);
     }
 
+    protected isVisibilityCacheValid(environment: L2Environment, cameraPosition: Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, topLevelOnly: boolean, staticMeshCullDistanceSq: number) {
+        const envVersion = environment.getEnvVersion();
+        const timeStep = Math.floor(environment.getTimeOfDay() * 600);
+        let unchanged = this.visibilityCacheInitialized
+            && this.visibilityCachePosition.equals(cameraPosition)
+            && this.visibilityCacheFrustumCulling === frustumCullingEnabled
+            && this.visibilityCacheTopLevelOnly === topLevelOnly
+            && this.visibilityCacheDistanceSq === staticMeshCullDistanceSq
+            && this.visibilityCacheEnvVersion === envVersion
+            && this.visibilityCacheTimeStep === timeStep;
+
+        for (let i = 0, offset = 0; unchanged && i < cameraFrustum.planes.length; i++) {
+            const plane = cameraFrustum.planes[i];
+            unchanged = this.visibilityCachePlanes[offset++] === plane.normal.x
+                && this.visibilityCachePlanes[offset++] === plane.normal.y
+                && this.visibilityCachePlanes[offset++] === plane.normal.z
+                && this.visibilityCachePlanes[offset++] === plane.constant;
+        }
+
+        if (unchanged) return true;
+
+        this.visibilityCacheInitialized = true;
+        this.visibilityCachePosition.copy(cameraPosition);
+        this.visibilityCacheFrustumCulling = frustumCullingEnabled;
+        this.visibilityCacheTopLevelOnly = topLevelOnly;
+        this.visibilityCacheDistanceSq = staticMeshCullDistanceSq;
+        this.visibilityCacheEnvVersion = envVersion;
+        this.visibilityCacheTimeStep = timeStep;
+
+        for (let i = 0, offset = 0; i < cameraFrustum.planes.length; i++) {
+            const plane = cameraFrustum.planes[i];
+            this.visibilityCachePlanes[offset++] = plane.normal.x;
+            this.visibilityCachePlanes[offset++] = plane.normal.y;
+            this.visibilityCachePlanes[offset++] = plane.normal.z;
+            this.visibilityCachePlanes[offset++] = plane.constant;
+        }
+
+        return false;
+    }
+
     public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity) {
         // every sector, not just the active one - lights start with needsUpdate=true
         // and a light that is never updated never clears it, so every lit actor around
         // it would recompute its vertex lighting every frame
         this.updateLights(environment);
+
+        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq)) return;
 
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
 
@@ -1003,8 +1109,12 @@ class SectorObject extends Object3D {
         }
 
         if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
-            const visibleActorUuids = new Set<string>();
-            const actorBox = new Box3();
+            const candidateActorUuids = this.candidateStaticActorUuids;
+            const visibleActorUuids = this.visibleStaticActorUuids;
+            const visibleActorDistances = this.visibleStaticActorDistances;
+            candidateActorUuids.clear();
+            visibleActorUuids.clear();
+            visibleActorDistances.clear();
 
             for (const leafIndex of visibleLeaves) {
                 const actors = library.leafActors[leafIndex];
@@ -1012,48 +1122,64 @@ class SectorObject extends Object3D {
                     for (const actorBase of actors) {
                         if (actorBase.type !== "StaticMeshActor") continue;
                         const actor = actorBase as IStaticMeshActorDecodeInfo;
-                        if (visibleActorUuids.has(actor.uuid)) continue;
+                        if (candidateActorUuids.has(actor.uuid)) continue;
+                        candidateActorUuids.add(actor.uuid);
 
                         // Actor frustum and zone mask culling
-                        actorBox.min.fromArray(actor.bounds.min);
-                        actorBox.max.fromArray(actor.bounds.max);
+                        tmpActorBox.min.fromArray(actor.bounds.min);
+                        tmpActorBox.max.fromArray(actor.bounds.max);
 
-                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
                         const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
                         // Distance-based culling — skip for actors with bIgnoredRange
-                        const actorCenter = actorBox.getCenter(tmpVec3);
+                        const actorCenter = tmpActorBox.getCenter(tmpVec3);
                         const distSq = cameraPosition.distanceToSquared(actorCenter);
                         const isRangeIgnored = !!(actor as any).isRangeIgnored;
                         const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
                         if (isFrustumVisible && isZoneVisible && isInRange) {
                             visibleActorUuids.add(actor.uuid);
+                            visibleActorDistances.set(actor.uuid, distSq);
                         }
                     }
                 }
             }
 
             let visibleCount = 0;
-            const processedBatches = new Set<string>();
 
-            this.staticMeshMap.forEach((object, uuid) => {
+            if (!this.staticMeshVisibilityEntries) {
+                const processedBatches = new Set<string>();
+                this.staticMeshVisibilityEntries = [];
+
+                this.staticMeshMap.forEach((object, uuid) => {
+                    if (object.userData.isBatch) {
+                        if (processedBatches.has(object.uuid)) return;
+                        processedBatches.add(object.uuid);
+                    }
+
+                    this.staticMeshVisibilityEntries.push({ object, uuid });
+                });
+            }
+
+            for (const { object, uuid } of this.staticMeshVisibilityEntries) {
                 // For batched meshes, per-element culling via geometry.groups
                 if (object.userData.isBatch) {
-                    // Only process each batch mesh once (multiple UUIDs map to same object)
-                    const batchId = object.uuid;
-                    if (processedBatches.has(batchId)) return;
-                    processedBatches.add(batchId);
-
                     const batchElements = object.userData.batchElements;
                     const geometry = (object as any).geometry;
-                    if (!batchElements || !geometry) return;
+                    if (!batchElements || !geometry) continue;
 
                     // Test each element's bounds individually
-                    const transparentMats = object.userData.transparentMaterialIndexes as Set<number> | undefined;
-                    const transparentElems = object.userData.transparentElems as { index: number, mesh: THREE.Mesh }[] | undefined;
-                    const elemVisibility: boolean[] = new Array(batchElements.length);
-                    let elemKey = "";
+                    const sortedTransparentMats = object.userData.sortedTransparentMaterialIndexes as Set<number> | undefined;
+                    let elemVisibility = object.userData.elemVisibility as Uint8Array;
+                    if (!elemVisibility || elemVisibility.length !== batchElements.length) {
+                        elemVisibility = object.userData.elemVisibility = new Uint8Array(batchElements.length);
+                        elemVisibility.fill(2);
+                    }
+                    let elemDistances = object.userData.elemDistances as Float64Array;
+                    if (!elemDistances || elemDistances.length !== batchElements.length)
+                        elemDistances = object.userData.elemDistances = new Float64Array(batchElements.length);
+                    let visibilityChanged = false;
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
                         const elem = batchElements[ei];
@@ -1061,88 +1187,68 @@ class SectorObject extends Object3D {
                         // per-element pvs: the element only qualifies when one of its
                         // leaves is visible (portals keep indoor cameras from seeing
                         // through walls), elements without leaf data skip the test
-                        let inVisibleLeaves = true;
+                        let elemVisible = visibleActorUuids.has(elem.uuid);
+                        let distSq = visibleActorDistances.get(elem.uuid) ?? 0;
 
-                        if (elem.leaves && elem.leaves.length > 0 && !visibleActorUuids.has(elem.uuid)) {
-                            inVisibleLeaves = false;
-                            for (const li of elem.leaves) {
-                                if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
+                        // Actors absent from leafActors still need the direct fallback.
+                        if (!elemVisible && !candidateActorUuids.has(elem.uuid)) {
+                            let inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
+                            if (!inVisibleLeaves) {
+                                for (const li of elem.leaves) {
+                                    if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
+                                }
+                            }
+
+                            if (inVisibleLeaves) {
+                                tmpActorBox.min.fromArray(elem.boundsMin);
+                                tmpActorBox.max.fromArray(elem.boundsMax);
+
+                                const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
+                                const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
+                                const actorCenter = tmpActorBox.getCenter(tmpVec3);
+                                distSq = cameraPosition.distanceToSquared(actorCenter);
+                                const isInRange = elem.isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+
+                                elemVisible = isFrustumVisible && isZoneVisible && isInRange;
                             }
                         }
 
-                        let elemVisible = false;
+                        elemDistances[ei] = distSq;
 
-                        if (inVisibleLeaves) {
-                            actorBox.min.fromArray(elem.boundsMin);
-                            actorBox.max.fromArray(elem.boundsMax);
-
-                            const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
-                            const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
-                            const actorCenter = actorBox.getCenter(tmpVec3);
-                            const distSq = cameraPosition.distanceToSquared(actorCenter);
-                            const isInRange = elem.isRangeIgnored || distSq <= staticMeshCullDistanceSq;
-
-                            elemVisible = isFrustumVisible && isZoneVisible && isInRange;
+                        const visibleValue = elemVisible ? 1 : 0;
+                        if (elemVisibility[ei] !== visibleValue) {
+                            elemVisibility[ei] = visibleValue;
+                            visibilityChanged = true;
                         }
-
-                        elemVisibility[ei] = elemVisible;
-                        if (elemVisible) elemKey += ei + ",";
                     }
 
-                    // the group rebuild and sub mesh toggles only when the visible set changed
-                    if (elemKey !== object.userData.visibleElemKey) {
-                        object.userData.visibleElemKey = elemKey;
+                    const transparentSortPosition = object.userData.transparentSortPosition as Vector3;
+                    const sortChanged = !!sortedTransparentMats?.size && (!transparentSortPosition || transparentSortPosition.distanceToSquared(cameraPosition) >= TRANSPARENT_SORT_DISTANCE_SQ);
 
-                        const visibleGroups: { start: number; count: number; materialIndex: number }[] = [];
-                        let anyTransparentVisible = false;
+                    if (visibilityChanged || sortChanged) {
+                        const visibleGroups: BatchGroup_T[] = [];
 
                         for (let ei = 0; ei < batchElements.length; ei++) {
                             if (!elemVisibility[ei]) continue;
                             for (const g of batchElements[ei].groups) {
-                                // transparent groups render through the per-element sub meshes
-                                if (transparentMats?.has(g.materialIndex)) continue;
-                                visibleGroups.push(g);
+                                visibleGroups.push({ ...g, distance: elemDistances[ei] });
                             }
                         }
 
-                        if (transparentElems) {
-                            for (const t of transparentElems) {
-                                t.mesh.visible = elemVisibility[t.index];
-                                if (t.mesh.visible) anyTransparentVisible = true;
-                            }
-                        }
-
-                        // Rebuild geometry groups with only visible elements (opaque only,
-                        // transparent sections live in the per-element sub meshes). Sorted
-                        // by material so consecutive draws share program state, contiguous
-                        // ranges collapse into one draw
                         if (visibleGroups.length > 0) {
-                            visibleGroups.sort((a, b) => (a.materialIndex - b.materialIndex) || (a.start - b.start));
-                            geometry.clearGroups();
-
-                            let run: { start: number; count: number; materialIndex: number } = null;
-
-                            for (const g of visibleGroups) {
-                                if (run && run.materialIndex === g.materialIndex && run.start + run.count === g.start) {
-                                    run.count += g.count;
-                                } else {
-                                    if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
-                                    run = { start: g.start, count: g.count, materialIndex: g.materialIndex };
-                                }
-                            }
-
-                            geometry.addGroup(run.start, run.count, run.materialIndex);
+                            rebuildBatchGroups(object, geometry, visibleGroups, sortedTransparentMats);
                         } else {
                             geometry.clearGroups();
                         }
 
-                        // transparent element meshes are siblings, not children - the batch
-                        // only shows its own opaque groups
                         object.visible = visibleGroups.length > 0;
-                        object.userData.anyTransparentVisible = anyTransparentVisible;
+                        if (sortedTransparentMats?.size) {
+                            if (transparentSortPosition) transparentSortPosition.copy(cameraPosition);
+                            else object.userData.transparentSortPosition = cameraPosition.clone();
+                        }
                     }
 
-                    if (object.visible || object.userData.anyTransparentVisible) visibleCount++;
+                    if (object.visible) visibleCount++;
 
                     // no update() here: render-manager's Pass 2 (traverseVisible)
                     // relights visible meshes the same frame - a light's needsUpdate
@@ -1155,13 +1261,13 @@ class SectorObject extends Object3D {
                     let isVisible = visibleActorUuids.has(uuid);
 
                     if (!isVisible && object.userData.actorBoundsMin && !isCameraInSector) {
-                        actorBox.min.fromArray(object.userData.actorBoundsMin);
-                        actorBox.max.fromArray(object.userData.actorBoundsMax);
+                        tmpActorBox.min.fromArray(object.userData.actorBoundsMin);
+                        tmpActorBox.max.fromArray(object.userData.actorBoundsMax);
 
-                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
+                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
                         const zoneMask = object.userData.actorZoneMask as bigint;
                         const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
-                        const actorCenter = actorBox.getCenter(tmpVec3);
+                        const actorCenter = tmpActorBox.getCenter(tmpVec3);
                         const distSq = cameraPosition.distanceToSquared(actorCenter);
                         const isInRange = object.userData.actorRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
@@ -1171,7 +1277,7 @@ class SectorObject extends Object3D {
                     object.visible = isVisible;
                     if (isVisible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
                 }
-            });
+            }
 
             if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);

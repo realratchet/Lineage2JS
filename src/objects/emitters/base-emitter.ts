@@ -7,6 +7,16 @@ const frozenUpdateMatrixWorld = function () { };
 const AXIS_X = new Vector3(1, 0, 0);
 const AXIS_Y = new Vector3(0, 1, 0);
 const AXIS_Z = new Vector3(0, 0, 1);
+const ZERO_VECTOR3 = new Vector3();
+const ONE_VECTOR3 = new Vector3(1, 1, 1);
+const ONE_VECTOR4 = new Vector4(1, 1, 1, 1);
+const tmpPhysicsVector = new Vector3();
+const tmpPhysicsVector2 = new Vector3();
+const tmpCurrentAcceleration = new Vector3();
+const tmpOwnerOffset = new Vector3();
+const tmpWorldToLocal = new Matrix4();
+const tmpWorldRotation = new Matrix4();
+const tmpFadeColor = new Vector4();
 
 // [offsetX, offsetY, scaleX, scaleY] scratch, reused every particle every frame
 const tmpSubdivUV: [number, number, number, number] = [0, 0, 1, 1];
@@ -116,6 +126,7 @@ abstract class BaseEmitter extends Object3D {
     protected isSpinning: boolean;
     protected isSpriteEmitter: boolean = false;
     protected SpinParticles: boolean;
+    protected secondsBeforeInactive: number;
 
     // set by a subclass's initSettings() - swaps to a single instanced draw call for the whole pool
     protected isInstancedRendering: boolean = false;
@@ -189,6 +200,7 @@ abstract class BaseEmitter extends Object3D {
         this.spawningSound ??= 0;         // PTSC_None
         this.drawStyle ??= 0;             // PTDS_Regular
         this.ScaleSizeByVelocityMax ??= Infinity; // no cap unless the data provides one
+        this.secondsBeforeInactive ??= 0; // Lineage II overrides stock UE2's one-second default
 
         // Struct settings arrive in the canonical decode encodings ([x,y,z] tuples,
         // [min,max] ranges) - rehydrate into the shapes the ue-ported simulation reads.
@@ -492,7 +504,7 @@ abstract class BaseEmitter extends Object3D {
         // only trail emitters use this apparently
     }
 
-    protected spawnParticle(index: number, spawnTime: number, flags: number = 0, spawnFlags: number = 0, localLocationOffset = new Vector3(0, 0, 0)) {
+    protected spawnParticle(index: number, spawnTime: number, flags: number = 0, spawnFlags: number = 0, localLocationOffset = ZERO_VECTOR3) {
         // debugger;
         const Owner = this.parent || this;
 
@@ -500,7 +512,6 @@ abstract class BaseEmitter extends Object3D {
             return;
 
         const ownerLocation = () => Owner.position;
-        const oldOwnerLocation = () => ownerLocation();
 
         const Particle = this.particles[index];
 
@@ -518,7 +529,7 @@ abstract class BaseEmitter extends Object3D {
             randVector(this.tmpVec, this.initialSettings.position.min, this.initialSettings.position.max),
             Particle.position.add(this.tmpVec.multiplyScalar(spawnRangeScale));
         if (ApplyAll || this.startLocationShape.valueOf() === PTLS_Sphere)
-            Particle.position.add(new Vector3().randomDirection().multiplyScalar(randRange(this.sphereRadiusRange.min, this.sphereRadiusRange.max)));
+            Particle.position.add(this.tmpVec.randomDirection().multiplyScalar(randRange(this.sphereRadiusRange.min, this.sphereRadiusRange.max)));
         if (ApplyAll || this.startLocationShape.valueOf() === PTLS_Polar) {
             const Polar = this.tmpVec;
             randVector(Polar, this.startLocationPolarRange.min, this.startLocationPolarRange.max);
@@ -531,7 +542,7 @@ abstract class BaseEmitter extends Object3D {
             X = Polar.z * Math.cos(azimuth) * Math.sin(inclination);
             Y = Polar.z * Math.sin(azimuth) * Math.sin(inclination);
             Z = Polar.z * Math.cos(inclination);
-            Particle.position.add(new Vector3(X, Y, Z));
+            Particle.position.add(this.tmpVec.set(X, Y, Z));
         }
 
         // Handle spawning from mesh.
@@ -669,11 +680,12 @@ abstract class BaseEmitter extends Object3D {
             Particle.StartSize.z = Particle.StartSize.x;
         }
         Particle.scale.copy(Particle.StartSize);
-        let currentAccel = this.acceleration.clone();
+        const currentAccel = tmpCurrentAcceleration.copy(this.acceleration);
         if (this.coordinateSystem.valueOf() === PTCS_Independent) {
             this.parent.updateMatrixWorld();
-            const worldToLocal = new Matrix4().copy(this.parent.matrixWorld).invert();
-            currentAccel.applyMatrix4(new Matrix4().extractRotation(worldToLocal));
+            tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
+            tmpWorldRotation.extractRotation(tmpWorldToLocal);
+            currentAccel.applyMatrix4(tmpWorldRotation);
         }
         Particle.Velocity.add(currentAccel.multiplyScalar(spawnTime));
         Particle.VelocityMultiplier.set(1, 1, 1);
@@ -699,17 +711,16 @@ abstract class BaseEmitter extends Object3D {
             let Direction;
 
             if (this.coordinateSystem.valueOf() === PTCS_Relative)
-                Direction = Particle.position.clone().normalize();
+                Direction = tmpPhysicsVector.copy(Particle.position).normalize();
             else
-                Direction = (ownerLocation().clone().sub(Particle.position)).normalize();
+                Direction = tmpPhysicsVector.copy(ownerLocation()).sub(Particle.position).normalize();
 
             switch (this.getVelocityDirectionFrom.valueOf()) {
                 case PTVD_StartPositionAndOwner:
-                    
-                    Particle.Velocity.copy(Particle.Velocity.clone().negate().multiply(Direction));
+                    Particle.Velocity.negate().multiply(Direction);
                     break;
                 case PTVD_OwnerAndStartPosition:
-                    Particle.Velocity.copy(Particle.Velocity.clone().multiply(Direction));
+                    Particle.Velocity.multiply(Direction);
                     break;
                 case PTVD_AddRadial:
                     __break__(); // StartVelocityRadialRange is not carried by the decode info yet
@@ -733,10 +744,10 @@ abstract class BaseEmitter extends Object3D {
 
         // Location.
         if (this.coordinateSystem.valueOf() === PTCS_Independent && spawnTime > 0) {
-            const ownerVelocity = ownerLocation().clone().sub(this.oldOwnerLocation).divideScalar(clamp(this.lastDeltaTime, 0.001, 1.0));
+            const ownerVelocity = tmpPhysicsVector.copy(ownerLocation()).sub(this.oldOwnerLocation).divideScalar(clamp(this.lastDeltaTime, 0.001, 1.0));
             Particle.position.sub(ownerVelocity.multiplyScalar(spawnTime));
         }
-        Particle.position.add(Particle.Velocity.clone().multiplyScalar(spawnTime));
+        Particle.position.add(tmpPhysicsVector.copy(Particle.Velocity).multiplyScalar(spawnTime));
 
         // Scale size by velocity.
         if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
@@ -829,11 +840,8 @@ abstract class BaseEmitter extends Object3D {
             this.currentSpawnOnTrigger -= spawnCount;
         }
 
-        const ownerLocation = () => new Vector3().set(Owner.position.x, Owner.position.z, Owner.position.y);
-        const oldOwnerLocation = () => ownerLocation();
-
         let percent;
-        const shouldInterpolate = oldOwnerLocation().distanceTo(ownerLocation()) > 1;
+        const shouldInterpolate = this.oldOwnerLocation.distanceToSquared(Owner.position) > 1;
 
         for (let i = 0; i < spawnCount; i++) {
 
@@ -841,9 +849,8 @@ abstract class BaseEmitter extends Object3D {
 
             // Laurent -- location interpolation
             if (shouldInterpolate && this.coordinateSystem.valueOf() === PTCS_Independent) {
-                __break__();
                 percent = 1 - (i + 1) / spawnCount;
-                this.particles[this.particleIndex].position.add((oldOwnerLocation().clone().sub(ownerLocation())).multiplyScalar(percent));
+                this.particles[this.particleIndex].position.add(tmpPhysicsVector.copy(this.oldOwnerLocation).sub(Owner.position).multiplyScalar(percent));
             }
 
             this.activeParticles = Math.max(this.activeParticles, this.particleIndex + 1);
@@ -941,10 +948,6 @@ abstract class BaseEmitter extends Object3D {
         if (rate > 0 && !this.killPending)
             this.ppsFraction = this.spawnParticles(this.ppsFraction, rate, deltaTime);
 
-        const ownerLocation = () => Owner.position;
-        const oldOwnerLocation = () => this.oldOwnerLocation;
-
-
         // Deferred spawning.
         if (!this.killPending) {
 
@@ -994,6 +997,18 @@ abstract class BaseEmitter extends Object3D {
 
         let MaxVelocityScale = 1;
         let OneOverDeltaTime = 1 / clamp(deltaTime, 0.001, 0.15);
+        const coordinateSystem = this.coordinateSystem.valueOf();
+        const currentAcceleration = tmpCurrentAcceleration.copy(this.acceleration);
+        const ownerOffset = tmpOwnerOffset.copy(Owner.position).sub(this.oldOwnerLocation);
+
+        if (coordinateSystem === PTCS_Independent) {
+            // Independent acceleration is emitter-wide, not per-particle.
+            this.parent.updateMatrixWorld();
+            tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
+            tmpWorldRotation.extractRotation(tmpWorldToLocal);
+            currentAcceleration.applyMatrix4(tmpWorldRotation);
+        }
+        currentAcceleration.multiplyScalar(deltaTime);
 
         // 2. Physics & Movement Update
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
@@ -1003,7 +1018,7 @@ abstract class BaseEmitter extends Object3D {
                 continue;
 
             // UE2: UBOOL TickParticle = !(Particle.Flags & PTF_NoTick) || (CoordinateSystem == PTCS_Relative);
-            let TickParticle = !(Particle.Flags & PTF_NoTick) || (this.coordinateSystem.valueOf() === PTCS_Relative);
+            let TickParticle = !(Particle.Flags & PTF_NoTick) || (coordinateSystem === PTCS_Relative);
 
             // Don't tick particle if it just got spawned via initial spawning or respawn.
             if (Particle.Flags & PTF_InitialSpawn) {
@@ -1012,28 +1027,19 @@ abstract class BaseEmitter extends Object3D {
             }
 
             if (TickParticle) {
-                let currentAccel = this.acceleration.clone();
-                if (this.coordinateSystem.valueOf() === PTCS_Independent) {
-                    // For Independent emitters, acceleration is world-space but applied to local velocity.
-                    this.parent.updateMatrixWorld();
-                    const worldToLocal = new Matrix4().copy(this.parent.matrixWorld).invert();
-                    currentAccel.applyMatrix4(new Matrix4().extractRotation(worldToLocal));
-                }
-
-                Particle.Velocity.add(currentAccel.multiplyScalar(deltaTime));
+                Particle.Velocity.add(currentAcceleration);
 
                 // Support Independent Coordinate System:
-                if (this.coordinateSystem.valueOf() === PTCS_Independent) {
-                    const ownerOffset = ownerLocation().clone().sub(oldOwnerLocation());
+                if (coordinateSystem === PTCS_Independent) {
                     Particle.position.sub(ownerOffset);
                 }
 
                 Particle.OldLocation.copy(Particle.position);
-                Particle.position.add(Particle.Velocity.clone().multiply(Particle.VelocityMultiplier).multiplyScalar(deltaTime));
+                Particle.position.add(tmpPhysicsVector.copy(Particle.Velocity).multiply(Particle.VelocityMultiplier).multiplyScalar(deltaTime));
 
                 if (numBones && this.useSkeletalLocationAs.valueOf() === PTSU_Location) {
-                    const NewMeshLocation = this.meshVertsAndNormals[Particle.BoneIndex * 2].clone().multiply(this.skeletalScale);
-                    Particle.position.add(NewMeshLocation.clone().sub(Particle.OldMeshLocation));
+                    const NewMeshLocation = tmpPhysicsVector.copy(this.meshVertsAndNormals[Particle.BoneIndex * 2]).multiply(this.skeletalScale);
+                    Particle.position.add(tmpPhysicsVector2.copy(NewMeshLocation).sub(Particle.OldMeshLocation));
                     Particle.OldMeshLocation.copy(NewMeshLocation);
                 }
 
@@ -1053,10 +1059,8 @@ abstract class BaseEmitter extends Object3D {
 
             // 3. Collision Detection
             let Collided = false;
-            let HitNormal = new Vector3(0, 0, 0);
-            let HitLocation = new Vector3(0, 0, 0);
 
-            if (TickParticle && (this.coordinateSystem.valueOf() !== PTCS_Relative)) {
+            if (TickParticle && (coordinateSystem !== PTCS_Relative)) {
                 if (this.isUsingCollision) {
                     __break__();
                 }
@@ -1071,7 +1075,7 @@ abstract class BaseEmitter extends Object3D {
             let RelativeTime;
             let TimeFactor = 1.0;
             let Time = Particle.Time;
-            const Color = new Vector4(1, 1, 1, 1);
+            const Color = Particle.Color.set(1, 1, 1, 1);
 
             if (Particle.MaxLifetime)
                 RelativeTime = clamp(Time / Particle.MaxLifetime, 0, 1);
@@ -1110,7 +1114,7 @@ abstract class BaseEmitter extends Object3D {
                     }
                 }
             }
-            Particle.scale.copy(Particle.StartSize.clone().multiplyScalar(TimeFactor * this.drawScale));
+            Particle.scale.copy(Particle.StartSize).multiplyScalar(TimeFactor * this.drawScale);
 
             // Velocity scale.
             if (this.isUsingVelocityScale) {
@@ -1127,7 +1131,7 @@ abstract class BaseEmitter extends Object3D {
                                 R1 = this.velocityScale[n - 1].RelativeTime;
                             }
                             else {
-                                V1 = new Vector3(1, 1, 1);
+                                V1 = ONE_VECTOR3;
                                 R1 = 0;
                             }
                             let A;
@@ -1146,7 +1150,9 @@ abstract class BaseEmitter extends Object3D {
 
             // Scale size by velocity.
             if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
-                let VelocitySize = this.determineVelocityByLocationDifference ? (Particle.position.clone().sub(Particle.OldLocation)).length() * OneOverDeltaTime : (Particle.Velocity.clone().multiply(Particle.VelocityMultiplier)).length();
+                let VelocitySize = this.determineVelocityByLocationDifference
+                    ? tmpPhysicsVector.copy(Particle.position).sub(Particle.OldLocation).length() * OneOverDeltaTime
+                    : tmpPhysicsVector.copy(Particle.Velocity).multiply(Particle.VelocityMultiplier).length();
                 MaxVelocityScale = Math.max(MaxVelocityScale, VelocitySize);
                 if (this.scaleSizeXByVelocity)
                     Particle.scale.x *= VelocitySize * this.scaleSizeByVelocityMultiplier.x;
@@ -1172,7 +1178,7 @@ abstract class BaseEmitter extends Object3D {
                                 R1 = this.RevolutionScale[n - 1].RelativeTime;
                             }
                             else {
-                                V1 = new Vector3(1, 1, 1);
+                                V1 = ONE_VECTOR3;
                                 R1 = 0;
                             }
                             let A;
@@ -1197,13 +1203,13 @@ abstract class BaseEmitter extends Object3D {
                         let R1;
                         let R2 = this.colorScale[n].RelativeTime;
                         let C1;
-                        let C2 = new Vector4().fromArray(this.colorScale[n].Color.toArray());
+                        let C2 = this.colorScale[n].Color;
                         if (n) {
-                            C1 = new Vector4().fromArray(this.colorScale[n - 1].Color.toArray());
+                            C1 = this.colorScale[n - 1].Color;
                             R1 = this.colorScale[n - 1].RelativeTime;
                         }
                         else {
-                            C1 = new Vector4(1, 1, 1, 1);
+                            C1 = ONE_VECTOR4;
                             R1 = 0;
                         }
                         let A;
@@ -1260,7 +1266,7 @@ abstract class BaseEmitter extends Object3D {
                 else if (this.drawStyle.valueOf() === PTDS_AlphaBlend) {
                     Color.w -= FadeFactor * MaxFade.w;
                 } else {
-                    Color.sub(new Vector4().copy(MaxFade).multiplyScalar(FadeFactor));
+                    Color.sub(tmpFadeColor.copy(MaxFade).multiplyScalar(FadeFactor));
                 }
 
                 Color.clampScalar(0, 1); // UnParticleEmitter.cpp clamps post-fade too, else Color can go negative
@@ -1281,8 +1287,6 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            Particle.Color.copy(Color);
-
             // Bounding box creation.
             this.boundingBox.expandByPoint(Particle.position);
 
@@ -1295,10 +1299,10 @@ abstract class BaseEmitter extends Object3D {
                 Particle.Velocity.z = clamp(Particle.Velocity.z, -this.maxAbsVelocity.z, this.maxAbsVelocity.z);
 
             // Friction.
-            Particle.Velocity.sub(Particle.Velocity.clone().multiply(randVector(this.tmpVec, this.realVelocityLossRange.min, this.realVelocityLossRange.max)).multiplyScalar(deltaTime));
+            Particle.Velocity.sub(tmpPhysicsVector.copy(Particle.Velocity).multiply(randVector(this.tmpVec, this.realVelocityLossRange.min, this.realVelocityLossRange.max)).multiplyScalar(deltaTime));
 
             // Don't tick if particle is no longer moving.
-            if (Collided && (new Vector3().copy(Particle.Velocity).lengthSq() < this.MinSquaredVelocity))
+            if (Collided && Particle.Velocity.lengthSq() < this.MinSquaredVelocity)
                 Particle.Flags |= PTF_NoTick;
 
             // Used by trail emitter e.g.
@@ -1380,6 +1384,14 @@ abstract class BaseEmitter extends Object3D {
 
         // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
         if (this.instancedMesh) this.instancedMesh.visible = true;
+
+        if (this.instancedMesh?.isWorldBatchCandidate) {
+            // Batched emitters write directly from simulation state.
+            this.instancedMesh.clearInstances();
+            if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
+            this.currentTime = currentTime;
+            return;
+        }
 
         this.particlePool.forEach((p, i) => {
             const settings = this.particles[i];

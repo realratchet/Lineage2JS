@@ -16,6 +16,7 @@ import { serializeLibrary, deserializeLibrary } from "./library-serializer";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
+const CACHE_CONTENT_VERSION = 3;
 
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
@@ -36,7 +37,7 @@ function hashSettings(settings: GD.LoadSettings_T): string {
 }
 
 function cacheFileName(sectorName: string, settings: GD.LoadSettings_T): string {
-    return `${sectorName}.v${settings.cache?.version ?? 1}.${hashSettings(settings)}.bin`;
+    return `${sectorName}.v${settings.cache?.version ?? 1}.${CACHE_CONTENT_VERSION}.${hashSettings(settings)}.bin`;
 }
 
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -113,7 +114,7 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
         return; // no cache directory yet
     }
 
-    const currentVersion = `.v${settings.cache?.version ?? 1}.`;
+    const currentVersion = `.v${settings.cache?.version ?? 1}.${CACHE_CONTENT_VERSION}.`;
     const doomed: string[] = [];
 
     for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {

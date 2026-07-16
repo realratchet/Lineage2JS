@@ -18,6 +18,7 @@ import EnvInfo from "@client/rendering/env-info";
 import AudioManager from "@client/rendering/audio-manager";
 import * as dat from "dat.gui";
 import type AssetManager from "@client/assets/asset-manager";
+import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -45,8 +46,17 @@ const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
 // off-screen emitters (in range but outside the frustum) simulate at this rate instead
 // of a hard freeze, so particle state doesn't go stale and pop when re-entering view
-const OFFSCREEN_EMITTER_HZ = 10;
+// Two maintenance ticks keep offscreen loops alive without dominating visible frames.
+const OFFSCREEN_EMITTER_HZ = 2;
 const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
+// Lineage II configures UE2's MinDesiredFrameRate to 35. UE2 raises bDropDetail
+// below that rate, then bAggressiveLOD another 5 FPS lower.
+const MIN_DESIRED_FRAME_RATE = 35;
+const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
+const DROP_DETAIL_FRAME_TIME_MS = 1000 / MIN_DESIRED_FRAME_RATE;
+const AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / AGGRESSIVE_LOD_FRAME_RATE;
+const MAX_OFFSCREEN_EMITTER_UPDATES = 32;
+const DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES = 8;
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
@@ -77,6 +87,51 @@ function freezeEmitterParticles(emitter: any) {
     }
 }
 
+function getEmitterPhase(emitter: any) {
+    if (emitter.detailPhase !== undefined) return emitter.detailPhase;
+
+    let hash = 2166136261;
+    for (let i = 0; i < emitter.uuid.length; i++) {
+        hash ^= emitter.uuid.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    return emitter.detailPhase = hash >>> 0;
+}
+
+function shouldUpdateOffscreenEmitter(emitter: any, currentTime: number) {
+    if (!emitter.isOffscreenThrottled) {
+        emitter.isOffscreenThrottled = true;
+        emitter.offscreenSince = currentTime;
+        emitter.nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS + getEmitterPhase(emitter) % OFFSCREEN_EMITTER_INTERVAL_MS;
+        return true;
+    }
+
+    // Native UE2 stops ticking a ParticleEmitter after SecondsBeforeInactive.
+    // Stock UE2 defaults it to one second, while Lineage II defaults it to zero
+    // (disabled), in which case the low maintenance cadence continues.
+    const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
+    if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
+        return false;
+
+    if (currentTime < emitter.nextOffscreenUpdate) return false;
+
+    const missedIntervals = Math.floor((currentTime - emitter.nextOffscreenUpdate) / OFFSCREEN_EMITTER_INTERVAL_MS) + 1;
+    emitter.nextOffscreenUpdate += missedIntervals * OFFSCREEN_EMITTER_INTERVAL_MS;
+
+    return true;
+}
+
+function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean) {
+    if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
+
+    const phase = getEmitterPhase(emitter) + detailFrame;
+    // UE2's drop-detail xEmitter path retains roughly 65% of the normal particle
+    // budget. Keep all particles drawn here, but distribute an equivalent amount
+    // of simulation work across frames. Aggressive LOD lowers that to one half.
+    return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
+}
+
 class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
@@ -103,6 +158,13 @@ class RenderManager {
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
     private readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
+    protected readonly particleBatcher = new InstancedSpriteBatcher();
+    protected readonly visibleWorldBatchEmitters: any[] = [];
+    protected readonly neighborVisibilitySectors: SectorObject[] = [];
+    protected neighborVisibilityCursor = 0;
+    protected emitterDetailFrame = 0;
+    protected dropDetail = false;
+    protected aggressiveLod = false;
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
@@ -199,6 +261,7 @@ class RenderManager {
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+        this.objectGroup.add(this.particleBatcher.root);
 
         // Create visualizer system (will be recreated when sector changes)
         this.visualizer = new Visualizer(this.scene);
@@ -847,7 +910,20 @@ class RenderManager {
         );
     }
 
-    protected _updateObjects(currentTime: number) {
+    protected _updateObjects(currentTime: number, deltaTime: number) {
+        this.visibleWorldBatchEmitters.length = 0;
+        this.neighborVisibilitySectors.length = 0;
+        this.dropDetail = deltaTime > DROP_DETAIL_FRAME_TIME_MS;
+        this.aggressiveLod = deltaTime > AGGRESSIVE_LOD_FRAME_TIME_MS;
+        this.emitterDetailFrame = (this.emitterDetailFrame + 1) % 6;
+
+        const offscreenEmitterUpdateLimit = this.aggressiveLod
+            ? 0
+            : this.dropDetail
+                ? DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES
+                : MAX_OFFSCREEN_EMITTER_UPDATES;
+        let offscreenEmitterUpdates = 0;
+
         const globalTime = currentTime / 600;
         GLOBAL_UNIFORMS.globalTime.value = globalTime;
 
@@ -919,6 +995,7 @@ class RenderManager {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
                 const isCameraInSector = activeSector === sector;
+                const wasVisible = sector.visible;
 
                 // 1. Z-Culling: If outside fog range, hide entire sector
                 // NEVER cull the active sector
@@ -934,9 +1011,25 @@ class RenderManager {
                 // 2. Zone Visibility: If camera is not in the sector, only show top level
                 const topLevelOnly = !isCameraInSector;
 
-                sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq);
+                if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
+                    sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq);
+                } else {
+                    this.neighborVisibilitySectors.push(sector);
+                }
             }
         });
+
+        if (this.neighborVisibilitySectors.length > 0) {
+            const index = this.neighborVisibilityCursor++ % this.neighborVisibilitySectors.length;
+            this.neighborVisibilitySectors[index].updateVisibility(
+                this.environment,
+                bspCullingPosition,
+                this.frustum,
+                this.frustumCullingEnabled,
+                true,
+                staticMeshCullDistSq
+            );
+        }
 
         // Pass 2: Object & Material updates (active sector only — skip distant sectors)
         this.scene.traverseVisible(child => {
@@ -957,12 +1050,16 @@ class RenderManager {
                 if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
                     // emitters outside the camera's sector still simulate, just throttled to OFFSCREEN_EMITTER_HZ
                     if ((child as any).particlePool) {
-                        const nextUpdate = (child as any).nextOffscreenUpdate || 0;
-
-                        if (currentTime >= nextUpdate) {
-                            (child as any).nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS;
+                        const wasOffscreen = !!(child as any).isOffscreenThrottled;
+                        const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
+                        if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
+                            offscreenEmitterUpdates++;
                             (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
                             (child as any).update(currentTime);
+                            freezeEmitterParticles(child);
+                        } else if (!wasOffscreen) {
+                            // A budgeted-out first maintenance tick must still stop the
+                            // emitter's previous visible state from being submitted.
                             freezeEmitterParticles(child);
                         }
 
@@ -978,12 +1075,14 @@ class RenderManager {
 
                     if (!isVisible) {
                         // throttle instead of freezing outright so particle state doesn't go stale and pop back in once visible
-                        const nextUpdate = (child as any).nextOffscreenUpdate || 0;
-
-                        if (currentTime >= nextUpdate) {
-                            (child as any).nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS;
+                        const wasOffscreen = !!(child as any).isOffscreenThrottled;
+                        const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
+                        if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
+                            offscreenEmitterUpdates++;
                             (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
                             (child as any).update(currentTime);
+                            freezeEmitterParticles(child);
+                        } else if (!wasOffscreen) {
                             freezeEmitterParticles(child);
                         }
 
@@ -991,13 +1090,33 @@ class RenderManager {
                         return;
                     }
 
+                    const shouldUpdate = shouldUpdateVisibleEmitter(
+                        child,
+                        this.emitterDetailFrame,
+                        this.dropDetail,
+                        this.aggressiveLod
+                    );
+                    (child as any).isOffscreenThrottled = false;
                     (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+
+                    if (!shouldUpdate) {
+                        const mesh = (child as any).instancedMesh;
+                        if (mesh?.visible && mesh.isWorldBatchCandidate)
+                            this.visibleWorldBatchEmitters.push(child);
+                        return;
+                    }
                 }
 
                 if (sector && 'computeLighting' in child) {
                     (child as any).update(sector, this.environment);
                 } else {
                     (child as any).update(currentTime);
+                }
+
+                if ((child as any).particlePool) {
+                    const mesh = (child as any).instancedMesh;
+                    if (mesh?.visible && mesh.isWorldBatchCandidate)
+                        this.visibleWorldBatchEmitters.push(child);
                 }
             }
 
@@ -1013,6 +1132,8 @@ class RenderManager {
                 }
             }
         });
+
+        this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
 
         this._updateEnvironment();
     }
@@ -1428,7 +1549,7 @@ class RenderManager {
 
         this.player.position.lerp(desiredPosition, 0.1);
 
-        this._updateObjects(currentTime);
+        this._updateObjects(currentTime, deltaTime);
 
         const activeSector = this.getSector(this.camera.position);
         const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };

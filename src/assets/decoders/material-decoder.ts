@@ -5,17 +5,112 @@ import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-te
 import DecodeLibrary from "../unreal/decode-library";
 
 const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
+type WeakCacheEntry_T<T extends object> = { deref(): T | undefined };
+const WeakRefConstructor = (globalThis as any).WeakRef;
+
+function getWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T<T>>, key: string): T | undefined {
+    const value = cache.get(key)?.deref();
+
+    if (!value) cache.delete(key);
+    return value;
+}
+
+function setWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T<T>>, key: string, value: T): void {
+    cache.set(key, WeakRefConstructor ? new WeakRefConstructor(value) : { deref: () => value });
+}
+
+const cacheTexturesByName = new Map<string, WeakCacheEntry_T<GD.MapData_T>>();
 
 // static meshes reuse one material instance per (info, vertexColors, instanced) combo,
 // per-section duplicates otherwise dominate the draw loop with redundant uniform uploads
 const cacheStaticMaterials = new WeakMap<GD.IBaseMaterialDecodeInfo, Map<string, THREE.Material | THREE.Material[]>>();
+const cacheStaticMaterialsByName = new Map<string, WeakCacheEntry_T<Map<string, THREE.Material | THREE.Material[]>>>();
+const canonicalStaticMaterials = new Map<string, WeakCacheEntry_T<THREE.Material>>();
+const dynamicUniformNames = new Set([
+    "ambientLightColor", "cameraBillboardRight", "cameraBillboardUp", "directionalLights",
+    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTime",
+    "hemisphereLights", "ltc_1", "ltc_2", "pointLights", "pointLightShadows", "rectAreaLights",
+    "spotLights", "spotLightShadows"
+]);
+
+function serializeMaterialValue(value: any, seen: WeakSet<object>): any {
+    if (value === null || value === undefined || typeof value !== "object") return value;
+    if (value.isTexture) return `texture:${value.uuid}`;
+    if (value.isColor) return [value.r, value.g, value.b];
+    if (value.isVector2) return [value.x, value.y];
+    if (value.isVector3) return [value.x, value.y, value.z];
+    if (value.isVector4) return [value.x, value.y, value.z, value.w];
+    if (value.isMatrix3 || value.isMatrix4) return value.elements;
+    if (ArrayBuffer.isView(value)) return `${value.constructor.name}:${value.byteLength}`;
+    if (seen.has(value)) return null;
+
+    seen.add(value);
+
+    if (Array.isArray(value)) return value.map(entry => serializeMaterialValue(entry, seen));
+
+    const result: Record<string, any> = {};
+
+    Object.keys(value).sort().forEach(key => {
+        result[key] = serializeMaterialValue(value[key], seen);
+    });
+
+    return result;
+}
+
+function getCanonicalStaticMaterialKey(material: any): string {
+    const uniforms: Record<string, any> = {};
+
+    Object.keys(material.uniforms || {}).sort().forEach(name => {
+        if (!dynamicUniformNames.has(name))
+            uniforms[name] = serializeMaterialValue(material.uniforms[name].value, new WeakSet());
+    });
+
+    return JSON.stringify({
+        name: material.name,
+        defines: material.defines,
+        uniforms,
+        sprites: serializeMaterialValue(material.sprites, new WeakSet()),
+        vertexColors: material.vertexColors,
+        side: material.side,
+        transparent: material.transparent,
+        depthWrite: material.depthWrite,
+        depthTest: material.depthTest,
+        blending: material.blending,
+        blendSrc: material.blendSrc,
+        blendDst: material.blendDst,
+        blendEquation: material.blendEquation,
+        premultipliedAlpha: material.premultipliedAlpha
+    });
+}
+
+function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
+    const source = materials instanceof Array ? materials : [materials];
+    const canonical = source.map(material => {
+        if (!(material as any)?.isStaticMeshMaterial) return material;
+
+        const key = getCanonicalStaticMaterialKey(material);
+        const cached = getWeakCacheValue(canonicalStaticMaterials, key);
+
+        if (cached) return cached;
+
+        setWeakCacheValue(canonicalStaticMaterials, key, material);
+        return material;
+    });
+
+    return materials instanceof Array ? canonical : canonical[0];
+}
 
 function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean): THREE.Material | THREE.Material[] {
     if (!info) return null;
 
-    let variants = cacheStaticMaterials.get(info);
+    const name = info.name;
+    let variants = name ? getWeakCacheValue(cacheStaticMaterialsByName, name) : cacheStaticMaterials.get(info);
 
-    if (!variants) cacheStaticMaterials.set(info, variants = new Map());
+    if (!variants) {
+        variants = new Map();
+        cacheStaticMaterials.set(info, variants);
+        if (name) setWeakCacheValue(cacheStaticMaterialsByName, name, variants);
+    }
 
     const key = (vertexColors ? "v" : "") + (instanced ? "i" : "");
 
@@ -37,6 +132,11 @@ function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterial
 let emptyMapData: GD.MapData_T;
 
 function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.MapData_T {
+    const name = info?.name;
+    const namedTexture = name ? getWeakCacheValue(cacheTexturesByName, name) : undefined;
+
+    if (namedTexture) return namedTexture;
+
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
@@ -52,6 +152,7 @@ function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.M
     const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : emptyMapData;
 
     cacheTextures.set(info, data);
+    if (name) setWeakCacheValue(cacheTexturesByName, name, data);
 
     return data;
 }
@@ -574,7 +675,7 @@ function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo
 
     if (info.name && material) {
         if (Array.isArray(material)) {
-            material.forEach(m => { if (m) m.name = info.name; });
+            material.forEach(m => { if (m && !m.name) m.name = info.name; });
         } else {
             material.name = info.name;
         }
@@ -584,5 +685,4 @@ function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo
 }
 
 export default decodeMaterial;
-export { decodeMaterial, decodeStaticMeshMaterial };
-
+export { canonicalizeStaticMeshMaterials, decodeMaterial, decodeStaticMeshMaterial };

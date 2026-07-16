@@ -1,5 +1,5 @@
 import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
-import decodeMaterial, { decodeStaticMeshMaterial } from "./material-decoder";
+import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
@@ -168,6 +168,8 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const ambient = info.ambient;
 
     const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient });
+
+    object.material = canonicalizeStaticMeshMaterials(object.material);
 
     // if (info.name === "StaticMeshActor140")
     //     debugger;

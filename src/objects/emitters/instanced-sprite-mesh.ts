@@ -1,10 +1,11 @@
-import { DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, PlaneGeometry, Vector3, Vector4 } from "three";
+import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, Vector3, Vector4, ZeroFactor } from "three";
 import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
 
 // shared per-vertex quad data - only instance attributes differ per emitter
 const baseGeometry = new PlaneGeometry(2, 2);
 
 class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticleMaterial> {
+    public readonly isWorldBatchCandidate: boolean;
     private readonly positionAttr: InstancedBufferAttribute;
     private readonly scaleAttr: InstancedBufferAttribute;
     private readonly spinAttr: InstancedBufferAttribute;
@@ -41,6 +42,13 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
         this.frustumCulled = false;
 
         (this as any).isInstancedSpriteMesh = true;
+
+        // One/One RGB addition is order-independent.
+        this.isWorldBatchCandidate = material.blending === CustomBlending
+            && material.blendSrc === OneFactor
+            && material.blendDst === OneFactor
+            && material.blendSrcAlpha === ZeroFactor
+            && material.blendDstAlpha === OneFactor;
     }
 
     public setInstance(index: number, position: Vector3, scaleX: number, scaleY: number, spin: number, color: Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number) {
@@ -58,12 +66,26 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
 
     public commit() {
         this.geometry.instanceCount = this.renderCount;
+        const count = this.renderCount;
         this.renderCount = 0;
-        this.positionAttr.needsUpdate = true;
-        this.scaleAttr.needsUpdate = true;
-        this.spinAttr.needsUpdate = true;
-        this.colorAttr.needsUpdate = true;
-        this.uvAttr.needsUpdate = true;
+        if (count === 0) return;
+
+        this.markUpdated(this.positionAttr, count * 3);
+        this.markUpdated(this.scaleAttr, count * 2);
+        this.markUpdated(this.spinAttr, count);
+        this.markUpdated(this.colorAttr, count * 4);
+        this.markUpdated(this.uvAttr, count * 4);
+    }
+
+    private markUpdated(attribute: InstancedBufferAttribute, count: number) {
+        attribute.updateRange.offset = 0;
+        attribute.updateRange.count = count;
+        attribute.needsUpdate = true;
+    }
+
+    public clearInstances() {
+        this.renderCount = 0;
+        this.geometry.instanceCount = 0;
     }
 
     // Nothing raycasts individual particle visualizers today, and per-instance

@@ -1,10 +1,18 @@
 attribute vec3 instancePosition;
+#if !defined(USE_WORLD_PARTICLE_BATCH) || !defined(USE_FIXED_NORMAL)
 attribute vec2 instanceScale;
 attribute float instanceSpin;
+#endif
 attribute vec4 instanceColor;
 // texture-atlas subdivision cell for this instance (xy = offset, zw = scale) - see
 // shader-particle.vs's uvOffsetScale for the legacy-path equivalent
 attribute vec4 instanceUV;
+#ifdef USE_WORLD_PARTICLE_BATCH
+#ifdef USE_FIXED_NORMAL
+attribute vec3 instanceRight;
+attribute vec3 instanceUp;
+#endif
+#endif
 
 varying vec2 vUv;
 varying vec4 vColor;
@@ -22,6 +30,17 @@ void main() {
     vUv = uv * instanceUV.zw + instanceUV.xy;
     vColor = instanceColor;
 
+    #ifdef USE_WORLD_PARTICLE_BATCH
+    #ifdef USE_FIXED_NORMAL
+        vec3 worldPosition = instancePosition + instanceRight * position.x + instanceUp * position.y;
+    #else
+        float s = sin(instanceSpin);
+        float c = cos(instanceSpin);
+        vec3 right = cameraBillboardRight * c + cameraBillboardUp * s;
+        vec3 up = cameraBillboardUp * c - cameraBillboardRight * s;
+        vec3 worldPosition = instancePosition + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y);
+    #endif
+    #else
     #ifdef USE_FIXED_NORMAL
         // PTDU_Normal has one emitter-local basis for every particle. Transform it
         // into world space here, matching ParticleMesh's local quaternion followed
@@ -51,8 +70,9 @@ void main() {
     // start there, while fixed-normal bases were transformed above. instanceScale
     // has the emitter's 1/drawScale baked in on the JS side to compensate for not
     // applying modelMatrix's scale to the offset here.
-    vec3 anchorWorld = (modelMatrix * vec4(instancePosition, 1.0)).xyz;
-    vec3 worldPosition = anchorWorld + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y);
+        vec3 anchorWorld = (modelMatrix * vec4(instancePosition, 1.0)).xyz;
+        vec3 worldPosition = anchorWorld + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y);
+    #endif
 
     vec4 mvPosition = viewMatrix * vec4(worldPosition, 1.0);
     gl_Position = projectionMatrix * mvPosition;
