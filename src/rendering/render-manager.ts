@@ -170,6 +170,7 @@ class RenderManager {
     protected readonly activeMovableObjects = new Set<MovableObject>();
     protected readonly waitingMovableObjects = new Map<MovableObject, number>();
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
+    protected lastRenderOrderSector: SectorObject | null = null;
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
@@ -961,6 +962,17 @@ class RenderManager {
             this.scheduleMovableObject(mover, mover.updateMover(currentTime));
     }
 
+    protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
+        if (activeSector === this.lastRenderOrderSector) return;
+
+        this.lastRenderOrderSector = activeSector;
+
+        // batch meshes project the sector origin for depth, so cross-sector transparent order rides on groupOrder - camera sector draws last
+        this.sectors.forEach(row => row.forEach(sector => {
+            if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = sector === activeSector ? 0 : -1;
+        }));
+    }
+
     protected _updateObjects(currentTime: number, deltaTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
@@ -1043,6 +1055,8 @@ class RenderManager {
         const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
 
         const activeSector = this.getSector(bspCullingPosition);
+
+        this.updateSectorRenderOrder(activeSector);
 
         this.scene.traverse((object: THREE.Object3D) => {
             if ((object as any).isSectorObject) {
@@ -1913,6 +1927,7 @@ class RenderManager {
             mover.setPosition(this.envConfig.moverPosition);
         });
         this.lastMoverTriggerPosition.set(Infinity, Infinity, Infinity);
+        this.lastRenderOrderSector = null;
 
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);
