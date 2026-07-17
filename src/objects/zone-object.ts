@@ -22,7 +22,18 @@ type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
 type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number };
 
 function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups: BatchGroup_T[], transparentMaterials: Set<number>) {
-    visibleGroups.sort((a, b) => (a.materialIndex - b.materialIndex) || (transparentMaterials.has(a.materialIndex) ? b.distance - a.distance : a.start - b.start));
+    // same-object render items draw in insertion order, so transparent groups must interleave material indexes far->near
+    const allTransparent = (object.transparentMaterialIndexes as Set<number>) ?? transparentMaterials;
+
+    visibleGroups.sort((a, b) => {
+        const aTransparent = allTransparent.has(a.materialIndex) ? 1 : 0;
+        const bTransparent = allTransparent.has(b.materialIndex) ? 1 : 0;
+
+        if (aTransparent !== bTransparent) return aTransparent - bTransparent;
+        if (aTransparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex);
+
+        return (a.materialIndex - b.materialIndex) || (a.start - b.start);
+    });
     geometry.clearGroups();
 
     const index = geometry.index;
