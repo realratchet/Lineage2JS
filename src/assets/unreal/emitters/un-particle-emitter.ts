@@ -434,6 +434,7 @@ abstract class UParticleEmitter extends UObject {
             name: this.uuid,
             maxParticles: this.maxParticles,
             drawScale: this.actor?.drawScale ?? 1,
+            rotationOffset: this.rotationOffset?.getQuaternionElements() || [0, 0, 0, 1],
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
             fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,

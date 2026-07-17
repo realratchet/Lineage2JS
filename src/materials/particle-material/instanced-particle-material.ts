@@ -26,7 +26,7 @@ class InstancedParticleMaterial extends ShaderMaterial {
         if (spriteDirection === "normal") {
             defines.USE_FIXED_NORMAL = "";
         }
-        const { blending, blendSrc, blendDst, blendSrcAlpha, blendDstAlpha, isAdditive } = getPartcileBlendingSettings(blendingMode);
+        const { isAdditive, ...blendingSettings } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
             defines.USE_ADDITIVE_FOG = "";
@@ -42,11 +42,7 @@ class InstancedParticleMaterial extends ShaderMaterial {
             // Camera billboards continuously face the viewer, so rendering their
             // back face only duplicates every transparent draw in three r143.
             side: spriteDirection === "camera" ? FrontSide : DoubleSide,
-            blending,
-            blendSrc,
-            blendDst,
-            blendSrcAlpha,
-            blendDstAlpha
+            ...blendingSettings
         });
 
         (this as any).isParticleMaterial = true;

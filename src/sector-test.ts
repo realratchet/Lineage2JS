@@ -18,6 +18,7 @@ import type { SectorObject } from "@client/objects/zone-object";
 //   cache=1     allow the decode cache (disabled by default)
 //   free=0      keep worker-side packages alive after each sector
 //   render=0    skip the render/simulation phase
+//   forceRender=1 submit every renderable object once, ignoring visibility/frustum culling
 //   textures=X  "auto" (default, s3tc when supported), "rgba" or "compressed"
 
 const SECTOR_TIMEOUT_MS = 240_000;
@@ -35,6 +36,7 @@ interface SectorReport {
     ms?: number;
     done?: boolean;
     note?: string;
+    warnings?: string[];
     bsp?: [number, number, number]; // nodes, sections, zones
     lum?: [number, number, number]; // avg luminance before/after lighting updates, % coverage
 }
@@ -84,11 +86,13 @@ class SectorRenderTester {
     public readonly renderer: WebGLRenderer;
     protected readonly scene = new Scene();
     protected readonly camera = new PerspectiveCamera(90, 4 / 3, 10, 500_000);
+    protected readonly forceRenderObjects: boolean;
     protected environment: L2Environment;
 
-    public constructor() {
+    public constructor(forceRenderObjects: boolean) {
         const canvas = document.createElement("canvas");
 
+        this.forceRenderObjects = forceRenderObjects;
         canvas.width = 256;
         canvas.height = 192;
         document.body.appendChild(canvas);
@@ -162,6 +166,41 @@ class SectorRenderTester {
         return count ? Math.round(sum / count) : -1;
     }
 
+    protected forceRender(sector: SectorObject): void {
+        const objectStates: Array<[THREE.Object3D, boolean, boolean]> = [];
+        const materialStates = new Map<THREE.Material, boolean>();
+
+        sector.traverse(object => {
+            objectStates.push([object, object.visible, object.frustumCulled]);
+            object.visible = true;
+            object.frustumCulled = false;
+
+            const renderable = object as THREE.Mesh;
+
+            if (!renderable.isMesh && !(renderable as any).isPoints && !(renderable as any).isSprite && !(renderable as any).isLine) return;
+
+            const materials = Array.isArray(renderable.material) ? renderable.material : [renderable.material];
+
+            for (const material of materials) {
+                if (!material || !(material as any).isMaterial || materialStates.has(material)) continue;
+
+                materialStates.set(material, material.visible);
+                material.visible = true;
+            }
+        });
+
+        try {
+            this.renderer.render(this.scene, this.camera);
+        } finally {
+            for (const [material, visible] of materialStates) material.visible = visible;
+
+            for (const [object, visible, frustumCulled] of objectStates) {
+                object.visible = visible;
+                object.frustumCulled = frustumCulled;
+            }
+        }
+    }
+
     public run(sector: SectorObject): { lumBefore: number, lumAfter: number, coverage: number, colBefore: number, colAfter: number } {
         this.scene.add(sector);
 
@@ -233,6 +272,8 @@ class SectorRenderTester {
                 this.renderer.render(this.scene, this.camera);
             }
 
+            if (this.forceRenderObjects) this.forceRender(sector);
+
             const { lum: lumAfter, coverage } = this.measureLuminance(sector);
             const colAfter = this.measureTerrainColors(sector);
 
@@ -276,6 +317,7 @@ async function runSectorTest(): Promise<void> {
     const cacheEnabled = params.get("cache") === "1";
     const freeAfterDecode = params.get("free") !== "0";
     const renderEnabled = params.get("render") !== "0";
+    const forceRenderObjects = params.get("forceRender") === "1";
 
     const loadSettings = {
         helpersZoneBounds: false,
@@ -297,7 +339,7 @@ async function runSectorTest(): Promise<void> {
     if (only) sectors = sectors.filter(s => only.includes(s));
 
     if (start === 0)
-        await report({ note: `sweep started: ${sectors.length} sectors, emitters=${loadEmitters}, cache=${cacheEnabled}, render=${renderEnabled}` });
+        await report({ note: `sweep started: ${sectors.length} sectors, emitters=${loadEmitters}, cache=${cacheEnabled}, render=${renderEnabled}, forceRender=${forceRenderObjects}` });
 
     const client = new DecodeWorkerClient();
 
@@ -313,7 +355,7 @@ async function runSectorTest(): Promise<void> {
 
     if (renderEnabled) {
         try {
-            renderTester = new SectorRenderTester();
+            renderTester = new SectorRenderTester(forceRenderObjects);
             await renderTester.init(client);
         } catch (e) {
             await report({ note: `render tester unavailable (${(e as Error)?.message}), falling back to decode-only` });
@@ -331,11 +373,18 @@ async function runSectorTest(): Promise<void> {
 
     // three reports shader compile/link failures via console.error, not exceptions
     const consoleErrors: string[] = [];
+    const consoleWarnings: string[] = [];
     const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
 
     console.error = (...args: any[]) => {
         consoleErrors.push(args.map(a => (a instanceof Error ? a.message : String(a))).join(" ").slice(0, 400));
         originalConsoleError.apply(console, args);
+    };
+
+    console.warn = (...args: any[]) => {
+        consoleWarnings.push(args.map(a => (a instanceof Error ? a.message : String(a))).join(" ").slice(0, 400));
+        originalConsoleWarn.apply(console, args);
     };
 
     for (let i = start; i < sectors.length; i++) {
@@ -346,6 +395,7 @@ async function runSectorTest(): Promise<void> {
         document.title = `sector-test: ${i + 1}/${sectors.length} ${sector}`;
         console.log(`[sector-test] ${i + 1}/${sectors.length} '${sector}'`);
         consoleErrors.length = 0;
+        consoleWarnings.length = 0;
 
         try {
             const library = await withTimeout(client.decodeSector(sector, loadSettings), SECTOR_TIMEOUT_MS, `decode '${sector}'`);
@@ -372,10 +422,11 @@ async function runSectorTest(): Promise<void> {
                 await report({
                     sector, index: i, total: sectors.length, ok: false, phase, bsp, lum,
                     error: `console errors during ${phase}: ${consoleErrors.slice(0, 3).join(" | ")}`,
+                    warnings: consoleWarnings.slice(0, 10),
                     ms: Math.round(performance.now() - startTime)
                 });
             } else {
-                await report({ sector, index: i, total: sectors.length, ok: true, bsp, lum, ms: Math.round(performance.now() - startTime) });
+                await report({ sector, index: i, total: sectors.length, ok: true, bsp, lum, warnings: consoleWarnings.slice(0, 10), ms: Math.round(performance.now() - startTime) });
             }
         } catch (e) {
             const error = e as Error;
@@ -384,6 +435,7 @@ async function runSectorTest(): Promise<void> {
                 sector, index: i, total: sectors.length, ok: false, phase,
                 error: error?.message ?? String(e),
                 stack: error?.stack,
+                warnings: consoleWarnings.slice(0, 10),
                 ms: Math.round(performance.now() - startTime)
             });
 
@@ -397,6 +449,7 @@ async function runSectorTest(): Promise<void> {
     }
 
     console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
 
     await report({ done: true });
     document.title = "sector-test: done";

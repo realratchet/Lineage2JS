@@ -110,6 +110,8 @@ abstract class UStaticMeshActor extends UAActor {
         });
     }
 
+    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> { return {}; }
+
     public getDecodeInfo(library: GD.DecodeLibrary): string {
         if (!this.mesh) {
             console.warn(`StaticMeshActor '${this.objectName}' has no static mesh, skipping`);
@@ -246,7 +248,8 @@ abstract class UStaticMeshActor extends UAActor {
             bounds: {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
-            }
+            },
+            ...this.getActorDecodeInfo()
         } as GD.IStaticMeshActorDecodeInfo;
 
         const extent = predictedBox.getExtents();

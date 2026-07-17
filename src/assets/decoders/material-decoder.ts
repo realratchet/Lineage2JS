@@ -478,7 +478,7 @@ function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDe
         specular: isShader ? _decodeModifier(library, info, shader.specular) : null,
         specularMask: isShader ? _decodeModifier(library, info, shader.specularMask) : null,
         side: (isColorMod && colorMod.doubleSide) ? DoubleSide : (isFinalBlend ? (finalBlend.doubleSide ? DoubleSide : FrontSide) : ((info as GD.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide)),
-        blendingMode: isFinalBlend ? finalBlend.blendingMode : (shader.blendingMode ?? "normal"),
+        blendingMode: isFinalBlend ? finalBlend.blendingMode : (isShader ? shader.blendingMode ?? "normal" : "normal"),
         transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false)),
         depthWrite: isFinalBlend ? finalBlend.depthWrite : (isShader ? shader.depthWrite : true),
         depthTest: isFinalBlend ? finalBlend.depthTest : (isShader ? shader.depthTest ?? true : true),
@@ -597,10 +597,8 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
         return { name: "empty", type: "texture", map: null, blendingMode, opacity };
     }
 
-    if (!baseMaterial) {
-        console.warn("Particle emitter without a material, using empty material");
-        return decodeEmpty();
-    }
+    if (!info.material) return decodeEmpty();
+    if (!baseMaterial) throw new Error(`Particle material '${info.material}' not found`);
 
     function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): any {
         return {

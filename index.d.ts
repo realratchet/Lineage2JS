@@ -228,11 +228,27 @@ declare global {
                     bounds: IBoxDecodeInfo,
                     scaledGlow: number,
                     isSunAffected?: boolean,
+                    dontBatch?: boolean,
+                    mover?: IMoverDecodeInfo,
                     ambient: {
                         glow: number,
                         vector: Vector3Arr,
                         isUnlit: boolean
                     }
+                }
+
+                export interface IMoverDecodeInfo {
+                    initialState: string,
+                    keyNum: number,
+                    keyPositions: Vector3Arr[],
+                    keyQuaternions: QuaternionArr[],
+                    moveTime: number,
+                    stayOpenTime: number,
+                    delayTime: number,
+                    collisionRadius: number,
+                    collisionHeight: number,
+                    isGliding: boolean,
+                    triggerOnceOnly: boolean
                 }
 
                 export interface IBaseMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -498,7 +514,7 @@ declare global {
 
                 export interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "particle",
-                    material: string,
+                    material: string | null,
                     blendingMode: ParticleBlendModes_T,
                     opacity: number
                 }
@@ -554,6 +570,7 @@ declare global {
                     uniformScale?: boolean,
                     maxParticles: number,
                     drawScale?: number,
+                    rotationOffset?: GD.QuaternionArr,
                     opacity: number,
                     lifetime: [number, number],
                     acceleration: GD.Vector3Arr,

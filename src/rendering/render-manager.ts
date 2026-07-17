@@ -19,6 +19,7 @@ import AudioManager from "@client/rendering/audio-manager";
 import * as dat from "dat.gui";
 import type AssetManager from "@client/assets/asset-manager";
 import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
+import MovableObject from "@client/objects/movable-object";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -165,6 +166,10 @@ class RenderManager {
     protected emitterDetailFrame = 0;
     protected dropDetail = false;
     protected aggressiveLod = false;
+    protected readonly movableObjects = new Set<MovableObject>();
+    protected readonly activeMovableObjects = new Set<MovableObject>();
+    protected readonly waitingMovableObjects = new Map<MovableObject, number>();
+    protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
@@ -196,7 +201,8 @@ class RenderManager {
 
     public envConfig = {
         showLevel: true,
-        fogPreset: "4"
+        fogPreset: "4",
+        moverPosition: 0
     };
 
     public constructor(viewport: HTMLViewportElement, assetManager: AssetManager) {
@@ -234,6 +240,15 @@ class RenderManager {
             .name("Show Level")
             .onChange(v => {
                 this.objectGroup.visible = v;
+            });
+
+        guiFolders.world.add(this.envConfig, "moverPosition", 0, 1, 0.01)
+            .name("Door Position")
+            .onChange(v => {
+                this.activeMovableObjects.clear();
+                this.waitingMovableObjects.clear();
+                this.movableObjects.forEach(mover => mover.setPosition(v));
+                this.needsUpdate = true;
             });
 
         const skyFolder = gui.addFolder("Sky Layers");
@@ -366,9 +381,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // heine
-        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
-        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // // heine
+        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
+        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         // // d.elf village emitters
         // this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
@@ -381,6 +396,10 @@ class RenderManager {
         // // negropolis near delf forest
         // this.camera.position.set(-48757.64540781602, 81179.19605056658, -4673.552599009336);
         // this.controls.orbit.target.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
+
+        // tower of incolsence missing floor piece
+        this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
+    this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -910,6 +929,34 @@ class RenderManager {
         );
     }
 
+    protected scheduleMovableObject(mover: MovableObject, nextUpdate: number): void {
+        this.activeMovableObjects.delete(mover);
+        this.waitingMovableObjects.delete(mover);
+
+        if (nextUpdate === 0) this.activeMovableObjects.add(mover);
+        else if (nextUpdate > 0) this.waitingMovableObjects.set(mover, nextUpdate);
+    }
+
+    protected updateMovableObjects(currentTime: number): void {
+        if (!this.lastMoverTriggerPosition.equals(this.camera.position)) {
+            this.lastMoverTriggerPosition.copy(this.camera.position);
+
+            this.movableObjects.forEach(mover => {
+                const nextUpdate = mover.tryTrigger(currentTime, this.camera.position);
+
+                if (nextUpdate !== null) this.scheduleMovableObject(mover, nextUpdate);
+            });
+        }
+
+        for (const [mover, wakeTime] of Array.from(this.waitingMovableObjects)) {
+            if (currentTime >= wakeTime)
+                this.scheduleMovableObject(mover, mover.updateMover(currentTime));
+        }
+
+        for (const mover of Array.from(this.activeMovableObjects))
+            this.scheduleMovableObject(mover, mover.updateMover(currentTime));
+    }
+
     protected _updateObjects(currentTime: number, deltaTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
@@ -965,6 +1012,8 @@ class RenderManager {
         // Use helper camera position only when active (frozen), otherwise use main camera
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const bspCullingPosition = bspCullingCamera.position;
+
+        this.updateMovableObjects(currentTime);
 
         // Pass 1: Visibility updates
         // UE2: DistanceFogEnd IS the far clip plane — no padding needed
@@ -1851,6 +1900,16 @@ class RenderManager {
             this.sectors.get(sector.index.x).set(sector.index.y, sector);
         }
 
+        sector.traverse(child => {
+            if (!(child as any).isMovableObject) return;
+
+            const mover = child as MovableObject;
+
+            this.movableObjects.add(mover);
+            mover.setPosition(this.envConfig.moverPosition);
+        });
+        this.lastMoverTriggerPosition.set(Infinity, Infinity, Infinity);
+
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);
 
@@ -1871,6 +1930,11 @@ class RenderManager {
         sector.updateMatrixWorld(true);
 
         const freeze = (node: THREE.Object3D): boolean => {
+            if ((node as any).isMovableObject) {
+                (node as MovableObject).freezeMover();
+                return false;
+            }
+
             node.matrixAutoUpdate = false;
 
             if ((node as any).particlePool) return false;
@@ -1923,6 +1987,16 @@ class RenderManager {
 
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
+
+        sector.traverse(child => {
+            if (!(child as any).isMovableObject) return;
+
+            const mover = child as MovableObject;
+
+            this.movableObjects.delete(mover);
+            this.activeMovableObjects.delete(mover);
+            this.waitingMovableObjects.delete(mover);
+        });
 
         this.objectGroup.remove(sector);
         this.stitchTerrains();

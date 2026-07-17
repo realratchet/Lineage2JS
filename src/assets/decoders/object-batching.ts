@@ -181,6 +181,8 @@ export function batchStaticMeshActors(
     staticMeshGroup.updateMatrixWorld(true);
     const frozenUpdateMatrixWorld = function () { };
     for (const child of staticMeshGroup.children) {
+        if ((child as any).isMovableObject) continue;
+
         child.matrixAutoUpdate = false;
         child.updateMatrixWorld = frozenUpdateMatrixWorld;
         child.traverse(node => {

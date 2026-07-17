@@ -141,7 +141,7 @@ function buildDecodeLibrary(pkg: C.APackage, {
 
                 return { index: i - 1, export: pkg.exports[i - 1] };
             });
-        else actorsToLoad = expGroups["StaticMeshActor"] || [];
+        else actorsToLoad = [...expGroups["StaticMeshActor"] || [], ...expGroups["Mover"] || []];
 
         if (ALLOW_FAILED_OBJECTS) {
             const failed = decodeLibrary.failed, failedLoad = decodeLibrary.failedLoad, failedDecode = decodeLibrary.failedDecode;

@@ -42,7 +42,7 @@ class ParticleMaterial extends ShaderMaterial {
         if (uniforms.map.value) {
             defines.USE_MAP = "";
         }
-        const { blending, blendSrc, blendDst, blendSrcAlpha, blendDstAlpha, isAdditive } = getPartcileBlendingSettings(blendingMode);
+        const { isAdditive, ...blendingSettings } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
             defines.USE_ADDITIVE_FOG = "";
@@ -56,11 +56,7 @@ class ParticleMaterial extends ShaderMaterial {
             transparent: true,
             depthWrite: false,
             side: DoubleSide,
-            blending,
-            blendSrc,
-            blendDst,
-            blendSrcAlpha,
-            blendDstAlpha
+            ...blendingSettings
         });
 
         (this as any).isParticleMaterial = true;
@@ -94,7 +90,7 @@ class AnimatedParticleMaterial extends ShaderMaterial {
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
 
         const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
-        const { blending, blendSrc, blendDst, blendSrcAlpha, blendDstAlpha, isAdditive } = getPartcileBlendingSettings(blendingMode);
+        const { isAdditive, ...blendingSettings } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
             defines.USE_ADDITIVE_FOG = "";
@@ -108,11 +104,7 @@ class AnimatedParticleMaterial extends ShaderMaterial {
             transparent: true,
             depthWrite: false,
             side: DoubleSide,
-            blending,
-            blendSrc,
-            blendDst,
-            blendSrcAlpha,
-            blendDstAlpha
+            ...blendingSettings
         });
 
         (this as any).isParticleMaterial = true;

@@ -10,6 +10,7 @@ import BeamEmitter from "@client/objects/emitters/beam-emitter";
 import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
 import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance } from "./object-batching";
+import MovableObject from "@client/objects/movable-object";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -167,7 +168,8 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
 
-    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient });
+    const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient };
+    const object = info.mover ? new MovableObject({ ...props, mover: info.mover }) : new CollidingMesh(props);
 
     object.material = canonicalizeStaticMeshMaterials(object.material);
 
@@ -679,6 +681,7 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         acceleration: info.acceleration,
         lifetime: info.lifetime,
         maxParticles: info.maxParticles,
+        rotationOffset: info.rotationOffset,
         initial: {
             particlesPerSecond: info.initial.particlesPerSecond,
             scale: info.initial.scale,

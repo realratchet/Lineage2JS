@@ -1,4 +1,4 @@
-import { Box3, Matrix4, Object3D, Vector3, Vector4 } from "three";
+import { Box3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import type InstancedSpriteMesh from "./instanced-sprite-mesh";
 
@@ -17,6 +17,7 @@ const tmpOwnerOffset = new Vector3();
 const tmpWorldToLocal = new Matrix4();
 const tmpWorldRotation = new Matrix4();
 const tmpFadeColor = new Vector4();
+const tmpParticleQuaternion = new Quaternion();
 
 // [offsetX, offsetY, scaleX, scaleY] scratch, reused every particle every frame
 const tmpSubdivUV: [number, number, number, number] = [0, 0, 1, 1];
@@ -187,6 +188,7 @@ abstract class BaseEmitter extends Object3D {
         this.opacity = config.opacity ?? 1; // updateParticles' fade logic reads this.opacity, not generalSettings.opacity above
 
         Object.assign(this, config.settings);
+        this.rotationOffset.fromArray(config.rotationOffset || [0, 0, 0, 1]);
 
         // enum properties are absent from the data when left at class defaults, the simulation calls .valueOf() on them so they must be numbers
         this.startLocationShape = this.startLocationShape ?? PTLS_Box;
@@ -356,7 +358,7 @@ abstract class BaseEmitter extends Object3D {
 
     protected RVLMin: THREE.Vector3;
     protected RVLMax: THREE.Vector3;
-    protected RotationOffset: any;
+    protected rotationOffset = new Quaternion();
     protected rotationNormal: any;
 
     declare protected skeletalMeshActor: any;
@@ -628,12 +630,13 @@ abstract class BaseEmitter extends Object3D {
         // Handle Rotation.
         switch (this.rotationSource.valueOf()) {
             case PTRS_Actor:
-                __break__();
-                // Particle.position.copy(Particle.position.TransformVectorBy(GMath.UnitCoords * Owner.Rotation * this.RotationOffset));
+                // Particle.Location = Particle.Location.TransformVectorBy(GMath.UnitCoords*RotationOffset*Owner->Rotation);
+                tmpParticleQuaternion.copy(Owner.quaternion).multiply(this.rotationOffset);
+                Particle.position.applyQuaternion(tmpParticleQuaternion);
                 break;
             case PTRS_Offset:
-                __break__();
-                // Particle.position.copy(Particle.position.TransformVectorBy(GMath.UnitCoords * this.RotationOffset));
+                // Particle.Location = Particle.Location.TransformVectorBy(GMath.UnitCoords*RotationOffset);
+                Particle.position.applyQuaternion(this.rotationOffset);
                 break;
             case PTRS_Normal:
                 __break__();
@@ -687,12 +690,13 @@ abstract class BaseEmitter extends Object3D {
         // Adjust velocity.
         switch (this.rotationSource.valueOf()) {
             case PTRS_Actor:
-                __break__();
-                // Particle.Velocity.copy(Particle.Velocity.TransformVectorBy(GMath.UnitCoords * Owner.Rotation * this.RotationOffset));
+                // Particle.Velocity = Particle.Velocity.TransformVectorBy(GMath.UnitCoords*RotationOffset*Owner->Rotation);
+                tmpParticleQuaternion.copy(Owner.quaternion).multiply(this.rotationOffset);
+                Particle.Velocity.applyQuaternion(tmpParticleQuaternion);
                 break;
             case PTRS_Offset:
-                __break__();
-                // Particle.Velocity.copy(Particle.Velocity.TransformVectorBy(GMath.UnitCoords * this.RotationOffset));
+                // Particle.Velocity = Particle.Velocity.TransformVectorBy(GMath.UnitCoords*RotationOffset);
+                Particle.Velocity.applyQuaternion(this.rotationOffset);
                 break;
             case PTRS_Normal:
                 __break__();
