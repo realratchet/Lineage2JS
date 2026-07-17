@@ -16,7 +16,7 @@ import { serializeLibrary, deserializeLibrary } from "./library-serializer";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
-const CACHE_CONTENT_VERSION = 4;
+const CACHE_CONTENT_VERSION = 7;
 
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 

@@ -398,13 +398,13 @@ class RenderManager {
         // this.camera.position.set(-48757.64540781602, 81179.19605056658, -4673.552599009336);
         // this.controls.orbit.target.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
 
-        // // tower of incolsence missing floor piece
-        // this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
-        // this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
+        // tower of incolsence missing floor piece
+        this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
+        this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
 
-        // tree leaf alpha sorting
-        this.camera.position.set(73459.19761207198, 92466.6152928568, -2799.239596681226);
-        this.controls.orbit.target.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
+        // // tree leaf alpha sorting
+        // this.camera.position.set(73459.19761207198, 92466.6152928568, -2799.239596681226);
+        // this.controls.orbit.target.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

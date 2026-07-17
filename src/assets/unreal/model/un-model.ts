@@ -381,7 +381,7 @@ abstract class UModel extends UPrimitive {
             if (surf.flags & (
                 PolyFlags_T.PF_Invisible |
                 PolyFlags_T.PF_Portal |
-                PolyFlags_T.PF_AntiPortal |
+                // PF_AntiPortal (0x8000000) renders in retail - ToI 23_18 Baium floor slab carries it with live texture+lightmap
                 PolyFlags_T.PF_FakeBackdrop | // no skybox
                 PolyFlags_T.PF_Unused2        // don't know what this flag is but seems invisible
             )) continue;

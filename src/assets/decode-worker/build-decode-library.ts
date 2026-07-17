@@ -48,7 +48,11 @@ function buildDecodeLibrary(pkg: C.APackage, {
     const isNotSector = sectorIndex.some(x => typeof (x) !== "number" || !isFinite(x));
 
     if (isNotSector) {
-        sectorIndex = [17, 25]
+        // 23_17's LevelInfo url.map doesn't parse - the filename is authoritative; [17,25] stays as the skylevel placeholder
+        sectorIndex = pkg.path.split("/").pop().split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
+
+        if (sectorIndex.some(x => typeof (x) !== "number" || !isFinite(x)))
+            sectorIndex = [17, 25]
         // debugger;
     }
 
