@@ -242,6 +242,14 @@ class BeamEmitter extends BaseEmitter {
         (particle as any).beamDirty = true;
     }
 
+    protected updateParticle(deltaTime: number, index: number): void {
+        const points = (this.particlePool[index] as any)?.beamPoints as Float32Array | undefined;
+        if (!points) return;
+
+        for (let i = 0; i < points.length; i += 3)
+            this.boundingBox.expandByPoint(this.tmpVec.set(points[i], points[i + 1], points[i + 2]));
+    }
+
     // dynamic noise timing, whole steps of the sampled interval
     public beamDynamicNoiseSteps(currentTime: number): number {
         if (this.lastNoiseTime < 0) this.lastNoiseTime = currentTime;

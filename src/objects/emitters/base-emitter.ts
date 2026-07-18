@@ -348,6 +348,7 @@ abstract class BaseEmitter extends Object3D {
     protected warmupTicksPerSecond: number;
     declare protected maxParticles: number;
     protected boundingBox = new Box3();
+    protected particleGeometryRadius: number = 1;
     protected drawScale: number = 1;
     declare protected addLocationFromOtherEmitter: number;
     declare protected addVelocityFromOtherEmitter: number;
@@ -1285,7 +1286,7 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            const particleExtent = Math.max(Particle.scale.x, Particle.scale.y, Particle.scale.z);
+            const particleExtent = Math.max(Particle.scale.x, Particle.scale.y, Particle.scale.z) * this.particleGeometryRadius;
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(Particle.position).addScalar(particleExtent));
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(Particle.position).addScalar(-particleExtent));
 

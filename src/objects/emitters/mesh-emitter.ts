@@ -10,6 +10,9 @@ class MeshEmitter extends BaseEmitter {
     protected initSettings(config: MeshEmitterConfig_T): void {
         this.geometry = config.geometry;
         this.materials = config.materials;
+
+        if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
+        this.particleGeometryRadius = this.geometry.boundingSphere.radius;
     }
 
     protected initParticleMesh() {
