@@ -76,11 +76,15 @@ const tmpBeamEndPoint = new Vector3();
 const tmpBeamNoise = new Vector3();
 
 class BeamEmitter extends BaseEmitter {
-    declare protected material: ParticleMaterialInitSettings_T;
-    declare protected beam: BeamSettings_T;
-    declare protected sheetsUsed: number;
+    protected beam: BeamSettings_T;
+    protected sheetsUsed: number;
     protected timeSinceLastDynamicNoise = 0;
     protected lastNoiseTime = -1;
+
+    public constructor(config: BeamEmitterConfig_T) {
+        super(config);
+        this.finishConstruction(config);
+    }
 
     protected initSettings(config: BeamEmitterConfig_T): void {
         this.material = config.material;

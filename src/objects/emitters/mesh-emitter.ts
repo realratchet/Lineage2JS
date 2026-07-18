@@ -3,9 +3,13 @@ import { DoubleSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
 
 class MeshEmitter extends BaseEmitter {
-    // declare matters, see sprite-emitter
-    declare protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
-    declare protected geometry: THREE.BufferGeometry;
+    protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
+    protected geometry: THREE.BufferGeometry;
+
+    public constructor(config: MeshEmitterConfig_T) {
+        super(config);
+        this.finishConstruction(config);
+    }
 
     protected initSettings(config: MeshEmitterConfig_T): void {
         this.geometry = config.geometry;

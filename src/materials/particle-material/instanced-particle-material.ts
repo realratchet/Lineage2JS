@@ -65,6 +65,6 @@ type InstancedParticleMaterialInitSettings_T = {
     blendingMode: GD.ParticleBlendModes_T,
     name: string,
     usesSubdivision?: boolean,
-    spriteDirection?: string,
+    spriteDirection?: GD.SpriteDirections_T,
     projectionNormal?: Vector3
 };

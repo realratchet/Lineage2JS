@@ -97,6 +97,7 @@ abstract class BaseEmitter extends Object3D {
     // set by a subclass's initSettings() - swaps to a single instanced draw call for the whole pool
     protected isInstancedRendering: boolean = false;
     protected instancedMesh: InstancedSpriteMesh | null = null;
+    protected material: ParticleMaterialInitSettings_T;
 
     protected warmedUp: boolean;
     protected warmupTime: number;
@@ -410,8 +411,15 @@ abstract class BaseEmitter extends Object3D {
         this.maxActiveParticles = this.maxParticles;
 
         // debugger;
+    }
 
+    // called by each concrete subclass's own constructor, after super() returns - initSettings()
+    // runs here instead of from this constructor so subclass field initializers (which run right
+    // after super()) land before their values are set, not after
+    protected finishConstruction(config: GD.EmitterConfig_T): void {
         this.initSettings(config);
+
+        const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
 
         this.particlePool = new Array(poolSize);
 
@@ -436,8 +444,6 @@ abstract class BaseEmitter extends Object3D {
                 this.add(particle);
             }
         }
-
-
 
         // world matrix already includes DrawScale, local 1/DrawScale keeps simulation units 1:1 with world units
         if (this.drawScale > 0) {

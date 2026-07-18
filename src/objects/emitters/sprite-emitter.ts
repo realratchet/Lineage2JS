@@ -25,12 +25,13 @@ const tmpNormal = new Vector3();
 const tmpMatrix = new THREE.Matrix4();
 
 class SpriteEmitter extends BaseEmitter {
+    public spriteDirection: GD.SpriteDirections_T;
+    public projectionNormal: THREE.Vector3;
 
-    // declare matters, initSettings runs from the BaseEmitter constructor so field
-    // initializers here would clobber whatever it assigned
-    declare public spriteDirection: string;
-    declare public projectionNormal: THREE.Vector3;
-    declare protected material: ParticleMaterialInitSettings_T;
+    public constructor(config: SpriteEmitterConfig_T) {
+        super(config);
+        this.finishConstruction(config);
+    }
 
     protected initSettings(config: SpriteEmitterConfig_T): void {
         this.isSpriteEmitter = true;
@@ -67,7 +68,7 @@ export default SpriteEmitter;
 export { SpriteEmitter };
 
 class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
-    public spriteDirection: string = "camera";
+    public spriteDirection: GD.SpriteDirections_T = "camera";
     public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
 
     constructor(material: ParticleMaterial) {
@@ -192,6 +193,6 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
 
 type SpriteEmitterConfig_T = GD.EmitterConfig_T & {
     material: ParticleMaterialInitSettings_T;
-    spriteDirection?: string;
+    spriteDirection?: GD.SpriteDirections_T;
     projectionNormal?: [number, number, number];
 };
