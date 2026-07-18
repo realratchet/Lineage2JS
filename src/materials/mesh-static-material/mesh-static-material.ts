@@ -1,7 +1,7 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -91,8 +91,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         const sprites = {};
 
         const defines: Record<string, any> = { USE_FOG: "" };
+        // UniformsLib.lights dropped - NUM_DIR_LIGHTS/NUM_SPOT_LIGHTS/NUM_HEMI_LIGHTS are always
+        // 0 here (DynamicLight isn't a THREE.Light), so those ~19 uniforms never compiled in
         const uniforms: Record<string, Uniform> = appendGlobalUniforms(UniformsUtils.merge([
-            UniformsLib.lights,
             {
                 alphaTest: new Uniform(1e-3),
                 diffuse: new Uniform(new Color(0xffffff)),
@@ -218,7 +219,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             depthWrite: true,
             depthTest: true,
             visible: info.visible,
-            lights: true,
+            // lights:true would write into uniforms.ambientLightColor/directionalLights/etc,
+            // which no longer exist now that UniformsLib.lights isn't merged in above
+            lights: false,
             wireframe: false
         });
 

@@ -13,21 +13,22 @@ const tmpColorByte = new ColorByte();
 // Vertex indices a light actually influences, decoded once from its flags bitmask
 // (LSB-first per byte). The dynamic pass runs per animated light per frame, and
 // walking every vertex of a batched geometry just to test bits dominated the frame
-// time (~20M vertex×light iterations/frame in the 18_20 necropolis).
+// time (~20M vertex×light iterations/frame in the 18_20 necropolis). rangeStart/rangeEnd
+// (mergeMeshLightFlags, batch-data.ts) narrow the scan to the actors that reference the light.
 const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
 
-function getAffectedVertices(flags: Uint8Array, vertexCount: number): Uint32Array {
+function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart: number = 0, rangeEnd: number = vertexCount): Uint32Array {
     let indices = affectedVertexCache.get(flags);
 
     if (!indices) {
         let count = 0;
 
-        for (let vi = 0; vi < vertexCount; vi++)
+        for (let vi = rangeStart; vi < rangeEnd; vi++)
             if (flags[vi >> 3] & (1 << (vi & 7))) count++;
 
         indices = new Uint32Array(count);
 
-        for (let vi = 0, k = 0; vi < vertexCount; vi++)
+        for (let vi = rangeStart, k = 0; vi < rangeEnd; vi++)
             if (flags[vi >> 3] & (1 << (vi & 7))) indices[k++] = vi;
 
         affectedVertexCache.set(flags, indices);
@@ -36,7 +37,7 @@ function getAffectedVertices(flags: Uint8Array, vertexCount: number): Uint32Arra
     return indices;
 }
 
-type AugmentedLight_T = { light: string, flags: Uint8Array, instance?: DynamicLight };
+type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, instance?: DynamicLight };
 
 class LitActorMesh extends Mesh {
     public readonly isUpdatable: boolean = true;
@@ -62,6 +63,9 @@ class LitActorMesh extends Mesh {
     public actorBoundsMax?: number[];
     public actorZoneMask?: bigint;
     public actorRangeIgnored?: boolean;
+
+    public needsRelightPass?: boolean; // set by zone-object.ts when a batch element's visibility flips
+    protected vertexToElement?: Uint32Array;
 
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
         super(props.geometry, props.materials);
@@ -121,7 +125,23 @@ class LitActorMesh extends Mesh {
         return this.perVertexGlow;
     }
 
-    protected computeLighting(_sector: SectorObject, lights: AugmentedLight_T[], target: Uint8ClampedArray, multiplier: number) {
+    // vertex -> batch element index, same order as elemVisibility (batch-data.ts)
+    protected getVertexToElement(perActorAmbient: { startVertex: number, count: number }[], vertexCount: number): Uint32Array {
+        if (!this.vertexToElement || this.vertexToElement.length !== vertexCount) {
+            const arr = new Uint32Array(vertexCount);
+
+            for (let ei = 0; ei < perActorAmbient.length; ei++) {
+                const { startVertex, count } = perActorAmbient[ei];
+                arr.fill(ei, startVertex, startVertex + count);
+            }
+
+            this.vertexToElement = arr;
+        }
+
+        return this.vertexToElement;
+    }
+
+    protected computeLighting(_sector: SectorObject, lights: AugmentedLight_T[], target: Uint8ClampedArray, multiplier: number, elemVisibility?: Uint8Array, vertexToElement?: Uint32Array) {
         if (lights.length === 0) return;
 
         const attrPositions = this.geometry.getAttribute("position");
@@ -135,14 +155,16 @@ class LitActorMesh extends Mesh {
         const glowPerVertex = perActorAmbient ? this.getPerVertexGlow(perActorAmbient, vertexArrayLen) : null;
         const uniformGlow = this.scaledGlow;
 
-        for (const { instance: light, flags } of lights) {
+        for (const { instance: light, flags, vertexRangeStart, vertexRangeEnd } of lights) {
             if (!light) continue;
 
-            const indices = getAffectedVertices(flags, vertexArrayLen);
+            const indices = getAffectedVertices(flags, vertexArrayLen, vertexRangeStart, vertexRangeEnd);
             const col = light.color;
 
             for (let k = 0, len = indices.length; k < len; k++) {
                 const vi = indices[k];
+
+                if (elemVisibility && !elemVisibility[vertexToElement![vi]]) continue;
 
                 vertex.fromBufferAttribute(attrPositions, vi);
                 tmpNormal.fromBufferAttribute(attrNormals, vi);
@@ -175,6 +197,8 @@ class LitActorMesh extends Mesh {
         return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
     }
 
+    public lightingGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+
     protected lightSets?: {
         all: AugmentedLight_T[],
         staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[],
@@ -187,8 +211,8 @@ class LitActorMesh extends Mesh {
         const scene: AugmentedLight_T[] = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
         const environment: AugmentedLight_T[] = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
 
-        const isStatic = (l: AugmentedLight_T) => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight");
-        const isDynamic = (l: AugmentedLight_T) => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight"));
+        const isStatic = (l: AugmentedLight_T) => l.instance && !l.instance.isDynamic && !l.instance.isTimeBased;
+        const isDynamic = (l: AugmentedLight_T) => l.instance && (l.instance.isDynamic || l.instance.isTimeBased);
 
         const sets = {
             all: [...scene, ...environment],
@@ -207,6 +231,7 @@ class LitActorMesh extends Mesh {
 
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
+        if (this.needsInitialLighting && !this.lightingGate) return;
 
 
         const attrColors = this.geometry.getAttribute("lighting");
@@ -241,13 +266,19 @@ class LitActorMesh extends Mesh {
         for (const { instance: light } of allLights) {
             if (!light) continue;
 
-            if (light.isDynamic || (light.isTimeBased && light.lightMethod !== "Sunlight")) {
+            if (light.isDynamic || light.isTimeBased) {
                 if (light.needsUpdate) anyDynamicLightNeedsUpdate = true;
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
         // Return early if no lighting parameters have changed
-        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
+        if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !this.needsRelightPass) return;
+
+        // dynamic pass below filters by elemVisibility - a batch's .visible flag covers every merged actor
+        const perActorAmbientForFilter = this.perActorAmbient as { startVertex: number, count: number }[] | undefined;
+        const canFilterByVisibility = !!this.elemVisibility && !!perActorAmbientForFilter;
+        const filterVisibility = canFilterByVisibility ? this.elemVisibility : undefined;
+        const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
@@ -307,6 +338,8 @@ class LitActorMesh extends Mesh {
                 this.staticLightingCache.fill(0);
             }
 
+            // not filtered by elemVisibility, unlike the dynamic pass - staticLightingCache is a
+            // persistent baseline and needsRelightPass can't backfill a skipped contribution later
             if (this.lightInfo) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
 
             // if (staticEnv.length > 0)
@@ -356,12 +389,14 @@ class LitActorMesh extends Mesh {
         }
 
         // Apply dynamic pass (lights that change over time or move)
-        if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0);
+        if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0, filterVisibility, vertexToElement);
         if (dynamicEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);
-            if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp);
-            if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp);
-        } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0);
+            if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp, filterVisibility, vertexToElement);
+            if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp, filterVisibility, vertexToElement);
+        } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0, filterVisibility, vertexToElement);
+
+        this.needsRelightPass = false;
 
         attrColors.needsUpdate = true;
     }
@@ -373,8 +408,8 @@ class LitActorMesh extends Mesh {
 
 export interface MeshLight {
     matrix: Matrix4,
-    scene: { light: string, flags: Uint8Array }[],
-    environment: { light: string, flags: Uint8Array }[]
+    scene: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number }[],
+    environment: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number }[]
 }
 
 export default LitActorMesh;

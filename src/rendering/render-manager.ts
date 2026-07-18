@@ -71,11 +71,35 @@ const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (wa
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
+type SectorTextureWarmup_T = { sector: SectorObject, textureQueue: THREE.Texture[] };
 
 const frozenUpdateMatrixWorld = function () { };
 
-// never touch the emitter's own .visible here - scene.traverseVisible skips `if (!this.visible)` before
-// the callback, so that would permanently strand it out of future traversal even once back in range
+// three's render() always walks scene.updateMatrixWorld() regardless of matrixAutoUpdate,
+// so only overriding updateMatrixWorld to a no-op skips the descent - a subtree only gets
+// that override once every node under it is confirmed static; an emitter node keeps the
+// walk alive so its particlePool is still reached, blocking every ancestor above it too
+function freezeStaticSubtree(node: THREE.Object3D): boolean {
+    if ((node as any).isMovableObject) {
+        (node as MovableObject).freezeMover();
+        return false;
+    }
+
+    node.matrixAutoUpdate = false;
+
+    if ((node as any).particlePool) return false;
+
+    let allChildrenFrozen = true;
+
+    for (const child of node.children)
+        if (!freezeStaticSubtree(child)) allChildrenFrozen = false;
+
+    if (allChildrenFrozen) node.updateMatrixWorld = frozenUpdateMatrixWorld;
+
+    return allChildrenFrozen;
+}
+
+// never touch the emitter's own .visible here - scene.traverseVisible skips it before the callback, permanently stranding it out of future traversal even once back in range
 function freezeEmitterParticles(emitter: any) {
     for (const p of emitter.particlePool) {
         p.visible = false;
@@ -177,6 +201,15 @@ class RenderManager {
 
     protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
+
+    protected readonly pendingMeshReveals: SectorObject[] = []; // tier 2 - always fully drains before pendingTextureWarmups touches anything
+    protected readonly pendingTextureWarmups: SectorTextureWarmup_T[] = [];
+    protected static readonly TEXTURES_PER_FRAME = 8;
+
+    // deferred shader link/compile error reporting, see processShaderDiagnostics
+    protected readonly pendingShaderChecks: any[] = [];
+    protected readonly seenPrograms = new WeakSet<object>();
+    protected parallelShaderCompileExt: any = undefined; // resolved lazily, null if unsupported
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
     protected lastRender: number = 0;
@@ -216,6 +249,11 @@ class RenderManager {
             logarithmicDepthBuffer: true,
             alpha: true,
         });
+
+        // gl.getProgramInfoLog (behind this flag) stalls the CPU waiting on the driver -
+        // profiled at ~90ms of a sector's first-render cost. processShaderDiagnostics
+        // polls KHR_parallel_shader_compile instead (errors go unreported without that extension)
+        this.renderer.debug.checkShaderErrors = false;
 
         // Initialize Native Bloom System
         this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
@@ -382,9 +420,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // // heine
-        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
-        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // heine
+        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
+        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         // // d.elf village emitters
         // this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
@@ -398,9 +436,9 @@ class RenderManager {
         // this.camera.position.set(-48757.64540781602, 81179.19605056658, -4673.552599009336);
         // this.controls.orbit.target.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
 
-        // tower of incolsence missing floor piece
-        this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
-        this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
+        // // tower of incolsence missing floor piece
+        // this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
+        // this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
 
         // // tree leaf alpha sorting
         // this.camera.position.set(73459.19761207198, 92466.6152928568, -2799.239596681226);
@@ -1524,6 +1562,8 @@ class RenderManager {
 
     protected _preRender(currentTime: number, deltaTime: number) {
         this.assetManager.tick(this);
+        this.processSectorWarmups();
+        this.processShaderDiagnostics();
         this.mixer.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
@@ -1935,39 +1975,17 @@ class RenderManager {
         this.objectGroup.add(sector);
         this.stitchTerrains();
 
-        // sector content never moves. matrixAutoUpdate=false alone only skips the
-        // local matrix recompose - three's own render() still calls
-        // scene.updateMatrixWorld() every frame, which unconditionally recurses into
-        // every child regardless of that flag, just skipping the multiply once
-        // there. Overriding updateMatrixWorld itself to a no-op skips the descent
-        // too, so a subtree only gets that override once every node under it is
-        // confirmed static - an emitter's own node freezes (it doesn't move) but
-        // keeps the default implementation so the walk still reaches its live
-        // particle-pool children every frame; that in turn means none of its
-        // ancestors can take the no-op shortcut either, or the walk would never
-        // reach the emitter at all.
+        setLightingGate(sector, false); // terrain/BSP stays visible but starts unlit until processSectorWarmups ungates it
+
+        // static mesh geometry, its materials, and particle warm-up all wait their turn
+        if (sector.staticMeshGroup) {
+            sector.staticMeshGroup.visible = false;
+            this.pendingMeshReveals.push(sector);
+            setEmitterWarmupGate(sector, false);
+        }
+
         sector.updateMatrixWorld(true);
-
-        const freeze = (node: THREE.Object3D): boolean => {
-            if ((node as any).isMovableObject) {
-                (node as MovableObject).freezeMover();
-                return false;
-            }
-
-            node.matrixAutoUpdate = false;
-
-            if ((node as any).particlePool) return false;
-
-            let allChildrenFrozen = true;
-
-            for (const child of node.children)
-                if (!freeze(child)) allChildrenFrozen = false;
-
-            if (allChildrenFrozen) node.updateMatrixWorld = frozenUpdateMatrixWorld;
-
-            return allChildrenFrozen;
-        };
-        freeze(sector);
+        freezeStaticSubtree(sector);
 
         // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);
@@ -1995,6 +2013,91 @@ class RenderManager {
         }
     }
 
+    // no renderer.compile() call here on purpose - a batch's .material array holds every
+    // merged actor (127-688 entries measured), and compile() force-compiles all of it
+    // regardless of visibility; profiled at 300-600ms/frame, worse than the plain reveal below
+    protected processSectorWarmups() {
+        if (this.pendingMeshReveals.length > 0) {
+            const sector = this.pendingMeshReveals.shift();
+
+            sector.staticMeshGroup.visible = true;
+            this.pendingTextureWarmups.push({ sector, textureQueue: collectSectorTextures(sector.staticMeshGroup) });
+            return; // let this reveal land on its own frame before tier 3 touches anything
+        }
+
+        const job = this.pendingTextureWarmups[0];
+        if (!job) return;
+
+        for (let i = 0; i < RenderManager.TEXTURES_PER_FRAME && job.textureQueue.length > 0; i++)
+            this.renderer.initTexture(job.textureQueue.pop());
+
+        if (job.textureQueue.length === 0) {
+            this.pendingTextureWarmups.shift();
+            setLightingGate(job.sector, true); // materials done - shading (lighting, then particles) can go
+            setEmitterWarmupGate(job.sector, true);
+
+            (job.sector as any).visibilityCacheInitialized = false; // force a retry even if the camera hasn't moved since the gated pass
+        }
+    }
+
+    // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
+    protected processShaderDiagnostics() {
+        if (this.parallelShaderCompileExt === undefined)
+            this.parallelShaderCompileExt = this.renderer.extensions.get("KHR_parallel_shader_compile") ?? null;
+
+        for (const program of (this.renderer.info as any).programs ?? []) {
+            if (this.seenPrograms.has(program)) continue;
+
+            this.seenPrograms.add(program);
+            this.pendingShaderChecks.push(program);
+        }
+
+        if (this.pendingShaderChecks.length === 0) return;
+
+        const ext = this.parallelShaderCompileExt;
+        if (!ext) return; // no non-blocking way to know when it's safe to check - leave queued
+
+        const gl = this.renderer.getContext() as WebGL2RenderingContext;
+
+        for (let i = this.pendingShaderChecks.length - 1; i >= 0; i--) {
+            const program = this.pendingShaderChecks[i];
+
+            if (!gl.getProgramParameter(program.program, ext.COMPLETION_STATUS_KHR)) continue; // still compiling, retry next frame
+
+            this.pendingShaderChecks.splice(i, 1);
+            reportShaderErrors(gl, program);
+        }
+    }
+
+    // addSector's own staticMeshGroup check can't gate this - AssetManager calls addSector
+    // before staticMeshGroup exists, so call this right after instead
+    public gateParticleWarmup(sector: SectorObject, allowed: boolean) {
+        setEmitterWarmupGate(sector, allowed);
+    }
+
+    // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
+    public attachStaticMeshGroup(sector: SectorObject) {
+        sector.staticMeshGroup.traverse(child => {
+            if (!(child as any).isMovableObject) return;
+
+            const mover = child as MovableObject;
+
+            this.movableObjects.add(mover);
+            mover.setPosition(this.envConfig.moverPosition);
+        });
+
+        sector.worldBounds.setFromObject(sector);
+
+        sector.staticMeshGroup.updateMatrixWorld(true);
+        freezeStaticSubtree(sector.staticMeshGroup);
+
+        // addSector's unconditional gate ran before this group existed - gate it now
+        setLightingGate(sector.staticMeshGroup, false);
+
+        sector.staticMeshGroup.visible = false;
+        this.pendingMeshReveals.push(sector);
+    }
+
     /**
      * Inverse of addSector: unregisters the sector, removes it from the scene and
      * re-stitches the remaining terrains. GPU resources are NOT freed - the sector can
@@ -2019,6 +2122,12 @@ class RenderManager {
 
         this.objectGroup.remove(sector);
         this.stitchTerrains();
+
+        const revealIndex = this.pendingMeshReveals.indexOf(sector);
+        if (revealIndex >= 0) this.pendingMeshReveals.splice(revealIndex, 1);
+
+        const warmupIndex = this.pendingTextureWarmups.findIndex(job => job.sector === sector);
+        if (warmupIndex >= 0) this.pendingTextureWarmups.splice(warmupIndex, 1);
     }
 
     public disposeSector(sector: SectorObject) {
@@ -2140,4 +2249,73 @@ function disposeSectorResources(sector: SectorObject) {
     for (const celestial of sector.celestials) {
         if (celestial.sprite?.isTexture) celestial.sprite.dispose();
     }
+}
+
+// MeshStaticMaterial wraps procedural map slots several levels deep (uniforms.shDiffuse.value.map.texture),
+// so uniforms need a real walk rather than disposeSectorResources' one-level uniform.value check
+function collectTexturesDeep(value: any, textures: Set<THREE.Texture>, seen: WeakSet<object>): void {
+    if (!value || typeof value !== "object") return;
+    if (value.isTexture) { textures.add(value); return; }
+    if (seen.has(value)) return;
+
+    seen.add(value);
+
+    for (const nested of Object.values(value)) collectTexturesDeep(nested, textures, seen);
+}
+
+function collectSectorTextures(root: THREE.Object3D): THREE.Texture[] {
+    const textures = new Set<THREE.Texture>();
+    const seen = new WeakSet<object>();
+
+    root.traverse(child => {
+        const mesh = child as THREE.Mesh;
+
+        if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
+
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+        for (const material of materials) {
+            if (!material) continue;
+
+            for (const value of Object.values(material)) {
+                if ((value as THREE.Texture)?.isTexture) textures.add(value as THREE.Texture);
+            }
+
+            if ((material as any).uniforms) collectTexturesDeep((material as any).uniforms, textures, seen);
+        }
+    });
+
+    return Array.from(textures);
+}
+
+// emitters live under sector.zones, not staticMeshGroup - always walk the whole sector
+function setEmitterWarmupGate(sector: SectorObject, allowed: boolean) {
+    sector.traverse(child => {
+        if ((child as any).particlePool) (child as any).warmupGate = allowed;
+    });
+}
+
+// batchTerrainSectors removes individual Terrain sectors from the scene graph once merged,
+// so traverse alone can't reach them - isTerrainBatch's .sectors needs gating explicitly too
+function setLightingGate(root: THREE.Object3D, allowed: boolean) {
+    root.traverse(child => {
+        if ("computeLighting" in child) (child as any).lightingGate = allowed;
+
+        if ((child as any).isTerrainBatch) {
+            for (const terrainSector of (child as any).sectors ?? [])
+                terrainSector.lightingGate = allowed;
+        }
+    });
+}
+
+// mirrors the check three's WebGLProgram itself does behind renderer.debug.checkShaderErrors
+function reportShaderErrors(gl: WebGL2RenderingContext, program: any) {
+    if (gl.getProgramParameter(program.program, gl.LINK_STATUS)) return;
+
+    console.error(
+        `[shader] link error in '${program.name}' (cacheKey=${program.cacheKey}):\n` +
+        `Program Info Log: ${gl.getProgramInfoLog(program.program)}\n` +
+        `Vertex Shader Log: ${gl.getShaderInfoLog(program.vertexShader)}\n` +
+        `Fragment Shader Log: ${gl.getShaderInfoLog(program.fragmentShader)}`
+    );
 }

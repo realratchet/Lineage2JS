@@ -29,10 +29,10 @@ class MeshTerrainMaterial extends ShaderMaterial {
         const pragmaSearch = "#pragma include_layers";
 
         const paramsIndex = splitFragmentShader.findIndex(x => x.includes(pragmaSearchParams));
-        const wsParams = new Array(splitFragmentShader[paramsIndex].indexOf(pragmaSearchParams)).fill(" ").join("");
+        const wsParams = " ".repeat(splitFragmentShader[paramsIndex].indexOf(pragmaSearchParams));
 
         let layerIndex = splitFragmentShader.findIndex(x => x.includes(pragmaSearch));
-        const ws = new Array(splitFragmentShader[layerIndex].indexOf(pragmaSearch)).fill(" ").join("");
+        const ws = " ".repeat(splitFragmentShader[layerIndex].indexOf(pragmaSearch));
 
         const paramsCode: string[] = [], layerCode: string[] = [];
 

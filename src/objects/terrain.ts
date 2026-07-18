@@ -111,8 +111,11 @@ class Terrain extends Mesh implements ICollidable {
         return !!this.lightingInfo && !this.staticLightingCache;
     }
 
+    public lightingGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightingInfo) return;
+        if (this.needsInitialLighting && !this.lightingGate) return;
 
         const timeOfDay = env.getTimeOfDay();
         let shadowIndex = 0;

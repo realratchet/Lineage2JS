@@ -346,6 +346,7 @@ abstract class BaseEmitter extends Object3D {
     protected warmedUp: boolean;
     protected warmupTime: number;
     protected warmupTicksPerSecond: number;
+    public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
     declare protected maxParticles: number;
     protected boundingBox = new Box3();
     protected particleGeometryRadius: number = 1;
@@ -1352,7 +1353,7 @@ abstract class BaseEmitter extends Object3D {
             return;
 
 
-        if (!this.warmedUp && this.parent) {
+        if (!this.warmedUp && this.parent && this.warmupGate) {
             this.oldOwnerLocation.copy(this.parent.position);
             
             if (this.warmupTime > 0) {

@@ -1224,6 +1224,8 @@ class SectorObject extends Object3D {
                     const transparentSortPosition = (object as any).transparentSortPosition as Vector3;
                     const sortChanged = !!sortedTransparentMats?.size && (!transparentSortPosition || transparentSortPosition.distanceToSquared(cameraPosition) >= TRANSPARENT_SORT_DISTANCE_SQ);
 
+                    if (visibilityChanged) (object as any).needsRelightPass = true; // catch up a newly-visible element's dynamic lighting
+
                     if (visibilityChanged || sortChanged) {
                         const visibleGroups: BatchGroup_T[] = [];
 

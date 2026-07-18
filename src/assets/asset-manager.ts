@@ -1,6 +1,6 @@
 import RenderManager from "@client/rendering/render-manager";
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { decodePackage } from "@client/assets/decoders/object3d-decoder";
+import { decodePackage, decodeSectorCore, decodeSectorStaticMeshes } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
 import { Vector3 } from "three";
@@ -26,6 +26,8 @@ class AssetManager {
     protected failedSectors = new Map<string, number>(); // sector id -> retry-after timestamp
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
     protected inFlightSectors = new Set<string>(); // sector ids currently decoding, so a boundary crossing can't re-request them
+
+    protected readonly pendingStaticMeshBuilds: { sector: SectorObject, library: GD.DecodeLibrary }[] = []; // drained one sector/tick by processPendingBuilds
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
     protected readonly decodeWorkerPoolSize: number;
@@ -138,7 +140,11 @@ class AssetManager {
                 decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
                 (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-                renderManager.addSector(decodePackage(decodeLibrary));
+                const sector = decodeSectorCore(decodeLibrary); // static meshes built later by processPendingBuilds
+                renderManager.addSector(sector);
+                renderManager.gateParticleWarmup(sector, false); // ungated again once materials finish, see attachStaticMeshGroup
+
+                this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary });
                 this.failedSectors.delete(sectorIdx);
             })
             .catch(e => {
@@ -185,6 +191,19 @@ class AssetManager {
         }
     }
 
+    protected processPendingBuilds(renderManager: RenderManager) {
+        const job = this.pendingStaticMeshBuilds.shift();
+
+        if (!job) return;
+
+        try {
+            decodeSectorStaticMeshes(job.library, job.sector);
+            renderManager.attachStaticMeshGroup(job.sector);
+        } catch (e) {
+            console.error(`Failed to build static meshes for sector '${job.sector.name}':`, e);
+        }
+    }
+
     public async tick(renderManager: RenderManager) {
         if (this.isTicking) return; // avoid too many ticks running at the same time as the tick is done on before render so we defer sector loading
 
@@ -211,6 +230,7 @@ class AssetManager {
             }
 
             this.destroyExpiredSectors(renderManager);
+            this.processPendingBuilds(renderManager);
 
             /*
              * Sectors wanted this tick, most-important first: the sector the camera is

@@ -24,6 +24,8 @@ type BatchElement_T = {
 type BatchLightEntry_T = {
     light: string;
     flags: Uint8Array;
+    vertexRangeStart?: number;
+    vertexRangeEnd?: number;
 }
 
 type StaticMeshBatchInfo_T = {
@@ -217,20 +219,27 @@ function prepareActorGeometriesData(
     return { actorGeometries, materialUuids };
 }
 
+// rangeStart/rangeEnd bound the actors that actually reference this light, so
+// getAffectedVertices (lit-actor.ts) can skip scanning the rest of the batch
 function mergeMeshLightFlags(
     totalVertices: number,
     vertexCounts: number[],
     flagArrays: Uint8Array[]
-): Uint8Array {
+): { flags: Uint8Array, rangeStart: number, rangeEnd: number } {
     const bytesNeeded = Math.ceil(totalVertices / 8);
     const result = new Uint8Array(bytesNeeded);
     let globalVertex = 0;
+    let rangeStart = totalVertices;
+    let rangeEnd = 0;
 
     for (let ai = 0; ai < vertexCounts.length; ai++) {
         const actorVertexCount = vertexCounts[ai];
         const actorFlags = flagArrays[ai];
 
         if (actorFlags) {
+            rangeStart = Math.min(rangeStart, globalVertex);
+            rangeEnd = Math.max(rangeEnd, globalVertex + actorVertexCount);
+
             for (let vi = 0; vi < actorVertexCount; vi++) {
                 const srcByte = Math.floor(vi / 8);
                 const srcBit = vi % 8;
@@ -246,7 +255,9 @@ function mergeMeshLightFlags(
         globalVertex += actorVertexCount;
     }
 
-    return result;
+    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; } // no actor referenced this light
+
+    return { flags: result, rangeStart, rangeEnd };
 }
 
 function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]) {
@@ -374,14 +385,14 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let mergedLights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null = null;
     if (hasAnyLights) {
         mergedLights = {
-            scene: Array.from(mergedSceneLights.entries()).map(([light, flagArrays]) => ({
-                light,
-                flags: mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays)
-            })),
-            environment: Array.from(mergedEnvLights.entries()).map(([light, flagArrays]) => ({
-                light,
-                flags: mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays)
-            }))
+            scene: Array.from(mergedSceneLights.entries()).map(([light, flagArrays]) => {
+                const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
+                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
+            }),
+            environment: Array.from(mergedEnvLights.entries()).map(([light, flagArrays]) => {
+                const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
+                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
+            })
         };
     }
 

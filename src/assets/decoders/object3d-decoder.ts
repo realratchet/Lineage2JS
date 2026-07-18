@@ -309,7 +309,7 @@ function decodeLight(library: GD.DecodeLibrary, info: GD.ILightDecodeInfo | GD.I
     // };
 }
 
-function decodeSector(library: GD.DecodeLibrary) {
+function decodeSectorCore(library: GD.DecodeLibrary) {
     const sector = new SectorObject();
 
     sector.name = library.name;
@@ -385,6 +385,10 @@ function decodeSector(library: GD.DecodeLibrary) {
         sector.add(bspGroup);
     }
 
+    return sector;
+}
+
+function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObject) {
     const staticMeshGroup = new Group();
     staticMeshGroup.name = "StaticMeshActors";
 
@@ -501,7 +505,8 @@ function decodeSector(library: GD.DecodeLibrary) {
 }
 
 function decodePackage(library: GD.DecodeLibrary) {
-    const sector = decodeSector(library);
+    const sector = decodeSectorCore(library);
+    decodeSectorStaticMeshes(library, sector);
 
     if (library.helpersZoneBounds) {
         const boundsGroup = new Object3D();
@@ -823,4 +828,4 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
 }
 
 export default decodeObject3D;
-export { decodeObject3D, decodePackage };
+export { decodeObject3D, decodePackage, decodeSectorCore, decodeSectorStaticMeshes };
