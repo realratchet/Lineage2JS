@@ -76,6 +76,8 @@ type DrawStyle_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModul
 abstract class BaseEmitter extends Object3D {
     protected readonly isUpdatable = true;
 
+    public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+
     protected fadingSettings: FadeSettings_T;
     protected generalSettings: { colorMultiplierRange: Range3_T, opacity: number, maxParticles: number; acceleration: Vector3; lifetime: Range_T; particlesPerSecond: number };
     protected initialSettings: { particlesPerSecond: number, position: { min: Vector3; max: Vector3; }, offset: Vector3, scale: { min: Vector3; max: Vector3; }; velocity: { min: Vector3; max: Vector3; }; angularVelocity: { min: Vector3; max: Vector3; }; };
@@ -94,6 +96,162 @@ abstract class BaseEmitter extends Object3D {
     // set by a subclass's initSettings() - swaps to a single instanced draw call for the whole pool
     protected isInstancedRendering: boolean = false;
     protected instancedMesh: InstancedSpriteMesh | null = null;
+
+    protected warmedUp: boolean;
+    protected warmupTime: number;
+    protected warmupTicksPerSecond: number;
+    protected maxParticles: number;
+    protected boundingBox = new Box3();
+    protected particleGeometryRadius: number = 1;
+    protected drawScale: number = 1;
+    protected addLocationFromOtherEmitter: number;
+    protected addVelocityFromOtherEmitter: number;
+    protected spawnFromOtherEmitter: number;
+    protected rotateVelocityLossRange: boolean;
+    protected realVelocityLossRange: Range3_T;
+    protected velocityLossRange: Range3_T;
+    protected rotationSource: RotationSource_T;
+
+    protected rvlMin: THREE.Vector3;
+    protected rvlMax: THREE.Vector3;
+    protected rotationOffset = new Quaternion();
+    protected rotationNormal: THREE.Vector3;
+
+    protected skeletalMeshActor: any; // UE Actor reference, never resolved by the decoder
+    protected useSkeletalLocationAs: SkeletalLocationUse_T;
+
+    protected oldOwnerLocation: THREE.Vector3;
+    protected lastDeltaTime: number = 0.016;
+    protected activeParticles: number = 0;
+    protected activeCount: number = 0;
+    protected maxActiveParticles: number;
+    protected isAutomaticInitialSpawning: boolean;
+
+    protected lifetimeRange: { min: number, max: number };
+    protected initialParticlesPerSecond: number;
+    protected particlesPerSecond: number;
+
+    protected currentSpawnOnTrigger: number = 0;
+    protected spawnOnTriggerPPS: number;
+
+    protected killPending: boolean = false;
+
+    protected ppsFraction: number = 0;
+
+    protected deferredParticles: number = 0;
+    protected particleIndex: number;
+
+    protected coordinateSystem: CoordinateSystem_T;
+    protected particles: Particle_T[];
+    protected isRespawningDeadParticles: boolean;
+    protected forcedMaxParticles: boolean = false;
+    protected initialTimeRange: { min: number, max: number };
+
+    protected acceleration: THREE.Vector3;
+    protected skeletalScale: THREE.Vector3;
+    protected meshVertsAndNormals = new Array<THREE.Vector3>();
+
+    protected isUsingRevolution: boolean;
+    protected isUsingCollision: boolean;
+    protected isUsingCollisionPlanes: boolean;
+    protected isUsingSizeScale: boolean;
+    protected isScaleSizeRegular: boolean;
+    protected maxAbsVelocity: THREE.Vector3;
+    protected startMassRange: { min: number, max: number };
+    protected meshNormal: THREE.Vector3;
+    protected meshNormalThresholdRange: Range_T;
+    protected meshScaleRange: Range3_T;
+    protected meshSpawning: MeshSpawning_T;
+    protected meshSpawningStaticMesh: THREE.Mesh;
+    protected isVelocityFromMesh: boolean;
+    protected velocityScaleRange: Range3_T;
+    protected isUsingColorFromMesh: boolean;
+    protected isUniformMeshScale: boolean;
+    protected isUniformVelocityScale: boolean;
+    protected addVelocityMultiplierRange: Range3_T;
+    protected globalOffset = new Vector3();
+    protected relativeBoneIndexRange: Range_T;
+    protected effectAxis: EffectAxis_T;
+    protected revolutionCenterOffsetRange: Range3_T;
+    protected revolutionsPerSecondRange: Range3_T;
+    protected colorMultiplierRange: Range3_T;
+    protected startSizeRange: Range3_T;
+    protected isUniformScale: boolean;
+    protected startVelocityRadialRange: Range3_T;
+    protected addVelocityFromOwner: boolean;
+    protected scaleSizeByVelocityMax: number;
+    protected startSpinRange: Range3_T;
+    protected spinsPerSecondRange: Range3_T;
+    protected clockwiseSpinChance: THREE.Vector3;
+    protected isUsingRandomSubdiv: boolean;
+    protected subdivStart: number;
+    protected subdivEnd: number;
+    protected texSubdivU: number;
+    protected texSubdivV: number;
+    protected spawningSound: CollisionSound_T;
+    protected spawningSoundIndex: Range_T;
+    protected spawningSoundProbability: Range_T;
+    protected isDisabled: boolean;
+
+    protected realExtentMultiplier: any; // unused - never populated from decode data, no shape to confirm
+    protected collisionPlanes: THREE.Vector4[];
+    protected collisionSound: CollisionSound_T;
+    protected currentCollisionSoundIndex: number;
+    protected collisionSoundIndex: Range_T;
+    protected spawnAmount: number;
+    protected sounds: any[];
+    protected collisionSoundProbability: Range_T;
+    protected isUsingSpawnedVelocityScale: boolean;
+    protected spawnedVelocityScaleRange: Range3_T;
+    protected useMaxCollisions: boolean;
+    protected maxCollisions: Range_T;
+    protected dampingFactorRange: Range3_T;
+    protected dampRotation: boolean;
+    protected rotationDampingFactorRange: Range3_T;
+    protected useAbsoluteTimeForSizeScale: boolean;
+    protected sizeScaleRepeats: number;
+    protected sizeScale: { relTime: number, relSize: number }[];
+    protected isUsingVelocityScale: boolean;
+    protected velocityScaleRepeats: number;
+    protected velocityScale: { relativeTime: number, relativeVelocity: THREE.Vector3 }[];
+    protected scaleSizeXByVelocity: boolean;
+    protected scaleSizeYByVelocity: boolean;
+    protected scaleSizeZByVelocity: boolean;
+    protected scaleSizeByVelocityMultiplier: Vector3;
+    protected determineVelocityByLocationDifference: boolean;
+    protected isUsingRevolutionScale: boolean;
+    protected revolutionScaleRepeats: number;
+    protected revolutionScale: { relativeTime: number, relativeRevolution: THREE.Vector3 }[];
+    protected isUsingColorScale: boolean;
+    protected colorScaleRepeats: number;
+    protected colorScale: { relativeTime: number, color: THREE.Vector4 }[];
+    protected drawStyle: DrawStyle_T;
+    protected isFadingOut: boolean;
+    protected fadeOutStartTime: number;
+    protected fadeOutFactor: THREE.Vector4;
+    protected isFadingIn: boolean;
+    protected fadeInEndTime: number;
+    protected fadeInFactor: THREE.Vector4;
+    protected fadeFactor: number;
+    protected opacity: number;
+    protected minSquaredVelocity: number;
+    protected allParticlesDead: boolean;
+    protected startLocationShape: StartLocationShape_T;
+    protected startLocationOffset: THREE.Vector3;
+    protected startVelocityRange: Range3_T;
+    protected startLocationRange: any; // unused - never populated from decode data, no shape to confirm
+    protected sphereRadiusRange: Range_T;
+    protected startLocationPolarRange: Range3_T;
+    protected currentMeshSpawningIndex: number;
+    protected isSpawningTowardsNormal: boolean;
+    protected realMeshNormal: any;
+    protected meshNormalThreshold: Range_T;
+    protected uniformMeshScale: boolean;
+    protected uniformVelocityScale: boolean;
+    protected otherIndex: number = 0;
+    protected getVelocityDirectionFrom: VelocityDirection_T;
+    protected maxSizeScale: number;
+    protected currentSpawningSoundIndex: number = 0;
 
     public getCurrentTime() { return this.currentTime; }
 
@@ -303,163 +461,6 @@ abstract class BaseEmitter extends Object3D {
             this.updateParticles(dt);
         }
     }
-
-    protected warmedUp: boolean;
-    protected warmupTime: number;
-    protected warmupTicksPerSecond: number;
-    public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
-    protected maxParticles: number;
-    protected boundingBox = new Box3();
-    protected particleGeometryRadius: number = 1;
-    protected drawScale: number = 1;
-    protected addLocationFromOtherEmitter: number;
-    protected addVelocityFromOtherEmitter: number;
-    protected spawnFromOtherEmitter: number;
-    protected rotateVelocityLossRange: boolean;
-    protected realVelocityLossRange: Range3_T;
-    protected velocityLossRange: Range3_T;
-    protected rotationSource: RotationSource_T;
-
-    protected rvlMin: THREE.Vector3;
-    protected rvlMax: THREE.Vector3;
-    protected rotationOffset = new Quaternion();
-    protected rotationNormal: THREE.Vector3;
-
-    protected skeletalMeshActor: any; // UE Actor reference, never resolved by the decoder
-    protected useSkeletalLocationAs: SkeletalLocationUse_T;
-
-    protected oldOwnerLocation: THREE.Vector3;
-    protected lastDeltaTime: number = 0.016;
-    protected activeParticles: number = 0;
-    protected activeCount: number = 0;
-    protected maxActiveParticles: number;
-    protected isAutomaticInitialSpawning: boolean;
-
-    protected lifetimeRange: { min: number, max: number };
-    protected initialParticlesPerSecond: number;
-    protected particlesPerSecond: number;
-
-    protected currentSpawnOnTrigger: number = 0;
-    protected spawnOnTriggerPPS: number;
-
-    protected killPending: boolean = false;
-
-    protected ppsFraction: number = 0;
-
-    protected deferredParticles: number = 0;
-    protected particleIndex: number;
-
-    protected coordinateSystem: CoordinateSystem_T;
-    protected particles: Particle_T[];
-    protected isRespawningDeadParticles: boolean;
-    protected forcedMaxParticles: boolean = false;
-    protected initialTimeRange: { min: number, max: number };
-
-    protected acceleration: THREE.Vector3;
-    protected skeletalScale: THREE.Vector3;
-    protected meshVertsAndNormals = new Array<THREE.Vector3>();
-
-    protected isUsingRevolution: boolean;
-    protected isUsingCollision: boolean;
-    protected isUsingCollisionPlanes: boolean;
-    protected isUsingSizeScale: boolean;
-    protected isScaleSizeRegular: boolean;
-    protected maxAbsVelocity: THREE.Vector3;
-    protected startMassRange: { min: number, max: number };
-    protected meshNormal: THREE.Vector3;
-    protected meshNormalThresholdRange: Range_T;
-    protected meshScaleRange: Range3_T;
-    protected meshSpawning: MeshSpawning_T;
-    protected meshSpawningStaticMesh: THREE.Mesh;
-    protected isVelocityFromMesh: boolean;
-    protected velocityScaleRange: Range3_T;
-    protected isUsingColorFromMesh: boolean;
-    protected isUniformMeshScale: boolean;
-    protected isUniformVelocityScale: boolean;
-    protected addVelocityMultiplierRange: Range3_T;
-    protected globalOffset = new Vector3();
-    protected relativeBoneIndexRange: Range_T;
-    protected effectAxis: EffectAxis_T;
-    protected revolutionCenterOffsetRange: Range3_T;
-    protected revolutionsPerSecondRange: Range3_T;
-    protected colorMultiplierRange: Range3_T;
-    protected startSizeRange: Range3_T;
-    protected isUniformScale: boolean;
-    protected startVelocityRadialRange: Range3_T;
-    protected addVelocityFromOwner: boolean;
-    protected scaleSizeByVelocityMax: number;
-    protected startSpinRange: Range3_T;
-    protected spinsPerSecondRange: Range3_T;
-    protected clockwiseSpinChance: THREE.Vector3;
-    protected isUsingRandomSubdiv: boolean;
-    protected subdivStart: number;
-    protected subdivEnd: number;
-    protected texSubdivU: number;
-    protected texSubdivV: number;
-    protected spawningSound: CollisionSound_T;
-    protected spawningSoundIndex: Range_T;
-    protected spawningSoundProbability: Range_T;
-    protected isDisabled: boolean;
-
-    protected realExtentMultiplier: any; // unused - never populated from decode data, no shape to confirm
-    protected collisionPlanes: THREE.Vector4[];
-    protected collisionSound: CollisionSound_T;
-    protected currentCollisionSoundIndex: number;
-    protected collisionSoundIndex: Range_T;
-    protected spawnAmount: number;
-    protected sounds: any[];
-    protected collisionSoundProbability: Range_T;
-    protected isUsingSpawnedVelocityScale: boolean;
-    protected spawnedVelocityScaleRange: Range3_T;
-    protected useMaxCollisions: boolean;
-    protected maxCollisions: Range_T;
-    protected dampingFactorRange: Range3_T;
-    protected dampRotation: boolean;
-    protected rotationDampingFactorRange: Range3_T;
-    protected useAbsoluteTimeForSizeScale: boolean;
-    protected sizeScaleRepeats: number;
-    protected sizeScale: { relTime: number, relSize: number }[];
-    protected isUsingVelocityScale: boolean;
-    protected velocityScaleRepeats: number;
-    protected velocityScale: { relativeTime: number, relativeVelocity: THREE.Vector3 }[];
-    protected scaleSizeXByVelocity: boolean;
-    protected scaleSizeYByVelocity: boolean;
-    protected scaleSizeZByVelocity: boolean;
-    protected scaleSizeByVelocityMultiplier: Vector3;
-    protected determineVelocityByLocationDifference: boolean;
-    protected isUsingRevolutionScale: boolean;
-    protected revolutionScaleRepeats: number;
-    protected revolutionScale: { relativeTime: number, relativeRevolution: THREE.Vector3 }[];
-    protected isUsingColorScale: boolean;
-    protected colorScaleRepeats: number;
-    protected colorScale: { relativeTime: number, color: THREE.Vector4 }[];
-    protected drawStyle: DrawStyle_T;
-    protected isFadingOut: boolean;
-    protected fadeOutStartTime: number;
-    protected fadeOutFactor: THREE.Vector4;
-    protected isFadingIn: boolean;
-    protected fadeInEndTime: number;
-    protected fadeInFactor: THREE.Vector4;
-    protected fadeFactor: number;
-    protected opacity: number;
-    protected minSquaredVelocity: number;
-    protected allParticlesDead: boolean;
-    protected startLocationShape: StartLocationShape_T;
-    protected startLocationOffset: THREE.Vector3;
-    protected startVelocityRange: Range3_T;
-    protected startLocationRange: any; // unused - never populated from decode data, no shape to confirm
-    protected sphereRadiusRange: Range_T;
-    protected startLocationPolarRange: Range3_T;
-    protected currentMeshSpawningIndex: number;
-    protected isSpawningTowardsNormal: boolean;
-    protected realMeshNormal: any;
-    protected meshNormalThreshold: Range_T;
-    protected uniformMeshScale: boolean;
-    protected uniformVelocityScale: boolean;
-    protected otherIndex: number = 0;
-    protected getVelocityDirectionFrom: VelocityDirection_T;
-    protected maxSizeScale: number;
-    protected currentSpawningSoundIndex: number = 0;
 
     protected updateParticle(deltaTime: number, index: number) {
         // only trail emitters use this apparently
