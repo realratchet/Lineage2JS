@@ -28,9 +28,9 @@ class SpriteEmitter extends BaseEmitter {
 
     // declare matters, initSettings runs from the BaseEmitter constructor so field
     // initializers here would clobber whatever it assigned
-    declare protected material: ParticleMaterialInitSettings_T;
     declare public spriteDirection: string;
-    declare public projectionNormal: Vector3;
+    declare public projectionNormal: THREE.Vector3;
+    declare protected material: ParticleMaterialInitSettings_T;
 
     protected initSettings(config: SpriteEmitterConfig_T): void {
         this.isSpriteEmitter = true;
@@ -68,7 +68,7 @@ export { SpriteEmitter };
 
 class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
     public spriteDirection: string = "camera";
-    public projectionNormal: Vector3 = new Vector3(0, 0, 1);
+    public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
 
     constructor(material: ParticleMaterial) {
         super(geometry, material);

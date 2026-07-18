@@ -39,7 +39,7 @@ const PTEP_Velocity = 0, PTEP_Distance = 1, PTEP_Offset = 2, PTEP_Actor = 3, PTE
 
 const randRange = (min: number, max: number) => min + Math.random() * (max - min);
 
-function randVec(range: BeamRangeVec_T | undefined, out: Vector3): Vector3 {
+function randVec(range: BeamRangeVec_T | undefined, out: THREE.Vector3): THREE.Vector3 {
     if (!range) return out.set(0, 0, 0);
 
     return out.set(
@@ -49,7 +49,7 @@ function randVec(range: BeamRangeVec_T | undefined, out: Vector3): Vector3 {
 }
 
 // LF/HFScaleFactors interpolation along the beam
-function scaleNoise(factors: BeamScale_T[], repeats: number, i: number, count: number, noiseRange: BeamRangeVec_T | undefined, out: Vector3): Vector3 {
+function scaleNoise(factors: BeamScale_T[], repeats: number, i: number, count: number, noiseRange: BeamRangeVec_T | undefined, out: THREE.Vector3): THREE.Vector3 {
     const relativeLength = (i / count * (repeats + 1)) % 1;
 
     for (let n = 0; n < factors.length; n++) {
@@ -70,6 +70,10 @@ function scaleNoise(factors: BeamScale_T[], repeats: number, i: number, count: n
 
     return out.set(0, 0, 0);
 }
+
+const tmpBeamDirection = new Vector3();
+const tmpBeamEndPoint = new Vector3();
+const tmpBeamNoise = new Vector3();
 
 class BeamEmitter extends BaseEmitter {
     declare protected material: ParticleMaterialInitSettings_T;
@@ -136,8 +140,6 @@ class BeamEmitter extends BaseEmitter {
         const beam = this.beam;
         const sim = this.particles[index];
         const location = sim.position;
-        const direction = new Vector3();
-        const endPoint = new Vector3();
         let setEndPoint = false;
 
         // pick a weighted endpoint entry
@@ -160,24 +162,24 @@ class BeamEmitter extends BaseEmitter {
 
         switch (beam.determineEndPointBy) {
             case PTEP_Velocity:
-                direction.copy(sim.velocity).multiplyScalar(sim.maxLifetime);
+                tmpBeamDirection.copy(sim.velocity).multiplyScalar(sim.maxLifetime);
                 break;
             case PTEP_Distance:
                 sim.velocity.normalize();
-                direction.copy(sim.velocity).multiplyScalar(randRange(beam.distanceRange[0], beam.distanceRange[1]));
+                tmpBeamDirection.copy(sim.velocity).multiplyScalar(randRange(beam.distanceRange[0], beam.distanceRange[1]));
                 break;
             case PTEP_Offset:
             case PTEP_TraceOffset: // no collision here, behaves like PTEP_Offset
                 if (epIndex !== -1) {
-                    randVec(beam.endPoints[epIndex].offset, direction);
-                    endPoint.copy(direction).add(location);
+                    randVec(beam.endPoints[epIndex].offset, tmpBeamDirection);
+                    tmpBeamEndPoint.copy(tmpBeamDirection).add(location);
                 }
                 setEndPoint = true;
                 break;
             case PTEP_OffsetAsAbsolute:
                 if (epIndex !== -1) {
-                    randVec(beam.endPoints[epIndex].offset, endPoint);
-                    direction.copy(endPoint).sub(location);
+                    randVec(beam.endPoints[epIndex].offset, tmpBeamEndPoint);
+                    tmpBeamDirection.copy(tmpBeamEndPoint).sub(location);
                 }
                 setEndPoint = true;
                 break;
@@ -190,19 +192,18 @@ class BeamEmitter extends BaseEmitter {
 
         // low frequency path
         const lf = beam.lowFrequencyPoints, hf = beam.highFrequencyPoints;
-        const lfPoints: Vector3[] = [location.clone()];
-        const noise = new Vector3();
+        const lfPoints: THREE.Vector3[] = [location.clone()];
 
         for (let i = 1; i < lf; i++) {
             if (beam.useLowFrequencyScale)
-                scaleNoise(beam.lfScaleFactors, beam.lfScaleRepeats, i, lf, beam.highFrequencyNoiseRange, noise);
+                scaleNoise(beam.lfScaleFactors, beam.lfScaleRepeats, i, lf, beam.highFrequencyNoiseRange, tmpBeamNoise);
             else
-                randVec(beam.lowFrequencyNoiseRange, noise);
+                randVec(beam.lowFrequencyNoiseRange, tmpBeamNoise);
 
-            lfPoints.push(location.clone().addScaledVector(direction, i / (lf - 1)).add(noise));
+            lfPoints.push(location.clone().addScaledVector(tmpBeamDirection, i / (lf - 1)).add(tmpBeamNoise));
         }
 
-        if (setEndPoint) lfPoints[lf - 1].copy(endPoint);
+        if (setEndPoint) lfPoints[lf - 1].copy(tmpBeamEndPoint);
 
         // high frequency points modulated on top of the low frequency path
         const hfPoints: Float32Array = (particle as any).beamPoints ?? new Float32Array(hf * 3);
@@ -215,16 +216,16 @@ class BeamEmitter extends BaseEmitter {
 
         for (let i = 1; i < hf; i++) {
             if (beam.useHighFrequencyScale)
-                scaleNoise(beam.hfScaleFactors, beam.hfScaleRepeats, i, hf, beam.highFrequencyNoiseRange, noise);
+                scaleNoise(beam.hfScaleFactors, beam.hfScaleRepeats, i, hf, beam.highFrequencyNoiseRange, tmpBeamNoise);
             else
-                randVec(beam.highFrequencyNoiseRange, noise);
+                randVec(beam.highFrequencyNoiseRange, tmpBeamNoise);
 
             const tl = th * (lf - 1);
             const a = lfPoints[lfIndex], b = lfPoints[Math.min(lfIndex + 1, lf - 1)];
 
-            hfPoints[i * 3 + 0] = (1 - tl) * a.x + tl * b.x + noise.x;
-            hfPoints[i * 3 + 1] = (1 - tl) * a.y + tl * b.y + noise.y;
-            hfPoints[i * 3 + 2] = (1 - tl) * a.z + tl * b.z + noise.z;
+            hfPoints[i * 3 + 0] = (1 - tl) * a.x + tl * b.x + tmpBeamNoise.x;
+            hfPoints[i * 3 + 1] = (1 - tl) * a.y + tl * b.y + tmpBeamNoise.y;
+            hfPoints[i * 3 + 2] = (1 - tl) * a.z + tl * b.z + tmpBeamNoise.z;
             hfT[i] = i * rhf;
 
             th += rhf;
@@ -232,9 +233,9 @@ class BeamEmitter extends BaseEmitter {
         }
 
         if (setEndPoint) {
-            hfPoints[(hf - 1) * 3 + 0] = endPoint.x;
-            hfPoints[(hf - 1) * 3 + 1] = endPoint.y;
-            hfPoints[(hf - 1) * 3 + 2] = endPoint.z;
+            hfPoints[(hf - 1) * 3 + 0] = tmpBeamEndPoint.x;
+            hfPoints[(hf - 1) * 3 + 1] = tmpBeamEndPoint.y;
+            hfPoints[(hf - 1) * 3 + 2] = tmpBeamEndPoint.z;
         }
 
         (particle as any).beamPoints = hfPoints;

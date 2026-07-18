@@ -1,4 +1,5 @@
-import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, Vector3, Vector4, ZeroFactor } from "three";
+import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ZeroFactor } from "three";
+import * as THREE from "three";
 import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
 
 // shared per-vertex quad data - only instance attributes differ per emitter
@@ -6,12 +7,12 @@ const baseGeometry = new PlaneGeometry(2, 2);
 
 class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticleMaterial> {
     public readonly isWorldBatchCandidate: boolean;
-    private readonly positionAttr: InstancedBufferAttribute;
-    private readonly scaleAttr: InstancedBufferAttribute;
-    private readonly spinAttr: InstancedBufferAttribute;
-    private readonly colorAttr: InstancedBufferAttribute;
-    private readonly uvAttr: InstancedBufferAttribute;
-    private renderCount = 0;
+    protected readonly positionAttr: InstancedBufferAttribute;
+    protected readonly scaleAttr: InstancedBufferAttribute;
+    protected readonly spinAttr: InstancedBufferAttribute;
+    protected readonly colorAttr: InstancedBufferAttribute;
+    protected readonly uvAttr: InstancedBufferAttribute;
+    protected renderCount = 0;
 
     constructor(material: InstancedParticleMaterial, capacity: number) {
         const geometry = new InstancedBufferGeometry();
@@ -51,7 +52,7 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
             && material.blendDstAlpha === OneFactor;
     }
 
-    public setInstance(index: number, position: Vector3, scaleX: number, scaleY: number, spin: number, color: Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number) {
+    public setInstance(index: number, position: THREE.Vector3, scaleX: number, scaleY: number, spin: number, color: THREE.Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number) {
         this.positionAttr.setXYZ(index, position.x, position.y, position.z);
         this.scaleAttr.setXY(index, scaleX, scaleY);
         this.spinAttr.setX(index, spin);
@@ -77,7 +78,7 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
         this.markUpdated(this.uvAttr, count * 4);
     }
 
-    private markUpdated(attribute: InstancedBufferAttribute, count: number) {
+    protected markUpdated(attribute: InstancedBufferAttribute, count: number) {
         attribute.updateRange.offset = 0;
         attribute.updateRange.count = count;
         attribute.needsUpdate = true;
