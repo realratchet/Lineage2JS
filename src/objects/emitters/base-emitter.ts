@@ -19,6 +19,7 @@ const tmpWorldRotation = new Matrix4();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
 const tmpBoxExpand = new Vector3();
+const tmpVelocityLossRange: Range3_T = { min: new Vector3(), max: new Vector3() };
 
 // [offsetX, offsetY, scaleX, scaleY] scratch, reused every particle every frame
 const tmpSubdivUV: [number, number, number, number] = [0, 0, 1, 1];
@@ -79,8 +80,8 @@ abstract class BaseEmitter extends Object3D {
     public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
 
     protected fadingSettings: FadeSettings_T;
-    protected generalSettings: { colorMultiplierRange: Range3_T, opacity: number, maxParticles: number; acceleration: Vector3; lifetime: Range_T; particlesPerSecond: number };
-    protected initialSettings: { particlesPerSecond: number, position: { min: Vector3; max: Vector3; }, offset: Vector3, scale: { min: Vector3; max: Vector3; }; velocity: { min: Vector3; max: Vector3; }; angularVelocity: { min: Vector3; max: Vector3; }; };
+    protected generalSettings: { colorMultiplierRange: Range3_T, opacity: number, maxParticles: number; acceleration: THREE.Vector3; lifetime: Range_T; particlesPerSecond: number };
+    protected initialSettings: { particlesPerSecond: number, position: { min: THREE.Vector3; max: THREE.Vector3; }, offset: THREE.Vector3, scale: { min: THREE.Vector3; max: THREE.Vector3; }; velocity: { min: THREE.Vector3; max: THREE.Vector3; }; angularVelocity: { min: THREE.Vector3; max: THREE.Vector3; }; };
     protected changesOverLifetimeSettings: ChangesOverTime_T;
 
     protected particlePool: Array<Particle>;
@@ -112,8 +113,6 @@ abstract class BaseEmitter extends Object3D {
     protected velocityLossRange: Range3_T;
     protected rotationSource: RotationSource_T;
 
-    protected rvlMin: THREE.Vector3;
-    protected rvlMax: THREE.Vector3;
     protected rotationOffset = new Quaternion();
     protected rotationNormal: THREE.Vector3;
 
@@ -217,7 +216,7 @@ abstract class BaseEmitter extends Object3D {
     protected scaleSizeXByVelocity: boolean;
     protected scaleSizeYByVelocity: boolean;
     protected scaleSizeZByVelocity: boolean;
-    protected scaleSizeByVelocityMultiplier: Vector3;
+    protected scaleSizeByVelocityMultiplier: THREE.Vector3;
     protected determineVelocityByLocationDifference: boolean;
     protected isUsingRevolutionScale: boolean;
     protected revolutionScaleRepeats: number;
@@ -848,32 +847,26 @@ abstract class BaseEmitter extends Object3D {
             this.realVelocityLossRange = this.velocityLossRange;
         } else {
             __break__();
-            const rvlMin = new Vector3(this.velocityLossRange.min.x, this.velocityLossRange.min.y, this.velocityLossRange.min.z);
-            const rvlMax = new Vector3(this.velocityLossRange.max.x, this.velocityLossRange.max.y, this.velocityLossRange.max.z);
+            tmpVelocityLossRange.min.copy(this.velocityLossRange.min);
+            tmpVelocityLossRange.max.copy(this.velocityLossRange.max);
 
             // switch (this.rotationSource) {
             //     case "actor":
-            //         this.rvlMin = rvlMin.TransformVectorBy(GMath.UnitCoords * owner.Rotation * this.rotationOffset);
-            //         this.rvlMax = rvlMax.TransformVectorBy(GMath.UnitCoords * owner.Rotation * this.rotationOffset);
+            //         tmpVelocityLossRange.min.copy(tmpVelocityLossRange.min.TransformVectorBy(GMath.UnitCoords * owner.Rotation * this.rotationOffset));
+            //         tmpVelocityLossRange.max.copy(tmpVelocityLossRange.max.TransformVectorBy(GMath.UnitCoords * owner.Rotation * this.rotationOffset));
             //         break;
             //     case "offset":
-            //         this.rvlMin = rvlMin.TransformVectorBy(GMath.UnitCoords * this.rotationOffset);
-            //         this.rvlMax = rvlMax.TransformVectorBy(GMath.UnitCoords * this.rotationOffset);
+            //         tmpVelocityLossRange.min.copy(tmpVelocityLossRange.min.TransformVectorBy(GMath.UnitCoords * this.rotationOffset));
+            //         tmpVelocityLossRange.max.copy(tmpVelocityLossRange.max.TransformVectorBy(GMath.UnitCoords * this.rotationOffset));
             //         break;
             //     case "normal":
-            //         this.rvlMin = rvlMin.TransformVectorBy(GMath.UnitCoords * this.rotationNormal.Rotation());
-            //         this.rvlMax = rvlMax.TransformVectorBy(GMath.UnitCoords * this.rotationNormal.Rotation());
+            //         tmpVelocityLossRange.min.copy(tmpVelocityLossRange.min.TransformVectorBy(GMath.UnitCoords * this.rotationNormal.Rotation()));
+            //         tmpVelocityLossRange.max.copy(tmpVelocityLossRange.max.TransformVectorBy(GMath.UnitCoords * this.rotationNormal.Rotation()));
             //         break;
             // }
 
-            this.realVelocityLossRange = { min: new Vector3(), max: new Vector3() }
-            this.realVelocityLossRange.min.x = rvlMin.x;
-            this.realVelocityLossRange.min.y = rvlMin.y;
-            this.realVelocityLossRange.min.z = rvlMin.z;
-
-            this.realVelocityLossRange.max.x = rvlMax.x;
-            this.realVelocityLossRange.max.y = rvlMax.y;
-            this.realVelocityLossRange.max.z = rvlMax.z;
+            this.realVelocityLossRange.min.copy(tmpVelocityLossRange.min);
+            this.realVelocityLossRange.max.copy(tmpVelocityLossRange.max);
         }
 
         // Skeletal mesh stuff.
@@ -1562,10 +1555,10 @@ class Particle extends Object3D {
     protected lastUpdate: number;
 
     protected _velocity = new Vector3();
-    public get velocity(): Readonly<Vector3> { return this._velocity; }
+    public get velocity(): Readonly<THREE.Vector3> { return this._velocity; }
 
     protected _oldLocation = new Vector3();
-    public get oldLocation(): Readonly<Vector3> { return this._oldLocation; }
+    public get oldLocation(): Readonly<THREE.Vector3> { return this._oldLocation; }
 
     protected acceleration = new Vector3();
     protected changesOverLifetime: ChangesOverTime_T;
@@ -1758,7 +1751,7 @@ function buildChangeRanges(ranges: { values: [number, number][], repeats: number
 }
 
 type Range_T = { min: number; max: number; };
-type Fade_T = { time: number; color: Vector4; };
+type Fade_T = { time: number; color: THREE.Vector4; };
 type FadeSettings_T = { fadeIn: Fade_T; fadeOut: Fade_T; };
 type Range3_T = { min: THREE.Vector3, max: THREE.Vector3 };
 type ChangesOverTime_T = { scale?: { times: number[], values: number[] }; };
