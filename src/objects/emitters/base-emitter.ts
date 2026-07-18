@@ -18,6 +18,7 @@ const tmpWorldToLocal = new Matrix4();
 const tmpWorldRotation = new Matrix4();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
+const tmpBoxExpand = new Vector3();
 
 // [offsetX, offsetY, scaleX, scaleY] scratch, reused every particle every frame
 const tmpSubdivUV: [number, number, number, number] = [0, 0, 1, 1];
@@ -1284,8 +1285,9 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            // Bounding box creation.
-            this.boundingBox.expandByPoint(Particle.position);
+            const particleExtent = Math.max(Particle.scale.x, Particle.scale.y, Particle.scale.z);
+            this.boundingBox.expandByPoint(tmpBoxExpand.copy(Particle.position).addScalar(particleExtent));
+            this.boundingBox.expandByPoint(tmpBoxExpand.copy(Particle.position).addScalar(-particleExtent));
 
             // Clamping velocity.
             if (this.maxAbsVelocity.x)
