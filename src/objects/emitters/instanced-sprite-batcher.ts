@@ -152,7 +152,7 @@ class SpriteParticleBatch {
             const scaleFactor = emitter.scale.x;
             for (let i = 0; i < particleLimit; i++) {
                 const settings = emitter.particles[i];
-                if (!(settings.Flags & 1)) continue;
+                if (!(settings.flags & 1)) continue;
 
                 const scaleX = settings.scale.x * scaleFactor;
                 const scaleY = settings.scale.y * scaleFactor;
@@ -161,8 +161,8 @@ class SpriteParticleBatch {
                 anchor.copy(settings.position).applyMatrix4(mesh.matrixWorld);
 
                 let angle = 0;
-                if (emitter.isSpinning || emitter.SpinParticles)
-                    angle = (settings.StartSpin.z + settings.Time * settings.SpinsPerSecond.z) * (Math.PI * 2 / 65536);
+                if (emitter.isSpinning || emitter.spinParticles)
+                    angle = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536);
                 if (this.fixedNormal) {
                     const sin = Math.sin(angle);
                     const cos = Math.cos(angle);
@@ -190,10 +190,10 @@ class SpriteParticleBatch {
                     scales[p2 + 1] = scaleY;
                     spins[count] = angle;
                 }
-                colors[p4] = settings.Color.x;
-                colors[p4 + 1] = settings.Color.y;
-                colors[p4 + 2] = settings.Color.z;
-                colors[p4 + 3] = settings.Color.w;
+                colors[p4] = settings.color.x;
+                colors[p4 + 1] = settings.color.y;
+                colors[p4 + 2] = settings.color.z;
+                colors[p4 + 3] = settings.color.w;
                 uvs[p4] = subdivUV[0];
                 uvs[p4 + 1] = subdivUV[1];
                 uvs[p4 + 2] = subdivUV[2];

@@ -75,10 +75,7 @@ type SectorTextureWarmup_T = { sector: SectorObject, textureQueue: THREE.Texture
 
 const frozenUpdateMatrixWorld = function () { };
 
-// three's render() always walks scene.updateMatrixWorld() regardless of matrixAutoUpdate,
-// so only overriding updateMatrixWorld to a no-op skips the descent - a subtree only gets
-// that override once every node under it is confirmed static; an emitter node keeps the
-// walk alive so its particlePool is still reached, blocking every ancestor above it too
+// overrides updateMatrixWorld to a no-op, but only once every child under a node is static too
 function freezeStaticSubtree(node: THREE.Object3D): boolean {
     if ((node as any).isMovableObject) {
         (node as MovableObject).freezeMover();
@@ -250,10 +247,7 @@ class RenderManager {
             alpha: true,
         });
 
-        // gl.getProgramInfoLog (behind this flag) stalls the CPU waiting on the driver -
-        // profiled at ~90ms of a sector's first-render cost. processShaderDiagnostics
-        // polls KHR_parallel_shader_compile instead (errors go unreported without that extension)
-        this.renderer.debug.checkShaderErrors = false;
+        this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
         // Initialize Native Bloom System
         this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
@@ -588,17 +582,16 @@ class RenderManager {
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
 
-                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) {
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
 
-                // Overlay fogs if in other modes
                 if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
@@ -626,17 +619,16 @@ class RenderManager {
                     currentSectorMap.set(currentSector.index.x, sectorXMap);
                 }
 
-                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) {
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
 
-                // Overlay fogs if in other modes
                 if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
@@ -652,7 +644,7 @@ class RenderManager {
 
             // If we're currently in Leaves mode and visualizer is enabled, refresh the visualization immediately.
             const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.getMode() === 3 && this.visualizer.isEnabled()) {
+            if (currentSector && this.visualizer.getMode() === VisualizerMode.Leaves && this.visualizer.isEnabled()) {
                 const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
                 const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
@@ -1800,13 +1792,13 @@ class RenderManager {
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
 
-                if (this.visualizer.getMode() === VisualizerMode.Portals) { // Portals
+                if (this.visualizer.getMode() === VisualizerMode.Portals) {
                     this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) { // Zones
+                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
                     this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) { // Leaves
+                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
                     this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) { // Fogs
+                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
                     this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
                 }
             }
@@ -2003,19 +1995,17 @@ class RenderManager {
                 currentSectorMap.set(currentSector.index.x, sectorXMap);
             }
 
-            if (this.visualizer.getMode() === 1) { // Portals
+            if (this.visualizer.getMode() === VisualizerMode.Portals) {
                 this.visualizer.updatePortals(currentSectorMap, cameraPos);
-            } else if (this.visualizer.getMode() === 2) { // Zones
+            } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
                 this.visualizer.updateZones(currentSectorMap, cameraPos);
-            } else if (this.visualizer.getMode() === 3) { // Leaves
+            } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
                 this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
             }
         }
     }
 
-    // no renderer.compile() call here on purpose - a batch's .material array holds every
-    // merged actor (127-688 entries measured), and compile() force-compiles all of it
-    // regardless of visibility; profiled at 300-600ms/frame, worse than the plain reveal below
+    // no renderer.compile() here - force-compiling a batch's full .material array profiled worse (300-600ms) than the plain reveal below
     protected processSectorWarmups() {
         if (this.pendingMeshReveals.length > 0) {
             const sector = this.pendingMeshReveals.shift();
@@ -2069,8 +2059,7 @@ class RenderManager {
         }
     }
 
-    // addSector's own staticMeshGroup check can't gate this - AssetManager calls addSector
-    // before staticMeshGroup exists, so call this right after instead
+    // called before staticMeshGroup exists, so addSector's own gating can't cover this
     public gateParticleWarmup(sector: SectorObject, allowed: boolean) {
         setEmitterWarmupGate(sector, allowed);
     }
@@ -2251,8 +2240,7 @@ function disposeSectorResources(sector: SectorObject) {
     }
 }
 
-// MeshStaticMaterial wraps procedural map slots several levels deep (uniforms.shDiffuse.value.map.texture),
-// so uniforms need a real walk rather than disposeSectorResources' one-level uniform.value check
+// procedural maps nest several levels deep (uniforms.shDiffuse.value.map.texture), needs a real walk
 function collectTexturesDeep(value: any, textures: Set<THREE.Texture>, seen: WeakSet<object>): void {
     if (!value || typeof value !== "object") return;
     if (value.isTexture) { textures.add(value); return; }
@@ -2295,8 +2283,7 @@ function setEmitterWarmupGate(sector: SectorObject, allowed: boolean) {
     });
 }
 
-// batchTerrainSectors removes individual Terrain sectors from the scene graph once merged,
-// so traverse alone can't reach them - isTerrainBatch's .sectors needs gating explicitly too
+// merged Terrain sectors aren't in the scene graph anymore, so isTerrainBatch's .sectors needs gating directly
 function setLightingGate(root: THREE.Object3D, allowed: boolean) {
     root.traverse(child => {
         if ("computeLighting" in child) (child as any).lightingGate = allowed;

@@ -9,7 +9,7 @@ import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
 
 // ADrop struct, bytes A-D are type-specific (speed/phase/age/size)
 abstract class UADrop extends UObject {
-    declare public type: number;
+    declare public type: EDropType_T;
     declare public depth: number;
     declare public x: number;
     declare public y: number;
@@ -76,7 +76,7 @@ abstract class UWetTexture extends UTexture {
             .slice(0, this.numDrops ?? 0)
             .filter(d => !!d)
             .map(d => ({
-                type: d.type?.valueOf() ?? 0,
+                type: DROP_TYPE_NAMES[(d.type?.valueOf() as EDropType_T) ?? EDropType_T.DROP_FixedDepth],
                 depth: d.depth ?? 0,
                 x: d.x ?? 0,
                 y: d.y ?? 0,
@@ -106,5 +106,53 @@ abstract class UWetTexture extends UTexture {
     }
 }
 
+// ADrop.Type (UnFractal.h)
+enum EDropType_T {
+    DROP_FixedDepth,
+    DROP_PhaseSpot,
+    DROP_ShallowSpot,
+    DROP_HalfAmpl,
+    DROP_RandomMover,
+    DROP_FixedRandomSpot,
+    DROP_WhirlyThing,
+    DROP_BigWhirly,
+    DROP_HorizontalLine,
+    DROP_VerticalLine,
+    DROP_DiagonalLine1,
+    DROP_DiagonalLine2,
+    DROP_HorizontalOsc,
+    DROP_VerticalOsc,
+    DROP_DiagonalOsc1,
+    DROP_DiagonalOsc2,
+    DROP_RainDrops,
+    DROP_AreaClamp,
+    DROP_LeakyTap,
+    DROP_DrippyTap
+}
+
+// mapped to its camelCase name at the decode boundary so wet-water-texture.ts doesn't need this enum
+const DROP_TYPE_NAMES: Record<EDropType_T, string> = {
+    [EDropType_T.DROP_FixedDepth]: "fixedDepth",
+    [EDropType_T.DROP_PhaseSpot]: "phaseSpot",
+    [EDropType_T.DROP_ShallowSpot]: "shallowSpot",
+    [EDropType_T.DROP_HalfAmpl]: "halfAmpl",
+    [EDropType_T.DROP_RandomMover]: "randomMover",
+    [EDropType_T.DROP_FixedRandomSpot]: "fixedRandomSpot",
+    [EDropType_T.DROP_WhirlyThing]: "whirlyThing",
+    [EDropType_T.DROP_BigWhirly]: "bigWhirly",
+    [EDropType_T.DROP_HorizontalLine]: "horizontalLine",
+    [EDropType_T.DROP_VerticalLine]: "verticalLine",
+    [EDropType_T.DROP_DiagonalLine1]: "diagonalLine1",
+    [EDropType_T.DROP_DiagonalLine2]: "diagonalLine2",
+    [EDropType_T.DROP_HorizontalOsc]: "horizontalOsc",
+    [EDropType_T.DROP_VerticalOsc]: "verticalOsc",
+    [EDropType_T.DROP_DiagonalOsc1]: "diagonalOsc1",
+    [EDropType_T.DROP_DiagonalOsc2]: "diagonalOsc2",
+    [EDropType_T.DROP_RainDrops]: "rainDrops",
+    [EDropType_T.DROP_AreaClamp]: "areaClamp",
+    [EDropType_T.DROP_LeakyTap]: "leakyTap",
+    [EDropType_T.DROP_DrippyTap]: "drippyTap"
+};
+
 export default UWetTexture;
-export { UWetTexture, UADrop };
+export { UWetTexture, UADrop, EDropType_T };

@@ -160,11 +160,11 @@ class BeamEmitter extends BaseEmitter {
 
         switch (beam.determineEndPointBy) {
             case PTEP_Velocity:
-                direction.copy(sim.Velocity).multiplyScalar(sim.MaxLifetime);
+                direction.copy(sim.velocity).multiplyScalar(sim.maxLifetime);
                 break;
             case PTEP_Distance:
-                sim.Velocity.normalize();
-                direction.copy(sim.Velocity).multiplyScalar(randRange(beam.distanceRange[0], beam.distanceRange[1]));
+                sim.velocity.normalize();
+                direction.copy(sim.velocity).multiplyScalar(randRange(beam.distanceRange[0], beam.distanceRange[1]));
                 break;
             case PTEP_Offset:
             case PTEP_TraceOffset: // no collision here, behaves like PTEP_Offset

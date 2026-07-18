@@ -4,13 +4,13 @@ import { ColorByte } from "../utils/color-byte";
 type SectorObject = import("../objects/zone-object").SectorObject;
 
 export enum VisualizerMode {
-    None = 0,
-    Portals = 1,
-    Zones = 2,
-    Leaves = 3,
-    Fogs = 4,
-    Audio = 5,
-    Emitters = 6,
+    None = "none",
+    Portals = "portals",
+    Zones = "zones",
+    Leaves = "leaves",
+    Fogs = "fogs",
+    Audio = "audio",
+    Emitters = "emitters",
 }
 
 export interface EmitterDebugInfo {
@@ -24,26 +24,14 @@ export interface EmitterDebugInfo {
     isDisabled: boolean;
     isVisible: boolean;
     isManuallyHidden: boolean;
-    // the wrapping "Emitter" actor (un-emitter.ts) that this sub-emitter (SpriteEmitter/
-    // MeshEmitter/BeamEmitter, un-particle-emitter.ts) lives under - one actor can carry
-    // several sub-emitters, and the HUD groups by this rather than listing them flat
-    parentUuid: string;
+    parentUuid: string; // wrapping "Emitter" actor - the HUD groups sub-emitters by this
     parentName: string;
 }
 
 export enum LeafVisualizerDetail {
-    /**
-     * Automatically switches to a decluttered view when there are lots of leaves visible.
-     */
-    Auto = 0,
-    /**
-     * Draw one box per visible leaf (can get very noisy).
-     */
-    PerLeaf = 1,
-    /**
-     * Aggregate/union visible leaf bounds per zone (much cleaner).
-     */
-    PerZone = 2,
+    Auto = "auto", // decluttered view once leafAutoAggregateThreshold is exceeded
+    PerLeaf = "perLeaf",
+    PerZone = "perZone",
 }
 
 export interface FogSourceColors {
@@ -81,9 +69,7 @@ class Visualizer {
     private readonly hudColors: Map<string, { swatch: HTMLElement, rgbDisplay: HTMLElement, alpha: HTMLElement }> = new Map();
     private readonly audioLines: Map<string, HTMLElement> = new Map();
     private readonly emitterLines: Map<string, HTMLElement> = new Map();
-    // one wrapper per parent "Emitter" actor - `body` is where that actor's own
-    // sub-emitter lines (from emitterLines) get appended, `header` shows its name/count
-    private readonly emitterGroups: Map<string, { wrapper: HTMLElement, header: HTMLElement, body: HTMLElement }> = new Map();
+    private readonly emitterGroups: Map<string, { wrapper: HTMLElement, header: HTMLElement, body: HTMLElement }> = new Map(); // one wrapper per parent "Emitter" actor
     private readonly emitterLabels: Map<string, Sprite> = new Map();
     private readonly emitterCheckboxes: Map<string, HTMLInputElement> = new Map();
     private emitterMasterCheckbox: HTMLInputElement | null = null;
@@ -114,9 +100,7 @@ class Visualizer {
     constructor(scene: Object3D) {
         this.group = new Group();
         this.group.name = "Visualizers";
-        // Render on top - set renderOrder high
         this.group.renderOrder = 999;
-        // Don't participate in culling
         scene.add(this.group);
 
         this.fogGroup = new Group();
@@ -217,17 +201,14 @@ class Visualizer {
             return panel;
         };
 
-        // Panel 1: Fog Source Colors
         const fogPanel = createPanel("FOG SOURCE COLORS");
         ["Fog", "Sky", "Cloud", "Haze"].forEach(name => this.createHudRow(fogPanel, name, "fog"));
         hud.appendChild(fogPanel);
 
-        // Panel 2: Global Environment Colors
         const globalPanel = createPanel("GLOBAL ENVIRONMENT");
         ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(name => this.createHudRow(globalPanel, name, "global"));
         hud.appendChild(globalPanel);
 
-        // Panel 3: Zone Fog Colors
         const zonePanel = createPanel("ZONE FOG COLORS");
         this.createHudRow(zonePanel, "Fog Color", "zone");
         this.createHudRow(zonePanel, "Fog Start", "zone");
@@ -320,10 +301,7 @@ class Visualizer {
             boxShadow: "0 0 10px rgba(0,0,0,0.5)",
             maxHeight: "80vh",
             overflowY: "auto",
-            // the hud wrapper is pointer-events:none so empty space around the panel
-            // doesn't eat clicks meant for camera control - the panel itself needs
-            // pointer events back or its own scrollbar is inert
-            pointerEvents: "auto"
+            pointerEvents: "auto" // hud wrapper is pointer-events:none so it doesn't eat camera-control clicks; the panel needs it back for its scrollbar
         });
 
         const title = document.createElement("div");
@@ -354,11 +332,7 @@ class Visualizer {
 
         this.emitterListElement = document.createElement("div");
         Object.assign(this.emitterListElement.style, {
-            // CSS multi-column instead of grid-auto-flow: entries are grouped by
-            // parent actor (see updateEmitters) and a grid's column-then-row fill
-            // order would happily slice a group in half at the column boundary;
-            // multi-column text flow + break-inside:avoid on each group keeps a
-            // parent and all its sub-emitters together in one column.
+            // multi-column, not grid-auto-flow: a grid's column-then-row fill would slice a parent's group in half
             columnCount: "3",
             columnGap: "20px"
         });
@@ -378,8 +352,7 @@ class Visualizer {
         canvas.width = width;
         canvas.height = height;
 
-        // measureText above ran against a freshly-resized (and thus cleared) canvas
-        // context, so font/fill state needs reapplying after the resize
+        // canvas resize above cleared the context, font/fill state needs reapplying
         ctx.font = `${fontSize}px monospace`;
         ctx.textBaseline = "middle";
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
@@ -395,28 +368,18 @@ class Visualizer {
             transparent: true
         });
         const sprite = new Sprite(material);
-        // world-unit size independent of camera distance would need per-frame
-        // rescaling; a fixed world size is good enough for a debug overlay and
-        // keeps this update-free between label content changes
-        const scale = 40;
+        const scale = 40; // fixed world size - camera-distance independence would need per-frame rescaling
         sprite.scale.set(scale * (width / height), scale, 1);
         sprite.renderOrder = 1000;
         return sprite;
     }
 
-    /**
-     * Updates both the Emitters HUD list and the floating in-world labels.
-     * `emitters` should already be sorted nearest-first and pre-filtered to a
-     * reasonable count - this redraws a canvas texture per label, so it isn't meant
-     * to run against thousands of entries per frame.
-     */
+    // emitters should already be sorted nearest-first and pre-filtered - this redraws a canvas texture per label
     public updateEmitters(emitters: EmitterDebugInfo[]): void {
         if (!this.enabled || this.mode !== VisualizerMode.Emitters) return;
 
         if (this.emitterListElement) {
-            // one "Emitter" actor can carry several sub-emitters (SpriteEmitter/
-            // MeshEmitter/BeamEmitter) - group the flat feed back by parent so they
-            // read as one unit instead of being scattered across the sort order
+            // one "Emitter" actor can carry several sub-emitters - group the flat feed back by parent
             const groups = new Map<string, EmitterDebugInfo[]>();
             for (const e of emitters) {
                 let members = groups.get(e.parentUuid);
@@ -447,10 +410,8 @@ class Visualizer {
                 }
             }
 
-            // reorders group/line elements to match sort order, but only touches the DOM when
-            // position actually changed - an unconditional move (even to the same spot) can
-            // detach/reattach the node between a checkbox's mousedown and mouseup, which silently
-            // swallows the click (the browser only synthesizes "click" if both land on the same node)
+            // only moves a group/line in the DOM when its position actually changed - an unconditional
+            // move can detach/reattach a node between a checkbox's mousedown and mouseup, swallowing the click
             let prevGroupWrapper: HTMLElement | null = null;
 
             for (const groupId of orderedGroupIds) {
@@ -560,10 +521,7 @@ class Visualizer {
         }
     }
 
-    // full name is "{ClassName}_{objectName}_{uuid}" (un-object-mixin.ts) - both the
-    // HUD list and world-space labels only want objectName (the middle segment),
-    // which is also exactly what loadEmitterList's `emitters` array expects, so it
-    // doubles as copy-pasteable output.
+    // full name is "{ClassName}_{objectName}_{uuid}" (un-object-mixin.ts), only objectName is wanted here
     private shortEmitterName(fullName: string): string {
         const parts = fullName.split("_");
         return parts.length >= 3 ? parts[1] : fullName;
@@ -665,7 +623,6 @@ class Visualizer {
             }
         };
 
-        // Update Fog Source
         if (activeFogColors) {
             updateEntry("fog", "Fog", activeFogColors.fog);
             updateEntry("fog", "Sky", activeFogColors.sky);
@@ -675,7 +632,6 @@ class Visualizer {
             ["Fog", "Sky", "Cloud", "Haze"].forEach(n => updateEntry("fog", n));
         }
 
-        // Update Global Environment
         if (globalEnvColors) {
             updateEntry("global", "Fog", globalEnvColors.fog);
             updateEntry("global", "Sky", globalEnvColors.sky);
@@ -688,7 +644,6 @@ class Visualizer {
             ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(n => updateEntry("global", n));
         }
 
-        // Update Zone Fog
         if (zoneFogData) {
             updateEntry("zone", "Fog Color", zoneFogData.color);
 
@@ -724,49 +679,32 @@ class Visualizer {
     public toggle(): void {
         this.enabled = !this.enabled;
         this.updateVisibility();
-        console.log(`Visualizer ${this.enabled ? "enabled" : "disabled"} (Mode: ${VisualizerMode[this.mode]})`);
+        console.log(`Visualizer ${this.enabled ? "enabled" : "disabled"} (Mode: ${this.mode})`);
     }
 
+    private static readonly VISUALIZATION_MODES = Object.values(VisualizerMode).filter(mode => mode !== VisualizerMode.None);
+
     public nextMode(): void {
-        // Only cycle through actual visualization modes (exclude None)
-        const visualizationModes: VisualizerMode[] = [];
-        for (const key in VisualizerMode) {
-            const modeValue = VisualizerMode[key as keyof typeof VisualizerMode];
-            if (typeof modeValue === 'number' && modeValue !== VisualizerMode.None) {
-                visualizationModes.push(modeValue);
-            }
-        }
+        const modes = Visualizer.VISUALIZATION_MODES;
 
-        if (visualizationModes.length === 0) {
-            return; // No visualization modes available
-        }
-
-        // If currently None or disabled, start with first visualization mode
         if (this.mode === VisualizerMode.None || !this.enabled) {
-            this.mode = visualizationModes[0];
+            this.mode = modes[0];
             this.enabled = true;
         } else {
-            // Cycle through visualization modes
-            const currentIndex = visualizationModes.indexOf(this.mode);
-            const nextIndex = (currentIndex + 1) % visualizationModes.length;
-            this.mode = visualizationModes[nextIndex];
+            const currentIndex = modes.indexOf(this.mode);
+            this.mode = modes[(currentIndex + 1) % modes.length];
         }
 
         this.updateVisualizations();
-        console.log(`Visualizer mode: ${VisualizerMode[this.mode]}`);
+        console.log(`Visualizer mode: ${this.mode}`);
     }
 
     public nextLeafDetail(): void {
-        // Only meaningful while Leaves mode is active, but harmless otherwise.
-        const details: LeafVisualizerDetail[] = [
-            LeafVisualizerDetail.Auto,
-            LeafVisualizerDetail.PerLeaf,
-            LeafVisualizerDetail.PerZone,
-        ];
+        const details = Object.values(LeafVisualizerDetail);
 
         const idx = details.indexOf(this.leafDetail);
         this.leafDetail = details[(idx + 1) % details.length];
-        console.log(`Leaf visualizer detail: ${LeafVisualizerDetail[this.leafDetail]}`);
+        console.log(`Leaf visualizer detail: ${this.leafDetail}`);
     }
 
     private updateVisibility(): void {
@@ -786,9 +724,7 @@ class Visualizer {
             this.emittersHudElement.style.display = isEmittersMode ? "flex" : "none";
         }
         if (!isEmittersMode) {
-            // labels are cheap to rebuild but not free (canvas + texture per entry) -
-            // drop them the instant the mode isn't active instead of leaving them
-            // parked offscreen
+            // canvas + texture per label isn't free - drop them instead of leaving them parked offscreen
             for (const sprite of this.emitterLabels.values()) {
                 this.emitterLabelGroup.remove(sprite);
                 sprite.material.map?.dispose();
@@ -804,27 +740,6 @@ class Visualizer {
     private updateVisualizations(): void {
         this.clearVisualizations();
         this.updateVisibility();
-
-        if (!this.enabled || this.mode === VisualizerMode.None) {
-            return;
-        }
-
-        switch (this.mode) {
-            case VisualizerMode.Portals:
-                // Portals will be added via updatePortals()
-                break;
-            case VisualizerMode.Zones:
-                // Zones will be added via updateZones()
-                break;
-            case VisualizerMode.Leaves:
-                // Leaves will be added via updateLeaves()
-                break;
-            case VisualizerMode.Fogs:
-                // Fogs will be added via updateFogs()
-                break;
-            case VisualizerMode.Audio:
-                break;
-        }
     }
 
     public updatePortals(sectors: Map<number, Map<number, SectorObject>>, cameraPosition?: Vector3): void {
@@ -835,9 +750,9 @@ class Visualizer {
         this.clearPortalVisualizations();
 
         const PF_Portal = 0x04000000;
-        const visiblePortalColor = new Color(0x00ff00); // Green for visible portals
-        const hiddenPortalColor = new Color(0x004400); // Dark green for hidden portals
-        const arrowColor = new Color(0xffff00); // Yellow for direction arrows
+        const visiblePortalColor = new Color(0x00ff00);
+        const hiddenPortalColor = new Color(0x004400);
+        const arrowColor = new Color(0xffff00);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -845,16 +760,14 @@ class Visualizer {
                     continue;
                 }
 
-                // Only show helpers for sectors where camera is inside
                 if (cameraPosition) {
                     const cameraLeaf = sector.findPositionLeaf(cameraPosition);
                     const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
                     if (!isCameraInSector) {
-                        continue; // Skip sectors where camera is outside
+                        continue;
                     }
                 }
 
-                // Get active zone mask for this sector if camera position is provided
                 let activeZoneMask: bigint | null = null;
                 if (cameraPosition) {
                     activeZoneMask = sector.getActiveZoneMask(cameraPosition);
@@ -865,10 +778,8 @@ class Visualizer {
                     const hasPortalFlag = node.surfFlags !== undefined && (node.surfFlags & PF_Portal) !== 0;
 
                     if (hasPortalFlag && node.zones[0] >= 0 && node.zones[1] >= 0 && node.zones[0] !== node.zones[1]) {
-                        // Determine if portal is visible from camera
                         let isVisible = true;
                         if (activeZoneMask !== null) {
-                            // Portal is visible if either of its zones is in the active zone mask
                             const zone0Mask = 1n << BigInt(node.zones[0]);
                             const zone1Mask = 1n << BigInt(node.zones[1]);
                             isVisible = !!(activeZoneMask & zone0Mask) || !!(activeZoneMask & zone1Mask);
@@ -876,31 +787,26 @@ class Visualizer {
 
                         const portalColor = isVisible ? visiblePortalColor : hiddenPortalColor;
 
-                        // Create AABB visualization from exclusive sphere bound
                         const sphere = node.exclusiveSphereBound;
                         const box = new Box3();
                         box.setFromCenterAndSize(sphere.center, new Vector3(sphere.radius * 2, sphere.radius * 2, sphere.radius * 2));
 
-                        // Create box helper
                         const boxHelper = new Box3Helper(box, portalColor);
                         const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
                         if (boxMaterial) {
                             (boxMaterial as any).linewidth = 2;
                             boxMaterial.transparent = true;
-                            boxMaterial.depthTest = false; // Always render on top
+                            boxMaterial.depthTest = false;
                             boxMaterial.depthWrite = false;
                         }
-                        boxHelper.renderOrder = 1000; // Render on top
+                        boxHelper.renderOrder = 1000;
                         this.portalVisualizations.push(boxHelper);
                         this.group.add(boxHelper);
 
-                        // Create direction arrow
-                        // Portal direction: from zone[0] (back) to zone[1] (front)
-                        // Arrow points in the direction of the plane normal
+                        // arrow points along the plane normal, from zone[0] (back) to zone[1] (front)
                         const planeNormal = new Vector3(node.plane.x, node.plane.y, node.plane.z).normalize();
                         const arrowLength = sphere.radius * 0.5;
                         const arrow = new ArrowHelper(planeNormal, sphere.center, arrowLength, arrowColor, arrowLength * 0.3, arrowLength * 0.2);
-                        // Update arrow materials to render on top
                         if (arrow.line) {
                             const lineMaterial = Array.isArray(arrow.line.material) ? arrow.line.material[0] : arrow.line.material;
                             if (lineMaterial) {
@@ -919,12 +825,11 @@ class Visualizer {
                             }
                             arrow.cone.renderOrder = 1000;
                         }
-                        arrow.renderOrder = 1000; // Render on top
+                        arrow.renderOrder = 1000;
                         this.portalVisualizations.push(arrow);
                         this.group.add(arrow);
 
-                        // Add zone labels as simple text representation (using a small box for now)
-                        // You could enhance this with actual text rendering later
+                        // TODO: real text labels instead of boxes
                         const zoneLabel = new Mesh(
                             new BoxGeometry(10, 10, 10),
                             new MeshBasicMaterial({
@@ -970,10 +875,10 @@ class Visualizer {
 
         this.clearZoneVisualizations();
 
-        const visibleZoneColor = new Color(0x00ff00); // Green for visible zones
-        const hiddenZoneColor = new Color(0x004400); // Dark green for hidden zones
-        const activeConnectivityColor = new Color(0x00ffff); // Cyan for connectivity from active zones
-        const inactiveConnectivityColor = new Color(0x444444); // Dark gray for connectivity from inactive zones
+        const visibleZoneColor = new Color(0x00ff00);
+        const hiddenZoneColor = new Color(0x004400);
+        const activeConnectivityColor = new Color(0x00ffff);
+        const inactiveConnectivityColor = new Color(0x444444);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -981,37 +886,31 @@ class Visualizer {
                     continue;
                 }
 
-                // Only show helpers for sectors where camera is inside
                 if (cameraPosition) {
                     const cameraLeaf = sector.findPositionLeaf(cameraPosition);
                     const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
                     if (!isCameraInSector) {
-                        continue; // Skip sectors where camera is outside
+                        continue;
                     }
                 }
 
-                // Get active zone mask for visibility determination
                 let activeZoneMask: bigint | null = null;
                 if (cameraPosition) {
                     activeZoneMask = sector.getActiveZoneMask(cameraPosition);
                 }
 
-                // Compute bounds for each zone by aggregating from nodes/leaves
                 const zoneBounds = new Map<number, Box3>();
                 const zoneCenters = new Map<number, Vector3>();
                 const zoneNodeCounts = new Map<number, number>();
 
-                // Aggregate bounds from leaves (more accurate for zone representation)
                 for (let leafIndex = 0; leafIndex < sector.bspLeaves.length; leafIndex++) {
                     const leaf = sector.bspLeaves[leafIndex];
                     if (leaf && leaf.zone >= 0 && leaf.zone < 64) {
-                        // Find nodes that reference this leaf to get bounds
                         for (let nodeIndex = 0; nodeIndex < sector.bspNodes.length; nodeIndex++) {
                             const node = sector.bspNodes[nodeIndex];
                             if (node.leaves[0] === leafIndex || node.leaves[1] === leafIndex) {
                                 let bounds: Box3 | null = null;
 
-                                // Try collision bounds first
                                 if (node.collision && node.collision.bounds) {
                                     const collisionBox = node.collision.bounds;
                                     if (collisionBox.min && collisionBox.max &&
@@ -1022,7 +921,6 @@ class Visualizer {
                                     }
                                 }
 
-                                // Fallback to sphere bounds
                                 if (!bounds) {
                                     const sphere = node.exclusiveSphereBound.radius > 0 ? node.exclusiveSphereBound : node.inclusiveSphereBound;
                                     if (sphere.radius > 0 && !isNaN(sphere.radius) && sphere.center) {
@@ -1041,24 +939,21 @@ class Visualizer {
                                     }
                                     zoneNodeCounts.set(leaf.zone, (zoneNodeCounts.get(leaf.zone) || 0) + 1);
                                 }
-                                break; // Found a node for this leaf, move to next leaf
+                                break;
                             }
                         }
                     }
                 }
 
-                // Calculate centers for each zone
                 for (const [zoneIndex, bounds] of zoneBounds) {
                     const center = new Vector3();
                     bounds.getCenter(center);
                     zoneCenters.set(zoneIndex, center);
                 }
 
-                // Visualize zones
                 for (const [zoneIndex, bounds] of zoneBounds) {
                     if (zoneIndex < 0 || zoneIndex >= 64) continue;
 
-                    // Determine if zone is visible
                     let isVisible = true;
                     if (activeZoneMask !== null) {
                         const zoneBit = 1n << BigInt(zoneIndex);
@@ -1067,7 +962,6 @@ class Visualizer {
 
                     const zoneColor = isVisible ? visibleZoneColor : hiddenZoneColor;
 
-                    // Create box helper for zone bounds
                     const boxHelper = new Box3Helper(bounds, zoneColor);
                     const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
                     if (boxMaterial) {
@@ -1081,7 +975,6 @@ class Visualizer {
                     this.zoneVisualizations.push(boxHelper);
                     this.group.add(boxHelper);
 
-                    // Add zone label
                     const center = zoneCenters.get(zoneIndex);
                     if (center) {
                         const zoneLabel = new Mesh(
@@ -1103,7 +996,6 @@ class Visualizer {
                     }
                 }
 
-                // Visualize connectivity between zones
                 for (let zoneIndex = 0; zoneIndex < 64; zoneIndex++) {
                     const zoneData = sector.bspZones[zoneIndex];
                     if (!zoneData || !zoneData.connectivity) continue;
@@ -1111,14 +1003,12 @@ class Visualizer {
                     const sourceCenter = zoneCenters.get(zoneIndex);
                     if (!sourceCenter) continue;
 
-                    // Check if source zone is active
                     let isSourceActive = false;
                     if (activeZoneMask !== null) {
                         const sourceZoneBit = 1n << BigInt(zoneIndex);
                         isSourceActive = !!(activeZoneMask & sourceZoneBit);
                     }
 
-                    // Draw lines to connected zones
                     for (let targetZoneIndex = 0; targetZoneIndex < 64; targetZoneIndex++) {
                         if (targetZoneIndex === zoneIndex) continue;
 
@@ -1127,11 +1017,9 @@ class Visualizer {
                             const targetCenter = zoneCenters.get(targetZoneIndex);
                             if (!targetCenter) continue;
 
-                            // Determine connectivity color based on whether source zone is active
                             const connectivityColor = isSourceActive ? activeConnectivityColor : inactiveConnectivityColor;
                             const connectivityOpacity = isSourceActive ? 0.8 : 0.3;
 
-                            // Create line geometry for connectivity
                             const geometry = new BufferGeometry().setFromPoints([sourceCenter, targetCenter]);
                             const material = new LineBasicMaterial({
                                 color: connectivityColor,
@@ -1142,7 +1030,7 @@ class Visualizer {
                                 linewidth: 1
                             });
                             const line = new Line(geometry, material);
-                            line.renderOrder = 999; // Slightly below zone boxes
+                            line.renderOrder = 999;
                             (line as any).sourceZone = zoneIndex;
                             (line as any).targetZone = targetZoneIndex;
                             this.zoneVisualizations.push(line);
@@ -1170,22 +1058,17 @@ class Visualizer {
                     material.dispose();
                 }
             }
-            // Box3Helper doesn't have dispose, just remove it
         });
         this.zoneVisualizations = [];
     }
 
-    /**
-     * Calculate the depth of each node in the BSP tree (distance from root).
-     * Returns a map from node index to depth.
-     */
+    // BFS distance from root (node 0)
     private calculateNodeDepths(bspNodes: any[]): Map<number, number> {
         const depths = new Map<number, number>();
         if (bspNodes.length === 0) {
             return depths;
         }
 
-        // BFS from root (node 0)
         const queue: { nodeIndex: number; depth: number }[] = [{ nodeIndex: 0, depth: 0 }];
         depths.set(0, 0);
 
@@ -1195,7 +1078,6 @@ class Visualizer {
 
             if (!node) continue;
 
-            // Process children
             const children = [node.front, node.back].filter(idx => idx >= 0);
             for (const childIndex of children) {
                 if (!depths.has(childIndex)) {
@@ -1208,14 +1090,8 @@ class Visualizer {
         return depths;
     }
 
-    /**
-     * Darken a color based on depth level.
-     * Returns a darker shade of the original color.
-     */
     private darkenColorByDepth(baseColor: Color, depth: number, maxDepth: number): Color {
-        // Calculate darkness factor: 1.0 (full brightness) at depth 0, decreasing to ~0.3 at max depth
-        // Use exponential decay for smoother transitions
-        const maxDarkness = 0.3; // Minimum brightness (30%)
+        const maxDarkness = 0.3;
         const darknessFactor = 1.0 - (1.0 - maxDarkness) * (depth / Math.max(maxDepth, 1));
 
         const darkened = baseColor.clone();
@@ -1234,8 +1110,8 @@ class Visualizer {
             return;
         }
 
-        const directLeafColor = new Color(0x0088ff); // Blue for directly visible leaves (camera zone)
-        const portalLeafColor = new Color(0xff8800); // Orange for leaves visible through portals
+        const directLeafColor = new Color(0x0088ff);
+        const portalLeafColor = new Color(0xff8800);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -1243,54 +1119,45 @@ class Visualizer {
                     continue;
                 }
 
-                // Only show helpers for sectors where camera is inside
                 if (cameraPosition) {
                     const cameraLeaf = sector.findPositionLeaf(cameraPosition);
                     const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
                     if (!isCameraInSector) {
-                        continue; // Skip sectors where camera is outside
+                        continue;
                     }
                 }
 
-                // Calculate node depths for this sector
                 const nodeDepths = this.calculateNodeDepths(sector.bspNodes);
                 const maxDepth = nodeDepths.size > 0 ? Math.max(...Array.from(nodeDepths.values())) : 0;
 
-                // Get initial active zone mask (before portal expansion)
                 const initialZoneMask = sector.getActiveZoneMask(cameraPosition);
                 const frustum = cameraFrustum || new Frustum();
 
-                // Traverse BSP to get visible leaves and zones added through portals
                 const { visibleLeaves, zonesAddedThroughPortals } = sector.traverseBSP(cameraPosition, initialZoneMask, frustum, frustumCullingEnabled);
 
                 if (visibleLeaves.size === 0) {
-                    continue; // No visible leaves in this sector
+                    continue;
                 }
 
-                // Use the zonesAddedThroughPortals directly from traversal (more accurate)
                 const portalAddedZones = zonesAddedThroughPortals;
 
-                // Decide which detail mode to use for this frame (Auto can switch when noisy)
+                // Auto switches to per-zone once visibleLeaves crosses leafAutoAggregateThreshold
                 const effectiveLeafDetail =
                     this.leafDetail === LeafVisualizerDetail.Auto
                         ? (visibleLeaves.size >= this.leafAutoAggregateThreshold ? LeafVisualizerDetail.PerZone : LeafVisualizerDetail.PerLeaf)
                         : this.leafDetail;
 
-                // For each visible leaf, find the highest level (minimum depth) node that references it
-                // Map: leafIndex -> { nodeIndex, depth }
+                // leafIndex -> the highest-level (minimum depth) node that references it
                 const leafToNodeMap = new Map<number, { nodeIndex: number; depth: number }>();
 
-                // find the highest level (minimum depth) node for each visible leaf
                 for (let nodeIndex = 0; nodeIndex < sector.bspNodes.length; nodeIndex++) {
                     const node = sector.bspNodes[nodeIndex];
                     const nodeDepth = nodeDepths.get(nodeIndex) ?? Infinity;
 
-                    // Check both leaves this node references
                     for (let i = 0; i < 2; i++) {
                         const leafIndex = node.leaves[i];
                         if (leafIndex >= 0 && leafIndex < sector.bspLeaves.length && visibleLeaves.has(leafIndex)) {
                             const existing = leafToNodeMap.get(leafIndex);
-                            // Keep the node with minimum depth (highest level)
                             if (!existing || nodeDepth < existing.depth) {
                                 leafToNodeMap.set(leafIndex, { nodeIndex, depth: nodeDepth });
                             }
@@ -1298,7 +1165,6 @@ class Visualizer {
                     }
                 }
 
-                // compute bounds per leaf (from its highest-level node), visualize per-leaf or union per-zone
                 const leafBoxes = new Map<number, { box: Box3; zone: number; depth: number; isPortalLeaf: boolean }>();
 
                 for (const [leafIndex, { nodeIndex, depth }] of leafToNodeMap) {
@@ -1310,7 +1176,6 @@ class Visualizer {
 
                     let box: Box3 | null = null;
 
-                    // Try to get bounds from node's collision bounds first (most accurate)
                     if (node.collision && node.collision.bounds) {
                         const collisionBox = node.collision.bounds;
                         if (collisionBox.min && collisionBox.max &&
@@ -1321,7 +1186,6 @@ class Visualizer {
                         }
                     }
 
-                    // Fallback to sphere bounds if collision bounds not available
                     if (!box) {
                         const exclusiveSphere = node.exclusiveSphereBound;
                         if (exclusiveSphere.radius > 0 && !isNaN(exclusiveSphere.radius) && exclusiveSphere.center &&
@@ -1407,9 +1271,6 @@ class Visualizer {
                         this.group.add(boxHelper);
                     }
                 }
-
-                // Debug: log results (only on first visualization or when issues occur)
-                // Removed per-frame logging to avoid console spam
             }
         }
     }
@@ -1434,8 +1295,8 @@ class Visualizer {
 
         this.clearFogVisualizations();
 
-        const activeFogColor = new Color(0x00ff00); // Green
-        const inactiveFogColor = new Color(0xff0000); // Red
+        const activeFogColor = new Color(0x00ff00);
+        const inactiveFogColor = new Color(0xff0000);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -1452,7 +1313,6 @@ class Visualizer {
 
                         const segments = 16;
 
-                        // Outer radius (max)
                         const outerGeometry = new SphereGeometry(outerRadius, segments, segments);
                         const outerMaterial = new MeshBasicMaterial({
                             color: activeFogColor,
@@ -1472,7 +1332,7 @@ class Visualizer {
                         if (outerRadius - innerRadius > 10) {
                             const innerGeometry = new SphereGeometry(innerRadius, segments, segments);
                             const innerMaterial = new MeshBasicMaterial({
-                                color: new Color(0x00ffff), // Cyan for inner range
+                                color: new Color(0x00ffff),
                                 wireframe: true,
                                 transparent: true,
                                 opacity: 0.15,
@@ -1487,7 +1347,6 @@ class Visualizer {
                         }
                     }
 
-                    // Add a center point or label if needed
                     const centerPoint = new Mesh(
                         new BoxGeometry(20, 20, 20),
                         new MeshBasicMaterial({ color: color, depthTest: false, depthWrite: false })

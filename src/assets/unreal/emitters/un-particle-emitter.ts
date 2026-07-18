@@ -493,7 +493,9 @@ abstract class UParticleEmitter extends UObject {
         const snapshot: Record<string, any> = {};
 
         for (const varName of REQUIRED_SETTINGS) {
-            const value = toCloneSafeSetting((this as any)[varName], library);
+            const raw = (this as any)[varName];
+            const enumNames = ENUM_SETTING_NAMES[varName];
+            const value = enumNames ? (enumNames[raw?.valueOf() ?? 0] ?? enumNames[0]) : toCloneSafeSetting(raw, library);
 
             if (value !== CLONE_UNSAFE) snapshot[varName] = value;
         }
@@ -723,3 +725,47 @@ const blendingNames = {
     [EParticleDrawStyle_T.PTDS_Darken]: "darken",
     [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
 } as Record<EParticleDrawStyle_T, GD.ParticleBlendModes_T>;
+
+// enum-backed REQUIRED_SETTINGS, resolved to the member's own camelCase name
+const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
+    coordinateSystem: {
+        [EParticleCoordinateSystem_T.PTCS_Independent]: "independent",
+        [EParticleCoordinateSystem_T.PTCS_Relative]: "relative",
+        [EParticleCoordinateSystem_T.PTCS_Absolute]: "absolute",
+        [EParticleCoordinateSystem_T.PTCS_RelativeRotation]: "relativeRotation",
+        [EParticleCoordinateSystem_T.PTCS_Spray]: "spray"
+    },
+    effectAxis: {
+        [EParticleEffectAxis_T.PTEA_NegativeX]: "negativeX",
+        [EParticleEffectAxis_T.PTEA_PositiveZ]: "positiveZ"
+    },
+    meshSpawning: {
+        [EParticleMeshSpawning_T.PTMS_None]: "none",
+        [EParticleMeshSpawning_T.PTMS_Linear]: "linear",
+        [EParticleMeshSpawning_T.PTMS_Random]: "random"
+    },
+    rotationSource: {
+        [EParticleRotationSource_T.PTRS_None]: "none",
+        [EParticleRotationSource_T.PTRS_Actor]: "actor",
+        [EParticleRotationSource_T.PTRS_Offset]: "offset",
+        [EParticleRotationSource_T.PTRS_Normal]: "normal"
+    },
+    useSkeletalLocationAs: {
+        [ESkelLocationUpdate_T.PTSU_None]: "none",
+        [ESkelLocationUpdate_T.PTSU_SpawnOffset]: "spawnOffset",
+        [ESkelLocationUpdate_T.PTSU_Location]: "location"
+    },
+    getVelocityDirectionFrom: {
+        [EParticleVelocityDirection_T.PTVD_None]: "none",
+        [EParticleVelocityDirection_T.PTVD_StartPositionAndOwner]: "startPositionAndOwner",
+        [EParticleVelocityDirection_T.PTVD_OwnerAndStartPosition]: "ownerAndStartPosition",
+        [EParticleVelocityDirection_T.PTVD_AddRadial]: "addRadial"
+    },
+    startLocationShape: {
+        [EParticleStartLocationShape_T.PTLS_Box]: "box",
+        [EParticleStartLocationShape_T.PTLS_Sphere]: "sphere",
+        [EParticleStartLocationShape_T.PTLS_Polar]: "polar",
+        [EParticleStartLocationShape_T.PTLS_All]: "all"
+    },
+    drawStyle: blendingNames
+};

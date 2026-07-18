@@ -16,31 +16,19 @@ const WAVE_TABLE = new Uint8Array(1536);
 for (let t = 0; t < 1536; t++)
     WAVE_TABLE[t] = Math.min(255, Math.max(0, ((t >> 1) - 256) + ((t - 512) < 256 ? 1 : 0)));
 
-type WetDrop_T = { type: number, depth: number, x: number, y: number, byteA: number, byteB: number, byteC: number, byteD: number };
+type WetDrop_T = { type: string, depth: number, x: number, y: number, byteA: number, byteB: number, byteC: number, byteD: number };
 
-// horizontal, vertical, '/', '\'
-const LINE_DIRS: [number, number][] = [[1, 0], [0, 1], [-1, 1], [1, 1]];
-
-const DROP_FixedDepth = 0;
-const DROP_PhaseSpot = 1;
-const DROP_ShallowSpot = 2;
-const DROP_HalfAmpl = 3;
-const DROP_RandomMover = 4;
-const DROP_FixedRandomSpot = 5;
-const DROP_WhirlyThing = 6;
-const DROP_BigWhirly = 7;
-const DROP_HorizontalLine = 8;
-const DROP_VerticalLine = 9;
-const DROP_DiagonalLine1 = 10;
-const DROP_DiagonalLine2 = 11;
-const DROP_HorizontalOsc = 12;
-const DROP_VerticalOsc = 13;
-const DROP_DiagonalOsc1 = 14;
-const DROP_DiagonalOsc2 = 15;
-const DROP_RainDrops = 16;
-const DROP_AreaClamp = 17;
-const DROP_LeakyTap = 18;
-const DROP_DrippyTap = 19;
+// horizontal, vertical, '/', '\' direction + oscillating-depth flag, shared by the Line and Osc drop variants
+const LINE_DROP_DIRS: Record<string, [number, number, boolean]> = {
+    "horizontalLine": [1, 0, false],
+    "verticalLine": [0, 1, false],
+    "diagonalLine1": [-1, 1, false],
+    "diagonalLine2": [1, 1, false],
+    "horizontalOsc": [1, 0, true],
+    "verticalOsc": [0, 1, true],
+    "diagonalOsc1": [-1, 1, true],
+    "diagonalOsc2": [1, 1, true]
+};
 
 class WetWaterTexture extends DataTexture {
     public readonly isUpdatable = true;
@@ -119,32 +107,32 @@ class WetWaterTexture extends DataTexture {
 
         for (const drop of this.drops) {
             switch (drop.type) {
-                case DROP_FixedDepth:
+                case "fixedDepth":
                     stamp(drop.x, drop.y, drop.byteD);
                     break;
-                case DROP_PhaseSpot:
+                case "phaseSpot":
                     drop.depth = (drop.depth + drop.byteD) & 0xff;
                     stamp(drop.x, drop.y, PHASE_TABLE[drop.depth]);
                     break;
-                case DROP_ShallowSpot:
+                case "shallowSpot":
                     drop.depth = (drop.depth + drop.byteD) & 0xff;
                     stamp(drop.x, drop.y, 64 + (PHASE_TABLE[drop.depth] >> 1));
                     break;
-                case DROP_HalfAmpl: {
+                case "halfAmpl": {
                     drop.depth = (drop.depth + drop.byteD) & 0xff;
                     stamp(drop.x, drop.y, Math.max(128, PHASE_TABLE[drop.depth]));
                     break;
                 }
-                case DROP_RandomMover:
+                case "randomMover":
                     drop.x = (drop.x - (rand() & 3) + (rand() & 3)) & u2mask;
                     drop.y = (drop.y - (rand() & 3) + (rand() & 3)) & v2mask;
                     stamp(drop.x, drop.y, 128 + 57, 128 - 57);
                     break;
-                case DROP_FixedRandomSpot:
+                case "fixedRandomSpot":
                     stamp(drop.x, drop.y, rand(), rand());
                     break;
-                case DROP_WhirlyThing: case DROP_BigWhirly: {
-                    const shift = drop.type === DROP_WhirlyThing ? 4 : 3;
+                case "whirlyThing": case "bigWhirly": {
+                    const shift = drop.type === "whirlyThing" ? 4 : 3;
                     let phase = ((drop.byteB << 8) | drop.byteA) + ((drop.byteD << 8) | drop.byteC);
 
                     phase &= 0xffff;
@@ -154,23 +142,23 @@ class WetWaterTexture extends DataTexture {
                     stamp(drop.x + (PHASE_TABLE[drop.byteB] >> shift), drop.y + (PHASE_TABLE[(drop.byteB + 64) & 0xff] >> shift), drop.depth);
                     break;
                 }
-                case DROP_HorizontalLine: case DROP_VerticalLine: case DROP_DiagonalLine1: case DROP_DiagonalLine2:
-                case DROP_HorizontalOsc: case DROP_VerticalOsc: case DROP_DiagonalOsc1: case DROP_DiagonalOsc2: {
+                case "horizontalLine": case "verticalLine": case "diagonalLine1": case "diagonalLine2":
+                case "horizontalOsc": case "verticalOsc": case "diagonalOsc1": case "diagonalOsc2": {
                     let depth = drop.depth;
+                    const [dx, dy, isOsc] = LINE_DROP_DIRS[drop.type];
 
-                    if (drop.type >= DROP_HorizontalOsc) {
+                    if (isOsc) {
                         drop.depth = (drop.depth + drop.byteC) & 0xff;
                         depth = PHASE_TABLE[drop.depth];
                     }
 
                     const size = drop.byteD >> 1;
-                    const [dx, dy] = LINE_DIRS[(drop.type - DROP_HorizontalLine) & 3];
 
                     for (let t = 0; t <= size; t++)
                         stamp(drop.x + t * dx, drop.y + t * dy, depth);
                     break;
                 }
-                case DROP_RainDrops: {
+                case "rainDrops": {
                     if ((rand() & 15) === 0) {
                         const spray = drop.byteD;
 
@@ -178,7 +166,7 @@ class WetWaterTexture extends DataTexture {
                     }
                     break;
                 }
-                case DROP_AreaClamp: {
+                case "areaClamp": {
                     const size = drop.byteD >> 1;
 
                     for (let v = 0; v < size; v++)
@@ -186,11 +174,11 @@ class WetWaterTexture extends DataTexture {
                             stamp(drop.x + u, drop.y + v, drop.depth);
                     break;
                 }
-                case DROP_LeakyTap:
+                case "leakyTap":
                     drop.byteA = (drop.byteA + drop.byteD) & 0xff;
                     if (drop.byteA <= drop.byteD) stamp(drop.x, drop.y, drop.depth, 255 ^ drop.depth);
                     break;
-                case DROP_DrippyTap:
+                case "drippyTap":
                     drop.byteA = (drop.byteA + drop.byteD) & 0xff;
                     if (drop.byteA <= drop.byteD) {
                         drop.byteA = rand();

@@ -10,33 +10,33 @@ enum EMoverGlideType_T {
 abstract class UMover extends UStaticMeshActor {
     public readonly careUnread: boolean = false;
 
-    declare protected MoverGlideType: EMoverGlideType_T;
-    declare protected KeyNum: number;
-    declare protected NumKeys: number;
-    declare protected MoveTime: number;
-    declare protected StayOpenTime: number;
-    declare protected DelayTime: number;
-    declare protected bTriggerOnceOnly: boolean;
-    declare protected KeyPos: (GA.FVector | null)[];
-    declare protected KeyRot: (GA.FRotator | null)[];
-    declare protected BasePos: GA.FVector;
-    declare protected BaseRot: GA.FRotator;
-    declare protected InitialState: string;
+    declare protected moverGlideType: EMoverGlideType_T;
+    declare protected keyNum: number;
+    declare protected numKeys: number;
+    declare protected moveTime: number;
+    declare protected stayOpenTime: number;
+    declare protected delayTime: number;
+    declare protected triggerOnceOnly: boolean;
+    declare protected keyPos: (GA.FVector | null)[];
+    declare protected keyRot: (GA.FRotator | null)[];
+    declare protected basePos: GA.FVector;
+    declare protected baseRot: GA.FRotator;
+    declare protected initialState: string;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "MoverGlideType": "MoverGlideType",
-            "KeyNum": "KeyNum",
-            "NumKeys": "NumKeys",
-            "MoveTime": "MoveTime",
-            "StayOpenTime": "StayOpenTime",
-            "DelayTime": "DelayTime",
-            "bTriggerOnceOnly": "bTriggerOnceOnly",
-            "KeyPos": "KeyPos",
-            "KeyRot": "KeyRot",
-            "BasePos": "BasePos",
-            "BaseRot": "BaseRot",
-            "InitialState": "InitialState"
+            "MoverGlideType": "moverGlideType",
+            "KeyNum": "keyNum",
+            "NumKeys": "numKeys",
+            "MoveTime": "moveTime",
+            "StayOpenTime": "stayOpenTime",
+            "DelayTime": "delayTime",
+            "bTriggerOnceOnly": "triggerOnceOnly",
+            "KeyPos": "keyPos",
+            "KeyRot": "keyRot",
+            "BasePos": "basePos",
+            "BaseRot": "baseRot",
+            "InitialState": "initialState"
         });
     }
 
@@ -44,19 +44,19 @@ abstract class UMover extends UStaticMeshActor {
         const keyPositions: GD.Vector3Arr[] = [];
         const keyQuaternions: GD.QuaternionArr[] = [];
 
-        for (let i = 0; i < this.NumKeys; i++) {
-            const keyPos = this.KeyPos[i];
-            const keyRot = this.KeyRot[i];
+        for (let i = 0; i < this.numKeys; i++) {
+            const keyPos = this.keyPos[i];
+            const keyRot = this.keyRot[i];
             const rot = FRotator.make(
-                this.BaseRot.pitch + (keyRot ? keyRot.pitch : 0),
-                this.BaseRot.yaw + (keyRot ? keyRot.yaw : 0),
-                this.BaseRot.roll + (keyRot ? keyRot.roll : 0)
+                this.baseRot.pitch + (keyRot ? keyRot.pitch : 0),
+                this.baseRot.yaw + (keyRot ? keyRot.yaw : 0),
+                this.baseRot.roll + (keyRot ? keyRot.roll : 0)
             );
 
             keyPositions.push([
-                this.BasePos.x + (keyPos ? keyPos.x : 0),
-                this.BasePos.y + (keyPos ? keyPos.y : 0),
-                this.BasePos.z + (keyPos ? keyPos.z : 0)
+                this.basePos.x + (keyPos ? keyPos.x : 0),
+                this.basePos.y + (keyPos ? keyPos.y : 0),
+                this.basePos.z + (keyPos ? keyPos.z : 0)
             ]);
             keyQuaternions.push(rot.getQuaternionElements());
         }
@@ -64,17 +64,17 @@ abstract class UMover extends UStaticMeshActor {
         return {
             dontBatch: true,
             mover: {
-                initialState: this.InitialState,
-                keyNum: this.KeyNum,
+                initialState: this.initialState,
+                keyNum: this.keyNum,
                 keyPositions,
                 keyQuaternions,
-                moveTime: this.MoveTime,
-                stayOpenTime: this.StayOpenTime,
-                delayTime: this.DelayTime,
+                moveTime: this.moveTime,
+                stayOpenTime: this.stayOpenTime,
+                delayTime: this.delayTime,
                 collisionRadius: this.collisionRadius,
                 collisionHeight: this.collisionHeight,
-                isGliding: this.MoverGlideType === EMoverGlideType_T.MV_GlideByTime,
-                triggerOnceOnly: this.bTriggerOnceOnly
+                isGliding: this.moverGlideType === EMoverGlideType_T.MV_GlideByTime,
+                triggerOnceOnly: this.triggerOnceOnly
             }
         };
     }
