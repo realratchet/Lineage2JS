@@ -1,13 +1,11 @@
 import { BufferValue } from "@l2js/core";
-import FArray, { FPrimitiveArray } from "../un-array";
-import FConstructable from "../un-constructable";
-import FNumber from "../un-number";
+import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
 import UObject from "@l2js/core";
 import FQuaternion from "../un-quaternion";
 import FVector from "../un-vector";
 import { FIndexArray } from "@l2js/core/unreal/un-array";
 
-class FNamedBone extends FConstructable {
+class FNamedBone extends UObject {
     public boneName: string;
     public unkVar0: number;
     public unkVar1: number;
@@ -21,7 +19,7 @@ class FNamedBone extends FConstructable {
     }
 }
 
-class FAnalogTrack extends FConstructable {
+class FAnalogTrack extends UObject {
     public flags: number;
     public keyQuat = new FArray(FQuaternion);
     public keyPos = new FArray(FVector);
@@ -37,7 +35,7 @@ class FAnalogTrack extends FConstructable {
     }
 }
 
-class FMotionChunk extends FConstructable {
+class FMotionChunk extends UObject {
     public rootSpeed3d: FVector;
     public trackTime: number;
     public startBone: number;
@@ -59,7 +57,7 @@ class FMotionChunk extends FConstructable {
     }
 }
 
-class FMeshAnimNotify extends FConstructable {
+class FMeshAnimNotify extends UObject {
     public time: number;
     public name: string;
     public notifyObjectId: number;
@@ -82,7 +80,7 @@ class FMeshAnimNotify extends FConstructable {
     }
 }
 
-class FLineageUnk2 extends FConstructable {
+class FLineageUnk2 extends UObject {
     public unkVar0: number;
     public unkVar1: number;
 
@@ -94,7 +92,7 @@ class FLineageUnk2 extends FConstructable {
     }
 }
 
-class FLineageUnk3 extends FConstructable {
+class FLineageUnk3 extends UObject {
     public unkVar0: number;
     public unkArr0 = new FArray(FLineageUnk2)
 
@@ -106,7 +104,7 @@ class FLineageUnk3 extends FConstructable {
     }
 }
 
-class FLineageUnk4 extends FConstructable {
+class FLineageUnk4 extends UObject {
     public unkArr0 = new FArray(FLineageUnk2);
     public unkVar0: number;
     public unkArr1 = new FArray(FLineageUnk3);
@@ -133,7 +131,7 @@ class FLineageUnk4 extends FConstructable {
     }
 }
 
-class FAnimSequence extends FConstructable {
+class FAnimSequence extends UObject {
     public unkVar0: number;
     public name: string;
     public groupNames: string[];

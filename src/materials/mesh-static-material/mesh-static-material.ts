@@ -1,7 +1,7 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -273,6 +273,22 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 this.blending = CustomBlending;
                 this.blendSrc = DstColorFactor;
                 this.blendDst = SrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "alphaModulate":
+                // UE2 FB_AlphaModulate_MightNotFogCorrectly: ONE, INVSRCALPHA (D3DMaterialState.cpp line 310-316)
+                this.blending = CustomBlending;
+                this.blendSrc = OneFactor;
+                this.blendDst = OneMinusSrcAlphaFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "invisible":
+                // UE2 FB_Invisible: ZERO, ONE (D3DMaterialState.cpp line 345-350)
+                this.blending = CustomBlending;
+                this.blendSrc = ZeroFactor;
+                this.blendDst = OneFactor;
                 this.transparent = true;
                 this.depthWrite = false;
                 break;

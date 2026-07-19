@@ -80,7 +80,7 @@ async function decodeSector(sectorName: string, settings: GD.LoadSettings_T): Pr
     }
 
     const pkg = await assetLoader.using(assetLoader.getPackage(sectorName, "Level"));
-    const library = buildDecodeLibrary(pkg, settings);
+    const library = buildDecodeLibrary(pkg, sectorName, settings);
 
     buildStaticMeshBatchData(library);
 

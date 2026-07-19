@@ -89,6 +89,11 @@ enum ETexOscillationType_T {
     OT_Jitter
 };
 
+enum EColorFadeType_T {
+    FC_Linear,
+    FC_Sinusoidal
+};
+
 enum EColorOperation_T {
     CO_Use_Color_From_Material1,
     CO_Use_Color_From_Material2,
@@ -179,10 +184,24 @@ abstract class UCombiner extends UBaseModifier {
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
+        // shader-mesh-static.fs's USE_COMBINER block expects this flattened numbering, not
+        // the raw CombineOperation ordinal (D3DMaterialState.cpp line 807-844 is ground truth
+        // for the operations; Modulate2X/Modulate4X fold into the CO_Multiply case there)
+        let combineMode: number;
+        switch (this.combineOperation.valueOf()) {
+            case EColorOperation_T.CO_Use_Color_From_Material1: combineMode = 0; break;
+            case EColorOperation_T.CO_Multiply: combineMode = this.modulate4X ? 3 : this.modulate2X ? 2 : 1; break;
+            case EColorOperation_T.CO_Add: combineMode = 4; break;
+            case EColorOperation_T.CO_Subtract: combineMode = 5; break;
+            case EColorOperation_T.CO_AlphaBlend_With_Mask: combineMode = 6; break;
+            case EColorOperation_T.CO_Use_Color_From_Material2: combineMode = 7; break;
+            default: combineMode = 0; break; // CO_Add_With_Mask_Modulation, CO_Use_Color_From_Mask: not yet implemented in the shader
+        }
+
         library.materials[this.uuid] = {
             name: this.uuid,
             materialType: "combiner",
-            combineMode: this.combineOperation.valueOf(),
+            combineMode,
             material1: this.material1?.loadSelf().getDecodeInfo(library) || null,
             material2: this.material2?.loadSelf().getDecodeInfo(library) || null,
             mask: this.mask?.loadSelf().getDecodeInfo(library) || null,
@@ -208,20 +227,17 @@ abstract class UCombiner extends UBaseModifier {
     }
 }
 
+// FinalBlend.uc (l2_editor_leak) - FB_Add=8 is an L2 addition over stock UT2003's FB_MAX=8
 enum EFrameBufferBlending {
     FB_Overwrite,
-    FB_Normal,
-    FB_Masked,
-    FB_Translucent,
     FB_Modulate,
-    FB_Brighten,
-    FB_Darken,
-    FB_Invisible,
     FB_AlphaBlend,
-    FB_AlphaModulate_Simple,
-    FB_AlphaModulate_Brighten,
-    FB_AlphaModulate_Darken,
-    FB_AlphaModulate_Invisible,
+    FB_AlphaModulate_MightNotFogCorrectly,
+    FB_Translucent,
+    FB_Darken,
+    FB_Brighten,
+    FB_Invisible,
+    FB_Add,
 };
 
 abstract class UFinalBlend extends UBaseModifier {
@@ -244,18 +260,18 @@ abstract class UFinalBlend extends UBaseModifier {
 
         const map = this.material?.loadSelf().getDecodeInfo(library) || null;
 
+        // D3DMaterialState.cpp ApplyFinalBlend (line 298-352) is the ground truth for the blend factors below
         let blendingMode: GA.SupportedBlendingTypes_T = "normal";
         let transparent = false;
         switch (this.frameBufferBlending.valueOf()) {
             case EFrameBufferBlending.FB_Overwrite: blendingMode = "normal"; break;
-            case EFrameBufferBlending.FB_Normal: blendingMode = "normal"; break;
-            case EFrameBufferBlending.FB_Masked: blendingMode = "masked"; break;
-            case EFrameBufferBlending.FB_Translucent: blendingMode = "translucent"; transparent = true; break;
             case EFrameBufferBlending.FB_Modulate: blendingMode = "modulate"; transparent = true; break;
-            case EFrameBufferBlending.FB_Brighten: blendingMode = "brighten"; transparent = true; break;
-            case EFrameBufferBlending.FB_Darken: blendingMode = "darken"; transparent = true; break;
-            case EFrameBufferBlending.FB_Invisible: blendingMode = "invisible"; transparent = true; break;
             case EFrameBufferBlending.FB_AlphaBlend: blendingMode = "normal"; transparent = true; break;
+            case EFrameBufferBlending.FB_AlphaModulate_MightNotFogCorrectly: blendingMode = "alphaModulate"; transparent = true; break;
+            case EFrameBufferBlending.FB_Translucent: blendingMode = "translucent"; transparent = true; break;
+            case EFrameBufferBlending.FB_Darken: blendingMode = "darken"; transparent = true; break;
+            case EFrameBufferBlending.FB_Brighten: blendingMode = "brighten"; transparent = true; break;
+            case EFrameBufferBlending.FB_Invisible: blendingMode = "invisible"; transparent = true; break;
             default: console.warn("Unknown FinalBlend blending mode:", this.frameBufferBlending); break;
         }
 
@@ -387,20 +403,27 @@ abstract class UFadeColor extends UBaseModifier {
     declare public readonly color1: GA.FColor;
     declare public readonly color2: GA.FColor;
     declare public readonly period: number;
+    declare public readonly phase: number;
+    declare public readonly fadeType: EColorFadeType_T;
 
     public getDecodeInfo(library: DecodeLibrary): string {
         if (this.uuid in library.materials) return this.uuid;
 
         library.materials[this.uuid] = null;
 
+        // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
+        const fadeType = this.fadeType === EColorFadeType_T.FC_Sinusoidal ? "sinusoidal" : "linear";
+
         library.materials[this.uuid] = {
             name: this.uuid,
             materialType: "modifier",
             modifierType: "fadeColor",
             fadeColors: {
-                color1: [this.color1.r / 255, this.color1.b / 255, this.color1.b / 255],
-                color2: [this.color2.r / 255, this.color2.b / 255, this.color2.b / 255],
-                period: this.period
+                color1: [this.color1.r / 255, this.color1.g / 255, this.color1.b / 255],
+                color2: [this.color2.r / 255, this.color2.g / 255, this.color2.b / 255],
+                period: this.period,
+                phase: this.phase,
+                fadeType
             }
         } as GD.IFadeColorDecodeInfo;
 
@@ -411,7 +434,9 @@ abstract class UFadeColor extends UBaseModifier {
         return Object.assign({}, super.getPropertyMap(), {
             "Color1": "color1",
             "Color2": "color2",
-            "FadePeriod": "period"
+            "FadePeriod": "period",
+            "FadePhase": "phase",
+            "ColorFadeType": "fadeType"
         });
     }
 }
@@ -456,6 +481,9 @@ abstract class UTexRotator extends UBaseModifier {
     declare public readonly rotation: GA.FRotator;
     declare public readonly offsetU: number;
     declare public readonly offsetV: number;
+    declare public readonly oscillationRate: GA.FRotator;
+    declare public readonly oscillationAmplitude: GA.FRotator;
+    declare public readonly oscillationPhase: GA.FRotator;
 
     // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
@@ -500,7 +528,11 @@ abstract class UTexRotator extends UBaseModifier {
                 type: rotationType,
                 rotation: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll, "XYZ"],
                 offsetU: this.offsetU,
-                offsetV: this.offsetV
+                offsetV: this.offsetV,
+                // UTexRotator::GetMatrix TR_OscillatingRotation (UnMaterial.cpp line 550-558)
+                oscillationRate: [this.oscillationRate.pitch, this.oscillationRate.yaw, this.oscillationRate.roll],
+                oscillationAmplitude: [this.oscillationAmplitude.pitch, this.oscillationAmplitude.yaw, this.oscillationAmplitude.roll],
+                oscillationPhase: [this.oscillationPhase.pitch, this.oscillationPhase.yaw, this.oscillationPhase.roll]
             }
         } as GD.ITexRotatorDecodeInfo;
 
@@ -513,7 +545,10 @@ abstract class UTexRotator extends UBaseModifier {
             "TexRotationType": "type",
             "Rotation": "rotation",
             "UOffset": "offsetU",
-            "VOffset": "offsetV"
+            "VOffset": "offsetV",
+            "OscillationRate": "oscillationRate",
+            "OscillationAmplitude": "oscillationAmplitude",
+            "OscillationPhase": "oscillationPhase"
         });
     }
 }

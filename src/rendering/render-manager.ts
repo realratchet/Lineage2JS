@@ -1,5 +1,5 @@
 import "./ue2-conventions";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbit-controls";
 import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
@@ -42,6 +42,7 @@ document.body.appendChild(stats.dom);
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
+const tmpPawnWorldPos = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
@@ -437,6 +438,17 @@ class RenderManager {
         // // tree leaf alpha sorting
         // this.camera.position.set(73459.19761207198, 92466.6152928568, -2799.239596681226);
         // this.controls.orbit.target.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
+
+        // this.camera.position.set(-160498.80097106379, 147444.77329136943, -2160.401920637207);
+        // this.controls.orbit.target.set(-160411.158574305, 147397.90024984805, -2171.4349741089036);
+
+        // // neighbor sector's water plane floating in front of trees
+        // this.camera.position.set(-75102.0413513907, 254532.21528121945, -2647.6340093257513);
+        // this.controls.orbit.target.set(-75022.26420482268, 254592.21245772878, -2653.629482315672);
+
+        // // same bug, different sector
+        // this.camera.position.set(-94267.46807869655, 90614.94062961312, -2563.8085497287193);
+        // this.controls.orbit.target.set(-94325.95049631658, 90695.2733064729, -2575.054342624675);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -997,9 +1009,35 @@ class RenderManager {
 
         this.lastRenderOrderSector = activeSector;
 
-        // batch meshes project the sector origin for depth, so cross-sector transparent order rides on groupOrder - camera sector draws last
+        // batch meshes (and BSP section meshes - their geometry is baked in world space, so matrixWorld
+        // is the identity origin and three's per-object z-sort is meaningless) project the sector origin
+        // for depth, so cross-sector transparent order rides on groupOrder - camera sector draws last
         this.sectors.forEach(row => row.forEach(sector => {
-            if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = sector === activeSector ? 0 : -1;
+            const order = sector === activeSector ? 0 : -1;
+            if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = order;
+            if (sector.bspGroup) sector.bspGroup.renderOrder = order;
+        }));
+    }
+
+    // pawns move freely across sector boundaries, so unlike StaticMeshActor (leaf-baked at decode
+    // time into whichever sector's grid cell it fell in) their portal/leaf visibility has to be
+    // resolved live against wherever they currently are, not the sector they happen to be parented under
+    protected updatePawnVisibility(): void {
+        this.sectors.forEach(row => row.forEach(sector => {
+            for (const pawn of sector.pawns.children) {
+                pawn.getWorldPosition(tmpPawnWorldPos);
+
+                const containingSector = this.getSector(tmpPawnWorldPos);
+
+                if (!containingSector) {
+                    pawn.visible = false;
+                    continue;
+                }
+
+                const leafIndex = containingSector.findPositionLeaf(tmpPawnWorldPos);
+
+                pawn.visible = leafIndex !== null && containingSector.visibleLeaves.has(leafIndex);
+            }
         }));
     }
 
@@ -1126,6 +1164,8 @@ class RenderManager {
             );
         }
 
+        this.updatePawnVisibility();
+
         // Pass 2: Object & Material updates (active sector only — skip distant sectors)
         this.scene.traverseVisible(child => {
             if ((child as any).isUpdatable) {
@@ -1212,6 +1252,13 @@ class RenderManager {
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
+
+                    const pendingSounds = (child as any).pendingSounds;
+                    if (pendingSounds.length) {
+                        for (const snd of pendingSounds)
+                            this.audioManager.playOneShotSound(snd.soundDataUri, snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
+                        pendingSounds.length = 0;
+                    }
                 }
             }
 
@@ -1225,6 +1272,15 @@ class RenderManager {
                         }
                     });
                 }
+            }
+
+            if ((child as any).isSkinnedMesh && !(child as any).hasStartedAnimation) {
+                const meshAnimations = (child as any).meshAnimations as Record<string, AnimationClip>;
+                const clip = meshAnimations?.["Wait"] ?? Object.values(meshAnimations ?? {})[0];
+
+                if (clip) this.mixer.clipAction(clip, child).play();
+
+                (child as any).hasStartedAnimation = true;
             }
         });
 

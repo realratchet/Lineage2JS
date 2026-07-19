@@ -401,6 +401,52 @@ class AudioManager {
         source.start(0);
     }
 
+    public async playOneShotSound(dataUri: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number) {
+        await this.ensureUnlocked();
+
+        let buffer = this.ambientBufferCache.get(dataUri);
+        if (!buffer) {
+            try {
+                const res = await fetch(dataUri);
+                const raw = await res.arrayBuffer();
+                buffer = await this.audioContext.decodeAudioData(raw);
+                this.ambientBufferCache.set(dataUri, buffer);
+            } catch (e) {
+                console.warn(`Failed to decode one-shot sound ${dataUri}`, e);
+                return;
+            }
+        }
+
+        const panner = this.audioContext.createPanner();
+        panner.panningModel = "equalpower";
+        panner.distanceModel = "inverse";
+        panner.refDistance = refDistance;
+        panner.maxDistance = maxDistance;
+        panner.rolloffFactor = 1.0;
+        panner.positionX.value = position[0];
+        panner.positionY.value = position[1];
+        panner.positionZ.value = position[2];
+
+        const gain = this.audioContext.createGain();
+        gain.gain.value = volume;
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.playbackRate.value = pitch;
+
+        source.connect(gain);
+        gain.connect(panner);
+        panner.connect(this.ambientGainNode);
+
+        source.onended = () => {
+            source.disconnect();
+            gain.disconnect();
+            panner.disconnect();
+        };
+
+        source.start(0);
+    }
+
     public stopAmbientSound(id: string) {
         const entry = this.activeAmbientSounds.get(id);
         if (!entry) return;

@@ -246,6 +246,8 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
         throw new Error(`Material not found for section ${sectionInfo.uuid}`);
     }
 
+    // if (sectionInfo.sectionName.startsWith("Texture_Cm_o_wall010_")) debugger;
+
     const materials = decodeMaterial(library, materialInfo);
 
     if (sectionInfo.isUnlit) {
@@ -508,6 +510,9 @@ function decodePackage(library: GD.DecodeLibrary) {
     const sector = decodeSectorCore(library);
     decodeSectorStaticMeshes(library, sector);
 
+    for (const pawnInfo of library.pawnActors)
+        sector.pawns.add(decodeObject3D(library, pawnInfo));
+
     if (library.helpersZoneBounds) {
         const boundsGroup = new Object3D();
         sector.helpers.add(boundsGroup);
@@ -677,6 +682,7 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
 
     (mesh as any).meshAnimations = animations; // .animations is taken by three's own AnimationClip[] slot
 
+    applySimpleProperties(library, mesh, info);
 
     return mesh;
 }

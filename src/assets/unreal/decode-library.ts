@@ -24,6 +24,9 @@ class DecodeLibrary {
     // flat (not leaf-indexed like leafActors) - emitters register at a single origin point
     // (un-emitter.ts), so gating on leaf membership on top of the zone mask double-gates them
     public readonly allEmitterActors: GD.IBaseObjectOrInstanceDecodeInfo[] = [];
+    // pawns (players, mobs/NPCs) move freely across sector boundaries, unlike StaticMeshActor
+    // (leaf-baked at decode time) - no decode-time leaf/zone export, see RenderManager.updatePawnVisibility
+    public readonly pawnActors: GD.ISkinnedMeshObjectDecodeInfo[] = [];
     public readonly lightActors: (GD.ILightDecodeInfo | GD.ISunLightDecodeInfo)[] = [];
     public readonly audioList: GD.IAudioDecodeInfo[] = []
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)

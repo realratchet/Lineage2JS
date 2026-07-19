@@ -166,13 +166,17 @@ function decodeFadeColorModifier(library: DecodeLibrary, info: GD.IFadeColorDeco
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
     const period = info.fadeColors.period;
+    const phase = info.fadeColors.phase ?? 0;
+    const fadeType = info.fadeColors.fadeType === "sinusoidal" ? 1 : 0;
 
     return {
         uniforms: {
             fadeColors: {
                 color1: new Color(r1, g1, b1),
                 color2: new Color(r2, g2, b2),
-                period
+                period,
+                phase,
+                fadeType
             }
         },
         defines: {
@@ -228,7 +232,10 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
                 rotation: [info.transform.rotation[0], info.transform.rotation[1], info.transform.rotation[2]],
                 offsetU: info.transform.offsetU,
                 offsetV: info.transform.offsetV,
-                type: info.transform.type === "fixed" ? 0 : info.transform.type === "rotating" ? 1 : 2
+                type: info.transform.type === "fixed" ? 0 : info.transform.type === "rotating" ? 1 : 2,
+                oscillationRate: info.transform.oscillationRate,
+                oscillationAmplitude: info.transform.oscillationAmplitude,
+                oscillationPhase: info.transform.oscillationPhase
             }
         }
     };

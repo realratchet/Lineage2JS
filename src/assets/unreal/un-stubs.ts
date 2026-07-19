@@ -5,8 +5,7 @@ import { UObject } from "@l2js/core";
 
 abstract class UProjector extends UObject { }
 abstract class UAntiPortalActor extends UObject { }
-abstract class UPawn extends UObject { }
 abstract class ULineagePlayerController extends UObject { }
 abstract class UAmbientSound extends UObject { }
 
-export { UProjector, UAntiPortalActor, UPawn, ULineagePlayerController, UAmbientSound };
+export { UProjector, UAntiPortalActor, ULineagePlayerController, UAmbientSound };

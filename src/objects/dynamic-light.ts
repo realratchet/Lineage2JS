@@ -265,7 +265,8 @@ class DynamicLight extends Object3D {
             else intensity = 1.0;
         }
         else if (this.lightType === LT_SUBTLE_PULSE)
-            intensity = 0.95 + 0.05 * Math.sin(angle);
+            // FDynamicLight::Update, UnRenderLight.cpp line 70: Intensity = 0.9f + 0.09f * GMath.SinTab(...)
+            intensity = 0.9 + 0.09 * Math.sin(angle);
         else if (this.lightType === LT_TEXTURE_PALETTE_LOOP) {
             this.isDynamicLight = true;
         }

@@ -19,6 +19,7 @@ const tmpWorldRotation = new Matrix4();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
 const tmpBoxExpand = new Vector3();
+const tmpSoundWorldPos = new Vector3();
 const tmpVelocityLossRange: Range3_T = { min: new Vector3(), max: new Vector3() };
 
 // [offsetX, offsetY, scaleX, scaleY] scratch, reused every particle every frame
@@ -78,6 +79,7 @@ abstract class BaseEmitter extends Object3D {
     protected readonly isUpdatable = true;
 
     public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+    public readonly pendingSounds: PendingEmitterSound_T[] = []; // spawning-sound requests queued by spawnParticle(), drained by RenderManager each frame
 
     protected fadingSettings: FadeSettings_T;
     protected generalSettings: { colorMultiplierRange: Range3_T, opacity: number, maxParticles: number; acceleration: THREE.Vector3; lifetime: Range_T; particlesPerSecond: number };
@@ -199,7 +201,7 @@ abstract class BaseEmitter extends Object3D {
     protected currentCollisionSoundIndex: number;
     protected collisionSoundIndex: Range_T;
     protected spawnAmount: number;
-    protected sounds: any[];
+    protected sounds: GD.IParticleSoundDecodeInfo[];
     protected collisionSoundProbability: Range_T;
     protected isUsingSpawnedVelocityScale: boolean;
     protected spawnedVelocityScaleRange: Range3_T;
@@ -306,6 +308,7 @@ abstract class BaseEmitter extends Object3D {
         };
         this.drawScale = config.drawScale ?? 1;
         this.opacity = config.opacity ?? 1; // updateParticles' fade logic reads this.opacity, not generalSettings.opacity above
+        this.sounds = config.sounds ?? [];
 
         Object.assign(this, config.settings);
         this.rotationOffset.fromArray(config.rotationOffset || [0, 0, 0, 1]);
@@ -336,6 +339,7 @@ abstract class BaseEmitter extends Object3D {
         this.skeletalScale = vec3(this.skeletalScale);
         this.scaleSizeByVelocityMultiplier = vec3(this.scaleSizeByVelocityMultiplier) ?? new Vector3(1, 1, 1);
         this.spawningSoundIndex = range(this.spawningSoundIndex) ?? { min: 0, max: 0 };
+        this.spawningSoundProbability = range(this.spawningSoundProbability) ?? { min: 1, max: 1 };
         this.meshScaleRange = rangeVec3(this.meshScaleRange);
         this.startSpinRange = rangeVec3(this.startSpinRange);
         // Vector4.copy on the raw array reads undefined x/y/z (NaN rgb) but defaults w
@@ -759,8 +763,7 @@ abstract class BaseEmitter extends Object3D {
             this.spawnParticle(index, (particle.time % particle.maxLifetime));
 
         // Play sound on spawning.
-        if ((this.spawningSound !== "none") && __break__() && owner.GetLevel().Engine.Audio && this.sounds.length) {
-            __break__();
+        if ((this.spawningSound !== "none") && this.sounds.length) {
             let soundIndex = 0;
             switch (this.spawningSound) {
                 case "linearGlobal":
@@ -776,8 +779,23 @@ abstract class BaseEmitter extends Object3D {
             soundIndex += Math.trunc(this.spawningSoundIndex.min);
             soundIndex = clamp(soundIndex, 0, this.sounds.length - 1);
 
-            if (Math.random() <= (randRange(this.sounds[soundIndex].Probability.min, this.sounds[soundIndex].Probability.max) * randRange(this.spawningSoundProbability.min, this.spawningSoundProbability.max)))
-                owner.GetLevel().Engine.Audio.PlaySound(owner, SLOT_None, this.sounds[soundIndex].Sound, particle.position, owner.TransientSoundVolume * randRange(this.sounds[soundIndex].Volume.min, this.sounds[soundIndex].Volume.max), randRange(this.sounds[soundIndex].Radius.min, this.sounds[soundIndex].Radius.max), randRange(this.sounds[soundIndex].Pitch.min, this.sounds[soundIndex].Pitch.max), SF_NoUpdates, 0);
+            const sound = this.sounds[soundIndex];
+
+            if (Math.random() <= (randRange(sound.probability[0], sound.probability[1]) * randRange(this.spawningSoundProbability.min, this.spawningSoundProbability.max))) {
+                tmpSoundWorldPos.copy(particle.position);
+                this.localToWorld(tmpSoundWorldPos);
+
+                const refDistance = randRange(sound.radius[0], sound.radius[1]);
+
+                this.pendingSounds.push({
+                    soundDataUri: sound.soundDataUri,
+                    position: [tmpSoundWorldPos.x, tmpSoundWorldPos.y, tmpSoundWorldPos.z],
+                    volume: randRange(sound.volume[0], sound.volume[1]), // UE2 also factors in owner.TransientSoundVolume, not tracked here
+                    pitch: randRange(sound.pitch[0], sound.pitch[1]),
+                    refDistance,
+                    maxDistance: refDistance * 100 // GAudioMaxRadiusMultiplier = 100 in UE2
+                });
+            }
         }
 
         // Make sure we get ticked.
@@ -1761,6 +1779,7 @@ type Fade_T = { time: number; color: THREE.Vector4; };
 type FadeSettings_T = { fadeIn: Fade_T; fadeOut: Fade_T; };
 type Range3_T = { min: THREE.Vector3, max: THREE.Vector3 };
 type ChangesOverTime_T = { scale?: { times: number[], values: number[] }; };
+type PendingEmitterSound_T = { soundDataUri: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number };
 
 // unimplemented particle feature marker, warns once per call site instead of
 // throwing so an exotic emitter can't kill the render loop

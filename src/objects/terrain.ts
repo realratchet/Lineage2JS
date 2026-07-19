@@ -1,15 +1,17 @@
 /**
  * Runtime Terrain Lighting System
- * 
- * Ported from: src/assets/unreal/un-terrain-sector.ts (lines 174-255, getDecodeInfo method)
- * 
+ *
+ * un-terrain-sector.ts only loads the raw shadow map bytes and inits vertex colors
+ * to black at decode time - this file is where the actual relighting happens.
+ *
  * Key differences from Static Mesh lighting:
  * - NO scaleGlow multiplier (uses raw intensity)
  * - NO environment lights (only scene lights)
  * - Uses shadow maps that change with time of day
- * - Ambient light is applied with shadow map modulation
- * 
- * Lighting formula: color = ambient * shadow + Σ(lightColor * sampleIntensity(...))
+ * - Ambient is added unconditionally, NOT shadow-modulated - modulating ambient+sun
+ *   together crushed shadowed terrain to pitch black (see git history)
+ *
+ * Lighting formula: color = ambient + (sunColor * shadow/255) + Σ(lightColor * sampleIntensity(...))
  */
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
@@ -97,9 +99,9 @@ class Terrain extends Mesh implements ICollidable {
      * 
      * This replaces the baked lighting from un-terrain-sector.ts:getDecodeInfo
      * with a runtime system that supports dynamic lights and time-of-day changes.
-     * 
+     *
      * Static cache includes:
-     * - Ambient light (modulated by shadow map for current time)
+     * - Ambient light (unconditional) + sun light (modulated by shadow map for current time)
      * - Static scene lights (LT_Steady with bDynamicLight=false)
      * 
      * Dynamic pass includes:

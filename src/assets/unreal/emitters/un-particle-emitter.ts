@@ -37,8 +37,8 @@ abstract class UParticleEmitter extends UObject {
     declare protected fadeInEndTime: number; // If FadeIn is true, this is the time at which the particle will have completly faded in and is 100% visible. This is NOT relative. 0.5 is 1/2 a second, not 1/2 of the particles lifespan.
     declare protected fadeInFactor: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means start at 0 while e.g. 0.5 means start at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
     declare protected isFadingOut: boolean; // If true, the particle will fade out.
-    declare protected fadeOutFactor: UPlane; // If Fadeout is true, this is the absolute time at which the particle will start fading out. Fading out overrules fading in, so if a particle is not yet faded in and starts fading out, it will start at full color values.
-    declare protected fadeOutStartTime: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means end at 0 while e.g. 0.5 means end at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
+    declare protected fadeOutFactor: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means end at 0 while e.g. 0.5 means end at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
+    declare protected fadeOutStartTime: number; // If Fadeout is true, this is the absolute time at which the particle will start fading out. Fading out overrules fading in, so if a particle is not yet faded in and starts fading out, it will start at full color values.
 
     // Forces
     declare protected isUsingActorForces: boolean; /* Whether the particles can be affected by Actor forces.
@@ -438,7 +438,7 @@ abstract class UParticleEmitter extends UObject {
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
             fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
-            fadeOut: this.isFadingOut ? { time: (this.fadeOutStartTime as any)?.x ?? 0, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
+            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
             uniformScale: this.isUniformScale,
             acceleration: this.acceleration?.getElements(),
             warmupTime: this.relativeWarmupTime,
@@ -482,6 +482,7 @@ abstract class UParticleEmitter extends UObject {
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
+            sounds: (this.sounds?.map(s => s.getDecodeInfo(library)).filter(s => s) as GD.IParticleSoundDecodeInfo[]) ?? [],
             settings: this.getSettingsSnapshot(library)
         };
     }
@@ -517,7 +518,8 @@ const REQUIRED_SETTINGS = [
     "isUsingRevolution", "isUsingRevolutionScale", "isUsingSizeScale", "isUsingVelocityScale",
     "isVelocityFromMesh", "maxAbsVelocity", "meshNormal", "meshScaleRange", "meshSpawning",
     "rotateVelocityLossRange", "rotationNormal", "rotationSource", "sizeScaleRepeats",
-    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSoundIndex",
+    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSound",
+    "spawningSoundIndex", "spawningSoundProbability",
     "startLocationShape", "startSpinRange", "subdivEnd", "subdivStart", "texSubdivU",
     "texSubdivV", "useSkeletalLocationAs", "velocityScaleRepeats"
 ];
@@ -601,7 +603,55 @@ abstract class UParticleVelocityScale extends UObject {
 }
 
 abstract class UParticleSound extends UObject {
+    declare public sound: GA.USound;
+    declare public radius: FRange;
+    declare public pitch: FRange;
+    declare public weight: number;
+    declare public volume: FRange;
+    declare public probability: FRange;
 
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Sound": "sound",
+            "Radius": "radius",
+            "Pitch": "pitch",
+            "Weight": "weight",
+            "Volume": "volume",
+            "Probability": "probability"
+        });
+    }
+
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IParticleSoundDecodeInfo | null {
+        if (!this.sound) return null;
+
+        const snd = (this.sound as any).loadSelf();
+        if (!snd) return null;
+
+        const soundKey = snd.objectName ?? snd.uuid;
+        let soundEntry = library.soundBlobCache.get(soundKey);
+
+        if (!soundEntry) {
+            const audioData = snd.getAudioData();
+            if (!audioData || audioData.length === 0) return null;
+
+            const fileType = snd.getFileType()?.toLowerCase() ?? "wav";
+            const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
+            const blob = new Blob([audioData.buffer], { type: mimeType });
+
+            soundEntry = { uri: URL.createObjectURL(blob), data: audioData, mimeType };
+            library.soundBlobCache.set(soundKey, soundEntry);
+        }
+
+        return {
+            soundDataUri: soundEntry.uri,
+            soundName: soundKey,
+            radius: this.radius?.loadSelf().getDecodeInfo(library) ?? [0, 0],
+            pitch: this.pitch?.loadSelf().getDecodeInfo(library) ?? [1, 1],
+            volume: this.volume?.loadSelf().getDecodeInfo(library) ?? [1, 1],
+            probability: this.probability?.loadSelf().getDecodeInfo(library) ?? [1, 1],
+            weight: this.weight ?? 1
+        };
+    }
 };
 
 // BeamEmitter.uc structs
@@ -767,5 +817,11 @@ const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
         [EParticleStartLocationShape_T.PTLS_Polar]: "polar",
         [EParticleStartLocationShape_T.PTLS_All]: "all"
     },
-    drawStyle: blendingNames
+    drawStyle: blendingNames,
+    spawningSound: {
+        [EParticleCollisionSound_T.PTSC_None]: "none",
+        [EParticleCollisionSound_T.PTSC_LinearGlobal]: "linearGlobal",
+        [EParticleCollisionSound_T.PTSC_LinearLocal]: "linearLocal",
+        [EParticleCollisionSound_T.PTSC_Random]: "random"
+    }
 };

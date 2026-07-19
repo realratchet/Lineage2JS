@@ -47,6 +47,9 @@ uniform float opacity;
                     float offsetU;
                     float offsetV;
                     int type;
+                    vec3 oscillationRate;
+                    vec3 oscillationAmplitude;
+                    vec3 oscillationPhase;
                 #elif USE_MAP_DIFFUSE_TRANSFORM == OSCILLATE
                     float rateU;
                     float rateV;
@@ -100,6 +103,9 @@ uniform float opacity;
                     float offsetU;
                     float offsetV;
                     int type;
+                    vec3 oscillationRate;
+                    vec3 oscillationAmplitude;
+                    vec3 oscillationPhase;
                 #elif USE_MAP_OPACITY_TRANSFORM == OSCILLATE
                     float rateU;
                     float rateV;
@@ -146,6 +152,8 @@ uniform float opacity;
                 vec3 color1;
                 vec3 color2;
                 float period;
+                float phase;
+                int fadeType;
             };
         #endif
 
@@ -161,6 +169,9 @@ uniform float opacity;
                     float offsetU;
                     float offsetV;
                     int type;
+                    vec3 oscillationRate;
+                    vec3 oscillationAmplitude;
+                    vec3 oscillationPhase;
                 #elif USE_MAP_SPECULAR_TRANSFORM == OSCILLATE
                     float rateU;
                     float rateV;
@@ -219,6 +230,9 @@ uniform float opacity;
                     float offsetU;
                     float offsetV;
                     int type;
+                    vec3 oscillationRate;
+                    vec3 oscillationAmplitude;
+                    vec3 oscillationPhase;
                 #elif USE_MAP_SPECULAR_MASK_TRANSFORM == OSCILLATE
                     float rateU;
                     float rateV;
@@ -271,6 +285,9 @@ uniform float opacity;
                     float offsetU;
                     float offsetV;
                     int type;
+                    vec3 oscillationRate;
+                    vec3 oscillationAmplitude;
+                    vec3 oscillationPhase;
                 #elif USE_MAP_MATERIAL2_TRANSFORM == OSCILLATE
                     float rateU;
                     float rateV;
@@ -419,6 +436,8 @@ void main() {
             diffuseColor.rgb = color1 - color2.rgb;
         } else if (combiner.combineMode == 6) { // AlphaBlend
             diffuseColor.rgb = mix(color2.rgb, color1, maskVal);
+        } else if (combiner.combineMode == 7) { // Use Color From Material2
+            diffuseColor.rgb = color2.rgb;
         }
         
         if (combiner.alphaFrom1) diffuseColor.a = alpha1;
@@ -498,7 +517,20 @@ void main() {
         vec3 specularColor = vec3(1.0);
 
         #ifdef USE_FADE
-            float mixValue = (sin(globalTime) + 1.0) / 2.0;
+            // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
+            float fadeTimeSeconds = globalTime * 0.6;
+            float fadeTime = (fadeTimeSeconds + shSpecular.fadeColors.phase) / shSpecular.fadeColors.period;
+            float fadePercent;
+
+            if (shSpecular.fadeColors.fadeType == 1) {
+                fadePercent = 0.5 + cos(fadeTime * PI * 0.5) * 0.5;
+            } else {
+                float fadeCycle = floor(fadeTime);
+                float fadeFrac = fadeTime - fadeCycle;
+                fadePercent = (mod(fadeCycle, 2.0) != 0.0) ? fadeFrac : 1.0 - fadeFrac;
+            }
+
+            float mixValue = 1.0 - fadePercent;
             specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
         #else
             #ifdef USE_MAP_SPECULAR

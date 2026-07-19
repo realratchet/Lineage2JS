@@ -58,6 +58,10 @@ import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
 import { fetchAssetHandle } from "@client/assets/asset-handle";
+import UPawn from "@client/assets/unreal/un-pawn";
+import USkeletalMesh from "@client/assets/unreal/skeletal-mesh/un-skeletal-mesh";
+import USkeletalMeshInstance from "@client/assets/unreal/un-skeletal-mesh-instance";
+import UMeshAnimation from "@client/assets/unreal/skeletal-mesh/un-mesh-animation";
 
 type CoreStructs_T =
     | "Vector"
@@ -339,14 +343,15 @@ class UNativePackage extends ANativePackage {
 
             //         case "Font": Constructor = UFont; break;
             //         case "Mesh": Constructor = UMesh; break;
-            //         case "MeshAnimation": Constructor = UMeshAnimation; break;
+            case "MeshAnimation": Constructor = UMeshAnimation; break;
             //         case "Level": Constructor = ULevel; break;
             case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
             //         case "Viewport": Constructor = UViewport; break;
             //         case "Client": Constructor = UClient; break;
             //         case "Player": Constructor = UPlayer; break;
             //         case "MeshInstance": Constructor = UMeshInstance; break;
-            //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
+            case "SkeletalMesh": Constructor = USkeletalMesh; break;
+            case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
             case "Texture": Constructor = UTexture; break;
             case "WetTexture": Constructor = UWetTexture; break;
@@ -394,7 +399,7 @@ class UNativePackage extends ANativePackage {
             case "VertexColor": Constructor = UnMaterials.UVertexColor; break;
             case "Projector": Constructor = UnStubs.UProjector; break;
             case "AntiPortalActor": Constructor = UnStubs.UAntiPortalActor; break;
-            case "Pawn": Constructor = UnStubs.UPawn; break;
+            case "Pawn": Constructor = UPawn; break;
             case "LineagePlayerController": Constructor = UnStubs.ULineagePlayerController; break;
             case "AmbientSound": Constructor = UnStubs.UAmbientSound; break;
 
@@ -419,6 +424,8 @@ class UNativePackage extends ANativePackage {
         this.registerNativeClass("ConvexVolume", "Primitive");
         this.registerNativeClass("StaticMesh", "Primitive");
         this.registerNativeClass("Mesh", "Primitive");
+        this.registerNativeClass("LodMesh", "Mesh");
+        this.registerNativeClass("SkeletalMesh", "LodMesh");
         this.registerNativeClass("MeshInstance", "Primitive");
         this.registerNativeClass("LodMeshInstance", "MeshInstance");
         this.registerNativeClass("SkeletalMeshInstance", "LodMeshInstance");

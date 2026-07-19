@@ -8,7 +8,7 @@ import DecodeLibrary from "@client/assets/unreal/decode-library";
 
 const ALLOW_FAILED_OBJECTS = false;
 
-function buildDecodeLibrary(pkg: C.APackage, {
+function buildDecodeLibrary(pkg: C.APackage, sectorName: string, {
     loadBaseModel = true,
     loadStaticModels = true,
     loadStaticModelList = null,
@@ -43,20 +43,11 @@ function buildDecodeLibrary(pkg: C.APackage, {
 
     // debugger;
 
-    let sectorIndex = uLevel.url.map.split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
+    // sectorName is the caller's own key, not uLevel.url.map (stale on some packages, e.g. 23_17 - desynced decodeLibrary.sector from AssetManager and caused load/retire thrash)
+    const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);
 
-    const isNotSector = sectorIndex.some(x => typeof (x) !== "number" || !isFinite(x));
-
-    if (isNotSector) {
-        // 23_17's LevelInfo url.map doesn't parse - the filename is authoritative; [17,25] stays as the skylevel placeholder
-        sectorIndex = pkg.path.split("/").pop().split("_").map(v => parseInt(v.slice(0, 2))) as [number, number];
-
-        if (sectorIndex.some(x => typeof (x) !== "number" || !isFinite(x)))
-            sectorIndex = [17, 25]
-        // debugger;
-    }
-
-    decodeLibrary.sector = sectorIndex;
+    if (sectorMatch)
+        decodeLibrary.sector = [parseInt(sectorMatch[1], 10), parseInt(sectorMatch[2], 10)];
 
     const uModel = pkg.fetchObject<GA.UModel>(uLevel.baseModelId); // base model
 
@@ -134,6 +125,21 @@ function buildDecodeLibrary(pkg: C.APackage, {
 
             actor.getDecodeInfo(decodeLibrary);
         }
+    }
+
+    {
+        const pawnExports = expGroups["Pawn"] ?? [];
+        pawnExports.forEach(exp => {
+            try {
+                const actor = pkg.fetchObject<GA.UPawn>(exp.index + 1).loadSelf();
+                if (actor.isDeleteMe) return;
+
+                const pawnInfo = actor.getDecodeInfo(decodeLibrary);
+                if (pawnInfo) decodeLibrary.pawnActors.push(pawnInfo);
+            } catch (e) {
+                console.warn(`Pawn '${exp.objectName}' failed to decode`, e);
+            }
+        });
     }
 
     if (loadStaticModels) {

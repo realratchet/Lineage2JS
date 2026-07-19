@@ -169,6 +169,7 @@ class SectorObject extends Object3D {
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
+    public readonly pawns = new Object3D(); // players/mobs - scene-graph home only, visibility resolved live (RenderManager.updatePawnVisibility)
     public readonly fogInfos: FogInfoObject[] = [];
 
     public bspZones: BSPZoneData[];
@@ -195,6 +196,8 @@ class SectorObject extends Object3D {
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     // rebuilt each updateVisibility call; render-manager's Pass 2 checks membership directly
     public visibleEmitterUuids: Set<string> = new Set();
+    // rebuilt each updateVisibility call; render-manager's Pass 2 leaf-checks live pawn positions against it
+    public visibleLeaves: Set<number> = new Set();
     public readonly lights: Record<string, DynamicLight> = {};
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
@@ -233,8 +236,9 @@ class SectorObject extends Object3D {
 
         this.helpers.name = "SectorHelpers";
         this.zones.name = "SectorZones";
+        this.pawns.name = "SectorPawns";
 
-        this.add(this.helpers, this.zones);
+        this.add(this.helpers, this.zones, this.pawns);
     }
 
     public setBSPInfo(bspZones: GD.IBSPZoneDecodeInfo_T[], bspNodes: GD.IBSPNodeDecodeInfo_T[], bspLeaves: GD.IBSPLeafDecodeInfo_T[]) {
@@ -1020,6 +1024,8 @@ class SectorObject extends Object3D {
             leafOnlyMode,
             topLevelOnly
         );
+
+        this.visibleLeaves = visibleLeaves;
 
         if (this.bspGroup && this.bspSections && this.nodeToSection) {
             // Find which sections contain visible nodes

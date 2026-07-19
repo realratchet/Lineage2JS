@@ -86,6 +86,10 @@ declare global {
                 export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
                 export type UStaticMeshMaterial = import("@unreal/un-material").UStaticMeshMaterial;
 
+                export type USkeletalMesh = import("@unreal/skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
+                export type UPawn = import("@unreal/un-pawn").UPawn;
+                export type UMeshAnimation = import("@unreal/skeletal-mesh/un-mesh-animation").UMeshAnimation;
+
                 export type FTIntMap = import("@unreal/un-tint-map").FTIntMap;
                 export type UDecoLayer = import("@unreal/un-deco-layer").UDecoLayer;
 
@@ -93,7 +97,7 @@ declare global {
 
                 export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
 
-                export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+                export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
 
                 export type ULight = import("@unreal/un-light").ULight;
                 export type LightEffect_T = import("@unreal/un-light").LightEffect_T;
@@ -591,6 +595,7 @@ declare global {
                     addVelocityMultiplierRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     velocityLossRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     forcedMaxParticles?: boolean,
+                    sounds?: IParticleSoundDecodeInfo[],
                     initial: {
                         particlesPerSecond: number,
                         angularVelocity: { min: GD.Vector3Arr, max: GD.Vector3Arr },
@@ -624,6 +629,16 @@ declare global {
                     time: number,
                     color: ColorArr
                 };
+
+                export interface IParticleSoundDecodeInfo {
+                    soundDataUri: string,
+                    soundName: string,
+                    radius: [number, number],
+                    pitch: [number, number],
+                    volume: [number, number],
+                    probability: [number, number],
+                    weight: number
+                }
 
                 export interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "instance",
@@ -737,7 +752,9 @@ declare global {
                     fadeColors: {
                         color1: number[],
                         color2: number[],
-                        period: number
+                        period: number,
+                        phase: number,
+                        fadeType: "linear" | "sinusoidal"
                     }
                 }
 
@@ -749,7 +766,10 @@ declare global {
                         type: "fixed" | "rotating" | "oscillating",
                         rotation: EulerArr,
                         offsetU: number,
-                        offsetV: number
+                        offsetV: number,
+                        oscillationRate: [number, number, number],
+                        oscillationAmplitude: [number, number, number],
+                        oscillationPhase: [number, number, number]
                     }
                 }
 
@@ -805,7 +825,7 @@ declare global {
 
                 export interface ICombinerDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "combiner",
-                    combineMode: number, // TODO: enum
+                    combineMode: number, // 0=material1 1=modulate 2=modulate2x 3=modulate4x 4=add 5=subtract 6=alphaBlend 7=material2 - see UCombiner.getDecodeInfo
                     material1: string,
                     material2: string,
                     mask: string,
