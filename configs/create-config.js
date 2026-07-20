@@ -78,7 +78,10 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         const output = {
             filename: "[name].bundle.js",
             path: dirOutput ? dirOutput : path.resolve(__dirname, "../bin"),
-            chunkFilename: "[name].chunk.js"
+            /* client and worker are separate Compiler instances sharing bin/ - a chunk name
+               reachable from both (e.g. modules/unreal, now also modules/decode-engine's own
+               inner chunks) would otherwise collide on disk between the two compilations */
+            chunkFilename: isWorker ? "worker.[name].chunk.js" : "[name].chunk.js"
         };
 
         if (library) {

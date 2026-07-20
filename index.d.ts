@@ -138,12 +138,14 @@ declare global {
                     loadAudio?: boolean,
                     helpersZoneBounds?: boolean,
                     isSkyLevel?: boolean,
+                    decodeWorkerPoolSize?: number,
                     batching?: {
                         terrain?: boolean,
                         staticMeshes?: boolean
                     },
                     cache?: {
-                        enabled?: boolean
+                        enabled?: boolean,
+                        version?: number
                     }
                 };
 

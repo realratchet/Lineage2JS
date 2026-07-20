@@ -17,12 +17,12 @@ interface FreeMessage {
 }
 
 interface DecodeEnvMessage {
-    type: "decode-env";
+    type: "decodeEnv";
     requestId: number;
 }
 
 interface MusicInfoMessage {
-    type: "music-info";
+    type: "musicInfo";
     requestId: number;
 }
 
@@ -33,7 +33,7 @@ interface ReadyMessage {
 }
 
 interface InitErrorMessage {
-    type: "init-error";
+    type: "initError";
     message: string;
 }
 
@@ -44,20 +44,20 @@ interface DecodedMessage {
 }
 
 interface DecodeErrorMessage {
-    type: "decode-error";
+    type: "decodeError";
     requestId: number;
     message: string;
     stack?: string; // worker-side stack for the main thread console
 }
 
 interface EnvDecodedMessage {
-    type: "env-decoded";
+    type: "envDecoded";
     requestId: number;
     info: any; // plain env decode info (UConfigEnv.getDecodeInfo)
 }
 
 interface MusicInfoDecodedMessage {
-    type: "music-info-decoded";
+    type: "musicInfoDecoded";
     requestId: number;
     music: Record<number, string[]>; // music id -> package paths
 }

@@ -1,5 +1,6 @@
 import DecodeLibrary from "@client/assets/unreal/decode-library";
 import type { WorkerToMainMessage } from "./decode-protocol";
+import type DecodeEngine from "./decode-engine";
 
 interface PendingRequest {
     resolve(value: any): void;
@@ -25,16 +26,26 @@ interface WorkerSlot {
  * moved past can't block a newly-urgent sector behind it - each sector still routes to
  * whichever single worker decoded it (freeSector needs that worker specifically, since
  * package refcounts are per-worker, not shared).
+ *
+ * poolSize 0 skips the Worker pool entirely and runs a single DecodeEngine in-process
+ * instead, loaded via dynamic import - a dev-only knob for stepping through a decode in
+ * the normal main-thread devtools instead of a worker context.
  */
 class DecodeWorkerClient {
     protected slots: WorkerSlot[] = [];
     protected pending = new Map<number, PendingRequest>();
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>(); // sector -> worker that decoded it
+    protected mainThreadEngine: DecodeEngine = null;
 
     public readonly ready: Promise<void>;
 
     public constructor(poolSize: number = 1) {
+        if (poolSize === 0) {
+            this.ready = this.initMainThread();
+            return;
+        }
+
         const readyPromises: Promise<void>[] = [];
 
         for (let i = 0; i < poolSize; i++) {
@@ -61,7 +72,16 @@ class DecodeWorkerClient {
         this.ready = Promise.all(readyPromises).then(() => { });
     }
 
+    protected async initMainThread(): Promise<void> {
+        const { DecodeEngine } = await import(/* webpackChunkName: "modules/decode-engine" */ "./decode-engine");
+
+        this.mainThreadEngine = new DecodeEngine();
+        await this.mainThreadEngine.initialize();
+    }
+
     public get isDead(): boolean {
+        if (this.mainThreadEngine) return false;
+
         return this.slots.every(slot => slot.isDead);
     }
 
@@ -86,6 +106,10 @@ class DecodeWorkerClient {
     }
 
     public decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine)
+            return this.mainThreadEngine.decodeSector(sectorName, settings)
+                .then(({ library }) => Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary);
+
         const workerIndex = this.pickWorker(this.sectorWorker.get(sectorName));
 
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
@@ -104,6 +128,11 @@ class DecodeWorkerClient {
      * (~142), not worth pruning.
      */
     public freeSector(sectorName: string) {
+        if (this.mainThreadEngine) {
+            this.mainThreadEngine.freeSector(sectorName);
+            return;
+        }
+
         const workerIndex = this.sectorWorker.get(sectorName);
 
         if (workerIndex === undefined) return;
@@ -116,19 +145,23 @@ class DecodeWorkerClient {
     }
 
     public decodeEnv(): Promise<any> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeEnvConfig();
+
         const workerIndex = this.pickWorker();
 
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
 
-        return this.dispatch(workerIndex, { type: "decode-env" });
+        return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
 
     public getMusicInfo(): Promise<Record<number, string[]>> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeMusicInfo();
+
         const workerIndex = this.pickWorker();
 
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
 
-        return this.dispatch(workerIndex, { type: "music-info" });
+        return this.dispatch(workerIndex, { type: "musicInfo" });
     }
 
     protected dispatch(workerIndex: number, message: any): Promise<any> {
@@ -159,7 +192,7 @@ class DecodeWorkerClient {
                 this.slots[workerIndex].readyResolve();
                 break;
             }
-            case "init-error": {
+            case "initError": {
                 this.slots[workerIndex].isDead = true;
                 this.slots[workerIndex].readyReject(new Error(msg.message));
                 break;
@@ -172,7 +205,7 @@ class DecodeWorkerClient {
                 request.resolve(Object.setPrototypeOf(msg.library, DecodeLibrary.prototype) as DecodeLibrary);
                 break;
             }
-            case "decode-error": {
+            case "decodeError": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
 
@@ -183,14 +216,14 @@ class DecodeWorkerClient {
                 request.reject(error);
                 break;
             }
-            case "env-decoded": {
+            case "envDecoded": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
 
                 request.resolve(msg.info);
                 break;
             }
-            case "music-info-decoded": {
+            case "musicInfoDecoded": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
 

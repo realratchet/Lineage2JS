@@ -31,6 +31,7 @@ class AssetManager {
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
     protected readonly decodeWorkerPoolSize: number;
+    protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
 
     /**
      * Sectors whose bounds intersect this radius around the camera get loaded. At half
@@ -40,9 +41,10 @@ class AssetManager {
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
 
-    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>, decodeWorkerPoolSize: number = 3) {
+    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>) {
         this.loadSettings = loadSettings;
-        this.decodeWorkerPoolSize = decodeWorkerPoolSize;
+        this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
+        this.maxConcurrentDecodes = Math.max(this.decodeWorkerPoolSize, 1);
 
         /* level packages are <x>_<y>.unr - keep the sector ids for map-edge validity checks */
         for (const path of Object.keys(assetList)) {
@@ -131,7 +133,7 @@ class AssetManager {
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
         if (!this.isWorkerReady || this.decodeWorker.isDead) return false;
-        if (this.inFlightSectors.size >= this.decodeWorkerPoolSize) return false; // pool full, retry next tick
+        if (this.inFlightSectors.size >= this.maxConcurrentDecodes) return false; // pool full, retry next tick
 
         this.inFlightSectors.add(sectorIdx);
 

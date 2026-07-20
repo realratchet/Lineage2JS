@@ -23,8 +23,10 @@ async function startCore() {
             staticMeshes: true
         },
         cache: {
-            enabled: true
+            enabled: true,
+            version: 14 // bump when decode logic changes, invalidates all previously cached sectors
         },
+        decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
         loadTerrain: true,
         loadBaseModel: true,
@@ -84,15 +86,10 @@ async function startCore() {
         ]
     } as GD.LoadSettings_T;
 
-    // number of decode workers streaming sectors in parallel - real peak concurrent need
-    // is small (own sector + up to 3 corner neighbors, see AssetManager.renderDistance),
-    // each worker duplicates the core/engine/native package memory, so keep this low
-    const DECODE_WORKER_POOL_SIZE = 3;
-
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const assetList = await (await fetch("asset-list.json")).json();
-    const assetManager = new AssetManager(loadSettings, assetList.supported, DECODE_WORKER_POOL_SIZE);
+    const assetManager = new AssetManager(loadSettings, assetList.supported);
     const renderManager = new RenderManager(viewport, assetManager);
 
     (global as any).renderManager = renderManager;

@@ -5,7 +5,7 @@ import { serializeLibrary, deserializeLibrary } from "./library-serializer";
  * packages are cached. A warm hit skips deserialization, decode-info generation and
  * batch merging entirely.
  *
- * Invalidation: CACHE_CONTENT_VERSION (bump when decode logic changes) and the
+ * Invalidation: settings.cache.version (bump when decode logic changes) and the
  * load-settings hash are baked into the filename; entries older than CACHE_TTL_DAYS
  * are swept on init. settings.cache.enabled toggles the cache entirely.
  *
@@ -16,7 +16,6 @@ import { serializeLibrary, deserializeLibrary } from "./library-serializer";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
-const CACHE_CONTENT_VERSION = 14;
 
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
@@ -24,10 +23,14 @@ function isCacheEnabled(settings: GD.LoadSettings_T): boolean {
     return settings.cache?.enabled !== false;
 }
 
+function getCacheVersion(settings: GD.LoadSettings_T): number {
+    return settings.cache?.version ?? 0;
+}
+
 function hashSettings(settings: GD.LoadSettings_T): string {
-    /* the cache config must not affect the content hash; texture mode neither -
-       conversion happens after the cache, which always stores DDS */
-    const json = JSON.stringify({ ...settings, cache: undefined, textures: undefined, rgbaTextures: undefined });
+    /* the cache config and worker pool size must not affect the content hash; texture
+       mode neither - conversion happens after the cache, which always stores DDS */
+    const json = JSON.stringify({ ...settings, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)
@@ -37,7 +40,7 @@ function hashSettings(settings: GD.LoadSettings_T): string {
 }
 
 function cacheFileName(sectorName: string, settings: GD.LoadSettings_T): string {
-    return `${sectorName}.v${CACHE_CONTENT_VERSION}.${hashSettings(settings)}.bin`;
+    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}.bin`;
 }
 
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -114,7 +117,7 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
         return; // no cache directory yet
     }
 
-    const currentVersion = `.v${CACHE_CONTENT_VERSION}.`;
+    const currentVersion = `.v${getCacheVersion(settings)}.`;
     const doomed: string[] = [];
 
     for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
