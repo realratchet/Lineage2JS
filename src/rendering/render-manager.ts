@@ -20,6 +20,7 @@ import * as dat from "dat.gui";
 import type AssetManager from "@client/assets/asset-manager";
 import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
 import MovableObject from "@client/objects/movable-object";
+import RotatingObject from "@client/objects/rotating-object";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -82,6 +83,8 @@ function freezeStaticSubtree(node: THREE.Object3D): boolean {
         (node as MovableObject).freezeMover();
         return false;
     }
+
+    if ((node as any).isRotatingObject) return false;
 
     node.matrixAutoUpdate = false;
 
@@ -191,6 +194,7 @@ class RenderManager {
     protected readonly movableObjects = new Set<MovableObject>();
     protected readonly activeMovableObjects = new Set<MovableObject>();
     protected readonly waitingMovableObjects = new Map<MovableObject, number>();
+    protected readonly rotatingObjects = new Set<RotatingObject>();
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected lastRenderOrderSector: SectorObject | null = null;
 
@@ -355,6 +359,10 @@ class RenderManager {
         // this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
         // this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
+        // cruma doors
+        this.camera.position.set(17635.92785265722, 110567.1123199521, -6404.763840433224);
+        this.controls.orbit.target.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
+
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
         // this.controls.orbit.target.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
@@ -363,9 +371,9 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // talking island
-        this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
-        this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
+        // // talking island
+        // this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
+        // this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -415,9 +423,17 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // heine
-        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);                                                                   
-        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // // heine
+        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
+        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+
+        // heine gondolas (L2MovementTag movables)
+        this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
+        this.controls.orbit.target.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
+
+        // // catacombs hanging fire bowls (L2MovementTag movables)
+        // this.camera.position.set(-50336.06572467676, 81322.44437284899, -4586.177393335977);
+        // this.controls.orbit.target.set(-50419.82278206141, 81376.9776969517, -4589.47464985799);
 
         // // d.elf village emitters
         // this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
@@ -1004,6 +1020,10 @@ class RenderManager {
             this.scheduleMovableObject(mover, mover.updateMover(currentTime));
     }
 
+    protected updateRotatingObjects(deltaTime: number): void {
+        this.rotatingObjects.forEach(object => object.updateRotation(deltaTime));
+    }
+
     protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
         if (activeSector === this.lastRenderOrderSector) return;
 
@@ -1098,6 +1118,7 @@ class RenderManager {
         const bspCullingPosition = bspCullingCamera.position;
 
         this.updateMovableObjects(currentTime);
+        this.updateRotatingObjects(deltaTime);
 
         // Pass 1: Visibility updates
         // UE2: DistanceFogEnd IS the far clip plane — no padding needed
@@ -2007,6 +2028,11 @@ class RenderManager {
         }
 
         sector.traverse(child => {
+            if ((child as any).isRotatingObject) {
+                this.rotatingObjects.add(child as RotatingObject);
+                return;
+            }
+
             if (!(child as any).isMovableObject) return;
 
             const mover = child as MovableObject;
@@ -2123,6 +2149,11 @@ class RenderManager {
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
         sector.staticMeshGroup.traverse(child => {
+            if ((child as any).isRotatingObject) {
+                this.rotatingObjects.add(child as RotatingObject);
+                return;
+            }
+
             if (!(child as any).isMovableObject) return;
 
             const mover = child as MovableObject;
@@ -2156,6 +2187,11 @@ class RenderManager {
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
         sector.traverse(child => {
+            if ((child as any).isRotatingObject) {
+                this.rotatingObjects.delete(child as RotatingObject);
+                return;
+            }
+
             if (!(child as any).isMovableObject) return;
 
             const mover = child as MovableObject;

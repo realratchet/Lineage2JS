@@ -12,6 +12,7 @@ abstract class UAActor extends UObject {
     declare public readonly region: GA.UPointRegion;
     declare public readonly drawScale: number;
     declare public readonly tag: string;
+    declare public readonly l2MoveEvent: string;
     declare public readonly group: string;
     declare public readonly isSunAffected: boolean;
     declare public readonly physicsVolume: GA.UPhysicsVolume;
@@ -61,6 +62,8 @@ abstract class UAActor extends UObject {
     declare public ambientGlow: number;
 
     declare public readonly physics: EPhysics_T;
+    declare public readonly rotationRate: GA.FRotator;
+    declare public readonly isFixedRotationDir: boolean;
     declare public readonly drawType: EDrawType_T;
     declare public readonly filterState: EFilterState_T;
     declare public readonly detailMode: EDetailMode_T;
@@ -204,6 +207,7 @@ abstract class UAActor extends UObject {
             "Level": "levelInfo",
             "Region": "region",
             "Tag": "tag",
+            "L2MoveEvent": "l2MoveEvent", // FName right after MeshInstance (cpp/l2_headers/engine/EngineClasses.h:843)
             "bSunAffect": "isSunAffected",
             "PhysicsVolume": "physicsVolume",
             "Location": "location",
@@ -237,6 +241,8 @@ abstract class UAActor extends UObject {
             "bDirectional": "isDirectional",
 
             "Physics": "physics",
+            "RotationRate": "rotationRate",
+            "bFixedRotationDir": "isFixedRotationDir",
             "DrawType": "drawType",
             "StaticFilterState": "filterState",
             "DetailMode": "detailMode",

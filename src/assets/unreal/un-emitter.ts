@@ -161,7 +161,8 @@ abstract class UEmitter extends UAActor {
             scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
             children: emittersInfo.filter(x => x),
-            isRangeIgnored: !!this.isRangeIgnored
+            isRangeIgnored: !!this.isRangeIgnored,
+            moveEvent: this.l2MoveEvent
         } as GD.IBaseObjectDecodeInfo;
 
         // UParticleEmitter::UpdateParticles (UnParticleEmitter.cpp) rebuilds BoundingBox

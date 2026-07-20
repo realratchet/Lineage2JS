@@ -137,7 +137,7 @@ function buildDecodeLibrary(pkg: C.APackage, sectorName: string, {
                 const pawnInfo = actor.getDecodeInfo(decodeLibrary);
                 if (pawnInfo) decodeLibrary.pawnActors.push(pawnInfo);
             } catch (e) {
-                console.warn(`Pawn '${exp.objectName}' failed to decode`, e);
+                console.warn(`Pawn '${exp.export.objectName}' failed to decode`, e);
             }
         });
     }
@@ -151,7 +151,7 @@ function buildDecodeLibrary(pkg: C.APackage, sectorName: string, {
 
                 return { index: i - 1, export: pkg.exports[i - 1] };
             });
-        else actorsToLoad = [...expGroups["StaticMeshActor"] || [], ...expGroups["Mover"] || []];
+        else actorsToLoad = [...expGroups["StaticMeshActor"] || [], ...expGroups["Mover"] || [], ...expGroups["MovableStaticMeshActor"] || []];
 
         if (ALLOW_FAILED_OBJECTS) {
             const failed = decodeLibrary.failed, failedLoad = decodeLibrary.failedLoad, failedDecode = decodeLibrary.failedDecode;

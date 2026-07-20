@@ -3,6 +3,7 @@ import { decodePackage } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import L2Environment from "@client/rendering/l2-env";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
+import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
 import { Box3, Color, Frustum, Matrix4, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
 
@@ -248,10 +249,18 @@ class SectorRenderTester {
             const colBefore = this.measureTerrainColors(sector);
             const { lum: lumBefore } = this.measureLuminance(sector);
 
+            // the render manager batches additive sprite emitters into world-space instanced
+            // batches (SpriteParticleBatch builds its material there) - exercise that path too
+            const particleBatcher = new InstancedSpriteBatcher();
+            const batchEmitters: any[] = [];
+
+            this.scene.add(particleBatcher.root);
+
             for (let step = 0; step < SIMULATION_STEPS; step++) {
                 const currentTime = performance.now() + step * SIMULATION_STEP_MS;
 
                 GLOBAL_UNIFORMS.globalTime.value = currentTime / 600;
+                batchEmitters.length = 0;
 
                 // the app uses traverseVisible on the active sector, traverse everything
                 // here so every emitter/material gets exercised
@@ -261,6 +270,8 @@ class SectorRenderTester {
                         else (child as any).update(currentTime);
                     }
 
+                    if ((child as any).instancedMesh) batchEmitters.push(child);
+
                     const material = (child as THREE.Mesh).material;
 
                     if (material) {
@@ -269,8 +280,12 @@ class SectorRenderTester {
                     }
                 });
 
+                particleBatcher.update(batchEmitters, this.camera);
                 this.renderer.render(this.scene, this.camera);
             }
+
+            particleBatcher.root.traverse(child => (child as THREE.Mesh).geometry?.dispose?.());
+            this.scene.remove(particleBatcher.root);
 
             if (this.forceRenderObjects) this.forceRender(sector);
 
@@ -322,7 +337,7 @@ async function runSectorTest(): Promise<void> {
     const loadSettings = {
         helpersZoneBounds: false,
         batching: { terrain: true, staticMeshes: true },
-        cache: { enabled: cacheEnabled, version: 1 },
+        cache: { enabled: cacheEnabled },
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,

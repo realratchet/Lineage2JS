@@ -43,6 +43,7 @@ abstract class UStaticMeshActor extends UAActor {
 
     declare protected hasStaticLighting: boolean;
     declare protected isLightingVisibile: boolean;
+    declare protected isDynamicLightMover: boolean;
 
     declare protected isAgitDefaultStaticMesh: boolean;
     declare protected agitID: number;
@@ -90,6 +91,7 @@ abstract class UStaticMeshActor extends UAActor {
 
             "bStaticLighting": "hasStaticLighting",
             "bLightingVisibility": "isLightingVisibile",
+            "bDynamicLightMover": "isDynamicLightMover",
 
             "bAgitDefaultStaticMesh": "isAgitDefaultStaticMesh",
             "AgitID": "agitID",
@@ -131,7 +133,10 @@ abstract class UStaticMeshActor extends UAActor {
         this.instance?.loadSelf().setActor(this);
 
         const isStatic = this.physics === EPhysics_T.PHYS_None;
-        const isMoverWithoutDynamicLight = false; // TODO: Check if mover has bDynamicLightMover
+
+        // AMover defaults Physics=PHYS_MovingBrush, bStatic=False (Mover.uc); retail gates
+        // static per-vertex lighting on bStatic || (mover && !bDynamicLightMover) (UnStaticMesh.cpp Illuminate)
+        const isMoverWithoutDynamicLight = this.physics === EPhysics_T.PHYS_MovingBrush && !this.isDynamicLightMover;
 
 
         if (!isStatic && !isMoverWithoutDynamicLight) {
@@ -225,6 +230,12 @@ abstract class UStaticMeshActor extends UAActor {
             }
         }
 
+        // physicsRotation only runs when bRotateToDesired or bFixedRotationDir is set (UnPhysic.cpp:401);
+        // fixed-dir spin is `result += deltaRate` per axis, 65536 units per revolution (fixedTurn, UnPhysic.cpp:460)
+        const rotating = this.physics === EPhysics_T.PHYS_Rotating && this.isFixedRotationDir && this.rotationRate && (this.rotationRate.pitch !== 0 || this.rotationRate.yaw !== 0 || this.rotationRate.roll !== 0)
+            ? { rotator: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll], rate: [this.rotationRate.pitch, this.rotationRate.yaw, this.rotationRate.roll] } as GD.IRotatingDecodeInfo
+            : undefined;
+
         const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
@@ -233,7 +244,8 @@ abstract class UStaticMeshActor extends UAActor {
             scaledGlow: this.scaleGlow,
             isSunAffected: this.isSunAffected,
             ambient,
-            dontBatch: !!this.dontBatch,
+            rotating,
+            dontBatch: !!this.dontBatch || !!rotating,
             isRangeIgnored: !!this.isRangeIgnored,
             scale: this.scale?.multiplyScalar(this.drawScale).getElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],

@@ -5,9 +5,9 @@ import { serializeLibrary, deserializeLibrary } from "./library-serializer";
  * packages are cached. A warm hit skips deserialization, decode-info generation and
  * batch merging entirely.
  *
- * Invalidation: the cache version (settings.cache.version - bump when decode logic
- * changes) and the load-settings hash are baked into the filename; entries older than
- * CACHE_TTL_DAYS are swept on init. settings.cache.enabled toggles the cache entirely.
+ * Invalidation: CACHE_CONTENT_VERSION (bump when decode logic changes) and the
+ * load-settings hash are baked into the filename; entries older than CACHE_TTL_DAYS
+ * are swept on init. settings.cache.enabled toggles the cache entirely.
  *
  * Libraries are cached before DXT->RGBA conversion (DDS is 4-8x smaller); the worker
  * re-runs the conversion after a hit. Blob URLs in the library are session-scoped, so
@@ -16,7 +16,7 @@ import { serializeLibrary, deserializeLibrary } from "./library-serializer";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
-const CACHE_CONTENT_VERSION = 9;
+const CACHE_CONTENT_VERSION = 14;
 
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
@@ -37,7 +37,7 @@ function hashSettings(settings: GD.LoadSettings_T): string {
 }
 
 function cacheFileName(sectorName: string, settings: GD.LoadSettings_T): string {
-    return `${sectorName}.v${settings.cache?.version ?? 1}.${CACHE_CONTENT_VERSION}.${hashSettings(settings)}.bin`;
+    return `${sectorName}.v${CACHE_CONTENT_VERSION}.${hashSettings(settings)}.bin`;
 }
 
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -114,7 +114,7 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
         return; // no cache directory yet
     }
 
-    const currentVersion = `.v${settings.cache?.version ?? 1}.${CACHE_CONTENT_VERSION}.`;
+    const currentVersion = `.v${CACHE_CONTENT_VERSION}.`;
     const doomed: string[] = [];
 
     for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {

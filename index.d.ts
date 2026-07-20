@@ -143,8 +143,7 @@ declare global {
                         staticMeshes?: boolean
                     },
                     cache?: {
-                        enabled?: boolean,
-                        version?: number      // bump when decode logic changes to invalidate cached sectors
+                        enabled?: boolean
                     }
                 };
 
@@ -221,6 +220,7 @@ declare global {
                     rotation?: EulerArr,
                     quaternion?: QuaternionArr,
                     scale?: Vector3Arr,
+                    moveEvent?: string,
                     siblings?: IBaseObjectOrInstanceDecodeInfo[],
                     children?: IBaseObjectOrInstanceDecodeInfo[]
                 }
@@ -234,11 +234,28 @@ declare global {
                     isSunAffected?: boolean,
                     dontBatch?: boolean,
                     mover?: IMoverDecodeInfo,
+                    rotating?: IRotatingDecodeInfo,
+                    swaying?: ISwayingDecodeInfo,
                     ambient: {
                         glow: number,
                         vector: Vector3Arr,
                         isUnlit: boolean
                     }
+                }
+
+                export interface IRotatingDecodeInfo {
+                    rotator: Vector3Arr,
+                    rate: Vector3Arr
+                }
+
+                export interface ISwayingDecodeInfo {
+                    tags: string[],
+                    orgRotator: Vector3Arr,
+                    rate: Vector3Arr,
+                    max: Vector3Arr,
+                    accelRatio: Vector3Arr,
+                    maxRandom: boolean,
+                    randomStart: boolean
                 }
 
                 export interface IMoverDecodeInfo {

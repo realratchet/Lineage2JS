@@ -11,6 +11,8 @@ import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
 import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance } from "./object-batching";
 import MovableObject from "@client/objects/movable-object";
+import RotatingObject from "@client/objects/rotating-object";
+import SwayingObject from "@client/objects/swaying-object";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -91,6 +93,8 @@ function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDeco
 
     // object.add(new AxesHelper(100));
 
+    if (info.moveEvent && info.moveEvent !== "None") (object as any).moveEvent = info.moveEvent;
+
     // library.leafActors (and this wrapper's bounds/zoneMask) are keyed by info.uuid,
     // not each sub-emitter's own uuid - propagate it down so render-manager's Pass 2
     // can look up BSP visibility for the actual particlePool-bearing children
@@ -169,7 +173,10 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const ambient = info.ambient;
 
     const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient };
-    const object = info.mover ? new MovableObject({ ...props, mover: info.mover }) : new CollidingMesh(props);
+    const object = info.mover ? new MovableObject({ ...props, mover: info.mover })
+        : info.swaying ? new SwayingObject({ ...props, swaying: info.swaying })
+            : info.rotating ? new RotatingObject({ ...props, rotating: info.rotating })
+                : new CollidingMesh(props);
 
     object.material = canonicalizeStaticMeshMaterials(object.material);
 
@@ -398,6 +405,9 @@ function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
     // or built synchronously inside if absent; see batch-data.ts)
     batchStaticMeshActors(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
 
+    // here, not decodePackage - the live app builds static meshes via this progressive path (asset-manager processPendingBuilds)
+    attachMoveEventActors(sector);
+
     // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {
         try {
@@ -534,6 +544,24 @@ function decodePackage(library: GD.DecodeLibrary) {
     }
 
     return sector;
+}
+
+function attachMoveEventActors(sector: SectorObject) {
+    const swayByTag = new Map<string, SwayingObject>();
+
+    for (const child of (sector as any).staticMeshGroup?.children ?? [])
+        if ((child as any).isSwayingObject)
+            for (const tag of (child as any).swaying.tags) swayByTag.set(tag, child);
+
+    if (swayByTag.size === 0) return;
+
+    sector.zones.traverse(object => {
+        const moveEvent = (object as any).moveEvent;
+        if (!moveEvent) return;
+
+        const sway = swayByTag.get(moveEvent);
+        if (sway) sway.attachActor(object);
+    });
 }
 
 function decodeTerrainInfo(library: GD.DecodeLibrary, info: GD.IBaseObjectDecodeInfo) {

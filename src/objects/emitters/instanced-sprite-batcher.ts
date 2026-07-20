@@ -81,8 +81,14 @@ class SpriteParticleBatch {
         geometry.instanceCount = 0;
 
         const material = new ShaderMaterial();
+        const sourceUniforms = sourceMaterial.uniforms;
+
+        // ShaderMaterial.copy deep-clones uniforms, and cloneUniforms clones textures through a
+        // bare `new this.constructor()` - WetWaterTexture can't survive that; uniforms are shared anyway
+        sourceMaterial.uniforms = {};
         material.copy(sourceMaterial);
-        material.uniforms = sourceMaterial.uniforms;
+        sourceMaterial.uniforms = sourceUniforms;
+        material.uniforms = sourceUniforms;
         material.defines = { ...(sourceMaterial.defines ?? {}), USE_WORLD_PARTICLE_BATCH: "" };
         material.visible = true;
         material.needsUpdate = true;

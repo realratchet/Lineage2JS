@@ -23,8 +23,7 @@ async function startCore() {
             staticMeshes: true
         },
         cache: {
-            enabled: true,
-            version: 17
+            enabled: true
         },
         textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
         loadTerrain: true,

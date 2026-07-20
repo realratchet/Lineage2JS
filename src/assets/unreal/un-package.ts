@@ -55,7 +55,7 @@ import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
 import UMover from "@client/assets/unreal/un-mover";
 import * as NEnv from "@client/assets/unreal/un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
-import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
+import UMovableStaticMeshActor, { FL2RotatorTime } from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
 import { fetchAssetHandle } from "@client/assets/asset-handle";
 import UPawn from "@client/assets/unreal/un-pawn";
@@ -275,6 +275,8 @@ class UNativePackage extends ANativePackage {
 
             case "L2EnvironmentColorInfo": Constructor = UL2EnvironmentColorInfo; break;
 
+            case "L2RotatorTime": Constructor = FL2RotatorTime; break;
+
             // structs we dont care about yet
             case "InterpCurve":
             case "InterpCurvePoint":
@@ -285,7 +287,6 @@ class UNativePackage extends ANativePackage {
             case "LightRenderDataPtr":
             case "NMoverPtr":
             case "Interpolator":
-            case "L2RotatorTime":
             case "AnimRep":
             case "Orientation":
             case "AccessoryType":
