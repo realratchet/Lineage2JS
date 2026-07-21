@@ -24,14 +24,14 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 14 // bump when decode logic changes, invalidates all previously cached sectors
+            version: 17 // bump when decode logic changes, invalidates all previously cached sectors
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: true,
+        loadEmitters: false,
         loadAudio: true,
         _loadEmitterList: [],
         _loadStaticModelList: [

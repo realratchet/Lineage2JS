@@ -104,7 +104,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 transformSpecular: new Uniform(null),
 
                 lightMap: new Uniform(null),
-                lightMapIntensity: new Uniform(2.0),
+                lightMapIntensity: new Uniform(info.modulateStaticLighting2X === true ? 2 : 1),
 
                 shDiffuse: new Uniform(null),
                 shOpacity: new Uniform(null),
@@ -113,13 +113,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
-                    vector: new Color(1, 1, 1),
+                    color: new Color(1, 1, 1),
                     brightness: 1
                 }),
 
                 directionalAmbient: new Uniform({
                     direction: new Vector3(),
-                    vector: new Color(1, 1, 1),
+                    color: new Color(1, 1, 1),
                     brightness: 1
                 })
             }
@@ -325,7 +325,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public enableAmbient({ vector, brightness }: IAmbientLighting) {
         const u = this.uniforms.ambient.value;
 
-        u.vector.copy(vector);
+        u.color.copy(vector);
         u.brightness = brightness / 5;
 
         this.defines["USE_AMBIENT"] = "";
@@ -338,7 +338,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public enableDirectionalAmbient({ vector, direction, brightness }: IDirectionalAmbientLighting) {
         const u = this.uniforms.directionalAmbient.value;
 
-        u.vector.copy(vector);
+        u.color.copy(vector);
         u.direction.copy(direction);
         u.brightness = brightness;
 
@@ -413,6 +413,7 @@ type MeshStaticMaterialParameters = {
     depthWrite: boolean,
     depthTest: boolean,
     visible: boolean,
+    modulateStaticLighting2X?: boolean,
     combiner?: {
         combineMode: number,
         material1: GD.IDecodedParameter,

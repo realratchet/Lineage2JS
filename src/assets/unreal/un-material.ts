@@ -308,11 +308,12 @@ abstract class UShader extends UMaterial {
     declare protected selfIllumination: UMaterial;
     declare protected selfIlluminationMask: UMaterial;
 
+    declare protected modulateStaticLighting2X: boolean;
+
     // protected isPerformingLightingOnSpecularPass: boolean = false;
     // protected unkBytes: BufferValue<"buffer">;
 
     // protected _wireframe: any;
-    // protected _modulateStaticLighting2X: any;
 
     // protected postLoad(pkg: UPackage): void {
     //     this.readHead = pkg.tell();
@@ -337,9 +338,10 @@ abstract class UShader extends UMaterial {
             "AlphaTest": "transparent",
             "AlphaRef": "alphaTest",
 
+            "ModulateStaticLighting2X": "modulateStaticLighting2X",
+
             // "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
             // "Wireframe": "_wireframe",
-            // "ModulateStaticLighting2X": "_modulateStaticLighting2X"
         });
     }
 
@@ -359,6 +361,7 @@ abstract class UShader extends UMaterial {
         const doubleSide = this.doubleSide;
         const transparent = this.transparent;
         const alphaTest = this.alphaTest / 255;
+        const modulateStaticLighting2X = this.modulateStaticLighting2X;
 
         let blendingMode: GA.SupportedBlendingTypes_T;
 
@@ -388,6 +391,7 @@ abstract class UShader extends UMaterial {
             doubleSide,
             transparent,
             alphaTest,
+            modulateStaticLighting2X,
             visible: true,
         } as GD.IShaderDecodeInfo;
 

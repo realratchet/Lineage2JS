@@ -130,7 +130,7 @@ class Terrain extends Mesh implements ICollidable {
             shadowIndex = this.getShadowMapIndex(timeOfDay);
         }
 
-        env.getAmbientPlaneTerrainLight(cbAmbient);
+        env.getAmbientPlaneTerrainLightHalved(cbAmbient);
         env.getTerrainLightColor(cbLight);
 
         // When lerping, we need to update if alpha changes significantly, or if light colors change

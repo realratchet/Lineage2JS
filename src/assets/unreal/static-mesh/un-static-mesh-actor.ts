@@ -163,26 +163,23 @@ abstract class UStaticMeshActor extends UAActor {
         const instanceColors = instance?.color ?? null;
 
         const ambActor = this.getAmbientLightingActor();
-        const zone = this.getZone();
-
-        // const h = zone.ambientHue || 0;
-        // const s = zone.ambientSaturation || 0;
-        // const b = zone.ambientBrightness || 0;
-
-        // let ambX = 0, ambY = 0, ambZ = 0;
         const xmodel = this.levelInfo.getLevel().getModel();
 
-        const [ambX, ambY, ambZ] = this.isSunAffected ? [0, 0, 0] : zone.ambientVector.getElements();
+        let ambX = 0, ambY = 0, ambZ = 0;
 
-        // for (let leaf of leaves) {
-        //     const zoneInfo = xmodel.getZoneActor(leaf.iZone);
-        //     const zone = zoneInfo.getZone();
-        //     const amb = zone.ambientVector;
+        if (!this.isSunAffected) {
+            if (leaves.length > 0) {
+                for (const leaf of leaves) { // seems that precalculated may be wrong for some objects and need to re-calc from zone, already had this regression, not sure why i gone back to using zone vector
+                    const amb = xmodel.getZoneActor(leaf.iZone).ambientVector;
 
-        //     ambX = Math.max(ambX, amb.x);
-        //     ambY = Math.max(ambY, amb.y);
-        //     ambZ = Math.max(ambZ, amb.z);
-        // }
+                    ambX = Math.max(ambX, amb.x);
+                    ambY = Math.max(ambY, amb.y);
+                    ambZ = Math.max(ambZ, amb.z);
+                }
+            } else {
+                [ambX, ambY, ambZ] = this.getZone().ambientVector.getElements();
+            }
+        }
 
         const ambVector = FColor.fromFloating(ambX, ambY, ambZ)
 

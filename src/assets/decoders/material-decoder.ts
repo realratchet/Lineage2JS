@@ -437,7 +437,8 @@ function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshS
         alphaTest: info.alphaTest,
         depthWrite: info.depthWrite,
         depthTest: info.depthTest,
-        visible: info.visible
+        visible: info.visible,
+        modulateStaticLighting2X: info.modulateStaticLighting2X
     });
 }
 

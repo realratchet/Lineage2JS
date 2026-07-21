@@ -9,6 +9,7 @@ const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
 // const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
+const tmpColorByte2 = new ColorByte();
 
 // Vertex indices a light actually influences, decoded once from its flags bitmask
 // (LSB-first per byte). The dynamic pass runs per animated light per frame, and
@@ -355,14 +356,15 @@ class LitActorMesh extends Mesh {
         // Apply static cache to the vertex attribute
         colorArray.set(this.staticLightingCache!);
 
-        // Apply sun ambient
+        // GetColorPlane_HSVStaticMeshSunLight + (ambient >> 1)
         if (this.perActorAmbient) {
-            const ambientSun = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
-            if (ambientSun.r !== 0 || ambientSun.g !== 0 || ambientSun.b !== 0) {
-                const r = ambientSun.r;
-                const g = ambientSun.g;
-                const b = ambientSun.b;
+            const ambientSun = env.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
+            const sunColor = env.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte2);
+            const r = ambientSun.r + sunColor.r;
+            const g = ambientSun.g + sunColor.g;
+            const b = ambientSun.b + sunColor.b;
 
+            if (r !== 0 || g !== 0 || b !== 0) {
                 for (const actor of this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean }[]) {
                     if (actor.isSunAffected) {
                         for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
@@ -374,12 +376,13 @@ class LitActorMesh extends Mesh {
                 }
             }
         } else if (this.isSunAffected) {
-            const ambient = env.getAmbientPlaneStaticMeshSunLight(tmpColorByte);
-            if (ambient.r !== 0 || ambient.g !== 0 || ambient.b !== 0) {
-                const r = ambient.r;
-                const g = ambient.g;
-                const b = ambient.b;
+            const ambient = env.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
+            const sunColor = env.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte2);
+            const r = ambient.r + sunColor.r;
+            const g = ambient.g + sunColor.g;
+            const b = ambient.b + sunColor.b;
 
+            if (r !== 0 || g !== 0 || b !== 0) {
                 for (let i = 0; i < colorArray.length; i += 3) {
                     colorArray[i] += r;
                     colorArray[i + 1] += g;

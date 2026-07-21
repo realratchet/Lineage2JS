@@ -1,4 +1,5 @@
 import "./ue2-conventions";
+import "../materials/shader-chunks/register-chunks";
 import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbit-controls";
@@ -371,9 +372,9 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // // talking island
-        // this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
-        // this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
+        // talking island
+        this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
+        this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -427,9 +428,9 @@ class RenderManager {
         // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
         // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
-        // heine gondolas (L2MovementTag movables)
-        this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
-        this.controls.orbit.target.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
+        // // heine gondolas (L2MovementTag movables)
+        // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
+        // this.controls.orbit.target.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
 
         // // catacombs hanging fire bowls (L2MovementTag movables)
         // this.camera.position.set(-50336.06572467676, 81322.44437284899, -4586.177393335977);
@@ -465,6 +466,10 @@ class RenderManager {
         // // same bug, different sector
         // this.camera.position.set(-94267.46807869655, 90614.94062961312, -2563.8085497287193);
         // this.controls.orbit.target.set(-94325.95049631658, 90695.2733064729, -2575.054342624675);
+
+        // cruma bad light (stale Region -> zoneNumber 0 ambient bug, fixed in un-static-mesh-actor.ts)
+        // this.camera.position.set(19547.91987263343, 116964.69226804674, -11334.275986974659);
+        // this.controls.orbit.target.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

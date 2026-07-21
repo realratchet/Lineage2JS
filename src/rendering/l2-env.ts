@@ -152,8 +152,28 @@ class L2Environment {
         return getColorByteFromHSV(timeOfDay, envColor.light.staticMesh, target);
     }
 
+    // mode==2 caller (0x90d3cf) multiplies by flt_AB958C=32.0 before adding
+    public getBaseColorPlaneStaticMeshSunLightScaled(target: ColorByte): ColorByte {
+        this.getBaseColorPlaneStaticMeshSunLight(target);
+        return target.set(target.r * 32 / 255, target.g * 32 / 255, target.b * 32 / 255, target.a);
+    }
+
     public getBrightnessStaticMeshSunLight() {
         return getBrightness(this.getTimeOfDay(), this.getEnvColor().light.staticMesh);
+    }
+
+    public getBaseColorPlaneBSPSunLight(target: ColorByte): ColorByte {
+        const timeOfDay = this.getTimeOfDay();
+        const envColor = this.getEnvColor();
+
+        // same fallback as getAmbientPlaneBSPLight - some envs never populate a distinct BSP curve
+        const bspArray = envColor.light.bsp?.length > 0 ? envColor.light.bsp : envColor.light.staticMesh;
+        return getColorByteFromHSV(timeOfDay, bspArray, target);
+    }
+
+    public getBaseColorPlaneBSPSunLightScaled(target: ColorByte): ColorByte {
+        this.getBaseColorPlaneBSPSunLight(target);
+        return target.set(target.r * 32 / 255, target.g * 32 / 255, target.b * 32 / 255, target.a);
     }
 
     public getBrightnessActorSunLight() {
@@ -185,11 +205,21 @@ class L2Environment {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().ambient.staticMesh, target);
     }
 
+    public getAmbientPlaneStaticMeshSunLightHalved(target: ColorByte): ColorByte {
+        this.getAmbientPlaneStaticMeshSunLight(target);
+        return target.shr(1);
+    }
+
     public getAmbientPlaneBSPLight(target: ColorByte): ColorByte {
         const envColor = this.getEnvColor();
         // Fallback to staticMesh ambient if BSP ambient is not available
         const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
         return getColorFromTimeColor(this.getTimeOfDay(), bspArray, target);
+    }
+
+    public getAmbientPlaneBSPLightHalved(target: ColorByte): ColorByte {
+        this.getAmbientPlaneBSPLight(target);
+        return target.shr(1);
     }
 
     public getSunColor(target: ColorByte): ColorByte {
@@ -208,7 +238,7 @@ class L2Environment {
         return target;
     }
 
-    /** never used in the game as far as i can tell, instructions never called, would make the moon red */
+    // never used in the game as far as i can tell, instructions never called, would make the moon red
     public getMoonColor(target: ColorByte): ColorByte {
         const colors = this.getEnvColor().color.moon;
         if (!colors || colors.length === 0) return target.set(0, 0, 0, 255);

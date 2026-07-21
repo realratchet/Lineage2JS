@@ -7,6 +7,7 @@ import { ColorByte } from "@client/utils/color-byte";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
+const tmpColorByte2 = new ColorByte();
 const tmpVec3 = new Vector3();
 const tmpVec4 = new Vector4();
 const tmpSphere = new Sphere();
@@ -1039,7 +1040,9 @@ class SectorObject extends Object3D {
             let visibleMeshCount = 0;
             let bspAmbientColor: ColorByte | null = null;
             if (environment) {
-                bspAmbientColor = environment.getAmbientPlaneBSPLight(tmpColorByte);
+                bspAmbientColor = environment.getAmbientPlaneBSPLightHalved(tmpColorByte);
+                const sunColor = environment.getBaseColorPlaneBSPSunLightScaled(tmpColorByte2);
+                bspAmbientColor.set(bspAmbientColor.r + sunColor.r, bspAmbientColor.g + sunColor.g, bspAmbientColor.b + sunColor.b, bspAmbientColor.a);
             }
 
             let outdoorCount = 0, indoorCount = 0;
@@ -1064,14 +1067,13 @@ class SectorObject extends Object3D {
 
                         if (isOutdoor) outdoorCount++; else indoorCount++;
 
-                        // Apply ambient color via MeshStaticMaterial's ambient uniform
                         let material = child.material;
+                        const hasLightmap = (m: any) => m?.defines?.USE_LIGHTMAP !== undefined;
+
                         const applyAmbient = (m: any) => {
-                            // MeshStaticMaterial uses uniforms.ambient.value.color (which is THREE.Color)
                             if (m?.uniforms?.ambient?.value?.color) {
-                                if (isOutdoor && bspAmbientColor) {
+                                if (isOutdoor && bspAmbientColor && !hasLightmap(m)) {
                                     bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
-                                    // Ensure defines exists before checking USE_AMBIENT
                                     if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";
                                         m.needsUpdate = true;
@@ -1080,7 +1082,7 @@ class SectorObject extends Object3D {
                                     m.uniforms.ambient.value.color.setRGB(1, 1, 1);
                                 }
                             } else if (m?.color) {
-                                // Fallback for materials with .color (like MeshBasicMaterial)
+                                // fallback
                                 if (isOutdoor && bspAmbientColor) bspAmbientColor.toFloats(m.color);
                                 else m.color.setHex(0xffffff);
                             }

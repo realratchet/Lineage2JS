@@ -749,6 +749,7 @@ declare global {
                     doubleSide: boolean,
                     transparent: boolean,
                     alphaTest: number,
+                    modulateStaticLighting2X: boolean,
                     visible: boolean
                 }
 
