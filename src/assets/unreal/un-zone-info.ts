@@ -1,4 +1,5 @@
 import AInfo from "./un-info";
+import FColor from "@client/assets/unreal/un-color";
 
 abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly isFogZone: boolean;
@@ -99,6 +100,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
             position: this.location ? [this.location.x, this.location.y, this.location.z] : [0, 0, 0],
             isFogZone: this.isFogZone,
             isSunAffected: this.isSunAffected,
+            ambient: this.ambientVector ? FColor.fromFloating(this.ambientVector.x, this.ambientVector.y, this.ambientVector.z).toArray() as number[] : undefined,
             fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
                 start: this.distanceFogStart,
                 end: this.distanceFogEnd,

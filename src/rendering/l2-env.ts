@@ -423,10 +423,11 @@ function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorB
 
     const v = hsvCurr.value + (hsvNext.value - hsvCurr.value) * lFrac;
 
-    target.setFromHSV(hsvCurr.hue, hsvCurr.saturation, v);
-    tmpColorByte_2.setFromHSV(hsvNext.hue, hsvNext.saturation, v);
+    // UL2NTimeLight::GetColorPlane (0x7b8120): lerp(FGetHSV(h1,s1,255), FGetHSV(h2,s2,255)) * (lerp(v1,v2) * flt_A62CF4=1/255)
+    target.setFromHSV(hsvCurr.hue, hsvCurr.saturation, 255);
+    tmpColorByte_2.setFromHSV(hsvNext.hue, hsvNext.saturation, 255);
 
-    return target.lerp(tmpColorByte_2, lFrac);
+    return target.lerp(tmpColorByte_2, lFrac).multiplyScalar(v / 255);
 }
 
 function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: ColorByte): ColorByte {

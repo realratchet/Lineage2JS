@@ -78,6 +78,13 @@ type SectorTextureWarmup_T = { sector: SectorObject, textureQueue: THREE.Texture
 
 const frozenUpdateMatrixWorld = function () { };
 
+// undoes addSector's early freeze once live content attaches, or its matrixWorld never updates again
+function unfreezeAncestors(node: THREE.Object3D): void {
+    for (let n = node.parent; n; n = n.parent)
+        if (n.updateMatrixWorld === frozenUpdateMatrixWorld)
+            n.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+}
+
 // overrides updateMatrixWorld to a no-op, but only once every child under a node is static too
 function freezeStaticSubtree(node: THREE.Object3D): boolean {
     if ((node as any).isMovableObject) {
@@ -424,9 +431,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // // heine
-        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
-        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // heine
+        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
+        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
@@ -2170,7 +2177,7 @@ class RenderManager {
         sector.worldBounds.setFromObject(sector);
 
         sector.staticMeshGroup.updateMatrixWorld(true);
-        freezeStaticSubtree(sector.staticMeshGroup);
+        if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
 
         // addSector's unconditional gate ran before this group existed - gate it now
         setLightingGate(sector.staticMeshGroup, false);

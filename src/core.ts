@@ -16,7 +16,7 @@ async function startCore() {
 
     const startTime = performance.now();
 
-    const loadSettings = {
+    const loadSettings: GD.LoadSettings_T = {
         helpersZoneBounds: false,
         batching: {
             terrain: true,
@@ -24,10 +24,10 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 17 // bump when decode logic changes, invalidates all previously cached sectors
+            version: 19 // bump when decode logic changes, invalidates all previously cached sectors
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
-        textures: "auto", // "auto" | "rgba" | "compressed" - s3tc upload when the gpu supports it
+        textures: "auto",
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,

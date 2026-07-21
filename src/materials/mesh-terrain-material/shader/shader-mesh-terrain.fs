@@ -47,7 +47,10 @@ void main() {
     diffuseColor.rgb *= texelDiffuse.rgb;
 
     #include <color_fragment>
-    
+
+    // D3DTOP_MODULATE2X: ATerrainInfo::Render (0x9bdfb8) passes EnableLighting Modulate2X=1
+    diffuseColor.rgb *= 2.0;
+
     #include <alphatest_fragment>
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     #ifdef USE_LIGHTMAP

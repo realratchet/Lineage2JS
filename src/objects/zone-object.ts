@@ -261,6 +261,38 @@ class SectorObject extends Object3D {
         this.outdoorZoneMask = outdoorMask;
     }
 
+    protected cacheSectionZoneAmbient = new Map<number, ColorByte | null>();
+
+    // retail clears BSP lightmaps to zone ambient * 0.5 before accumulating light (0x908c80, zone FGetHSV bytes at [zone+0x3E0])
+    public getSectionZoneAmbient(sectionIndex: number): ColorByte | null {
+        if (this.cacheSectionZoneAmbient.has(sectionIndex)) return this.cacheSectionZoneAmbient.get(sectionIndex);
+
+        let r = 0, g = 0, b = 0;
+        const nodeIndices = (this.bspSections?.[sectionIndex] as any)?.nodeIndices;
+
+        if (nodeIndices && this.bspZones) {
+            for (const ni of nodeIndices) {
+                const node = this.bspNodes[ni];
+                if (!node) continue;
+
+                for (const zi of node.zones) {
+                    if (!zi) continue;
+
+                    const amb = this.bspZones[zi]?.zoneInfo?.ambient;
+                    if (!amb) continue;
+
+                    r = Math.max(r, amb[0]);
+                    g = Math.max(g, amb[1]);
+                    b = Math.max(b, amb[2]);
+                }
+            }
+        }
+
+        const color = r || g || b ? new ColorByte(r >> 1, g >> 1, b >> 1) : null;
+        this.cacheSectionZoneAmbient.set(sectionIndex, color);
+        return color;
+    }
+
     public findPositionZone(position: THREE.Vector3) {
         if (this.bspNodes.length === 0) return null;
 
@@ -1070,10 +1102,18 @@ class SectorObject extends Object3D {
                         let material = child.material;
                         const hasLightmap = (m: any) => m?.defines?.USE_LIGHTMAP !== undefined;
 
+                        const sectionZoneAmbient = isOutdoor ? null : this.getSectionZoneAmbient(sectionIndex);
+
                         const applyAmbient = (m: any) => {
                             if (m?.uniforms?.ambient?.value?.color) {
                                 if (isOutdoor && bspAmbientColor && !hasLightmap(m)) {
                                     bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
+                                    if (m.defines && m.defines.USE_AMBIENT === undefined) {
+                                        m.defines.USE_AMBIENT = "";
+                                        m.needsUpdate = true;
+                                    }
+                                } else if (sectionZoneAmbient) {
+                                    sectionZoneAmbient.toFloats(m.uniforms.ambient.value.color);
                                     if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";
                                         m.needsUpdate = true;

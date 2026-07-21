@@ -189,9 +189,10 @@ class Terrain extends Mesh implements ICollidable {
                     s = s * (1 - alpha) + sNext * alpha;
                 }
 
-                const sunR = cbLight.r * s;
-                const sunG = cbLight.g * s;
-                const sunB = cbLight.b * s;
+                // UTerrainSector::SetIntensityMap (0x9a4160): sunPlane * flt_A68640=0.5 * intensity/255
+                const sunR = cbLight.r * s * 0.5;
+                const sunG = cbLight.g * s * 0.5;
+                const sunB = cbLight.b * s * 0.5;
 
                 this.staticLightingCache[i + 0] = (cbAmbient.r + (sunR / 255)) | 0;
                 this.staticLightingCache[i + 1] = (cbAmbient.g + (sunG / 255)) | 0;
@@ -280,7 +281,8 @@ class Terrain extends Mesh implements ICollidable {
 
                     tmpNormal.fromBufferAttribute(attrNormals, sourceVi);
 
-                    const intensity = light.sampleIntensity(tmpVertex, tmpNormal);
+                    // 0.5 inferred from the static-mesh bake constant (dbl_AABA38, 0x90c0ed) and the sun map's SampleIntensity*127.5 (flt_AAC438, 0x9a4514); CalcLight's own factor not independently read
+                    const intensity = light.sampleIntensity(tmpVertex, tmpNormal) * 0.5;
 
                     if (intensity > 0) {
                         target[targetOffset + vi * 3 + 0] += Math.floor(col.r * intensity);

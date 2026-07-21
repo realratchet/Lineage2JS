@@ -136,6 +136,7 @@ declare global {
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
                     loadAudio?: boolean,
+                    textures: "auto" | "rgba" | "compressed",
                     helpersZoneBounds?: boolean,
                     isSkyLevel?: boolean,
                     decodeWorkerPoolSize?: number,
@@ -400,6 +401,7 @@ declare global {
                     fogRange3?: Vector2Arr,
                     fogRange4?: Vector2Arr,
                     fogRange5?: Vector2Arr,
+                    ambient?: number[],
                     colors?: any[]
                 }
 

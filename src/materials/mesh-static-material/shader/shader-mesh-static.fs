@@ -483,13 +483,14 @@ void main() {
             reflectedLight.indirectDiffuse += vColorInstance;
         #endif
 
+        // D3DTOP_MODULATE2X: static mesh relight dispatcher (0x90d33d) passes EnableLighting Modulate2X=1
         #ifdef USE_LIT_ATTRIBUTES
-            reflectedLight.indirectDiffuse += vLitColor;
+            reflectedLight.indirectDiffuse += vLitColor * 2.0;
         #endif
     #endif
 
     #ifdef USE_AMBIENT
-        reflectedLight.indirectDiffuse += ambient.brightness * ambient.color;
+        reflectedLight.indirectDiffuse += ambient.brightness * ambient.color * 2.0;
     #endif
 
     #ifdef HAS_LIGHTS

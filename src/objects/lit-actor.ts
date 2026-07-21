@@ -174,7 +174,8 @@ class LitActorMesh extends Mesh {
                 const samplingNormal = tmpNormal.transformDirection(localToWorld);
 
                 const scaleGlow = glowPerVertex ? glowPerVertex[vi] : uniformGlow;
-                const intensity = multiplier * scaleGlow * this.sampleIntensity(light, samplingPoint, samplingNormal);
+                // licensee pre-halves the baked light term for the Modulate2X domain: fmul dbl_AABA38=0.5 (0x90c0ed)
+                const intensity = multiplier * scaleGlow * 0.5 * this.sampleIntensity(light, samplingPoint, samplingNormal);
 
                 if (intensity > 0) {
                     target[vi * 3 + 0] += Math.floor(col.r * intensity);
@@ -290,16 +291,18 @@ class LitActorMesh extends Mesh {
                 const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, ambient: typeof this.ambient }[];
                 for (const actor of perActorAmbient) {
                     if (actor.ambient && actor.ambient.isUnlit) {
+                        // unlit renders at 1x: EnableLighting(1,1,0) + SetAmbientLight(255) (UnRenderStaticMesh.cpp line 470), 127 = 1.0 in the Modulate2X domain
                         for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
-                            this.staticLightingCache[i] = 255;
-                            this.staticLightingCache[i + 1] = 255;
-                            this.staticLightingCache[i + 2] = 255;
+                            this.staticLightingCache[i] = 127;
+                            this.staticLightingCache[i + 1] = 127;
+                            this.staticLightingCache[i + 2] = 127;
                         }
                     } else if (actor.ambient) {
+                        // zone ambient enters the vertex domain halved: FColor(FGetHSV(...) * 0.5f) (UnRenderLight.cpp line 967), ambient >> 1 (0x90d372)
                         tmpColorByte.set(actor.ambient.vector[0], actor.ambient.vector[1], actor.ambient.vector[2]);
-                        const r = tmpColorByte.r + actor.ambient.glow;
-                        const g = tmpColorByte.g + actor.ambient.glow;
-                        const b = tmpColorByte.b + actor.ambient.glow;
+                        const r = (tmpColorByte.r + actor.ambient.glow) >> 1;
+                        const g = (tmpColorByte.g + actor.ambient.glow) >> 1;
+                        const b = (tmpColorByte.b + actor.ambient.glow) >> 1;
 
                         for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
                             this.staticLightingCache[i] = r;
@@ -319,15 +322,15 @@ class LitActorMesh extends Mesh {
 
                 if (isUnlit) {
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
-                        this.staticLightingCache[i] = 255;
-                        this.staticLightingCache[i + 1] = 255;
-                        this.staticLightingCache[i + 2] = 255;
+                        this.staticLightingCache[i] = 127;
+                        this.staticLightingCache[i + 1] = 127;
+                        this.staticLightingCache[i + 2] = 127;
                     }
                 } else {
                     tmpColorByte.set(vector[0], vector[1], vector[2]);
-                    const r = tmpColorByte.r + glow;
-                    const g = tmpColorByte.g + glow;
-                    const b = tmpColorByte.b + glow;
+                    const r = (tmpColorByte.r + glow) >> 1;
+                    const g = (tmpColorByte.g + glow) >> 1;
+                    const b = (tmpColorByte.b + glow) >> 1;
 
                     for (let i = 0; i < this.staticLightingCache.length; i += 3) {
                         this.staticLightingCache[i] = r;
