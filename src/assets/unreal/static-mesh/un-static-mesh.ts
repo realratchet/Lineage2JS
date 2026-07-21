@@ -54,7 +54,7 @@ abstract class UStaticMesh extends UPrimitive {
 
     protected useSimpleLineCollision: boolean = false;
     protected UseSimpleBoxCollision: boolean = false;
-    protected useVertexColor: boolean = false;
+    public useVertexColor: boolean = false;
 
     public static getUnserializedProperties(): C.UnserializedProperty_T[] {
         return [
@@ -87,6 +87,7 @@ abstract class UStaticMesh extends UPrimitive {
             "bSwayObject": "swayObject",
             "Frequency": "frequency",
             "MaxSwayAngle": "maxSwayAngle",
+            "bUseVertexColor": "useVertexColor",
         });
     }
 

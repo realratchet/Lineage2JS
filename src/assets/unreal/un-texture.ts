@@ -342,7 +342,7 @@ abstract class UTexture extends UMaterial {
 }
 
 export default UTexture;
-export { UTexture };
+export { UTexture, ETexClampMode };
 
 function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
     const width_half = width / 2;

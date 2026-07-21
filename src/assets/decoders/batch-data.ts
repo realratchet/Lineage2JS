@@ -289,7 +289,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const mergedNormals = new Float32Array(totalVertices * 3);
     const mergedUVs = hasUVs ? new Float32Array(totalVertices * 2) : null;
     const mergedColors = hasColors ? new ColorArrayConstructor(totalVertices * 3) : null;
-    const mergedColorsInstance = hasColorsInstance ? new ColorInstanceConstructor(totalVertices * 3) : null;
+    const mergedColorsInstance = hasColorsInstance ? new ColorInstanceConstructor(totalVertices * 3).fill(127) : null; // 127 = 1.0 in the halved Modulate2X
     const mergedIndices = new Uint32Array(totalIndices);
     const mergedColliderIndices = totalColliderIndices > 0 ? new Uint32Array(totalColliderIndices) : null;
 

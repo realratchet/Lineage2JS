@@ -1,23 +1,12 @@
-import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, MirroredRepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
+import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import DecodeLibrary from "../unreal/decode-library";
 import WetWaterTexture from "@client/materials/wet-water-texture";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dxt-decode";
+import { ETexClampMode } from "../unreal/un-texture";
 
-function getClamping(mode: number): THREE.Wrapping {
-    return RepeatWrapping;
-
-    switch (mode) {
-        case 1024: return RepeatWrapping;
-        case 512: return RepeatWrapping;
-        case 256: return MirroredRepeatWrapping;
-        case 128: return RepeatWrapping;
-        case 64: return RepeatWrapping;
-        case 32: return RepeatWrapping;
-        default:
-            console.warn(`Unknown clamping mode: ${mode}`);
-            return ClampToEdgeWrapping;
-    }
+function getClamping(mode: ETexClampMode): THREE.Wrapping {
+    return mode === ETexClampMode.TC_Clamp ? ClampToEdgeWrapping : RepeatWrapping;
 }
 
 function getFormat(type: GD.DataTextureFormats_T) {

@@ -160,8 +160,7 @@ abstract class UStaticMeshActor extends UAActor {
         // if (attributes.positions.length / 3 === 1587)
         //     debugger;
 
-        const instanceColors = instance?.color ?? null;
-
+        const instanceColors = (mesh.useVertexColor && instance?.color) || null;
         const ambActor = this.getAmbientLightingActor();
         const xmodel = this.levelInfo.getLevel().getModel();
 

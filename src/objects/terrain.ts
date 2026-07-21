@@ -216,8 +216,8 @@ class Terrain extends Mesh implements ICollidable {
             this.lastSunB = cbLight.b;
         }
 
-        // Apply static cache to the vertex attribute (at the correct offset)
-        colorArray.set(this.staticLightingCache!, colorOffset);
+        this.syncStitchedBoundaryColors(); // stitched boundary row has no shadow-map data of its own - borrow the neighbor's real edge color
+        colorArray.set(this.staticLightingCache!, colorOffset); // apply static cache to the vertex attribute
 
         // 3. Add Dynamic/Time-Based Lights
         const dynamicLights = lights.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
@@ -226,6 +226,41 @@ class Terrain extends Mesh implements ICollidable {
         }
 
         attrColors.needsUpdate = true;
+    }
+
+    protected syncStitchedBoundaryColors() {
+        const cache = this.staticLightingCache!;
+
+        if (this.stitchEastNeighbor?.staticLightingCache) {
+            const n = this.stitchEastNeighbor.staticLightingCache;
+            for (let y = 0; y < 17; y++) {
+                const selfIdx = (y * 17 + 16) * 3;
+                const neighborIdx = (y * 17 + 0) * 3;
+                cache[selfIdx + 0] = n[neighborIdx + 0];
+                cache[selfIdx + 1] = n[neighborIdx + 1];
+                cache[selfIdx + 2] = n[neighborIdx + 2];
+            }
+        }
+
+        if (this.stitchSouthNeighbor?.staticLightingCache) {
+            const n = this.stitchSouthNeighbor.staticLightingCache;
+            for (let x = 0; x < 17; x++) {
+                const selfIdx = (16 * 17 + x) * 3;
+                const neighborIdx = (0 * 17 + x) * 3;
+                cache[selfIdx + 0] = n[neighborIdx + 0];
+                cache[selfIdx + 1] = n[neighborIdx + 1];
+                cache[selfIdx + 2] = n[neighborIdx + 2];
+            }
+        }
+
+        if (this.stitchCornerNeighbor?.staticLightingCache) {
+            const n = this.stitchCornerNeighbor.staticLightingCache;
+            const selfIdx = (16 * 17 + 16) * 3;
+            const neighborIdx = (0 * 17 + 0) * 3;
+            cache[selfIdx + 0] = n[neighborIdx + 0];
+            cache[selfIdx + 1] = n[neighborIdx + 1];
+            cache[selfIdx + 2] = n[neighborIdx + 2];
+        }
     }
 
     /**
@@ -422,6 +457,10 @@ class Terrain extends Mesh implements ICollidable {
         return this.collider;
     }
 
+    protected stitchEastNeighbor: Terrain | null = null;
+    protected stitchSouthNeighbor: Terrain | null = null;
+    protected stitchCornerNeighbor: Terrain | null = null;
+
     /**
      * Stitches this terrain's Eastern (Right) edge to match a Western neighbor's Left edge.
      * Only applied at inter-map boundaries (offsetX === 240).
@@ -451,6 +490,7 @@ class Terrain extends Mesh implements ICollidable {
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
+        this.stitchEastNeighbor = neighbor;
         return true;
     }
 
@@ -481,6 +521,7 @@ class Terrain extends Mesh implements ICollidable {
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
+        this.stitchSouthNeighbor = neighbor;
         return true;
     }
 
@@ -509,6 +550,7 @@ class Terrain extends Mesh implements ICollidable {
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
+        this.stitchCornerNeighbor = neighbor;
         return true;
     }
 

@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, CustomBlending, RepeatWrapping, LinearFilter } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, CustomBlending, LinearFilter } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -60,8 +60,6 @@ class MeshTerrainMaterial extends ShaderMaterial {
 
             Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
-            layer.alphaMap.uniforms.map.texture.wrapS = RepeatWrapping;
-            layer.alphaMap.uniforms.map.texture.wrapT = RepeatWrapping;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
             layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
@@ -74,8 +72,6 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layerCode.push("");
 
             layer.map.uniforms.map.texture.premultiplyAlpha = true;
-            layer.map.uniforms.map.texture.wrapS = RepeatWrapping;
-            layer.map.uniforms.map.texture.wrapT = RepeatWrapping;
             layer.map.uniforms.map.texture.needsUpdate = true;
 
             Object.assign(u.value.map, layer.map.uniforms.map);
@@ -128,6 +124,6 @@ export default MeshTerrainMaterial;
 export { MeshTerrainMaterial };
 
 type MeshTerrainMaterialParameters = {
-    uvs: MapData_T,
-    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter }[]
+    uvs: GD.MapData_T,
+    layers: { map: GD.IDecodedParameter, alphaMap: GD.IDecodedParameter }[]
 };

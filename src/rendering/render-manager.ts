@@ -478,6 +478,10 @@ class RenderManager {
         // this.camera.position.set(19547.91987263343, 116964.69226804674, -11334.275986974659);
         // this.controls.orbit.target.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
 
+        // heine stitching issue
+        this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
+        this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
+
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
 

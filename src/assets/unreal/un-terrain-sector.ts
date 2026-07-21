@@ -82,6 +82,7 @@ abstract class UTerrainSector extends UObject {
 
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
+        const invSize = 1 / 4096;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
         const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Uint8ClampedArray(17 * 17 * 3);
@@ -155,7 +156,7 @@ abstract class UTerrainSector extends UObject {
                     const indexOffset = vertexIndex >> 5;
                     const vertexMask = 1 << (vertexIndex & 0x1F);
 
-                    isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask) !== 0;
+                    isVisible = (info.quadVisibilityBitmapOrig.getElem(indexOffset) & vertexMask) !== 0;
                 }
 
                 if (!isVisible) {
@@ -261,8 +262,8 @@ abstract class UTerrainSector extends UObject {
                 const hmy = y + this.offsetY;
                 const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                uvs[hmLayerOffset + idxOffset + 0] = hmx / info.heightmapX;
-                uvs[hmLayerOffset + idxOffset + 1] = hmy / info.heightmapY;
+                uvs[hmLayerOffset + idxOffset + 0] = (hmx + 0.5) / info.heightmapX - (hmx >= 240 ? (hmx - 240) * invSize : 0);
+                uvs[hmLayerOffset + idxOffset + 1] = (hmy + 0.5) / info.heightmapY - (hmy >= 240 ? (hmy - 240) * invSize : 0);
             }
         }
 
@@ -448,8 +449,7 @@ abstract class UTerrainSector extends UObject {
         const info = this.info.loadSelf();
         const invSize = 1 / 4096;
         const hmx = info.heightmapX, hmy = info.heightmapY;
-
-        const vertexCount = (this.quadsX + 1) * (this.quadsY + 1);
+        const vertexCount = 17 * 17;
         const vertices = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
@@ -460,8 +460,8 @@ abstract class UTerrainSector extends UObject {
             throw new Error("not implemented");
         }
 
-        for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= this.quadsY; y++) {
-            for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
+        for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= 16; y++) {
+            for (let x = 0; x <= 16; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
 
