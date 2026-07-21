@@ -31,7 +31,7 @@ async function startCore() {
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
-        loadEmitters: false,
+        loadEmitters: true,
         loadAudio: true,
         _loadEmitterList: [],
         _loadStaticModelList: [
@@ -84,7 +84,7 @@ async function startCore() {
 
             "StaticMeshActor49", /* church indoors too dark */ "StaticMeshActor6", /* church outdoors */
         ]
-    } as GD.LoadSettings_T;
+    } as const;
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;

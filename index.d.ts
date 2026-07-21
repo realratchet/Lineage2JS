@@ -147,10 +147,9 @@ declare global {
                     cache?: {
                         enabled?: boolean,
                         version?: number
-                    }
+                    },
+                    [key: `_${string}`]: any // debug/testing overrides, see core.ts
                 };
-
-
 
                 export interface IDecodedParameter {
                     uniforms: Record<string, any>,
