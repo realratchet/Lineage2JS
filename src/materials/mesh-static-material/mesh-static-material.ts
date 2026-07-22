@@ -142,6 +142,15 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
 
+        switch (info.blendingMode) {
+            case "modulate": defines["USE_MODULATED_FOG"] = ""; break;
+            case "alphaModulate":
+            case "translucent":
+            case "brighten":
+            case "darken":
+            case "invisible": defines["USE_ADDITIVE_FOG"] = ""; break;
+        }
+
         if (info.alphaTest !== undefined) uniforms.alphaTest.value = info.alphaTest;
 
         if (info.opacity || info.alphaTest !== undefined) defines["USE_ALPHATEST"] = "";
@@ -359,6 +368,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public setSway() {
         this.defines["USE_SWAY"] = "";
+
+        if (this.transparent && this.blending === NormalBlending) this.depthWrite = true;
 
         this.needsUpdate = true;
 

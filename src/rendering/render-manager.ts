@@ -380,8 +380,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
         // talking island
-        this.camera.position.set(-81847.51759016213, 247911.6738006922, -2178.2043655745533);
-        this.controls.orbit.target.set(-81887.17852556695, 247822.95386223609, -2201.779410074118);
+        this.camera.position.set(-94565.5599208028, 241247.1267543205, -2757.6753131407077);
+        this.controls.orbit.target.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -431,9 +431,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // // heine
-        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
-        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // heine
+        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
+        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);

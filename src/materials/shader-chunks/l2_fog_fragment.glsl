@@ -5,7 +5,9 @@
         float fogFactor = clamp( ( vFogDepth - fogNear ) / ( fogFar - fogNear ), 0.0, 1.0 );
     #endif
 
-    #ifdef USE_ADDITIVE_FOG
+    #ifdef USE_MODULATED_FOG
+        vec3 fogMixColor = vec3(127.0 / 255.0);
+    #elif defined(USE_ADDITIVE_FOG)
         vec3 fogMixColor = vec3(0.0);
     #else
         vec3 fogMixColor = fogColor;

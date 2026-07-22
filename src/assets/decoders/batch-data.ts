@@ -87,7 +87,7 @@ function groupActorsForBatching(
             return;
         }
 
-        const batchKey = `${meshGeometry.attributes.colors ? 1 : 0}:${actor.instance.attributes?.colors ? 1 : 0}`;
+        const batchKey = `${meshGeometry.attributes.colors ? 1 : 0}:${actor.instance.attributes?.colors ? 1 : 0}:${actor.instance.mesh.sway ? 1 : 0}`;
         if (!batchGroups.has(batchKey)) batchGroups.set(batchKey, []);
         batchGroups.get(batchKey)!.push(actor);
     });
