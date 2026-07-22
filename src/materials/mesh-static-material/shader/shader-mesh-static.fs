@@ -337,8 +337,8 @@ uniform float opacity;
     uniform CombinerData combiner;
 #endif
 
-#ifdef USE_GLOBAL_TIME
-    uniform float globalTime;
+#ifdef USE_GLOBAL_TIME_SECONDS
+    uniform float globalTimeSeconds;
 #endif
 
 #ifdef USE_AMBIENT
@@ -519,8 +519,7 @@ void main() {
 
         #ifdef USE_FADE
             // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
-            float fadeTimeSeconds = globalTime * 0.6;
-            float fadeTime = (fadeTimeSeconds + shSpecular.fadeColors.phase) / shSpecular.fadeColors.period;
+            float fadeTime = (globalTimeSeconds + shSpecular.fadeColors.phase) / shSpecular.fadeColors.period;
             float fadePercent;
 
             if (shSpecular.fadeColors.fadeType == 1) {

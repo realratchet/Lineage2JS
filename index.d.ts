@@ -280,7 +280,14 @@ declare global {
                 }
 
                 export interface IStaticMeshObjectDecodeInfo extends IBaseMeshObjectDecodeInfo {
-                    type: "StaticMesh"
+                    type: "StaticMesh",
+                    sway?: IStaticMeshSwayDecodeInfo
+                }
+
+                export interface IStaticMeshSwayDecodeInfo {
+                    pivotZ: number,
+                    frequency: number,
+                    maxAngle: number
                 }
 
                 export interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -369,6 +376,7 @@ declare global {
                     name?: string,
                     type: "StaticMeshInstance",
                     mesh: IStaticMeshObjectDecodeInfo,
+                    swayPhase?: number,
                     lights?: ILightInstanceDecodeInfo,
                     attributes?: {
                         colors?: Float32Array | Uint8Array
@@ -551,6 +559,7 @@ declare global {
                         normals?: Float32Array;
                         colors?: Float32Array | Uint8Array | Uint8ClampedArray,
                         colorsInstance?: Float32Array | Uint8Array | Uint8ClampedArray,
+                        sway?: Float32Array,
                         uvs?: Float32Array | Float32Array[];
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array;

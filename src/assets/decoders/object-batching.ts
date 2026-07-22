@@ -10,6 +10,19 @@ import { MeshLight } from "@client/objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { StaticMeshBatchManifest_T, BatchElement_T } from "./batch-data";
 
+export function makeSwayAttribute(vertexCount: number, info: GD.IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
+    const sway = new Float32Array(vertexCount * 4);
+
+    for (let i = 0; i < vertexCount; i++) {
+        sway[i * 4] = info.pivotZ;
+        sway[i * 4 + 1] = info.frequency;
+        sway[i * 4 + 2] = info.maxAngle;
+        sway[i * 4 + 3] = phase;
+    }
+
+    return sway;
+}
+
 function createBatchObject(
     name: string,
     mergedGeometry: BufferGeometry,
@@ -86,10 +99,13 @@ export function decodeStaticMeshInstance(
     fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry
 ) {
     const geometryUuid = info.mesh.geometry;
+    const geometryInfo = library.geometries[geometryUuid];
+    const sway = info.mesh.sway ? makeSwayAttribute((geometryInfo.attributes.positions as Float32Array).length / 3, info.mesh.sway, info.swayPhase ?? 0) : null;
     const infoGeo = {
-        ...library.geometries[geometryUuid],
+        ...geometryInfo,
         attributes: {
-            ...library.geometries[geometryUuid].attributes,
+            ...geometryInfo.attributes,
+            ...(sway ? { sway } : {}),
             ...Object.fromEntries(Object.keys(info.attributes).map((k: "colors") => [`${k}Instance`, (info.attributes as any)[k]]))
         }
     };
@@ -99,7 +115,7 @@ export function decodeStaticMeshInstance(
 
     const infoMats = library.materials[meshInfo.materials];
 
-    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, !!info.attributes.colors) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
+    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, !!info.attributes.colors, !!sway) || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
 
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
@@ -126,7 +142,7 @@ export function batchStaticMeshActors(
             const geometry = fetchGeometry(library.geometries[batch.geometry]);
             const geometryInfo = library.geometries[batch.geometry];
             const materialInfo = library.materials[batch.materials];
-            const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance)
+            const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
                 || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
             // The merged light matrix has always been identity (see mergeBatchGeometriesData)
             const lightInfo: MeshLight | null = batch.lights

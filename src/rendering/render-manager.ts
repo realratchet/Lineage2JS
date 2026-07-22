@@ -1091,8 +1091,7 @@ class RenderManager {
                 : MAX_OFFSCREEN_EMITTER_UPDATES;
         let offscreenEmitterUpdates = 0;
 
-        const globalTime = currentTime / 600;
-        GLOBAL_UNIFORMS.globalTime.value = globalTime;
+        GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
 
         // camera-facing billboard basis, computed once and shared as a uniform (was per-particle in sprite-emitter.ts's onBeforeRender)
         {

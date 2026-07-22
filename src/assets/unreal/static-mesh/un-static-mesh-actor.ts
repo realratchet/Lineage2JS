@@ -3,6 +3,7 @@ import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
 import FColor from "@client/assets/unreal/un-color";
+import cyrb53 from "@client/utils/hash-cyrb";
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -12,6 +13,10 @@ abstract class FAccessory extends UObject {
 
     //     return this;
     // }
+}
+
+function getSwayPhase(uuid: string): number {
+    return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
 }
 
 abstract class UStaticMeshActor extends UAActor {
@@ -243,6 +248,7 @@ abstract class UStaticMeshActor extends UAActor {
                 type: "StaticMeshInstance",
                 uuid: this.instance?.uuid || null,
                 name: this.instance?.objectName || null,
+                swayPhase: getSwayPhase(this.uuid),
                 attributes: { colors: instanceColors },
                 lights
             } as GD.IStaticMeshInstanceDecodeInfo,

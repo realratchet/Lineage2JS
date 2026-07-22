@@ -53,6 +53,8 @@ type PreparedActorGeometryData_T = {
     uvs: Float32Array | null;
     colors: ColorTypedArray_T | null;
     colorsInstance: ColorTypedArray_T | null;
+    sway: GD.IStaticMeshSwayDecodeInfo | null;
+    swayPhase: number;
     indices: ArrayLike<number> | null;
     groups: [number, number, number?][];
     materialIndices: number[];
@@ -201,6 +203,8 @@ function prepareActorGeometriesData(
             uvs: (uvs as Float32Array) ?? null,
             colors: (meshGeo.attributes.colors as ColorTypedArray_T) ?? null,
             colorsInstance: ((info.attributes as any)?.colors as ColorTypedArray_T) ?? null,
+            sway: info.mesh.sway ?? null,
+            swayPhase: info.swayPhase ?? 0,
             indices: meshGeo.indices ?? null,
             groups: (meshGeo.groups?.length > 0 ? meshGeo.groups : (meshGeo.indices ? [[0, meshGeo.indices.length, 0]] : [])) as [number, number, number?][],
             materialIndices: actorMaterialIndices,
@@ -266,6 +270,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let totalColliderIndices = 0;
     let hasColors = false;
     let hasColorsInstance = false;
+    let hasSway = false;
     let hasUVs = false;
     let ColorArrayConstructor: any = Float32Array;
     let ColorInstanceConstructor: any = Float32Array;
@@ -282,6 +287,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             hasColorsInstance = true;
             ColorInstanceConstructor = geo.colorsInstance.constructor;
         }
+        if (geo.sway) hasSway = true;
         if (geo.uvs) hasUVs = true;
     }
 
@@ -290,6 +296,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const mergedUVs = hasUVs ? new Float32Array(totalVertices * 2) : null;
     const mergedColors = hasColors ? new ColorArrayConstructor(totalVertices * 3) : null;
     const mergedColorsInstance = hasColorsInstance ? new ColorInstanceConstructor(totalVertices * 3).fill(127) : null; // 127 = 1.0 in the halved Modulate2X
+    const mergedSway = hasSway ? new Float32Array(totalVertices * 4) : null;
     const mergedIndices = new Uint32Array(totalIndices);
     const mergedColliderIndices = totalColliderIndices > 0 ? new Uint32Array(totalColliderIndices) : null;
 
@@ -307,7 +314,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const tmpN = new Vector3();
 
     for (let ai = 0; ai < actorGeometries.length; ai++) {
-        const { positions, normals, uvs, colors, colorsInstance, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, collider } = actorGeometries[ai];
+        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, collider } = actorGeometries[ai];
 
         for (let vi = 0; vi < vertexCount; vi++) {
             tmpV.fromArray(positions, vi * 3);
@@ -326,6 +333,18 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
         if (mergedUVs && uvs) mergedUVs.set(uvs.subarray(0, vertexCount * 2), vertexOffset * 2);
         if (mergedColors && colors) mergedColors.set(colors.subarray(0, vertexCount * 3), vertexOffset * 3);
         if (mergedColorsInstance && colorsInstance) mergedColorsInstance.set(colorsInstance.subarray(0, vertexCount * 3), vertexOffset * 3);
+        if (mergedSway && sway) {
+            tmpV.set(0, 0, sway.pivotZ).applyMatrix4(worldMatrix);
+
+            for (let vi = 0; vi < vertexCount; vi++) {
+                const offset = (vertexOffset + vi) * 4;
+
+                mergedSway[offset] = tmpV.z;
+                mergedSway[offset + 1] = sway.frequency;
+                mergedSway[offset + 2] = sway.maxAngle;
+                mergedSway[offset + 3] = swayPhase;
+            }
+        }
 
         if (indices) {
             for (const [start, count, materialIndex] of groups) {
@@ -402,7 +421,8 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             normals: mergedNormals,
             uvs: mergedUVs,
             colors: mergedColors,
-            colorsInstance: mergedColorsInstance
+            colorsInstance: mergedColorsInstance,
+            sway: mergedSway
         },
         mergedLights,
         mergedColliderIndices,
@@ -574,7 +594,8 @@ function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchMan
                     normals: attributes.normals,
                     ...(attributes.uvs ? { uvs: attributes.uvs } : {}),
                     ...(attributes.colors ? { colors: attributes.colors } : {}),
-                    ...(attributes.colorsInstance ? { colorsInstance: attributes.colorsInstance } : {})
+                    ...(attributes.colorsInstance ? { colorsInstance: attributes.colorsInstance } : {}),
+                    ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
                 groups: finalGroups

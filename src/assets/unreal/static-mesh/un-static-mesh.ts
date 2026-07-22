@@ -241,6 +241,11 @@ abstract class UStaticMesh extends UPrimitive {
         // debugger;
 
         let materialUuid = this.uuid;
+        const sway = this.swayObject ? {
+            pivotZ: this.boundingBox.min.z,
+            frequency: this.frequency,
+            maxAngle: this.maxSwayAngle
+        } : undefined;
 
         if (matModifiers?.length > 0) {
             const hash = new StringSet(matModifiers).hash();
@@ -283,6 +288,7 @@ abstract class UStaticMesh extends UPrimitive {
             name: this.objectName,
             geometry: this.uuid,
             materials: materialUuid,
+            sway
         } as GD.IStaticMeshObjectDecodeInfo;
 
         library.geometryInstances[this.uuid] = 0;
@@ -394,6 +400,7 @@ abstract class UStaticMesh extends UPrimitive {
             name: this.objectName,
             geometry: this.uuid,
             materials: materialUuid,
+            sway,
             children: [
                 // this.getDecodeTrisInfo(library),
             ]

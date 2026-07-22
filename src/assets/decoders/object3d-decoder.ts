@@ -9,7 +9,7 @@ import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 import BeamEmitter from "@client/objects/emitters/beam-emitter";
 import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
-import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance } from "./object-batching";
+import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance, makeSwayAttribute } from "./object-batching";
 import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
 import SwayingObject from "@client/objects/swaying-object";
@@ -44,6 +44,7 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.nodeIndex) geometry.setAttribute("nodeIndex", new BufferAttribute(info.attributes.nodeIndex, 1));
+    if (info.attributes.sway) geometry.setAttribute("sway", new BufferAttribute(info.attributes.sway, 4));
     if ((info.attributes as any).terrainIndex) geometry.setAttribute("terrainIndex", new BufferAttribute((info.attributes as any).terrainIndex, 1));
 
     if (info.indices) {
@@ -131,10 +132,13 @@ function decodeEdges(library: GD.DecodeLibrary, info: GD.IEdgesObjectDecodeInfo)
 }
 
 function decodeStaticMeshData(library: GD.DecodeLibrary, info: GD.IStaticMeshObjectDecodeInfo) {
-    const infoGeo = library.geometries[info.geometry];
+    let infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
+    const sway = info.sway ? makeSwayAttribute((infoGeo.attributes.positions as Float32Array).length / 3, info.sway) : null;
 
-    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, false) || new MeshBasicMaterial({ color: 0xff00ff });
+    if (sway) infoGeo = { ...infoGeo, attributes: { ...infoGeo.attributes, sway } };
+
+    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, false, !!sway) || new MeshBasicMaterial({ color: 0xff00ff });
     const geometry = fetchGeometry(infoGeo as GD.IGeometryDecodeInfo);
 
     return { geometry, materials };

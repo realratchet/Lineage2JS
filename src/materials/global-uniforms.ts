@@ -2,7 +2,7 @@ import { Uniform, UniformsLib, UniformsUtils, Vector3 } from "three";
 
 const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     UniformsLib.fog, {
-        globalTime: new Uniform(0),
+        globalTimeSeconds: new Uniform(0),
         // camera-facing billboard basis (world-space), recomputed once per frame in
         // render-manager.ts instead of once per particle - every instanced sprite
         // emitter's shader reads the same pair of vectors instead of each particle

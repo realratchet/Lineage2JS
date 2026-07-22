@@ -357,6 +357,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    public setSway() {
+        this.defines["USE_SWAY"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
     public setLit() {
         this.defines["USE_LIT_ATTRIBUTES"] = "";
 

@@ -28,7 +28,7 @@ const cacheStaticMaterialsByName = new Map<string, WeakCacheEntry_T<Map<string, 
 const canonicalStaticMaterials = new Map<string, WeakCacheEntry_T<THREE.Material>>();
 const dynamicUniformNames = new Set([
     "ambientLightColor", "cameraBillboardRight", "cameraBillboardUp", "directionalLights",
-    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTime",
+    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTimeSeconds",
     "hemisphereLights", "ltc_1", "ltc_2", "pointLights", "pointLightShadows", "rectAreaLights",
     "spotLights", "spotLightShadows"
 ]);
@@ -100,7 +100,7 @@ function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Mater
     return materials instanceof Array ? canonical : canonical[0];
 }
 
-function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean): THREE.Material | THREE.Material[] {
+function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean, sway: boolean): THREE.Material | THREE.Material[] {
     if (!info) return null;
 
     const name = info.name;
@@ -112,7 +112,7 @@ function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterial
         if (name) setWeakCacheValue(cacheStaticMaterialsByName, name, variants);
     }
 
-    const key = (vertexColors ? "v" : "") + (instanced ? "i" : "");
+    const key = (vertexColors ? "v" : "") + (instanced ? "i" : "") + (sway ? "s" : "");
 
     if (variants.has(key)) return variants.get(key);
 
@@ -121,6 +121,7 @@ function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterial
     (materials instanceof Array ? materials : [materials]).forEach((mat: any) => {
         if (!mat) return;
         if (instanced) mat.setInstanced?.();
+        if (sway) mat.setSway?.();
         if (vertexColors) mat.vertexColors = true;
     });
 
@@ -181,7 +182,7 @@ function decodeFadeColorModifier(library: DecodeLibrary, info: GD.IFadeColorDeco
         },
         defines: {
             USE_FADE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         transformType: "none",
         isUsingMap: false
@@ -201,7 +202,7 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
         transformType: "pan",
         defines: {
             USE_DIFFUSE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
             map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
@@ -223,7 +224,7 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
         transformType: "rotate",
         defines: {
             USE_DIFFUSE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
             map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
@@ -250,7 +251,7 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
         transformType: "oscillate",
         defines: {
             USE_DIFFUSE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
             map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,

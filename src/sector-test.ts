@@ -259,7 +259,7 @@ class SectorRenderTester {
             for (let step = 0; step < SIMULATION_STEPS; step++) {
                 const currentTime = performance.now() + step * SIMULATION_STEP_MS;
 
-                GLOBAL_UNIFORMS.globalTime.value = currentTime / 600;
+                GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
                 batchEmitters.length = 0;
 
                 // the app uses traverseVisible on the active sector, traverse everything
