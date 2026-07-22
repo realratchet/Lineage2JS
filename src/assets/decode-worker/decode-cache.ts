@@ -105,9 +105,6 @@ async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8
     }
 }
 
-/**
- * Deletes entries from other cache versions and entries past the TTL. Fire-and-forget.
- */
 async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
     let dir: FileSystemDirectoryHandle;
 

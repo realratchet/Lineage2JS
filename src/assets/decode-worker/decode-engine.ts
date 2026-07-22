@@ -52,8 +52,8 @@ class DecodeEngine {
 
     public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
         if (!this.hasSweptCache) {
+            await sweepDecodeCache(settings);
             this.hasSweptCache = true;
-            void sweepDecodeCache(settings);
         }
 
         console.log(`[decode] decoding sector '${sectorName}'`);

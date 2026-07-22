@@ -431,9 +431,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // heine
-        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
-        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // heine fountain
+        this.camera.position.set(112055.37149242389, 220146.2276990017, -3588.410935323853);
+        this.controls.orbit.target.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
@@ -1100,8 +1100,8 @@ class RenderManager {
             const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
             const projRight = tmpBillboardRight.crossVectors(projFront, projUp).normalize();
             projUp.crossVectors(projRight, projFront).normalize();
-            (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight).negate();
-            (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp).negate();
+            (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
+            (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
         }
 
         // Update helper camera: copy from main camera if inactive, otherwise keep frozen

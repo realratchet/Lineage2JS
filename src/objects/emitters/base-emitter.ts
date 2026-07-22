@@ -657,7 +657,7 @@ abstract class BaseEmitter extends Object3D {
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAccel.applyMatrix4(tmpWorldRotation);
         }
-        particle.velocity.add(currentAccel.multiplyScalar(spawnTime));
+        particle.velocity.add(currentAccel.multiplyScalar(spawnRangeScale * spawnTime));
         particle.velocityMultiplier.set(1, 1, 1);
         particle.revolutionsMultiplier.set(1, 1, 1);
 
@@ -977,6 +977,7 @@ abstract class BaseEmitter extends Object3D {
         const coordinateSystem = this.coordinateSystem;
         const currentAcceleration = tmpCurrentAcceleration.copy(this.acceleration);
         const ownerOffset = tmpOwnerOffset.copy(owner.position).sub(this.oldOwnerLocation);
+        const accelerationScale = this.parent?.scale.x ? 1 / this.parent.scale.x : 1;
 
         if (coordinateSystem === "independent") {
             // Independent acceleration is emitter-wide, not per-particle.
@@ -985,7 +986,7 @@ abstract class BaseEmitter extends Object3D {
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAcceleration.applyMatrix4(tmpWorldRotation);
         }
-        currentAcceleration.multiplyScalar(deltaTime);
+        currentAcceleration.multiplyScalar(accelerationScale * deltaTime);
 
         // Update particles.
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
