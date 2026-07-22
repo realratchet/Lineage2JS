@@ -285,4 +285,4 @@ function convertDDSMaterialsToRGBA(library: GD.DecodeLibrary) {
     }
 }
 
-export { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba, convertDDSMaterialsToRGBA };
+export { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba, convertDDSTextureInfo, convertDDSMaterialsToRGBA };

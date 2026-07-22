@@ -9,13 +9,13 @@ abstract class UPawn extends UAActor {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISkinnedMeshObjectDecodeInfo {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.ISkinnedMeshObjectDecodeInfo {
         if (!this.mesh) {
             console.warn(`Pawn '${this.objectName}' has no mesh, skipping`);
             return null;
         }
 
-        const meshInfo = this.mesh.loadSelf().getDecodeInfo(library);
+        const meshInfo = Object.assign({}, builder.pullSkeletalMesh(this.mesh));
 
         meshInfo.name = this.objectName;
         meshInfo.position = this.location.getElements();

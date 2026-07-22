@@ -63,6 +63,8 @@ abstract class ULevel extends ULevelBase {
     public setInfo(info: GA.ULevelInfo) { this.info = info; }
 
     public getModel() { return this.baseModel; }
+    public getActors() { return this.actors; }
+    public getAmbientActors() { return this.ambientActors; }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         super.doLoad(pkg, exp);

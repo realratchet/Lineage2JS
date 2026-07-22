@@ -312,32 +312,26 @@ abstract class UTexture extends UMaterial {
         } as GD.ITextureDecodeInfo;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.uuid;
-
-        library.materials[this.uuid] = null;
-
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
             const sprites: GD.ITextureDecodeInfo[] = [];
 
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(tex.loadSelf().decodeTexture(library));
+                sprites.push(tex.loadSelf().decodeTexture(builder.library));
                 tex = tex.animNext;
             }
 
-            library.materials[this.uuid] = {
+            return {
                 name: `Sprite_${this.uuid}`,
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate
             } as GD.IAnimatedSpriteDecodeInfo;
-        } else {
-            library.materials[this.uuid] = this.decodeTexture(library);
         }
 
-        return this.uuid;
+        return this.decodeTexture(builder.library);
     }
 }
 

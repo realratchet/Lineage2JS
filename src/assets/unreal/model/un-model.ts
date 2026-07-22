@@ -304,38 +304,44 @@ abstract class UModel extends UPrimitive {
         return (node.numVertices > 0) && !(node.flags & (BspNodeFlags_T.NF_IsNew | BspNodeFlags_T.NF_NotCsg));
     }
 
-    public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): void {
-        this.leaves.forEach((leaf: FLeaf) => library.bspLeaves.push(leaf.getDecodeInfo()));
+    public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): ModelZoneDecodeResult_T {
+        const result: ModelZoneDecodeResult_T = { bspLeaves: [], bspZones: [], bspZoneIndexMap: {} };
+
+        this.leaves.forEach((leaf: FLeaf) => result.bspLeaves.push(leaf.getDecodeInfo()));
         this.zones.forEach((zone: FZoneProperties, index: number) => {
             const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 
-            library.bspZones.push(bspZone);
+            result.bspZones.push(bspZone);
 
-            library.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
+            result.bspZoneIndexMap[bspZone.zoneInfo.uuid] = index;
         });
+
+        return result;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): string[][] {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, uLevelInfo: GA.ULevelInfo): ModelDecodeResult_T {
+        const library = builder.library;
+        const result: ModelDecodeResult_T = Object.assign(this.getZoneDecodeInfo(library, uLevelInfo), {
+            bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
+        });
 
-        this.multiLightmaps.map((lm: FMultiLightmapTexture) => lm.textures[0].staticLightmap.getDecodeInfo(library));
+        this.multiLightmaps.map((lm: FMultiLightmapTexture) => builder.pullStaticLightmap(lm.textures[0].staticLightmap));
 
-        this.getZoneDecodeInfo(library, uLevelInfo);
+        result.leafActors.length = result.bspLeaves.length;
+        result.nodeToSection.length = this.bspNodes.length;
+        result.nodeZoneMasks.length = this.bspNodes.length;
+        result.bspRenderBounds.length = this.bounds.getElemCount();
 
-        library.leafActors.length = library.bspLeaves.length;
-        library.nodeToSection.length = this.bspNodes.length;
-        library.nodeZoneMasks.length = this.bspNodes.length;
-        library.bspRenderBounds.length = this.bounds.getElemCount();
-
-        for (let i = 0; i < library.bspLeaves.length; i++)
-            library.leafActors[i] = [];
+        for (let i = 0; i < result.bspLeaves.length; i++)
+            result.leafActors[i] = [];
 
         for (let i = 0; i < this.bspNodes.length; i++)
-            library.nodeToSection[i] = -1;
+            result.nodeToSection[i] = -1;
 
         const _box = FBox.make();
 
         for (let i = 0, len = this.bounds.getElemCount(); i < len; i++)
-            library.bspRenderBounds[i] = this.bounds.getElem(i, _box).getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
+            result.bspRenderBounds[i] = this.bounds.getElem(i, _box).getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
 
         const sectionMap = new Map<PriorityGroups_T, Map<string, ObjectsForSection_T>>();
 
@@ -344,9 +350,9 @@ abstract class UModel extends UPrimitive {
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
             const nodeInfo = node.getBSPDecodeInfo(surf.flags) as GD.IBSPNodeDecodeInfo_T;
 
-            nodeInfo.zoneMask = library.nodeZoneMasks[nodeIndex] = node.zoneMask;
+            nodeInfo.zoneMask = result.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
-            library.bspNodes.push(nodeInfo);
+            result.bspNodes.push(nodeInfo);
 
             if (node.iCollisionBound >= 0) {
                 const hulls = this.leafHulls.getTypedArray() as Int32Array;
@@ -410,7 +416,7 @@ abstract class UModel extends UPrimitive {
             if (!library.isSkyLevel && isSkyZone) continue;
 
             if (node.iCollisionBound >= 0) {
-                library.bspColliders.push(nodeInfo.collision.bounds);
+                result.bspColliders.push(nodeInfo.collision.bounds);
             }
 
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
@@ -419,7 +425,7 @@ abstract class UModel extends UPrimitive {
 
 
             // Get material UUID
-            const materialUuid = surf.material.loadSelf().getDecodeInfo(library);
+            const materialUuid = builder.pullMaterial(surf.material);
             const lightmapTextureIndex = lightmapIndex ? lightmapIndex.iLightmapTexture : -1;
 
             // const matInfo = library.materials[library.materials[materialUuid].material];
@@ -562,9 +568,9 @@ abstract class UModel extends UPrimitive {
                 // const nodeIndex = this.bspNodes.indexOf(node); // Optimized: passed via NodeInfo_T
                 if (nodeIndex >= 0 && node.numVertices > 0) {
                     nodeIndices.push(nodeIndex);
-                    const sectionIndex = library.bspSections.length;
-                    library.nodeToSection[nodeIndex] = sectionIndex;
-                    library.bspNodes[nodeIndex].sectionIndex = sectionIndex;
+                    const sectionIndex = result.bspSections.length;
+                    result.nodeToSection[nodeIndex] = sectionIndex;
+                    result.bspNodes[nodeIndex].sectionIndex = sectionIndex;
                 }
             }
 
@@ -574,18 +580,18 @@ abstract class UModel extends UPrimitive {
             let finalMaterialUuid: string;
             if (lightmap) {
                 finalMaterialUuid = `${material}+LM_${generateUUID()}`;
-                library.materials[finalMaterialUuid] = {
+                result.materials.push([finalMaterialUuid, {
                     materialType: "lightmapped",
                     material: material,
                     lightmap: lightmap,
-                } as GD.IBaseMaterialDecodeInfo;
+                } as GD.IBaseMaterialDecodeInfo]);
             } else {
                 finalMaterialUuid = material;
             }
 
             // Create geometry for this section
             const geometryUuid = generateUUID();
-            library.geometries[geometryUuid] = {
+            result.geometries.push([geometryUuid, {
                 groups: [[0, indices.length, 0]],
                 indices: new TypedIndicesArray(indices),
                 attributes: {
@@ -594,7 +600,7 @@ abstract class UModel extends UPrimitive {
                     uvs: lightmap ? [uvs, uvs2] : [uvs],
                     nodeIndex: attrNodeIndices
                 }
-            };
+            }]);
 
             // Create section info (UE2-style: material + lightmap only, no zone splitting)
             const sectionInfo: GD.IBSPSectionDecodeInfo_T & { isOutdoor: boolean } = {
@@ -616,9 +622,9 @@ abstract class UModel extends UPrimitive {
                     ((sectionData.polyFlags & PolyFlags_T.PF_Additive) ? "brighten" : undefined),
             };
 
-            const sectionIndex = library.bspSections.length;
-            library.bspSections.push(sectionInfo);
-            library.bspSectionIndexMap.set(sectionKey, sectionIndex);
+            const sectionIndex = result.bspSections.length;
+            result.bspSections.push(sectionInfo);
+            result.bspSectionIndexMap.set(sectionKey, sectionIndex);
 
             return sectionIndex;
         };
@@ -631,7 +637,7 @@ abstract class UModel extends UPrimitive {
         }
 
 
-        return [];
+        return result;
     }
 }
 
@@ -643,6 +649,8 @@ function boxPushOut(normal: GA.FVector | GA.FPlane, size: GA.FVector) {
 }
 
 type PriorityGroups_T = "opaque" | "transparent";
+type ModelZoneDecodeResult_T = { bspLeaves: GD.IBSPLeafDecodeInfo_T[], bspZones: GD.IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
+type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspNodes: GD.IBSPNodeDecodeInfo_T[], bspColliders: GD.IBoxDecodeInfo[], leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: GD.IBoxDecodeInfo[], bspSections: GD.IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, GD.IGeometryDecodeInfo][], materials: [string, GD.IBaseMaterialDecodeInfo][] };
 // NEW: Section-based organization (replaces zone-based)
 type ObjectsForSection_T = {
     material: string,  // material UUID

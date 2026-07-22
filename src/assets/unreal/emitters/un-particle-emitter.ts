@@ -417,7 +417,9 @@ abstract class UParticleEmitter extends UObject {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.EmitterConfig_T {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.EmitterConfig_T {
+        const library = builder.library;
+
         if (this._particles && this._particles.length > 0)
             debugger;
 
@@ -482,7 +484,7 @@ abstract class UParticleEmitter extends UObject {
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
-            sounds: (this.sounds?.map(s => s.getDecodeInfo(library)).filter(s => s) as GD.IParticleSoundDecodeInfo[]) ?? [],
+            sounds: (this.sounds?.map(s => s.getDecodeInfo(builder)).filter(s => s) as GD.IParticleSoundDecodeInfo[]) ?? [],
             settings: this.getSettingsSnapshot(library)
         };
     }
@@ -621,26 +623,17 @@ abstract class UParticleSound extends UObject {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.IParticleSoundDecodeInfo | null {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IParticleSoundDecodeInfo | null {
         if (!this.sound) return null;
 
-        const snd = (this.sound as any).loadSelf();
+        const library = builder.library;
+        const snd = this.sound.loadSelf();
         if (!snd) return null;
 
         const soundKey = snd.objectName ?? snd.uuid;
-        let soundEntry = library.soundBlobCache.get(soundKey);
+        const soundEntry = builder.pullSound(snd);
 
-        if (!soundEntry) {
-            const audioData = snd.getAudioData();
-            if (!audioData || audioData.length === 0) return null;
-
-            const fileType = snd.getFileType()?.toLowerCase() ?? "wav";
-            const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
-            const blob = new Blob([audioData.buffer], { type: mimeType });
-
-            soundEntry = { uri: URL.createObjectURL(blob), data: audioData, mimeType };
-            library.soundBlobCache.set(soundKey, soundEntry);
-        }
+        if (!soundEntry) return null;
 
         return {
             soundDataUri: soundEntry.uri,

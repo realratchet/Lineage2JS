@@ -6,6 +6,8 @@ import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
 import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
 
+type TerrainSegmentDecodeResult_T = { object: GD.ITerrainSegmentDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialTerrainSegmentDecodeInfo };
+
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
     public light: GA.ULight;
@@ -60,22 +62,24 @@ abstract class UTerrainSector extends UObject {
     declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
 
-    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
+        const library = builder.library;
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oy, z: oz } = center;
 
 
         if (this.uuid in library.geometries) return {
-            uuid: this.uuid,
-            name: this.objectName,
-            type: "TerrainSegment",
-            geometry: this.uuid,
-            materials: this.uuid,
-            position: [ox, oy, oz]
-        } as GD.ITerrainSegmentDecodeInfo;
-
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
+            object: {
+                uuid: this.uuid,
+                name: this.objectName,
+                type: "TerrainSegment",
+                geometry: this.uuid,
+                materials: this.uuid,
+                position: [ox, oy, oz]
+            } as GD.ITerrainSegmentDecodeInfo,
+            geometry: null,
+            material: null
+        };
 
         // Generate triangulation data on demand
         this.generateTriangles();
@@ -267,7 +271,7 @@ abstract class UTerrainSector extends UObject {
             }
         }
 
-        library.geometries[this.uuid] = {
+        const geometryInfo = {
             attributes: {
                 positions,
                 colors,
@@ -285,7 +289,7 @@ abstract class UTerrainSector extends UObject {
 
         // debugger;
 
-        library.materials[this.uuid] = {
+        const materialInfo = {
             name: this.uuid,
             materialType: "terrainSegment",
             terrainMaterial: info.uuid,
@@ -299,7 +303,7 @@ abstract class UTerrainSector extends UObject {
             } as GD.IDataTextureDecodeInfo
         } as GD.IMaterialTerrainSegmentDecodeInfo;
 
-        return {
+        const objectInfo: GD.ITerrainSegmentDecodeInfo = {
             uuid: this.uuid,
             name: this.objectName,
             terrainInfoUuid: info.uuid,
@@ -322,7 +326,13 @@ abstract class UTerrainSector extends UObject {
             offsetY: this.offsetY,
             heightmapX: info.heightmapX,
             heightmapY: info.heightmapY
-        } as any;
+        };
+
+        return {
+            object: objectInfo,
+            geometry: geometryInfo,
+            material: materialInfo
+        };
     }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
@@ -797,5 +807,6 @@ abstract class UTerrainSector extends UObject {
 
 export default UTerrainSector;
 export { UTerrainSector };
+export type { HeightMapInfo_T };
 
 type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo, edgeTurns: Int32Array };

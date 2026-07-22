@@ -22,9 +22,9 @@ abstract class UNMoon extends UNCelestial {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
         const self = this.loadSelf();
-        const sprites = self.skins?.map(skin => skin.loadSelf().getDecodeInfo(library));
+        const sprites = self.skins?.map(skin => builder.pullMaterial(skin));
 
         return {
             type: "Moon",

@@ -5,6 +5,8 @@ import FBox from "@client/assets/unreal/un-box";
 import FColor from "@client/assets/unreal/un-color";
 import cyrb53 from "@client/utils/hash-cyrb";
 
+type StaticMeshActorDecodeResult_T = { object: GD.IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
+
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
 
@@ -119,14 +121,16 @@ abstract class UStaticMeshActor extends UAActor {
 
     protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> { return {}; }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): string {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): StaticMeshActorDecodeResult_T {
+        const library = builder.library;
+
         if (!this.mesh) {
             console.warn(`StaticMeshActor '${this.objectName}' has no static mesh, skipping`);
             return null;
         }
 
         const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
-        const meshInfo = mesh.getDecodeInfo(library, null);
+        const meshInfo = builder.pullStaticMesh(mesh, null);
 
         const level = this.getLevel();
         const baseModel = level.getModel();
@@ -144,14 +148,12 @@ abstract class UStaticMeshActor extends UAActor {
         const isMoverWithoutDynamicLight = this.physics === EPhysics_T.PHYS_MovingBrush && !this.isDynamicLightMover;
 
         if (!isStatic && !isMoverWithoutDynamicLight) {
-            this._exportActorToLibrary(library, meshInfo, null, predictedBox, null);
-            return this.uuid;
+            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
         }
 
         if (this.isHiddenInEditor) {
             // Still export actor even if hidden, is this really needed?
-            this._exportActorToLibrary(library, meshInfo, null, predictedBox, null);
-            return this.uuid;
+            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
         }
 
         const leaves: GA.FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox) : [];
@@ -187,26 +189,21 @@ abstract class UStaticMeshActor extends UAActor {
             isUnlit: this.isUnlit
         };
 
-        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
-
-        return this.uuid;
+        return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | Uint8Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): void {
+    protected getActorDecodeResult(library: GD.DecodeLibrary, meshInfo: GD.IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
         if (!geometryInfo) {
             console.warn(`Geometry info not found for meshInfo.geometry: ${meshInfo.geometry}, actor: ${this.objectName}`);
-            return;
+            return null;
         }
 
         const level = this.getLevel();
         const baseModel = level.getModel();
         const zone = this.getZone();
-        const bspZoneIndex = library.bspZoneIndexMap[zone.uuid];
-        const zoneInfo = library.bspZones[bspZoneIndex].zoneInfo;
-
         const _position = this.location.getElements();
 
         // skip actors outside of the sector as it doesn't make sense
@@ -220,7 +217,7 @@ abstract class UStaticMeshActor extends UAActor {
 
             if (loc.x < gridMinX || loc.x > gridMaxX ||
                 loc.y < gridMinY || loc.y > gridMaxY) {
-                return;
+                return null;
             }
         }
 
@@ -270,16 +267,14 @@ abstract class UStaticMeshActor extends UAActor {
         };
 
         let actorZoneMask = 0n;
+        let leafIndices: number[] = [];
 
         if (baseModel) {
             const origin = inflatedBox.getCenter();
             const inflatedExtent = inflatedBox.getExtents();
-            const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+            leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
 
             for (const leafIndex of leafIndices) {
-                if (library.leafActors[leafIndex]) {
-                    library.leafActors[leafIndex].push(actorInfo);
-                }
                 const leaf = library.bspLeaves[leafIndex];
                 if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
                     actorZoneMask |= (1n << BigInt(leaf.zone));
@@ -287,26 +282,18 @@ abstract class UStaticMeshActor extends UAActor {
             }
         }
 
-        (actorInfo as any).zoneMask = actorZoneMask;
+        actorInfo.zoneMask = actorZoneMask;
 
-        library.exportedActors.add(this.uuid);
-
-        library.geometryInstances[meshInfo.geometry]++;
-
+        let zoneBounds: { min: number[], max: number[] } = null;
         if (geometryInfo.bounds?.box) {
             const { min, max } = geometryInfo.bounds.box;
             const _min = min.map((v, i) => v + _position[i]);
             const _max = max.map((v, i) => v + _position[i]);
 
-            zoneInfo.bounds.isValid = true;
-
-            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
-                    for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], _min[i], _max[i]);
-                }
-            );
+            zoneBounds = { min: _min, max: _max };
         }
+
+        return { object: actorInfo, leafIndices, zoneUuid: zone.uuid, geometryUuid: meshInfo.geometry, zoneBounds };
     }
 }
 

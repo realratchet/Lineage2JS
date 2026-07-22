@@ -35,7 +35,7 @@ class DecodeLibrary {
     public readonly ambientSounds: GD.IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
-    public readonly isSkyLevel: boolean;
+    public isSkyLevel = false;
     public readonly skyLevel: {
         skybox: string;
         hazering: string;

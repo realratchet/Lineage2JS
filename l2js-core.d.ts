@@ -6,7 +6,6 @@ import type { UObject as UObject_ } from "@l2js/core/src/unreal/un-object";
 declare module "@l2js/core" {
     abstract class UObject extends UObject_ {
         public uuid: string;
-        public getDecodeInfo(library: GD.DecodeLibrary, ...args: any): any;
 
         /**
          * Force LSP to mark all inheriting classes as needing to implement this to remind about needing to make the class itself abstract.

@@ -171,7 +171,7 @@ abstract class UAActor extends UObject {
         ];
     }
 
-    protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+    protected getRegionLineHelper(color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();
         const _a = this.region.getZone().location;
         const _b = this.location;
@@ -184,7 +184,7 @@ abstract class UAActor extends UObject {
             ignoreDepth
         } as GD.IEdgesObjectDecodeInfo;
 
-        library.geometries[lineGeometryUuid] = {
+        const geometryInfo = {
             indices: new Uint8Array([0, 1]),
             attributes: {
                 positions: new Float32Array([
@@ -194,7 +194,7 @@ abstract class UAActor extends UObject {
             }
         };
 
-        return regionHelper;
+        return { object: regionHelper, uuid: lineGeometryUuid, geometry: geometryInfo };
     }
 
     public getLevel() { return this.levelInfo.getLevel(); }

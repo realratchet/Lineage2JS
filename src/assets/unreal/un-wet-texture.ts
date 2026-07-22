@@ -1,6 +1,6 @@
 import { UObject } from "@l2js/core";
 import UTexture from "./un-texture";
-import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
+import { convertDDSTextureInfo } from "@client/assets/decoders/dxt-decode";
 
 // WetTexture: a WaterTexture whose simulated water field displaces SourceTexture
 // horizontally each tick. The simulation itself runs client side
@@ -51,24 +51,21 @@ abstract class UWetTexture extends UTexture {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): string {
-        if (this.uuid in library.materials) return this.uuid;
-
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
         const source = this.sourceTexture?.loadSelf();
-        const info = source ? (source as any).decodeTexture(library) as GD.IBaseMaterialDecodeInfo : null;
+        const sourceUuid = source ? builder.pullMaterial(source) : null;
+        const info = sourceUuid ? builder.library.materials[sourceUuid] : null;
 
         // no usable source, draw it as a plain texture instead
         if (!info || info.materialType === "empty")
-            return source ? source.getDecodeInfo(library) : super.getDecodeInfo(library);
+            return sourceUuid ?? super.getDecodeInfo(builder);
+
+        if (!isTextureInfo(info)) return sourceUuid;
 
         // the sim needs cpu-readable rgba of the top mip
-        if ((info as any).textureType === "dds")
-            convertDDSMaterialsToRGBA({ materials: { source: info } } as any);
+        if (info.textureType === "dds") convertDDSTextureInfo(info);
 
-        if ((info as any).textureType !== "rgba")
-            return source.getDecodeInfo(library);
-
-        const dataInfo = info as GD.IDataTextureDecodeInfo;
+        if (info.textureType !== "rgba") return sourceUuid;
 
         // drops are in the wet texture's half resolution grid, the client scales them
         // when the source dimensions differ
@@ -86,25 +83,27 @@ abstract class UWetTexture extends UTexture {
                 byteD: d.byteD ?? 0
             }));
 
-        library.materials[this.uuid] = {
+        const wetInfo: GD.IWetTextureDecodeInfo = {
             name: this.uuid,
             materialType: "texture",
             textureType: "wet",
-            width: dataInfo.width,
-            height: dataInfo.height,
-            buffer: dataInfo.buffer,
+            width: info.width,
+            height: info.height,
+            buffer: info.buffer,
             format: "rgba",
             wrapS: this.wrapS,
             wrapT: this.wrapT,
             waveAmp: this.waveAmp ?? 128,
-            dropsX: this.width ? this.width >> 1 : dataInfo.width >> 1,
-            dropsY: this.height ? this.height >> 1 : dataInfo.height >> 1,
+            dropsX: this.width ? this.width >> 1 : info.width >> 1,
+            dropsY: this.height ? this.height >> 1 : info.height >> 1,
             drops
-        } as any;
+        };
 
-        return this.uuid;
+        return wetInfo;
     }
 }
+
+function isTextureInfo(info: GD.IBaseMaterialDecodeInfo): info is GD.ITextureDecodeInfo { return info.materialType === "texture"; }
 
 // ADrop.Type (UnFractal.h)
 enum EDropType_T {

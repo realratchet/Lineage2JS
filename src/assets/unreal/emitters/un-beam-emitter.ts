@@ -68,7 +68,9 @@ abstract class UBeamEmitter extends UParticleEmitter {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+        const library = builder.library;
+
         if (this.isUsingBranching)
             console.warn(`BeamEmitter '${this.objectName}': branching is not implemented`);
 
@@ -77,9 +79,9 @@ abstract class UBeamEmitter extends UParticleEmitter {
             relativeLength: f.relativeLength ?? 0
         }));
 
-        return Object.assign(super.getDecodeInfo(library), {
+        return Object.assign(super.getDecodeInfo(builder), {
             type: "BeamEmitter",
-            texture: this.texture?.loadSelf().getDecodeInfo(library),
+            texture: builder.pullMaterial(this.texture),
             beam: {
                 distanceRange: this.beamDistanceRange?.loadSelf().getDecodeInfo(library) ?? [0, 0],
                 endPoints: (this.beamEndPoints ?? []).filter(p => p).map(p => ({

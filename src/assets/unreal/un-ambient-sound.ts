@@ -1,5 +1,4 @@
 import UAActor from "./un-aactor";
-import { generateUUID } from "three/src/math/MathUtils";
 
 abstract class UAmbientSoundObject extends UAActor {
     declare public readonly sound: GA.USound;
@@ -26,10 +25,10 @@ abstract class UAmbientSoundObject extends UAActor {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
         if (!this.sound) return null;
 
-        const snd = (this.sound as any).loadSelf();
+        const snd = this.sound.loadSelf();
         if (!snd) return null;
 
         console.assert(isFinite(this.radius));
@@ -39,20 +38,9 @@ abstract class UAmbientSoundObject extends UAActor {
         console.assert(isFinite(this.randomAmbient));
 
         const soundKey = snd.objectName ?? snd.uuid;
-        let soundEntry = library.soundBlobCache.get(soundKey);
+        const soundEntry = builder.pullSound(snd);
 
-        if (!soundEntry) {
-            const audioData = snd.getAudioData();
-            if (!audioData || audioData.length === 0) return null;
-
-            const fileType = snd.getFileType()?.toLowerCase() ?? "wav";
-            const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
-            const blob = new Blob([audioData.buffer], { type: mimeType });
-
-            /* raw bytes ride along so the decode cache can re-mint the session-scoped blob URL */
-            soundEntry = { uri: URL.createObjectURL(blob), data: audioData, mimeType };
-            library.soundBlobCache.set(soundKey, soundEntry);
-        }
+        if (!soundEntry) return null;
 
         const soundDataUri = soundEntry.uri;
 
@@ -78,8 +66,6 @@ abstract class UAmbientSoundObject extends UAActor {
             soundType: this.soundType, // 0=Always, 1=Day, 2=Night, 3=Water
             randomDelay,
         };
-
-        library.ambientSounds.push(decodeInfo);
 
         return decodeInfo;
     }

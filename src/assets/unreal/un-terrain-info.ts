@@ -14,6 +14,8 @@ import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
 import FPlane from "@client/assets/unreal/un-plane";
 
+type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.ITerrainSegmentDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
+
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 
@@ -632,14 +634,15 @@ abstract class ATerrainInfo extends AInfo {
         // debugger;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): string {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
+        const library = builder.library;
         const terrainLayers = this.layers.filter(x => x);
         const layerCount = terrainLayers.length;
 
         // Force recalculation of texture matrices to ensure they use loaded layer data
         this.calcLayerTexCoords();
 
-        const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
+        const terrainUuid = builder.pullMaterial(this.terrainMap);
         const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
         const edgeTurnBitmap = this.edgeTurnBitmap.getTypedArray();
@@ -668,8 +671,8 @@ abstract class ATerrainInfo extends AInfo {
             }
 
             layers[k] = {
-                map: layer.map?.loadSelf().getDecodeInfo(library) ?? null,
-                alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) ?? null
+                map: builder.pullMaterial(layer.map),
+                alphaMap: builder.pullMaterial(layer.alphaMap)
             };
 
             if (layers[k].alphaMap && !layers[k].map)
@@ -678,40 +681,25 @@ abstract class ATerrainInfo extends AInfo {
 
 
 
-        library.materials[this.uuid] = {
+        const materialInfo = {
             name: this.uuid,
             materialType: "terrain",
             layers
         } as GD.IMaterialTerrainDecodeInfo;
 
-        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-        const children = this.sectors.map(sector => sector.loadSelf().getDecodeInfo(library, this, heightmapData));
+        const children = this.sectors.map(sector => builder.pullTerrainSector(sector, this, heightmapData));
 
-        const decodeInfo = {
+        const decodeInfo: GD.IBaseObjectDecodeInfo & { children: GD.ITerrainSegmentDecodeInfo[] } = {
             uuid: this.uuid,
             type: "TerrainInfo",
             name: this.objectName,
             // position,
             children
-        } as GD.IBaseObjectDecodeInfo;
-
-        zoneInfo.children.push(decodeInfo);
-        zoneInfo.bounds.isValid = true;
-
-        children.forEach(({ geometry: uuid }) => {
-            const { min, max } = library.geometries[uuid].bounds.box;
-
-            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
-                    for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], min[i], max[i]);
-                }
-            );
-        });
+        };
 
         // debugger;
 
-        return this.uuid;
+        return { object: decodeInfo, material: materialInfo, zoneUuid: this.getZone().uuid };
     }
 }
 

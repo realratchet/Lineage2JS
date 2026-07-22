@@ -127,6 +127,7 @@ declare global {
                 export type ArrGeometryGroup = [number, number, number];
 
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
+                export type DecodeLibraryBuilder = import("@unreal/decode-library-builder").DecodeLibraryBuilder;
                 export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
                 export type LoadSettings_T = {
@@ -135,6 +136,7 @@ declare global {
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
+                    loadEmitterList?: { name: string, emitters?: string[] }[],
                     loadAudio?: boolean,
                     textures: "auto" | "rgba" | "compressed",
                     helpersZoneBounds?: boolean,
@@ -224,7 +226,10 @@ declare global {
                     scale?: Vector3Arr,
                     moveEvent?: string,
                     siblings?: IBaseObjectOrInstanceDecodeInfo[],
-                    children?: IBaseObjectOrInstanceDecodeInfo[]
+                    children?: (IBaseObjectOrInstanceDecodeInfo | EmitterConfig_T)[],
+                    bounds?: IBoxDecodeInfo,
+                    zoneMask?: bigint,
+                    isRangeIgnored?: boolean
                 }
 
                 export interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
@@ -351,6 +356,7 @@ declare global {
 
                 export interface ITerrainSegmentDecodeInfo extends IBaseMeshObjectDecodeInfo {
                     type: "TerrainSegment",
+                    terrainInfoUuid?: string,
                     lighting?: {
                         lights: { light: string, flags: Uint8Array }[],
                         shadowMaps: Uint8Array[],
@@ -533,6 +539,14 @@ declare global {
                     format?: DataTextureFormats_T
                 }
 
+                export interface IWetTextureDecodeInfo extends IDataTextureDecodeInfo {
+                    textureType: "wet",
+                    waveAmp: number,
+                    dropsX: number,
+                    dropsY: number,
+                    drops: { type: string, depth: number, x: number, y: number, byteA: number, byteB: number, byteC: number, byteD: number }[]
+                }
+
                 export interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "lightmapped",
                     material: string,
@@ -569,7 +583,7 @@ declare global {
                     indices?: IndexLikeArray;
                     colliderIndices?: Uint32Array;
                     groups?: ArrGeometryGroup[],
-                    bounds?: IBoxDecodeInfo
+                    bounds?: IBoundsDecodeInfo
                 }
 
                 export interface IMaterialModifier {
@@ -598,6 +612,7 @@ declare global {
                 export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
 
                 export type EmitterConfig_T = {
+                    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter",
                     name?: string,
                     blendingMode: ParticleBlendModes_T,
                     uniformScale?: boolean,
@@ -865,7 +880,7 @@ declare global {
                 }
 
                 export interface IBoundsDecodeInfo {
-                    sphere: ISphereDecodeInfo,
+                    sphere?: ISphereDecodeInfo,
                     box: { min: Vector3Arr, max: Vector3Arr } | null
                 }
 

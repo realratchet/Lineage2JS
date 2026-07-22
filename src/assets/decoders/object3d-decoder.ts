@@ -841,7 +841,7 @@ function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) 
     return object;
 }
 
-function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
+function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo | GD.EmitterConfig_T): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":

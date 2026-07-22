@@ -1,11 +1,15 @@
 import { FObjectArray } from "@l2js/core/unreal/un-array";
+import UObject from "@l2js/core";
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
 import FBox from "./un-box";
 import FVector from "./un-vector";
 
+type EmitterDecodeResult_T = { object: GD.IBaseObjectDecodeInfo, leafIndices: number[], zoneUuid: string };
+
 abstract class UEmitter extends UAActor {
-    declare protected emitters: FObjectArray<UParticleEmitter>;
+    declare protected emitters: FObjectArray<UObject>;
+    protected subEmitterFilter: string[] | null = null;
 
     // protected _autoDestroy: any;
     // protected _autoReset: any;
@@ -124,46 +128,45 @@ abstract class UEmitter extends UAActor {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public setSubEmitterFilter(filter: string[] | null): this {
+        this.subEmitterFilter = filter;
+        return this;
+    }
 
-        // set by build-decode-library.ts from loadSettings.loadEmitterList; null loads every sub-emitter
-        const subEmitterFilter: string[] | null = (this as any).__subEmitterFilter ?? null;
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): EmitterDecodeResult_T {
+        const library = builder.library;
+        const emittersInfo: GD.EmitterConfig_T[] = [];
 
-        const emittersInfo = this.emitters.loadSelf()
-            .filter(e => {
-                if (!e) return false; // deleted sub-emitters serialize as None
+        this.emitters.loadSelf().forEach(emitter => {
+            if (!emitter) return;
 
-                // unsupported emitter types decode as plain objects
-                if (typeof (e as any).setActor !== "function") {
-                    console.warn(`Emitter '${this.objectName}' skipping unsupported sub-emitter '${(e as any).objectName}'`);
-                    return false;
-                }
+            if (!isParticleEmitter(emitter)) {
+                console.warn(`Emitter '${this.objectName}' skipping unsupported sub-emitter '${emitter.objectName}'`);
+                return;
+            }
 
-                if (subEmitterFilter && !subEmitterFilter.includes((e as any).objectName)) return false;
+            if (this.subEmitterFilter && !this.subEmitterFilter.includes(emitter.objectName)) return;
 
-                return true;
-            })
-            .map(e => e.setActor(this).getDecodeInfo(library)) as any as GD.IBaseObjectOrInstanceDecodeInfo[];
+            emittersInfo.push(emitter.setActor(this).getDecodeInfo(builder));
+        });
 
         const level = this.getLevel();
         const baseModel = level.getModel();
         const localToWorld = this.localToWorld();
         const zone = this.getZone();
-        const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
-
         const _position = this.location.getElements();
 
-        const actorInfo = {
+        const actorInfo: GD.IBaseObjectDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
             position: _position,
             scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
-            children: emittersInfo.filter(x => x),
+            children: emittersInfo,
             isRangeIgnored: !!this.isRangeIgnored,
             moveEvent: this.l2MoveEvent
-        } as GD.IBaseObjectDecodeInfo;
+        };
 
         // UParticleEmitter::UpdateParticles (UnParticleEmitter.cpp) rebuilds BoundingBox
         // every tick from live particles - can't replicate at decode time, so register
@@ -172,21 +175,19 @@ abstract class UEmitter extends UAActor {
             .transformBy(localToWorld).getCenter();
 
         // mirrors UStaticMeshActor.getDecodeInfo for zone-object.ts's BSP visibility pass; min===max, a point not a box
-        (actorInfo as any).bounds = {
+        actorInfo.bounds = {
             isValid: true,
             min: [worldOrigin.x, worldOrigin.y, worldOrigin.z],
             max: [worldOrigin.x, worldOrigin.y, worldOrigin.z]
         };
 
         let actorZoneMask = 0n;
+        let leafIndices: number[] = [];
 
         if (baseModel) {
-            const leafIndices = baseModel.boxLeavesRecursive(0, worldOrigin, FVector.make(0, 0, 0));
+            leafIndices = baseModel.boxLeavesRecursive(0, worldOrigin, FVector.make(0, 0, 0));
 
             for (const leafIndex of leafIndices) {
-                if (library.leafActors[leafIndex]) {
-                    library.leafActors[leafIndex].push(actorInfo);
-                }
                 const leaf = library.bspLeaves[leafIndex];
                 if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
                     actorZoneMask |= (1n << BigInt(leaf.zone));
@@ -194,15 +195,14 @@ abstract class UEmitter extends UAActor {
             }
         }
 
-        (actorInfo as any).zoneMask = actorZoneMask;
+        actorInfo.zoneMask = actorZoneMask;
 
-        // flat list (see decode-library.ts) - avoids double-gating on both leaf and zone mask
-        library.allEmitterActors.push(actorInfo);
-
-        zoneInfo.children.push(actorInfo);
-
-        return this.uuid;
+        return { object: actorInfo, leafIndices, zoneUuid: zone.uuid };
     }
+}
+
+function isParticleEmitter(emitter: UObject): emitter is UParticleEmitter {
+    return "setActor" in emitter && typeof emitter.setActor === "function";
 }
 
 export default UEmitter;

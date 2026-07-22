@@ -72,8 +72,6 @@ abstract class UMusicVolume extends UVolume {
             }
         };
 
-        library.musicVolumes.push(decodeInfo);
-
         return decodeInfo;
     }
 }

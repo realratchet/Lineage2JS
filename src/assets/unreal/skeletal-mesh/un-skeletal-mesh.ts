@@ -9,6 +9,8 @@ import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
 import { FIndexArray } from "@l2js/core/unreal/un-array";
 
+type SkeletalMeshDecodeResult_T = { object: GD.ISkinnedMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialGroupDecodeInfo };
+
 class FWeightIndex extends UObject {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     public startBoneInf: number;
@@ -355,27 +357,16 @@ abstract class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISkinnedMeshObjectDecodeInfo {
-        if (this.uuid in library.geometries) return {
-            uuid: this.uuid,
-            type: "SkinnedMesh",
-            name: this.objectName,
-            geometry: this.uuid,
-            materials: this.uuid
-        } as GD.ISkinnedMeshObjectDecodeInfo;
-
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
-
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): SkeletalMeshDecodeResult_T {
         const section = this;
         const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
         const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
 
-        const materials = this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => mat?.loadSelf().getDecodeInfo(library) || null);
+        const materials = this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat));
 
-        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
-        library.geometries[this.uuid] = {
+        const materialInfo = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
+        const geometryInfo = {
             attributes: {
                 positions,
                 skinIndex: bones,
@@ -476,14 +467,18 @@ abstract class USkeletalMesh extends ULodMesh {
         }
 
         return {
-            uuid: this.uuid,
-            type: "SkinnedMesh",
-            name: this.objectName,
-            geometry: this.uuid,
-            materials: this.uuid,
-            skeleton,
-            animations
-        } as ISkinnedMeshObjectDecodeInfo;
+            object: {
+                uuid: this.uuid,
+                type: "SkinnedMesh",
+                name: this.objectName,
+                geometry: this.uuid,
+                materials: this.uuid,
+                skeleton,
+                animations
+            } as ISkinnedMeshObjectDecodeInfo,
+            geometry: geometryInfo,
+            material: materialInfo
+        };
     }
 }
 

@@ -13,6 +13,8 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import StringSet from "@client/utils/string-set";
 import FArray, { FArrayLazy } from "@l2js/core/src/unreal/un-array";
 
+type StaticMeshDecodeResult_T = { object: GD.IStaticMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, materials: [string, GD.IBaseMaterialDecodeInfo][], colorMaterials: string[] };
+
 const triggerDebuggerOnUnsupported = true;
 
 
@@ -235,12 +237,14 @@ abstract class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary, matModifiers?: string[]): GD.IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, matModifiers?: string[]): StaticMeshDecodeResult_T {
         // await this.onDecodeReady();
 
         // debugger;
 
+        const library = builder.library;
         let materialUuid = this.uuid;
+        const materialsInfo: [string, GD.IBaseMaterialDecodeInfo][] = [];
         const sway = this.swayObject ? {
             pivotZ: this.boundingBox.min.z,
             frequency: this.frequency,
@@ -254,11 +258,11 @@ abstract class UStaticMesh extends UPrimitive {
             materialUuid = seededUuid(hashArr, materialUuid);
 
             if (!(materialUuid in library.materials)) {
-                library.materials[materialUuid] = {
+                materialsInfo.push([materialUuid, {
                     materialType: "instance",
                     baseMaterial: this.uuid,
                     modifiers: matModifiers
-                } as GD.IMaterialInstancedDecodeInfo;
+                } as GD.IMaterialInstancedDecodeInfo]);
 
                 // debugger;
             }
@@ -282,7 +286,7 @@ abstract class UStaticMesh extends UPrimitive {
         //     debugger;
         // }
 
-        if (this.uuid in library.geometries) return {
+        const objectInfo = {
             uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
@@ -291,9 +295,8 @@ abstract class UStaticMesh extends UPrimitive {
             sway
         } as GD.IStaticMeshObjectDecodeInfo;
 
-        library.geometryInstances[this.uuid] = 0;
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
+        if (this.uuid in library.geometries)
+            return { object: objectInfo, geometry: null, materials: materialsInfo, colorMaterials: [] };
 
         // 43 arrays of 30 uint8 values that are likely colors
         // 43x30 -> 1290
@@ -370,7 +373,7 @@ abstract class UStaticMesh extends UPrimitive {
             // collision[offset + 8] = verts[2][2];
         }
 
-        library.geometries[this.uuid] = {
+        const geometryInfo = {
             attributes: {
                 positions,
                 colors,
@@ -384,30 +387,14 @@ abstract class UStaticMesh extends UPrimitive {
         };
 
         // const materials = await Promise.all(this.materials.map((mat: UStaticMeshMaterial) => mat.getDecodeInfo(library)));
-        const materials = this.materials.map((mat: GA.UStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
+        const materials = this.materials.map((mat: GA.UStaticMeshMaterial) => builder.pullMaterial(mat));
 
-        materials.forEach(uuid => {
-            if (!library.materials[uuid]) return;
+        materialsInfo.push([this.uuid, { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo]);
 
-            library.materials[uuid].color = true;
-        });
-
-        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
-
-        return {
-            uuid: this.uuid,
-            type: "StaticMesh",
-            name: this.objectName,
-            geometry: this.uuid,
-            materials: materialUuid,
-            sway,
-            children: [
-                // this.getDecodeTrisInfo(library),
-            ]
-        };
+        return { object: objectInfo, geometry: geometryInfo, materials: materialsInfo, colorMaterials: materials };
     }
 
-    protected getDecodeTrisInfo(library: GD.DecodeLibrary): GD.IBaseObjectDecodeInfo {
+    protected getDecodeTrisInfo(): { object: GD.IBaseObjectDecodeInfo, uuid: string, geometry: GD.IGeometryDecodeInfo } {
         const trisCount = this.staticMeshTris.length;
         const trisGeometryUuid = generateUUID();
         const TypedIndicesArray = getTypedArrayConstructor(trisCount);
@@ -435,7 +422,7 @@ abstract class UStaticMesh extends UPrimitive {
         }
 
 
-        library.geometries[trisGeometryUuid] = {
+        const geometryInfo = {
             indices: trisIndices,
             attributes: {
                 positions: trisPositions
@@ -443,10 +430,14 @@ abstract class UStaticMesh extends UPrimitive {
         };
 
         return {
-            type: "Edges",
-            geometry: trisGeometryUuid,
-            color: [1, 0, 1]
-        } as GD.IEdgesObjectDecodeInfo;
+            object: {
+                type: "Edges",
+                geometry: trisGeometryUuid,
+                color: [1, 0, 1]
+            } as GD.IEdgesObjectDecodeInfo,
+            uuid: trisGeometryUuid,
+            geometry: geometryInfo
+        };
     }
 
     public getRenderBoundingBox(owner?: GA.AActor): GA.FBox {

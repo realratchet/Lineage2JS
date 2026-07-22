@@ -14,7 +14,8 @@ abstract class UL2FogInfo extends AInfo {
     declare protected readonly cloudTexture: GA.UMaterial;
     declare protected readonly textureDistance: number;
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+        const library = builder.library;
         let zoneMask = 0n;
         const level = this.getLevel();
         const model = level?.getModel();
@@ -44,7 +45,7 @@ abstract class UL2FogInfo extends AInfo {
             fogRange4: this.fogRange4.getDecodeInfo(library),
             fogRange5: this.fogRange5.getDecodeInfo(library),
             colors: this.colors.map(c => c.getDecodeInfo()),
-            cloudTexture: this.cloudTexture?.getDecodeInfo(library) ?? null,
+            cloudTexture: builder.pullMaterial(this.cloudTexture),
             zoneMask,
             textureDistance: this.textureDistance
         };
