@@ -47,8 +47,6 @@ abstract class UStaticMeshInstance extends UObject {
 
     public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
 
-
-
     public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;

@@ -138,7 +138,6 @@ abstract class UStaticMeshActor extends UAActor {
         // static per-vertex lighting on bStatic || (mover && !bDynamicLightMover) (UnStaticMesh.cpp Illuminate)
         const isMoverWithoutDynamicLight = this.physics === EPhysics_T.PHYS_MovingBrush && !this.isDynamicLightMover;
 
-
         if (!isStatic && !isMoverWithoutDynamicLight) {
             this._exportActorToLibrary(library, meshInfo, null, predictedBox, null);
             return this.uuid;
@@ -150,11 +149,7 @@ abstract class UStaticMeshActor extends UAActor {
             return this.uuid;
         }
 
-        let leaves: GA.FLeaf[] = [];
-        if (baseModel) {
-            leaves = baseModel.boxLeaves(predictedBox);
-        }
-
+        const leaves: GA.FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox) : [];
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
         // if (attributes.positions.length / 3 === 1587)
@@ -180,12 +175,10 @@ abstract class UStaticMeshActor extends UAActor {
             }
         }
 
-        const ambVector = FColor.fromFloating(ambX, ambY, ambZ)
-
+        const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as number[];
         const ambientProps = {
             glow: ambActor.ambientGlow,
-            // color: ambVector.toArray(),
-            vector: Array.from(ambVector.toArray()),
+            vector: ambVector,
             isUnlit: this.isUnlit
         };
 
