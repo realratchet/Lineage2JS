@@ -18,6 +18,7 @@ const PI = Math.PI;
 
 const MATERIAL_U_SIZE = 32; // Used for scaling instead of texture size
 const DEFAULT_CELESTIAL_RADIUS = 15000; // Calibrated for ~0.5 degree angular size
+const PF_TwoSided = 0x100;
 
 const TMP_VEC3 = new Vector3();
 const tmpColorByte = new ColorByte();
@@ -203,20 +204,12 @@ export default class SkyRenderer {
                 mesh.renderOrder = -9500 + meshCount;
                 this.skyLayers.skybox.push(mesh);
             } else if (type === "haze") {
-                mesh.renderOrder = -7000 + meshCount;
-
                 // Check for PF_TwoSided (0x100)
                 // Mesh name format: BSPSection_.../flags/...
                 const nameParts = mesh.name.split('/');
                 const flags = nameParts.length > 1 ? parseInt(nameParts[1]) || 0 : 0;
 
-                const PF_TwoSided = 0x100;
-
-                if (!(flags & PF_TwoSided)) {
-                    // If NOT TwoSided, we assume this is the AddLast/Glow mesh (Haze 2)
-                    // Render AFTER normal haze (-6500 range)
-                    mesh.renderOrder = -6500 + meshCount;
-                }
+                mesh.renderOrder = flags & PF_TwoSided ? -7000 + meshCount : -8500 + meshCount;
 
                 // material blending/transparency/depth/fog come from the decoding pipeline (un-model.ts + object3d-decoder.ts)
 
@@ -310,12 +303,13 @@ export default class SkyRenderer {
         // Haze - isolate Layer 1 (Clearing) and Layer 2 (Dome)
         this.skyLayers.haze.forEach((mesh) => {
 
-            // Dome is large/lower order (-7998), Ring is small/higher order (-5997)
             const material = mesh.material as any;
-            const isLayer2 = mesh.renderOrder < -7000;
+            const nameParts = mesh.name.split('/');
+            const flags = nameParts.length > 1 ? parseInt(nameParts[1]) || 0 : 0;
+            const isLayer2 = !!(flags & PF_TwoSided);
 
             if (isLayer2) {
-                mesh.visible = this.config.haze2;
+                mesh.visible = this.config.haze1 && this.config.haze2;
                 material.fog = false;
             } else {
                 mesh.visible = this.config.haze1;

@@ -431,9 +431,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // heine
-        this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
-        this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
+        // // heine
+        // this.camera.position.set(113559.02586613764, 223131.12350043328, -2633.230415081199);
+        // this.controls.orbit.target.set(113619.89248856776, 223208.91908878039, -2648.8221022150724);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
@@ -478,9 +478,9 @@ class RenderManager {
         // this.camera.position.set(19547.91987263343, 116964.69226804674, -11334.275986974659);
         // this.controls.orbit.target.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
 
-        // heine stitching issue
-        this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
-        this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
+        // // heine stitching issue
+        // this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
+        // this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

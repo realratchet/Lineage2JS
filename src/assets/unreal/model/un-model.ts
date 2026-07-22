@@ -556,12 +556,6 @@ abstract class UModel extends UPrimitive {
                     indices.push(findex, findex + i + 2, findex + i + 1);
                 }
 
-                if (surf.flags & PolyFlags_T.PF_TwoSided) {
-                    for (let i = 0; i < fcount; i++) {
-                        indices.push(findex, findex + i + 1, findex + i + 2);
-                    }
-                }
-
                 // Store node index for this section
                 // UE2 line 1024: Node.iSection = Section - &Sections(0);
                 // Only nodes with NumVertices > 0 get section indices
