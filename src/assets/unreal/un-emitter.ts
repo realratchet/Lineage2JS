@@ -147,7 +147,9 @@ abstract class UEmitter extends UAActor {
 
             if (this.subEmitterFilter && !this.subEmitterFilter.includes(emitter.objectName)) return;
 
-            emittersInfo.push(emitter.setActor(this).getDecodeInfo(builder));
+            const emitterInfo = emitter.setActor(this).getDecodeInfo(builder);
+
+            if (emitterInfo) emittersInfo.push(emitterInfo);
         });
 
         const level = this.getLevel();
