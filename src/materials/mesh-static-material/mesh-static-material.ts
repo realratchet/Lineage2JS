@@ -1,7 +1,10 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
+import { padTransformStages } from "./transform-stage";
 import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+
+const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -61,6 +64,13 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
             defines["OSCILLATE"] = 2;
             defines["ENVMAP"] = 3;
             defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
+
+            // nested UV transforms for NMoon1
+            const innerTransforms = (parameters.uniforms as any).innerTransforms;
+            if (innerTransforms?.length > 0 && TRANSFORM_CHAIN_SLOTS.has(name)) {
+                defines[`USE_MAP_${defName}_TRANSFORM_CHAIN`] = "";
+                uniforms[name].value.innerTransforms = padTransformStages(innerTransforms);
+            }
         }
     }
 }
@@ -141,6 +151,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         apply("shOpacity", info.opacity);
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
+
+        if (info.selfIllumination) defines["USE_SELF_ILLUMINATION"] = "";
 
         switch (info.blendingMode) {
             case "modulate": defines["USE_MODULATED_FOG"] = ""; break;
@@ -433,6 +445,7 @@ type MeshStaticMaterialParameters = {
     depthTest: boolean,
     visible: boolean,
     modulateStaticLighting2X?: boolean,
+    selfIllumination?: boolean,
     combiner?: {
         combineMode: number,
         material1: GD.IDecodedParameter,

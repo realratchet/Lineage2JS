@@ -30,6 +30,25 @@
             sampler2D texture;
             vec2 size;
         };
+
+        #define MAX_TRANSFORM_STAGES 2
+
+        // nested UV transforms, flattened innermost-first by material-decoder.ts
+        struct TransformStage {
+            int type; // PAN/ROTATE/OSCILLATE
+            mat3 matrix;
+            vec2 rate; // pan
+            vec3 rotation; // rotate
+            int rotationType; // rotate - TR_Fixed/Rotating/Oscillating (0/1/2)
+            vec3 oscillationRate; // rotate
+            vec3 oscillationAmplitude; // rotate
+            vec3 oscillationPhase; // rotate
+            float rateU, rateV; // oscillate
+            float phaseU, phaseV; // oscillate
+            float amplitudeU, amplitudeV; // oscillate
+            int typeU, typeV; // oscillate
+            float offsetU, offsetV; // rotate + oscillate
+        };
     #endif
 
     #ifdef USE_MAP_DIFFUSE_TRANSFORM
@@ -67,6 +86,11 @@
 
                 #ifdef USE_MAP_DIFFUSE_TRANSFORM
                     TransformDiffuseData transform;
+
+                    #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
+                        TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                        int numInnerTransforms;
+                    #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -112,6 +136,11 @@
 
                 #ifdef USE_MAP_OPACITY_TRANSFORM
                 TransformOpacityData transform;
+
+                #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -171,6 +200,11 @@
 
                 #ifdef USE_MAP_SPECULAR_TRANSFORM
                     TransformSpecularData transform;
+
+                    #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
+                        TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                        int numInnerTransforms;
+                    #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -216,6 +250,11 @@
 
                 #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
                 TransformSpecularMaskData transform;
+
+                #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -310,6 +349,24 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     return val;
 }
 
+#if defined(USE_MAP_DIFFUSE_TRANSFORM_CHAIN) || defined(USE_MAP_OPACITY_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN)
+    vec2 applyTransformStage(vec2 uv, TransformStage stage, float timeSeconds, vec2 size) {
+        if (stage.type == PAN) {
+            mat3 m = stage.matrix;
+            m[2].xy += (stage.rate * timeSeconds);
+            return (m * vec3(uv, 1)).xy;
+        } else if (stage.type == ROTATE) {
+            uv = rotateUV(uv, stage.rotation, stage.oscillationRate, stage.oscillationAmplitude, stage.oscillationPhase, stage.offsetU, stage.offsetV, timeSeconds, stage.rotationType, size);
+            return (stage.matrix * vec3(uv, 1)).xy;
+        } else if (stage.type == OSCILLATE) {
+            uv.x = oscillateAxis(uv.x, stage.rateU, stage.phaseU, stage.amplitudeU, stage.offsetU, stage.typeU, timeSeconds, size.x);
+            uv.y = oscillateAxis(uv.y, stage.rateV, stage.phaseV, stage.amplitudeV, stage.offsetV, stage.typeV, timeSeconds, size.y);
+            return (stage.matrix * vec3(uv, 1)).xy;
+        }
+        return uv;
+    }
+#endif
+
 void main() {
     #ifdef USE_INSTANCED_ATTRIBUTES
         vColorInstance = colorInstance;
@@ -343,6 +400,13 @@ void main() {
             vUvTransformedDiffuse.y = oscillateAxis(vUvTransformedDiffuse.y, shDiffuse.transform.rateV, shDiffuse.transform.phaseV, shDiffuse.transform.amplitudeV, shDiffuse.transform.offsetV, shDiffuse.transform.typeV, globalTimeSeconds, shDiffuse.map.size.y);
             vUvTransformedDiffuse = (shDiffuse.transform.matrix * vec3(vUvTransformedDiffuse, 1)).xy;
         #endif
+        #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
+            // UTexModifier::Matrix accumulates outer-to-inner
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shDiffuse.numInnerTransforms) continue;
+                vUvTransformedDiffuse = applyTransformStage(vUvTransformedDiffuse, shDiffuse.innerTransforms[i], globalTimeSeconds, shDiffuse.map.size);
+            }
+        #endif
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
@@ -362,6 +426,12 @@ void main() {
             vUvTransformedOpacity.x = oscillateAxis(vUvTransformedOpacity.x, shOpacity.transform.rateU, shOpacity.transform.phaseU, shOpacity.transform.amplitudeU, shOpacity.transform.offsetU, shOpacity.transform.typeU, globalTimeSeconds, shOpacity.map.size.x);
             vUvTransformedOpacity.y = oscillateAxis(vUvTransformedOpacity.y, shOpacity.transform.rateV, shOpacity.transform.phaseV, shOpacity.transform.amplitudeV, shOpacity.transform.offsetV, shOpacity.transform.typeV, globalTimeSeconds, shOpacity.map.size.y);
             vUvTransformedOpacity = (shOpacity.transform.matrix * vec3(vUvTransformedOpacity, 1)).xy;
+        #endif
+        #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shOpacity.numInnerTransforms) continue;
+                vUvTransformedOpacity = applyTransformStage(vUvTransformedOpacity, shOpacity.innerTransforms[i], globalTimeSeconds, shOpacity.map.size);
+            }
         #endif
     #endif
 
@@ -383,6 +453,12 @@ void main() {
             vUvTransformedSpecular.y = oscillateAxis(vUvTransformedSpecular.y, shSpecular.transform.rateV, shSpecular.transform.phaseV, shSpecular.transform.amplitudeV, shSpecular.transform.offsetV, shSpecular.transform.typeV, globalTimeSeconds, shSpecular.map.size.y);
             vUvTransformedSpecular = (shSpecular.transform.matrix * vec3(vUvTransformedSpecular, 1)).xy;
         #endif
+        #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shSpecular.numInnerTransforms) continue;
+                vUvTransformedSpecular = applyTransformStage(vUvTransformedSpecular, shSpecular.innerTransforms[i], globalTimeSeconds, shSpecular.map.size);
+            }
+        #endif
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
@@ -402,6 +478,12 @@ void main() {
             vUvTransformedSpecularMask.x = oscillateAxis(vUvTransformedSpecularMask.x, shSpecularMask.transform.rateU, shSpecularMask.transform.phaseU, shSpecularMask.transform.amplitudeU, shSpecularMask.transform.offsetU, shSpecularMask.transform.typeU, globalTimeSeconds, shSpecularMask.map.size.x);
             vUvTransformedSpecularMask.y = oscillateAxis(vUvTransformedSpecularMask.y, shSpecularMask.transform.rateV, shSpecularMask.transform.phaseV, shSpecularMask.transform.amplitudeV, shSpecularMask.transform.offsetV, shSpecularMask.transform.typeV, globalTimeSeconds, shSpecularMask.map.size.y);
             vUvTransformedSpecularMask = (shSpecularMask.transform.matrix * vec3(vUvTransformedSpecularMask, 1)).xy;
+        #endif
+        #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shSpecularMask.numInnerTransforms) continue;
+                vUvTransformedSpecularMask = applyTransformStage(vUvTransformedSpecularMask, shSpecularMask.innerTransforms[i], globalTimeSeconds, shSpecularMask.map.size);
+            }
         #endif
     #endif
 

@@ -415,13 +415,13 @@ function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
     // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {
         try {
-            console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);
+            // console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);
             if (celestialInfo.sprites && celestialInfo.sprites.length > 0) {
-                const spriteUuid = typeof celestialInfo.sprites[0] === 'string'
-                    ? celestialInfo.sprites[0]
-                    : celestialInfo.sprites[0].uuid || celestialInfo.sprites[0].material;
-
-                let spriteTextureInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
+                const spriteUuid = celestialInfo.sprites[0];
+                const materialInfo = library.materials[spriteUuid] as GD.IBaseMaterialDecodeInfo;
+                // NSun only ever uses .sprite
+                const material = celestialInfo.type === "Moon" ? decodeMaterial(library, materialInfo) : null;
+                let spriteTextureInfo = materialInfo as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
                 let texture = null;
 
                 // Handle Shader materials by extracting the diffuse texture
@@ -441,6 +441,7 @@ function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
                 sector.celestials.push({
                     type: celestialInfo.type,
                     sprite: texture,
+                    material,
                     data: celestialInfo
                 });
             }

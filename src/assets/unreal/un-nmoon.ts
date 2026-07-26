@@ -29,6 +29,7 @@ abstract class UNMoon extends UNCelestial {
         return {
             type: "Moon",
             sprites,
+            envType: self.envType,
             ...this.getCelestialDecodeInfo()
         };
     }

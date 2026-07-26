@@ -340,6 +340,8 @@ abstract class UShader extends UMaterial {
         const opacity = builder.pullMaterial(this.opacity);
         const specular = builder.pullMaterial(this.specular);
         const specularMask = builder.pullMaterial(this.specularMask);
+        const selfIllumination = specular ? null : builder.pullMaterial(this.selfIllumination);
+        const selfIlluminationMask = specular ? null : builder.pullMaterial(this.selfIlluminationMask);
         const depthWrite = this.depthWrite;
         const doubleSide = this.doubleSide;
         const transparent = this.transparent;
@@ -369,6 +371,8 @@ abstract class UShader extends UMaterial {
             opacity,
             specular,
             specularMask,
+            selfIllumination,
+            selfIlluminationMask,
             depthWrite,
             // depthTest: this.depthTest,
             doubleSide,

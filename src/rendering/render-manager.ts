@@ -1998,28 +1998,6 @@ class RenderManager {
 
     public setSky(sector: SectorObject) {
         this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
-
-        // Add GUI specific for Moons
-        if (this.skyRenderer.moons.length > 0) {
-            const moonFolder = guiFolders.world.addFolder("Moons");
-
-            if (this.skyRenderer.moons.length > 1) {
-                const moonConfig = { activeMoon: 0 };
-                const moonIndices: Record<string, number> = {};
-                this.skyRenderer.moons.forEach((m, i) => {
-                    const name = m.data.objectName || `Moon ${i + 1}`;
-                    moonIndices[name] = i;
-                });
-
-                moonFolder.add(moonConfig, "activeMoon", moonIndices)
-                    .name("Active Moon")
-                    .onChange((value) => {
-                        this.skyRenderer.setActiveMoon(parseInt(value as string));
-                    });
-            }
-
-            moonFolder.close();
-        }
     }
 
     public getLoadedSectors() {
@@ -2344,6 +2322,20 @@ function disposeSectorResources(sector: SectorObject) {
 
     for (const celestial of sector.celestials) {
         if (celestial.sprite?.isTexture) celestial.sprite.dispose();
+
+        const materials = Array.isArray(celestial.material) ? celestial.material : [celestial.material];
+        for (const material of materials) {
+            if (!material) continue;
+
+            // MeshStaticMaterial textures nest several levels deep (uniforms.shDiffuse.value.map.texture)
+            if ((material as any).uniforms) {
+                const textures = new Set<THREE.Texture>();
+                collectTexturesDeep((material as any).uniforms, textures, new WeakSet());
+                for (const texture of textures) texture.dispose();
+            }
+
+            material.dispose();
+        }
     }
 }
 

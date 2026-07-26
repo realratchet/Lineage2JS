@@ -1,6 +1,6 @@
 import {
     Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial,
-    Texture, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor,
+    DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor,
     PlaneGeometry, Group, BufferAttribute, Fog, Color,
     OneMinusSrcAlphaFactor
 } from 'three';
@@ -8,6 +8,7 @@ import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 import { SectorObject } from "@client/objects/zone-object";
 import EnvInfo from "@client/rendering/env-info";
+import { EEnvCycle } from "@unreal/env-consts";
 
 // Constants from Analysis (CELESTIAL_POSITIONING_COMPLETE.md)
 const DEG2RAD = Math.PI / 180;
@@ -41,7 +42,7 @@ class CelestialMaterial extends MeshBasicMaterial {
 
 
 class Celestial extends Mesh {
-    public static readonly _geometry = new PlaneGeometry(1, -1);
+    public static readonly _geometry = new PlaneGeometry(-1, -1);
 
     public constructor() {
         super(Celestial._geometry, new CelestialMaterial());
@@ -56,7 +57,6 @@ export default class SkyRenderer {
 
     private celestialScene = new Scene();
     public sun: Celestial = new Celestial();
-    public moon: Celestial = new Celestial();
     private camera: PerspectiveCamera | null = null;
 
     private sunData: any = null;
@@ -74,34 +74,14 @@ export default class SkyRenderer {
         clouds: { mesh: Mesh, index: number }[];
     } = { skybox: [], haze: [], clouds: [] };
 
-
-    public moons: { data: any, texture: Texture | null }[] = [];
-    public activeMoonIndex: number = 0;
+    private moonActors: { mesh: Mesh; data: any; envType: EEnvCycle }[] = [];
 
     public constructor() {
         this.celestialScene.add(this.skyLayerGroup);
         this.celestialScene.add(this.sun);
-        this.celestialScene.add(this.moon);
 
         this.sun.renderOrder = -9000;
-        this.moon.renderOrder = -8999;
     }
-
-    public setActiveMoon(index: number) {
-        if (index >= 0 && index < this.moons.length) {
-            this.activeMoonIndex = index;
-            this.updateActiveMoonMaterial();
-        }
-    }
-
-    private updateActiveMoonMaterial() {
-        const activeMoon = this.moons[this.activeMoonIndex];
-        if (activeMoon && activeMoon.texture) {
-            (this.moon.material as MeshBasicMaterial).map = activeMoon.texture;
-            (this.moon.material as MeshBasicMaterial).needsUpdate = true;
-        }
-    }
-
 
 
     public initSkyLevel(envInfo: EnvInfo, skyLevel: SectorObject) {
@@ -122,6 +102,9 @@ export default class SkyRenderer {
 
         const stetup = envInfo.setup
 
+        this.moonActors.forEach(actor => this.celestialScene.remove(actor.mesh));
+        this.moonActors = [];
+
         celestials.forEach(celestial => {
             if (celestial.type === "Sun") {
                 this.sunData = celestial.data;
@@ -130,16 +113,39 @@ export default class SkyRenderer {
                     (this.sun.material as MeshBasicMaterial).needsUpdate = true;
                 }
             } else if (celestial.type === "Moon") {
-                this.moons.push({ data: celestial.data, texture: celestial.sprite });
+                if (Array.isArray(celestial.material) || !("defines" in celestial.material))
+                    throw new Error(`NMoon '${celestial.data.objectName}' decoded to an unsupported material shape`);
+
+                const material = celestial.material as any;
+
+                // DrawMoon (0x8EA8A0) hardcodes SRCALPHA/ONE + ZWRITE=0, ignoring the Shader's OutputBlending
+                material.side = DoubleSide;
+                material.transparent = true;
+                material.depthWrite = false;
+                material.depthTest = false;
+                material.blending = CustomBlending;
+                material.blendSrc = SrcAlphaFactor;
+                material.blendDst = OneFactor;
+
+                // l2_fog_fragment.glsl mixes toward the real fog color by default; additive needs USE_ADDITIVE_FOG to fade to black instead
+                delete material.defines.USE_MODULATED_FOG;
+                material.defines.USE_ADDITIVE_FOG = "";
+
+                // that blend weights each layer by its own texture alpha, otherwise the quad adds at alpha 1
+                material.defines.USE_MASKING = "";
+                material.needsUpdate = true;
+
+                const mesh = new Mesh(Celestial._geometry, material);
+                mesh.frustumCulled = false;
+                mesh.visible = false;
+                this.celestialScene.add(mesh);
+
+                this.moonActors.push({ mesh, data: celestial.data, envType: celestial.data.envType ?? EEnvCycle.Normal });
             }
         });
 
-        this.moons.sort((a, b) => (a.data.objectName || "").localeCompare(b.data.objectName || ""));
-
-        if (this.moons.length > 0) {
-            this.activeMoonIndex = 0;
-            this.updateActiveMoonMaterial();
-        }
+        this.moonActors.sort((a, b) => (a.data.objectName || "").localeCompare(b.data.objectName || ""));
+        this.moonActors.forEach((actor, i) => actor.mesh.renderOrder = -8999 + i);
 
         const { skybox, hazering, clouds } = envInfo.setup;
         const bspSections = skyLevel.getObjectByName("BSP_Sections");
@@ -240,7 +246,7 @@ export default class SkyRenderer {
             }
         });
 
-        console.log(`[SkyRenderer] layers: skybox=${this.skyLayers.skybox.length}, haze=${this.skyLayers.haze.length}, clouds=${this.skyLayers.clouds.length} (of ${children.length} bsp meshes; patterns: skybox='${skybox}', haze='${hazering}', clouds=[${clouds.join(", ")}])`);
+        // console.log(`[SkyRenderer] layers: skybox=${this.skyLayers.skybox.length}, haze=${this.skyLayers.haze.length}, clouds=${this.skyLayers.clouds.length} (of ${children.length} bsp meshes; patterns: skybox='${skybox}', haze='${hazering}', clouds=[${clouds.join(", ")}])`);
     }
 
     public update(camera: PerspectiveCamera, env: L2Environment, skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], _fogColor: ColorByte, fogStart: number, fogEnd: number, _sector: SectorObject | null, clearColor: ColorByte, skyVisibility: number) {
@@ -416,40 +422,35 @@ export default class SkyRenderer {
         } else this.sun.visible = false;
     }
 
-    private updateMoon(timeOfDay: number, camera: PerspectiveCamera, env: L2Environment, fogColor: ColorByte, fogStart: number, fogEnd: number) {
-        if (this.moons.length === 0 || this.activeMoonIndex < 0 || !this.config.celestials) {
-            this.moon.visible = false;
+    private updateMoon(timeOfDay: number, camera: PerspectiveCamera, env: L2Environment, _fogColor: ColorByte, _fogStart: number, _fogEnd: number) {
+        if (this.moonActors.length === 0 || !this.config.celestials) {
+            this.moonActors.forEach(actor => actor.mesh.visible = false);
             return;
         }
+
         const [lat] = this.getCelestialPositioningAngles(timeOfDay, "moon");
-        if (lat !== NEG_PI) {
-            this.moon.visible = true;
-            const activeMoon = this.moons[this.activeMoonIndex];
-            const radius = activeMoon.data.radius || DEFAULT_CELESTIAL_RADIUS;
-            const offset = this.calculateCelestialOffset(timeOfDay, "moon", radius);
-            this.moon.position.copy(camera.position).add(offset);
-            const scale = this.calculateCelestialScale("moon", activeMoon.data.celestialScale ?? 1.0, activeMoon.data.drawScale ?? 1.0, env);
-            this.moon.scale.setScalar(scale);
-            this.moon.lookAt(camera.position);
+        if (lat === NEG_PI) {
+            this.moonActors.forEach(actor => actor.mesh.visible = false);
+            return;
+        }
 
-            const mat = this.moon.material as MeshBasicMaterial;
+        const activeEnv = env.getActiveEnv();
 
-            // Accurate Coloring: Use White as base (Env MoonColor is dead code/red)
-            tmpColorByte.set(255, 255, 255);
-
-            // Apply CPU-side fog blending
-            const dist = offset.length(); // Radial distance from camera
-            if (dist > fogStart) {
-                let visibility = (fogEnd - dist) / (fogEnd - fogStart);
-                visibility = Math.max(0, Math.min(1, visibility));
-
-                const fogFactor = 1.0 - visibility;
-                tmpColorByte.lerp(fogColor, fogFactor);
+        this.moonActors.forEach(actor => {
+            if (actor.envType !== activeEnv) {
+                actor.mesh.visible = false;
+                return;
             }
 
-            mat.color.setRGB(tmpColorByte.r / 255, tmpColorByte.g / 255, tmpColorByte.b / 255);
-            mat.opacity = 1.0;
-        } else this.moon.visible = false;
+            actor.mesh.visible = true;
+
+            const radius = actor.data.radius || DEFAULT_CELESTIAL_RADIUS;
+            const offset = this.calculateCelestialOffset(timeOfDay, "moon", radius);
+            actor.mesh.position.copy(camera.position).add(offset);
+            const scale = this.calculateCelestialScale("moon", actor.data.celestialScale ?? 1.0, actor.data.drawScale ?? 1.0, env);
+            actor.mesh.scale.setScalar(scale);
+            actor.mesh.lookAt(camera.position);
+        });
     }
 
     public render(renderer: WebGLRenderer) {

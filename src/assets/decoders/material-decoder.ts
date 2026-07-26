@@ -3,6 +3,7 @@ import _decodeTexture from "./texture-decoder";
 import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
 import DecodeLibrary from "../unreal/decode-library";
+import { buildTransformStage } from "@client/materials/mesh-static-material/transform-stage";
 
 const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
 type WeakCacheEntry_T<T extends object> = { deref(): T | undefined };
@@ -163,6 +164,26 @@ function fetchMapTexture(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInf
     return decodeParameter(library, info)?.uniforms?.map ?? null;
 }
 
+function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | null): { map: GD.MapData_T | null, innerTransforms: any[] } {
+    if (materialIndex === null) return { map: null, innerTransforms: [] };
+
+    const info = library.materials[materialIndex] as GD.IBaseMaterialDecodeInfo;
+    if (!info || info.materialType === "empty") return { map: fetchMapTexture(library, info), innerTransforms: [] };
+
+    const decoded = decodeParameter(library, info);
+    if (!decoded) return { map: null, innerTransforms: [] };
+
+    const nestedTransforms = decoded.uniforms.innerTransforms ?? [];
+
+    if (decoded.transformType === "none")
+        return { map: decoded.uniforms.map, innerTransforms: nestedTransforms };
+
+    return {
+        map: decoded.uniforms.map,
+        innerTransforms: [...nestedTransforms, buildTransformStage(decoded.transformType as "pan" | "rotate" | "oscillate", decoded.uniforms.transform)]
+    };
+}
+
 function decodeFadeColorModifier(library: DecodeLibrary, info: GD.IFadeColorDecodeInfo): GD.IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
@@ -197,6 +218,8 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
         console.warn(`[MaterialDecoder] PanTexture map not found in library: ${materialIndex}`);
     }
 
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
+
     return {
         isUsingMap,
         transformType: "pan",
@@ -205,12 +228,14 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
             USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
+            map: resolved.map,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: Array.isArray(info.transform.rate) ? new Vector2().fromArray(info.transform.rate) : info.transform.rate,
                 map: materialIndex
-            }
+            },
+            innerTransforms: resolved.innerTransforms,
+            numInnerTransforms: resolved.innerTransforms.length
         }
     };
 }
@@ -218,6 +243,8 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
 function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
     const isUsingMap = materialIndex !== null;
+
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
 
     return {
         isUsingMap,
@@ -227,7 +254,7 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
             USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
+            map: resolved.map,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rotation: [info.transform.rotation[0], info.transform.rotation[1], info.transform.rotation[2]],
@@ -237,7 +264,9 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
                 oscillationRate: info.transform.oscillationRate,
                 oscillationAmplitude: info.transform.oscillationAmplitude,
                 oscillationPhase: info.transform.oscillationPhase
-            }
+            },
+            innerTransforms: resolved.innerTransforms,
+            numInnerTransforms: resolved.innerTransforms.length
         }
     };
 }
@@ -245,6 +274,8 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
 function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscillatorDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
     const isUsingMap = materialIndex !== null;
+
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
 
     return {
         isUsingMap,
@@ -254,7 +285,7 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
             USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchMapTexture(library, library.materials[materialIndex]) : null,
+            map: resolved.map,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rateU: info.transform.rateU,
@@ -267,7 +298,9 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
                 typeV: info.transform.typeV === "pan" ? 0 : info.transform.typeV === "stretch" ? 1 : info.transform.typeV === "stretchRepeat" ? 2 : 3,
                 offsetU: info.transform.offsetU,
                 offsetV: info.transform.offsetV
-            }
+            },
+            innerTransforms: resolved.innerTransforms,
+            numInnerTransforms: resolved.innerTransforms.length
         }
     };
 }
@@ -427,11 +460,14 @@ function decodeCombiner(library: DecodeLibrary, info: GD.ICombinerDecodeInfo): M
 }
 
 function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshStaticMaterial {
+    // D3DTSS_COLOROP = D3DTOP_BLENDCURRENTALPHA (L2.dusk_and_dawn.trace call 9416187, TextureStageState2)
+    const useSelfIllumination = !info.specular && !!info.selfIllumination && !!info.selfIlluminationMask;
+
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, library.materials[info.diffuse]),
         opacity: decodeParameter(library, library.materials[info.opacity]),
-        specular: decodeParameter(library, library.materials[info.specular]),
-        specularMask: decodeParameter(library, library.materials[info.specularMask]),
+        specular: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIllumination : info.specular]),
+        specularMask: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIlluminationMask : info.specularMask]),
         side: info.doubleSide ? DoubleSide : FrontSide,
         blendingMode: info.blendingMode,
         transparent: info.transparent,
@@ -439,7 +475,8 @@ function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshS
         depthWrite: info.depthWrite,
         depthTest: info.depthTest,
         visible: info.visible,
-        modulateStaticLighting2X: info.modulateStaticLighting2X
+        modulateStaticLighting2X: info.modulateStaticLighting2X,
+        selfIllumination: useSelfIllumination
     });
 }
 

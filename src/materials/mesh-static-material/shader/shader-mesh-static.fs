@@ -31,6 +31,24 @@ uniform float opacity;
         sampler2D texture;
         vec2 size;
     };
+
+    #define MAX_TRANSFORM_STAGES 2
+
+    struct TransformStage {
+        int type; // PAN/ROTATE/OSCILLATE
+        mat3 matrix;
+        vec2 rate; // pan
+        vec3 rotation; // rotate
+        int rotationType; // rotate - TR_Fixed/Rotating/Oscillating (0/1/2)
+        vec3 oscillationRate; // rotate
+        vec3 oscillationAmplitude; // rotate
+        vec3 oscillationPhase; // rotate
+        float rateU, rateV; // oscillate
+        float phaseU, phaseV; // oscillate
+        float amplitudeU, amplitudeV; // oscillate
+        int typeU, typeV; // oscillate
+        float offsetU, offsetV; // rotate + oscillate
+    };
 #endif
 
 #ifdef USE_DIFFUSE
@@ -71,6 +89,11 @@ uniform float opacity;
 
                 #ifdef USE_MAP_DIFFUSE_TRANSFORM
                 TransformDiffuseData transform;
+
+                #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
                 #endif
             #endif
         };
@@ -128,6 +151,11 @@ uniform float opacity;
             #endif
             #ifdef USE_MAP_OPACITY_TRANSFORM
                 TransformOpacityData transform;
+
+                #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
             #endif
         };
 
@@ -198,6 +226,11 @@ uniform float opacity;
 
             #ifdef USE_MAP_SPECULAR_TRANSFORM
                 TransformSpecularData transform;
+
+                #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
             #endif
         };
 
@@ -254,6 +287,11 @@ uniform float opacity;
             #endif
             #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
                 TransformSpecularMaskData transform;
+
+                #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
             #endif
         };
 
@@ -542,7 +580,14 @@ void main() {
         
         #ifdef USE_MAP_SPECULAR_MASK
             vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
-            reflectedLight.directDiffuse += texelSpecularMask.a * specularColor;
+            #ifdef USE_SELF_ILLUMINATION
+                // D3DTOP_BLENDCURRENTALPHA over CURRENT, which is indirectDiffuse here - directDiffuse is 0 unlit
+                reflectedLight.indirectDiffuse = mix(reflectedLight.indirectDiffuse, specularColor, texelSpecularMask.a);
+                // that op's alpha comes from D3DTOP_SELECTARG1, D3DTA_TEXTURE on the mask stage
+                diffuseColor.a = texelSpecularMask.a;
+            #else
+                reflectedLight.directDiffuse += texelSpecularMask.a * specularColor;
+            #endif
         #else
             reflectedLight.directDiffuse *= specularColor;
         #endif

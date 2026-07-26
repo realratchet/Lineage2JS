@@ -768,6 +768,8 @@ declare global {
                     opacity: string,
                     specular: string,
                     specularMask: string,
+                    selfIllumination: string,
+                    selfIlluminationMask: string,
                     blendingMode: GA.SupportedBlendingTypes_T,
                     depthWrite: boolean,
                     depthTest: boolean,
