@@ -276,6 +276,7 @@ class UNativePackage extends ANativePackage {
             case "L2EnvironmentColorInfo": Constructor = UL2EnvironmentColorInfo; break;
 
             case "L2RotatorTime": Constructor = FL2RotatorTime; break;
+            case "SkillActionInfo": Constructor = UObject; break;
 
             // structs we dont care about yet
             case "InterpCurve":
@@ -403,6 +404,10 @@ class UNativePackage extends ANativePackage {
             case "Pawn": Constructor = UPawn; break;
             case "LineagePlayerController": Constructor = UnStubs.ULineagePlayerController; break;
             case "AmbientSound": Constructor = UnStubs.UAmbientSound; break;
+            case "SkillVisualEffect":
+            case "SkillAction":
+            case "SkillAction_LocateEffect":
+            case "SkillAction_SwordTrail": Constructor = UObject; break;
 
 
             default:

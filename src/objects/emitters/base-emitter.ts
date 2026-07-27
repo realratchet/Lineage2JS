@@ -1,6 +1,7 @@
 import { Box3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import type InstancedSpriteMesh from "./instanced-sprite-mesh";
+import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
 
 const frozenUpdateMatrixWorld = function () { };
 
@@ -106,6 +107,7 @@ abstract class BaseEmitter extends Object3D {
     protected warmupTicksPerSecond: number;
     protected maxParticles: number;
     protected boundingBox = new Box3();
+    public worldParticleExtent: number = 0;
     protected particleGeometryRadius: number = 1;
     protected drawScale: number = 1;
     protected addLocationFromOtherEmitter: number;
@@ -853,6 +855,7 @@ abstract class BaseEmitter extends Object3D {
 
         this.boundingBox.makeEmpty();
         let deadParticles = 0;
+        let maxParticleExtent = 0;
 
         // Verify range of critical variables.
         if (owner) {
@@ -1268,6 +1271,7 @@ abstract class BaseEmitter extends Object3D {
             const particleExtent = Math.max(particle.scale.x, particle.scale.y, particle.scale.z) * this.particleGeometryRadius;
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(particleExtent));
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(-particleExtent));
+            if (particleExtent > maxParticleExtent) maxParticleExtent = particleExtent;
 
             // Clamping velocity.
             if (this.maxAbsVelocity.x)
@@ -1309,6 +1313,9 @@ abstract class BaseEmitter extends Object3D {
 
         // Subclasses use this to expand bounding box accordingly.
         this.maxSizeScale = maxScale * maxVelocityScale * maxScaleSizeByVelocityMultiplier;
+
+        // boundingBox picks up the parent chain's drawScale through matrixWorld, the billboard quad never does - carry the drawn half-size so cullers can undo it
+        if (this.instancedMesh) this.worldParticleExtent = maxParticleExtent * this.maxSizeScale * this.scale.x;
 
         // Finalize state.
         if ((deadParticles >= this.maxActiveParticles || (this.activeParticles - deadParticles) <= 0) && this.particlesPerSecond === 0 && !this.isRespawningDeadParticles)
@@ -1364,7 +1371,8 @@ abstract class BaseEmitter extends Object3D {
         // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
         if (this.instancedMesh) this.instancedMesh.visible = true;
 
-        if (this.instancedMesh?.isWorldBatchCandidate) {
+        // mirrors instanced-sprite-batcher's grouping test - whatever it rejects still has to fill its own mesh below
+        if (this.instancedMesh?.isWorldBatchCandidate && this.activeCount > 0 && isOrderIndependentAdditive(this.instancedMesh.material)) {
             // Batched emitters write directly from simulation state.
             this.instancedMesh.clearInstances();
             if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);

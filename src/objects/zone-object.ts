@@ -1357,6 +1357,7 @@ class SectorObject extends Object3D {
                         if (!box || box.isEmpty()) continue;
 
                         tmpEmitterBox.copy(box).applyMatrix4(child.matrixWorld);
+                        tmpEmitterBox.expandByScalar((child as any).worldParticleExtent);
 
                         if (cameraFrustum.intersectsBox(tmpEmitterBox)) {
                             isFrustumVisible = true;

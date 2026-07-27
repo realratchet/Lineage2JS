@@ -116,7 +116,6 @@ class SpriteParticleBatch {
             required += Math.min(emitter.maxActiveParticles, emitter.activeParticles);
 
         this.ensureCapacity(Math.max(required, 1));
-        this.mesh.material.uniforms = emitters[0].instancedMesh.material.uniforms;
 
         const positions = this.positionAttr.array as Float32Array;
         const rights = this.fixedNormal ? this.rightAttr.array as Float32Array : null;
@@ -257,6 +256,9 @@ class SpriteParticleBatch {
         this.uvAttr = make(4);
 
         if (geometry) {
+            // WebGLBindingStates only computes _maxInstanceCount while it is undefined - a stale one clamps every later draw to the original capacity
+            (geometry as any)._maxInstanceCount = undefined;
+
             geometry.setAttribute("instancePosition", this.positionAttr);
             if (this.fixedNormal) {
                 geometry.setAttribute("instanceRight", this.rightAttr);
@@ -288,6 +290,10 @@ class InstancedSpriteBatcher {
         for (const emitter of emitters) {
             const mesh = emitter.instancedMesh;
             const material = mesh?.material;
+
+            // a batch takes this back below - whatever the grouping rejects has to draw itself again
+            if (material) material.visible = true;
+
             if (!mesh?.visible || !mesh.isWorldBatchCandidate || !emitter.activeCount || !isOrderIndependentAdditive(material)) continue;
 
             if (!emitter.worldBatchSubdivUV) emitter.worldBatchSubdivUV = [0, 0, 1, 1];
@@ -323,4 +329,4 @@ class InstancedSpriteBatcher {
 }
 
 export default InstancedSpriteBatcher;
-export { InstancedSpriteBatcher };
+export { InstancedSpriteBatcher, isOrderIndependentAdditive };
