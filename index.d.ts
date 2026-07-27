@@ -610,6 +610,7 @@ declare global {
 
                 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
                 export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+                export type AmbientSoundTypes_T = "always" | "day" | "night" | "water";
 
                 export type EmitterConfig_T = {
                     type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter",
@@ -758,8 +759,8 @@ declare global {
                     soundDataUri: string,
                     soundName: string,
                     looping: boolean,
-                    soundType: number, // 0=Always, 1=Day, 2=Night, 3=Water
-                    randomDelay: number, // max seconds between repetitions (0 = seamless loop)
+                    soundType: AmbientSoundTypes_T,
+                    randomChance: number,
                 }
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {

@@ -1742,51 +1742,57 @@ class RenderManager {
             }
         }
 
-        // Ambient sound spatial update (UE2: MAX_AUDIOCHANNELS=32, priority-sorted by distance)
+        // Ambient sound spatial update, after UALAudioSubsystem::Update in the retail alaudio.dll
         {
-            const MAX_AMBIENT_CHANNELS = 24; // leave headroom for music/effects
             const camPos = this.camera.position;
             const timeOfDay = this.environment.getTimeOfDay(); // 0-24 hours
             const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
-            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, distSq: number }[] = [];
+            const activeIds = this.audioManager.activeAmbientSoundIds;
+            const audibleSounds = new Map<string, number>();
+            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, priority: number }[] = [];
 
             for (const [, sectorYMap] of this.sectors) {
                 for (const [, sector] of sectorYMap) {
                     if (!sector.ambientSounds) continue;
                     for (const snd of sector.ambientSounds) {
-                        // L2 AmbientSoundType: 0=Always, 1=Day, 2=Night, 3=Water
-                        if (snd.soundType === 1 && !isDaytime) continue; // Day-only sound at night
-                        if (snd.soundType === 2 && isDaytime) continue;  // Night-only sound during day
+                        if (snd.soundType === "day" && !isDaytime) continue;
+                        if (snd.soundType === "night" && isDaytime) continue;
+                        if (snd.soundType === "water") continue; // TODO: plays only while the listener is in a water volume
 
                         const dx = snd.position[0] - camPos.x;
                         const dy = snd.position[1] - camPos.y;
                         const dz = snd.position[2] - camPos.z;
                         const distSq = dx * dx + dy * dy + dz * dz;
-                        if (distSq <= snd.maxDistance * snd.maxDistance) {
-                            candidates.push({ uuid: snd.uuid, snd, distSq });
-                        }
+                        const maxDistSq = snd.maxDistance * snd.maxDistance;
+
+                        if (distSq > maxDistSq) continue;
+
+                        // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
+                        const priority = snd.volume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
+
+                        audibleSounds.set(snd.uuid, priority);
+
+                        if (activeIds.has(snd.uuid)) continue;
+                        if (!snd.looping && !this.audioManager.rollAmbientTrigger(snd.uuid, snd.soundDataUri, snd.randomChance, currentTime)) continue;
+
+                        candidates.push({ uuid: snd.uuid, snd, priority });
                     }
                 }
             }
 
-            // Sort by distance (closest = highest priority), take only top N
-            candidates.sort((a, b) => a.distSq - b.distSq);
-            const inRangeSounds = new Map<string, GD.IAmbientSoundObjectDecodeInfo>();
-            for (let i = 0; i < Math.min(candidates.length, MAX_AMBIENT_CHANNELS); i++) {
-                inRangeSounds.set(candidates[i].uuid, candidates[i].snd);
+            // A playing ambient is never dropped for merely ranking below the newcomers
+            for (const id of activeIds) {
+                const priority = audibleSounds.get(id);
+
+                if (priority === undefined) this.audioManager.stopAmbientSound(id);
+                else this.audioManager.setAmbientPriority(id, priority);
             }
 
-            // Stop sounds no longer in range or below priority cutoff
-            for (const id of this.audioManager.activeAmbientSoundIds) {
-                if (!inRangeSounds.has(id)) {
-                    this.audioManager.stopAmbientSound(id);
-                }
-            }
+            candidates.sort((a, b) => b.priority - a.priority);
 
-            // Start sounds newly in range
-            for (const [id, snd] of inRangeSounds) {
-                this.audioManager.playAmbientSound(
-                    id,
+            for (const { uuid, snd, priority } of candidates) {
+                const placed = this.audioManager.playAmbientSound(
+                    uuid,
                     snd.soundName,
                     snd.soundDataUri,
                     snd.position,
@@ -1794,10 +1800,11 @@ class RenderManager {
                     snd.pitch,
                     snd.refDistance,
                     snd.maxDistance,
-                    snd.randomDelay,
                     snd.looping,
-                    currentTime
+                    priority
                 );
+
+                if (!placed) break;
             }
 
             // Update listener position from camera - AudioParam writes cross to the

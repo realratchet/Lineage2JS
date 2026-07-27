@@ -582,17 +582,16 @@ class Visualizer {
                 const ref = s.info.refDistance;
                 let attenuation = 1.0;
                 if (s.dist > ref) {
-                    attenuation = ref / (ref + 1.0 * (s.dist - ref));
+                    attenuation = ref / (ref + 0.5 * (s.dist - ref));
                 }
                 const actualVol = baseVol * attenuation;
 
                 const baseVolText = Math.round(baseVol * 100).toString().padStart(3, " ");
                 const actualVolText = Math.round(actualVol * 100).toString().padStart(3, " ");
                 const status = s.isPlaying ? "PLAYING" : "WAITING";
-                const delayText = s.nextReplayTime !== undefined ? 
-                    ` (next: ${Math.round((s.nextReplayTime - currentTime) / 100) / 10}s)` : "";
+                const prioText = ` (prio: ${Math.round(s.priority * 1000) / 1000}${s.info.looping ? ", loop" : ""})`;
 
-                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${delayText}`;
+                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${prioText}`;
                 line.style.color = s.isPlaying ? "#fff" : "#888";
                 line.style.borderColor = s.isPlaying ? "#0f0" : "#444";
             });

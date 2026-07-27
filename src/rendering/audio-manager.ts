@@ -1,6 +1,26 @@
 import { randInt } from "three/src/math/MathUtils";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
+const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini
+
+type AmbientInfo_T = {
+    dataUri: string,
+    soundName: string,
+    position: [number, number, number],
+    volume: number,
+    pitch: number,
+    refDistance: number,
+    maxDistance: number,
+    looping: boolean
+};
+
+type AmbientChannel_T = {
+    source?: AudioBufferSourceNode,
+    panner?: PannerNode,
+    gain?: GainNode,
+    priority: number,
+    info: AmbientInfo_T
+};
 
 class AudioManager {
     protected readonly musicFiles: Record<number, string[]> = {};
@@ -19,6 +39,7 @@ class AudioManager {
     protected nextMusicPlayId?: number;
     protected fadeEndTime?: number;
     protected lastTime = 0;
+    protected prevTime = 0;
 
     protected currentPlayId = 0;
 
@@ -212,6 +233,7 @@ class AudioManager {
     }
 
     public async update(currentTime: number) {
+        this.prevTime = this.lastTime;
         this.lastTime = currentTime;
 
         // Handle music delays
@@ -232,17 +254,6 @@ class AudioManager {
             if (buffer && targetIndex !== undefined && (playId === undefined || this.currentPlayId === playId)) {
                 this.playBuffer(buffer, currentTime);
                 this.preloadNext(targetIndex);
-            }
-        }
-
-        // Handle ambient delays
-        for (const [id, entry] of this.activeAmbientSounds) {
-            if (entry.nextReplayTime !== undefined && currentTime >= entry.nextReplayTime) {
-                entry.nextReplayTime = undefined;
-                const buffer = this.ambientBufferCache.get(entry.info.dataUri);
-                if (buffer) {
-                    this.startAmbientSource(id, buffer, entry, currentTime);
-                }
             }
         }
     }
@@ -295,26 +306,40 @@ class AudioManager {
         }
     }
 
-    protected readonly activeAmbientSounds = new Map<string, {
-        source?: AudioBufferSourceNode,
-        panner: PannerNode,
-        gain: GainNode,
-        nextReplayTime?: number,
-        info: {
-            dataUri: string,
-            soundName: string,
-            position: [number, number, number],
-            volume: number,
-            pitch: number,
-            refDistance: number,
-            maxDistance: number,
-            randomDelay: number,
-            looping: boolean
-        }
-    }>();
+    protected readonly activeAmbientSounds = new Map<string, AmbientChannel_T>();
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
+    protected readonly ambientSlotAnchors = new Map<string, number>();
+    protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
 
-    public async playAmbientSound(
+    // alaudio.dll 0x1000cb5f: a non-looping ambient is rerolled once per Sound->Duration slot counted from AmbientSoundStartTime, and enters the candidate list when appRand()%100 < AmbientRandom
+    public rollAmbientTrigger(id: string, dataUri: string, randomChance: number, currentTime: number): boolean {
+        const buffer = this.ambientBufferCache.get(dataUri);
+
+        if (!buffer) {
+            this.loadAmbientBuffer(dataUri);
+            return false;
+        }
+
+        const anchor = this.ambientSlotAnchors.get(id);
+        if (anchor === undefined) {
+            this.ambientSlotAnchors.set(id, currentTime);
+            return randInt(0, 99) < randomChance;
+        }
+
+        const slotMs = buffer.duration * 1000;
+        if (Math.floor((currentTime - anchor) / slotMs) <= Math.floor((this.prevTime - anchor) / slotMs)) return false;
+
+        return randInt(0, 99) < randomChance;
+    }
+
+    public setAmbientPriority(id: string, priority: number) {
+        const entry = this.activeAmbientSounds.get(id);
+
+        if (entry) entry.priority = priority;
+    }
+
+    // alaudio.dll 0x1000cd77 breaks out of the sorted candidate loop the first time this returns 0
+    public playAmbientSound(
         id: string,
         soundName: string,
         dataUri: string,
@@ -323,81 +348,124 @@ class AudioManager {
         pitch: number,
         refDistance: number,
         maxDistance: number,
-        randomDelay: number,
         looping: boolean,
-        currentTime?: number
-    ) {
-        if (this.activeAmbientSounds.has(id)) return;
+        priority: number
+    ): boolean {
+        if (this.activeAmbientSounds.has(id)) return true;
 
-        const time = currentTime ?? this.lastTime;
+        if (this.activeAmbientSounds.size >= MAX_AUDIOCHANNELS && !this.stealAmbientChannel(priority)) return false;
 
-        this.activeAmbientSounds.set(id, {
-            info: { dataUri, soundName, position, volume, pitch, refDistance, maxDistance, randomDelay, looping }
-        } as any);
+        const entry: AmbientChannel_T = {
+            priority,
+            info: { dataUri, soundName, position, volume, pitch, refDistance, maxDistance, looping }
+        };
 
+        this.activeAmbientSounds.set(id, entry);
+
+        const buffer = this.ambientBufferCache.get(dataUri);
+        if (buffer) this.startAmbientSource(id, buffer, entry);
+        else this.startAmbientSoundAsync(id, entry);
+
+        return true;
+    }
+
+    // PlaySound takes the lowest-priority voice still below the incoming priority
+    protected stealAmbientChannel(priority: number): boolean {
+        let victimId: string | undefined;
+        let bestPriority = priority;
+
+        for (const [id, entry] of this.activeAmbientSounds) {
+            if (entry.priority >= bestPriority) continue;
+
+            victimId = id;
+            bestPriority = entry.priority;
+        }
+
+        if (victimId === undefined) return false;
+
+        this.stopAmbientSound(victimId);
+
+        return true;
+    }
+
+    protected async startAmbientSoundAsync(id: string, entry: AmbientChannel_T) {
         await this.ensureUnlocked();
 
-        let buffer = this.ambientBufferCache.get(dataUri);
+        const buffer = await this.loadAmbientBuffer(entry.info.dataUri);
         if (!buffer) {
+            this.activeAmbientSounds.delete(id);
+            return;
+        }
+
+        if (this.activeAmbientSounds.get(id) !== entry) return;
+
+        this.startAmbientSource(id, buffer, entry);
+    }
+
+    protected async loadAmbientBuffer(dataUri: string): Promise<AudioBuffer | null> {
+        const cached = this.ambientBufferCache.get(dataUri);
+        if (cached) return cached;
+
+        if (this.pendingAmbientBuffers.has(dataUri)) return this.pendingAmbientBuffers.get(dataUri)!;
+
+        const pending = (async () => {
             try {
                 const res = await fetch(dataUri);
                 const raw = await res.arrayBuffer();
-                buffer = await this.audioContext.decodeAudioData(raw);
-                this.ambientBufferCache.set(dataUri, buffer);
-            } catch (e) {
-                console.warn(`Failed to decode ambient sound ${id}`, e);
-                this.activeAmbientSounds.delete(id);
-                return;
-            }
-        }
+                const buffer = await this.audioContext.decodeAudioData(raw);
 
-        const entry = this.activeAmbientSounds.get(id);
-        if (!entry) return;
+                this.ambientBufferCache.set(dataUri, buffer);
+
+                return buffer;
+            } catch (e) {
+                console.warn(`Failed to decode ambient sound ${dataUri}`, e);
+                return null;
+            } finally {
+                this.pendingAmbientBuffers.delete(dataUri);
+            }
+        })();
+
+        this.pendingAmbientBuffers.set(dataUri, pending);
+
+        return pending;
+    }
+
+    protected startAmbientSource(id: string, buffer: AudioBuffer, entry: AmbientChannel_T) {
+        const info = entry.info;
 
         const panner = this.audioContext.createPanner();
-        panner.panningModel = "equalpower"; // hrtf convolution is too costly at 24 concurrent panners
+        panner.panningModel = "equalpower"; // hrtf convolution is too costly at 32 concurrent panners
         panner.distanceModel = "inverse";
-        panner.refDistance = refDistance;
-        panner.maxDistance = maxDistance;
-        panner.rolloffFactor = 1.0;
-        panner.positionX.value = position[0];
-        panner.positionY.value = position[1];
-        panner.positionZ.value = position[2];
+        panner.refDistance = info.refDistance;
+        panner.maxDistance = info.maxDistance;
+        panner.rolloffFactor = ROLLOFF;
+        panner.positionX.value = info.position[0];
+        panner.positionY.value = info.position[1];
+        panner.positionZ.value = info.position[2];
 
         const gain = this.audioContext.createGain();
-        gain.gain.value = volume;
+        gain.gain.value = info.volume;
 
         gain.connect(panner);
         panner.connect(this.ambientGainNode);
 
-        entry.panner = panner;
-        entry.gain = gain;
-
-        if (!entry.info.looping && entry.info.randomDelay > 0) {
-            entry.nextReplayTime = time + Math.random() * entry.info.randomDelay * 1000;
-        } else {
-            this.startAmbientSource(id, buffer, entry, time);
-        }
-    }
-
-    protected startAmbientSource(id: string, buffer: AudioBuffer, entry: any, _startTime: number) {
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
-        source.loop = entry.info.looping;
-        source.playbackRate.value = entry.info.pitch;
-        source.connect(entry.gain);
+        source.loop = info.looping;
+        source.playbackRate.value = info.pitch;
+        source.connect(gain);
 
-        if (!entry.info.looping && entry.info.randomDelay > 0) {
-            source.onended = () => {
-                const updatedEntry = this.activeAmbientSounds.get(id);
-                if (!updatedEntry || updatedEntry.source !== source) return;
+        // Update frees a non-looping voice once AL reports its source AL_STOPPED
+        if (!info.looping) source.onended = () => {
+            if (this.activeAmbientSounds.get(id) !== entry || entry.source !== source) return;
 
-                updatedEntry.source = undefined;
-                updatedEntry.nextReplayTime = this.lastTime + Math.random() * entry.info.randomDelay * 1000;
-            };
-        }
+            this.stopAmbientSound(id);
+        };
 
+        entry.panner = panner;
+        entry.gain = gain;
         entry.source = source;
+
         source.start(0);
     }
 
@@ -422,7 +490,7 @@ class AudioManager {
         panner.distanceModel = "inverse";
         panner.refDistance = refDistance;
         panner.maxDistance = maxDistance;
-        panner.rolloffFactor = 1.0;
+        panner.rolloffFactor = ROLLOFF;
         panner.positionX.value = position[0];
         panner.positionY.value = position[1];
         panner.positionZ.value = position[2];
@@ -451,7 +519,6 @@ class AudioManager {
         const entry = this.activeAmbientSounds.get(id);
         if (!entry) return;
 
-        entry.nextReplayTime = undefined;
         if (entry.source) {
             entry.source.onended = null;
             try { entry.source.stop(); } catch { }
@@ -501,7 +568,7 @@ class AudioManager {
                 id,
                 info: entry.info,
                 isPlaying: !!entry.source,
-                nextReplayTime: entry.nextReplayTime
+                priority: entry.priority
             });
         }
         return results;
