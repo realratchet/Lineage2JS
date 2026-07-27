@@ -58,6 +58,7 @@ class LitActorMesh extends Mesh {
     public transparentMaterialIndexes?: Set<number>;
     public sortedTransparentMaterialIndexes?: Set<number>;
     public elemVisibility?: Uint8Array;
+    public elemRelight?: Uint8Array;
     public elemDistances?: Float64Array;
     public transparentSortPosition?: THREE.Vector3;
     public actorBoundsMin?: number[];
@@ -279,8 +280,9 @@ class LitActorMesh extends Mesh {
         // dynamic pass below filters by elemVisibility - a batch's .visible flag covers every merged actor
         const perActorAmbientForFilter = this.perActorAmbient as { startVertex: number, count: number }[] | undefined;
         const canFilterByVisibility = !!this.elemVisibility && !!perActorAmbientForFilter;
-        const filterVisibility = canFilterByVisibility ? this.elemVisibility : undefined;
         const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
+        const relight = canFilterByVisibility && !staticCacheDirty && !anyDynamicLightNeedsUpdate ? this.elemRelight : undefined;
+        const filterVisibility = relight ?? (canFilterByVisibility ? this.elemVisibility : undefined);
 
         // Rebuild static cache if necessary
         if (staticCacheDirty) {
@@ -357,7 +359,14 @@ class LitActorMesh extends Mesh {
         }
 
         // Apply static cache to the vertex attribute
-        colorArray.set(this.staticLightingCache!);
+        if (relight) {
+            for (let ei = 0; ei < relight.length; ei++) {
+                if (!relight[ei]) continue;
+
+                const { startVertex, count } = perActorAmbientForFilter![ei];
+                colorArray.set(this.staticLightingCache!.subarray(startVertex * 3, (startVertex + count) * 3), startVertex * 3);
+            }
+        } else colorArray.set(this.staticLightingCache!);
 
         // GetColorPlane_HSVStaticMeshSunLight + (ambient >> 1)
         if (this.perActorAmbient) {
@@ -368,7 +377,12 @@ class LitActorMesh extends Mesh {
             const b = ambientSun.b + sunColor.b;
 
             if (r !== 0 || g !== 0 || b !== 0) {
-                for (const actor of this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean }[]) {
+                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean }[];
+
+                for (let ei = 0; ei < perActorAmbient.length; ei++) {
+                    if (relight && !relight[ei]) continue;
+
+                    const actor = perActorAmbient[ei];
                     if (actor.isSunAffected) {
                         for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
                             colorArray[i] += r;
@@ -404,6 +418,32 @@ class LitActorMesh extends Mesh {
 
         this.needsRelightPass = false;
 
+        // three only clears updateRange once it uploads - an unrendered attribute keeps a stale
+        // partial range that would then clip the next full pass
+        let rangeOffset = 0;
+        let rangeCount = -1;
+
+        if (relight) {
+            let minVertex = Infinity, maxVertex = 0;
+
+            for (let ei = 0; ei < relight.length; ei++) {
+                if (!relight[ei]) continue;
+
+                const { startVertex, count } = perActorAmbientForFilter![ei];
+                if (startVertex < minVertex) minVertex = startVertex;
+                if (startVertex + count > maxVertex) maxVertex = startVertex + count;
+            }
+
+            relight.fill(0);
+
+            if (minVertex === Infinity) return;
+
+            rangeOffset = minVertex * 3;
+            rangeCount = (maxVertex - minVertex) * 3;
+        } else if (this.elemRelight) this.elemRelight.fill(0);
+
+        attrColors.updateRange.offset = rangeOffset;
+        attrColors.updateRange.count = rangeCount;
         attrColors.needsUpdate = true;
     }
 

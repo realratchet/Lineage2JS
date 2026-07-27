@@ -1,6 +1,5 @@
-import UObject, { APackage, UExport } from "@l2js/core";
+import UObject from "@l2js/core";
 import AInfo from "./un-info";
-import { Vector3 } from "three";
 import FVector from "@client/assets/unreal/un-vector";
 
 abstract class UL2FogInfo extends AInfo {

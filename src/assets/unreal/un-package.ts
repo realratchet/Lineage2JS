@@ -37,7 +37,6 @@ import UCubemap from "./un-cubemap";
 import FMatrix from "./un-matrix";
 import UTerrainLayer from "./un-terrain-layer";
 import UDecoLayer from "./un-deco-layer";
-import * as UnStubs from "./un-stubs";
 import UWetTexture, { UADrop } from "./un-wet-texture";
 import UBeamEmitter from "./emitters/un-beam-emitter";
 import FRange, { FRangeVector } from "./un-range";
@@ -391,26 +390,25 @@ class UNativePackage extends ANativePackage {
             case "Sound": Constructor = USound; break;
 
             case "Mover": Constructor = UMover; break;
+            case "VertexColor": Constructor = UnMaterials.UVertexColor; break;
+            case "L2FogInfo": Constructor = UL2FogInfo; break;
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
-            case "L2FogInfo": Constructor = UL2FogInfo; break;
-            case "L2SeamlessInfo": Constructor = UObject; break;
-            case "SceneManager": Constructor = UObject; break;
-            case "PathNode": Constructor = UObject; break;
-            case "InterpolationPoint": Constructor = UObject; break;
-            case "VertexColor": Constructor = UnMaterials.UVertexColor; break;
-            case "Projector": Constructor = UnStubs.UProjector; break;
-            case "AntiPortalActor": Constructor = UnStubs.UAntiPortalActor; break;
-            case "Pawn": Constructor = UPawn; break;
-            case "LineagePlayerController": Constructor = UnStubs.ULineagePlayerController; break;
-            case "AmbientSound": Constructor = UnStubs.UAmbientSound; break;
+            case "L2SeamlessInfo":
+            case "SceneManager":
+            case "PathNode":
+            case "InterpolationPoint":
+            case "Projector":
+            case "AntiPortalActor":
+            case "Pawn":
+            case "LineagePlayerController":
+            case "AmbientSound":
             case "SkillVisualEffect":
             case "SkillAction":
             case "SkillAction_LocateEffect":
             case "SkillAction_SwordTrail": Constructor = UObject; break;
 
-
-            default:
+            default: // objects that we never saw before
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
         }

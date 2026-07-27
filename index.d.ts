@@ -55,7 +55,12 @@ declare global {
                     | "SceneManager"
                     | "MovableStaticMeshActor"
                     | "Combiner"
-                    | "VertexColor";
+                    | "VertexColor"
+                    | "LineagePlayerController"
+                    | "SkillVisualEffect"
+                    | "SkillAction"
+                    | "SkillAction_LocateEffect"
+                    | "SkillAction_SwordTrail";
 
                 export type USound = import("@unreal/un-sound").USound;
                 export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;

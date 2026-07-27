@@ -1226,6 +1226,9 @@ class SectorObject extends Object3D {
                     let elemDistances = (object as any).elemDistances as Float64Array;
                     if (!elemDistances || elemDistances.length !== batchElements.length)
                         elemDistances = (object as any).elemDistances = new Float64Array(batchElements.length);
+                    let elemRelight = (object as any).elemRelight as Uint8Array;
+                    if (!elemRelight || elemRelight.length !== batchElements.length)
+                        elemRelight = (object as any).elemRelight = new Uint8Array(batchElements.length);
                     let visibilityChanged = false;
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
@@ -1266,6 +1269,8 @@ class SectorObject extends Object3D {
                         if (elemVisibility[ei] !== visibleValue) {
                             elemVisibility[ei] = visibleValue;
                             visibilityChanged = true;
+                            // the dynamic pass skips hidden elements, so only one that just appeared owes a relight
+                            elemRelight[ei] = visibleValue;
                         }
                     }
 
@@ -1345,6 +1350,17 @@ class SectorObject extends Object3D {
 
                 const origin = tmpVec3.fromArray(bounds.min);
 
+                // zone and range first - the box fallback below walks every child of every out-of-frustum
+                // eqmitter, and running it on one the cheap tests reject anyway was most of this loop
+                const zoneMask = (actorBase as any).zoneMask as bigint;
+                const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
+                if (!isZoneVisible) continue;
+
+                const distSq = cameraPosition.distanceToSquared(origin);
+                const isRangeIgnored = !!(actorBase as any).isRangeIgnored;
+                const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+                if (!isInRange) continue;
+
                 let isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin);
 
                 // UE2 frustum-tests the per-tick particle bounding box rebuilt in
@@ -1365,15 +1381,8 @@ class SectorObject extends Object3D {
                         }
                     }
                 }
-                const zoneMask = (actorBase as any).zoneMask as bigint;
-                const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
-                const distSq = cameraPosition.distanceToSquared(origin);
-                const isRangeIgnored = !!(actorBase as any).isRangeIgnored;
-                const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
-                if (isFrustumVisible && isZoneVisible && isInRange) {
-                    visibleEmitterUuids.add(actorBase.uuid);
-                }
+                if (isFrustumVisible) visibleEmitterUuids.add(actorBase.uuid);
             }
 
             this.visibleEmitterUuids = visibleEmitterUuids;
