@@ -16,6 +16,11 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+#ifdef USE_TERRAIN_DECORATION_FADE
+    uniform vec2 terrainDecorationFadeRange;
+    varying float vTerrainDecorationFade;
+#endif
+
 #if defined(USE_GLOBAL_TIME_SECONDS) || defined(USE_SWAY)
     uniform float globalTimeSeconds;
 #endif
@@ -542,6 +547,11 @@ void main() {
     #include <morphtarget_vertex>
     #include <skinning_vertex>
     #include <project_vertex>
+    #ifdef USE_TERRAIN_DECORATION_FADE
+        float terrainDecorationFadeRangeSize = max(terrainDecorationFadeRange.y - terrainDecorationFadeRange.x, 1.0);
+        float terrainDecorationFadeDistance = clamp((length(mvPosition.xyz) - terrainDecorationFadeRange.x) / terrainDecorationFadeRangeSize, 0.0, 1.0);
+        vTerrainDecorationFade = 1.0 - terrainDecorationFadeDistance * terrainDecorationFadeDistance * (3.0 - 2.0 * terrainDecorationFadeDistance);
+    #endif
     #include <logdepthbuf_vertex>
     #include <clipping_planes_vertex>
     #include <worldpos_vertex>

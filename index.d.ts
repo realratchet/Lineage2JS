@@ -217,6 +217,7 @@ declare global {
                     | "Level"
                     | "TerrainInfo"
                     | "TerrainSegment"
+                    | "TerrainDecoration"
                     | "StaticMeshActor"
                     | "StaticMesh"
                     | "Model"
@@ -396,6 +397,18 @@ declare global {
                     offsetY: number,
                     heightmapX: number,
                     heightmapY: number
+                }
+
+                export interface ITerrainDecorationDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "TerrainDecoration",
+                    terrainSegment: string,
+                    mesh: IStaticMeshObjectDecodeInfo,
+                    matrices: Float32Array,
+                    colors: Uint8Array,
+                    terrainVertexIndices?: Uint16Array,
+                    fadeoutRadius: [number, number],
+                    drawOrder: number,
+                    forceRender: boolean
                 }
 
                 export interface ILightInstanceDecodeInfo {

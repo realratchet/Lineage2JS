@@ -13,6 +13,7 @@ import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance
 import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
 import SwayingObject from "@client/objects/swaying-object";
+import TerrainDecoration from "@client/objects/terrain-decoration";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -593,10 +594,21 @@ function decodeTerrainInfo(library: GD.DecodeLibrary, info: GD.IBaseObjectDecode
 
     // Identify terrain sectors among children
     const sectors: Terrain[] = [];
+    const decorations: TerrainDecoration[] = [];
     group.children.forEach(child => {
         if ((child as any).isTerrain) {
             sectors.push(child as Terrain);
+        } else if ((child as any).isTerrainDecoration) {
+            decorations.push(child as TerrainDecoration);
         }
+    });
+
+    const sectorsByUuid = new Map<string, Terrain>();
+    sectors.forEach(sector => sectorsByUuid.set(sector.terrainSegmentUuid, sector));
+    decorations.forEach(decoration => {
+        const terrain = sectorsByUuid.get(decoration.terrainSegment);
+        if (!terrain) throw new Error(`Terrain segment '${decoration.terrainSegment}' not found for decoration '${decoration.name}'`);
+        decoration.setTerrain(terrain);
     });
 
     batchTerrainSectors(library, group, sectors);
@@ -639,8 +651,23 @@ function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     }, terrainInfo.lighting);
 
     applySimpleProperties(library, terrain, info);
+    terrain.terrainSegmentUuid = info.uuid;
 
     return terrain;
+}
+
+function decodeTerrainDecoration(library: GD.DecodeLibrary, info: GD.ITerrainDecorationDecodeInfo) {
+    const mesh = info.mesh;
+    let geometryInfo = library.geometries[mesh.geometry];
+    const sway = mesh.sway ? makeSwayAttribute((geometryInfo.attributes.positions as Float32Array).length / 3, mesh.sway) : null;
+
+    if (sway) geometryInfo = { ...geometryInfo, attributes: { ...geometryInfo.attributes, sway } };
+
+    const geometry = fetchGeometry(geometryInfo);
+    const materialInfo = library.materials[mesh.materials];
+    const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, true, !!sway, true) || new MeshBasicMaterial({ color: 0xff00ff });
+
+    return new TerrainDecoration(geometry, materials, info);
 }
 
 function decodeBone(library: GD.DecodeLibrary, info: GD.IBoneDecodeInfo): Bone {
@@ -869,6 +896,7 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "StaticMeshActor": return decodeStaticMeshActor(library, info as GD.IStaticMeshActorDecodeInfo);
         // case "Light": return decodeLight(library, info as GD.ILightDecodeInfo);
         case "TerrainSegment": return decodeTerrainSegment(library, info as GD.IStaticMeshObjectDecodeInfo);
+        case "TerrainDecoration": return decodeTerrainDecoration(library, info as GD.ITerrainDecorationDecodeInfo);
         case "Model":
         case "StaticMesh": return decodeStaticMeshWrapped(library, info as GD.IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as GD.IEdgesObjectDecodeInfo);

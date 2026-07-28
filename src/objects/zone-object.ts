@@ -2,6 +2,7 @@ import DynamicLight from "@client/objects/dynamic-light";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
 import type { Terrain } from "@client/objects/terrain";
+import type { TerrainDecoration } from "@client/objects/terrain-decoration";
 
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -218,7 +219,7 @@ class SectorObject extends Object3D {
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
 
     // per-frame caches, both derive from data that is static after decode
-    protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[] };
+    protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly candidateStaticActorUuids = new Set<string>();
     protected readonly visibleStaticActorUuids = new Set<string>();
@@ -1025,7 +1026,7 @@ class SectorObject extends Object3D {
 
         // Early return if no BSP data - but terrain still needs its lighting pass
         if (!this.bspGroup && !this.staticMeshGroup) {
-            this.updateTerrainSectors(environment, cameraFrustum, frustumCullingEnabled);
+            this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled);
             return;
         }
 
@@ -1434,7 +1435,7 @@ class SectorObject extends Object3D {
         // indoor (sealed dungeon), the outdoor terrain must not draw or relight;
         // a portal to the outside entering the frustum re-adds the outdoor zones
         const terrainZoneVisible = !frustumCullingEnabled || (finalZoneMask & this.outdoorZoneMask) !== 0n;
-        this.updateTerrainSectors(environment, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
+        this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
     }
 
     protected emitterObjectsByUuid?: Map<string, THREE.Object3D[]>;
@@ -1458,18 +1459,24 @@ class SectorObject extends Object3D {
     }
 
     // Update terrain lighting and batch visibility
-    protected updateTerrainSectors(environment: L2Environment, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, zoneVisible: boolean = true) {
+    protected updateTerrainSectors(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, zoneVisible: boolean = true) {
         // the zones subtree is static after decode, collect the terrain nodes once
         if (!this.terrainRenderables) {
             const batches: Mesh[] = [];
             const standalone: any[] = [];
+            const decorations = new Map<string, TerrainDecoration[]>();
 
             this.zones.traverse((object) => {
                 if ((object as any).isTerrainBatch) batches.push(object as Mesh);
                 else if ((object as any).isTerrain && !(object as any).batchGeometry) standalone.push(object);
+                else if ((object as any).isTerrainDecoration) {
+                    const decoration = object as TerrainDecoration;
+                    if (!decorations.has(decoration.terrainSegment)) decorations.set(decoration.terrainSegment, []);
+                    decorations.get(decoration.terrainSegment).push(decoration);
+                }
             });
 
-            this.terrainRenderables = { batches, standalone };
+            this.terrainRenderables = { batches, standalone, decorations };
         }
 
         for (const batch of this.terrainRenderables.batches) {
@@ -1495,6 +1502,9 @@ class SectorObject extends Object3D {
                         visibleGroups.push(originalGroups[i]);
                     }
                 }
+
+                const decorations = this.terrainRenderables.decorations.get(sector.terrainSegmentUuid);
+                if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible));
             });
 
             // rebuilding groups dirties the geometry, only do it when the selection changed
@@ -1513,8 +1523,11 @@ class SectorObject extends Object3D {
         }
 
         for (const terrain of this.terrainRenderables.standalone) {
-            // Standalone terrain or fallback: update if visible
-            if (terrain.visible) terrain.update?.(this, environment);
+            const isVisible = zoneVisible && terrain.visible;
+            if (isVisible) terrain.update?.(this, environment);
+
+            const decorations = this.terrainRenderables.decorations.get(terrain.terrainSegmentUuid);
+            if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible));
         }
     }
 

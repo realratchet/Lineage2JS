@@ -62,8 +62,10 @@ class Terrain extends Mesh implements ICollidable {
     public offsetY: number = 0;
     public heightmapX: number = 0;
     public heightmapY: number = 0;
+    public terrainSegmentUuid: string;
 
     public useShadowLerp: boolean = true;
+    public lightingRevision: number = 0;
 
     // Batch mode: when set, this sector writes to a shared geometry buffer at vertexOffset
     public batchGeometry: THREE.BufferGeometry | null = null;
@@ -226,6 +228,7 @@ class Terrain extends Mesh implements ICollidable {
         }
 
         attrColors.needsUpdate = true;
+        this.lightingRevision++;
     }
 
     protected syncStitchedBoundaryColors() {

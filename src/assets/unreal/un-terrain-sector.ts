@@ -62,6 +62,10 @@ abstract class UTerrainSector extends UObject {
     declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
 
+    public getDecorationInfo() {
+        return { offsetX: this.offsetX, offsetY: this.offsetY, quadsX: this.quadsXActual, quadsY: this.quadsYActual };
+    }
+
     public getDecodeInfo(builder: GD.DecodeLibraryBuilder, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
         const library = builder.library;
         const center = this.boundingBox.getCenter();

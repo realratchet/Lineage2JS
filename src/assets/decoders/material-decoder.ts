@@ -101,7 +101,7 @@ function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Mater
     return materials instanceof Array ? canonical : canonical[0];
 }
 
-function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean, sway: boolean): THREE.Material | THREE.Material[] {
+function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean, sway: boolean, terrainDecoration: boolean = false): THREE.Material | THREE.Material[] {
     if (!info) return null;
 
     const name = info.name;
@@ -113,7 +113,7 @@ function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterial
         if (name) setWeakCacheValue(cacheStaticMaterialsByName, name, variants);
     }
 
-    const key = (vertexColors ? "v" : "") + (instanced ? "i" : "") + (sway ? "s" : "");
+    const key = (vertexColors ? "v" : "") + (instanced ? "i" : "") + (sway ? "s" : "") + (terrainDecoration ? "d" : "");
 
     if (variants.has(key)) return variants.get(key);
 
@@ -123,6 +123,7 @@ function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterial
         if (!mat) return;
         if (instanced) mat.setInstanced?.();
         if (sway) mat.setSway?.();
+        if (terrainDecoration) mat.setTerrainDecoration?.();
         if (vertexColors) mat.vertexColors = true;
     });
 

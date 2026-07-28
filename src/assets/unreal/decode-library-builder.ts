@@ -163,7 +163,10 @@ class DecodeLibraryBuilder {
         zoneInfo.bounds.isValid = true;
 
         for (const child of result.object.children) {
-            const bounds = this.library.geometries[child.geometry].bounds;
+            const geometry = (child as any).geometry;
+            if (!geometry) continue;
+
+            const bounds = this.library.geometries[geometry].bounds;
 
             if (!bounds.box) continue;
 

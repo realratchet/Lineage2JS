@@ -1,5 +1,8 @@
 uniform vec3 diffuse;
 uniform float opacity;
+#ifdef USE_TERRAIN_DECORATION_FADE
+    varying float vTerrainDecorationFade;
+#endif
 #ifndef FLAT_SHADED
     varying vec3 vNormal;
 #endif
@@ -521,7 +524,7 @@ void main() {
         #endif
 
         #ifdef USE_INSTANCED_ATTRIBUTES
-            reflectedLight.indirectDiffuse *= vColorInstance * 2.0;
+            reflectedLight.indirectDiffuse += vColorInstance * 2.0;
         #endif
     #endif
 
@@ -597,6 +600,10 @@ void main() {
     #include <output_fragment>
     #include <tonemapping_fragment>
     #include <encodings_fragment>
+
+    #ifdef USE_TERRAIN_DECORATION_FADE
+        gl_FragColor.a *= vTerrainDecorationFade;
+    #endif
 
     #include <l2_fog_fragment>
 

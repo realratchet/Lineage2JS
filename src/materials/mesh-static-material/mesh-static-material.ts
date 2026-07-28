@@ -2,7 +2,7 @@ import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
 
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
@@ -109,6 +109,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 diffuse: new Uniform(new Color(0xffffff)),
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
+                terrainDecorationFadeRange: new Uniform(new Vector2()),
                 uvTransform: new Uniform(new Matrix3()),
                 uv2Transform: new Uniform(new Matrix3()),
                 transformSpecular: new Uniform(null),
@@ -372,6 +373,16 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public setInstanced() {
         this.defines["USE_INSTANCED_ATTRIBUTES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    public setTerrainDecoration() {
+        this.defines["USE_TERRAIN_DECORATION_FADE"] = "";
+        this.transparent = true;
+        this.depthWrite = false;
 
         this.needsUpdate = true;
 
