@@ -11,6 +11,13 @@ interface DecodeMessage {
     settings: GD.LoadSettings_T;
 }
 
+type PrecacheMessage_T = {
+    type: "precache";
+    requestId: number;
+    sectorName: string;
+    settings: GD.LoadSettings_T;
+};
+
 interface FreeMessage {
     type: "free";
     sectorName: string;
@@ -26,7 +33,7 @@ interface MusicInfoMessage {
     requestId: number;
 }
 
-type MainToWorkerMessage = InitMessage | DecodeMessage | FreeMessage | DecodeEnvMessage | MusicInfoMessage;
+type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | MusicInfoMessage;
 
 interface ReadyMessage {
     type: "ready";
@@ -42,6 +49,14 @@ interface DecodedMessage {
     requestId: number;
     library: any; // structured-cloned DecodeLibrary (plain object, prototype restored by the client)
 }
+
+type PrecacheResult_T = { cached: boolean, bytes: number };
+
+type PrecachedMessage_T = {
+    type: "precached";
+    requestId: number;
+    result: PrecacheResult_T;
+};
 
 interface DecodeErrorMessage {
     type: "decodeError";
@@ -62,6 +77,6 @@ interface MusicInfoDecodedMessage {
     music: Record<number, string[]>; // music id -> package paths
 }
 
-type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | DecodeErrorMessage | EnvDecodedMessage | MusicInfoDecodedMessage;
+type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | MusicInfoDecodedMessage;
 
-export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, FreeMessage, DecodeEnvMessage, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };
+export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };

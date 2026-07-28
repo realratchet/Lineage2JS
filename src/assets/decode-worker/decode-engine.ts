@@ -6,7 +6,8 @@ import { buildStaticMeshBatchData } from "@client/assets/decoders/batch-data";
 import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
-import { loadCachedLibrary, storeCachedLibrary, sweepDecodeCache, refreshSoundBlobUris } from "./decode-cache";
+import { hasCachedLibrary, loadCachedLibrary, storeCachedLibrary, storeCachedLibraryDurable, sweepDecodeCache, refreshSoundBlobUris } from "./decode-cache";
+import type { PrecacheResult_T } from "./decode-protocol";
 
 /**
  * Owns an AssetLoader and runs the full sector decode - deserialization, decode-info
@@ -39,12 +40,12 @@ class DecodeEngine {
     protected collectPackageBuffers(): Set<ArrayBuffer> {
         const buffers = new Set<ArrayBuffer>();
 
-        for (const path of (this.assetLoader as any).pkgDependencies.keys()) {
-            try {
-                const buffer = (this.assetLoader.getPackage(path) as any)?.buffer;
+        for (const packages of (this.assetLoader as any).packages.values()) {
+            for (const pkg of packages.values()) {
+                const buffer = (pkg as any).buffer;
 
                 if (buffer instanceof ArrayBuffer) buffers.add(buffer);
-            } catch (e) { } // path not resolvable - nothing to exclude
+            }
         }
 
         return buffers;
@@ -64,6 +65,28 @@ class DecodeEngine {
         console.log(`[decode] sector '${sectorName}' decoded in ${(performance.now() - start).toFixed(0)}ms${result.fromCache ? " (from cache)" : ""}`);
 
         return result;
+    }
+
+    public async precacheSector(sectorName: string, settings: GD.LoadSettings_T): Promise<PrecacheResult_T> {
+        if (!this.hasSweptCache) {
+            await sweepDecodeCache(settings);
+            this.hasSweptCache = true;
+        }
+
+        if (await hasCachedLibrary(sectorName, settings))
+            return { cached: true, bytes: 0 };
+
+        try {
+            const pkg = await this.assetLoader.using(this.assetLoader.getPackage(sectorName, "Level"));
+            const library = buildDecodeLibrary(pkg, sectorName, settings);
+
+            buildStaticMeshBatchData(library);
+            prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+            return { cached: false, bytes: await storeCachedLibraryDurable(sectorName, settings, library) };
+        } finally {
+            this.freeSector(sectorName);
+        }
     }
 
     protected async decodeSectorCore(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {

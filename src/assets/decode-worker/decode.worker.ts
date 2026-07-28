@@ -46,6 +46,15 @@ async function handleMessage(msg: MainToWorkerMessage) {
             }
             break;
         }
+        case "precache": {
+            try {
+                post({ type: "precached", requestId: msg.requestId, result: await engine.precacheSector(msg.sectorName, msg.settings) });
+            } catch (e) {
+                console.error(`[decode-worker] failed to precache sector '${msg.sectorName}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "free": {
             engine.freeSector(msg.sectorName);
             break;

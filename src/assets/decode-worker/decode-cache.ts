@@ -49,7 +49,7 @@ async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> 
     return root.getDirectoryHandle(CACHE_DIR, { create });
 }
 
-async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<any | null> {
+async function getCachedFile(sectorName: string, settings: GD.LoadSettings_T): Promise<File | null> {
     if (!isCacheEnabled(settings)) return null;
 
     try {
@@ -62,11 +62,28 @@ async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T
             return null;
         }
 
-        return deserializeLibrary(await file.arrayBuffer());
+        return file;
     } catch (e) {
         if (!(e instanceof DOMException && e.name === "NotFoundError"))
-            console.warn(`[decode-cache] failed to read cached sector '${sectorName}', re-decoding:`, e);
+            console.warn(`[decode-cache] failed to inspect cached sector '${sectorName}', re-decoding:`, e);
 
+        return null;
+    }
+}
+
+async function hasCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<boolean> {
+    return (await getCachedFile(sectorName, settings)) !== null;
+}
+
+async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<any | null> {
+    const file = await getCachedFile(sectorName, settings);
+
+    if (!file) return null;
+
+    try {
+        return deserializeLibrary(await file.arrayBuffer());
+    } catch (e) {
+        console.warn(`[decode-cache] failed to read cached sector '${sectorName}', re-decoding:`, e);
         return null;
     }
 }
@@ -87,19 +104,33 @@ function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, lib
         return;
     }
 
-    void writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes);
+    void writeCacheFileSafe(cacheFileName(sectorName, settings), sectorName, bytes);
+}
+
+async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSettings_T, library: any): Promise<number> {
+    if (!isCacheEnabled(settings)) throw new Error("Decode cache is disabled");
+
+    const bytes = serializeLibrary(library);
+
+    await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes);
+
+    return bytes.length;
 }
 
 async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
+    const dir = await getCacheDir(true);
+    const handle = await dir.getFileHandle(fileName, { create: true });
+    const writable = await handle.createWritable();
+
+    await writable.write(bytes);
+    await writable.close();
+
+    console.log(`[decode-cache] cached sector '${sectorName}' (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+}
+
+async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
     try {
-        const dir = await getCacheDir(true);
-        const handle = await dir.getFileHandle(fileName, { create: true });
-        const writable = await handle.createWritable();
-
-        await writable.write(bytes);
-        await writable.close();
-
-        console.log(`[decode-cache] cached sector '${sectorName}' (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+        await writeCacheFile(fileName, sectorName, bytes);
     } catch (e) {
         console.warn(`[decode-cache] failed to write cached sector '${sectorName}':`, e);
     }
@@ -162,4 +193,4 @@ function refreshSoundBlobUris(library: any): void {
     }
 }
 
-export { loadCachedLibrary, storeCachedLibrary, sweepDecodeCache, refreshSoundBlobUris };
+export { hasCachedLibrary, loadCachedLibrary, storeCachedLibrary, storeCachedLibraryDurable, sweepDecodeCache, refreshSoundBlobUris };

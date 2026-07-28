@@ -3,6 +3,7 @@ import RenderManager from "./rendering/render-manager";
 import { Box3, Vector3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
 import AssetManager from "@client/assets/asset-manager";
+import runSectorPrecache from "@client/sector-precache";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -85,6 +86,11 @@ async function startCore() {
             "StaticMeshActor49", /* church indoors too dark */ "StaticMeshActor6", /* church outdoors */
         ]
     } as const;
+
+    if (new URLSearchParams(location.search).has("precacheSectors")) {
+        await runSectorPrecache(loadSettings);
+        return;
+    }
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;

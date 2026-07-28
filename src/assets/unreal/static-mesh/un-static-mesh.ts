@@ -127,8 +127,8 @@ abstract class UStaticMesh extends UPrimitive {
         this.collisionModelId = pkg.read("compat32");
         this.collisionModel = pkg.fetchObject<GA.UModel>(this.collisionModelId);
 
-        if (this.collisionModelId !== 0)
-            debugger;
+        // if (this.collisionModelId !== 0)
+        //     debugger;
 
         // if (this.vertexStream.vert.length === 0xB3)
         //     debugger;
@@ -145,9 +145,9 @@ abstract class UStaticMesh extends UPrimitive {
         // debugger;
 
         if (verLicense < 17) {
-            if (this.collisionModelId > 0) {
-                debugger;
-            }
+            // if (this.collisionModelId > 0) {
+            //     debugger;
+            // }
 
             this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg);
             this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg);
@@ -169,8 +169,8 @@ abstract class UStaticMesh extends UPrimitive {
 
         // debugger;
 
-        if (this.collisionModelId > 0)
-            debugger;
+        // if (this.collisionModelId > 0)
+        //     debugger;
 
         this.readHead = pkg.tell();
 

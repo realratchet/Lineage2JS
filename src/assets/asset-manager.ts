@@ -12,6 +12,11 @@ const tmpCameraPosition = new Vector3();
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
 const SECTOR_WORLD_SIZE = 256 * 128;
+const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
+const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
+
+const tmpPrefetchPosition = new Vector3();
+const tmpCameraMovement = new Vector3();
 
 /**
  * Streams the world in and out around the camera. All ue2 asset decoding happens in
@@ -34,11 +39,13 @@ class AssetManager {
     public userConfig: GA.IUserConfig = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
+    protected readonly lastCameraPosition = new Vector3();
+    protected lastCameraSampleTime = 0;
 
     /**
-     * Sectors whose bounds intersect this radius around the camera get loaded. At half
-     * a sector this needs at most 4 sectors (own + up to 3 at a corner); unloading only
-     * kicks in past the larger radius so boundary crossings don't thrash.
+     * Sectors whose bounds intersect this radius around the camera or its projected
+     * position get loaded. Unloading only kicks in past the larger radius so boundary
+     * crossings don't thrash.
      */
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
@@ -120,7 +127,7 @@ class AssetManager {
      * load was attempted (dispatched, or reused from the retired grace period), false when
      * the sector was skipped (already in flight, failure cooldown, pool full, worker dead).
      */
-    protected requestSector(renderManager: RenderManager, sectorIdx: string): boolean {
+    protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes): boolean {
         const retired = this.retiredSectors.get(sectorIdx);
 
         if (retired) {
@@ -137,7 +144,7 @@ class AssetManager {
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
         if (!this.isWorkerReady || this.decodeWorker.isDead) return false;
-        if (this.inFlightSectors.size >= this.maxConcurrentDecodes) return false; // pool full, retry next tick
+        if (this.inFlightSectors.size >= maxInFlight) return false; // pool full, retry next tick
 
         this.inFlightSectors.add(sectorIdx);
 
@@ -197,8 +204,21 @@ class AssetManager {
         }
     }
 
-    protected processPendingBuilds(renderManager: RenderManager) {
-        const job = this.pendingStaticMeshBuilds.shift();
+    protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
+        let jobIndex = -1;
+        let jobDistance = Infinity;
+
+        for (let i = 0; i < this.pendingStaticMeshBuilds.length; i++) {
+            const sector = this.pendingStaticMeshBuilds[i].sector;
+            const distance = sectorDistance(cameraPosition, sector.index.x, sector.index.y);
+
+            if (distance >= jobDistance) continue;
+
+            jobIndex = i;
+            jobDistance = distance;
+        }
+
+        const job = jobIndex < 0 ? null : this.pendingStaticMeshBuilds.splice(jobIndex, 1)[0];
 
         if (!job) return;
 
@@ -222,6 +242,23 @@ class AssetManager {
             const sectorsLoaded = renderManager.getLoadedSectors();
             const sectorsLoadedIds = sectorsLoaded.map(({ index }) => `${index.x}_${index.y}`)
             const isValidOrigin = this.hasSector(originIdx);
+            const now = performance.now();
+            const sampleDelta = now - this.lastCameraSampleTime;
+
+            tmpPrefetchPosition.copy(cameraPosition);
+            tmpCameraMovement.set(0, 0, 0);
+
+            if (this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
+                tmpCameraMovement.subVectors(cameraPosition, this.lastCameraPosition).setZ(0).multiplyScalar(SECTOR_PREFETCH_LOOKAHEAD_MS / sampleDelta);
+
+                if (tmpCameraMovement.lengthSq() > SECTOR_PREFETCH_MAX_DISTANCE * SECTOR_PREFETCH_MAX_DISTANCE)
+                    tmpCameraMovement.setLength(SECTOR_PREFETCH_MAX_DISTANCE);
+
+                tmpPrefetchPosition.add(tmpCameraMovement);
+            }
+
+            this.lastCameraPosition.copy(cameraPosition);
+            this.lastCameraSampleTime = now;
 
             /*
              * Retire sectors past the unload radius; the gap between renderDistance and
@@ -236,14 +273,13 @@ class AssetManager {
             }
 
             this.destroyExpiredSectors(renderManager);
-            this.processPendingBuilds(renderManager);
+            this.processPendingBuilds(renderManager, cameraPosition);
 
             /*
              * Sectors wanted this tick, most-important first: the sector the camera is
-             * in, then any sector whose bounds intersect renderDistance, nearest-first.
-             * Only one is requested per tick (isTicking stays up while it decodes), so
-             * the origin always wins and the rest trickle in one by one; recomputing the
-             * list every tick makes crossing a boundary re-prioritize the new origin.
+             * in, then any sector near the projected camera position, nearest-first.
+             * Recomputing the list every tick makes a direction or boundary change
+             * reprioritize the next available worker.
              */
             const sectorsToLoad: string[] = [];
 
@@ -251,10 +287,11 @@ class AssetManager {
                 sectorsToLoad.push(originIdx);
 
             const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
-            const neighbours: { idx: string, dist: number }[] = [];
+            const [psx, psy] = renderManager.getSectorId(tmpPrefetchPosition);
+            const neighbours: { idx: string, dist: number, prefetchDist: number }[] = [];
 
-            for (let x = sx - ring, xmax = sx + ring; x <= xmax; x++) {
-                for (let y = sy - ring, ymax = sy + ring; y <= ymax; y++) {
+            for (let x = Math.min(sx, psx) - ring, xmax = Math.max(sx, psx) + ring; x <= xmax; x++) {
+                for (let y = Math.min(sy, psy) - ring, ymax = Math.max(sy, psy) + ring; y <= ymax; y++) {
                     const levelIdx = `${x}_${y}`;
 
                     if (levelIdx === originIdx || !this.hasSector(levelIdx))
@@ -263,19 +300,25 @@ class AssetManager {
                     if (sectorsLoadedIds.includes(levelIdx)) continue;
 
                     const dist = sectorDistance(cameraPosition, x, y);
+                    const prefetchDist = sectorDistance(tmpPrefetchPosition, x, y);
 
-                    if (dist <= this.renderDistance)
-                        neighbours.push({ idx: levelIdx, dist });
+                    if (dist <= this.renderDistance || prefetchDist <= this.renderDistance)
+                        neighbours.push({ idx: levelIdx, dist, prefetchDist });
                 }
             }
 
-            neighbours.sort((a, b) => a.dist - b.dist);
+            neighbours.sort((a, b) => a.prefetchDist - b.prefetchDist || a.dist - b.dist);
             sectorsToLoad.push(...neighbours.map(n => n.idx));
 
-            // dispatches up to decodeWorkerPoolSize concurrently; requestSector's own
-            // in-flight/pool-full checks skip the rest, which re-enter the list next tick
-            for (const secIdx of sectorsToLoad)
-                this.requestSector(renderManager, secIdx);
+            const backgroundLimit = tmpCameraMovement.lengthSq() > 0
+                ? Math.max(this.maxConcurrentDecodes - 1, 1)
+                : this.maxConcurrentDecodes;
+
+            for (let i = 0; i < sectorsToLoad.length; i++) {
+                const isOrigin = i === 0 && sectorsToLoad[i] === originIdx;
+
+                this.requestSector(renderManager, sectorsToLoad[i], isOrigin ? this.maxConcurrentDecodes : backgroundLimit);
+            }
         } finally {
             this.isTicking = false;
         }

@@ -1,5 +1,5 @@
 import DecodeLibrary from "@client/assets/unreal/decode-library";
-import type { WorkerToMainMessage } from "./decode-protocol";
+import type { WorkerToMainMessage, PrecacheResult_T } from "./decode-protocol";
 import type DecodeEngine from "./decode-engine";
 
 interface PendingRequest {
@@ -119,6 +119,17 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decode", sectorName, settings });
     }
 
+    public precacheSector(sectorName: string, settings: GD.LoadSettings_T): Promise<PrecacheResult_T> {
+        if (this.mainThreadEngine)
+            return this.mainThreadEngine.precacheSector(sectorName, settings);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "precache", sectorName, settings });
+    }
+
     /**
      * Releases the worker-side package refcounts a decoded sector took (fire-and-forget).
      * Routed to whichever worker actually decoded it - refcounts aren't shared across the
@@ -205,6 +216,13 @@ class DecodeWorkerClient {
                 request.resolve(Object.setPrototypeOf(msg.library, DecodeLibrary.prototype) as DecodeLibrary);
                 break;
             }
+            case "precached": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.result);
+                break;
+            }
             case "decodeError": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
@@ -247,6 +265,10 @@ class DecodeWorkerClient {
         }
 
         slot.worker.terminate();
+    }
+
+    public terminate() {
+        this.slots.forEach(slot => slot.worker.terminate());
     }
 }
 

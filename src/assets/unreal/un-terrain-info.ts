@@ -675,8 +675,8 @@ abstract class ATerrainInfo extends AInfo {
                 alphaMap: builder.pullMaterial(layer.alphaMap)
             };
 
-            if (layers[k].alphaMap && !layers[k].map)
-                debugger;
+            // if (layers[k].alphaMap && !layers[k].map)
+            //     debugger;
         }
 
 
