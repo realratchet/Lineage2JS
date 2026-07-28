@@ -1,6 +1,6 @@
 import RenderManager from "@client/rendering/render-manager";
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { decodePackage, decodeSectorCore, decodeSectorStaticMeshes } from "@client/assets/decoders/object3d-decoder";
+import { createSectorStaticMeshDecodeJob, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
 import { getUserConfig } from "@unreal/conf-files/un-conf-system";
@@ -14,9 +14,12 @@ const RETIRED_SECTOR_DISPOSE_MS = 30_000;
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
+const STATIC_MESH_BUILD_FRAME_MS = 2;
 
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
+
+type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
 
 /**
  * Streams the world in and out around the camera. All ue2 asset decoding happens in
@@ -33,7 +36,7 @@ class AssetManager {
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
     protected inFlightSectors = new Set<string>(); // sector ids currently decoding, so a boundary crossing can't re-request them
 
-    protected readonly pendingStaticMeshBuilds: { sector: SectorObject, library: GD.DecodeLibrary }[] = []; // drained one sector/tick by processPendingBuilds
+    protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
     public userConfig: GA.IUserConfig = null;
@@ -157,7 +160,7 @@ class AssetManager {
                 renderManager.addSector(sector);
                 renderManager.gateParticleWarmup(sector, false); // ungated again once materials finish, see attachStaticMeshGroup
 
-                this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary });
+                this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, decodeJob: null });
                 this.failedSectors.delete(sectorIdx);
             })
             .catch(e => {
@@ -218,14 +221,25 @@ class AssetManager {
             jobDistance = distance;
         }
 
-        const job = jobIndex < 0 ? null : this.pendingStaticMeshBuilds.splice(jobIndex, 1)[0];
+        const job = jobIndex < 0 ? null : this.pendingStaticMeshBuilds[jobIndex];
 
         if (!job) return;
 
         try {
-            decodeSectorStaticMeshes(job.library, job.sector);
+            if (!job.decodeJob) job.decodeJob = createSectorStaticMeshDecodeJob(job.library, job.sector);
+
+            const deadline = performance.now() + STATIC_MESH_BUILD_FRAME_MS;
+            let complete = false;
+
+            do complete = stepSectorStaticMeshDecodeJob(job.decodeJob);
+            while (!complete && performance.now() < deadline);
+
+            if (!complete) return;
+
+            this.pendingStaticMeshBuilds.splice(jobIndex, 1);
             renderManager.attachStaticMeshGroup(job.sector);
         } catch (e) {
+            this.pendingStaticMeshBuilds.splice(jobIndex, 1);
             console.error(`Failed to build static meshes for sector '${job.sector.name}':`, e);
         }
     }

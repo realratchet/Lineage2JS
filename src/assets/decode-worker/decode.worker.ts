@@ -36,10 +36,9 @@ async function handleMessage(msg: MainToWorkerMessage) {
         }
         case "decode": {
             try {
-                const { library } = await engine.decodeSector(msg.sectorName, msg.settings);
-                const transfer = engine.collectTransferables(library);
+                const { buffer } = await engine.decodeSectorBinary(msg.sectorName, msg.settings);
 
-                post({ type: "decoded", requestId: msg.requestId, library }, transfer);
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
             } catch (e) {
                 console.error(`[decode-worker] failed to decode sector '${msg.sectorName}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });

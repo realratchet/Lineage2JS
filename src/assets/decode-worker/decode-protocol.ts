@@ -47,7 +47,7 @@ interface InitErrorMessage {
 interface DecodedMessage {
     type: "decoded";
     requestId: number;
-    library: any; // structured-cloned DecodeLibrary (plain object, prototype restored by the client)
+    buffer: ArrayBuffer;
 }
 
 type PrecacheResult_T = { cached: boolean, bytes: number };

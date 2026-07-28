@@ -6,8 +6,11 @@ import { buildStaticMeshBatchData } from "@client/assets/decoders/batch-data";
 import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
-import { hasCachedLibrary, loadCachedLibrary, storeCachedLibrary, storeCachedLibraryDurable, sweepDecodeCache, refreshSoundBlobUris } from "./decode-cache";
+import { hasCachedLibrary, loadCachedLibrary, loadCachedLibraryBuffer, storeCachedLibrary, storeCachedLibraryDurable, storeCachedLibraryBufferDurable, sweepDecodeCache, refreshSoundBlobUris } from "./decode-cache";
+import { serializeLibrary, deserializeLibrary } from "./library-serializer";
 import type { PrecacheResult_T } from "./decode-protocol";
+
+type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 
 /**
  * Owns an AssetLoader and runs the full sector decode - deserialization, decode-info
@@ -61,6 +64,22 @@ class DecodeEngine {
 
         const start = performance.now();
         const result = await this.decodeSectorCore(sectorName, settings);
+
+        console.log(`[decode] sector '${sectorName}' decoded in ${(performance.now() - start).toFixed(0)}ms${result.fromCache ? " (from cache)" : ""}`);
+
+        return result;
+    }
+
+    public async decodeSectorBinary(sectorName: string, settings: GD.LoadSettings_T): Promise<BinarySector_T> {
+        if (!this.hasSweptCache) {
+            await sweepDecodeCache(settings);
+            this.hasSweptCache = true;
+        }
+
+        console.log(`[decode] decoding sector '${sectorName}'`);
+
+        const start = performance.now();
+        const result = await this.decodeSectorBinaryCore(sectorName, settings);
 
         console.log(`[decode] sector '${sectorName}' decoded in ${(performance.now() - start).toFixed(0)}ms${result.fromCache ? " (from cache)" : ""}`);
 
@@ -122,6 +141,44 @@ class DecodeEngine {
         if (convertToRGBA) convertDDSMaterialsToRGBA(library);
 
         return { library, fromCache: false };
+    }
+
+    protected async decodeSectorBinaryCore(sectorName: string, settings: GD.LoadSettings_T): Promise<BinarySector_T> {
+        const convertToRGBA = (settings as any).rgbaTextures !== false;
+        const cacheable = !(settings as any).isSkyLevel;
+        const cachedBuffer = cacheable ? await loadCachedLibraryBuffer(sectorName, settings) : null;
+
+        if (cachedBuffer) {
+            if (!convertToRGBA) return { buffer: cachedBuffer, fromCache: true };
+
+            const library = deserializeLibrary(cachedBuffer);
+
+            convertDDSMaterialsToRGBA(library);
+
+            return { buffer: serializeLibrary(library).buffer as ArrayBuffer, fromCache: true };
+        }
+
+        const pkg = await this.assetLoader.using(this.assetLoader.getPackage(sectorName, "Level"));
+        const library = buildDecodeLibrary(pkg, sectorName, settings);
+
+        buildStaticMeshBatchData(library);
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        let buffer: ArrayBuffer = null;
+
+        if (cacheable) {
+            buffer = serializeLibrary(library).buffer as ArrayBuffer;
+            await storeCachedLibraryBufferDurable(sectorName, settings, buffer);
+        }
+
+        if (convertToRGBA) {
+            buffer = null;
+            convertDDSMaterialsToRGBA(library);
+        }
+
+        if (!buffer) buffer = serializeLibrary(library).buffer as ArrayBuffer;
+
+        return { buffer, fromCache: false };
     }
 
     public freeSector(sectorName: string) {

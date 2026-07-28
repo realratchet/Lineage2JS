@@ -9,7 +9,7 @@ import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 import BeamEmitter from "@client/objects/emitters/beam-emitter";
 import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
-import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance, makeSwayAttribute } from "./object-batching";
+import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
 import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
 import SwayingObject from "@client/objects/swaying-object";
@@ -401,13 +401,23 @@ function decodeSectorCore(library: GD.DecodeLibrary) {
     return sector;
 }
 
-function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObject) {
+type SectorStaticMeshDecodeJob_T = StaticMeshBatchJob_T;
+
+function createSectorStaticMeshDecodeJob(library: GD.DecodeLibrary, sector: SectorObject): SectorStaticMeshDecodeJob_T {
     const staticMeshGroup = new Group();
     staticMeshGroup.name = "StaticMeshActors";
 
-    // --- Static Mesh Batching --- (merge data is precomputed by the decode worker,
-    // or built synchronously inside if absent; see batch-data.ts)
-    batchStaticMeshActors(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
+    return createStaticMeshBatchJob(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
+}
+
+function stepSectorStaticMeshDecodeJob(job: SectorStaticMeshDecodeJob_T): boolean {
+    if (!stepStaticMeshBatchJob(job)) return false;
+
+    finishSectorStaticMeshes(job.library, job.sector);
+    return true;
+}
+
+function finishSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObject) {
 
     // here, not decodePackage - the live app builds static meshes via this progressive path (asset-manager processPendingBuilds)
     attachMoveEventActors(sector);
@@ -517,6 +527,14 @@ function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
     // }
 
     // (sector as SectorObject).setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
+
+    return sector;
+}
+
+function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObject) {
+    const job = createSectorStaticMeshDecodeJob(library, sector);
+
+    while (!stepSectorStaticMeshDecodeJob(job)) { }
 
     return sector;
 }
@@ -867,4 +885,4 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
 }
 
 export default decodeObject3D;
-export { decodeObject3D, decodePackage, decodeSectorCore, decodeSectorStaticMeshes };
+export { decodeObject3D, decodePackage, decodeSectorCore, decodeSectorStaticMeshes, createSectorStaticMeshDecodeJob, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T };

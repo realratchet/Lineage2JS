@@ -1,4 +1,4 @@
-import { serializeLibrary, deserializeLibrary } from "./library-serializer";
+import { serializeLibrary, deserializeLibrary, isSerializedLibrary } from "./library-serializer";
 
 /**
  * OPFS-backed cache of fully decoded (and sanitized) sector libraries, mirroring how
@@ -62,6 +62,11 @@ async function getCachedFile(sectorName: string, settings: GD.LoadSettings_T): P
             return null;
         }
 
+        if (!isSerializedLibrary(await file.slice(0, 5).arrayBuffer())) {
+            try { await dir.removeEntry(handle.name); } catch (e) { }
+            return null;
+        }
+
         return file;
     } catch (e) {
         if (!(e instanceof DOMException && e.name === "NotFoundError"))
@@ -86,6 +91,12 @@ async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T
         console.warn(`[decode-cache] failed to read cached sector '${sectorName}', re-decoding:`, e);
         return null;
     }
+}
+
+async function loadCachedLibraryBuffer(sectorName: string, settings: GD.LoadSettings_T): Promise<ArrayBuffer | null> {
+    const file = await getCachedFile(sectorName, settings);
+
+    return file ? file.arrayBuffer() : null;
 }
 
 /**
@@ -115,6 +126,12 @@ async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSe
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes);
 
     return bytes.length;
+}
+
+async function storeCachedLibraryBufferDurable(sectorName: string, settings: GD.LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
+    if (!isCacheEnabled(settings)) return;
+
+    await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
 }
 
 async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
@@ -193,4 +210,4 @@ function refreshSoundBlobUris(library: any): void {
     }
 }
 
-export { hasCachedLibrary, loadCachedLibrary, storeCachedLibrary, storeCachedLibraryDurable, sweepDecodeCache, refreshSoundBlobUris };
+export { hasCachedLibrary, loadCachedLibrary, loadCachedLibraryBuffer, storeCachedLibrary, storeCachedLibraryDurable, storeCachedLibraryBufferDurable, sweepDecodeCache, refreshSoundBlobUris };

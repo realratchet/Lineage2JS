@@ -8,6 +8,21 @@
 
 const MAGIC = 0x4c324443; // "L2DC"
 const FORMAT_VERSION = 1;
+const DECODE_FRAME_MS = 2;
+const DECODE_STEP_BATCH = 2048;
+const BUFFER_COPY_CHUNK_SIZE = 256 * 1024;
+
+const decodeYieldQueue: (() => void)[] = [];
+const decodeYieldChannel = new MessageChannel();
+
+decodeYieldChannel.port1.onmessage = () => decodeYieldQueue.shift()!();
+
+function yieldDecode(): Promise<void> {
+    return new Promise(resolve => {
+        decodeYieldQueue.push(resolve);
+        decodeYieldChannel.port2.postMessage(0);
+    });
+}
 
 const enum Tag {
     Null = 0,
@@ -90,6 +105,13 @@ class ByteWriter {
         this.length += src.length;
     }
 
+    public align(alignment: number) {
+        const padding = (alignment - this.length % alignment) % alignment;
+
+        this.ensure(padding);
+        this.length += padding;
+    }
+
     public string(value: string) {
         const encoded = textEncoder.encode(value);
         this.varint(encoded.length);
@@ -105,8 +127,10 @@ class ByteReader {
     protected view: DataView;
     protected bytes: Uint8Array;
     public offset = 0;
+    public readonly buffer: ArrayBuffer;
 
     public constructor(buffer: ArrayBuffer) {
+        this.buffer = buffer;
         this.view = new DataView(buffer);
         this.bytes = new Uint8Array(buffer);
     }
@@ -141,6 +165,10 @@ class ByteReader {
         const view = this.bytes.subarray(this.offset, this.offset + length);
         this.offset += length;
         return view;
+    }
+
+    public align(alignment: number) {
+        this.offset += (alignment - this.offset % alignment) % alignment;
     }
 
     public string(): string {
@@ -182,10 +210,12 @@ function serializeLibrary(root: any): Uint8Array {
         if (ArrayBuffer.isView(value)) {
             const kind = TYPED_ARRAY_KINDS.indexOf(value.constructor as any);
             if (kind < 0) throw new Error(`Cannot serialize a '${value.constructor.name}' view`);
+            const bytesPerElement = (value.constructor as any).BYTES_PER_ELEMENT ?? 1;
 
             writer.u8(Tag.TypedArray);
             writer.u8(kind);
             writer.varint(value.byteLength);
+            writer.align(bytesPerElement);
             return writer.blob(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
         }
 
@@ -235,85 +265,199 @@ function serializeLibrary(root: any): Uint8Array {
     return writer.result();
 }
 
-function deserializeLibrary(buffer: ArrayBuffer): any {
-    const reader = new ByteReader(buffer);
+type ObjectFrame_T = { type: "object", value: Record<string, any>, index: number, count: number };
+type ArrayFrame_T = { type: "array", value: any[], index: number, count: number };
+type MapFrame_T = { type: "map", value: Map<any, any>, index: number, count: number, key: any, hasKey: boolean };
+type SetFrame_T = { type: "set", value: Set<any>, index: number, count: number };
+type BufferFrame_T = { type: "buffer", value: ArrayBuffer, index: number, count: number, sourceOffset: number };
+type DecoderFrame_T = ObjectFrame_T | ArrayFrame_T | MapFrame_T | SetFrame_T | BufferFrame_T;
 
-    if (reader.u32() !== MAGIC) throw new Error("Not a decode-cache file");
-    if (reader.u8() !== FORMAT_VERSION) throw new Error("Unsupported decode-cache format version");
+class LibraryDecoder {
+    protected readonly reader: ByteReader;
+    protected readonly refs: any[] = [];
+    protected readonly frames: DecoderFrame_T[] = [];
+    protected nextFrame: DecoderFrame_T = null;
+    protected hasRoot = false;
+    protected root: any;
 
-    const refs: any[] = [];
+    public constructor(buffer: ArrayBuffer) {
+        this.reader = new ByteReader(buffer);
 
-    function read(): any {
-        const tag = reader.u8() as Tag;
+        if (this.reader.u32() !== MAGIC) throw new Error("Not a decode-cache file");
+        if (this.reader.u8() !== FORMAT_VERSION) throw new Error("Unsupported decode-cache format version");
+    }
+
+    protected readValue(): any {
+        const tag = this.reader.u8() as Tag;
+
+        this.nextFrame = null;
 
         switch (tag) {
             case Tag.Null: return null;
             case Tag.Undefined: return undefined;
             case Tag.False: return false;
             case Tag.True: return true;
-            case Tag.Number: return reader.f64();
-            case Tag.String: return reader.string();
-            case Tag.BigInt: return BigInt(reader.string());
-            case Tag.BackRef: return refs[reader.varint()];
+            case Tag.Number: return this.reader.f64();
+            case Tag.String: return this.reader.string();
+            case Tag.BigInt: return BigInt(this.reader.string());
+            case Tag.BackRef: return this.refs[this.reader.varint()];
             case Tag.ArrayBuffer: {
-                const bytes = reader.take(reader.varint()).slice();
-                refs.push(bytes.buffer);
-                return bytes.buffer;
+                const count = this.reader.varint();
+                const sourceOffset = this.reader.offset;
+                const value = new ArrayBuffer(count);
+
+                this.reader.offset += count;
+                this.refs.push(value);
+                this.nextFrame = { type: "buffer", value, index: 0, count, sourceOffset };
+                return value;
             }
             case Tag.TypedArray: {
-                const kind = reader.u8();
-                const byteLength = reader.varint();
-                const bytes = reader.take(byteLength).slice(); // copy re-aligns and detaches from the file buffer
+                const kind = this.reader.u8();
+                const byteLength = this.reader.varint();
                 const Constructor = TYPED_ARRAY_KINDS[kind] as any;
                 const bytesPerElement = Constructor.BYTES_PER_ELEMENT ?? 1;
-                const view = new Constructor(bytes.buffer, 0, byteLength / bytesPerElement);
 
-                refs.push(view);
-                return view;
+                this.reader.align(bytesPerElement);
+
+                const value = new Constructor(this.reader.buffer, this.reader.offset, byteLength / bytesPerElement);
+
+                this.reader.offset += byteLength;
+                this.refs.push(value);
+                return value;
             }
             case Tag.Object: {
                 const value: Record<string, any> = {};
-                refs.push(value);
 
-                const count = reader.varint();
-                for (let i = 0; i < count; i++) {
-                    const key = reader.string();
-                    value[key] = read();
-                }
+                this.refs.push(value);
+                this.nextFrame = { type: "object", value, index: 0, count: this.reader.varint() };
                 return value;
             }
             case Tag.Array: {
-                const length = reader.varint();
-                const value = new Array(length);
-                refs.push(value);
+                const count = this.reader.varint();
+                const value = new Array(count);
 
-                for (let i = 0; i < length; i++) value[i] = read();
+                this.refs.push(value);
+                this.nextFrame = { type: "array", value, index: 0, count };
                 return value;
             }
             case Tag.Map: {
                 const value = new Map();
-                refs.push(value);
 
-                const count = reader.varint();
-                for (let i = 0; i < count; i++) {
-                    const key = read();
-                    value.set(key, read());
-                }
+                this.refs.push(value);
+                this.nextFrame = { type: "map", value, index: 0, count: this.reader.varint(), key: undefined, hasKey: false };
                 return value;
             }
             case Tag.Set: {
                 const value = new Set();
-                refs.push(value);
 
-                const count = reader.varint();
-                for (let i = 0; i < count; i++) value.add(read());
+                this.refs.push(value);
+                this.nextFrame = { type: "set", value, index: 0, count: this.reader.varint() };
                 return value;
             }
             default: throw new Error(`Corrupt decode-cache file (unknown tag ${tag})`);
         }
     }
 
-    return read();
+    protected pushNextFrame(): void {
+        if (this.nextFrame) this.frames.push(this.nextFrame);
+    }
+
+    public step(): boolean {
+        while (this.frames.length > 0) {
+            const frame = this.frames[this.frames.length - 1];
+            const complete = frame.index >= frame.count && (frame.type !== "map" || !frame.hasKey);
+
+            if (!complete) break;
+            this.frames.pop();
+        }
+
+        if (!this.hasRoot) {
+            this.root = this.readValue();
+            this.hasRoot = true;
+            this.pushNextFrame();
+            return true;
+        }
+
+        if (this.frames.length === 0) return false;
+
+        const frame = this.frames[this.frames.length - 1];
+
+        switch (frame.type) {
+            case "object": {
+                const key = this.reader.string();
+                frame.value[key] = this.readValue();
+                frame.index++;
+                break;
+            }
+            case "array": {
+                frame.value[frame.index++] = this.readValue();
+                break;
+            }
+            case "map": {
+                if (!frame.hasKey) {
+                    frame.key = this.readValue();
+                    frame.hasKey = true;
+                } else {
+                    frame.value.set(frame.key, this.readValue());
+                    frame.key = undefined;
+                    frame.hasKey = false;
+                    frame.index++;
+                }
+                break;
+            }
+            case "set": {
+                frame.value.add(this.readValue());
+                frame.index++;
+                break;
+            }
+            case "buffer": {
+                const length = Math.min(BUFFER_COPY_CHUNK_SIZE, frame.count - frame.index);
+                const source = new Uint8Array(this.reader.buffer, frame.sourceOffset + frame.index, length);
+
+                new Uint8Array(frame.value, frame.index, length).set(source);
+                frame.index += length;
+                return true;
+            }
+        }
+
+        this.pushNextFrame();
+        return true;
+    }
+
+    public result(): any {
+        return this.root;
+    }
 }
 
-export { serializeLibrary, deserializeLibrary };
+function isSerializedLibrary(buffer: ArrayBuffer): boolean {
+    if (buffer.byteLength < 5) return false;
+
+    const view = new DataView(buffer);
+
+    return view.getUint32(0, true) === MAGIC && view.getUint8(4) === FORMAT_VERSION;
+}
+
+function deserializeLibrary(buffer: ArrayBuffer): any {
+    const decoder = new LibraryDecoder(buffer);
+
+    while (decoder.step()) { }
+
+    return decoder.result();
+}
+
+async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any> {
+    const decoder = new LibraryDecoder(buffer);
+
+    while (true) {
+        const deadline = performance.now() + DECODE_FRAME_MS;
+
+        do {
+            for (let i = 0; i < DECODE_STEP_BATCH; i++)
+                if (!decoder.step()) return decoder.result();
+        } while (performance.now() < deadline);
+
+        await yieldDecode();
+    }
+}
+
+export { serializeLibrary, deserializeLibrary, deserializeLibraryAsync, isSerializedLibrary };

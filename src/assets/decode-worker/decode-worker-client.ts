@@ -1,19 +1,27 @@
 import DecodeLibrary from "@client/assets/unreal/decode-library";
 import type { WorkerToMainMessage, PrecacheResult_T } from "./decode-protocol";
 import type DecodeEngine from "./decode-engine";
+import { deserializeLibraryAsync } from "./library-serializer";
+import { refreshSoundBlobUris } from "./decode-cache";
 
-interface PendingRequest {
+type PendingRequest_T = {
     resolve(value: any): void;
     reject(error: Error): void;
     workerIndex: number;
-}
+};
 
-interface WorkerSlot {
+type WorkerSlot_T = {
     worker: Worker;
     isDead: boolean;
     inFlight: number;
     readyResolve(): void;
     readyReject(error: Error): void;
+};
+
+type BinaryDecodeRequest_T = { buffer: ArrayBuffer, request: PendingRequest_T };
+
+async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
+    await Promise.all(promises);
 }
 
 /**
@@ -32,11 +40,13 @@ interface WorkerSlot {
  * the normal main-thread devtools instead of a worker context.
  */
 class DecodeWorkerClient {
-    protected slots: WorkerSlot[] = [];
-    protected pending = new Map<number, PendingRequest>();
+    protected slots: WorkerSlot_T[] = [];
+    protected pending = new Map<number, PendingRequest_T>();
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>(); // sector -> worker that decoded it
     protected mainThreadEngine: DecodeEngine = null;
+    protected readonly binaryDecodeQueue: BinaryDecodeRequest_T[] = [];
+    protected isDecodingBinary = false;
 
     public readonly ready: Promise<void>;
 
@@ -49,7 +59,7 @@ class DecodeWorkerClient {
         const readyPromises: Promise<void>[] = [];
 
         for (let i = 0; i < poolSize; i++) {
-            const slot = { isDead: false, inFlight: 0 } as WorkerSlot;
+            const slot = { isDead: false, inFlight: 0 } as WorkerSlot_T;
 
             readyPromises.push(new Promise<void>((resolve, reject) => {
                 slot.readyResolve = resolve;
@@ -69,7 +79,7 @@ class DecodeWorkerClient {
             this.slots.push(slot);
         }
 
-        this.ready = Promise.all(readyPromises).then(() => { });
+        this.ready = waitForWorkers(readyPromises);
     }
 
     protected async initMainThread(): Promise<void> {
@@ -105,14 +115,16 @@ class DecodeWorkerClient {
         return best;
     }
 
-    public decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<DecodeLibrary> {
-        if (this.mainThreadEngine)
-            return this.mainThreadEngine.decodeSector(sectorName, settings)
-                .then(({ library }) => Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary);
+    public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine) {
+            const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
 
         const workerIndex = this.pickWorker(this.sectorWorker.get(sectorName));
 
-        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
 
         this.sectorWorker.set(sectorName, workerIndex);
 
@@ -186,7 +198,7 @@ class DecodeWorkerClient {
         });
     }
 
-    protected settlePending(requestId: number): PendingRequest | undefined {
+    protected settlePending(requestId: number): PendingRequest_T | undefined {
         const request = this.pending.get(requestId);
 
         if (!request) return undefined;
@@ -212,8 +224,8 @@ class DecodeWorkerClient {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
 
-                /* the library is plain data with no instance methods - restoring the prototype suffices */
-                request.resolve(Object.setPrototypeOf(msg.library, DecodeLibrary.prototype) as DecodeLibrary);
+                this.binaryDecodeQueue.push({ buffer: msg.buffer, request });
+                void this.processBinaryDecodeQueue();
                 break;
             }
             case "precached": {
@@ -249,6 +261,27 @@ class DecodeWorkerClient {
                 break;
             }
         }
+    }
+
+    protected async processBinaryDecodeQueue(): Promise<void> {
+        if (this.isDecodingBinary) return;
+
+        this.isDecodingBinary = true;
+
+        while (this.binaryDecodeQueue.length > 0) {
+            const { buffer, request } = this.binaryDecodeQueue.shift();
+
+            try {
+                const library = await deserializeLibraryAsync(buffer);
+
+                refreshSoundBlobUris(library);
+                request.resolve(Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary);
+            } catch (e) {
+                request.reject(e as Error);
+            }
+        }
+
+        this.isDecodingBinary = false;
     }
 
     protected onWorkerDead(workerIndex: number, error: Error) {

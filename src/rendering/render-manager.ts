@@ -78,7 +78,15 @@ const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (wa
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
-type SectorTextureWarmup_T = { sector: SectorObject, textureQueue: THREE.Texture[] };
+type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[] };
+type SectorWarmup_T = {
+    sector: SectorObject,
+    materialQueue: SectorMaterialBinding_T[],
+    warmedTextures: Set<THREE.Texture>,
+    lightingQueue: any[],
+    fallbackMaterials: Set<THREE.Material>,
+    releaseEmitters: boolean
+};
 
 const frozenUpdateMatrixWorld = function () { };
 
@@ -87,6 +95,25 @@ function unfreezeAncestors(node: THREE.Object3D): void {
     for (let n = node.parent; n; n = n.parent)
         if (n.updateMatrixWorld === frozenUpdateMatrixWorld)
             n.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+}
+
+function findVisibleMaterialBinding(bindings: SectorMaterialBinding_T[], cacheVisibleMaterials: WeakMap<THREE.Mesh, Set<number>>): number {
+    for (let i = bindings.length - 1; i >= 0; i--) {
+        const binding = bindings[i];
+        if (!binding.object.visible) continue;
+        if (binding.materialIndex < 0) return i;
+
+        let visibleMaterials = cacheVisibleMaterials.get(binding.object);
+
+        if (!visibleMaterials) {
+            visibleMaterials = new Set(binding.object.geometry.groups.map(group => group.materialIndex));
+            cacheVisibleMaterials.set(binding.object, visibleMaterials);
+        }
+
+        if (visibleMaterials.has(binding.materialIndex)) return i;
+    }
+
+    return -1;
 }
 
 // overrides updateMatrixWorld to a no-op, but only once every child under a node is static too
@@ -221,9 +248,9 @@ class RenderManager {
     protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
 
-    protected readonly pendingMeshReveals: SectorObject[] = []; // tier 2 - always fully drains before pendingTextureWarmups touches anything
-    protected readonly pendingTextureWarmups: SectorTextureWarmup_T[] = [];
-    protected static readonly TEXTURES_PER_FRAME = 8;
+    protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
+    protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
+    protected static readonly MATERIAL_RESTORES_PER_FRAME = 8;
 
     // deferred shader link/compile error reporting, see processShaderDiagnostics
     protected readonly pendingShaderChecks: any[] = [];
@@ -2109,14 +2136,13 @@ class RenderManager {
         this.objectGroup.add(sector);
         this.stitchTerrains();
 
-        setLightingGate(sector, false); // terrain/BSP stays visible but starts unlit until processSectorWarmups ungates it
+        setLightingGate(sector, false);
 
-        // static mesh geometry, its materials, and particle warm-up all wait their turn
         if (sector.staticMeshGroup) {
-            sector.staticMeshGroup.visible = false;
-            this.pendingMeshReveals.push(sector);
             setEmitterWarmupGate(sector, false);
         }
+
+        this.queueSectorWarmup(sector, sector, !!sector.staticMeshGroup);
 
         sector.updateMatrixWorld(true);
         freezeStaticSubtree(sector);
@@ -2147,29 +2173,92 @@ class RenderManager {
         }
     }
 
-    // no renderer.compile() here - force-compiling a batch's full .material array profiled worse (300-600ms) than the plain reveal below
     protected processSectorWarmups() {
-        if (this.pendingMeshReveals.length > 0) {
-            const sector = this.pendingMeshReveals.shift();
+        let jobIndex = -1;
+        let jobDistance = Infinity;
+        const cacheVisibleMaterials = new WeakMap<THREE.Mesh, Set<number>>();
 
-            sector.staticMeshGroup.visible = true;
-            this.pendingTextureWarmups.push({ sector, textureQueue: collectSectorTextures(sector.staticMeshGroup) });
-            return; // let this reveal land on its own frame before tier 3 touches anything
+        for (let i = 0; i < this.pendingSectorWarmups.length; i++) {
+            if (findVisibleMaterialBinding(this.pendingSectorWarmups[i].materialQueue, cacheVisibleMaterials) < 0) continue;
+
+            const distance = this.pendingSectorWarmups[i].sector.worldBounds.distanceToPoint(this.camera.position);
+
+            if (distance >= jobDistance) continue;
+
+            jobIndex = i;
+            jobDistance = distance;
         }
 
-        const job = this.pendingTextureWarmups[0];
+        const visibleOnly = jobIndex >= 0;
+
+        if (!visibleOnly) {
+            for (let i = 0; i < this.pendingSectorWarmups.length; i++) {
+                const distance = this.pendingSectorWarmups[i].sector.worldBounds.distanceToPoint(this.camera.position);
+
+                if (distance >= jobDistance) continue;
+
+                jobIndex = i;
+                jobDistance = distance;
+            }
+        }
+
+        const job = jobIndex < 0 ? null : this.pendingSectorWarmups[jobIndex];
         if (!job) return;
 
-        for (let i = 0; i < RenderManager.TEXTURES_PER_FRAME && job.textureQueue.length > 0; i++)
-            this.renderer.initTexture(job.textureQueue.pop());
+        const deadline = performance.now() + RenderManager.TEXTURE_WARMUP_FRAME_MS;
+        let restoredMaterials = 0;
 
-        if (job.textureQueue.length === 0) {
-            this.pendingTextureWarmups.shift();
-            setLightingGate(job.sector, true); // materials done - shading (lighting, then particles) can go
+        while (job.materialQueue.length > 0 && restoredMaterials < RenderManager.MATERIAL_RESTORES_PER_FRAME) {
+            const bindingIndex = visibleOnly ? findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials) : job.materialQueue.length - 1;
+            if (bindingIndex < 0) return;
+
+            const binding = job.materialQueue[bindingIndex];
+
+            while (binding.textureQueue.length > 0) {
+                const texture = binding.textureQueue.pop();
+
+                if (job.warmedTextures.has(texture)) continue;
+
+                this.renderer.initTexture(texture);
+                job.warmedTextures.add(texture);
+
+                if (binding.textureQueue.length > 0 && performance.now() >= deadline) return;
+            }
+
+            job.materialQueue.splice(bindingIndex, 1);
+            if (binding.materialIndex < 0) binding.object.material = binding.material;
+            else (binding.object.material as THREE.Material[])[binding.materialIndex] = binding.material;
+
+            restoredMaterials++;
+            if (performance.now() >= deadline) return;
+        }
+
+        if (job.materialQueue.length > 0) return;
+
+        if (job.lightingQueue.length > 0) {
+            job.lightingQueue.pop().lightingGate = true;
+            return;
+        }
+
+        this.pendingSectorWarmups.splice(jobIndex, 1);
+        job.fallbackMaterials.forEach(material => material.dispose());
+
+        if (job.releaseEmitters)
             setEmitterWarmupGate(job.sector, true);
 
-            (job.sector as any).visibilityCacheInitialized = false; // force a retry even if the camera hasn't moved since the gated pass
+        (job.sector as any).visibilityCacheInitialized = false;
+    }
+
+    protected queueSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean) {
+        const job = stageSectorWarmup(sector, root, releaseEmitters);
+
+        if (job.materialQueue.length > 0 || job.lightingQueue.length > 0) {
+            this.pendingSectorWarmups.push(job);
+            return;
         }
+
+        setLightingGate(root, true);
+        if (releaseEmitters) setEmitterWarmupGate(sector, true);
     }
 
     // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
@@ -2227,11 +2316,8 @@ class RenderManager {
         sector.staticMeshGroup.updateMatrixWorld(true);
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
 
-        // addSector's unconditional gate ran before this group existed - gate it now
         setLightingGate(sector.staticMeshGroup, false);
-
-        sector.staticMeshGroup.visible = false;
-        this.pendingMeshReveals.push(sector);
+        this.queueSectorWarmup(sector, sector.staticMeshGroup, true);
     }
 
     /**
@@ -2264,11 +2350,13 @@ class RenderManager {
         this.objectGroup.remove(sector);
         this.stitchTerrains();
 
-        const revealIndex = this.pendingMeshReveals.indexOf(sector);
-        if (revealIndex >= 0) this.pendingMeshReveals.splice(revealIndex, 1);
+        for (let i = this.pendingSectorWarmups.length - 1; i >= 0; i--) {
+            const job = this.pendingSectorWarmups[i];
+            if (job.sector !== sector) continue;
 
-        const warmupIndex = this.pendingTextureWarmups.findIndex(job => job.sector === sector);
-        if (warmupIndex >= 0) this.pendingTextureWarmups.splice(warmupIndex, 1);
+            restoreSectorMaterials(job);
+            this.pendingSectorWarmups.splice(i, 1);
+        }
     }
 
     public disposeSector(sector: SectorObject) {
@@ -2417,29 +2505,91 @@ function collectTexturesDeep(value: any, textures: Set<THREE.Texture>, seen: Wea
     for (const nested of Object.values(value)) collectTexturesDeep(nested, textures, seen);
 }
 
-function collectSectorTextures(root: THREE.Object3D): THREE.Texture[] {
-    const textures = new Set<THREE.Texture>();
-    const seen = new WeakSet<object>();
+function collectMaterialTextures(material: THREE.Material, textures: Set<THREE.Texture>, seen: WeakSet<object>): void {
+    for (const value of Object.values(material)) {
+        if ((value as THREE.Texture)?.isTexture) textures.add(value as THREE.Texture);
+    }
+
+    if ((material as any).uniforms) collectTexturesDeep((material as any).uniforms, textures, seen);
+    if ((material as any).sprites) collectTexturesDeep((material as any).sprites, textures, seen);
+}
+
+function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean): SectorWarmup_T {
+    const materialQueue: SectorMaterialBinding_T[] = [];
+    const lightingQueue: any[] = [];
+    const fallbackCache = new Map<string, MeshBasicMaterial>();
 
     root.traverse(child => {
+        if ("computeLighting" in child) lightingQueue.push(child);
+
+        if ((child as any).isTerrainBatch) {
+            for (const terrainSector of (child as any).sectors ?? [])
+                lightingQueue.push(terrainSector);
+        }
+
         const mesh = child as THREE.Mesh;
 
-        if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
+        if (!(mesh as any).isMesh) return;
+
+        for (let parent = child.parent; parent && parent !== root.parent; parent = parent.parent)
+            if ((parent as any).particlePool) return;
 
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const materialTextures = new Array<THREE.Texture[]>(materials.length);
 
-        for (const material of materials) {
+        for (let i = 0; i < materials.length; i++) {
+            const material = materials[i];
             if (!material) continue;
 
-            for (const value of Object.values(material)) {
-                if ((value as THREE.Texture)?.isTexture) textures.add(value as THREE.Texture);
+            const textures = new Set<THREE.Texture>();
+            collectMaterialTextures(material, textures, new WeakSet());
+            if (textures.size === 0) continue;
+
+            materialTextures[i] = Array.from(textures);
+        }
+
+        if (!materialTextures.some(Boolean)) return;
+
+        const vertexColors = !!mesh.geometry?.getAttribute("color");
+        const fallback = materials.map((material, materialIndex) => {
+            if (!material || !materialTextures[materialIndex]) return material;
+
+            const key = [material.visible, material.side, material.transparent, material.depthTest, material.depthWrite, material.blending, vertexColors].join(":");
+            let fallbackMaterial = fallbackCache.get(key);
+
+            if (!fallbackMaterial) {
+                fallbackMaterial = new MeshBasicMaterial({ color: 0x777777, side: material.side, transparent: material.transparent, opacity: material.transparent ? 0.5 : 1, depthTest: material.depthTest, depthWrite: material.depthWrite, vertexColors });
+                fallbackMaterial.visible = material.visible;
+                fallbackMaterial.blending = material.blending;
+                (fallbackMaterial as any).isSectorFallbackMaterial = true;
+                fallbackCache.set(key, fallbackMaterial);
             }
 
-            if ((material as any).uniforms) collectTexturesDeep((material as any).uniforms, textures, seen);
+            return fallbackMaterial;
+        });
+
+        if (Array.isArray(mesh.material)) {
+            for (let i = 0; i < materials.length; i++)
+                if (fallback[i] !== materials[i])
+                    materialQueue.push({ object: mesh, material: materials[i], materialIndex: i, textureQueue: materialTextures[i] });
+        } else if (fallback[0] !== materials[0]) {
+            materialQueue.push({ object: mesh, material: materials[0], materialIndex: -1, textureQueue: materialTextures[0] });
         }
+
+        mesh.material = Array.isArray(mesh.material) ? fallback : fallback[0];
     });
 
-    return Array.from(textures);
+    return { sector, materialQueue, warmedTextures: new Set(), lightingQueue, fallbackMaterials: new Set(fallbackCache.values()), releaseEmitters };
+}
+
+function restoreSectorMaterials(job: SectorWarmup_T): void {
+    for (const binding of job.materialQueue) {
+        if (binding.materialIndex < 0) binding.object.material = binding.material;
+        else (binding.object.material as THREE.Material[])[binding.materialIndex] = binding.material;
+    }
+
+    job.materialQueue.length = 0;
+    job.fallbackMaterials.forEach(material => material.dispose());
 }
 
 // emitters live under sector.zones, not staticMeshGroup - always walk the whole sector

@@ -1,6 +1,6 @@
 
 import BaseConfigFile from "./un-base-config";
-import { consumeNextValue, findSection } from "./conf-parser";
+import { consumeNextValue } from "./conf-parser";
 
 class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
@@ -38,11 +38,12 @@ class UConfigSystem extends BaseConfigFile {
     }
 
     private _loadSection(fileContents: string, section: string, target: object, definedKeys: Set<string>): void {
-        let readOffset: number;
+        const sectionHeader = `[${section}]\r\n`;
+        const sectionOffset = fileContents.indexOf(sectionHeader);
 
-        try {
-            readOffset = findSection(fileContents, section);
-        } catch { return; }
+        if (sectionOffset === -1) return;
+
+        let readOffset = sectionOffset + sectionHeader.length;
 
         while (true) {
             let nextOffset = this._skipToNextToken(fileContents, readOffset);
