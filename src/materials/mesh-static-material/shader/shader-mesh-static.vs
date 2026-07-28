@@ -545,9 +545,6 @@ void main() {
     #include <worldpos_vertex>
     #include <envmap_vertex>
 
-    #ifdef HAS_LIGHTS
-        #include <lights_lambert_vertex>
-    #endif
     // #ifdef USE_DIRECTIONAL_AMBIENT
     ///     #include <lights_lambert_vertex>
     //     // vViewPosition = -mvPosition.xyz;

@@ -252,28 +252,33 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
         const iCount = idx ? idx.count : 0;
         const sectorPos = sector.position;
 
+        const posArray = pos.array as any;
+        const normArray = norm ? norm.array as any : null;
+        const colorArray = color ? color.array as any : null;
+        const terrainIndexArray = terrainIndex ? terrainIndex.array as any : null;
+
         // Copy and shift data
         for (let i = 0; i < vCount; i++) {
             const vi = vertexOffset + i;
 
-            mergedPositions[vi * 3 + 0] = pos.getX(i) + sectorPos.x;
-            mergedPositions[vi * 3 + 1] = pos.getY(i) + sectorPos.y;
-            mergedPositions[vi * 3 + 2] = pos.getZ(i) + sectorPos.z;
+            mergedPositions[vi * 3 + 0] = posArray[i * 3 + 0] + sectorPos.x;
+            mergedPositions[vi * 3 + 1] = posArray[i * 3 + 1] + sectorPos.y;
+            mergedPositions[vi * 3 + 2] = posArray[i * 3 + 2] + sectorPos.z;
 
-            if (norm) {
-                mergedNormals[vi * 3 + 0] = norm.getX(i);
-                mergedNormals[vi * 3 + 1] = norm.getY(i);
-                mergedNormals[vi * 3 + 2] = norm.getZ(i);
+            if (normArray) {
+                mergedNormals[vi * 3 + 0] = normArray[i * 3 + 0];
+                mergedNormals[vi * 3 + 1] = normArray[i * 3 + 1];
+                mergedNormals[vi * 3 + 2] = normArray[i * 3 + 2];
             }
 
-            if (color) {
-                mergedColors[vi * 3 + 0] = color.getX(i);
-                mergedColors[vi * 3 + 1] = color.getY(i);
-                mergedColors[vi * 3 + 2] = color.getZ(i);
+            if (colorArray) {
+                mergedColors[vi * 3 + 0] = colorArray[i * 3 + 0];
+                mergedColors[vi * 3 + 1] = colorArray[i * 3 + 1];
+                mergedColors[vi * 3 + 2] = colorArray[i * 3 + 2];
             }
 
-            if (terrainIndex) {
-                mergedTerrainIndices[vi] = terrainIndex.getX(i);
+            if (terrainIndexArray) {
+                mergedTerrainIndices[vi] = terrainIndexArray[i];
             }
         }
 

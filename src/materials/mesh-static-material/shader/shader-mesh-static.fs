@@ -511,9 +511,7 @@ void main() {
         // reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
         reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
     #else
-        #ifdef HAS_LIGHTS
-            reflectedLight.indirectDiffuse += vec3( 0.0 );
-        #elif !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES) && !defined(USE_LIT_ATTRIBUTES)
+        #if !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES) && !defined(USE_LIT_ATTRIBUTES)
             reflectedLight.indirectDiffuse += vec3( 1.0 );
         #endif
 

@@ -553,6 +553,9 @@ abstract class BaseEmitter extends Object3D {
                     let attrColors = this.meshSpawningStaticMesh.geometry.getAttribute("color");
 
                     let meshColor = new Vector3().fromBufferAttribute(attrColors, vertexIndex);
+
+                    if (attrColors.normalized) meshColor.multiplyScalar(255);
+
                     particle.colorMultiplier.x = meshColor.x;
                     particle.colorMultiplier.y = meshColor.y;
                     particle.colorMultiplier.z = meshColor.z;
