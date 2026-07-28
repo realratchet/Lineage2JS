@@ -159,7 +159,9 @@ function shouldUpdateOffscreenEmitter(emitter: any, currentTime: number) {
     return true;
 }
 
-function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean) {
+function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean, simDue: boolean) {
+    if (!simDue && emitter.instancedMesh?.visible && !emitter.isOffscreenThrottled) return false;
+
     if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
 
     const phase = getEmitterPhase(emitter) + detailFrame;
@@ -200,6 +202,7 @@ class RenderManager {
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected emitterDetailFrame = 0;
+    protected emitterSimDue = true;
     protected dropDetail = false;
     protected aggressiveLod = false;
     protected readonly movableObjects = new Set<MovableObject>();
@@ -1282,7 +1285,8 @@ class RenderManager {
                         child,
                         this.emitterDetailFrame,
                         this.dropDetail,
-                        this.aggressiveLod
+                        this.aggressiveLod,
+                        this.emitterSimDue
                     );
                     (child as any).isOffscreenThrottled = false;
                     (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
@@ -1726,7 +1730,9 @@ class RenderManager {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
-        if (this.nextPhysicsTick <= currentTime) {
+        this.emitterSimDue = this.nextPhysicsTick <= currentTime;
+
+        if (this.emitterSimDue) {
             // this.physicsWorld.step();
             // this.player.update(this, currentTime, deltaTime);
 
