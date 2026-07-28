@@ -5,6 +5,7 @@ import { consumeNextValue, findSection } from "./conf-parser";
 class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
     public readonly definedClippingKeys = new Set<string>();
+    public readonly definedDisplayKeys = new Set<string>();
 
     public clippingRange: GA.IClippingRangeConfig = {
         staticMesh: 4.0,
@@ -18,17 +19,30 @@ class UConfigSystem extends BaseConfigFile {
         pawnMax: 3.0
     };
 
+    public display: GA.IDisplayConfig = {
+        brightness: 0.8,
+        contrast: 0.7,
+        gamma: 0.8
+    };
+
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
 
         this._loadSection(fileContents, "ClippingRange", this.clippingRange, this.definedClippingKeys);
 
+        // C4 UClient::Init overrides the l2.ini config field with Option.ini [Video] Gamma.
+        this._loadSection(fileContents, "WinDrv.WindowsClient", this.display, this.definedDisplayKeys);
+        this._loadSection(fileContents, "Video", this.display, this.definedDisplayKeys);
+
         return this;
     }
 
     private _loadSection(fileContents: string, section: string, target: object, definedKeys: Set<string>): void {
-        let readOffset = findSection(fileContents, section);
-        if (readOffset === -1) return;
+        let readOffset: number;
+
+        try {
+            readOffset = findSection(fileContents, section);
+        } catch { return; }
 
         while (true) {
             let nextOffset = this._skipToNextToken(fileContents, readOffset);
@@ -86,7 +100,10 @@ async function getUserConfig(): Promise<GA.IUserConfig> {
     for (const key of options.definedClippingKeys)
         (defaults.clippingRange as any)[key] = (options.clippingRange as any)[key];
 
-    return { clippingRange: defaults.clippingRange };
+    for (const key of options.definedDisplayKeys)
+        (defaults.display as any)[key] = (options.display as any)[key];
+
+    return { clippingRange: defaults.clippingRange, display: defaults.display };
 }
 
 export default UConfigSystem;

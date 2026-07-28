@@ -9,7 +9,6 @@ const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
 // const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
-const tmpColorByte2 = new ColorByte();
 
 // Vertex indices a light actually influences, decoded once from its flags bitmask
 // (LSB-first per byte). The dynamic pass runs per animated light per frame, and
@@ -97,7 +96,25 @@ class LitActorMesh extends Mesh {
                     true
                 )
             );
+
+            const sunAffected = new Uint8Array(attrPositions.count);
+            if (this.isSunAffected) sunAffected.fill(255);
+            this.geometry.setAttribute("sunAffected", new BufferAttribute(sunAffected, 1, true));
         }
+    }
+
+    public setPerActorAmbient(perActorAmbient: any[]) {
+        this.perActorAmbient = perActorAmbient;
+
+        const attrSunAffected = this.geometry.getAttribute("sunAffected");
+        if (!attrSunAffected) return;
+
+        const arrSunAffected = attrSunAffected.array as Uint8Array;
+        arrSunAffected.fill(0);
+
+        for (const actor of perActorAmbient)
+            if (actor.isSunAffected)
+                arrSunAffected.fill(255, actor.startVertex, actor.startVertex + actor.count);
     }
 
     protected perVertexGlow?: Float32Array;
@@ -370,46 +387,6 @@ class LitActorMesh extends Mesh {
                 colorArray.set(this.staticLightingCache!.subarray(startVertex * 3, (startVertex + count) * 3), startVertex * 3);
             }
         } else colorArray.set(this.staticLightingCache!);
-
-        // GetColorPlane_HSVStaticMeshSunLight + (ambient >> 1)
-        if (this.perActorAmbient) {
-            const ambientSun = env.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
-            const sunColor = env.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte2);
-            const r = ambientSun.r + sunColor.r;
-            const g = ambientSun.g + sunColor.g;
-            const b = ambientSun.b + sunColor.b;
-
-            if (r !== 0 || g !== 0 || b !== 0) {
-                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean }[];
-
-                for (let ei = 0; ei < perActorAmbient.length; ei++) {
-                    if (relight && !relight[ei]) continue;
-
-                    const actor = perActorAmbient[ei];
-                    if (actor.isSunAffected) {
-                        for (let i = actor.startVertex * 3, end = (actor.startVertex + actor.count) * 3; i < end; i += 3) {
-                            colorArray[i] += r;
-                            colorArray[i + 1] += g;
-                            colorArray[i + 2] += b;
-                        }
-                    }
-                }
-            }
-        } else if (this.isSunAffected) {
-            const ambient = env.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
-            const sunColor = env.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte2);
-            const r = ambient.r + sunColor.r;
-            const g = ambient.g + sunColor.g;
-            const b = ambient.b + sunColor.b;
-
-            if (r !== 0 || g !== 0 || b !== 0) {
-                for (let i = 0; i < colorArray.length; i += 3) {
-                    colorArray[i] += r;
-                    colorArray[i + 1] += g;
-                    colorArray[i + 2] += b;
-                }
-            }
-        }
 
         // Apply dynamic pass (lights that change over time or move)
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0, filterVisibility, vertexToElement);

@@ -22,6 +22,7 @@ import type AssetManager from "@client/assets/asset-manager";
 import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
 import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
+import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -190,6 +191,8 @@ class RenderManager {
     protected assetManager: AssetManager;
     protected uGlowPass: UGlowPass;
     protected mainRenderTarget: WebGLRenderTarget;
+    protected displayGammaPass: DisplayGammaPass;
+    protected displayGammaEnabled: boolean = false;
 
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
@@ -279,6 +282,8 @@ class RenderManager {
 
         this.uGlowPass = new UGlowPass(new Vector2(256, 256));
         this.uGlowPass.renderToScreen = true;
+
+        this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0);
 
         guiFolders.quality.add(this.envConfig, "fogPreset", {
             "1 (2k-8k)": "1",
@@ -531,7 +536,8 @@ class RenderManager {
         };
 
         guiFolders.world.add(timeState, "time", 0, 24, 0.01)
-            .name("Time");
+            .name("Time")
+            .listen();
         guiFolders.world.add(timeState, "timeScale", 0, 100, 0.01)
             .name("Time Scale");
 
@@ -895,6 +901,7 @@ class RenderManager {
 
         this.mainRenderTarget.setSize(rtWidth, rtHeight);
         this.uGlowPass.setSize(rtWidth, rtHeight);
+        this.displayGammaPass.setSize(rtWidth, rtHeight);
         this.getDomElement().style.display = oldStyle;
         this.needsUpdate = true;
     }
@@ -1016,6 +1023,24 @@ class RenderManager {
             });
     }
 
+    public addDisplayGammaControls(): void {
+        const display = this.assetManager.userConfig.display;
+        display.gamma = 0;
+
+        const steps = GAMMA_STEPS.reduce((acc, g) => (acc[g.toFixed(1)] = g, acc), { "off": 0 } as Record<string, number>);
+
+        guiFolders.quality.add(display, "gamma", steps)
+            .name("Gamma")
+            .onChange(v => {
+                display.gamma = parseFloat(v as any);
+                this.displayGammaEnabled = display.gamma !== 0;
+
+                if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
+
+                this.needsUpdate = true;
+            });
+    }
+
     private wireEmitterVisibilityHandlers(): void {
         this.visualizer.setEmitterVisibilityHandlers(
             (uuid, visible) => this.setEmitterVisible(uuid, visible),
@@ -1107,6 +1132,14 @@ class RenderManager {
         let offscreenEmitterUpdates = 0;
 
         GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
+
+        const ambientSun = this.environment.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
+        const sunColor = this.environment.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte_2);
+        (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(
+            (ambientSun.r + sunColor.r) / 255,
+            (ambientSun.g + sunColor.g) / 255,
+            (ambientSun.b + sunColor.b) / 255
+        );
 
         // camera-facing billboard basis, computed once and shared as a uniform (was per-particle in sprite-emitter.ts's onBeforeRender)
         {
@@ -1854,6 +1887,8 @@ class RenderManager {
         // i think bloom pass is only enabled when shader rendering used which is off by default
         // this.renderer.setRenderTarget(this.mainRenderTarget);
 
+        if (this.displayGammaEnabled) this.renderer.setRenderTarget(this.displayGammaPass.getTarget());
+
         // Render Sky (Background)
         this.renderer.clear();
         this.skyRenderer.render(this.renderer);
@@ -1993,6 +2028,8 @@ class RenderManager {
         // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);
 
         // this.renderer.setRenderTarget(null);
+
+        if (this.displayGammaEnabled) this.displayGammaPass.render(this.renderer);
     }
 
     protected _postRender(_currentTime: number, _deltaTime: number) { }

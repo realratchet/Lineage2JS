@@ -279,6 +279,8 @@
 
 #ifdef USE_LIT_ATTRIBUTES
     attribute vec3 lighting;
+    attribute float sunAffected;
+    uniform vec3 staticMeshSunAmbient;
     varying vec3 vLitColor;
 #endif
 
@@ -373,7 +375,7 @@ void main() {
     #endif
     
     #ifdef USE_LIT_ATTRIBUTES
-        vLitColor = lighting;
+        vLitColor = clamp(lighting + staticMeshSunAmbient * sunAffected, 0.0, 1.0);
     #endif
 
     #include <uv_vertex>

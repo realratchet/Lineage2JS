@@ -88,6 +88,13 @@ declare global {
 
                 export interface IUserConfig {
                     clippingRange: IClippingRangeConfig;
+                    display: IDisplayConfig;
+                }
+
+                export interface IDisplayConfig {
+                    brightness: number;
+                    contrast: number;
+                    gamma: number;
                 }
 
                 export interface IClippingRangeConfig {

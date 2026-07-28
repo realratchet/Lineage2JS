@@ -48,7 +48,7 @@ function createBatchObject(
     mergedObject.name = name;
     mergedObject.isBatch = true;
     mergedObject.batchActorUuids = actors.map(a => a.uuid);
-    mergedObject.perActorAmbient = perActorAmbient;
+    mergedObject.setPerActorAmbient(perActorAmbient);
     mergedObject.batchElements = batchElements;
     mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
     mergedObject.batchIndices = mergedGeometry.index ? mergedGeometry.index.array.slice() as Uint8Array | Uint16Array | Uint32Array : null;
