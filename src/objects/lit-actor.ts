@@ -61,6 +61,9 @@ class LitActorMesh extends Mesh {
     public elemRelight?: Uint8Array;
     public elemDistances?: Float64Array;
     public transparentSortPosition?: THREE.Vector3;
+    public transparentLookup?: Uint8Array;
+    public batchGroupPool?: { start: number, count: number, materialIndex: number, distance: number, transparent: number }[];
+    public visibleBatchGroups?: { start: number, count: number, materialIndex: number, distance: number, transparent: number }[];
     public actorBoundsMin?: number[];
     public actorBoundsMax?: number[];
     public actorZoneMask?: bigint;

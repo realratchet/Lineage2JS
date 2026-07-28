@@ -57,6 +57,8 @@ const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
 // below that rate, then bAggressiveLOD another 5 FPS lower.
 const MIN_DESIRED_FRAME_RATE = 35;
 const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
+// AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
+const CLIPPING_RANGE_SCALE = 2048;
 const DROP_DETAIL_FRAME_TIME_MS = 1000 / MIN_DESIRED_FRAME_RATE;
 const AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / AGGRESSIVE_LOD_FRAME_RATE;
 const MAX_OFFSCREEN_EMITTER_UPDATES = 32;
@@ -1001,6 +1003,17 @@ class RenderManager {
         this.needsUpdate = true;
     }
 
+    public addClippingRangeControls(): void {
+        const clippingRange = this.assetManager.userConfig.clippingRange;
+
+        guiFolders.world.add(clippingRange, "actor", 1, 12, 0.5)
+            .name("Emitter Clip")
+            .onChange(() => {
+                this.sectors.forEach(column => column.forEach(sector => (sector as any).visibilityCacheInitialized = false));
+                this.needsUpdate = true;
+            });
+    }
+
     private wireEmitterVisibilityHandlers(): void {
         this.visualizer.setEmitterVisibilityHandlers(
             (uuid, visible) => this.setEmitterVisible(uuid, visible),
@@ -1154,9 +1167,13 @@ class RenderManager {
         }
 
         // static meshes clip at the same distance as fog/terrain, no padding (isRangeIgnored is the real per-actor exemption)
+        // TODO: Clip static meshes against [ClippingRange] StaticMesh instead of fog.
         const STATIC_MESH_CLIPPING_RANGE = 1;
         const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
         const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
+
+        const emitterCullDist = this.assetManager.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
+        const emitterCullDistSq = emitterCullDist * emitterCullDist;
 
         const activeSector = this.getSector(bspCullingPosition);
 
@@ -1181,7 +1198,7 @@ class RenderManager {
                 const topLevelOnly = !isCameraInSector;
 
                 if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
-                    sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq);
+                    sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq);
                 } else {
                     this.neighborVisibilitySectors.push(sector);
                 }
@@ -1196,7 +1213,8 @@ class RenderManager {
                 this.frustum,
                 this.frustumCullingEnabled,
                 true,
-                staticMeshCullDistSq
+                staticMeshCullDistSq,
+                emitterCullDistSq
             );
         }
 

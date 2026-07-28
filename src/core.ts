@@ -100,6 +100,7 @@ async function startCore() {
 
     await assetManager.initialize(renderManager);
 
+    renderManager.addClippingRangeControls();
     
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");

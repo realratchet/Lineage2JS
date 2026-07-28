@@ -16,7 +16,7 @@ abstract class BaseConfigFile extends UEncodedFile {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 
-    protected decodeConfig() { return this.decoder.decode(new Uint8Array(this.buffer, 28)); }
+    protected decodeConfig() { return this.decoder.decode(new Uint8Array(this.buffer, this.contentOffset)); }
 
     public async decode(): Promise<this> {
         if (this.buffer) return this;

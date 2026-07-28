@@ -20,18 +20,32 @@ const TRANSPARENT_SORT_DISTANCE_SQ = 128 * 128;
 const MAX_RECURSION_DEPTH = 4;
 
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
-type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number };
+type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number; transparent: number };
+
+function getTransparentLookup(object: any, transparentMaterials: Set<number>): Uint8Array {
+    let lookup = object.transparentLookup as Uint8Array;
+    if (lookup) return lookup;
+
+    const allTransparent = (object.transparentMaterialIndexes as Set<number>) ?? transparentMaterials;
+
+    lookup = object.transparentLookup = new Uint8Array(Array.isArray(object.material) ? object.material.length : 1);
+    allTransparent.forEach(materialIndex => lookup[materialIndex] = 1);
+
+    return lookup;
+}
 
 function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups: BatchGroup_T[], transparentMaterials: Set<number>) {
     // same-object render items draw in insertion order, so transparent groups must interleave material indexes far->near
-    const allTransparent = (object.transparentMaterialIndexes as Set<number>) ?? transparentMaterials;
+    const transparentLookup = getTransparentLookup(object, transparentMaterials);
+
+    for (let i = 0, len = visibleGroups.length; i < len; i++) {
+        const group = visibleGroups[i];
+        group.transparent = transparentLookup[group.materialIndex];
+    }
 
     visibleGroups.sort((a, b) => {
-        const aTransparent = allTransparent.has(a.materialIndex) ? 1 : 0;
-        const bTransparent = allTransparent.has(b.materialIndex) ? 1 : 0;
-
-        if (aTransparent !== bTransparent) return aTransparent - bTransparent;
-        if (aTransparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex);
+        if (a.transparent !== b.transparent) return a.transparent - b.transparent;
+        if (a.transparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex);
 
         return (a.materialIndex - b.materialIndex) || (a.start - b.start);
     });
@@ -67,7 +81,7 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
             run.count += group.count;
         } else {
             if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
-            run = { start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance };
+            run = { start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance, transparent: group.transparent };
         }
 
         offset += group.count;
@@ -216,6 +230,7 @@ class SectorObject extends Object3D {
     protected visibilityCacheFrustumCulling = true;
     protected visibilityCacheTopLevelOnly = false;
     protected visibilityCacheDistanceSq = Infinity;
+    protected visibilityCacheEmitterDistanceSq = Infinity;
     protected visibilityCacheEnvVersion = -1;
     protected visibilityCacheTimeStep = -1;
     protected _lastLoggedStaticMeshLeaf: number | null = null;
@@ -956,7 +971,7 @@ class SectorObject extends Object3D {
         for (const light of this._animatedLights) light.update(environment, this.brightness);
     }
 
-    protected isVisibilityCacheValid(environment: L2Environment, cameraPosition: Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, topLevelOnly: boolean, staticMeshCullDistanceSq: number) {
+    protected isVisibilityCacheValid(environment: L2Environment, cameraPosition: Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, topLevelOnly: boolean, staticMeshCullDistanceSq: number, emitterCullDistanceSq: number) {
         const envVersion = environment.getEnvVersion();
         const timeStep = Math.floor(environment.getTimeOfDay() * 600);
         let unchanged = this.visibilityCacheInitialized
@@ -964,6 +979,7 @@ class SectorObject extends Object3D {
             && this.visibilityCacheFrustumCulling === frustumCullingEnabled
             && this.visibilityCacheTopLevelOnly === topLevelOnly
             && this.visibilityCacheDistanceSq === staticMeshCullDistanceSq
+            && this.visibilityCacheEmitterDistanceSq === emitterCullDistanceSq
             && this.visibilityCacheEnvVersion === envVersion
             && this.visibilityCacheTimeStep === timeStep;
 
@@ -982,6 +998,7 @@ class SectorObject extends Object3D {
         this.visibilityCacheFrustumCulling = frustumCullingEnabled;
         this.visibilityCacheTopLevelOnly = topLevelOnly;
         this.visibilityCacheDistanceSq = staticMeshCullDistanceSq;
+        this.visibilityCacheEmitterDistanceSq = emitterCullDistanceSq;
         this.visibilityCacheEnvVersion = envVersion;
         this.visibilityCacheTimeStep = timeStep;
 
@@ -996,13 +1013,13 @@ class SectorObject extends Object3D {
         return false;
     }
 
-    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity) {
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity) {
         // every sector, not just the active one - lights start with needsUpdate=true
         // and a light that is never updated never clears it, so every lit actor around
         // it would recompute its vertex lighting every frame
         this.updateLights(environment);
 
-        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq)) return;
+        if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) return;
 
         const library = (this as any).decodeLibrary as GD.DecodeLibrary;
 
@@ -1280,22 +1297,41 @@ class SectorObject extends Object3D {
                     if (visibilityChanged) (object as any).needsRelightPass = true; // catch up a newly-visible element's dynamic lighting
 
                     if (visibilityChanged || sortChanged) {
-                        const visibleGroups: BatchGroup_T[] = [];
+                        let groupPool = (object as any).batchGroupPool as BatchGroup_T[];
+                        if (!groupPool) groupPool = (object as any).batchGroupPool = [];
+
+                        let visibleGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
+                        if (!visibleGroups) visibleGroups = (object as any).visibleBatchGroups = [];
+
+                        let groupCount = 0;
 
                         for (let ei = 0; ei < batchElements.length; ei++) {
                             if (!elemVisibility[ei]) continue;
+
+                            const distance = elemDistances[ei];
+
                             for (const g of batchElements[ei].groups) {
-                                visibleGroups.push({ ...g, distance: elemDistances[ei] });
+                                let entry = groupPool[groupCount];
+                                if (!entry) entry = groupPool[groupCount] = { start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
+
+                                entry.start = g.start;
+                                entry.count = g.count;
+                                entry.materialIndex = g.materialIndex;
+                                entry.distance = distance;
+
+                                visibleGroups[groupCount++] = entry;
                             }
                         }
 
-                        if (visibleGroups.length > 0) {
+                        visibleGroups.length = groupCount;
+
+                        if (groupCount > 0) {
                             rebuildBatchGroups(object, geometry, visibleGroups, sortedTransparentMats);
                         } else {
                             geometry.clearGroups();
                         }
 
-                        object.visible = visibleGroups.length > 0;
+                        object.visible = groupCount > 0;
                         if (sortedTransparentMats?.size) {
                             if (transparentSortPosition) transparentSortPosition.copy(cameraPosition);
                             else (object as any).transparentSortPosition = cameraPosition.clone();
@@ -1356,9 +1392,11 @@ class SectorObject extends Object3D {
                 const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
                 if (!isZoneVisible) continue;
 
-                const distSq = cameraPosition.distanceToSquared(origin);
+                // AEmitter::Render (0x8a2ae0): appSqrt(dx*dx + dy*dy) >= GL2ActorCR * 2048 skips rendering.
+                const dx = origin.x - cameraPosition.x;
+                const dy = origin.y - cameraPosition.y;
                 const isRangeIgnored = !!(actorBase as any).isRangeIgnored;
-                const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+                const isInRange = isRangeIgnored || (dx * dx + dy * dy) <= emitterCullDistanceSq;
                 if (!isInRange) continue;
 
                 let isFrustumVisible = !frustumCullingEnabled || cameraFrustum.containsPoint(origin);

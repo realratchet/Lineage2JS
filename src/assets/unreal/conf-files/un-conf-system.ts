@@ -2,42 +2,32 @@
 import BaseConfigFile from "./un-base-config";
 import { consumeNextValue, findSection } from "./conf-parser";
 
-export interface ClippingRangeConfig {
-    StaticMesh: number;
-    StaticMeshLod: number;
-    Pawn: number;
-    Terrain: number;
-    Actor: number;
-    Projector: number;
-    AntiPortal: number;
-    PawnMin: number;
-    PawnMax: number;
-}
-
 class UConfigSystem extends BaseConfigFile {
-    public clippingRange: ClippingRangeConfig = {
-        StaticMesh: 4.0,
-        StaticMeshLod: 5.0,
-        Pawn: 2.0,
-        Terrain: 8.0,
-        Actor: 4.0,
-        Projector: 0.2,
-        AntiPortal: 1.5,
-        PawnMin: 1.5,
-        PawnMax: 3.0
+    // Option.ini only overrides keys it defines.
+    public readonly definedClippingKeys = new Set<string>();
+
+    public clippingRange: GA.IClippingRangeConfig = {
+        staticMesh: 4.0,
+        staticMeshLod: 5.0,
+        pawn: 2.0,
+        terrain: 8.0,
+        actor: 4.0,
+        projector: 0.2,
+        antiPortal: 1.5,
+        pawnMin: 1.5,
+        pawnMax: 3.0
     };
 
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
 
-        // Parse [ClippingRange]
-        this._loadClippingRange(fileContents);
+        this._loadSection(fileContents, "ClippingRange", this.clippingRange, this.definedClippingKeys);
 
         return this;
     }
 
-    private _loadClippingRange(fileContents: string): void {
-        let readOffset = findSection(fileContents, "ClippingRange");
+    private _loadSection(fileContents: string, section: string, target: object, definedKeys: Set<string>): void {
+        let readOffset = findSection(fileContents, section);
         if (readOffset === -1) return;
 
         while (true) {
@@ -58,10 +48,10 @@ class UConfigSystem extends BaseConfigFile {
             const val = parseFloat(nameVal);
 
             if (!isNaN(val)) {
-                // Case-insensitive matching effectively
-                Object.keys(this.clippingRange).forEach(k => {
+                Object.keys(target).forEach(k => {
                     if (k.toLowerCase() === key.toLowerCase()) {
-                        (this.clippingRange as any)[k] = val;
+                        (target as any)[k] = val;
+                        definedKeys.add(k);
                     }
                 });
             }
@@ -86,4 +76,18 @@ class UConfigSystem extends BaseConfigFile {
     }
 }
 
+async function getUserConfig(): Promise<GA.IUserConfig> {
+    const defaults = new UConfigSystem("assets/system/l2.ini");
+    const options = new UConfigSystem("assets/system/Option.ini");
+
+    await Promise.all([defaults.decode(), options.decode()]);
+    await Promise.all([defaults.load(), options.load()]);
+
+    for (const key of options.definedClippingKeys)
+        (defaults.clippingRange as any)[key] = (options.clippingRange as any)[key];
+
+    return { clippingRange: defaults.clippingRange };
+}
+
 export default UConfigSystem;
+export { getUserConfig };

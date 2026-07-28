@@ -3,6 +3,7 @@ import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { decodePackage, decodeSectorCore, decodeSectorStaticMeshes } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
+import { getUserConfig } from "@unreal/conf-files/un-conf-system";
 import { Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
 
@@ -30,6 +31,7 @@ class AssetManager {
     protected readonly pendingStaticMeshBuilds: { sector: SectorObject, library: GD.DecodeLibrary }[] = []; // drained one sector/tick by processPendingBuilds
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
+    public userConfig: GA.IUserConfig = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
 
@@ -70,6 +72,8 @@ class AssetManager {
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
         console.info(`[textures] mode=${textureMode}, s3tc=${hasS3TC} -> uploading ${this.preferCompressedTextures ? "compressed DDS" : "converted RGBA"}`);
+
+        this.userConfig = await getUserConfig();
 
         /* everything below comes out of the decode worker - the app cannot run without it */
         this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);

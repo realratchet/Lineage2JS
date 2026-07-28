@@ -86,6 +86,22 @@ declare global {
 
                 export type UEmitter = import("@unreal/un-emitter").UEmitter;
 
+                export interface IUserConfig {
+                    clippingRange: IClippingRangeConfig;
+                }
+
+                export interface IClippingRangeConfig {
+                    staticMesh: number;
+                    staticMeshLod: number;
+                    pawn: number;
+                    terrain: number;
+                    actor: number;
+                    projector: number;
+                    antiPortal: number;
+                    pawnMin: number;
+                    pawnMax: number;
+                }
+
                 export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
                 export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;
                 export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
