@@ -32,7 +32,8 @@ Object.assign(gui.domElement.style, {
 });
 document.body.appendChild(gui.domElement);
 const guiFolders = {
-    world: gui.addFolder("World")
+    world: gui.addFolder("World"),
+    quality: gui.addFolder("Quality")
 };
 guiFolders.world.open();
 
@@ -276,13 +277,13 @@ class RenderManager {
         this.uGlowPass = new UGlowPass(new Vector2(256, 256));
         this.uGlowPass.renderToScreen = true;
 
-        guiFolders.world.add(this.envConfig, "fogPreset", {
+        guiFolders.quality.add(this.envConfig, "fogPreset", {
             "1 (2k-8k)": "1",
             "2 (3k-10k)": "2",
             "3 (4k-12k)": "3",
             "4 (5k-14k)": "4",
             "5 (8k-20k)": "5"
-        });
+        }).name("Fog Range");
 
         guiFolders.world.add(this.envConfig, "showLevel")
             .name("Show Level")
@@ -304,8 +305,6 @@ class RenderManager {
         skyFolder.add(this.skyRenderer.config, "haze1").name("Haze");
         skyFolder.add(this.skyRenderer.config, "starsClouds").name("Stars/Clouds");
         // skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
-
-        skyFolder.open();
 
         const audioFolder = gui.addFolder("Audio");
         audioFolder.add(this.audioManager, "musicVolume", 0, 1, 0.01).name("Music Volume");
@@ -1006,8 +1005,8 @@ class RenderManager {
     public addClippingRangeControls(): void {
         const clippingRange = this.assetManager.userConfig.clippingRange;
 
-        guiFolders.world.add(clippingRange, "actor", 1, 12, 0.5)
-            .name("Emitter Clip")
+        guiFolders.quality.add(clippingRange, "actor", 1, 12, 0.5)
+            .name("Emitter Range")
             .onChange(() => {
                 this.sectors.forEach(column => column.forEach(sector => (sector as any).visibilityCacheInitialized = false));
                 this.needsUpdate = true;
