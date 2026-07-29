@@ -399,13 +399,13 @@ class RenderManager {
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
-        // // tower outside
-        // this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-        // this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
+        // tower outside
+        this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
+        this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
-        // cruma doors
-        this.camera.position.set(17635.92785265722, 110567.1123199521, -6404.763840433224);
-        this.controls.orbit.target.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
+        // // cruma doors
+        // this.camera.position.set(17635.92785265722, 110567.1123199521, -6404.763840433224);
+        // this.controls.orbit.target.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
@@ -415,9 +415,9 @@ class RenderManager {
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
         // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
-        // talking island
-        this.camera.position.set(-94565.5599208028, 241247.1267543205, -2757.6753131407077);
-        this.controls.orbit.target.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
+        // // talking island
+        // this.camera.position.set(-94565.5599208028, 241247.1267543205, -2757.6753131407077);
+        // this.controls.orbit.target.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
@@ -467,9 +467,9 @@ class RenderManager {
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
         // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
-        // heine fountain
-        this.camera.position.set(112055.37149242389, 220146.2276990017, -3588.410935323853);
-        this.controls.orbit.target.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
+        // // heine fountain
+        // this.camera.position.set(112055.37149242389, 220146.2276990017, -3588.410935323853);
+        // this.controls.orbit.target.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);

@@ -18,7 +18,7 @@ I'm not a vanilla purist so if there's some data that's not critical but is hidi
 Hopefully someday it's actually complete, obviously this is a passion project and it's not sustainable to invest any reasonable amount of time to it, so there can be months before even a small amount of progress is made, depending on my schedule. However, any help is always welcome, I will not however take bug reports or requests because obviously it's not something that's even remotely ready to be used.
 
 ## What's on the timeline?
-Since I have most of the sectors I currently care about working with sound/emitters I thought I'd start with skinned meshes and skill animations but I gave it another thought and I should do the full system refactor now instead of postponing it further and further. My current goal is to have on-demand map sector loading so that I no longer randomly run out of memory sometimes when loading 10+ sectors. Additionally, this will require me to rewrite large chunks of rendering behaviour to get rid of the axes swizzling. When I started the swizzling was great, because I could simply convert XYZ -> XZY for handedness but it kept making things harder and harder when I started working with more complex rotations as I had to convert UE2 rotators into quaternions just to avoid gimbal locks. Additionally, since the goal was always to make this a full client emulator that can run in on a regular L2J server keeping this behaviour I would have to keep converting axes from LHS -> RHS -> LHS when communicating with server which would just introduce many more points of failure and I'd rather decouple from that.
+Current stable release resolved a lot of parity issues with sounds, emitters. Added some missing entities like deco layers for terrain and animating objects like gandolas, castle doors, windmills, etc. Fixed seven signs moons and a few performance upgrades. But the major issue that's been plagueing me that has been resolved is the erradication of the coordinate swizzling, all assets are now in UE2 format, although it required duct-typing three which while I don't particularly enjoy had to be done for this to work. Additionally, one major feature that has been added - progressive sector loading/unloading. No more running out of alloted RAM and having browser kill your tab. It's not perfect and can be improved but it's probably fine for gameplay as there's still some minor stutter when scene first loads in. I reduced it as much as possible by having the geometry be prioritized for loading and then loading in materials and lighting information in progressively to reduce sync stutter as much as possible but I'm contempt with how it is now.
 
 ## The code is messy!
 I know, originally I thought I wanted to make it clean, hence why it's using TypeScript in the first place. But I quickly realized that it needs *WAY* too many changes when trying to find memory layouts, etc. If I ever reach the stage where I can actually start working on the gameplay emulation and it won't be just a glorious asset viewer, I will clean it up beforehand.
@@ -29,9 +29,9 @@ I don't know of the legality of providing assets, technically it wouldn't be pir
 ![](docs/tower_outside.jpg)
 ![](docs/tower_inside.jpg)
 ![](docs/tower_statues.jpg)
-[![Cruma Tower Test](https://img.youtube.com/vi/9ktRGp1N0yQ/0.jpg)](https://www.youtube.com/watch?v=9ktRGp1N0yQ)
-[![Giran Test](https://img.youtube.com/vi/LCDgQTZQXXw/0.jpg)](https://www.youtube.com/watch?v=LCDgQTZQXXw)
-[![Taling Island Test](https://img.youtube.com/vi/Gmn6JR9sJz4/0.jpg)](https://www.youtube.com/watch?v=Gmn6JR9sJz4)
+[![Field of Whispers Test](https://img.youtube.com/vi/hzT46m4pxhk/0.jpg)](https://www.youtube.com/watch?v=hzT46m4pxhk)
+[![Heine Test](https://img.youtube.com/vi/yldpCIzz8mg/0.jpg)](https://www.youtube.com/watch?v=yldpCIzz8mg)
+[![Cruma Tower Test](https://img.youtube.com/vi/1tDsKZokIv8/0.jpg)](https://www.youtube.com/watch?v=1tDsKZokIv8)
 
 ## Why switch to C4?
 
