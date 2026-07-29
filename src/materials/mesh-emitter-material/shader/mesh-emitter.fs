@@ -24,21 +24,7 @@ void main() {
     
     gl_FragColor = diffuseColor;
     
-    #ifdef USE_FOG
-        #ifdef FOG_EXP2
-            float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
-        #else
-            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
-        #endif
-
-        #ifdef USE_ADDITIVE_FOG
-            vec3 fogMixColor = vec3(0.0);
-        #else
-            vec3 fogMixColor = fogColor;
-        #endif
-
-        gl_FragColor.rgb = mix( gl_FragColor.rgb, fogMixColor, fogFactor );
-    #endif
+    #include <l2_fog_fragment>
     
     #include <tonemapping_fragment>
     #include <encodings_fragment>

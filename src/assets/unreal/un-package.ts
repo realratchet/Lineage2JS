@@ -37,6 +37,8 @@ import UCubemap from "./un-cubemap";
 import FMatrix from "./un-matrix";
 import UTerrainLayer from "./un-terrain-layer";
 import UDecoLayer from "./un-deco-layer";
+import UWetTexture, { UADrop } from "./un-wet-texture";
+import UBeamEmitter from "./emitters/un-beam-emitter";
 import FRange, { FRangeVector } from "./un-range";
 import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
@@ -52,8 +54,13 @@ import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
 import UMover from "@client/assets/unreal/un-mover";
 import * as NEnv from "@client/assets/unreal/un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
-import UMovableStaticMeshActor from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
+import UMovableStaticMeshActor, { FL2RotatorTime } from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
+import { fetchAssetHandle } from "@client/assets/asset-handle";
+import UPawn from "@client/assets/unreal/un-pawn";
+import USkeletalMesh from "@client/assets/unreal/skeletal-mesh/un-skeletal-mesh";
+import USkeletalMeshInstance from "@client/assets/unreal/un-skeletal-mesh-instance";
+import UMeshAnimation from "@client/assets/unreal/skeletal-mesh/un-mesh-animation";
 
 type CoreStructs_T =
     | "Vector"
@@ -73,15 +80,13 @@ type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : never;
 
 
+
 class UPackage extends APackage {
     protected async readArrayBuffer() {
-        const response = await fetch(this.path);
+        const response = await fetchAssetHandle(this.path);
+        const readable = await response.getReadable();
 
-        if (!response.ok) throw new Error(response.statusText);
-
-        const buffer = await response.arrayBuffer();
-
-        return buffer;
+        return readable.buffer;
     }
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
@@ -269,6 +274,9 @@ class UNativePackage extends ANativePackage {
 
             case "L2EnvironmentColorInfo": Constructor = UL2EnvironmentColorInfo; break;
 
+            case "L2RotatorTime": Constructor = FL2RotatorTime; break;
+            case "SkillActionInfo": Constructor = UObject; break;
+
             // structs we dont care about yet
             case "InterpCurve":
             case "InterpCurvePoint":
@@ -279,13 +287,13 @@ class UNativePackage extends ANativePackage {
             case "LightRenderDataPtr":
             case "NMoverPtr":
             case "Interpolator":
-            case "L2RotatorTime":
             case "AnimRep":
             case "Orientation":
             case "AccessoryType":
             case "L2Event":
-                Constructor = UObject;
-                break;
+            case "ParticleBeamEndPoint": Constructor = PEmitter.UParticleBeamEndPoint; break;
+            case "ParticleBeamScale": Constructor = PEmitter.UParticleBeamScale; break;
+            case "ADrop": Constructor = UADrop; break;
 
             case "ParticleColorScale": Constructor = PEmitter.UParticleColorScale; break;
             case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
@@ -336,21 +344,24 @@ class UNativePackage extends ANativePackage {
 
             //         case "Font": Constructor = UFont; break;
             //         case "Mesh": Constructor = UMesh; break;
-            //         case "MeshAnimation": Constructor = UMeshAnimation; break;
+            case "MeshAnimation": Constructor = UMeshAnimation; break;
             //         case "Level": Constructor = ULevel; break;
             case "MovableStaticMeshActor": Constructor = UMovableStaticMeshActor; break;
             //         case "Viewport": Constructor = UViewport; break;
             //         case "Client": Constructor = UClient; break;
             //         case "Player": Constructor = UPlayer; break;
             //         case "MeshInstance": Constructor = UMeshInstance; break;
-            //         case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
+            case "SkeletalMesh": Constructor = USkeletalMesh; break;
+            case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
             case "Texture": Constructor = UTexture; break;
+            case "WetTexture": Constructor = UWetTexture; break;
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
+            case "BeamEmitter": Constructor = UBeamEmitter; break;
 
 
 
@@ -379,17 +390,25 @@ class UNativePackage extends ANativePackage {
             case "Sound": Constructor = USound; break;
 
             case "Mover": Constructor = UMover; break;
+            case "VertexColor": Constructor = UnMaterials.UVertexColor; break;
+            case "L2FogInfo": Constructor = UL2FogInfo; break;
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
-            case "L2FogInfo": Constructor = UL2FogInfo; break;
-            case "L2SeamlessInfo": Constructor = UObject; break;
-            case "SceneManager": Constructor = UObject; break;
-            case "PathNode": Constructor = UObject; break;
-            case "InterpolationPoint": Constructor = UObject; break;
-            case "VertexColor": Constructor = UObject; break;
+            case "L2SeamlessInfo":
+            case "SceneManager":
+            case "PathNode":
+            case "InterpolationPoint":
+            case "Projector":
+            case "AntiPortalActor":
+            case "Pawn":
+            case "LineagePlayerController":
+            case "AmbientSound":
+            case "SkillVisualEffect":
+            case "SkillAction":
+            case "SkillAction_LocateEffect":
+            case "SkillAction_SwordTrail": Constructor = UObject; break;
 
-
-            default:
+            default: // objects that we never saw before
                 debugger;
                 throw new Error(`Constructor of '${constructorName}' is not yet implemented.`);
         }
@@ -409,6 +428,8 @@ class UNativePackage extends ANativePackage {
         this.registerNativeClass("ConvexVolume", "Primitive");
         this.registerNativeClass("StaticMesh", "Primitive");
         this.registerNativeClass("Mesh", "Primitive");
+        this.registerNativeClass("LodMesh", "Mesh");
+        this.registerNativeClass("SkeletalMesh", "LodMesh");
         this.registerNativeClass("MeshInstance", "Primitive");
         this.registerNativeClass("LodMeshInstance", "MeshInstance");
         this.registerNativeClass("SkeletalMeshInstance", "LodMeshInstance");

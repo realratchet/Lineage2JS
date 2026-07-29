@@ -1,17 +1,17 @@
-import { BufferValue } from "@l2js/core";
+import { BufferValue, UObject } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
-import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "../un-array";
-import FConstructable from "../un-constructable";
+import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/unreal/un-array";
 import FCoords from "../un-coords";
 import ULodMesh from "../un-lod-mesh";
-import FNumber from "../un-number";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
 import { FIndexArray } from "@l2js/core/unreal/un-array";
 
-class FWeightIndex extends FConstructable {
+type SkeletalMeshDecodeResult_T = { object: GD.ISkinnedMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialGroupDecodeInfo };
+
+class FWeightIndex extends UObject {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     public startBoneInf: number;
 
@@ -23,7 +23,7 @@ class FWeightIndex extends FConstructable {
     }
 }
 
-class FBoneInfluence extends FConstructable {
+class FBoneInfluence extends UObject {
     public boneWeight: number;
     public boneIndex: number;
 
@@ -35,7 +35,7 @@ class FBoneInfluence extends FConstructable {
     }
 }
 
-class FJointPos extends FConstructable {
+class FJointPos extends UObject {
     public rotation: FQuaternion;
     public position: FVector;
     public scale: FVector;
@@ -54,7 +54,7 @@ class FJointPos extends FConstructable {
 
 }
 
-class FMeshBone extends FConstructable {
+class FMeshBone extends UObject {
     public boneName: string;
     public flags: number;
     public bonePos = new FJointPos();
@@ -76,7 +76,7 @@ class FMeshBone extends FConstructable {
     }
 }
 
-class FMeshNorm extends FConstructable {
+class FMeshNorm extends UObject {
     public x = 10;
     public y = 10;
     public z = 10;
@@ -90,7 +90,7 @@ class FMeshNorm extends FConstructable {
     }
 }
 
-class FSkinPoint extends FConstructable {
+class FSkinPoint extends UObject {
     public point: FVector;
     public normal: FMeshNorm;
 
@@ -103,7 +103,7 @@ class FSkinPoint extends FConstructable {
     }
 }
 
-class FSkelMeshSection extends FConstructable {
+class FSkelMeshSection extends UObject {
     public materialIndex: number;
     public minStreamIndex: number;
     public minWedgeIndex: number;
@@ -133,7 +133,7 @@ class FSkelMeshSection extends FConstructable {
     }
 }
 
-class FAnimMeshVertex extends FConstructable {
+class FAnimMeshVertex extends UObject {
     public position: FVector;
     public normal: FVector;
     public texU: number;
@@ -150,7 +150,7 @@ class FAnimMeshVertex extends FConstructable {
     }
 }
 
-class FSkinVertexStream extends FConstructable {
+class FSkinVertexStream extends UObject {
     public revision: number;
     public unkVar0: number;
     public unkVar1: number;
@@ -166,7 +166,7 @@ class FSkinVertexStream extends FConstructable {
     }
 }
 
-class FTriangleLOD extends FConstructable {
+class FTriangleLOD extends UObject {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
 
@@ -180,7 +180,7 @@ class FTriangleLOD extends FConstructable {
         return this;
     }
 }
-class FStaticModelLOD extends FConstructable {
+class FStaticModelLOD extends UObject {
     public skinningData = new FPrimitiveArray(BufferValue.uint32);
     public skinPoints = new FArray(FSkinPoint);
     public numSoftWedges: number;
@@ -231,7 +231,7 @@ class FStaticModelLOD extends FConstructable {
     }
 }
 
-class FMeshWedge extends FConstructable {
+class FMeshWedge extends UObject {
     public iVertex: number;
     public texU: number;
     public texV: number;
@@ -245,7 +245,7 @@ class FMeshWedge extends FConstructable {
     }
 }
 
-class FTriangle extends FConstructable {
+class FTriangle extends UObject {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
     public materialIndex2: number;
@@ -264,7 +264,7 @@ class FTriangle extends FConstructable {
     }
 }
 
-class FVertexInfluence extends FConstructable {
+class FVertexInfluence extends UObject {
     public weight: number;
     public iPoint: number;
     public iBone: number;
@@ -357,27 +357,16 @@ abstract class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISkinnedMeshObjectDecodeInfo {
-        if (this.uuid in library.geometries) return {
-            uuid: this.uuid,
-            type: "SkinnedMesh",
-            name: this.objectName,
-            geometry: this.uuid,
-            materials: this.uuid
-        } as GD.ISkinnedMeshObjectDecodeInfo;
-
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
-
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): SkeletalMeshDecodeResult_T {
         const section = this;
         const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
         const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
 
-        const materials = await Promise.all(this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => mat?.getDecodeInfo(library) || null));
+        const materials = this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat));
 
-        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
-        library.geometries[this.uuid] = {
+        const materialInfo = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
+        const geometryInfo = {
             attributes: {
                 positions,
                 skinIndex: bones,
@@ -478,14 +467,18 @@ abstract class USkeletalMesh extends ULodMesh {
         }
 
         return {
-            uuid: this.uuid,
-            type: "SkinnedMesh",
-            name: this.objectName,
-            geometry: this.uuid,
-            materials: this.uuid,
-            skeleton,
-            animations
-        } as ISkinnedMeshObjectDecodeInfo;
+            object: {
+                uuid: this.uuid,
+                type: "SkinnedMesh",
+                name: this.objectName,
+                geometry: this.uuid,
+                materials: this.uuid,
+                skeleton,
+                animations
+            } as ISkinnedMeshObjectDecodeInfo,
+            geometry: geometryInfo,
+            material: materialInfo
+        };
     }
 }
 

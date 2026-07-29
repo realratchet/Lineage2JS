@@ -13,6 +13,8 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import StringSet from "@client/utils/string-set";
 import FArray, { FArrayLazy } from "@l2js/core/src/unreal/un-array";
 
+type StaticMeshDecodeResult_T = { object: GD.IStaticMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, materials: [string, GD.IBaseMaterialDecodeInfo][], colorMaterials: string[] };
+
 const triggerDebuggerOnUnsupported = true;
 
 
@@ -54,7 +56,7 @@ abstract class UStaticMesh extends UPrimitive {
 
     protected useSimpleLineCollision: boolean = false;
     protected UseSimpleBoxCollision: boolean = false;
-    protected useVertexColor: boolean = false;
+    public useVertexColor: boolean = false;
 
     public static getUnserializedProperties(): C.UnserializedProperty_T[] {
         return [
@@ -87,6 +89,7 @@ abstract class UStaticMesh extends UPrimitive {
             "bSwayObject": "swayObject",
             "Frequency": "frequency",
             "MaxSwayAngle": "maxSwayAngle",
+            "bUseVertexColor": "useVertexColor",
         });
     }
 
@@ -124,8 +127,8 @@ abstract class UStaticMesh extends UPrimitive {
         this.collisionModelId = pkg.read("compat32");
         this.collisionModel = pkg.fetchObject<GA.UModel>(this.collisionModelId);
 
-        if (this.collisionModelId !== 0)
-            debugger;
+        // if (this.collisionModelId !== 0)
+        //     debugger;
 
         // if (this.vertexStream.vert.length === 0xB3)
         //     debugger;
@@ -142,9 +145,9 @@ abstract class UStaticMesh extends UPrimitive {
         // debugger;
 
         if (verLicense < 17) {
-            if (this.collisionModelId > 0) {
-                debugger;
-            }
+            // if (this.collisionModelId > 0) {
+            //     debugger;
+            // }
 
             this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg);
             this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg);
@@ -166,8 +169,8 @@ abstract class UStaticMesh extends UPrimitive {
 
         // debugger;
 
-        if (this.collisionModelId > 0)
-            debugger;
+        // if (this.collisionModelId > 0)
+        //     debugger;
 
         this.readHead = pkg.tell();
 
@@ -234,12 +237,19 @@ abstract class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary, matModifiers?: string[]): GD.IStaticMeshObjectDecodeInfo {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, matModifiers?: string[]): StaticMeshDecodeResult_T {
         // await this.onDecodeReady();
 
         // debugger;
 
+        const library = builder.library;
         let materialUuid = this.uuid;
+        const materialsInfo: [string, GD.IBaseMaterialDecodeInfo][] = [];
+        const sway = this.swayObject ? {
+            pivotZ: this.boundingBox.min.z,
+            frequency: this.frequency,
+            maxAngle: this.maxSwayAngle
+        } : undefined;
 
         if (matModifiers?.length > 0) {
             const hash = new StringSet(matModifiers).hash();
@@ -248,11 +258,11 @@ abstract class UStaticMesh extends UPrimitive {
             materialUuid = seededUuid(hashArr, materialUuid);
 
             if (!(materialUuid in library.materials)) {
-                library.materials[materialUuid] = {
+                materialsInfo.push([materialUuid, {
                     materialType: "instance",
                     baseMaterial: this.uuid,
                     modifiers: matModifiers
-                } as GD.IMaterialInstancedDecodeInfo;
+                } as GD.IMaterialInstancedDecodeInfo]);
 
                 // debugger;
             }
@@ -276,17 +286,17 @@ abstract class UStaticMesh extends UPrimitive {
         //     debugger;
         // }
 
-        if (this.uuid in library.geometries) return {
+        const objectInfo = {
             uuid: this.uuid,
             type: "StaticMesh",
             name: this.objectName,
             geometry: this.uuid,
             materials: materialUuid,
+            sway
         } as GD.IStaticMeshObjectDecodeInfo;
 
-        library.geometryInstances[this.uuid] = 0;
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
+        if (this.uuid in library.geometries)
+            return { object: objectInfo, geometry: null, materials: materialsInfo, colorMaterials: [] };
 
         // 43 arrays of 30 uint8 values that are likely colors
         // 43x30 -> 1290
@@ -298,15 +308,11 @@ abstract class UStaticMesh extends UPrimitive {
         const countIndices = this.indexStream.indices.getElemCount();
         const countUvs = this.uvStream.getElemCount();
 
-        if (countUvs > 1) debugger;
-
-        // debugger;
-
         const TypedIndicesArray = getTypedArrayConstructor(countVerts);
         const positions = new Float32Array(countVerts * 3);
         const colors = new Uint8ClampedArray(countVerts * 3);
         const normals = new Float32Array(countVerts * 3);
-        const uvs = new Float32Array(countVerts * 2);
+        const uvs = Array.from({ length: countUvs }, () => new Float32Array(countVerts * 2));
         const indices = new TypedIndicesArray(countIndices);
 
         // if (countVerts === 0x42)
@@ -314,26 +320,29 @@ abstract class UStaticMesh extends UPrimitive {
 
         for (let i = 0; i < countVerts; i++) {
             const [px, py, pz, nx, ny, nz] = this.vertexStream.getElem(i);
-            const [u, v] = this.uvStream.getElem(0).getUV(i);
 
             // if (Math.abs(px - 241.79730224609375) < 1 && Math.abs(py + 235.71449279785156) < 1 && Math.abs(pz + 622.3489990234375) < 1) {
             //     debugger;
             // }
 
             positions[i * 3 + 0] = px;
-            positions[i * 3 + 1] = pz;
-            positions[i * 3 + 2] = py;
+            positions[i * 3 + 1] = py;
+            positions[i * 3 + 2] = pz;
 
             normals[i * 3 + 0] = nx;
-            normals[i * 3 + 1] = nz;
-            normals[i * 3 + 2] = ny;
+            normals[i * 3 + 1] = ny;
+            normals[i * 3 + 2] = nz;
 
             colors[i * 3 + 0] = 255;
             colors[i * 3 + 1] = 255;
             colors[i * 3 + 2] = 255;
 
-            uvs[i * 2 + 0] = u;
-            uvs[i * 2 + 1] = v;
+            for (let s = 0; s < countUvs; s++) {
+                const [u, v] = this.uvStream.getElem(s).getUV(i);
+
+                uvs[s][i * 2 + 0] = u;
+                uvs[s][i * 2 + 1] = v;
+            }
         }
 
         for (let i = 0; i < countIndices; i++)
@@ -343,7 +352,7 @@ abstract class UStaticMesh extends UPrimitive {
         const collision = new Uint32Array(this.collisionFaces.length * 3);
 
         for (let i = 0; i < collisionFaces; i++) {
-            const face = this.collisionFaces[i];
+            const face = this.collisionFaces.getElem(i);
             const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
             const offset = i * 3;
 
@@ -364,7 +373,7 @@ abstract class UStaticMesh extends UPrimitive {
             // collision[offset + 8] = verts[2][2];
         }
 
-        library.geometries[this.uuid] = {
+        const geometryInfo = {
             attributes: {
                 positions,
                 colors,
@@ -378,29 +387,14 @@ abstract class UStaticMesh extends UPrimitive {
         };
 
         // const materials = await Promise.all(this.materials.map((mat: UStaticMeshMaterial) => mat.getDecodeInfo(library)));
-        const materials = this.materials.map((mat: GA.UStaticMeshMaterial) => mat.loadSelf().getDecodeInfo(library));
+        const materials = this.materials.map((mat: GA.UStaticMeshMaterial) => builder.pullMaterial(mat));
 
-        materials.forEach(uuid => {
-            if (!library.materials[uuid]) return;
+        materialsInfo.push([this.uuid, { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo]);
 
-            library.materials[uuid].color = true;
-        });
-
-        library.materials[this.uuid] = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
-
-        return {
-            uuid: this.uuid,
-            type: "StaticMesh",
-            name: this.objectName,
-            geometry: this.uuid,
-            materials: materialUuid,
-            children: [
-                // this.getDecodeTrisInfo(library),
-            ]
-        };
+        return { object: objectInfo, geometry: geometryInfo, materials: materialsInfo, colorMaterials: materials };
     }
 
-    protected getDecodeTrisInfo(library: GD.DecodeLibrary): GD.IBaseObjectDecodeInfo {
+    protected getDecodeTrisInfo(): { object: GD.IBaseObjectDecodeInfo, uuid: string, geometry: GD.IGeometryDecodeInfo } {
         const trisCount = this.staticMeshTris.length;
         const trisGeometryUuid = generateUUID();
         const TypedIndicesArray = getTypedArrayConstructor(trisCount);
@@ -417,8 +411,8 @@ abstract class UStaticMesh extends UPrimitive {
                 const offset = vertOffset + j * 3;
 
                 trisPositions[offset + 0] = x;
-                trisPositions[offset + 1] = z;
-                trisPositions[offset + 2] = y;
+                trisPositions[offset + 1] = y;
+                trisPositions[offset + 2] = z;
             });
 
             trisIndices[indOffset + 0] = vIndOffset + 0;
@@ -428,7 +422,7 @@ abstract class UStaticMesh extends UPrimitive {
         }
 
 
-        library.geometries[trisGeometryUuid] = {
+        const geometryInfo = {
             indices: trisIndices,
             attributes: {
                 positions: trisPositions
@@ -436,10 +430,14 @@ abstract class UStaticMesh extends UPrimitive {
         };
 
         return {
-            type: "Edges",
-            geometry: trisGeometryUuid,
-            color: [1, 0, 1]
-        } as GD.IEdgesObjectDecodeInfo;
+            object: {
+                type: "Edges",
+                geometry: trisGeometryUuid,
+                color: [1, 0, 1]
+            } as GD.IEdgesObjectDecodeInfo,
+            uuid: trisGeometryUuid,
+            geometry: geometryInfo
+        };
     }
 
     public getRenderBoundingBox(owner?: GA.AActor): GA.FBox {

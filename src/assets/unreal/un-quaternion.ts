@@ -2,6 +2,8 @@ import FVector from "./un-vector";
 import { UObject } from "@l2js/core";
 
 abstract class FQuaternion extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public x: number;
     declare public y: number;
     declare public z: number;

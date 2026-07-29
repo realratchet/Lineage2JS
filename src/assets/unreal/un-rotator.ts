@@ -16,6 +16,8 @@ enum RotName {
 }
 
 abstract class FRotator extends UObject {
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public readonly pitch: number;
     declare public readonly yaw: number;
     declare public readonly roll: number;
@@ -124,13 +126,14 @@ abstract class FRotator extends UObject {
         const YY = CY * SR - CR * SP * SY;
         const YZ = CR * CP;
 
-        // Matrix elements arranged as:
-        // m00 = LX, m01 = YX, m02 = PX
-        // m10 = LZ, m11 = YZ, m12 = PZ
-        // m20 = LY, m21 = YY, m22 = PY
-        const m00 = LX, m01 = YX, m02 = PX;
-        const m10 = LZ, m11 = YZ, m12 = PZ;
-        const m20 = LY, m21 = YY, m22 = PY;
+        // Native UE2 rotation matrix (column-vector convention: columns are the
+        // world-space images of the local X/Y/Z axes), no axis swap:
+        // m00 = LX, m01 = PX, m02 = YX
+        // m10 = LY, m11 = PY, m12 = YY
+        // m20 = LZ, m21 = PZ, m22 = YZ
+        const m00 = LX, m01 = PX, m02 = YX;
+        const m10 = LY, m11 = PY, m12 = YY;
+        const m20 = LZ, m21 = PZ, m22 = YZ;
 
         const trace = m00 + m11 + m22;
         let x, y, z, w;

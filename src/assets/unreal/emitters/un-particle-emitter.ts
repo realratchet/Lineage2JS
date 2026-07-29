@@ -37,8 +37,8 @@ abstract class UParticleEmitter extends UObject {
     declare protected fadeInEndTime: number; // If FadeIn is true, this is the time at which the particle will have completly faded in and is 100% visible. This is NOT relative. 0.5 is 1/2 a second, not 1/2 of the particles lifespan.
     declare protected fadeInFactor: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means start at 0 while e.g. 0.5 means start at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
     declare protected isFadingOut: boolean; // If true, the particle will fade out.
-    declare protected fadeOutFactor: UPlane; // If Fadeout is true, this is the absolute time at which the particle will start fading out. Fading out overrules fading in, so if a particle is not yet faded in and starts fading out, it will start at full color values.
-    declare protected fadeOutStartTime: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means end at 0 while e.g. 0.5 means end at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
+    declare protected fadeOutFactor: UPlane; // Specifies how much each component of the particle colors should be faded. 1 means end at 0 while e.g. 0.5 means end at half the normal value. X,Y,Z correspond to R,G,B and W corresponds to the alpha value.
+    declare protected fadeOutStartTime: number; // If Fadeout is true, this is the absolute time at which the particle will start fading out. Fading out overrules fading in, so if a particle is not yet faded in and starts fading out, it will start at full color values.
 
     // Forces
     declare protected isUsingActorForces: boolean; /* Whether the particles can be affected by Actor forces.
@@ -417,7 +417,9 @@ abstract class UParticleEmitter extends UObject {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.EmitterConfig_T {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.EmitterConfig_T {
+        const library = builder.library;
+
         if (this._particles && this._particles.length > 0)
             debugger;
 
@@ -434,12 +436,13 @@ abstract class UParticleEmitter extends UObject {
             name: this.uuid,
             maxParticles: this.maxParticles,
             drawScale: this.actor?.drawScale ?? 1,
+            rotationOffset: this.rotationOffset?.getQuaternionElements() || [0, 0, 0, 1],
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
             fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
-            fadeOut: this.isFadingOut ? { time: (this.fadeOutStartTime as any)?.x ?? 0, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
+            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
             uniformScale: this.isUniformScale,
-            acceleration: this.acceleration?.getVectorElements(),
+            acceleration: this.acceleration?.getElements(),
             warmupTime: this.relativeWarmupTime,
             warmupTicksPerSecond: this.warmupTicksPerSecond,
             initial: {
@@ -448,7 +451,7 @@ abstract class UParticleEmitter extends UObject {
                 angularVelocity: this.startSpinRange?.loadSelf().getDecodeInfo(library),
                 velocity: this.startVelocityRange?.loadSelf().getDecodeInfo(library),
                 position: this.startLocationRange?.loadSelf().getDecodeInfo(library),
-                offset: this.startLocationOffset?.getVectorElements() || [0, 0, 0]
+                offset: this.startLocationOffset?.getElements() || [0, 0, 0]
             },
             colorMultiplierRange: this.colorMultiplierRange?.loadSelf().getDecodeInfo(library),
             revolutionCenterOffsetRange: this.revolutionCenterOffsetRange?.loadSelf().getDecodeInfo(library),
@@ -464,32 +467,93 @@ abstract class UParticleEmitter extends UObject {
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
             changesOverLifetime: {
-                scale: this.isUsingSizeScale && this.sizeScale.length > 1 ? {
+                scale: this.isUsingSizeScale && (this.sizeScale?.length ?? 0) > 1 ? {
                     values: this.sizeScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.sizeScaleRepeats
                 } : null,
-                color: this.isUsingColorScale && this.colorScale.length > 1 ? {
+                color: this.isUsingColorScale && (this.colorScale?.length ?? 0) > 1 ? {
                     values: this.colorScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.colorScaleRepeats
                 } : null,
-                velocity: this.isUsingVelocityScale && this.velocityScale.length > 1 ? {
+                velocity: this.isUsingVelocityScale && (this.velocityScale?.length ?? 0) > 1 ? {
                     values: this.velocityScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.velocityScaleRepeats
                 } : null,
-                revolution: this.isUsingRevolutionScale && this.revolutionScale.length > 1 ? {
+                revolution: this.isUsingRevolutionScale && (this.revolutionScale?.length ?? 0) > 1 ? {
                     values: this.revolutionScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
-            /**
-             * 
-             * 
-             * 
-             * 
-             */
-            allSettings: this
+            sounds: (this.sounds?.map(s => s.getDecodeInfo(builder)).filter(s => s) as GD.IParticleSoundDecodeInfo[]) ?? [],
+            settings: this.getSettingsSnapshot(library)
         };
     }
+
+    // BaseEmitter Object.assign's these onto itself. Structs serialize through their
+    // regular getDecodeInfo and BaseEmitter rehydrates the array forms, so no live
+    // UObject ever crosses the decode-worker boundary.
+    protected getSettingsSnapshot(library: GD.DecodeLibrary): Record<string, any> {
+        const snapshot: Record<string, any> = {};
+
+        for (const varName of REQUIRED_SETTINGS) {
+            const raw = (this as any)[varName];
+            const enumNames = ENUM_SETTING_NAMES[varName];
+            const value = enumNames ? (enumNames[raw?.valueOf() ?? 0] ?? enumNames[0]) : toCloneSafeSetting(raw, library);
+
+            if (value !== CLONE_UNSAFE) snapshot[varName] = value;
+        }
+
+        return snapshot;
+    }
+}
+
+// settings the emitters read off themselves after the assign and which aren't already
+// covered by explicit EmitterConfig_T fields, scale curves travel via changesOverLifetime
+const REQUIRED_SETTINGS = [
+    "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter",
+    "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
+    "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
+    "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
+    "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
+    "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
+    "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",
+    "isUsingRevolution", "isUsingRevolutionScale", "isUsingSizeScale", "isUsingVelocityScale",
+    "isVelocityFromMesh", "maxAbsVelocity", "meshNormal", "meshScaleRange", "meshSpawning",
+    "rotateVelocityLossRange", "rotationNormal", "rotationSource", "sizeScaleRepeats",
+    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSound",
+    "spawningSoundIndex", "spawningSoundProbability",
+    "startLocationShape", "startSpinRange", "subdivEnd", "subdivStart", "texSubdivU",
+    "texSubdivV", "useSkeletalLocationAs", "velocityScaleRepeats"
+];
+
+const CLONE_UNSAFE = Symbol("clone-unsafe");
+
+function toCloneSafeSetting(value: any, library: GD.DecodeLibrary): any {
+    if (value === null || value === undefined) return value;
+
+    const t = typeof value;
+
+    if (t === "number" || t === "string" || t === "boolean" || t === "bigint") return value;
+    if (t === "function") return CLONE_UNSAFE;
+
+    if (Array.isArray(value)) {
+        const result = value.map(v => toCloneSafeSetting(v, library));
+
+        return result.some(v => v === CLONE_UNSAFE) ? CLONE_UNSAFE : result;
+    }
+
+    if (t === "object") {
+        if (value.constructor === Object) return value;
+
+        // math structs serialize through their regular getDecodeInfo, anything else
+        // (textures, actors, FArrays) has no business in the settings snapshot
+        if (value instanceof FVector || value instanceof UPlane || value instanceof FRange || value instanceof FRangeVector)
+            return value.getDecodeInfo(library);
+
+        return CLONE_UNSAFE;
+    }
+
+    return CLONE_UNSAFE;
 }
 
 abstract class UParticleRevolutionScale extends UObject {
@@ -504,7 +568,7 @@ abstract class UParticleRevolutionScale extends UObject {
     }
 
     public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
-        return [this.relTime, this.relRevolution?.getVectorElements() || [0, 0, 0]];
+        return [this.relTime, this.relRevolution?.getElements() || [0, 0, 0]];
     }
 }
 
@@ -536,13 +600,78 @@ abstract class UParticleVelocityScale extends UObject {
     }
 
     public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
-        return [this.relTime, this.relVelocity?.getVectorElements() || [0, 0, 0]];
+        return [this.relTime, this.relVelocity?.getElements() || [0, 0, 0]];
     }
 }
 
 abstract class UParticleSound extends UObject {
+    declare public sound: GA.USound;
+    declare public radius: FRange;
+    declare public pitch: FRange;
+    declare public weight: number;
+    declare public volume: FRange;
+    declare public probability: FRange;
 
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "Sound": "sound",
+            "Radius": "radius",
+            "Pitch": "pitch",
+            "Weight": "weight",
+            "Volume": "volume",
+            "Probability": "probability"
+        });
+    }
+
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IParticleSoundDecodeInfo | null {
+        if (!this.sound) return null;
+
+        const library = builder.library;
+        const snd = this.sound.loadSelf();
+        if (!snd) return null;
+
+        const soundKey = snd.objectName ?? snd.uuid;
+        const soundEntry = builder.pullSound(snd);
+
+        if (!soundEntry) return null;
+
+        return {
+            soundDataUri: soundEntry.uri,
+            soundName: soundKey,
+            radius: this.radius?.loadSelf().getDecodeInfo(library) ?? [0, 0],
+            pitch: this.pitch?.loadSelf().getDecodeInfo(library) ?? [1, 1],
+            volume: this.volume?.loadSelf().getDecodeInfo(library) ?? [1, 1],
+            probability: this.probability?.loadSelf().getDecodeInfo(library) ?? [1, 1],
+            weight: this.weight ?? 1
+        };
+    }
 };
+
+// BeamEmitter.uc structs
+abstract class UParticleBeamEndPoint extends UObject {
+    declare public offset: FRangeVector;
+    declare public weight: number;
+
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "ActorTag": "_actorTag",
+            "Offset": "offset",
+            "Weight": "weight"
+        });
+    }
+}
+
+abstract class UParticleBeamScale extends UObject {
+    declare public frequencyScale: FVector;
+    declare public relativeLength: number;
+
+    public getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            "FrequencyScale": "frequencyScale",
+            "RelativeLength": "relativeLength"
+        });
+    }
+}
 
 abstract class UParticle extends UObject {
 
@@ -565,7 +694,7 @@ abstract class UParticleColorScale extends UObject {
 }
 
 export default UParticleEmitter;
-export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale };
+export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale, UParticleBeamEndPoint, UParticleBeamScale };
 
 enum EParticleCoordinateSystem_T {
     PTCS_Independent, //Initial values (Start Location, Starting Velocity, etc.) are relative to the Emitter actor. Values that change over time, such as acceleration, are relative to the world. (aka absolute)
@@ -639,3 +768,53 @@ const blendingNames = {
     [EParticleDrawStyle_T.PTDS_Darken]: "darken",
     [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
 } as Record<EParticleDrawStyle_T, GD.ParticleBlendModes_T>;
+
+// enum-backed REQUIRED_SETTINGS, resolved to the member's own camelCase name
+const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
+    coordinateSystem: {
+        [EParticleCoordinateSystem_T.PTCS_Independent]: "independent",
+        [EParticleCoordinateSystem_T.PTCS_Relative]: "relative",
+        [EParticleCoordinateSystem_T.PTCS_Absolute]: "absolute",
+        [EParticleCoordinateSystem_T.PTCS_RelativeRotation]: "relativeRotation",
+        [EParticleCoordinateSystem_T.PTCS_Spray]: "spray"
+    },
+    effectAxis: {
+        [EParticleEffectAxis_T.PTEA_NegativeX]: "negativeX",
+        [EParticleEffectAxis_T.PTEA_PositiveZ]: "positiveZ"
+    },
+    meshSpawning: {
+        [EParticleMeshSpawning_T.PTMS_None]: "none",
+        [EParticleMeshSpawning_T.PTMS_Linear]: "linear",
+        [EParticleMeshSpawning_T.PTMS_Random]: "random"
+    },
+    rotationSource: {
+        [EParticleRotationSource_T.PTRS_None]: "none",
+        [EParticleRotationSource_T.PTRS_Actor]: "actor",
+        [EParticleRotationSource_T.PTRS_Offset]: "offset",
+        [EParticleRotationSource_T.PTRS_Normal]: "normal"
+    },
+    useSkeletalLocationAs: {
+        [ESkelLocationUpdate_T.PTSU_None]: "none",
+        [ESkelLocationUpdate_T.PTSU_SpawnOffset]: "spawnOffset",
+        [ESkelLocationUpdate_T.PTSU_Location]: "location"
+    },
+    getVelocityDirectionFrom: {
+        [EParticleVelocityDirection_T.PTVD_None]: "none",
+        [EParticleVelocityDirection_T.PTVD_StartPositionAndOwner]: "startPositionAndOwner",
+        [EParticleVelocityDirection_T.PTVD_OwnerAndStartPosition]: "ownerAndStartPosition",
+        [EParticleVelocityDirection_T.PTVD_AddRadial]: "addRadial"
+    },
+    startLocationShape: {
+        [EParticleStartLocationShape_T.PTLS_Box]: "box",
+        [EParticleStartLocationShape_T.PTLS_Sphere]: "sphere",
+        [EParticleStartLocationShape_T.PTLS_Polar]: "polar",
+        [EParticleStartLocationShape_T.PTLS_All]: "all"
+    },
+    drawStyle: blendingNames,
+    spawningSound: {
+        [EParticleCollisionSound_T.PTSC_None]: "none",
+        [EParticleCollisionSound_T.PTSC_LinearGlobal]: "linearGlobal",
+        [EParticleCollisionSound_T.PTSC_LinearLocal]: "linearLocal",
+        [EParticleCollisionSound_T.PTSC_Random]: "random"
+    }
+};

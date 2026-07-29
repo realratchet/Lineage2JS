@@ -1,8 +1,10 @@
 import FVector from "@client/assets/unreal/un-vector";
 import UObject from "@l2js/core";
 
-abstract class FPlane extends UObject {
+abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4Arr> {
     declare public ["constructor"]: typeof FPlane;
+
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public x: number;
     declare public y: number;
@@ -32,6 +34,8 @@ abstract class FPlane extends UObject {
     }
 
     public vector() { return FVector.make(this.x, this.y, this.z); }
+
+    public getDecodeInfo(_library: GD.DecodeLibrary): GD.Vector4Arr { return this.getElements(); }
 
     public set(x: number, y: number, z: number, w: number) {
         this.x = x;

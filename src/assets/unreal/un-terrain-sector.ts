@@ -6,6 +6,8 @@ import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "@client/assets/unreal/un-vector";
 import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
 
+type TerrainSegmentDecodeResult_T = { object: GD.ITerrainSegmentDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialTerrainSegmentDecodeInfo };
+
 class FTerrainLightInfo implements C.IConstructable {
     public lightIndex: number;
     public light: GA.ULight;
@@ -60,28 +62,35 @@ abstract class UTerrainSector extends UObject {
     declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
 
-    public getDecodeInfo(library: GD.DecodeLibrary, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
+    public getDecorationInfo() {
+        return { offsetX: this.offsetX, offsetY: this.offsetY, quadsX: this.quadsXActual, quadsY: this.quadsYActual };
+    }
+
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
+        const library = builder.library;
         const center = this.boundingBox.getCenter();
-        const { x: ox, y: oz, z: oy } = center;
+        const { x: ox, y: oy, z: oz } = center;
 
 
         if (this.uuid in library.geometries) return {
-            uuid: this.uuid,
-            name: this.objectName,
-            type: "TerrainSegment",
-            geometry: this.uuid,
-            materials: this.uuid,
-            position: [ox, oy, oz]
-        } as GD.ITerrainSegmentDecodeInfo;
-
-        library.geometries[this.uuid] = null;
-        library.materials[this.uuid] = null;
+            object: {
+                uuid: this.uuid,
+                name: this.objectName,
+                type: "TerrainSegment",
+                geometry: this.uuid,
+                materials: this.uuid,
+                position: [ox, oy, oz]
+            } as GD.ITerrainSegmentDecodeInfo,
+            geometry: null,
+            material: null
+        };
 
         // Generate triangulation data on demand
         this.generateTriangles();
 
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
+        const invSize = 1 / 4096;
         const TypedIndicesArray = getTypedArrayConstructor(vertexCount);
 
         const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3), colors = new Uint8ClampedArray(17 * 17 * 3);
@@ -105,7 +114,7 @@ abstract class UTerrainSector extends UObject {
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
 
-                const { x: px, y: pz, z: py } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+                const { x: px, y: py, z: pz } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
                 // const [nx, nz, ny] = [
                 //     this.triangles.normals[0 + 3 * iii],
                 //     this.triangles.normals[1 + 3 * iii],
@@ -155,7 +164,7 @@ abstract class UTerrainSector extends UObject {
                     const indexOffset = vertexIndex >> 5;
                     const vertexMask = 1 << (vertexIndex & 0x1F);
 
-                    isVisible = (info.quadVisibilityBitmap.getElem(indexOffset) & vertexMask) !== 0;
+                    isVisible = (info.quadVisibilityBitmapOrig.getElem(indexOffset) & vertexMask) !== 0;
                 }
 
                 if (!isVisible) {
@@ -241,13 +250,7 @@ abstract class UTerrainSector extends UObject {
 
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
 
-                    // Reconstruct the Unified World Space vertex (Z-up) for this point
-                    // We reuse 'v' scratch vector if possible or create new one contextually. 
-                    // Note: 'v' is defined in outer scope but we should be careful. 
-                    // Let's use a new temporary vector to be safe/clean or reuse `v`.
-                    // The outer `v` is used in the geometry loop, this is the UV loop.
-
-                    // We must use info.toWorld to get the correct absolute position
+                    // rebuild the world-space (Z-up) vertex via info.toWorld
                     const worldVert = FVector.make(hmx, hmy, data[offset]).transformBy(info.toWorld);
 
                     // Transform by the layer's texture matrix to get UVs
@@ -267,12 +270,12 @@ abstract class UTerrainSector extends UObject {
                 const hmy = y + this.offsetY;
                 const idxOffset = (y * 17 + x) * uvMultiplier;
 
-                uvs[hmLayerOffset + idxOffset + 0] = hmx / info.heightmapX;
-                uvs[hmLayerOffset + idxOffset + 1] = hmy / info.heightmapY;
+                uvs[hmLayerOffset + idxOffset + 0] = (hmx + 0.5) / info.heightmapX - (hmx >= 240 ? (hmx - 240) * invSize : 0);
+                uvs[hmLayerOffset + idxOffset + 1] = (hmy + 0.5) / info.heightmapY - (hmy >= 240 ? (hmy - 240) * invSize : 0);
             }
         }
 
-        library.geometries[this.uuid] = {
+        const geometryInfo = {
             attributes: {
                 positions,
                 colors,
@@ -282,15 +285,15 @@ abstract class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getVectorElements() as GD.Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getVectorElements() as GD.Vector3Arr
+                    min: this.boundingBox.min.sub(center).getElements() as GD.Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getElements() as GD.Vector3Arr
                 } : null
             }
         };
 
         // debugger;
 
-        library.materials[this.uuid] = {
+        const materialInfo = {
             name: this.uuid,
             materialType: "terrainSegment",
             terrainMaterial: info.uuid,
@@ -304,7 +307,7 @@ abstract class UTerrainSector extends UObject {
             } as GD.IDataTextureDecodeInfo
         } as GD.IMaterialTerrainSegmentDecodeInfo;
 
-        return {
+        const objectInfo: GD.ITerrainSegmentDecodeInfo = {
             uuid: this.uuid,
             name: this.objectName,
             terrainInfoUuid: info.uuid,
@@ -313,11 +316,12 @@ abstract class UTerrainSector extends UObject {
             materials: this.uuid,
             position: [ox, oy, oz],
             lighting: {
+                /* .slice(): the library must not alias the package buffer (see collect-transferables.ts) */
                 lights: this.lightInfos.map(li => ({
                     light: li.light?.objectName,
-                    flags: li.visibilityBitmap.getTypedArray() as Uint8Array
+                    flags: (li.visibilityBitmap.getTypedArray() as Uint8Array).slice()
                 })).filter(li => li.light),
-                shadowMaps: this.shadowMaps?.map(sm => sm.getTypedArray() as Uint8Array) ?? [],
+                shadowMaps: this.shadowMaps?.map(sm => (sm.getTypedArray() as Uint8Array).slice()) ?? [],
                 shadowMapTimes: this.shadowMapTimes ?? []
             },
             mapX: info.mapX,
@@ -326,7 +330,13 @@ abstract class UTerrainSector extends UObject {
             offsetY: this.offsetY,
             heightmapX: info.heightmapX,
             heightmapY: info.heightmapY
-        } as any;
+        };
+
+        return {
+            object: objectInfo,
+            geometry: geometryInfo,
+            material: materialInfo
+        };
     }
 
     public doLoad(pkg: C.APackage, exp: C.UExport) {
@@ -453,8 +463,7 @@ abstract class UTerrainSector extends UObject {
         const info = this.info.loadSelf();
         const invSize = 1 / 4096;
         const hmx = info.heightmapX, hmy = info.heightmapY;
-
-        const vertexCount = (this.quadsX + 1) * (this.quadsY + 1);
+        const vertexCount = 17 * 17;
         const vertices = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
@@ -465,8 +474,8 @@ abstract class UTerrainSector extends UObject {
             throw new Error("not implemented");
         }
 
-        for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= this.quadsY; y++) {
-            for (let x = 0; x <= this.quadsX; x++, it4 += 4, it3 += 3, it2 += 2) {
+        for (let y = 0, it3 = 0, it2 = 0, it4 = 0; y <= 16; y++) {
+            for (let x = 0; x <= 16; x++, it4 += 4, it3 += 3, it2 += 2) {
                 const vertex = this.getVertex(x, y);
                 const normal = this.getVertexNormal(x, y);
 
@@ -507,7 +516,8 @@ abstract class UTerrainSector extends UObject {
                 if (!other || !other.map || !other.alphaMap)
                     break;
 
-                if (!other.map.isTransparent() && this.isSectorAll(indexOther, 255))
+                // non-texture maps (shaders) don't expose isTransparent, assume transparent
+                if (other.map.isTransparent?.() === false && this.isSectorAll(indexOther, 255))
                     continue;
 
             }
@@ -664,7 +674,7 @@ abstract class UTerrainSector extends UObject {
 
                 for (const layerIndex of otherComb.layers) {
                     const layer = layers[layerIndex];
-                    if (!layer.map.isTransparent() && this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 255)) {
+                    if (layer.map?.isTransparent?.() === false && this.isTriangleAll(layerIndex, x, y, triIndex, isTurned, 255)) {
                         return false;
                     }
                 }
@@ -801,5 +811,6 @@ abstract class UTerrainSector extends UObject {
 
 export default UTerrainSector;
 export { UTerrainSector };
+export type { HeightMapInfo_T };
 
 type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo, edgeTurns: Int32Array };

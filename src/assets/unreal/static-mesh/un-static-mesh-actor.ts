@@ -3,6 +3,9 @@ import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
 import FColor from "@client/assets/unreal/un-color";
+import cyrb53 from "@client/utils/hash-cyrb";
+
+type StaticMeshActorDecodeResult_T = { object: GD.IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -12,6 +15,10 @@ abstract class FAccessory extends UObject {
 
     //     return this;
     // }
+}
+
+function getSwayPhase(uuid: string): number {
+    return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
 }
 
 abstract class UStaticMeshActor extends UAActor {
@@ -43,6 +50,7 @@ abstract class UStaticMeshActor extends UAActor {
 
     declare protected hasStaticLighting: boolean;
     declare protected isLightingVisibile: boolean;
+    declare protected isDynamicLightMover: boolean;
 
     declare protected isAgitDefaultStaticMesh: boolean;
     declare protected agitID: number;
@@ -90,6 +98,7 @@ abstract class UStaticMeshActor extends UAActor {
 
             "bStaticLighting": "hasStaticLighting",
             "bLightingVisibility": "isLightingVisibile",
+            "bDynamicLightMover": "isDynamicLightMover",
 
             "bAgitDefaultStaticMesh": "isAgitDefaultStaticMesh",
             "AgitID": "agitID",
@@ -110,9 +119,18 @@ abstract class UStaticMeshActor extends UAActor {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): string {
+    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> { return {}; }
+
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): StaticMeshActorDecodeResult_T {
+        const library = builder.library;
+
+        if (!this.mesh) {
+            console.warn(`StaticMeshActor '${this.objectName}' has no static mesh, skipping`);
+            return null;
+        }
+
         const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
-        const meshInfo = mesh.getDecodeInfo(library, null);
+        const meshInfo = builder.pullStaticMesh(mesh, null);
 
         const level = this.getLevel();
         const baseModel = level.getModel();
@@ -124,84 +142,69 @@ abstract class UStaticMeshActor extends UAActor {
         this.instance?.loadSelf().setActor(this);
 
         const isStatic = this.physics === EPhysics_T.PHYS_None;
-        const isMoverWithoutDynamicLight = false; // TODO: Check if mover has bDynamicLightMover
 
+        // AMover defaults Physics=PHYS_MovingBrush, bStatic=False (Mover.uc); retail gates
+        // static per-vertex lighting on bStatic || (mover && !bDynamicLightMover) (UnStaticMesh.cpp Illuminate)
+        const isMoverWithoutDynamicLight = this.physics === EPhysics_T.PHYS_MovingBrush && !this.isDynamicLightMover;
 
         if (!isStatic && !isMoverWithoutDynamicLight) {
-            this._exportActorToLibrary(library, meshInfo, null, predictedBox, null);
-            return this.uuid;
+            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
         }
 
         if (this.isHiddenInEditor) {
             // Still export actor even if hidden, is this really needed?
-            this._exportActorToLibrary(library, meshInfo, null, predictedBox, null);
-            return this.uuid;
+            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
         }
 
-        let leaves: GA.FLeaf[] = [];
-        if (baseModel) {
-            leaves = baseModel.boxLeaves(predictedBox);
-        }
-
+        const leaves: GA.FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox) : [];
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
         // if (attributes.positions.length / 3 === 1587)
         //     debugger;
 
-        const instanceColors = instance?.color ?? null;
-
+        const instanceColors = (mesh.useVertexColor && instance?.color) || null;
         const ambActor = this.getAmbientLightingActor();
-        const zone = this.getZone();
-
-        // const h = zone.ambientHue || 0;
-        // const s = zone.ambientSaturation || 0;
-        // const b = zone.ambientBrightness || 0;
-
-        // let ambX = 0, ambY = 0, ambZ = 0;
         const xmodel = this.levelInfo.getLevel().getModel();
 
-        const [ambX, ambY, ambZ] = this.isSunAffected ? [0, 0, 0] : zone.ambientVector.getElements();
+        let ambX = 0, ambY = 0, ambZ = 0;
 
-        // for (let leaf of leaves) {
-        //     const zoneInfo = xmodel.getZoneActor(leaf.iZone);
-        //     const zone = zoneInfo.getZone();
-        //     const amb = zone.ambientVector;
+        if (!this.isSunAffected) {
+            if (leaves.length > 0) {
+                for (const leaf of leaves) { // seems that precalculated may be wrong for some objects and need to re-calc from zone, already had this regression, not sure why i gone back to using zone vector
+                    const amb = xmodel.getZoneActor(leaf.iZone).ambientVector;
 
-        //     ambX = Math.max(ambX, amb.x);
-        //     ambY = Math.max(ambY, amb.y);
-        //     ambZ = Math.max(ambZ, amb.z);
-        // }
+                    ambX = Math.max(ambX, amb.x);
+                    ambY = Math.max(ambY, amb.y);
+                    ambZ = Math.max(ambZ, amb.z);
+                }
+            } else {
+                [ambX, ambY, ambZ] = this.getZone().ambientVector.getElements();
+            }
+        }
 
-        const ambVector = FColor.fromFloating(ambX, ambY, ambZ)
-
+        const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as number[];
         const ambientProps = {
             glow: ambActor.ambientGlow,
-            // color: ambVector.toArray(),
-            vector: Array.from(ambVector.toArray()),
+            vector: ambVector,
             isUnlit: this.isUnlit
         };
 
-        this._exportActorToLibrary(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
-
-        return this.uuid;
+        return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
     }
 
-    private _exportActorToLibrary(library: GD.DecodeLibrary, meshInfo: any, instanceColors: Float32Array | Uint8Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): void {
+    protected getActorDecodeResult(library: GD.DecodeLibrary, meshInfo: GD.IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
         if (!geometryInfo) {
             console.warn(`Geometry info not found for meshInfo.geometry: ${meshInfo.geometry}, actor: ${this.objectName}`);
-            return;
+            return null;
         }
 
         const level = this.getLevel();
         const baseModel = level.getModel();
         const zone = this.getZone();
-        const bspZoneIndex = library.bspZoneIndexMap[zone.uuid];
-        const zoneInfo = library.bspZones[bspZoneIndex].zoneInfo;
-
-        const _position = this.location.getVectorElements();
+        const _position = this.location.getElements();
 
         // skip actors outside of the sector as it doesn't make sense
         if (library.sector) {
@@ -214,9 +217,15 @@ abstract class UStaticMeshActor extends UAActor {
 
             if (loc.x < gridMinX || loc.x > gridMaxX ||
                 loc.y < gridMinY || loc.y > gridMaxY) {
-                return;
+                return null;
             }
         }
+
+        // physicsRotation only runs when bRotateToDesired or bFixedRotationDir is set (UnPhysic.cpp:401);
+        // fixed-dir spin is `result += deltaRate` per axis, 65536 units per revolution (fixedTurn, UnPhysic.cpp:460)
+        const rotating = this.physics === EPhysics_T.PHYS_Rotating && this.isFixedRotationDir && this.rotationRate && (this.rotationRate.pitch !== 0 || this.rotationRate.yaw !== 0 || this.rotationRate.roll !== 0)
+            ? { rotator: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll], rate: [this.rotationRate.pitch, this.rotationRate.yaw, this.rotationRate.roll] } as GD.IRotatingDecodeInfo
+            : undefined;
 
         const actorInfo = {
             uuid: this.uuid,
@@ -226,22 +235,25 @@ abstract class UStaticMeshActor extends UAActor {
             scaledGlow: this.scaleGlow,
             isSunAffected: this.isSunAffected,
             ambient,
-            dontBatch: !!this.dontBatch,
+            rotating,
+            dontBatch: !!this.dontBatch || !!rotating,
             isRangeIgnored: !!this.isRangeIgnored,
-            scale: this.scale?.multiplyScalar(this.drawScale).getVectorElements() || [1, 1, 1],
+            scale: this.scale?.multiplyScalar(this.drawScale).getElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
             instance: {
                 mesh: meshInfo,
                 type: "StaticMeshInstance",
                 uuid: this.instance?.uuid || null,
                 name: this.instance?.objectName || null,
+                swayPhase: getSwayPhase(this.uuid),
                 attributes: { colors: instanceColors },
                 lights
             } as GD.IStaticMeshInstanceDecodeInfo,
             bounds: {
-                min: [predictedBox.min.x, predictedBox.min.z, predictedBox.min.y],
-                max: [predictedBox.max.x, predictedBox.max.z, predictedBox.max.y]
-            }
+                min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
+                max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
+            },
+            ...this.getActorDecodeInfo()
         } as GD.IStaticMeshActorDecodeInfo;
 
         const extent = predictedBox.getExtents();
@@ -250,21 +262,19 @@ abstract class UStaticMeshActor extends UAActor {
 
         actorInfo.bounds = {
             isValid: true,
-            min: [inflatedBox.min.x, inflatedBox.min.z, inflatedBox.min.y],
-            max: [inflatedBox.max.x, inflatedBox.max.z, inflatedBox.max.y]
+            min: [inflatedBox.min.x, inflatedBox.min.y, inflatedBox.min.z],
+            max: [inflatedBox.max.x, inflatedBox.max.y, inflatedBox.max.z]
         };
 
         let actorZoneMask = 0n;
+        let leafIndices: number[] = [];
 
         if (baseModel) {
             const origin = inflatedBox.getCenter();
             const inflatedExtent = inflatedBox.getExtents();
-            const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+            leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
 
             for (const leafIndex of leafIndices) {
-                if (library.leafActors[leafIndex]) {
-                    library.leafActors[leafIndex].push(actorInfo);
-                }
                 const leaf = library.bspLeaves[leafIndex];
                 if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
                     actorZoneMask |= (1n << BigInt(leaf.zone));
@@ -272,26 +282,18 @@ abstract class UStaticMeshActor extends UAActor {
             }
         }
 
-        (actorInfo as any).zoneMask = actorZoneMask;
+        actorInfo.zoneMask = actorZoneMask;
 
-        library.exportedActors.add(this.uuid);
-
-        library.geometryInstances[meshInfo.geometry]++;
-
+        let zoneBounds: { min: number[], max: number[] } = null;
         if (geometryInfo.bounds?.box) {
             const { min, max } = geometryInfo.bounds.box;
             const _min = min.map((v, i) => v + _position[i]);
             const _max = max.map((v, i) => v + _position[i]);
 
-            zoneInfo.bounds.isValid = true;
-
-            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
-                    for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], _min[i], _max[i]);
-                }
-            );
+            zoneBounds = { min: _min, max: _max };
         }
+
+        return { object: actorInfo, leafIndices, zoneUuid: zone.uuid, geometryUuid: meshInfo.geometry, zoneBounds };
     }
 }
 

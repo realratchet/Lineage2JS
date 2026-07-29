@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, DoubleSide, DataTexture, RGFormat, OneFactor, CustomBlending, RepeatWrapping, LinearFilter } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, CustomBlending, LinearFilter } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -29,10 +29,10 @@ class MeshTerrainMaterial extends ShaderMaterial {
         const pragmaSearch = "#pragma include_layers";
 
         const paramsIndex = splitFragmentShader.findIndex(x => x.includes(pragmaSearchParams));
-        const wsParams = new Array(splitFragmentShader[paramsIndex].indexOf(pragmaSearchParams)).fill(" ").join("");
+        const wsParams = " ".repeat(splitFragmentShader[paramsIndex].indexOf(pragmaSearchParams));
 
         let layerIndex = splitFragmentShader.findIndex(x => x.includes(pragmaSearch));
-        const ws = new Array(splitFragmentShader[layerIndex].indexOf(pragmaSearch)).fill(" ").join("");
+        const ws = " ".repeat(splitFragmentShader[layerIndex].indexOf(pragmaSearch));
 
         const paramsCode: string[] = [], layerCode: string[] = [];
 
@@ -60,8 +60,6 @@ class MeshTerrainMaterial extends ShaderMaterial {
 
             Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
-            layer.alphaMap.uniforms.map.texture.wrapS = RepeatWrapping;
-            layer.alphaMap.uniforms.map.texture.wrapT = RepeatWrapping;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
             layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
@@ -74,8 +72,6 @@ class MeshTerrainMaterial extends ShaderMaterial {
             layerCode.push("");
 
             layer.map.uniforms.map.texture.premultiplyAlpha = true;
-            layer.map.uniforms.map.texture.wrapS = RepeatWrapping;
-            layer.map.uniforms.map.texture.wrapT = RepeatWrapping;
             layer.map.uniforms.map.texture.needsUpdate = true;
 
             Object.assign(u.value.map, layer.map.uniforms.map);
@@ -118,7 +114,8 @@ class MeshTerrainMaterial extends ShaderMaterial {
             defines,
             uniforms,
             vertexShader: VERTEX_SHADER,
-            fragmentShader: fragmentShader
+            fragmentShader: fragmentShader,
+            side: FrontSide
         });
     }
 }
@@ -127,6 +124,6 @@ export default MeshTerrainMaterial;
 export { MeshTerrainMaterial };
 
 type MeshTerrainMaterialParameters = {
-    uvs: MapData_T,
-    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter }[]
+    uvs: GD.MapData_T,
+    layers: { map: GD.IDecodedParameter, alphaMap: GD.IDecodedParameter }[]
 };

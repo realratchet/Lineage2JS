@@ -27,11 +27,7 @@ class FStaticLightmapTexture implements C.IConstructable {
         return this;
     }
 
-    public async getDecodeInfo(library: GD.DecodeLibrary): Promise<string> {
-        if (this.uuid in library.materials) return this.uuid;
-
-        library.materials[this.uuid] = null;
-
+    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.ITextureDecodeInfo {
         const firstMipmap = this.data;
         const mipCount = 1;
 
@@ -59,7 +55,7 @@ class FStaticLightmapTexture implements C.IConstructable {
 
         const wrapS = 1024, wrapT = wrapS;
 
-        library.materials[this.uuid] = {
+        return {
             materialType: "texture",
             textureType,
             buffer: decodedBuffer,
@@ -69,8 +65,6 @@ class FStaticLightmapTexture implements C.IConstructable {
             wrapT: wrapT,
             useMipmaps: mipCount > 0
         } as GD.ITextureDecodeInfo;
-
-        return this.uuid;
     }
 
     getTexturePixelFormat() {

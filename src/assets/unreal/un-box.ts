@@ -5,6 +5,8 @@ import { UObject } from "@l2js/core";
 abstract class FBox extends UObject {
     declare ["constructor"]: typeof FBox;
 
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public readonly min: GA.FVector;
     declare public readonly max: GA.FVector;
 
@@ -95,8 +97,8 @@ abstract class FBox extends UObject {
     public getDecodeInfo(): GD.IBoxDecodeInfo {
         return {
             isValid: !!this.isValid,
-            min: this.min.getVectorElements(),
-            max: this.max.getVectorElements()
+            min: this.min.getElements(),
+            max: this.max.getElements()
         };
     }
 

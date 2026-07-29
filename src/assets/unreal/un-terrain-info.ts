@@ -13,9 +13,31 @@ import FVector from "@client/assets/unreal/un-vector";
 import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
 import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
 import FPlane from "@client/assets/unreal/un-plane";
+import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@client/assets/decoders/dxt-decode";
+
+type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
+const cacheTextureRgba = new WeakMap<GA.UTexture, Uint8Array>();
+
+function getTextureRgba(texture: GA.UTexture): Uint8Array {
+    if (cacheTextureRgba.has(texture)) return cacheTextureRgba.get(texture);
+
+    const data = texture.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array;
+    let rgba: Uint8Array;
+
+    switch (texture.format) {
+        case ETextureFormat.TEXF_DXT1: rgba = dxt1ToRgba(texture.width, texture.height, data); break;
+        case ETextureFormat.TEXF_DXT3: rgba = dxt3ToRgba(texture.width, texture.height, data); break;
+        case ETextureFormat.TEXF_DXT5: rgba = dxt5ToRgba(texture.width, texture.height, data); break;
+        default: return null;
+    }
+
+    cacheTextureRgba.set(texture, rgba);
+
+    return rgba;
+}
 
 enum ETerrainRenderMethod_T {
     RM_WeightMap = 0,
@@ -52,6 +74,7 @@ abstract class ATerrainInfo extends AInfo {
     declare public readonly layers: GA.UTerrainLayer[];
 
     declare protected readonly decoLayers: C.FArray<GA.UDecoLayer>
+    declare protected readonly decoLayerOffset: number;
     declare protected readonly showOnTerrain: number;
     declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"int32">;
     declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"int32">;
@@ -141,6 +164,7 @@ abstract class ATerrainInfo extends AInfo {
             "Sectors": "sectors",
 
             "DecoLayers": "decoLayers",
+            "DecoLayerOffset": "decoLayerOffset",
             "MapX": "mapX",
             "MapY": "mapY",
 
@@ -227,6 +251,7 @@ abstract class ATerrainInfo extends AInfo {
     public getQuadVisibilityBitmapOrig(x: number, y: number): boolean { return this.getFromBitmap(this.quadVisibilityBitmapOrig, x, y); }
     public getEdgeTurnBitmap(x: number, y: number): boolean { return this.getFromBitmap(this.edgeTurnBitmap, x, y); }
     public getEdgeTurnBitmapOrig(x: number, y: number): boolean { return this.getFromBitmap(this.edgeTurnBitmapOrig, x, y); }
+    public isInvertedTerrain() { return !!this.inverted; }
 
 
     public getLayerAlpha(x: number, y: number, layer: number, alphaMap: GA.UTexture) {
@@ -242,13 +267,17 @@ abstract class ATerrainInfo extends AInfo {
             case ETextureFormat.TEXF_L8:
             case ETextureFormat.TEXF_P8:
             case ETextureFormat.TEXF_RGB8:
+            case ETextureFormat.TEXF_RGBA8:
+            case ETextureFormat.TEXF_DXT1:
+            case ETextureFormat.TEXF_DXT3:
+            case ETextureFormat.TEXF_DXT5:
                 break;
             default: return 0;
         }
 
         if (layer !== -2) {
-            x = x * texture.width / this.heightmapX;
-            y = y * texture.height / this.heightmapY;
+            x = Math.floor(x * texture.width / this.heightmapX);
+            y = Math.floor(y * texture.height / this.heightmapY);
         }
 
         if (texture.mipmaps.getElemCount() <= 0) return 0;
@@ -261,9 +290,36 @@ abstract class ATerrainInfo extends AInfo {
 
         switch (texture.format) {
             case ETextureFormat.TEXF_L8: return data.getElem(offset);
-            case ETextureFormat.TEXF_P8: return texture.palette.colors[data.getElem(offset)].r;
-            case ETextureFormat.TEXF_RGB8: return data.getElem(offset * 4 + 3);
+            case ETextureFormat.TEXF_P8: return texture.palette.loadSelf().colors.getElem(data.getElem(offset)).r;
+            case ETextureFormat.TEXF_RGB8:
+            case ETextureFormat.TEXF_RGBA8: return data.getElem(offset * 4 + 3);
+            case ETextureFormat.TEXF_DXT1:
+            case ETextureFormat.TEXF_DXT3:
+            case ETextureFormat.TEXF_DXT5: return getTextureRgba(texture)[offset * 4];
             default: debugger; throw new Error("invalid");
+        }
+    }
+
+    public getTextureColor(x: number, y: number, texture: GA.UTexture): GD.Vector3Arr {
+        texture = texture.loadSelf();
+        x = Math.floor(x * texture.width / this.heightmapX);
+        y = Math.floor(y * texture.height / this.heightmapY);
+
+        if (texture.mipmaps.getElemCount() <= 0) return [0, 0, 0];
+
+        const data = texture.mipmaps.getElem(0).dataArray;
+        const offset = (x + y * texture.width) * 4;
+
+        switch (texture.format) {
+            case ETextureFormat.TEXF_RGB8:
+            case ETextureFormat.TEXF_RGBA8: return [data.getElem(offset + 2) / 255, data.getElem(offset + 1) / 255, data.getElem(offset) / 255];
+            case ETextureFormat.TEXF_DXT1:
+            case ETextureFormat.TEXF_DXT3:
+            case ETextureFormat.TEXF_DXT5: {
+                const rgba = getTextureRgba(texture);
+                return [rgba[offset] / 255, rgba[offset + 1] / 255, rgba[offset + 2] / 255];
+            }
+            default: return [0, 0, 0];
         }
     }
 
@@ -307,7 +363,7 @@ abstract class ATerrainInfo extends AInfo {
         this.toHeightMap = FCoords.make();
         this.vertexColors = new FArray(FColor.class());
 
-        if (verLicense >= 17) {
+        {
             this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();
 
             this.readHead = pkg.tell();
@@ -319,11 +375,22 @@ abstract class ATerrainInfo extends AInfo {
 
             pkg.seek(this.readHead, "set");
 
+            if (verLicense < 17) {
+                // stock layout: Sectors << Vertices << SectorsX/Y << FaceNormals,
+                // l2 dropped both arrays at licensee 17 (recomputed in updateVertices)
+                const vertexCount = pkg.read("compat32");
+
+                pkg.seek(vertexCount * 12); // FVector
+            }
+
             this.sectorsX = pkg.read("int32");
             this.sectorsY = pkg.read("int32");
-        } else {
-            console.warn("Unsupported yet");
-            debugger;
+
+            if (verLicense < 17) {
+                const normalCount = pkg.read("compat32");
+
+                pkg.seek(normalCount * 24); // FTerrainNormalPair (two FVectors)
+            }
         }
 
         if (verArchive < 0x53) {
@@ -621,14 +688,15 @@ abstract class ATerrainInfo extends AInfo {
         // debugger;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): string {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
+        const library = builder.library;
         const terrainLayers = this.layers.filter(x => x);
         const layerCount = terrainLayers.length;
 
         // Force recalculation of texture matrices to ensure they use loaded layer data
         this.calcLayerTexCoords();
 
-        const terrainUuid = this.terrainMap.loadSelf().getDecodeInfo(library);
+        const terrainUuid = builder.pullMaterial(this.terrainMap);
         const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
         const edgeTurnBitmap = this.edgeTurnBitmap.getTypedArray();
@@ -649,57 +717,51 @@ abstract class ATerrainInfo extends AInfo {
                 continue;
             }
 
-            if (layer.map?.loadSelf().mipmaps.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps.getElemCount() === 0) {
+            // non-texture maps (shaders) have no mipmaps, only skip when both sides
+            // are plain textures without any texture data
+            if (layer.map?.loadSelf().mipmaps?.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps?.getElemCount() === 0) {
                 layers[k] = { map: null, alphaMap: null };
-                debugger;
                 continue;
             }
 
             layers[k] = {
-                map: layer.map?.loadSelf().getDecodeInfo(library) ?? null,
-                alphaMap: layer.alphaMap?.loadSelf().getDecodeInfo(library) ?? null
+                map: builder.pullMaterial(layer.map),
+                alphaMap: builder.pullMaterial(layer.alphaMap)
             };
 
-            if (layers[k].alphaMap && !layers[k].map)
-                debugger;
+            // if (layers[k].alphaMap && !layers[k].map)
+            //     debugger;
         }
 
 
 
-        library.materials[this.uuid] = {
+        const materialInfo = {
             name: this.uuid,
             materialType: "terrain",
             layers
         } as GD.IMaterialTerrainDecodeInfo;
 
-        const zoneInfo = library.bspZones[library.bspZoneIndexMap[this.getZone().uuid]].zoneInfo;
-        const children = this.sectors.map(sector => sector.loadSelf().getDecodeInfo(library, this, heightmapData));
+        const sectors = this.sectors.map(sector => sector.loadSelf());
+        const children: GD.IBaseObjectDecodeInfo[] = sectors.map(sector => builder.pullTerrainSector(sector, this, heightmapData));
 
-        const decodeInfo = {
+        this.decoLayers?.forEach(layer => {
+            if (!layer) return;
+
+            const decorations = layer.loadSelf().getDecodeInfo(builder, this, sectors, this.decoLayerOffset || 0);
+            children.push(...decorations);
+        });
+
+        const decodeInfo: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] } = {
             uuid: this.uuid,
             type: "TerrainInfo",
             name: this.objectName,
             // position,
             children
-        } as GD.IBaseObjectDecodeInfo;
-
-        zoneInfo.children.push(decodeInfo);
-        zoneInfo.bounds.isValid = true;
-
-        children.forEach(({ geometry: uuid }) => {
-            const { min, max } = library.geometries[uuid].bounds.box;
-
-            [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
-                    for (let i = 0; i < 3; i++)
-                        arr[i] = fn(arr[i], min[i], max[i]);
-                }
-            );
-        });
+        };
 
         // debugger;
 
-        return this.uuid;
+        return { object: decodeInfo, material: materialInfo, zoneUuid: this.getZone().uuid };
     }
 }
 

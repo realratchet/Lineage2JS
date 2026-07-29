@@ -1,14 +1,19 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneBufferGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
-import decodeMaterial from "./material-decoder";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
+import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
 import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 import MeshEmitter from "@client/objects/emitters/mesh-emitter";
+import BeamEmitter from "@client/objects/emitters/beam-emitter";
 import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
-import { batchStaticMeshActors, batchTerrainSectors, decodeStaticMeshInstance } from "./object-batching";
+import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
+import MovableObject from "@client/objects/movable-object";
+import RotatingObject from "@client/objects/rotating-object";
+import SwayingObject from "@client/objects/swaying-object";
+import TerrainDecoration from "@client/objects/terrain-decoration";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 
@@ -40,6 +45,7 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.nodeIndex) geometry.setAttribute("nodeIndex", new BufferAttribute(info.attributes.nodeIndex, 1));
+    if (info.attributes.sway) geometry.setAttribute("sway", new BufferAttribute(info.attributes.sway, 4));
     if ((info.attributes as any).terrainIndex) geometry.setAttribute("terrainIndex", new BufferAttribute((info.attributes as any).terrainIndex, 1));
 
     if (info.indices) {
@@ -89,6 +95,15 @@ function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDeco
 
     // object.add(new AxesHelper(100));
 
+    if (info.moveEvent && info.moveEvent !== "None") (object as any).moveEvent = info.moveEvent;
+
+    // library.leafActors (and this wrapper's bounds/zoneMask) are keyed by info.uuid,
+    // not each sub-emitter's own uuid - propagate it down so render-manager's Pass 2
+    // can look up BSP visibility for the actual particlePool-bearing children
+    for (const child of object.children) {
+        (child as any).emitterActorUuid = info.uuid;
+    }
+
     return object;
 }
 
@@ -118,19 +133,14 @@ function decodeEdges(library: GD.DecodeLibrary, info: GD.IEdgesObjectDecodeInfo)
 }
 
 function decodeStaticMeshData(library: GD.DecodeLibrary, info: GD.IStaticMeshObjectDecodeInfo) {
-    const infoGeo = library.geometries[info.geometry];
+    let infoGeo = library.geometries[info.geometry];
     const infoMats = library.materials[info.materials];
+    const sway = info.sway ? makeSwayAttribute((infoGeo.attributes.positions as Float32Array).length / 3, info.sway) : null;
 
-    const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    if (sway) infoGeo = { ...infoGeo, attributes: { ...infoGeo.attributes, sway } };
+
+    const materials = decodeStaticMeshMaterial(library, infoMats, !!infoGeo.attributes.colors, false, !!sway) || new MeshBasicMaterial({ color: 0xff00ff });
     const geometry = fetchGeometry(infoGeo as GD.IGeometryDecodeInfo);
-
-    if (infoGeo.attributes.colors) {
-        (materials instanceof Array ? materials : [materials]).forEach(mat => {
-            if (!mat) return;
-
-            mat.vertexColors = true;
-        });
-    }
 
     return { geometry, materials };
 }
@@ -167,19 +177,25 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
 
-    const object = new CollidingMesh({ geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient });
+    const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient };
+    const object = info.mover ? new MovableObject({ ...props, mover: info.mover })
+        : info.swaying ? new SwayingObject({ ...props, swaying: info.swaying })
+            : info.rotating ? new RotatingObject({ ...props, rotating: info.rotating })
+                : new CollidingMesh(props);
+
+    object.material = canonicalizeStaticMeshMaterials(object.material);
 
     // if (info.name === "StaticMeshActor140")
     //     debugger;
 
     // debugger;
 
-    object.userData.meshInstance = {
+    (object as any).meshInstance = {
         uuid: instanceInfo.uuid,
         name: instanceInfo.name
     };
 
-    object.userData.mesh = {
+    (object as any).mesh = {
         uuid: instanceInfo.mesh.uuid,
         name: instanceInfo.mesh.name
     };
@@ -216,12 +232,11 @@ function decodeZoneObject(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInf
         (object as any).type = "Sky";
         (object as any).isSkyZoneInfo = true;
 
-        // Store the original position for SkyRenderer, but DON'T apply it to the object
-        // to avoid double-transforming children (which are already in world space).
+        // original position for SkyRenderer only, applying it would double-transform the already-world-space children
         if (info.position) {
-            object.userData.skyOrigin = new Vector3().fromArray(info.position);
+            (object as any).skyOrigin = new Vector3().fromArray(info.position);
         } else if ((info as any).location) {
-            object.userData.skyOrigin = new Vector3().fromArray((info as any).location);
+            (object as any).skyOrigin = new Vector3().fromArray((info as any).location);
         }
     }
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
@@ -242,6 +257,8 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
     if (!materialInfo) {
         throw new Error(`Material not found for section ${sectionInfo.uuid}`);
     }
+
+    // if (sectionInfo.sectionName.startsWith("Texture_Cm_o_wall010_")) debugger;
 
     const materials = decodeMaterial(library, materialInfo);
 
@@ -268,8 +285,8 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
     const mesh = new Mesh(geometry, materials);
 
     mesh.name = `BSPSection_${sectionInfo.sectionName}`;
-    mesh.userData.sectionIndex = sectionIndex;
-    mesh.userData.priority = sectionInfo.priority;
+    (mesh as any).sectionIndex = sectionIndex;
+    (mesh as any).priority = sectionInfo.priority;
 
     return mesh;
 }
@@ -306,7 +323,7 @@ function decodeLight(library: GD.DecodeLibrary, info: GD.ILightDecodeInfo | GD.I
     // };
 }
 
-function decodeSector(library: GD.DecodeLibrary) {
+function decodeSectorCore(library: GD.DecodeLibrary) {
     const sector = new SectorObject();
 
     sector.name = library.name;
@@ -329,6 +346,11 @@ function decodeSector(library: GD.DecodeLibrary) {
     sector.musicVolumes = library.musicVolumes;
     sector.ambientSounds = library.ambientSounds;
 
+    // traverseBSP/static mesh visibility need these even without renderable BSP sections
+    (sector as any).decodeLibrary = library;
+    sector.nodeToSection = library.nodeToSection;
+    sector.nodeZoneMasks = library.nodeZoneMasks;
+
     // NEW: Render BSP sections (UE2-style section-based rendering)
     if (library.bspSections && library.bspSections.length > 0) {
         const bspGroup = new Group();
@@ -336,11 +358,7 @@ function decodeSector(library: GD.DecodeLibrary) {
 
         // Store BSP rendering data in sector for dynamic visibility updates
         sector.bspSections = library.bspSections;
-        sector.nodeToSection = library.nodeToSection;
-        sector.nodeZoneMasks = library.nodeZoneMasks;
         sector.bspGroup = bspGroup;
-        // Store library reference for updateVisibleBSPSections
-        (sector as any).decodeLibrary = library;
 
         // Separate opaque and transparent sections for proper rendering order
         const opaqueSections: GD.IBSPSectionDecodeInfo_T[] = [];
@@ -381,31 +399,40 @@ function decodeSector(library: GD.DecodeLibrary) {
         sector.add(bspGroup);
     }
 
+    return sector;
+}
+
+type SectorStaticMeshDecodeJob_T = StaticMeshBatchJob_T;
+
+function createSectorStaticMeshDecodeJob(library: GD.DecodeLibrary, sector: SectorObject): SectorStaticMeshDecodeJob_T {
     const staticMeshGroup = new Group();
     staticMeshGroup.name = "StaticMeshActors";
-    const uniqueActors = new Map<string, GD.IBaseObjectOrInstanceDecodeInfo>();
 
-    library.leafActors.forEach((leaf: GD.IBaseObjectOrInstanceDecodeInfo[]) => {
-        leaf.forEach((actor: GD.IBaseObjectOrInstanceDecodeInfo) => {
-            if (actor.type === "StaticMeshActor" && library.exportedActors.has(actor.uuid)) {
-                uniqueActors.set(actor.uuid, actor);
-            }
-        });
-    });
+    return createStaticMeshBatchJob(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
+}
 
-    // --- Static Mesh Batching ---
-    batchStaticMeshActors(library, sector, staticMeshGroup, uniqueActors, fetchGeometry, decodeObject3D);
+function stepSectorStaticMeshDecodeJob(job: SectorStaticMeshDecodeJob_T): boolean {
+    if (!stepStaticMeshBatchJob(job)) return false;
+
+    finishSectorStaticMeshes(job.library, job.sector);
+    return true;
+}
+
+function finishSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObject) {
+
+    // here, not decodePackage - the live app builds static meshes via this progressive path (asset-manager processPendingBuilds)
+    attachMoveEventActors(sector);
 
     // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {
         try {
-            console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);
+            // console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);
             if (celestialInfo.sprites && celestialInfo.sprites.length > 0) {
-                const spriteUuid = typeof celestialInfo.sprites[0] === 'string'
-                    ? celestialInfo.sprites[0]
-                    : celestialInfo.sprites[0].uuid || celestialInfo.sprites[0].material;
-
-                let spriteTextureInfo = library.materials[spriteUuid] as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
+                const spriteUuid = celestialInfo.sprites[0];
+                const materialInfo = library.materials[spriteUuid] as GD.IBaseMaterialDecodeInfo;
+                // NSun only ever uses .sprite
+                const material = celestialInfo.type === "Moon" ? decodeMaterial(library, materialInfo) : null;
+                let spriteTextureInfo = materialInfo as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
                 let texture = null;
 
                 // Handle Shader materials by extracting the diffuse texture
@@ -425,6 +452,7 @@ function decodeSector(library: GD.DecodeLibrary) {
                 sector.celestials.push({
                     type: celestialInfo.type,
                     sprite: texture,
+                    material,
                     data: celestialInfo
                 });
             }
@@ -504,8 +532,20 @@ function decodeSector(library: GD.DecodeLibrary) {
     return sector;
 }
 
+function decodeSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObject) {
+    const job = createSectorStaticMeshDecodeJob(library, sector);
+
+    while (!stepSectorStaticMeshDecodeJob(job)) { }
+
+    return sector;
+}
+
 function decodePackage(library: GD.DecodeLibrary) {
-    const sector = decodeSector(library);
+    const sector = decodeSectorCore(library);
+    decodeSectorStaticMeshes(library, sector);
+
+    for (const pawnInfo of library.pawnActors)
+        sector.pawns.add(decodeObject3D(library, pawnInfo));
 
     if (library.helpersZoneBounds) {
         const boundsGroup = new Object3D();
@@ -530,16 +570,45 @@ function decodePackage(library: GD.DecodeLibrary) {
     return sector;
 }
 
+function attachMoveEventActors(sector: SectorObject) {
+    const swayByTag = new Map<string, SwayingObject>();
+
+    for (const child of (sector as any).staticMeshGroup?.children ?? [])
+        if ((child as any).isSwayingObject)
+            for (const tag of (child as any).swaying.tags) swayByTag.set(tag, child);
+
+    if (swayByTag.size === 0) return;
+
+    sector.zones.traverse(object => {
+        const moveEvent = (object as any).moveEvent;
+        if (!moveEvent) return;
+
+        const sway = swayByTag.get(moveEvent);
+        if (sway) sway.attachActor(object);
+    });
+}
+
 function decodeTerrainInfo(library: GD.DecodeLibrary, info: GD.IBaseObjectDecodeInfo) {
     const group = new Object3D();
     applySimpleProperties(library, group, info);
 
     // Identify terrain sectors among children
     const sectors: Terrain[] = [];
+    const decorations: TerrainDecoration[] = [];
     group.children.forEach(child => {
         if ((child as any).isTerrain) {
             sectors.push(child as Terrain);
+        } else if ((child as any).isTerrainDecoration) {
+            decorations.push(child as TerrainDecoration);
         }
+    });
+
+    const sectorsByUuid = new Map<string, Terrain>();
+    sectors.forEach(sector => sectorsByUuid.set(sector.terrainSegmentUuid, sector));
+    decorations.forEach(decoration => {
+        const terrain = sectorsByUuid.get(decoration.terrainSegment);
+        if (!terrain) throw new Error(`Terrain segment '${decoration.terrainSegment}' not found for decoration '${decoration.name}'`);
+        decoration.setTerrain(terrain);
     });
 
     batchTerrainSectors(library, group, sectors);
@@ -582,8 +651,23 @@ function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     }, terrainInfo.lighting);
 
     applySimpleProperties(library, terrain, info);
+    terrain.terrainSegmentUuid = info.uuid;
 
     return terrain;
+}
+
+function decodeTerrainDecoration(library: GD.DecodeLibrary, info: GD.ITerrainDecorationDecodeInfo) {
+    const mesh = info.mesh;
+    let geometryInfo = library.geometries[mesh.geometry];
+    const sway = mesh.sway ? makeSwayAttribute((geometryInfo.attributes.positions as Float32Array).length / 3, mesh.sway) : null;
+
+    if (sway) geometryInfo = { ...geometryInfo, attributes: { ...geometryInfo.attributes, sway } };
+
+    const geometry = fetchGeometry(geometryInfo);
+    const materialInfo = library.materials[mesh.materials];
+    const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, true, !!sway, true) || new MeshBasicMaterial({ color: 0xff00ff });
+
+    return new TerrainDecoration(geometry, materials, info);
 }
 
 function decodeBone(library: GD.DecodeLibrary, info: GD.IBoneDecodeInfo): Bone {
@@ -674,8 +758,9 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
         return acc;
     }, {} as Record<string, AnimationClip>);
 
-    mesh.userData.animations = animations;
+    (mesh as any).meshAnimations = animations; // .animations is taken by three's own AnimationClip[] slot
 
+    applySimpleProperties(library, mesh, info);
 
     return mesh;
 }
@@ -685,6 +770,7 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         acceleration: info.acceleration,
         lifetime: info.lifetime,
         maxParticles: info.maxParticles,
+        rotationOffset: info.rotationOffset,
         initial: {
             particlesPerSecond: info.initial.particlesPerSecond,
             scale: info.initial.scale,
@@ -697,7 +783,9 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         blendingMode: info.blendingMode,
         opacity: info.opacity,
         changesOverLifetime: {
-            scale: info.changesOverLifetime.scale
+            scale: info.changesOverLifetime.scale,
+            velocity: (info.changesOverLifetime as any).velocity ?? null,
+            color: (info.changesOverLifetime as any).color ?? null
         },
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
@@ -713,7 +801,7 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         velocityLossRange: info.velocityLossRange,
         warmupTime: info.warmupTime,
         warmupTicksPerSecond: info.warmupTicksPerSecond,
-        allSettings: info.allSettings
+        settings: info.settings
     };
 }
 
@@ -760,6 +848,24 @@ function decodeSpriteEmitter(library: GD.DecodeLibrary, info: GD.ISpriteEmitterD
     return emitter;
 }
 
+function decodeBeamEmitter(library: GD.DecodeLibrary, info: any) {
+    const material = decodeMaterial(library, {
+        materialType: "particle",
+        material: info.texture,
+        opacity: info.opacity,
+        blendingMode: info.blendingMode
+    } as GD.IParticleMaterialDecodeInfo) as any as GD.ParticleMaterialInitSettings_T;
+
+    const emitter = new BeamEmitter(Object.assign(decodeEmitterConfig(info), {
+        material,
+        beam: info.beam
+    }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
+}
+
 function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) {
     const object = new FogInfoObject();
 
@@ -781,7 +887,7 @@ function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) 
     return object;
 }
 
-function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo): THREE.Object3D {
+function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo | GD.EmitterConfig_T): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":
@@ -790,12 +896,14 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "StaticMeshActor": return decodeStaticMeshActor(library, info as GD.IStaticMeshActorDecodeInfo);
         // case "Light": return decodeLight(library, info as GD.ILightDecodeInfo);
         case "TerrainSegment": return decodeTerrainSegment(library, info as GD.IStaticMeshObjectDecodeInfo);
+        case "TerrainDecoration": return decodeTerrainDecoration(library, info as GD.ITerrainDecorationDecodeInfo);
         case "Model":
         case "StaticMesh": return decodeStaticMeshWrapped(library, info as GD.IStaticMeshObjectDecodeInfo);
         case "Edges": return decodeEdges(library, info as GD.IEdgesObjectDecodeInfo);
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as GD.ISkinnedMeshObjectDecodeInfo);
         case "SpriteEmitter": return decodeSpriteEmitter(library, info as GD.ISpriteEmitterDecodeInfo);
         case "MeshEmitter": return decodeMeshEmitter(library, info as GD.IMeshEmitterDecodeInfo);
+        case "BeamEmitter": return decodeBeamEmitter(library, info);
         case "L2FogInfo": return decodeFogInfo(library, info as GD.IBaseZoneDecodeInfo);
         case "Zone":
         case "Sky":
@@ -805,4 +913,4 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
 }
 
 export default decodeObject3D;
-export { decodeObject3D, decodePackage };
+export { decodeObject3D, decodePackage, decodeSectorCore, decodeSectorStaticMeshes, createSectorStaticMeshDecodeJob, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T };

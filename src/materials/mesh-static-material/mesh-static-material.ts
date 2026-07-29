@@ -1,7 +1,10 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector3, UniformsLib, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import { padTransformStages } from "./transform-stage";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+
+const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -50,12 +53,24 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
 
+        if (parameters.uvIndex === 1) {
+            defines["USE_UV2"] = "";
+            defines[`USE_MAP_${defName}_UV2`] = "";
+        }
+
         if (parameters.transformType !== "none") {
             defines["PAN"] = 0;
             defines["ROTATE"] = 1;
             defines["OSCILLATE"] = 2;
             defines["ENVMAP"] = 3;
             defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
+
+            // nested UV transforms for NMoon1
+            const innerTransforms = (parameters.uniforms as any).innerTransforms;
+            if (innerTransforms?.length > 0 && TRANSFORM_CHAIN_SLOTS.has(name)) {
+                defines[`USE_MAP_${defName}_TRANSFORM_CHAIN`] = "";
+                uniforms[name].value.innerTransforms = padTransformStages(innerTransforms);
+            }
         }
     }
 }
@@ -64,6 +79,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
     private spriteEntries: [string, SpriteParam_T][] = [];
+    private proceduralMaps: any[] = [];
 
     public isUpdatable = false;
 
@@ -85,19 +101,21 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         const sprites = {};
 
         const defines: Record<string, any> = { USE_FOG: "" };
+        // UniformsLib.lights dropped - NUM_DIR_LIGHTS/NUM_SPOT_LIGHTS/NUM_HEMI_LIGHTS are always
+        // 0 here (DynamicLight isn't a THREE.Light), so those ~19 uniforms never compiled in
         const uniforms: Record<string, Uniform> = appendGlobalUniforms(UniformsUtils.merge([
-            UniformsLib.lights,
             {
                 alphaTest: new Uniform(1e-3),
                 diffuse: new Uniform(new Color(0xffffff)),
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
+                terrainDecorationFadeRange: new Uniform(new Vector2()),
                 uvTransform: new Uniform(new Matrix3()),
                 uv2Transform: new Uniform(new Matrix3()),
                 transformSpecular: new Uniform(null),
 
                 lightMap: new Uniform(null),
-                lightMapIntensity: new Uniform(2.0),
+                lightMapIntensity: new Uniform(info.modulateStaticLighting2X === true ? 2 : 1),
 
                 shDiffuse: new Uniform(null),
                 shOpacity: new Uniform(null),
@@ -106,13 +124,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
-                    vector: new Color(1, 1, 1),
+                    color: new Color(1, 1, 1),
                     brightness: 1
                 }),
 
                 directionalAmbient: new Uniform({
                     direction: new Vector3(),
-                    vector: new Color(1, 1, 1),
+                    color: new Color(1, 1, 1),
                     brightness: 1
                 })
             }
@@ -134,6 +152,17 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         apply("shOpacity", info.opacity);
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
+
+        if (info.selfIllumination) defines["USE_SELF_ILLUMINATION"] = "";
+
+        switch (info.blendingMode) {
+            case "modulate": defines["USE_MODULATED_FOG"] = ""; break;
+            case "alphaModulate":
+            case "translucent":
+            case "brighten":
+            case "darken":
+            case "invisible": defines["USE_ADDITIVE_FOG"] = ""; break;
+        }
 
         if (info.alphaTest !== undefined) uniforms.alphaTest.value = info.alphaTest;
 
@@ -212,13 +241,21 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             depthWrite: true,
             depthTest: true,
             visible: info.visible,
-            lights: true,
+            // lights:true would write into uniforms.ambientLightColor/directionalLights/etc,
+            // which no longer exist now that UniformsLib.lights isn't merged in above
+            lights: false,
             wireframe: false
         });
 
         this.sprites = sprites;
         this.spriteEntries = Object.entries(sprites);
-        this.isUpdatable = this.spriteEntries.length > 0;
+
+        // procedural maps (water) drive their own animation through update()
+        this.proceduralMaps = Object.values(uniforms)
+            .map((u: any) => u?.value)
+            .filter((v: any) => v?.isTexture && v.isUpdatable);
+
+        this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0;
 
         if (info.opacity) this.transparent = true;
 
@@ -261,6 +298,22 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 this.transparent = true;
                 this.depthWrite = false;
                 break;
+            case "alphaModulate":
+                // UE2 FB_AlphaModulate_MightNotFogCorrectly: ONE, INVSRCALPHA (D3DMaterialState.cpp line 310-316)
+                this.blending = CustomBlending;
+                this.blendSrc = OneFactor;
+                this.blendDst = OneMinusSrcAlphaFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "invisible":
+                // UE2 FB_Invisible: ZERO, ONE (D3DMaterialState.cpp line 345-350)
+                this.blending = CustomBlending;
+                this.blendSrc = ZeroFactor;
+                this.blendDst = OneFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
             case "darken":
                 this.blending = CustomBlending;
                 this.blendSrc = ZeroFactor;
@@ -294,7 +347,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public enableAmbient({ vector, brightness }: IAmbientLighting) {
         const u = this.uniforms.ambient.value;
 
-        u.vector.copy(vector);
+        u.color.copy(vector);
         u.brightness = brightness / 5;
 
         this.defines["USE_AMBIENT"] = "";
@@ -307,7 +360,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public enableDirectionalAmbient({ vector, direction, brightness }: IDirectionalAmbientLighting) {
         const u = this.uniforms.directionalAmbient.value;
 
-        u.vector.copy(vector);
+        u.color.copy(vector);
         u.direction.copy(direction);
         u.brightness = brightness;
 
@@ -320,6 +373,26 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public setInstanced() {
         this.defines["USE_INSTANCED_ATTRIBUTES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    public setTerrainDecoration() {
+        this.defines["USE_TERRAIN_DECORATION_FADE"] = "";
+        this.transparent = true;
+        this.depthWrite = false;
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    public setSway() {
+        this.defines["USE_SWAY"] = "";
+
+        if (this.transparent && this.blending === NormalBlending) this.depthWrite = true;
 
         this.needsUpdate = true;
 
@@ -343,6 +416,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public update(time: number) {
         if (!this.isUpdatable) return;
+
+        for (const map of this.proceduralMaps)
+            map.update(time);
 
         for (let i = 0; i < this.spriteEntries.length; i++) {
             const [k, { sprites, framerate }] = this.spriteEntries[i];
@@ -379,6 +455,8 @@ type MeshStaticMaterialParameters = {
     depthWrite: boolean,
     depthTest: boolean,
     visible: boolean,
+    modulateStaticLighting2X?: boolean,
+    selfIllumination?: boolean,
     combiner?: {
         combineMode: number,
         material1: GD.IDecodedParameter,

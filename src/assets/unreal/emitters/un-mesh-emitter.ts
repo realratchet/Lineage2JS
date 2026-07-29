@@ -9,10 +9,15 @@ abstract class UMeshEmitter extends UParticleEmitter {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
-        return Object.assign(super.getDecodeInfo(library), {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+        if (!this.mesh) {
+            console.warn(`MeshEmitter '${this.objectName}' has no static mesh, skipping`);
+            return null;
+        }
+
+        return Object.assign(super.getDecodeInfo(builder), {
             type: "MeshEmitter",
-            mesh: this.mesh.loadSelf().getDecodeInfo(library)
+            mesh: builder.pullStaticMesh(this.mesh)
         });
     }
 }

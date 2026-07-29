@@ -55,7 +55,12 @@ declare global {
                     | "SceneManager"
                     | "MovableStaticMeshActor"
                     | "Combiner"
-                    | "VertexColor";
+                    | "VertexColor"
+                    | "LineagePlayerController"
+                    | "SkillVisualEffect"
+                    | "SkillAction"
+                    | "SkillAction_LocateEffect"
+                    | "SkillAction_SwordTrail";
 
                 export type USound = import("@unreal/un-sound").USound;
                 export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;
@@ -81,10 +86,37 @@ declare global {
 
                 export type UEmitter = import("@unreal/un-emitter").UEmitter;
 
+                export interface IUserConfig {
+                    clippingRange: IClippingRangeConfig;
+                    display: IDisplayConfig;
+                }
+
+                export interface IDisplayConfig {
+                    brightness: number;
+                    contrast: number;
+                    gamma: number;
+                }
+
+                export interface IClippingRangeConfig {
+                    staticMesh: number;
+                    staticMeshLod: number;
+                    pawn: number;
+                    terrain: number;
+                    actor: number;
+                    projector: number;
+                    antiPortal: number;
+                    pawnMin: number;
+                    pawnMax: number;
+                }
+
                 export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
                 export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;
                 export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
                 export type UStaticMeshMaterial = import("@unreal/un-material").UStaticMeshMaterial;
+
+                export type USkeletalMesh = import("@unreal/skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
+                export type UPawn = import("@unreal/un-pawn").UPawn;
+                export type UMeshAnimation = import("@unreal/skeletal-mesh/un-mesh-animation").UMeshAnimation;
 
                 export type FTIntMap = import("@unreal/un-tint-map").FTIntMap;
                 export type UDecoLayer = import("@unreal/un-deco-layer").UDecoLayer;
@@ -93,7 +125,7 @@ declare global {
 
                 export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
 
-                export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "translucent" | "invisible" | "brighten" | "darken";
+                export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
 
                 export type ULight = import("@unreal/un-light").ULight;
                 export type LightEffect_T = import("@unreal/un-light").LightEffect_T;
@@ -123,6 +155,7 @@ declare global {
                 export type ArrGeometryGroup = [number, number, number];
 
                 export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
+                export type DecodeLibraryBuilder = import("@unreal/decode-library-builder").DecodeLibraryBuilder;
                 export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
                 export type LoadSettings_T = {
@@ -131,16 +164,22 @@ declare global {
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
                     loadEmitters?: boolean,
+                    loadEmitterList?: { name: string, emitters?: string[] }[],
                     loadAudio?: boolean,
+                    textures: "auto" | "rgba" | "compressed",
                     helpersZoneBounds?: boolean,
                     isSkyLevel?: boolean,
+                    decodeWorkerPoolSize?: number,
                     batching?: {
                         terrain?: boolean,
                         staticMeshes?: boolean
-                    }
+                    },
+                    cache?: {
+                        enabled?: boolean,
+                        version?: number
+                    },
+                    [key: `_${string}`]: any // debug/testing overrides, see core.ts
                 };
-
-
 
                 export interface IDecodedParameter {
                     uniforms: Record<string, any>,
@@ -148,7 +187,8 @@ declare global {
                     isUsingMap: boolean,
                     transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap",
                     sprites?: any[],
-                    framerate?: number
+                    framerate?: number,
+                    uvIndex?: number
                 }
 
                 export interface IDecodedSpriteParameter extends IDecodedParameter {
@@ -177,6 +217,7 @@ declare global {
                     | "Level"
                     | "TerrainInfo"
                     | "TerrainSegment"
+                    | "TerrainDecoration"
                     | "StaticMeshActor"
                     | "StaticMesh"
                     | "Model"
@@ -188,10 +229,17 @@ declare global {
                     | "Emitter"
                     | "SpriteEmitter"
                     | "MeshEmitter"
+                    | "BeamEmitter"
                     | "Zone"
                     | "Sky"
                     | "SkyZoneInfo"
                     | "L2FogInfo";
+
+                // math structs that serialize through the standard decode method,
+                // same encodings ([x,y,z] tuples, [min,max]) as the rest of decoding
+                export interface IDecodableStruct<T = unknown> {
+                    getDecodeInfo(library: DecodeLibrary): T;
+                }
 
                 export interface IBaseObjectOrInstanceDecodeInfo {
                     uuid: string,
@@ -205,8 +253,12 @@ declare global {
                     rotation?: EulerArr,
                     quaternion?: QuaternionArr,
                     scale?: Vector3Arr,
+                    moveEvent?: string,
                     siblings?: IBaseObjectOrInstanceDecodeInfo[],
-                    children?: IBaseObjectOrInstanceDecodeInfo[]
+                    children?: (IBaseObjectOrInstanceDecodeInfo | EmitterConfig_T)[],
+                    bounds?: IBoxDecodeInfo,
+                    zoneMask?: bigint,
+                    isRangeIgnored?: boolean
                 }
 
                 export interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {
@@ -216,11 +268,44 @@ declare global {
                     bounds: IBoxDecodeInfo,
                     scaledGlow: number,
                     isSunAffected?: boolean,
+                    dontBatch?: boolean,
+                    mover?: IMoverDecodeInfo,
+                    rotating?: IRotatingDecodeInfo,
+                    swaying?: ISwayingDecodeInfo,
                     ambient: {
                         glow: number,
                         vector: Vector3Arr,
                         isUnlit: boolean
                     }
+                }
+
+                export interface IRotatingDecodeInfo {
+                    rotator: Vector3Arr,
+                    rate: Vector3Arr
+                }
+
+                export interface ISwayingDecodeInfo {
+                    tags: string[],
+                    orgRotator: Vector3Arr,
+                    rate: Vector3Arr,
+                    max: Vector3Arr,
+                    accelRatio: Vector3Arr,
+                    maxRandom: boolean,
+                    randomStart: boolean
+                }
+
+                export interface IMoverDecodeInfo {
+                    initialState: string,
+                    keyNum: number,
+                    keyPositions: Vector3Arr[],
+                    keyQuaternions: QuaternionArr[],
+                    moveTime: number,
+                    stayOpenTime: number,
+                    delayTime: number,
+                    collisionRadius: number,
+                    collisionHeight: number,
+                    isGliding: boolean,
+                    triggerOnceOnly: boolean
                 }
 
                 export interface IBaseMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -229,7 +314,14 @@ declare global {
                 }
 
                 export interface IStaticMeshObjectDecodeInfo extends IBaseMeshObjectDecodeInfo {
-                    type: "StaticMesh"
+                    type: "StaticMesh",
+                    sway?: IStaticMeshSwayDecodeInfo
+                }
+
+                export interface IStaticMeshSwayDecodeInfo {
+                    pivotZ: number,
+                    frequency: number,
+                    maxAngle: number
                 }
 
                 export interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -273,13 +365,13 @@ declare global {
                     velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
                     warmupTime?: number,
                     warmupTicksPerSecond?: number,
-                    allSettings: any
+                    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
                 }
 
                 export interface ISpriteEmitterDecodeInfo extends IEmitterDecodeInfo {
                     type: "SpriteEmitter",
                     texture: string,
-                    spriteDirection?: string,
+                    spriteDirection?: SpriteDirections_T,
                     projectionNormal?: [number, number, number]
                 }
 
@@ -293,6 +385,7 @@ declare global {
 
                 export interface ITerrainSegmentDecodeInfo extends IBaseMeshObjectDecodeInfo {
                     type: "TerrainSegment",
+                    terrainInfoUuid?: string,
                     lighting?: {
                         lights: { light: string, flags: Uint8Array }[],
                         shadowMaps: Uint8Array[],
@@ -304,6 +397,18 @@ declare global {
                     offsetY: number,
                     heightmapX: number,
                     heightmapY: number
+                }
+
+                export interface ITerrainDecorationDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "TerrainDecoration",
+                    terrainSegment: string,
+                    mesh: IStaticMeshObjectDecodeInfo,
+                    matrices: Float32Array,
+                    colors: Uint8Array,
+                    terrainVertexIndices?: Uint16Array,
+                    fadeoutRadius: [number, number],
+                    drawOrder: number,
+                    forceRender: boolean
                 }
 
                 export interface ILightInstanceDecodeInfo {
@@ -318,6 +423,7 @@ declare global {
                     name?: string,
                     type: "StaticMeshInstance",
                     mesh: IStaticMeshObjectDecodeInfo,
+                    swayPhase?: number,
                     lights?: ILightInstanceDecodeInfo,
                     attributes?: {
                         colors?: Float32Array | Uint8Array
@@ -349,6 +455,7 @@ declare global {
                     fogRange3?: Vector2Arr,
                     fogRange4?: Vector2Arr,
                     fogRange5?: Vector2Arr,
+                    ambient?: number[],
                     colors?: any[]
                 }
 
@@ -436,10 +543,10 @@ declare global {
                 }
 
                 // Material and Geometry Types
-                export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float";
+                export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
                 export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
                 export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
-                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend";
+                export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend" | "texCoordSource";
 
                 export interface IBaseMaterialDecodeInfo {
                     name?: string,
@@ -473,6 +580,14 @@ declare global {
                     format?: DataTextureFormats_T
                 }
 
+                export interface IWetTextureDecodeInfo extends IDataTextureDecodeInfo {
+                    textureType: "wet",
+                    waveAmp: number,
+                    dropsX: number,
+                    dropsY: number,
+                    drops: { type: string, depth: number, x: number, y: number, byteA: number, byteB: number, byteC: number, byteD: number }[]
+                }
+
                 export interface ILightmappedDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "lightmapped",
                     material: string,
@@ -486,7 +601,7 @@ declare global {
 
                 export interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "particle",
-                    material: string,
+                    material: string | null,
                     blendingMode: ParticleBlendModes_T,
                     opacity: number
                 }
@@ -499,6 +614,7 @@ declare global {
                         normals?: Float32Array;
                         colors?: Float32Array | Uint8Array | Uint8ClampedArray,
                         colorsInstance?: Float32Array | Uint8Array | Uint8ClampedArray,
+                        sway?: Float32Array,
                         uvs?: Float32Array | Float32Array[];
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array;
@@ -508,7 +624,7 @@ declare global {
                     indices?: IndexLikeArray;
                     colliderIndices?: Uint32Array;
                     groups?: ArrGeometryGroup[],
-                    bounds?: IBoxDecodeInfo
+                    bounds?: IBoundsDecodeInfo
                 }
 
                 export interface IMaterialModifier {
@@ -535,13 +651,16 @@ declare global {
 
                 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
                 export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+                export type AmbientSoundTypes_T = "always" | "day" | "night" | "water";
 
                 export type EmitterConfig_T = {
+                    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter",
                     name?: string,
                     blendingMode: ParticleBlendModes_T,
                     uniformScale?: boolean,
                     maxParticles: number,
                     drawScale?: number,
+                    rotationOffset?: GD.QuaternionArr,
                     opacity: number,
                     lifetime: [number, number],
                     acceleration: GD.Vector3Arr,
@@ -562,6 +681,7 @@ declare global {
                     addVelocityMultiplierRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     velocityLossRange?: { min: GD.Vector3Arr, max: GD.Vector3Arr },
                     forcedMaxParticles?: boolean,
+                    sounds?: IParticleSoundDecodeInfo[],
                     initial: {
                         particlesPerSecond: number,
                         angularVelocity: { min: GD.Vector3Arr, max: GD.Vector3Arr },
@@ -588,13 +708,23 @@ declare global {
                             repeats: number
                         }
                     },
-                    allSettings: any
+                    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
                 };
 
                 export type Fade_T = {
                     time: number,
                     color: ColorArr
                 };
+
+                export interface IParticleSoundDecodeInfo {
+                    soundDataUri: string,
+                    soundName: string,
+                    radius: [number, number],
+                    pitch: [number, number],
+                    volume: [number, number],
+                    probability: [number, number],
+                    weight: number
+                }
 
                 export interface IMaterialInstancedDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "instance",
@@ -670,8 +800,8 @@ declare global {
                     soundDataUri: string,
                     soundName: string,
                     looping: boolean,
-                    soundType: number, // 0=Always, 1=Day, 2=Night, 3=Water
-                    randomDelay: number, // max seconds between repetitions (0 = seamless loop)
+                    soundType: AmbientSoundTypes_T,
+                    randomChance: number,
                 }
 
                 export interface IShaderDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -680,12 +810,15 @@ declare global {
                     opacity: string,
                     specular: string,
                     specularMask: string,
+                    selfIllumination: string,
+                    selfIlluminationMask: string,
                     blendingMode: GA.SupportedBlendingTypes_T,
                     depthWrite: boolean,
                     depthTest: boolean,
                     doubleSide: boolean,
                     transparent: boolean,
                     alphaTest: number,
+                    modulateStaticLighting2X: boolean,
                     visible: boolean
                 }
 
@@ -708,7 +841,9 @@ declare global {
                     fadeColors: {
                         color1: number[],
                         color2: number[],
-                        period: number
+                        period: number,
+                        phase: number,
+                        fadeType: "linear" | "sinusoidal"
                     }
                 }
 
@@ -720,7 +855,10 @@ declare global {
                         type: "fixed" | "rotating" | "oscillating",
                         rotation: EulerArr,
                         offsetU: number,
-                        offsetV: number
+                        offsetV: number,
+                        oscillationRate: [number, number, number],
+                        oscillationAmplitude: [number, number, number],
+                        oscillationPhase: [number, number, number]
                     }
                 }
 
@@ -768,9 +906,15 @@ declare global {
                     depthTest: boolean
                 }
 
+                export interface ITexCoordSourceDecodeInfo extends IBaseMaterialModifierDecodeInfo {
+                    modifierType: "texCoordSource",
+                    material: string,
+                    uvIndex: number
+                }
+
                 export interface ICombinerDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "combiner",
-                    combineMode: number, // TODO: enum
+                    combineMode: number, // 0=material1 1=modulate 2=modulate2x 3=modulate4x 4=add 5=subtract 6=alphaBlend 7=material2 - see UCombiner.getDecodeInfo
                     material1: string,
                     material2: string,
                     mask: string,
@@ -780,7 +924,7 @@ declare global {
                 }
 
                 export interface IBoundsDecodeInfo {
-                    sphere: ISphereDecodeInfo,
+                    sphere?: ISphereDecodeInfo,
                     box: { min: Vector3Arr, max: Vector3Arr } | null
                 }
 

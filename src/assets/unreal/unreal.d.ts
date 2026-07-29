@@ -253,6 +253,7 @@
 //     loadStaticModels?: boolean,
 //     loadStaticModelList?: number[],
 //     loadEmitters?: boolean,
+//     loadEmitterList?: { name: string, emitters?: string[] }[],
 //     helpersZoneBounds?: boolean
 // };
 

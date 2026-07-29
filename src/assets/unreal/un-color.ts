@@ -3,6 +3,8 @@ import { APackage, UExport, UObject } from "@l2js/core";
 abstract class FColor extends UObject {
     declare public ["constructor"]: typeof FColor;
 
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
     declare public r: number;
     declare public g: number;
     declare public b: number;

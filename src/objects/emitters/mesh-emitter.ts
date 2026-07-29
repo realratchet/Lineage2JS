@@ -6,18 +6,26 @@ class MeshEmitter extends BaseEmitter {
     protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
     protected geometry: THREE.BufferGeometry;
 
+    public constructor(config: MeshEmitterConfig_T) {
+        super(config);
+        this.finishConstruction(config);
+    }
+
     protected initSettings(config: MeshEmitterConfig_T): void {
         this.geometry = config.geometry;
         this.materials = config.materials;
+
+        if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
+        this.particleGeometryRadius = this.geometry.boundingSphere.radius;
     }
 
     protected initParticleMesh() {
         const materialConfigs = this.materials instanceof Array ? this.materials : [this.materials];
         const materials = materialConfigs.map(m => {
             const isSprite = m.type === "sprite";
-            
+
             return new MeshEmitterMaterial({
-                map: isSprite ? m.sprites[0].uniforms.map.texture : m.map.uniforms.map.texture,
+                map: (isSprite ? m.sprites[0]?.uniforms.map.texture : m.map?.uniforms.map.texture) ?? null,
                 sprites: isSprite ? m.sprites.map(s => s.uniforms.map.texture) : undefined,
                 framerate: m.framerate,
                 blendingMode: m.blendingMode as any,

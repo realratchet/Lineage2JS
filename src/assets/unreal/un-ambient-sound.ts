@@ -1,5 +1,4 @@
 import UAActor from "./un-aactor";
-import { generateUUID } from "three/src/math/MathUtils";
 
 abstract class UAmbientSoundObject extends UAActor {
     declare public readonly sound: GA.USound;
@@ -10,7 +9,7 @@ abstract class UAmbientSoundObject extends UAActor {
     declare public readonly isHiddenEdGroup: boolean;
     declare public readonly isHiddenEd: boolean;
     declare public readonly startTime: number;
-    declare public readonly soundType: number;
+    declare public readonly soundType: ASType1_T;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -26,10 +25,10 @@ abstract class UAmbientSoundObject extends UAActor {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
         if (!this.sound) return null;
 
-        const snd = (this.sound as any).loadSelf();
+        const snd = this.sound.loadSelf();
         if (!snd) return null;
 
         console.assert(isFinite(this.radius));
@@ -39,25 +38,18 @@ abstract class UAmbientSoundObject extends UAActor {
         console.assert(isFinite(this.randomAmbient));
 
         const soundKey = snd.objectName ?? snd.uuid;
-        let soundDataUri = library.soundBlobCache.get(soundKey);
+        const soundEntry = builder.pullSound(snd);
 
-        if (!soundDataUri) {
-            const audioData = snd.getAudioData();
-            if (!audioData || audioData.length === 0) return null;
+        if (!soundEntry) return null;
 
-            const fileType = snd.getFileType()?.toLowerCase() ?? "wav";
-            const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
-            const blob = new Blob([audioData.buffer], { type: mimeType });
-            soundDataUri = URL.createObjectURL(blob);
-            library.soundBlobCache.set(soundKey, soundDataUri);
-        }
+        const soundDataUri = soundEntry.uri;
 
-        const position = this.location.getVectorElements();
+        const position = this.location.getElements();
         const refDistance = this.radius;
         const maxDistance = this.radius * 100; // GAudioMaxRadiusMultiplier = 100 in UE2
         const volume = this.volume / 255;
         const pitch = this.pitch / 64;
-        const randomDelay = this.randomAmbient; // L2 AmbientRandom=100 → max 100s delay
+        const randomChance = this.randomAmbient;
 
         const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
             uuid: this.uuid,
@@ -70,16 +62,28 @@ abstract class UAmbientSoundObject extends UAActor {
             pitch,
             soundDataUri,
             soundName: soundKey,
-            looping: randomDelay === 0, // seamless loop only when no random delay
-            soundType: this.soundType, // 0=Always, 1=Day, 2=Night, 3=Water
-            randomDelay,
+            looping: randomChance <= 0 || randomChance >= 100,
+            soundType: AS_TYPE_NAMES[(this.soundType?.valueOf() as ASType1_T) ?? ASType1_T.AST1_Always],
+            randomChance,
         };
-
-        library.ambientSounds.push(decodeInfo);
 
         return decodeInfo;
     }
 }
 
+enum ASType1_T {
+    AST1_Always,
+    AST1_Day,
+    AST1_Night,
+    AST1_Water
+}
+
+const AS_TYPE_NAMES: Record<ASType1_T, GD.AmbientSoundTypes_T> = {
+    [ASType1_T.AST1_Always]: "always",
+    [ASType1_T.AST1_Day]: "day",
+    [ASType1_T.AST1_Night]: "night",
+    [ASType1_T.AST1_Water]: "water"
+};
+
 export default UAmbientSoundObject;
-export { UAmbientSoundObject };
+export { UAmbientSoundObject, ASType1_T };

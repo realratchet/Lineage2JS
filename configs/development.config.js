@@ -1,4 +1,4 @@
-const { createConfigBundle } = require("./create-config");
+const { createConfigBundle, createConfigWorker } = require("./create-config");
 const path = require("path");
 const process = require("process");
 
@@ -12,6 +12,4 @@ const bundleConfigs = {
     dirOutput
 };
 
-console.log(JSON.stringify(createConfigBundle(bundleConfigs)));
-
-module.exports = [createConfigBundle(bundleConfigs)];
+module.exports = [createConfigBundle(bundleConfigs), createConfigWorker(bundleConfigs)];

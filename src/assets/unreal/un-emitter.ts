@@ -1,11 +1,15 @@
 import { FObjectArray } from "@l2js/core/unreal/un-array";
+import UObject from "@l2js/core";
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
 import FBox from "./un-box";
 import FVector from "./un-vector";
 
+type EmitterDecodeResult_T = { object: GD.IBaseObjectDecodeInfo, leafIndices: number[], zoneUuid: string };
+
 abstract class UEmitter extends UAActor {
-    declare protected emitters: FObjectArray<UParticleEmitter>;
+    declare protected emitters: FObjectArray<UObject>;
+    protected subEmitterFilter: string[] | null = null;
 
     // protected _autoDestroy: any;
     // protected _autoReset: any;
@@ -124,69 +128,68 @@ abstract class UEmitter extends UAActor {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public setSubEmitterFilter(filter: string[] | null): this {
+        this.subEmitterFilter = filter;
+        return this;
+    }
 
-        const emittersInfo = this.emitters.loadSelf().map(e => e.setActor(this).getDecodeInfo(library)) as any as GD.IBaseObjectOrInstanceDecodeInfo[];
-        // if (this.emitters.length > 0)
-        //     debugger;
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): EmitterDecodeResult_T {
+        const library = builder.library;
+        const emittersInfo: GD.EmitterConfig_T[] = [];
 
-        //     // this.rotation.pitch = 0;
-        //     // this.rotation.yaw = 0;
-        //     // this.rotation.roll = 0;
+        this.emitters.loadSelf().forEach(emitter => {
+            if (!emitter) return;
 
-        //     // debugger;
+            if (!isParticleEmitter(emitter)) {
+                console.warn(`Emitter '${this.objectName}' skipping unsupported sub-emitter '${emitter.objectName}'`);
+                return;
+            }
 
-        //     // if (this.objectName === "Emitter7")
-        //     //     debugger;
+            if (this.subEmitterFilter && !this.subEmitterFilter.includes(emitter.objectName)) return;
+
+            const emitterInfo = emitter.setActor(this).getDecodeInfo(builder);
+
+            if (emitterInfo) emittersInfo.push(emitterInfo);
+        });
 
         const level = this.getLevel();
         const baseModel = level.getModel();
         const localToWorld = this.localToWorld();
         const zone = this.getZone();
-        const zoneInfo = library.bspZones[library.bspZoneIndexMap[zone.uuid]].zoneInfo;
+        const _position = this.location.getElements();
 
-        const _position = this.location.getVectorElements();
-
-        const actorInfo = {
+        const actorInfo: GD.IBaseObjectDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
             position: _position,
-            scale: this.scale.getVectorElements().map(v => v * this.drawScale) as [number, number, number],
+            scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
-            children: emittersInfo.filter(x => x)
-        } as GD.IBaseObjectDecodeInfo;
+            children: emittersInfo,
+            isRangeIgnored: !!this.isRangeIgnored,
+            moveEvent: this.l2MoveEvent
+        };
 
-        // Calculate bounding box for emitter
-        // Estimate bounding box based on emitter properties or use default size
-        // The C++ code accumulates bounding boxes from particle emitters, but for static decoding
-        // we estimate based on collision radius/height or a reasonable default
-        const defaultRadius = this.collisionRadius || 100;
-        const defaultHeight = this.collisionHeight || 100;
-        const extents = FVector.make(defaultRadius, defaultRadius, defaultHeight);
-        const localBox = FBox.make(extents.negate(), extents, 1);
-        
-        // Transform bounding box to world space
-        const predictedBox = localBox.transformBy(localToWorld);
-        
-        // Create inflated box with margin (similar to static mesh actor)
-        const extent = predictedBox.getExtents();
-        const margin = extent.multiplyScalar(0.05);
-        const inflatedBox = FBox.make(predictedBox.min.sub(margin), predictedBox.max.add(margin), 1);
+        // UParticleEmitter::UpdateParticles (UnParticleEmitter.cpp) rebuilds BoundingBox
+        // every tick from live particles - can't replicate at decode time, so register
+        // at a zero-extent point (its origin) instead of guessing a static box.
+        const worldOrigin = FBox.make(FVector.make(0, 0, 0), FVector.make(0, 0, 0), 1)
+            .transformBy(localToWorld).getCenter();
 
-        // debugger;
+        // mirrors UStaticMeshActor.getDecodeInfo for zone-object.ts's BSP visibility pass; min===max, a point not a box
+        actorInfo.bounds = {
+            isValid: true,
+            min: [worldOrigin.x, worldOrigin.y, worldOrigin.z],
+            max: [worldOrigin.x, worldOrigin.y, worldOrigin.z]
+        };
 
         let actorZoneMask = 0n;
+        let leafIndices: number[] = [];
 
         if (baseModel) {
-            const origin = inflatedBox.getCenter();
-            const inflatedExtent = inflatedBox.getExtents();
-            const leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+            leafIndices = baseModel.boxLeavesRecursive(0, worldOrigin, FVector.make(0, 0, 0));
 
             for (const leafIndex of leafIndices) {
-                if (library.leafActors[leafIndex]) {
-                    library.leafActors[leafIndex].push(actorInfo);
-                }
                 const leaf = library.bspLeaves[leafIndex];
                 if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
                     actorZoneMask |= (1n << BigInt(leaf.zone));
@@ -194,10 +197,14 @@ abstract class UEmitter extends UAActor {
             }
         }
 
-        zoneInfo.children.push(actorInfo);
+        actorInfo.zoneMask = actorZoneMask;
 
-        return this.uuid;
+        return { object: actorInfo, leafIndices, zoneUuid: zone.uuid };
     }
+}
+
+function isParticleEmitter(emitter: UObject): emitter is UParticleEmitter {
+    return "setActor" in emitter && typeof emitter.setActor === "function";
 }
 
 export default UEmitter;

@@ -1,30 +1,37 @@
-import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry, SphereGeometry } from "three";
+import { Object3D, Group, Box3Helper, Box3, Vector3, ArrowHelper, Color, Mesh, BoxGeometry, MeshBasicMaterial, Frustum, Line, LineBasicMaterial, BufferGeometry, SphereGeometry, Sprite, SpriteMaterial, CanvasTexture } from "three";
 import { ColorByte } from "../utils/color-byte";
 
 type SectorObject = import("../objects/zone-object").SectorObject;
 
 export enum VisualizerMode {
-    None = 0,
-    Portals = 1,
-    Zones = 2,
-    Leaves = 3,
-    Fogs = 4,
-    Audio = 5,
+    None = "none",
+    Portals = "portals",
+    Zones = "zones",
+    Leaves = "leaves",
+    Fogs = "fogs",
+    Audio = "audio",
+    Emitters = "emitters",
+}
+
+export interface EmitterDebugInfo {
+    uuid: string;
+    name: string;
+    type: string;
+    worldPos: Vector3;
+    distance: number;
+    activeCount: number;
+    maxParticles: number;
+    isDisabled: boolean;
+    isVisible: boolean;
+    isManuallyHidden: boolean;
+    parentUuid: string; // wrapping "Emitter" actor - the HUD groups sub-emitters by this
+    parentName: string;
 }
 
 export enum LeafVisualizerDetail {
-    /**
-     * Automatically switches to a decluttered view when there are lots of leaves visible.
-     */
-    Auto = 0,
-    /**
-     * Draw one box per visible leaf (can get very noisy).
-     */
-    PerLeaf = 1,
-    /**
-     * Aggregate/union visible leaf bounds per zone (much cleaner).
-     */
-    PerZone = 2,
+    Auto = "auto", // decluttered view once leafAutoAggregateThreshold is exceeded
+    PerLeaf = "perLeaf",
+    PerZone = "perZone",
 }
 
 export interface FogSourceColors {
@@ -55,14 +62,29 @@ class Visualizer {
     private readonly HUD_NAME_WIDTH = 8;
     private readonly group: Group;
     private readonly fogGroup: Group;
+    private readonly emitterLabelGroup: Group;
     private readonly hudElement: HTMLElement;
     private readonly audioHudElement: HTMLElement;
+    private readonly emittersHudElement: HTMLElement;
     private readonly hudColors: Map<string, { swatch: HTMLElement, rgbDisplay: HTMLElement, alpha: HTMLElement }> = new Map();
     private readonly audioLines: Map<string, HTMLElement> = new Map();
+    private readonly emitterLines: Map<string, HTMLElement> = new Map();
+    private readonly emitterGroups: Map<string, { wrapper: HTMLElement, header: HTMLElement, body: HTMLElement }> = new Map(); // one wrapper per parent "Emitter" actor
+    private readonly emitterLabels: Map<string, Sprite> = new Map();
+    private readonly emitterCheckboxes: Map<string, HTMLInputElement> = new Map();
+    private emitterMasterCheckbox: HTMLInputElement | null = null;
+    private onEmitterToggle?: (uuid: string, visible: boolean) => void;
+    private onEmitterToggleAll?: (visible: boolean) => void;
     private musicInfoElement: HTMLElement | null = null;
     private ambientListElement: HTMLElement | null = null;
+    private emitterListElement: HTMLElement | null = null;
     private enabled: boolean = false;
     private mode: VisualizerMode = VisualizerMode.None;
+
+    public setEmitterVisibilityHandlers(onToggle: (uuid: string, visible: boolean) => void, onToggleAll: (visible: boolean) => void): void {
+        this.onEmitterToggle = onToggle;
+        this.onEmitterToggleAll = onToggleAll;
+    }
 
     public setMode(mode: VisualizerMode): void {
         this.mode = mode;
@@ -78,9 +100,7 @@ class Visualizer {
     constructor(scene: Object3D) {
         this.group = new Group();
         this.group.name = "Visualizers";
-        // Render on top - set renderOrder high
         this.group.renderOrder = 999;
-        // Don't participate in culling
         scene.add(this.group);
 
         this.fogGroup = new Group();
@@ -88,10 +108,17 @@ class Visualizer {
         this.fogGroup.renderOrder = 999;
         scene.add(this.fogGroup);
 
+        this.emitterLabelGroup = new Group();
+        this.emitterLabelGroup.name = "EmitterLabels";
+        this.emitterLabelGroup.renderOrder = 1000;
+        scene.add(this.emitterLabelGroup);
+
         this.hudElement = this.initHUD();
         this.audioHudElement = this.initAudioHUD();
+        this.emittersHudElement = this.initEmittersHUD();
         document.body.appendChild(this.hudElement);
         document.body.appendChild(this.audioHudElement);
+        document.body.appendChild(this.emittersHudElement);
     }
 
     private createHudRow(container: HTMLElement, name: string, prefix: string): void {
@@ -174,17 +201,14 @@ class Visualizer {
             return panel;
         };
 
-        // Panel 1: Fog Source Colors
         const fogPanel = createPanel("FOG SOURCE COLORS");
         ["Fog", "Sky", "Cloud", "Haze"].forEach(name => this.createHudRow(fogPanel, name, "fog"));
         hud.appendChild(fogPanel);
 
-        // Panel 2: Global Environment Colors
         const globalPanel = createPanel("GLOBAL ENVIRONMENT");
         ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(name => this.createHudRow(globalPanel, name, "global"));
         hud.appendChild(globalPanel);
 
-        // Panel 3: Zone Fog Colors
         const zonePanel = createPanel("ZONE FOG COLORS");
         this.createHudRow(zonePanel, "Fog Color", "zone");
         this.createHudRow(zonePanel, "Fog Start", "zone");
@@ -251,6 +275,258 @@ class Visualizer {
         return hud;
     }
 
+    private initEmittersHUD(): HTMLElement {
+        const hud = document.createElement("div");
+        hud.id = "emitters-hud-container";
+        Object.assign(hud.style, {
+            position: "fixed",
+            top: "10px",
+            left: "10px",
+            display: "none",
+            flexDirection: "column",
+            gap: "10px",
+            pointerEvents: "none",
+            zIndex: "10001"
+        });
+
+        const panel = document.createElement("div");
+        Object.assign(panel.style, {
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            color: "#fff",
+            padding: "10px",
+            borderRadius: "5px",
+            fontFamily: "monospace",
+            fontSize: "12px",
+            border: "1px solid #444",
+            boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+            maxHeight: "80vh",
+            overflowY: "auto",
+            pointerEvents: "auto" // hud wrapper is pointer-events:none so it doesn't eat camera-control clicks; the panel needs it back for its scrollbar
+        });
+
+        const title = document.createElement("div");
+        title.innerText = "EMITTERS (decoded, nearest first)";
+        title.style.fontWeight = "bold";
+        title.style.marginBottom = "4px";
+        panel.appendChild(title);
+
+        const masterRow = document.createElement("label");
+        Object.assign(masterRow.style, {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            marginBottom: "8px",
+            borderBottom: "1px solid #444",
+            paddingBottom: "8px",
+            cursor: "pointer"
+        });
+        this.emitterMasterCheckbox = document.createElement("input");
+        this.emitterMasterCheckbox.type = "checkbox";
+        this.emitterMasterCheckbox.checked = true;
+        this.emitterMasterCheckbox.onchange = () => this.onEmitterToggleAll?.(this.emitterMasterCheckbox!.checked);
+        const masterLabel = document.createElement("span");
+        masterLabel.innerText = "Show all";
+        masterRow.appendChild(this.emitterMasterCheckbox);
+        masterRow.appendChild(masterLabel);
+        panel.appendChild(masterRow);
+
+        this.emitterListElement = document.createElement("div");
+        Object.assign(this.emitterListElement.style, {
+            // multi-column, not grid-auto-flow: a grid's column-then-row fill would slice a parent's group in half
+            columnCount: "3",
+            columnGap: "20px"
+        });
+        panel.appendChild(this.emitterListElement);
+
+        hud.appendChild(panel);
+        return hud;
+    }
+
+    private makeTextSprite(text: string, color: string): Sprite {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d")!;
+        const fontSize = 48;
+        ctx.font = `${fontSize}px monospace`;
+        const width = Math.ceil(ctx.measureText(text).width) + 20;
+        const height = fontSize + 20;
+        canvas.width = width;
+        canvas.height = height;
+
+        // canvas resize above cleared the context, font/fill state needs reapplying
+        ctx.font = `${fontSize}px monospace`;
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = color;
+        ctx.fillText(text, 10, height / 2);
+
+        const texture = new CanvasTexture(canvas);
+        const material = new SpriteMaterial({
+            map: texture,
+            depthTest: false,
+            depthWrite: false,
+            transparent: true
+        });
+        const sprite = new Sprite(material);
+        const scale = 40; // fixed world size - camera-distance independence would need per-frame rescaling
+        sprite.scale.set(scale * (width / height), scale, 1);
+        sprite.renderOrder = 1000;
+        return sprite;
+    }
+
+    // emitters should already be sorted nearest-first and pre-filtered - this redraws a canvas texture per label
+    public updateEmitters(emitters: EmitterDebugInfo[]): void {
+        if (!this.enabled || this.mode !== VisualizerMode.Emitters) return;
+
+        if (this.emitterListElement) {
+            // one "Emitter" actor can carry several sub-emitters - group the flat feed back by parent
+            const groups = new Map<string, EmitterDebugInfo[]>();
+            for (const e of emitters) {
+                let members = groups.get(e.parentUuid);
+                if (!members) groups.set(e.parentUuid, members = []);
+                members.push(e);
+            }
+
+            const orderedGroupIds = [...groups.keys()].sort((a, b) => {
+                const da = Math.min(...groups.get(a)!.map(e => e.distance));
+                const db = Math.min(...groups.get(b)!.map(e => e.distance));
+                return da - db;
+            });
+
+            const currentGroupIds = new Set(orderedGroupIds);
+            for (const id of this.emitterGroups.keys()) {
+                if (!currentGroupIds.has(id)) {
+                    this.emitterGroups.get(id)!.wrapper.remove();
+                    this.emitterGroups.delete(id);
+                }
+            }
+
+            const currentLineIds = new Set(emitters.map(e => e.uuid));
+            for (const id of this.emitterLines.keys()) {
+                if (!currentLineIds.has(id)) {
+                    this.emitterLines.get(id)?.remove();
+                    this.emitterLines.delete(id);
+                    this.emitterCheckboxes.delete(id);
+                }
+            }
+
+            // only moves a group/line in the DOM when its position actually changed - an unconditional
+            // move can detach/reattach a node between a checkbox's mousedown and mouseup, swallowing the click
+            let prevGroupWrapper: HTMLElement | null = null;
+
+            for (const groupId of orderedGroupIds) {
+                const members = groups.get(groupId)!.sort((a, b) => a.distance - b.distance);
+                const minDist = members[0].distance;
+
+                let group = this.emitterGroups.get(groupId);
+                if (!group) {
+                    const wrapper = document.createElement("div");
+                    Object.assign(wrapper.style, {
+                        breakInside: "avoid", // keep a group's rows out of a column split
+                        marginBottom: "8px"
+                    });
+
+                    const header = document.createElement("div");
+                    header.style.fontWeight = "bold";
+                    header.style.color = "#8cf";
+                    wrapper.appendChild(header);
+
+                    const body = document.createElement("div");
+                    body.style.paddingLeft = "10px";
+                    body.style.borderLeft = "2px solid #345";
+                    wrapper.appendChild(body);
+
+                    group = { wrapper, header, body };
+                    this.emitterGroups.set(groupId, group);
+                }
+
+                const expectedNext = prevGroupWrapper ? prevGroupWrapper.nextElementSibling : this.emitterListElement.firstElementChild;
+                if (expectedNext !== group.wrapper) {
+                    this.emitterListElement.insertBefore(group.wrapper, expectedNext);
+                }
+                prevGroupWrapper = group.wrapper;
+
+                const distText = Math.round(minDist).toString().padStart(6, " ");
+                group.header.innerText = `[${distText}] ${members[0].parentName} (${members.length} sub${members.length === 1 ? "" : "s"})`;
+
+                let prevLine: HTMLElement | null = null;
+                members.forEach(e => {
+                    let line = this.emitterLines.get(e.uuid);
+                    let checkbox = this.emitterCheckboxes.get(e.uuid);
+                    let textEl: HTMLElement;
+                    if (!line) {
+                        line = document.createElement("div");
+                        Object.assign(line.style, {
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "4px",
+                            borderLeft: "2px solid #444",
+                            paddingLeft: "6px",
+                            marginTop: "2px"
+                        });
+
+                        checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.style.marginTop = "3px";
+                        checkbox.onchange = () => this.onEmitterToggle?.(e.uuid, checkbox!.checked);
+                        this.emitterCheckboxes.set(e.uuid, checkbox);
+                        line.appendChild(checkbox);
+
+                        textEl = document.createElement("span");
+                        textEl.style.whiteSpace = "pre";
+                        line.appendChild(textEl);
+
+                        this.emitterLines.set(e.uuid, line);
+                    } else {
+                        textEl = line.lastElementChild as HTMLElement;
+                    }
+
+                    const expectedNextLine = prevLine ? prevLine.nextElementSibling : group!.body.firstElementChild;
+                    if (expectedNextLine !== line) {
+                        group!.body.insertBefore(line, expectedNextLine);
+                    }
+                    prevLine = line;
+
+                    checkbox!.checked = !e.isManuallyHidden;
+
+                    const eDistText = Math.round(e.distance).toString().padStart(6, " ");
+                    const activeText = `${e.activeCount}/${e.maxParticles}`;
+                    const state = e.isDisabled ? "DISABLED" : (e.isVisible ? "VISIBLE" : "hidden");
+                    textEl.innerText = `[${eDistText}] ${this.shortEmitterName(e.name)} (${e.type})\n      active: ${activeText} | ${state}`;
+                    textEl.style.color = e.isDisabled ? "#888" : (e.isVisible ? "#fff" : "#f80");
+                    line.style.borderColor = e.isVisible ? "#0f0" : "#444";
+                });
+            }
+        }
+
+        const currentIds = new Set(emitters.map(e => e.uuid));
+        for (const id of this.emitterLabels.keys()) {
+            if (!currentIds.has(id)) {
+                const sprite = this.emitterLabels.get(id)!;
+                this.emitterLabelGroup.remove(sprite);
+                sprite.material.map?.dispose();
+                sprite.material.dispose();
+                this.emitterLabels.delete(id);
+            }
+        }
+
+        for (const e of emitters) {
+            let sprite = this.emitterLabels.get(e.uuid);
+            if (!sprite) {
+                sprite = this.makeTextSprite(this.shortEmitterName(e.name), e.isVisible ? "#0f0" : "#f80");
+                this.emitterLabels.set(e.uuid, sprite);
+                this.emitterLabelGroup.add(sprite);
+            }
+            sprite.position.copy(e.worldPos);
+        }
+    }
+
+    // full name is "{ClassName}_{objectName}_{uuid}" (un-object-mixin.ts), only objectName is wanted here
+    private shortEmitterName(fullName: string): string {
+        const parts = fullName.split("_");
+        return parts.length >= 3 ? parts[1] : fullName;
+    }
+
     public updateAudioHUD(musicData: any, ambientSounds: any[], currentTime: number, cameraPosition: Vector3): void {
         if (!this.enabled || this.mode !== VisualizerMode.Audio) return;
 
@@ -306,17 +582,16 @@ class Visualizer {
                 const ref = s.info.refDistance;
                 let attenuation = 1.0;
                 if (s.dist > ref) {
-                    attenuation = ref / (ref + 1.0 * (s.dist - ref));
+                    attenuation = ref / (ref + 0.5 * (s.dist - ref));
                 }
                 const actualVol = baseVol * attenuation;
 
                 const baseVolText = Math.round(baseVol * 100).toString().padStart(3, " ");
                 const actualVolText = Math.round(actualVol * 100).toString().padStart(3, " ");
                 const status = s.isPlaying ? "PLAYING" : "WAITING";
-                const delayText = s.nextReplayTime !== undefined ? 
-                    ` (next: ${Math.round((s.nextReplayTime - currentTime) / 100) / 10}s)` : "";
+                const prioText = ` (prio: ${Math.round(s.priority * 1000) / 1000}${s.info.looping ? ", loop" : ""})`;
 
-                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${delayText}`;
+                line.innerText = `[${distText}] ${sndName}\n      Vol: ${actualVolText}% (Base: ${baseVolText}%) | ${status}${prioText}`;
                 line.style.color = s.isPlaying ? "#fff" : "#888";
                 line.style.borderColor = s.isPlaying ? "#0f0" : "#444";
             });
@@ -347,7 +622,6 @@ class Visualizer {
             }
         };
 
-        // Update Fog Source
         if (activeFogColors) {
             updateEntry("fog", "Fog", activeFogColors.fog);
             updateEntry("fog", "Sky", activeFogColors.sky);
@@ -357,7 +631,6 @@ class Visualizer {
             ["Fog", "Sky", "Cloud", "Haze"].forEach(n => updateEntry("fog", n));
         }
 
-        // Update Global Environment
         if (globalEnvColors) {
             updateEntry("global", "Fog", globalEnvColors.fog);
             updateEntry("global", "Sky", globalEnvColors.sky);
@@ -370,7 +643,6 @@ class Visualizer {
             ["Fog", "Sky", "Cloud 1", "Cloud 2", "Cloud 3", "Sun", "Haze"].forEach(n => updateEntry("global", n));
         }
 
-        // Update Zone Fog
         if (zoneFogData) {
             updateEntry("zone", "Fog Color", zoneFogData.color);
 
@@ -406,88 +678,67 @@ class Visualizer {
     public toggle(): void {
         this.enabled = !this.enabled;
         this.updateVisibility();
-        console.log(`Visualizer ${this.enabled ? "enabled" : "disabled"} (Mode: ${VisualizerMode[this.mode]})`);
+        console.log(`Visualizer ${this.enabled ? "enabled" : "disabled"} (Mode: ${this.mode})`);
     }
 
+    private static readonly VISUALIZATION_MODES = Object.values(VisualizerMode).filter(mode => mode !== VisualizerMode.None);
+
     public nextMode(): void {
-        // Only cycle through actual visualization modes (exclude None)
-        const visualizationModes: VisualizerMode[] = [];
-        for (const key in VisualizerMode) {
-            const modeValue = VisualizerMode[key as keyof typeof VisualizerMode];
-            if (typeof modeValue === 'number' && modeValue !== VisualizerMode.None) {
-                visualizationModes.push(modeValue);
-            }
-        }
+        const modes = Visualizer.VISUALIZATION_MODES;
 
-        if (visualizationModes.length === 0) {
-            return; // No visualization modes available
-        }
-
-        // If currently None or disabled, start with first visualization mode
         if (this.mode === VisualizerMode.None || !this.enabled) {
-            this.mode = visualizationModes[0];
+            this.mode = modes[0];
             this.enabled = true;
         } else {
-            // Cycle through visualization modes
-            const currentIndex = visualizationModes.indexOf(this.mode);
-            const nextIndex = (currentIndex + 1) % visualizationModes.length;
-            this.mode = visualizationModes[nextIndex];
+            const currentIndex = modes.indexOf(this.mode);
+            this.mode = modes[(currentIndex + 1) % modes.length];
         }
 
         this.updateVisualizations();
-        console.log(`Visualizer mode: ${VisualizerMode[this.mode]}`);
+        console.log(`Visualizer mode: ${this.mode}`);
     }
 
     public nextLeafDetail(): void {
-        // Only meaningful while Leaves mode is active, but harmless otherwise.
-        const details: LeafVisualizerDetail[] = [
-            LeafVisualizerDetail.Auto,
-            LeafVisualizerDetail.PerLeaf,
-            LeafVisualizerDetail.PerZone,
-        ];
+        const details = Object.values(LeafVisualizerDetail);
 
         const idx = details.indexOf(this.leafDetail);
         this.leafDetail = details[(idx + 1) % details.length];
-        console.log(`Leaf visualizer detail: ${LeafVisualizerDetail[this.leafDetail]}`);
+        console.log(`Leaf visualizer detail: ${this.leafDetail}`);
     }
 
     private updateVisibility(): void {
         this.group.visible = this.enabled && this.mode !== VisualizerMode.None;
         const isFogMode = this.enabled && this.mode === VisualizerMode.Fogs;
         const isAudioMode = this.enabled && this.mode === VisualizerMode.Audio;
+        const isEmittersMode = this.enabled && this.mode === VisualizerMode.Emitters;
         this.fogGroup.visible = isFogMode;
+        this.emitterLabelGroup.visible = isEmittersMode;
         if (this.hudElement) {
             this.hudElement.style.display = isFogMode ? "flex" : "none";
         }
         if (this.audioHudElement) {
             this.audioHudElement.style.display = isAudioMode ? "flex" : "none";
         }
+        if (this.emittersHudElement) {
+            this.emittersHudElement.style.display = isEmittersMode ? "flex" : "none";
+        }
+        if (!isEmittersMode) {
+            // canvas + texture per label isn't free - drop them instead of leaving them parked offscreen
+            for (const sprite of this.emitterLabels.values()) {
+                this.emitterLabelGroup.remove(sprite);
+                sprite.material.map?.dispose();
+                sprite.material.dispose();
+            }
+            this.emitterLabels.clear();
+            this.emitterLines.clear();
+            this.emitterGroups.clear();
+            if (this.emitterListElement) this.emitterListElement.innerHTML = "";
+        }
     }
 
     private updateVisualizations(): void {
         this.clearVisualizations();
         this.updateVisibility();
-
-        if (!this.enabled || this.mode === VisualizerMode.None) {
-            return;
-        }
-
-        switch (this.mode) {
-            case VisualizerMode.Portals:
-                // Portals will be added via updatePortals()
-                break;
-            case VisualizerMode.Zones:
-                // Zones will be added via updateZones()
-                break;
-            case VisualizerMode.Leaves:
-                // Leaves will be added via updateLeaves()
-                break;
-            case VisualizerMode.Fogs:
-                // Fogs will be added via updateFogs()
-                break;
-            case VisualizerMode.Audio:
-                break;
-        }
     }
 
     public updatePortals(sectors: Map<number, Map<number, SectorObject>>, cameraPosition?: Vector3): void {
@@ -498,9 +749,9 @@ class Visualizer {
         this.clearPortalVisualizations();
 
         const PF_Portal = 0x04000000;
-        const visiblePortalColor = new Color(0x00ff00); // Green for visible portals
-        const hiddenPortalColor = new Color(0x004400); // Dark green for hidden portals
-        const arrowColor = new Color(0xffff00); // Yellow for direction arrows
+        const visiblePortalColor = new Color(0x00ff00);
+        const hiddenPortalColor = new Color(0x004400);
+        const arrowColor = new Color(0xffff00);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -508,16 +759,14 @@ class Visualizer {
                     continue;
                 }
 
-                // Only show helpers for sectors where camera is inside
                 if (cameraPosition) {
                     const cameraLeaf = sector.findPositionLeaf(cameraPosition);
                     const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
                     if (!isCameraInSector) {
-                        continue; // Skip sectors where camera is outside
+                        continue;
                     }
                 }
 
-                // Get active zone mask for this sector if camera position is provided
                 let activeZoneMask: bigint | null = null;
                 if (cameraPosition) {
                     activeZoneMask = sector.getActiveZoneMask(cameraPosition);
@@ -528,10 +777,8 @@ class Visualizer {
                     const hasPortalFlag = node.surfFlags !== undefined && (node.surfFlags & PF_Portal) !== 0;
 
                     if (hasPortalFlag && node.zones[0] >= 0 && node.zones[1] >= 0 && node.zones[0] !== node.zones[1]) {
-                        // Determine if portal is visible from camera
                         let isVisible = true;
                         if (activeZoneMask !== null) {
-                            // Portal is visible if either of its zones is in the active zone mask
                             const zone0Mask = 1n << BigInt(node.zones[0]);
                             const zone1Mask = 1n << BigInt(node.zones[1]);
                             isVisible = !!(activeZoneMask & zone0Mask) || !!(activeZoneMask & zone1Mask);
@@ -539,31 +786,26 @@ class Visualizer {
 
                         const portalColor = isVisible ? visiblePortalColor : hiddenPortalColor;
 
-                        // Create AABB visualization from exclusive sphere bound
                         const sphere = node.exclusiveSphereBound;
                         const box = new Box3();
                         box.setFromCenterAndSize(sphere.center, new Vector3(sphere.radius * 2, sphere.radius * 2, sphere.radius * 2));
 
-                        // Create box helper
                         const boxHelper = new Box3Helper(box, portalColor);
                         const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
                         if (boxMaterial) {
                             (boxMaterial as any).linewidth = 2;
                             boxMaterial.transparent = true;
-                            boxMaterial.depthTest = false; // Always render on top
+                            boxMaterial.depthTest = false;
                             boxMaterial.depthWrite = false;
                         }
-                        boxHelper.renderOrder = 1000; // Render on top
+                        boxHelper.renderOrder = 1000;
                         this.portalVisualizations.push(boxHelper);
                         this.group.add(boxHelper);
 
-                        // Create direction arrow
-                        // Portal direction: from zone[0] (back) to zone[1] (front)
-                        // Arrow points in the direction of the plane normal
+                        // arrow points along the plane normal, from zone[0] (back) to zone[1] (front)
                         const planeNormal = new Vector3(node.plane.x, node.plane.y, node.plane.z).normalize();
                         const arrowLength = sphere.radius * 0.5;
                         const arrow = new ArrowHelper(planeNormal, sphere.center, arrowLength, arrowColor, arrowLength * 0.3, arrowLength * 0.2);
-                        // Update arrow materials to render on top
                         if (arrow.line) {
                             const lineMaterial = Array.isArray(arrow.line.material) ? arrow.line.material[0] : arrow.line.material;
                             if (lineMaterial) {
@@ -582,12 +824,11 @@ class Visualizer {
                             }
                             arrow.cone.renderOrder = 1000;
                         }
-                        arrow.renderOrder = 1000; // Render on top
+                        arrow.renderOrder = 1000;
                         this.portalVisualizations.push(arrow);
                         this.group.add(arrow);
 
-                        // Add zone labels as simple text representation (using a small box for now)
-                        // You could enhance this with actual text rendering later
+                        // TODO: real text labels instead of boxes
                         const zoneLabel = new Mesh(
                             new BoxGeometry(10, 10, 10),
                             new MeshBasicMaterial({
@@ -601,8 +842,8 @@ class Visualizer {
                         zoneLabel.position.copy(sphere.center);
                         zoneLabel.position.y += sphere.radius + 20;
                         zoneLabel.renderOrder = 1000; // Render on top
-                        zoneLabel.userData.zone0 = node.zones[0];
-                        zoneLabel.userData.zone1 = node.zones[1];
+                        (zoneLabel as any).zone0 = node.zones[0];
+                        (zoneLabel as any).zone1 = node.zones[1];
                         this.portalVisualizations.push(zoneLabel);
                         this.group.add(zoneLabel);
                     }
@@ -633,10 +874,10 @@ class Visualizer {
 
         this.clearZoneVisualizations();
 
-        const visibleZoneColor = new Color(0x00ff00); // Green for visible zones
-        const hiddenZoneColor = new Color(0x004400); // Dark green for hidden zones
-        const activeConnectivityColor = new Color(0x00ffff); // Cyan for connectivity from active zones
-        const inactiveConnectivityColor = new Color(0x444444); // Dark gray for connectivity from inactive zones
+        const visibleZoneColor = new Color(0x00ff00);
+        const hiddenZoneColor = new Color(0x004400);
+        const activeConnectivityColor = new Color(0x00ffff);
+        const inactiveConnectivityColor = new Color(0x444444);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -644,37 +885,31 @@ class Visualizer {
                     continue;
                 }
 
-                // Only show helpers for sectors where camera is inside
                 if (cameraPosition) {
                     const cameraLeaf = sector.findPositionLeaf(cameraPosition);
                     const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
                     if (!isCameraInSector) {
-                        continue; // Skip sectors where camera is outside
+                        continue;
                     }
                 }
 
-                // Get active zone mask for visibility determination
                 let activeZoneMask: bigint | null = null;
                 if (cameraPosition) {
                     activeZoneMask = sector.getActiveZoneMask(cameraPosition);
                 }
 
-                // Compute bounds for each zone by aggregating from nodes/leaves
                 const zoneBounds = new Map<number, Box3>();
                 const zoneCenters = new Map<number, Vector3>();
                 const zoneNodeCounts = new Map<number, number>();
 
-                // Aggregate bounds from leaves (more accurate for zone representation)
                 for (let leafIndex = 0; leafIndex < sector.bspLeaves.length; leafIndex++) {
                     const leaf = sector.bspLeaves[leafIndex];
                     if (leaf && leaf.zone >= 0 && leaf.zone < 64) {
-                        // Find nodes that reference this leaf to get bounds
                         for (let nodeIndex = 0; nodeIndex < sector.bspNodes.length; nodeIndex++) {
                             const node = sector.bspNodes[nodeIndex];
                             if (node.leaves[0] === leafIndex || node.leaves[1] === leafIndex) {
                                 let bounds: Box3 | null = null;
 
-                                // Try collision bounds first
                                 if (node.collision && node.collision.bounds) {
                                     const collisionBox = node.collision.bounds;
                                     if (collisionBox.min && collisionBox.max &&
@@ -685,7 +920,6 @@ class Visualizer {
                                     }
                                 }
 
-                                // Fallback to sphere bounds
                                 if (!bounds) {
                                     const sphere = node.exclusiveSphereBound.radius > 0 ? node.exclusiveSphereBound : node.inclusiveSphereBound;
                                     if (sphere.radius > 0 && !isNaN(sphere.radius) && sphere.center) {
@@ -704,24 +938,21 @@ class Visualizer {
                                     }
                                     zoneNodeCounts.set(leaf.zone, (zoneNodeCounts.get(leaf.zone) || 0) + 1);
                                 }
-                                break; // Found a node for this leaf, move to next leaf
+                                break;
                             }
                         }
                     }
                 }
 
-                // Calculate centers for each zone
                 for (const [zoneIndex, bounds] of zoneBounds) {
                     const center = new Vector3();
                     bounds.getCenter(center);
                     zoneCenters.set(zoneIndex, center);
                 }
 
-                // Visualize zones
                 for (const [zoneIndex, bounds] of zoneBounds) {
                     if (zoneIndex < 0 || zoneIndex >= 64) continue;
 
-                    // Determine if zone is visible
                     let isVisible = true;
                     if (activeZoneMask !== null) {
                         const zoneBit = 1n << BigInt(zoneIndex);
@@ -730,7 +961,6 @@ class Visualizer {
 
                     const zoneColor = isVisible ? visibleZoneColor : hiddenZoneColor;
 
-                    // Create box helper for zone bounds
                     const boxHelper = new Box3Helper(bounds, zoneColor);
                     const boxMaterial = Array.isArray(boxHelper.material) ? boxHelper.material[0] : boxHelper.material;
                     if (boxMaterial) {
@@ -740,11 +970,10 @@ class Visualizer {
                         boxMaterial.depthWrite = false;
                     }
                     boxHelper.renderOrder = 1000;
-                    boxHelper.userData.zoneIndex = zoneIndex;
+                    (boxHelper as any).zoneIndex = zoneIndex;
                     this.zoneVisualizations.push(boxHelper);
                     this.group.add(boxHelper);
 
-                    // Add zone label
                     const center = zoneCenters.get(zoneIndex);
                     if (center) {
                         const zoneLabel = new Mesh(
@@ -760,13 +989,12 @@ class Visualizer {
                         zoneLabel.position.copy(center);
                         zoneLabel.position.y += bounds.max.y - bounds.min.y + 30;
                         zoneLabel.renderOrder = 1000;
-                        zoneLabel.userData.zoneIndex = zoneIndex;
+                        (zoneLabel as any).zoneIndex = zoneIndex;
                         this.zoneVisualizations.push(zoneLabel);
                         this.group.add(zoneLabel);
                     }
                 }
 
-                // Visualize connectivity between zones
                 for (let zoneIndex = 0; zoneIndex < 64; zoneIndex++) {
                     const zoneData = sector.bspZones[zoneIndex];
                     if (!zoneData || !zoneData.connectivity) continue;
@@ -774,14 +1002,12 @@ class Visualizer {
                     const sourceCenter = zoneCenters.get(zoneIndex);
                     if (!sourceCenter) continue;
 
-                    // Check if source zone is active
                     let isSourceActive = false;
                     if (activeZoneMask !== null) {
                         const sourceZoneBit = 1n << BigInt(zoneIndex);
                         isSourceActive = !!(activeZoneMask & sourceZoneBit);
                     }
 
-                    // Draw lines to connected zones
                     for (let targetZoneIndex = 0; targetZoneIndex < 64; targetZoneIndex++) {
                         if (targetZoneIndex === zoneIndex) continue;
 
@@ -790,11 +1016,9 @@ class Visualizer {
                             const targetCenter = zoneCenters.get(targetZoneIndex);
                             if (!targetCenter) continue;
 
-                            // Determine connectivity color based on whether source zone is active
                             const connectivityColor = isSourceActive ? activeConnectivityColor : inactiveConnectivityColor;
                             const connectivityOpacity = isSourceActive ? 0.8 : 0.3;
 
-                            // Create line geometry for connectivity
                             const geometry = new BufferGeometry().setFromPoints([sourceCenter, targetCenter]);
                             const material = new LineBasicMaterial({
                                 color: connectivityColor,
@@ -805,9 +1029,9 @@ class Visualizer {
                                 linewidth: 1
                             });
                             const line = new Line(geometry, material);
-                            line.renderOrder = 999; // Slightly below zone boxes
-                            line.userData.sourceZone = zoneIndex;
-                            line.userData.targetZone = targetZoneIndex;
+                            line.renderOrder = 999;
+                            (line as any).sourceZone = zoneIndex;
+                            (line as any).targetZone = targetZoneIndex;
                             this.zoneVisualizations.push(line);
                             this.group.add(line);
                         }
@@ -833,22 +1057,17 @@ class Visualizer {
                     material.dispose();
                 }
             }
-            // Box3Helper doesn't have dispose, just remove it
         });
         this.zoneVisualizations = [];
     }
 
-    /**
-     * Calculate the depth of each node in the BSP tree (distance from root).
-     * Returns a map from node index to depth.
-     */
+    // BFS distance from root (node 0)
     private calculateNodeDepths(bspNodes: any[]): Map<number, number> {
         const depths = new Map<number, number>();
         if (bspNodes.length === 0) {
             return depths;
         }
 
-        // BFS from root (node 0)
         const queue: { nodeIndex: number; depth: number }[] = [{ nodeIndex: 0, depth: 0 }];
         depths.set(0, 0);
 
@@ -858,7 +1077,6 @@ class Visualizer {
 
             if (!node) continue;
 
-            // Process children
             const children = [node.front, node.back].filter(idx => idx >= 0);
             for (const childIndex of children) {
                 if (!depths.has(childIndex)) {
@@ -871,14 +1089,8 @@ class Visualizer {
         return depths;
     }
 
-    /**
-     * Darken a color based on depth level.
-     * Returns a darker shade of the original color.
-     */
     private darkenColorByDepth(baseColor: Color, depth: number, maxDepth: number): Color {
-        // Calculate darkness factor: 1.0 (full brightness) at depth 0, decreasing to ~0.3 at max depth
-        // Use exponential decay for smoother transitions
-        const maxDarkness = 0.3; // Minimum brightness (30%)
+        const maxDarkness = 0.3;
         const darknessFactor = 1.0 - (1.0 - maxDarkness) * (depth / Math.max(maxDepth, 1));
 
         const darkened = baseColor.clone();
@@ -897,8 +1109,8 @@ class Visualizer {
             return;
         }
 
-        const directLeafColor = new Color(0x0088ff); // Blue for directly visible leaves (camera zone)
-        const portalLeafColor = new Color(0xff8800); // Orange for leaves visible through portals
+        const directLeafColor = new Color(0x0088ff);
+        const portalLeafColor = new Color(0xff8800);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -906,54 +1118,45 @@ class Visualizer {
                     continue;
                 }
 
-                // Only show helpers for sectors where camera is inside
                 if (cameraPosition) {
                     const cameraLeaf = sector.findPositionLeaf(cameraPosition);
                     const isCameraInSector = cameraLeaf !== null && cameraLeaf >= 0;
                     if (!isCameraInSector) {
-                        continue; // Skip sectors where camera is outside
+                        continue;
                     }
                 }
 
-                // Calculate node depths for this sector
                 const nodeDepths = this.calculateNodeDepths(sector.bspNodes);
                 const maxDepth = nodeDepths.size > 0 ? Math.max(...Array.from(nodeDepths.values())) : 0;
 
-                // Get initial active zone mask (before portal expansion)
                 const initialZoneMask = sector.getActiveZoneMask(cameraPosition);
                 const frustum = cameraFrustum || new Frustum();
 
-                // Traverse BSP to get visible leaves and zones added through portals
                 const { visibleLeaves, zonesAddedThroughPortals } = sector.traverseBSP(cameraPosition, initialZoneMask, frustum, frustumCullingEnabled);
 
                 if (visibleLeaves.size === 0) {
-                    continue; // No visible leaves in this sector
+                    continue;
                 }
 
-                // Use the zonesAddedThroughPortals directly from traversal (more accurate)
                 const portalAddedZones = zonesAddedThroughPortals;
 
-                // Decide which detail mode to use for this frame (Auto can switch when noisy)
+                // Auto switches to per-zone once visibleLeaves crosses leafAutoAggregateThreshold
                 const effectiveLeafDetail =
                     this.leafDetail === LeafVisualizerDetail.Auto
                         ? (visibleLeaves.size >= this.leafAutoAggregateThreshold ? LeafVisualizerDetail.PerZone : LeafVisualizerDetail.PerLeaf)
                         : this.leafDetail;
 
-                // For each visible leaf, find the highest level (minimum depth) node that references it
-                // Map: leafIndex -> { nodeIndex, depth }
+                // leafIndex -> the highest-level (minimum depth) node that references it
                 const leafToNodeMap = new Map<number, { nodeIndex: number; depth: number }>();
 
-                // First pass: find the highest level (minimum depth) node for each visible leaf
                 for (let nodeIndex = 0; nodeIndex < sector.bspNodes.length; nodeIndex++) {
                     const node = sector.bspNodes[nodeIndex];
                     const nodeDepth = nodeDepths.get(nodeIndex) ?? Infinity;
 
-                    // Check both leaves this node references
                     for (let i = 0; i < 2; i++) {
                         const leafIndex = node.leaves[i];
                         if (leafIndex >= 0 && leafIndex < sector.bspLeaves.length && visibleLeaves.has(leafIndex)) {
                             const existing = leafToNodeMap.get(leafIndex);
-                            // Keep the node with minimum depth (highest level)
                             if (!existing || nodeDepth < existing.depth) {
                                 leafToNodeMap.set(leafIndex, { nodeIndex, depth: nodeDepth });
                             }
@@ -961,8 +1164,6 @@ class Visualizer {
                     }
                 }
 
-                // Second pass: compute bounds per leaf (from its highest-level node), then either
-                // visualize per-leaf or aggregate/union per-zone for decluttering.
                 const leafBoxes = new Map<number, { box: Box3; zone: number; depth: number; isPortalLeaf: boolean }>();
 
                 for (const [leafIndex, { nodeIndex, depth }] of leafToNodeMap) {
@@ -974,7 +1175,6 @@ class Visualizer {
 
                     let box: Box3 | null = null;
 
-                    // Try to get bounds from node's collision bounds first (most accurate)
                     if (node.collision && node.collision.bounds) {
                         const collisionBox = node.collision.bounds;
                         if (collisionBox.min && collisionBox.max &&
@@ -985,7 +1185,6 @@ class Visualizer {
                         }
                     }
 
-                    // Fallback to sphere bounds if collision bounds not available
                     if (!box) {
                         const exclusiveSphere = node.exclusiveSphereBound;
                         if (exclusiveSphere.radius > 0 && !isNaN(exclusiveSphere.radius) && exclusiveSphere.center &&
@@ -1022,9 +1221,9 @@ class Visualizer {
                             boxMaterial.depthWrite = false;
                         }
                         boxHelper.renderOrder = 1000;
-                        boxHelper.userData.leafIndex = leafIndex;
-                        boxHelper.userData.zone = info.zone;
-                        boxHelper.userData.depth = info.depth;
+                        (boxHelper as any).leafIndex = leafIndex;
+                        (boxHelper as any).zone = info.zone;
+                        (boxHelper as any).depth = info.depth;
                         this.leafVisualizations.push(boxHelper);
                         this.group.add(boxHelper);
                     }
@@ -1063,17 +1262,14 @@ class Visualizer {
                             boxMaterial.depthWrite = false;
                         }
                         boxHelper.renderOrder = 1000;
-                        boxHelper.userData.zone = zone;
-                        boxHelper.userData.leafCount = agg.leafCount;
-                        boxHelper.userData.depth = agg.minDepth;
-                        boxHelper.userData.aggregated = true;
+                        (boxHelper as any).zone = zone;
+                        (boxHelper as any).leafCount = agg.leafCount;
+                        (boxHelper as any).depth = agg.minDepth;
+                        (boxHelper as any).aggregated = true;
                         this.leafVisualizations.push(boxHelper);
                         this.group.add(boxHelper);
                     }
                 }
-
-                // Debug: log results (only on first visualization or when issues occur)
-                // Removed per-frame logging to avoid console spam
             }
         }
     }
@@ -1098,8 +1294,8 @@ class Visualizer {
 
         this.clearFogVisualizations();
 
-        const activeFogColor = new Color(0x00ff00); // Green
-        const inactiveFogColor = new Color(0xff0000); // Red
+        const activeFogColor = new Color(0x00ff00);
+        const inactiveFogColor = new Color(0xff0000);
 
         for (const [, sectorYMap] of sectors) {
             for (const [, sector] of sectorYMap) {
@@ -1116,7 +1312,6 @@ class Visualizer {
 
                         const segments = 16;
 
-                        // Outer radius (max)
                         const outerGeometry = new SphereGeometry(outerRadius, segments, segments);
                         const outerMaterial = new MeshBasicMaterial({
                             color: activeFogColor,
@@ -1136,7 +1331,7 @@ class Visualizer {
                         if (outerRadius - innerRadius > 10) {
                             const innerGeometry = new SphereGeometry(innerRadius, segments, segments);
                             const innerMaterial = new MeshBasicMaterial({
-                                color: new Color(0x00ffff), // Cyan for inner range
+                                color: new Color(0x00ffff),
                                 wireframe: true,
                                 transparent: true,
                                 opacity: 0.15,
@@ -1151,7 +1346,6 @@ class Visualizer {
                         }
                     }
 
-                    // Add a center point or label if needed
                     const centerPoint = new Mesh(
                         new BoxGeometry(20, 20, 20),
                         new MeshBasicMaterial({ color: color, depthTest: false, depthWrite: false })
@@ -1202,13 +1396,26 @@ class Visualizer {
         return this.fogGroup;
     }
 
+    public getEmitterLabelGroup(): Group {
+        return this.emitterLabelGroup;
+    }
+
     public destroy(): void {
         this.clearVisualizations();
+        for (const sprite of this.emitterLabels.values()) {
+            this.emitterLabelGroup.remove(sprite);
+            sprite.material.map?.dispose();
+            sprite.material.dispose();
+        }
+        this.emitterLabels.clear();
         if (this.hudElement && this.hudElement.parentNode) {
             this.hudElement.parentNode.removeChild(this.hudElement);
         }
         if (this.audioHudElement && this.audioHudElement.parentNode) {
             this.audioHudElement.parentNode.removeChild(this.audioHudElement);
+        }
+        if (this.emittersHudElement && this.emittersHudElement.parentNode) {
+            this.emittersHudElement.parentNode.removeChild(this.emittersHudElement);
         }
     }
 }

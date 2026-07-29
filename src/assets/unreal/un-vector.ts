@@ -1,7 +1,9 @@
 import { UObject } from "@l2js/core";
 
-abstract class FVector extends UObject {
+abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3Arr> {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
+
+    public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public x: number;
     declare public y: number;
@@ -30,6 +32,8 @@ abstract class FVector extends UObject {
     }
 
     public getElements(): GD.Vector3Arr { return [this.x, this.y, this.z]; }
+
+    public getDecodeInfo(_library: GD.DecodeLibrary): GD.Vector3Arr { return this.getElements(); }
 
     public addScalar(scalar: number) {
         return FVector.make(
@@ -80,8 +84,8 @@ abstract class FVector extends UObject {
         );
     }
 
-    distanceTo(other: FVector) { return this.distanceToSquared(other) ** 0.5; }
-    distanceToSquared(other: FVector) {
+    public distanceTo(other: FVector) { return this.distanceToSquared(other) ** 0.5; }
+    public distanceToSquared(other: FVector) {
         const dx = this.x - other.x;
         const dy = this.y - other.y;
         const dz = this.z - other.z;
@@ -89,8 +93,8 @@ abstract class FVector extends UObject {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    length() { return this.lengthSq() ** 0.5; }
-    lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
+    public length() { return this.lengthSq() ** 0.5; }
+    public lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
 
     /**
      * operator ^
@@ -113,7 +117,7 @@ abstract class FVector extends UObject {
      */
     public dot(other: FVector) { return this.x * other.x + this.y * other.y + this.z * other.z; }
 
-    fromArray(array: number[] | ArrayLike<number> = [], offset = 0, restoreOrder = false) {
+    public fromArray(array: number[] | ArrayLike<number> = [], offset = 0, restoreOrder = false) {
         const [a, b, c] = restoreOrder ? [0, 2, 1] : [0, 1, 2];
 
         this.x = array[offset + a];
@@ -123,7 +127,7 @@ abstract class FVector extends UObject {
         return this;
     }
 
-    toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
+    public toArray(array: number[] | ArrayLike<number> = [], offset = 0) {
 
         (array as number[])[offset] = this.x;
         (array as number[])[offset + 1] = this.y;
@@ -132,7 +136,7 @@ abstract class FVector extends UObject {
         return array;
     }
 
-    normalized() {
+    public normalized() {
         const lenSq = this.lengthSq();
 
         if (lenSq < 1e-8)
@@ -150,78 +154,15 @@ abstract class FVector extends UObject {
 
     public negate() { return this.multiplyScalar(-1); }
 
-    getVectorElements(): GD.Vector3Arr {
-        return [this.x, this.z, this.y];
-    }
+    public applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
+        let [qx, qy, qz, qw] = rotator.getQuaternionElements();
 
-    applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
-
-        let [x, y, z, order] = rotator.getEulerElements();
-
-        if (negate) x = -x, y = -y, z = -z;
-
-        // http://www.mathworks.com/matlabcentral/fileexchange/
-        // 	20696-function-to-convert-between-dcm-euler-angles-quaternions-and-euler-vectors/
-        //	content/SpinCalc.m
-
-        const cos = Math.cos;
-        const sin = Math.sin;
-
-        const c1 = cos(x / 2);
-        const c2 = cos(y / 2);
-        const c3 = cos(z / 2);
-
-        const s1 = sin(x / 2);
-        const s2 = sin(y / 2);
-        const s3 = sin(z / 2);
-
-        let qx: number, qy: number, qz: number, qw: number;
-
-        switch (order) {
-            case "XYZ":
-                qx = s1 * c2 * c3 + c1 * s2 * s3;
-                qy = c1 * s2 * c3 - s1 * c2 * s3;
-                qz = c1 * c2 * s3 + s1 * s2 * c3;
-                qw = c1 * c2 * c3 - s1 * s2 * s3;
-                break;
-            case "YXZ":
-                qx = s1 * c2 * c3 + c1 * s2 * s3;
-                qy = c1 * s2 * c3 - s1 * c2 * s3;
-                qz = c1 * c2 * s3 - s1 * s2 * c3;
-                qw = c1 * c2 * c3 + s1 * s2 * s3;
-                break;
-            case "ZXY":
-                qx = s1 * c2 * c3 - c1 * s2 * s3;
-                qy = c1 * s2 * c3 + s1 * c2 * s3;
-                qz = c1 * c2 * s3 + s1 * s2 * c3;
-                qw = c1 * c2 * c3 - s1 * s2 * s3;
-                break;
-
-            case "ZYX":
-                qx = s1 * c2 * c3 - c1 * s2 * s3;
-                qy = c1 * s2 * c3 + s1 * c2 * s3;
-                qz = c1 * c2 * s3 - s1 * s2 * c3;
-                qw = c1 * c2 * c3 + s1 * s2 * s3;
-                break;
-            case "YZX":
-                qx = s1 * c2 * c3 + c1 * s2 * s3;
-                qy = c1 * s2 * c3 + s1 * c2 * s3;
-                qz = c1 * c2 * s3 - s1 * s2 * c3;
-                qw = c1 * c2 * c3 - s1 * s2 * s3;
-                break;
-            case "XZY":
-                qx = s1 * c2 * c3 - c1 * s2 * s3;
-                qy = c1 * s2 * c3 - s1 * c2 * s3;
-                qz = c1 * c2 * s3 + s1 * s2 * c3;
-                qw = c1 * c2 * c3 + s1 * s2 * s3;
-                break;
-            default: throw new Error(`Unsupported order: ${order}`)
-        }
+        if (negate) qx = -qx, qy = -qy, qz = -qz;
 
         return this.applyQuaternion(qx, qy, qz, qw);
     }
 
-    applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
+    public applyQuaternion(qx: number, qy: number, qz: number, qw: number) {
         const x = this.x, y = this.y, z = this.z;
 
         // calculate quat * vector
@@ -241,7 +182,7 @@ abstract class FVector extends UObject {
     }
 
 
-    applyMatrix4(m: GA.FMatrix) {
+    public applyMatrix4(m: GA.FMatrix) {
         const x = this.x, y = this.y, z = this.z;
         const e = m.getElements4x4();
 
@@ -264,7 +205,7 @@ abstract class FVector extends UObject {
         return FVector.make(this.dot(coord.xAxis), this.dot(coord.yAxis), this.dot(coord.zAxis));
     }
 
-    transformBy(coord: GA.FCoords) {
+    public transformBy(coord: GA.FCoords) {
         const inVector = this;
         const outVector = FVector.make();
 

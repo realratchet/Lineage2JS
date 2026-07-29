@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
+const { initChunkerMiddleware } = require("./chunker-middleware");
 // const { SourceMapDevToolPlugin } = require("webpack");
 
 function* walkSync(dir) {
@@ -16,7 +17,7 @@ function* walkSync(dir) {
 
 const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
-function createModuleConfig({ name, resolve, entry: _entry, library }) {
+function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {
         const pluginsSASS = (mode === "production"
             ? [{ loader: MiniCssExtractPlugin.loader }]
@@ -27,37 +28,39 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             ]);
 
         const dirAssets = "assets-c4/";
-        const fileList = {
-            comment: "This file is auto-generated, any changes will be lost.",
-            supported: {},
-            unsupported: []
-        };
+        const plugins = [];
 
-        for (const fname of walkSync(dirAssets)) {
+        /* the worker compilation reuses the artifacts the client compilation produces */
+        if (!isWorker) {
+            const fileList = {
+                comment: "This file is auto-generated, any changes will be lost.",
+                supported: {},
+                unsupported: []
+            };
 
-            const ext = path.extname(fname).slice(1).toUpperCase();
-            const relPath = fname.replace(dirAssets, "");
+            for (const fname of walkSync(dirAssets)) {
 
-            if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-                fileList.unsupported.push(relPath);
-                continue;
+                const ext = path.extname(fname).slice(1).toUpperCase();
+                const relPath = fname.replace(dirAssets, "");
+
+                if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+                    fileList.unsupported.push(relPath);
+                    continue;
+                }
+
+                fileList.supported[relPath.toLowerCase()] = relPath;
             }
 
-            fileList.supported[relPath.toLowerCase()] = relPath;
-        }
+            fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
 
-        fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
-
-
-        const plugins = [
-            new CopyWebpackPlugin({
+            plugins.push(new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
                     { from: "../asset-list.json", to: "asset-list.json" },
                     // ...copyFiles
                 ],
-            })
-        ];
+            }));
+        }
 
         if (devtool) {
             // plugins.unshift(new SourceMapDevToolPlugin({
@@ -75,7 +78,10 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
         const output = {
             filename: "[name].bundle.js",
             path: dirOutput ? dirOutput : path.resolve(__dirname, "../bin"),
-            chunkFilename: "[name].chunk.js"
+            /* client and worker are separate Compiler instances sharing bin/ - a chunk name
+               reachable from both (e.g. modules/unreal, now also modules/decode-engine's own
+               inner chunks) would otherwise collide on disk between the two compilations */
+            chunkFilename: isWorker ? "worker.[name].chunk.js" : "[name].chunk.js"
         };
 
         if (library) {
@@ -115,6 +121,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 plugins: [
                     ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                     "@babel/transform-runtime",
+                    // "@babel/plugin-transform-explicit-resource-management",
                     ["@babel/plugin-proposal-class-properties", { "loose": true }],
                     ["@babel/plugin-proposal-private-methods", { "loose": true }],
                     ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
@@ -143,6 +150,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                         plugins: [
                             ["@babel/plugin-transform-typescript", { allowDeclareFields: true }],
                             "@babel/transform-runtime",
+                            // "@babel/plugin-transform-explicit-resource-management",
                             ["@babel/plugin-proposal-class-properties", { "loose": true }],
                             ["@babel/plugin-proposal-private-methods", { "loose": true }],
                             ["@babel/plugin-proposal-private-property-in-object", { "loose": true }]
@@ -151,10 +159,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
                 }]
         });
 
-        return {
+        const config = {
             entry,
             mode,
             stats,
+            target: isWorker ? "webworker" : "web",
             resolve,
             optimization: {
                 minimize
@@ -162,37 +171,70 @@ function createModuleConfig({ name, resolve, entry: _entry, library }) {
             module: { rules },
             plugins,
             output,
-            devServer: {
-                port: 8080,
-                allowedHosts: "all",
-                hot: false,
-                static: {
-                    directory: path.resolve(__dirname, "../", dirAssets),
-                    publicPath: "/assets"
-                }
-            },
             devtool,
             context: __dirname,
             experiments: {
                 asyncWebAssembly: true
             }
         };
+
+        /* only one compilation may define the dev server - the worker rides along */
+        if (!isWorker) {
+            config.devServer = {
+                port: 8080,
+                allowedHosts: "all",
+                hot: false,
+                /* LIVE_RELOAD=0 is for automated ?sectorTest sweeps only - a mid-sweep
+                   rebuild would restart the sweep page and corrupt its report */
+                liveReload: process.env.LIVE_RELOAD !== "0",
+                static: {
+                    directory: path.resolve(__dirname, "../", dirAssets),
+                    publicPath: "/assets"
+                },
+                setupMiddlewares: (middlewares, devServer) => {
+                    // middlewares.unshift(initChunkerMiddleware(dirAssets));
+
+                    /* the ?sectorTest sweep posts one JSON result per sector here */
+                    const reportFile = path.join(__dirname, "../sector-test-report.jsonl");
+
+                    devServer.app.post("/sector-test/report", require("express").json({ limit: "4mb" }), (req, res) => {
+                        fs.appendFileSync(reportFile, JSON.stringify({ t: new Date().toISOString(), ...req.body }) + "\n");
+                        res.sendStatus(204);
+                    });
+
+                    return middlewares;
+                }
+            };
+        }
+
+        return config;
     }
 }
 
+const resolve = {
+    fallback: {
+        "buffer": false,
+        "path": require.resolve("path-browserify")
+    },
+    extensions: [".tsx", ".ts", ".js"],
+    alias: {
+        "@client": path.resolve(__dirname, "../src"),
+        "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
+        "@l2js/core": "@l2js/core/src"
+    }
+};
+
+/* renderer bundle - must stay free of ue2 asset code (that all lives in the worker bundle) */
 module.exports.createConfigBundle = createModuleConfig({
     name: "client",
-    resolve: {
-        fallback: {
-            "buffer": false,
-            "path": require.resolve("path-browserify")
-        },
-        extensions: [".tsx", ".ts", ".js"],
-        alias: {
-            "@client": path.resolve(__dirname, "../src"),
-            "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
-            "@l2js/core": "@l2js/core/src"
-        }
-    },
+    resolve,
     entry: "../src/index.ts"
+});
+
+/* decode worker bundle - owns the entire ue2 asset pipeline */
+module.exports.createConfigWorker = createModuleConfig({
+    name: "decode-worker",
+    resolve,
+    entry: "../src/assets/decode-worker/decode.worker.ts",
+    isWorker: true
 });

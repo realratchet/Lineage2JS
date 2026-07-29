@@ -1,6 +1,6 @@
 // import * as _path from "path";
 
-import { AAssetLoader } from "@l2js/core";
+import { AAssetLoader, APackage } from "@l2js/core";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
 
@@ -200,6 +200,8 @@ import { AAssetLoader } from "@l2js/core";
 
 class AssetLoader extends AAssetLoader<C.APackage, GA.UCorePackage, GA.UEnginePackage, C.ANativePackage> {
 
+    protected pkgRefCounts = new Map<string, number>();
+
     static async Instantiate(assetList: C.IAssetListInfo) {
         const Library = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
 
@@ -212,6 +214,40 @@ class AssetLoader extends AAssetLoader<C.APackage, GA.UCorePackage, GA.UEnginePa
 
     protected createPackage(UPackage: C.APackageConstructor<C.APackage> | C.ACorePackageConstructor<GA.UCorePackage> | C.AEnginePackageConstructor<GA.UEnginePackage>, downloadPath: string): C.APackage {
         return new UPackage(this, `assets/${downloadPath}`);
+    }
+
+    public async using<T extends APackage = APackage>(pkg: T, props?: { neverUnload?: boolean }): Promise<T> {
+        const _pkg = await this.load(pkg);
+        const w = (props?.neverUnload ?? false) ? Infinity : 1;
+
+        for (const dep of this.getDependencies(pkg)) {
+            if (!this.pkgRefCounts.has(dep))
+                this.pkgRefCounts.set(dep, 0);
+
+            this.pkgRefCounts.set(dep, this.pkgRefCounts.get(dep) + w);
+        }
+
+        return _pkg;
+    }
+
+    public free<T extends APackage = APackage>(pkg: T) {
+        const deref = new Array<string>();
+
+        for (const dep of this.getDependencies(pkg)) {
+            if (!this.pkgRefCounts.has(dep))
+                continue
+
+            const c = this.pkgRefCounts.get(dep);
+            const nc = Math.max(0, this.pkgRefCounts.get(dep) - 1);
+
+            if (c > 0 && nc === 0 && !deref.includes(dep))
+                deref.push(dep);
+
+            this.pkgRefCounts.set(dep, nc);
+        }
+
+        for (const path of deref)
+            this.getPackage(path).free();
     }
 }
 

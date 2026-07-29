@@ -66,7 +66,7 @@ abstract class ULight extends UAActor {
         });
     }
 
-    protected getRegionLineHelper(library: GD.DecodeLibrary, color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
+    protected getRegionLineHelper(color: [number, number, number] = [1, 0, 1], ignoreDepth: boolean = false) {
         const lineGeometryUuid = generateUUID();
         const _a = this.region.getZone().location;
         const _b = this.location;
@@ -82,7 +82,7 @@ abstract class ULight extends UAActor {
             ignoreDepth
         } as GD.IEdgesObjectDecodeInfo;
 
-        library.geometries[lineGeometryUuid] = {
+        const geometryInfo = {
             indices: new Uint8Array([0, 1]),
             attributes: {
                 positions: new Float32Array([
@@ -92,7 +92,7 @@ abstract class ULight extends UAActor {
             }
         };
 
-        return regionHelper;
+        return { object: regionHelper, uuid: lineGeometryUuid, geometry: geometryInfo };
     }
 
     public getColor(): [number, number, number] {
@@ -146,8 +146,8 @@ abstract class ULight extends UAActor {
             radius: this.radius,
             name: this.objectName,
             isSunlightColor: this.isSunlightColor,
-            position: this.location.getVectorElements(),
-            scale: this.scale.getVectorElements(),
+            position: this.location.getElements(),
+            scale: this.scale.getElements(),
             quaternion: this.rotation.getQuaternionElements() || [0, 0, 0, 1],
             period: this.period,
             phase: this.phase,
@@ -304,5 +304,3 @@ const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
 
 //     return out;
 // })();
-
-

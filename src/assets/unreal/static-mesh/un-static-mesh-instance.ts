@@ -47,12 +47,10 @@ abstract class UStaticMeshInstance extends UObject {
 
     public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
 
-
-
-    public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array | Uint8Array, lights: GD.ILightInstanceDecodeInfo } {
+    public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
-        const color = new Uint8Array(len * 3);
-
+        const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
+    
         for (let i = 0; i < len; i++) {
             const [r, g, b] = this.colorStream.getColor(i);
             const offset = i * 3;
@@ -61,7 +59,6 @@ abstract class UStaticMeshInstance extends UObject {
             color[offset + 1] = g;
             color[offset + 2] = b;
         }
-
 
         // let validEnvironment: FStaticMeshLightInfo = null;
         // let startIndex: number;

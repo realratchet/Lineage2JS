@@ -13,4 +13,57 @@ body {
         height: 100%;
         display: block;
     }
+
+    viewport.sector-precache {
+        display: grid;
+        place-items: center;
+        background: #0c0c0c;
+        color: #ddd;
+        font: 14px monospace;
+
+        main {
+            width: min(720px, calc(100% - 48px));
+        }
+
+        h1 {
+            margin: 0 0 24px;
+            font-size: 24px;
+            font-weight: normal;
+        }
+
+        progress {
+            width: 100%;
+            height: 20px;
+        }
+
+        .precache-detail {
+            min-height: 20px;
+            color: #999;
+        }
+
+        pre {
+            max-height: 240px;
+            overflow: auto;
+            color: #e88;
+            white-space: pre-wrap;
+        }
+
+        button, a {
+            display: inline-block;
+            margin: 16px 12px 0 0;
+            padding: 8px 12px;
+            border: 1px solid #777;
+            border-radius: 2px;
+            background: #222;
+            color: #ddd;
+            font: inherit;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            color: #777;
+            cursor: default;
+        }
+    }
 }

@@ -1,6 +1,13 @@
 #include <common>
 #include <uv_pars_vertex>
-#include <uv2_pars_vertex>
+
+// three's uv2 chunk only gates on USE_LIGHTMAP/USE_AOMAP, extended with USE_UV2
+#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+    attribute vec2 uv2;
+    varying vec2 vUv2;
+    uniform mat3 uv2Transform;
+#endif
+
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
@@ -9,8 +16,17 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
-#ifdef USE_GLOBAL_TIME
-    uniform float globalTime;
+#ifdef USE_TERRAIN_DECORATION_FADE
+    uniform vec2 terrainDecorationFadeRange;
+    varying float vTerrainDecorationFade;
+#endif
+
+#if defined(USE_GLOBAL_TIME_SECONDS) || defined(USE_SWAY)
+    uniform float globalTimeSeconds;
+#endif
+
+#ifdef USE_SWAY
+    attribute vec4 sway;
 #endif
 
 #if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK))
@@ -18,6 +34,25 @@
         struct TextureData {
             sampler2D texture;
             vec2 size;
+        };
+
+        #define MAX_TRANSFORM_STAGES 2
+
+        // nested UV transforms, flattened innermost-first by material-decoder.ts
+        struct TransformStage {
+            int type; // PAN/ROTATE/OSCILLATE
+            mat3 matrix;
+            vec2 rate; // pan
+            vec3 rotation; // rotate
+            int rotationType; // rotate - TR_Fixed/Rotating/Oscillating (0/1/2)
+            vec3 oscillationRate; // rotate
+            vec3 oscillationAmplitude; // rotate
+            vec3 oscillationPhase; // rotate
+            float rateU, rateV; // oscillate
+            float phaseU, phaseV; // oscillate
+            float amplitudeU, amplitudeV; // oscillate
+            int typeU, typeV; // oscillate
+            float offsetU, offsetV; // rotate + oscillate
         };
     #endif
 
@@ -33,6 +68,9 @@
                 float offsetU;
                 float offsetV;
                 int type;
+                vec3 oscillationRate;
+                vec3 oscillationAmplitude;
+                vec3 oscillationPhase;
             #elif USE_MAP_DIFFUSE_TRANSFORM == OSCILLATE
                 float rateU;
                 float rateV;
@@ -53,6 +91,11 @@
 
                 #ifdef USE_MAP_DIFFUSE_TRANSFORM
                     TransformDiffuseData transform;
+
+                    #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
+                        TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                        int numInnerTransforms;
+                    #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -75,6 +118,9 @@
                 float offsetU;
                 float offsetV;
                 int type;
+                vec3 oscillationRate;
+                vec3 oscillationAmplitude;
+                vec3 oscillationPhase;
             #elif USE_MAP_OPACITY_TRANSFORM == OSCILLATE
                 float rateU;
                 float rateV;
@@ -95,6 +141,11 @@
 
                 #ifdef USE_MAP_OPACITY_TRANSFORM
                 TransformOpacityData transform;
+
+                #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -113,6 +164,8 @@
                 vec3 color1;
                 vec3 color2;
                 float period;
+                float phase;
+                int fadeType;
             };
         #endif
         
@@ -125,6 +178,9 @@
                 float offsetU;
                 float offsetV;
                 int type;
+                vec3 oscillationRate;
+                vec3 oscillationAmplitude;
+                vec3 oscillationPhase;
             #elif USE_MAP_SPECULAR_TRANSFORM == OSCILLATE
                 float rateU;
                 float rateV;
@@ -149,6 +205,11 @@
 
                 #ifdef USE_MAP_SPECULAR_TRANSFORM
                     TransformSpecularData transform;
+
+                    #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
+                        TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                        int numInnerTransforms;
+                    #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -171,6 +232,9 @@
                 float offsetU;
                 float offsetV;
                 int type;
+                vec3 oscillationRate;
+                vec3 oscillationAmplitude;
+                vec3 oscillationPhase;
             #elif USE_MAP_SPECULAR_MASK_TRANSFORM == OSCILLATE
                 float rateU;
                 float rateV;
@@ -191,6 +255,11 @@
 
                 #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
                 TransformSpecularMaskData transform;
+
+                #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
                 #endif
             #endif
             #ifdef USE_COLOR_MODIFIER
@@ -215,6 +284,8 @@
 
 #ifdef USE_LIT_ATTRIBUTES
     attribute vec3 lighting;
+    attribute float sunAffected;
+    uniform vec3 staticMeshSunAmbient;
     varying vec3 vLitColor;
 #endif
 
@@ -246,19 +317,19 @@
 //     uniform DirectionalAmbientLight directionalAmbient;
 // #endif
 
-vec2 rotateUV(vec2 uv, vec3 rotation, float offsetU, float offsetV, float time, int type, vec2 size) {
+vec2 rotateUV(vec2 uv, vec3 rotation, vec3 oscillationRate, vec3 oscillationAmplitude, vec3 oscillationPhase, float offsetU, float offsetV, float timeSeconds, int type, vec2 size) {
     float angle = 0.0;
-    // Unreal rotation units: 65536 = 360 degrees. 
-    // We use Yaw (rotation.y) as the primary axis for texture rotation speed in L2.
-    float speed = (rotation.x + rotation.y + rotation.z); 
-    float radSpeed = speed * (3.14159 / 32768.0) * 0.2;
-    
+    // UTexRotator::GetMatrix uses rotation units per second (UnMaterial.cpp line 537).
+    float rotationAngle = (rotation.x + rotation.y + rotation.z) * PI / 32768.0;
+
     if (type == 1) { // Rotating
-        angle = radSpeed * time;
-    } else if (type == 2) { // Oscillating
-        angle = radSpeed * sin(time);
+        angle = rotationAngle * timeSeconds;
+    } else if (type == 2) { // Oscillating - UTexRotator::GetMatrix TR_OscillatingRotation (UnMaterial.cpp line 550-558)
+        vec3 s = timeSeconds * oscillationRate / 65535.0;
+        vec3 d = oscillationAmplitude * sin(PI2 * (fract(s) + oscillationPhase));
+        angle = rotationAngle + (d.x + d.y + d.z) * PI / 32768.0;
     } else { // Fixed
-        angle = radSpeed;
+        angle = rotationAngle;
     }
     
     vec2 center = vec2(offsetU, offsetV) / size;
@@ -269,10 +340,11 @@ vec2 rotateUV(vec2 uv, vec3 rotation, float offsetU, float offsetV, float time, 
     return rotated + center;
 }
 
-float oscillateAxis(float val, float rate, float phase, float amplitude, float offset, int type, float time, float size) {
-    // UE2 UTexOscillator::GetMatrix: S = time * rate; osc = amplitude * sin(2π * frac(S) + 2π * phase)
-    float s = time * rate;
-    float osc = amplitude * sin(2.0 * 3.14159265 * fract(s) + 2.0 * 3.14159265 * phase);
+float oscillateAxis(float val, float rate, float phase, float amplitude, float offset, int type, float timeSeconds, float size) {
+    // UTexOscillator::GetMatrix uses TimeSeconds * OscillationRate (UnMaterial.cpp line 637).
+    float s = timeSeconds * rate;
+    float cycle = type == 2 ? PI_HALF : PI2;
+    float osc = amplitude * sin(cycle * fract(s) + PI2 * phase);
     float off = offset / size;
     if (type == 0) { // Pan — UE2: M.M[2][0] = du (direct UV translation, no division by size)
         return val + osc;
@@ -284,79 +356,141 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     return val;
 }
 
+#if defined(USE_MAP_DIFFUSE_TRANSFORM_CHAIN) || defined(USE_MAP_OPACITY_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN)
+    vec2 applyTransformStage(vec2 uv, TransformStage stage, float timeSeconds, vec2 size) {
+        if (stage.type == PAN) {
+            mat3 m = stage.matrix;
+            m[2].xy += (stage.rate * timeSeconds);
+            return (m * vec3(uv, 1)).xy;
+        } else if (stage.type == ROTATE) {
+            uv = rotateUV(uv, stage.rotation, stage.oscillationRate, stage.oscillationAmplitude, stage.oscillationPhase, stage.offsetU, stage.offsetV, timeSeconds, stage.rotationType, size);
+            return (stage.matrix * vec3(uv, 1)).xy;
+        } else if (stage.type == OSCILLATE) {
+            uv.x = oscillateAxis(uv.x, stage.rateU, stage.phaseU, stage.amplitudeU, stage.offsetU, stage.typeU, timeSeconds, size.x);
+            uv.y = oscillateAxis(uv.y, stage.rateV, stage.phaseV, stage.amplitudeV, stage.offsetV, stage.typeV, timeSeconds, size.y);
+            return (stage.matrix * vec3(uv, 1)).xy;
+        }
+        return uv;
+    }
+#endif
+
 void main() {
     #ifdef USE_INSTANCED_ATTRIBUTES
         vColorInstance = colorInstance;
     #endif
     
     #ifdef USE_LIT_ATTRIBUTES
-        vLitColor = lighting;
+        vLitColor = clamp(lighting + staticMeshSunAmbient * sunAffected, 0.0, 1.0);
     #endif
 
     #include <uv_vertex>
-    #include <uv2_vertex>
+
+    #if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+        vUv2 = ( uv2Transform * vec3( uv2, 1 ) ).xy;
+    #endif
 
     #if defined(USE_UV) && defined(USE_MAP_DIFFUSE) && defined(USE_MAP_DIFFUSE_TRANSFORM)
-        vUvTransformedDiffuse = uv;
+        #ifdef USE_MAP_DIFFUSE_UV2
+            vUvTransformedDiffuse = vUv2;
+        #else
+            vUvTransformedDiffuse = uv;
+        #endif
         #if USE_MAP_DIFFUSE_TRANSFORM == PAN
             mat3 transformDiffuseMatrix = shDiffuse.transform.matrix;
-            transformDiffuseMatrix[2].xy += (shDiffuse.transform.rate * globalTime);
+            transformDiffuseMatrix[2].xy += (shDiffuse.transform.rate * globalTimeSeconds);
             vUvTransformedDiffuse = (transformDiffuseMatrix * vec3(vUvTransformedDiffuse, 1)).xy;
         #elif USE_MAP_DIFFUSE_TRANSFORM == ROTATE
-            vUvTransformedDiffuse = rotateUV(vUvTransformedDiffuse, shDiffuse.transform.rotation, shDiffuse.transform.offsetU, shDiffuse.transform.offsetV, globalTime, shDiffuse.transform.type, shDiffuse.map.size);
+            vUvTransformedDiffuse = rotateUV(vUvTransformedDiffuse, shDiffuse.transform.rotation, shDiffuse.transform.oscillationRate, shDiffuse.transform.oscillationAmplitude, shDiffuse.transform.oscillationPhase, shDiffuse.transform.offsetU, shDiffuse.transform.offsetV, globalTimeSeconds, shDiffuse.transform.type, shDiffuse.map.size);
             vUvTransformedDiffuse = (shDiffuse.transform.matrix * vec3(vUvTransformedDiffuse, 1)).xy;
         #elif USE_MAP_DIFFUSE_TRANSFORM == OSCILLATE
-            vUvTransformedDiffuse.x = oscillateAxis(vUvTransformedDiffuse.x, shDiffuse.transform.rateU, shDiffuse.transform.phaseU, shDiffuse.transform.amplitudeU, shDiffuse.transform.offsetU, shDiffuse.transform.typeU, globalTime, shDiffuse.map.size.x);
-            vUvTransformedDiffuse.y = oscillateAxis(vUvTransformedDiffuse.y, shDiffuse.transform.rateV, shDiffuse.transform.phaseV, shDiffuse.transform.amplitudeV, shDiffuse.transform.offsetV, shDiffuse.transform.typeV, globalTime, shDiffuse.map.size.y);
+            vUvTransformedDiffuse.x = oscillateAxis(vUvTransformedDiffuse.x, shDiffuse.transform.rateU, shDiffuse.transform.phaseU, shDiffuse.transform.amplitudeU, shDiffuse.transform.offsetU, shDiffuse.transform.typeU, globalTimeSeconds, shDiffuse.map.size.x);
+            vUvTransformedDiffuse.y = oscillateAxis(vUvTransformedDiffuse.y, shDiffuse.transform.rateV, shDiffuse.transform.phaseV, shDiffuse.transform.amplitudeV, shDiffuse.transform.offsetV, shDiffuse.transform.typeV, globalTimeSeconds, shDiffuse.map.size.y);
             vUvTransformedDiffuse = (shDiffuse.transform.matrix * vec3(vUvTransformedDiffuse, 1)).xy;
+        #endif
+        #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
+            // UTexModifier::Matrix accumulates outer-to-inner
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shDiffuse.numInnerTransforms) continue;
+                vUvTransformedDiffuse = applyTransformStage(vUvTransformedDiffuse, shDiffuse.innerTransforms[i], globalTimeSeconds, shDiffuse.map.size);
+            }
         #endif
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
-        vUvTransformedOpacity = uv;
+        #ifdef USE_MAP_OPACITY_UV2
+            vUvTransformedOpacity = vUv2;
+        #else
+            vUvTransformedOpacity = uv;
+        #endif
         #if USE_MAP_OPACITY_TRANSFORM == PAN
             mat3 transformOpacityMatrix = shOpacity.transform.matrix;
-            transformOpacityMatrix[2].xy += (shOpacity.transform.rate * globalTime);
+            transformOpacityMatrix[2].xy += (shOpacity.transform.rate * globalTimeSeconds);
             vUvTransformedOpacity = (transformOpacityMatrix * vec3(vUvTransformedOpacity, 1)).xy;
         #elif USE_MAP_OPACITY_TRANSFORM == ROTATE
-            vUvTransformedOpacity = rotateUV(vUvTransformedOpacity, shOpacity.transform.rotation, shOpacity.transform.offsetU, shOpacity.transform.offsetV, globalTime, shOpacity.transform.type, shOpacity.map.size);
+            vUvTransformedOpacity = rotateUV(vUvTransformedOpacity, shOpacity.transform.rotation, shOpacity.transform.oscillationRate, shOpacity.transform.oscillationAmplitude, shOpacity.transform.oscillationPhase, shOpacity.transform.offsetU, shOpacity.transform.offsetV, globalTimeSeconds, shOpacity.transform.type, shOpacity.map.size);
             vUvTransformedOpacity = (shOpacity.transform.matrix * vec3(vUvTransformedOpacity, 1)).xy;
         #elif USE_MAP_OPACITY_TRANSFORM == OSCILLATE
-            vUvTransformedOpacity.x = oscillateAxis(vUvTransformedOpacity.x, shOpacity.transform.rateU, shOpacity.transform.phaseU, shOpacity.transform.amplitudeU, shOpacity.transform.offsetU, shOpacity.transform.typeU, globalTime, shOpacity.map.size.x);
-            vUvTransformedOpacity.y = oscillateAxis(vUvTransformedOpacity.y, shOpacity.transform.rateV, shOpacity.transform.phaseV, shOpacity.transform.amplitudeV, shOpacity.transform.offsetV, shOpacity.transform.typeV, globalTime, shOpacity.map.size.y);
+            vUvTransformedOpacity.x = oscillateAxis(vUvTransformedOpacity.x, shOpacity.transform.rateU, shOpacity.transform.phaseU, shOpacity.transform.amplitudeU, shOpacity.transform.offsetU, shOpacity.transform.typeU, globalTimeSeconds, shOpacity.map.size.x);
+            vUvTransformedOpacity.y = oscillateAxis(vUvTransformedOpacity.y, shOpacity.transform.rateV, shOpacity.transform.phaseV, shOpacity.transform.amplitudeV, shOpacity.transform.offsetV, shOpacity.transform.typeV, globalTimeSeconds, shOpacity.map.size.y);
             vUvTransformedOpacity = (shOpacity.transform.matrix * vec3(vUvTransformedOpacity, 1)).xy;
+        #endif
+        #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shOpacity.numInnerTransforms) continue;
+                vUvTransformedOpacity = applyTransformStage(vUvTransformedOpacity, shOpacity.innerTransforms[i], globalTimeSeconds, shOpacity.map.size);
+            }
         #endif
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
-        vUvTransformedSpecular = uv;
+        #ifdef USE_MAP_SPECULAR_UV2
+            vUvTransformedSpecular = vUv2;
+        #else
+            vUvTransformedSpecular = uv;
+        #endif
         #if USE_MAP_SPECULAR_TRANSFORM == PAN
             mat3 transformSpecularMatrix = shSpecular.transform.matrix;
-            transformSpecularMatrix[2].xy += (shSpecular.transform.rate * globalTime);
+            transformSpecularMatrix[2].xy += (shSpecular.transform.rate * globalTimeSeconds);
             vUvTransformedSpecular = (transformSpecularMatrix * vec3(vUvTransformedSpecular, 1)).xy;
         #elif USE_MAP_SPECULAR_TRANSFORM == ROTATE
-            vUvTransformedSpecular = rotateUV(vUvTransformedSpecular, shSpecular.transform.rotation, shSpecular.transform.offsetU, shSpecular.transform.offsetV, globalTime, shSpecular.transform.type, shSpecular.map.size);
+            vUvTransformedSpecular = rotateUV(vUvTransformedSpecular, shSpecular.transform.rotation, shSpecular.transform.oscillationRate, shSpecular.transform.oscillationAmplitude, shSpecular.transform.oscillationPhase, shSpecular.transform.offsetU, shSpecular.transform.offsetV, globalTimeSeconds, shSpecular.transform.type, shSpecular.map.size);
             vUvTransformedSpecular = (shSpecular.transform.matrix * vec3(vUvTransformedSpecular, 1)).xy;
         #elif USE_MAP_SPECULAR_TRANSFORM == OSCILLATE
-            vUvTransformedSpecular.x = oscillateAxis(vUvTransformedSpecular.x, shSpecular.transform.rateU, shSpecular.transform.phaseU, shSpecular.transform.amplitudeU, shSpecular.transform.offsetU, shSpecular.transform.typeU, globalTime, shSpecular.map.size.x);
-            vUvTransformedSpecular.y = oscillateAxis(vUvTransformedSpecular.y, shSpecular.transform.rateV, shSpecular.transform.phaseV, shSpecular.transform.amplitudeV, shSpecular.transform.offsetV, shSpecular.transform.typeV, globalTime, shSpecular.map.size.y);
+            vUvTransformedSpecular.x = oscillateAxis(vUvTransformedSpecular.x, shSpecular.transform.rateU, shSpecular.transform.phaseU, shSpecular.transform.amplitudeU, shSpecular.transform.offsetU, shSpecular.transform.typeU, globalTimeSeconds, shSpecular.map.size.x);
+            vUvTransformedSpecular.y = oscillateAxis(vUvTransformedSpecular.y, shSpecular.transform.rateV, shSpecular.transform.phaseV, shSpecular.transform.amplitudeV, shSpecular.transform.offsetV, shSpecular.transform.typeV, globalTimeSeconds, shSpecular.map.size.y);
             vUvTransformedSpecular = (shSpecular.transform.matrix * vec3(vUvTransformedSpecular, 1)).xy;
+        #endif
+        #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shSpecular.numInnerTransforms) continue;
+                vUvTransformedSpecular = applyTransformStage(vUvTransformedSpecular, shSpecular.innerTransforms[i], globalTimeSeconds, shSpecular.map.size);
+            }
         #endif
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
-        vUvTransformedSpecularMask = uv;
+        #ifdef USE_MAP_SPECULAR_MASK_UV2
+            vUvTransformedSpecularMask = vUv2;
+        #else
+            vUvTransformedSpecularMask = uv;
+        #endif
         #if USE_MAP_SPECULAR_MASK_TRANSFORM == PAN
             mat3 transformSpecularMaskMatrix = shSpecularMask.transform.matrix;
-            transformSpecularMaskMatrix[2].xy += (shSpecularMask.transform.rate * globalTime);
+            transformSpecularMaskMatrix[2].xy += (shSpecularMask.transform.rate * globalTimeSeconds);
             vUvTransformedSpecularMask = (transformSpecularMaskMatrix * vec3(vUvTransformedSpecularMask, 1)).xy;
         #elif USE_MAP_SPECULAR_MASK_TRANSFORM == ROTATE
-            vUvTransformedSpecularMask = rotateUV(vUvTransformedSpecularMask, shSpecularMask.transform.rotation, shSpecularMask.transform.offsetU, shSpecularMask.transform.offsetV, globalTime, shSpecularMask.transform.type, shSpecularMask.map.size);
+            vUvTransformedSpecularMask = rotateUV(vUvTransformedSpecularMask, shSpecularMask.transform.rotation, shSpecularMask.transform.oscillationRate, shSpecularMask.transform.oscillationAmplitude, shSpecularMask.transform.oscillationPhase, shSpecularMask.transform.offsetU, shSpecularMask.transform.offsetV, globalTimeSeconds, shSpecularMask.transform.type, shSpecularMask.map.size);
             vUvTransformedSpecularMask = (shSpecularMask.transform.matrix * vec3(vUvTransformedSpecularMask, 1)).xy;
         #elif USE_MAP_SPECULAR_MASK_TRANSFORM == OSCILLATE
-            vUvTransformedSpecularMask.x = oscillateAxis(vUvTransformedSpecularMask.x, shSpecularMask.transform.rateU, shSpecularMask.transform.phaseU, shSpecularMask.transform.amplitudeU, shSpecularMask.transform.offsetU, shSpecularMask.transform.typeU, globalTime, shSpecularMask.map.size.x);
-            vUvTransformedSpecularMask.y = oscillateAxis(vUvTransformedSpecularMask.y, shSpecularMask.transform.rateV, shSpecularMask.transform.phaseV, shSpecularMask.transform.amplitudeV, shSpecularMask.transform.offsetV, shSpecularMask.transform.typeV, globalTime, shSpecularMask.map.size.y);
+            vUvTransformedSpecularMask.x = oscillateAxis(vUvTransformedSpecularMask.x, shSpecularMask.transform.rateU, shSpecularMask.transform.phaseU, shSpecularMask.transform.amplitudeU, shSpecularMask.transform.offsetU, shSpecularMask.transform.typeU, globalTimeSeconds, shSpecularMask.map.size.x);
+            vUvTransformedSpecularMask.y = oscillateAxis(vUvTransformedSpecularMask.y, shSpecularMask.transform.rateV, shSpecularMask.transform.phaseV, shSpecularMask.transform.amplitudeV, shSpecularMask.transform.offsetV, shSpecularMask.transform.typeV, globalTimeSeconds, shSpecularMask.map.size.y);
             vUvTransformedSpecularMask = (shSpecularMask.transform.matrix * vec3(vUvTransformedSpecularMask, 1)).xy;
+        #endif
+        #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shSpecularMask.numInnerTransforms) continue;
+                vUvTransformedSpecularMask = applyTransformStage(vUvTransformedSpecularMask, shSpecularMask.innerTransforms[i], globalTimeSeconds, shSpecularMask.map.size);
+            }
         #endif
     #endif
 
@@ -398,17 +532,31 @@ void main() {
         #include <defaultnormal_vertex>
     #endif
     #include <begin_vertex>
+    #ifdef USE_SWAY
+        float swayPivotZ = sway.x;
+        float swayPeriod = sway.y;
+        float swayMaxAngle = sway.z;
+        float swayPhase = sway.w;
+
+        if (swayPeriod > 0.0 && swayMaxAngle != 0.0) {
+            float swayAngle = sin(globalTimeSeconds / swayPeriod * PI2 + swayPhase) * radians(swayMaxAngle);
+            float swayHeight = max(transformed.z - swayPivotZ, 0.0);
+            transformed.xy += vec2(cos(swayPhase), sin(swayPhase)) * tan(swayAngle) * swayHeight;
+        }
+    #endif
     #include <morphtarget_vertex>
     #include <skinning_vertex>
     #include <project_vertex>
+    #ifdef USE_TERRAIN_DECORATION_FADE
+        float terrainDecorationFadeRangeSize = max(terrainDecorationFadeRange.y - terrainDecorationFadeRange.x, 1.0);
+        float terrainDecorationFadeDistance = clamp((length(mvPosition.xyz) - terrainDecorationFadeRange.x) / terrainDecorationFadeRangeSize, 0.0, 1.0);
+        vTerrainDecorationFade = 1.0 - terrainDecorationFadeDistance * terrainDecorationFadeDistance * (3.0 - 2.0 * terrainDecorationFadeDistance);
+    #endif
     #include <logdepthbuf_vertex>
     #include <clipping_planes_vertex>
     #include <worldpos_vertex>
     #include <envmap_vertex>
 
-    #ifdef HAS_LIGHTS
-        #include <lights_lambert_vertex>
-    #endif
     // #ifdef USE_DIRECTIONAL_AMBIENT
     ///     #include <lights_lambert_vertex>
     //     // vViewPosition = -mvPosition.xyz;

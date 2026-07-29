@@ -196,9 +196,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
             light: super.getDecodeInfo() as GD.IL2NTimeLightDecodeInfo,
             color: {
                 sky: { type: "TimeColor", array: this.colorSky?.map(c => c.getDecodeInfo()) ?? [] },
-                indexHaze: { type: "TypedArray", array: this.colorIndexHaze?.getTypedArray() ?? new Int32Array(0) },
+                /* .slice(): the decode info must not alias the package buffer (see collect-transferables.ts) */
+                indexHaze: { type: "TypedArray", array: (this.colorIndexHaze?.getTypedArray() as Int32Array)?.slice() ?? new Int32Array(0) },
                 haze: { type: "TimeColor", array: this.colorHaze?.map(c => c.getDecodeInfo()) ?? [] },
-                indexCloud: { type: "TypedArray", array: this.colorIndexCloud?.getTypedArray() ?? new Int32Array(0) },
+                indexCloud: { type: "TypedArray", array: (this.colorIndexCloud?.getTypedArray() as Int32Array)?.slice() ?? new Int32Array(0) },
                 cloud1: { type: "TimeColor", array: this.colorCloud1?.map(c => c.getDecodeInfo()) ?? [] },
                 cloud2: { type: "TimeColor", array: this.colorCloud2?.map(c => c.getDecodeInfo()) ?? [] },
                 cloud3: { type: "TimeColor", array: this.colorCloud3?.map(c => c.getDecodeInfo()) ?? [] },

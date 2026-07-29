@@ -59,9 +59,7 @@ class UGlowPass extends Pass {
                 varying vec2 vUv;
                 void main() {
                     vec4 texel = texture2D(tDiffuse, vUv);
-                    // Match UE2: Max(RGB) > cutoff.
-                    // IMPORTANT: Do NOT multiply by bloomScale here, as byte renderTargets clamp to 1.0.
-                    // We apply the scale in the Combine pass.
+                    // UE2 cutoff is Max(RGB) > cutoff, bloomScale applies in the combine pass because byte renderTargets clamp to 1.0
                     if (max(texel.r, max(texel.g, texel.b)) > rgbCutoff) {
                         gl_FragColor = texel;
                         gl_FragColor.a = 1.0;

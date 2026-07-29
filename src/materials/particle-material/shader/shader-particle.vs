@@ -1,5 +1,10 @@
 varying vec2 vUv;
 
+// texture-atlas subdivision (ParticleEmitter TextureUSubdivisions/VSubdivisions) - which
+// cell of the atlas this particle shows. xy = offset, zw = scale. Identity (0,0,1,1) for
+// unsubdivided textures.
+uniform vec4 uvOffsetScale;
+
 #include <common>
 #include <uv_pars_vertex>
 #include <envmap_pars_vertex>
@@ -11,7 +16,7 @@ varying vec2 vUv;
 #include <clipping_planes_pars_vertex>
 
 void main() {
-    vUv = uv;
+    vUv = uv * uvOffsetScale.zw + uvOffsetScale.xy;
 
     #include <uv_vertex>
     #include <color_vertex>

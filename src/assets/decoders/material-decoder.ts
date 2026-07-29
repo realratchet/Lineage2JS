@@ -3,12 +3,143 @@ import _decodeTexture from "./texture-decoder";
 import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
 import DecodeLibrary from "../unreal/decode-library";
+import { buildTransformStage } from "@client/materials/mesh-static-material/transform-stage";
 
 const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
+type WeakCacheEntry_T<T extends object> = { deref(): T | undefined };
+const WeakRefConstructor = (globalThis as any).WeakRef;
+
+function getWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T<T>>, key: string): T | undefined {
+    const value = cache.get(key)?.deref();
+
+    if (!value) cache.delete(key);
+    return value;
+}
+
+function setWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T<T>>, key: string, value: T): void {
+    cache.set(key, WeakRefConstructor ? new WeakRefConstructor(value) : { deref: () => value });
+}
+
+const cacheTexturesByName = new Map<string, WeakCacheEntry_T<GD.MapData_T>>();
+
+// static meshes reuse one material instance per (info, vertexColors, instanced) combo,
+// per-section duplicates otherwise dominate the draw loop with redundant uniform uploads
+const cacheStaticMaterials = new WeakMap<GD.IBaseMaterialDecodeInfo, Map<string, THREE.Material | THREE.Material[]>>();
+const cacheStaticMaterialsByName = new Map<string, WeakCacheEntry_T<Map<string, THREE.Material | THREE.Material[]>>>();
+const canonicalStaticMaterials = new Map<string, WeakCacheEntry_T<THREE.Material>>();
+const dynamicUniformNames = new Set([
+    "ambientLightColor", "cameraBillboardRight", "cameraBillboardUp", "directionalLights",
+    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTimeSeconds",
+    "hemisphereLights", "ltc_1", "ltc_2", "pointLights", "pointLightShadows", "rectAreaLights",
+    "spotLights", "spotLightShadows"
+]);
+
+function serializeMaterialValue(value: any, seen: WeakSet<object>): any {
+    if (value === null || value === undefined || typeof value !== "object") return value;
+    if (value.isTexture) return `texture:${value.uuid}`;
+    if (value.isColor) return [value.r, value.g, value.b];
+    if (value.isVector2) return [value.x, value.y];
+    if (value.isVector3) return [value.x, value.y, value.z];
+    if (value.isVector4) return [value.x, value.y, value.z, value.w];
+    if (value.isMatrix3 || value.isMatrix4) return value.elements;
+    if (ArrayBuffer.isView(value)) return `${value.constructor.name}:${value.byteLength}`;
+    if (seen.has(value)) return null;
+
+    seen.add(value);
+
+    if (Array.isArray(value)) return value.map(entry => serializeMaterialValue(entry, seen));
+
+    const result: Record<string, any> = {};
+
+    Object.keys(value).sort().forEach(key => {
+        result[key] = serializeMaterialValue(value[key], seen);
+    });
+
+    return result;
+}
+
+function getCanonicalStaticMaterialKey(material: any): string {
+    const uniforms: Record<string, any> = {};
+
+    Object.keys(material.uniforms || {}).sort().forEach(name => {
+        if (!dynamicUniformNames.has(name))
+            uniforms[name] = serializeMaterialValue(material.uniforms[name].value, new WeakSet());
+    });
+
+    return JSON.stringify({
+        name: material.name,
+        defines: material.defines,
+        uniforms,
+        sprites: serializeMaterialValue(material.sprites, new WeakSet()),
+        vertexColors: material.vertexColors,
+        side: material.side,
+        transparent: material.transparent,
+        depthWrite: material.depthWrite,
+        depthTest: material.depthTest,
+        blending: material.blending,
+        blendSrc: material.blendSrc,
+        blendDst: material.blendDst,
+        blendEquation: material.blendEquation,
+        premultipliedAlpha: material.premultipliedAlpha
+    });
+}
+
+function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
+    const source = materials instanceof Array ? materials : [materials];
+    const canonical = source.map(material => {
+        if (!(material as any)?.isStaticMeshMaterial) return material;
+
+        const key = getCanonicalStaticMaterialKey(material);
+        const cached = getWeakCacheValue(canonicalStaticMaterials, key);
+
+        if (cached) return cached;
+
+        setWeakCacheValue(canonicalStaticMaterials, key, material);
+        return material;
+    });
+
+    return materials instanceof Array ? canonical : canonical[0];
+}
+
+function decodeStaticMeshMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean, sway: boolean, terrainDecoration: boolean = false): THREE.Material | THREE.Material[] {
+    if (!info) return null;
+
+    const name = info.name;
+    let variants = name ? getWeakCacheValue(cacheStaticMaterialsByName, name) : cacheStaticMaterials.get(info);
+
+    if (!variants) {
+        variants = new Map();
+        cacheStaticMaterials.set(info, variants);
+        if (name) setWeakCacheValue(cacheStaticMaterialsByName, name, variants);
+    }
+
+    const key = (vertexColors ? "v" : "") + (instanced ? "i" : "") + (sway ? "s" : "") + (terrainDecoration ? "d" : "");
+
+    if (variants.has(key)) return variants.get(key);
+
+    const materials = decodeMaterial(library, info);
+
+    (materials instanceof Array ? materials : [materials]).forEach((mat: any) => {
+        if (!mat) return;
+        if (instanced) mat.setInstanced?.();
+        if (sway) mat.setSway?.();
+        if (terrainDecoration) mat.setTerrainDecoration?.();
+        if (vertexColors) mat.vertexColors = true;
+    });
+
+    variants.set(key, materials);
+
+    return materials;
+}
 
 let emptyMapData: GD.MapData_T;
 
 function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.MapData_T {
+    const name = info?.name;
+    const namedTexture = name ? getWeakCacheValue(cacheTexturesByName, name) : undefined;
+
+    if (namedTexture) return namedTexture;
+
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
 
@@ -24,26 +155,56 @@ function fetchTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.M
     const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : emptyMapData;
 
     cacheTextures.set(info, data);
+    if (name) setWeakCacheValue(cacheTexturesByName, name, data);
 
     return data;
+}
+
+function fetchMapTexture(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): GD.MapData_T {
+    if (!info || info.materialType === "empty") return fetchTexture(library, info as GD.ITextureDecodeInfo);
+    return decodeParameter(library, info)?.uniforms?.map ?? null;
+}
+
+function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | null): { map: GD.MapData_T | null, innerTransforms: any[] } {
+    if (materialIndex === null) return { map: null, innerTransforms: [] };
+
+    const info = library.materials[materialIndex] as GD.IBaseMaterialDecodeInfo;
+    if (!info || info.materialType === "empty") return { map: fetchMapTexture(library, info), innerTransforms: [] };
+
+    const decoded = decodeParameter(library, info);
+    if (!decoded) return { map: null, innerTransforms: [] };
+
+    const nestedTransforms = decoded.uniforms.innerTransforms ?? [];
+
+    if (decoded.transformType === "none")
+        return { map: decoded.uniforms.map, innerTransforms: nestedTransforms };
+
+    return {
+        map: decoded.uniforms.map,
+        innerTransforms: [...nestedTransforms, buildTransformStage(decoded.transformType as "pan" | "rotate" | "oscillate", decoded.uniforms.transform)]
+    };
 }
 
 function decodeFadeColorModifier(library: DecodeLibrary, info: GD.IFadeColorDecodeInfo): GD.IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
     const period = info.fadeColors.period;
+    const phase = info.fadeColors.phase ?? 0;
+    const fadeType = info.fadeColors.fadeType === "sinusoidal" ? 1 : 0;
 
     return {
         uniforms: {
             fadeColors: {
                 color1: new Color(r1, g1, b1),
                 color2: new Color(r2, g2, b2),
-                period
+                period,
+                phase,
+                fadeType
             }
         },
         defines: {
             USE_FADE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         transformType: "none",
         isUsingMap: false
@@ -58,20 +219,24 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: GD.ITexPannerDecod
         console.warn(`[MaterialDecoder] PanTexture map not found in library: ${materialIndex}`);
     }
 
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
+
     return {
         isUsingMap,
         transformType: "pan",
         defines: {
             USE_DIFFUSE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
+            map: resolved.map,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rate: Array.isArray(info.transform.rate) ? new Vector2().fromArray(info.transform.rate) : info.transform.rate,
                 map: materialIndex
-            }
+            },
+            innerTransforms: resolved.innerTransforms,
+            numInnerTransforms: resolved.innerTransforms.length
         }
     };
 }
@@ -80,22 +245,29 @@ function decodeTexRotatorModifer(library: DecodeLibrary, info: GD.ITexRotatorDec
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
     const isUsingMap = materialIndex !== null;
 
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
+
     return {
         isUsingMap,
         transformType: "rotate",
         defines: {
             USE_DIFFUSE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
+            map: resolved.map,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rotation: [info.transform.rotation[0], info.transform.rotation[1], info.transform.rotation[2]],
                 offsetU: info.transform.offsetU,
                 offsetV: info.transform.offsetV,
-                type: info.transform.type === "fixed" ? 0 : info.transform.type === "rotating" ? 1 : 2
-            }
+                type: info.transform.type === "fixed" ? 0 : info.transform.type === "rotating" ? 1 : 2,
+                oscillationRate: info.transform.oscillationRate,
+                oscillationAmplitude: info.transform.oscillationAmplitude,
+                oscillationPhase: info.transform.oscillationPhase
+            },
+            innerTransforms: resolved.innerTransforms,
+            numInnerTransforms: resolved.innerTransforms.length
         }
     };
 }
@@ -104,15 +276,17 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
     const isUsingMap = materialIndex !== null;
 
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
+
     return {
         isUsingMap,
         transformType: "oscillate",
         defines: {
             USE_DIFFUSE: "",
-            USE_GLOBAL_TIME: ""
+            USE_GLOBAL_TIME_SECONDS: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[materialIndex] as GD.ITextureDecodeInfo) : null,
+            map: resolved.map,
             transform: {
                 matrix: new Matrix3().fromArray(info.transform.matrix),
                 rateU: info.transform.rateU,
@@ -125,7 +299,9 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: GD.ITexOscilla
                 typeV: info.transform.typeV === "pan" ? 0 : info.transform.typeV === "stretch" ? 1 : info.transform.typeV === "stretchRepeat" ? 2 : 3,
                 offsetU: info.transform.offsetU,
                 offsetV: info.transform.offsetV
-            }
+            },
+            innerTransforms: resolved.innerTransforms,
+            numInnerTransforms: resolved.innerTransforms.length
         }
     };
 }
@@ -141,7 +317,7 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
             USE_ENVMAP: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchTexture(library, library.materials[info.map] as GD.ITextureDecodeInfo) : null,
+            map: isUsingMap ? fetchMapTexture(library, library.materials[info.map]) : null,
             envMapType: info.envMapType
         }
     };
@@ -150,6 +326,22 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
 function decodeFinalBlendModifier(library: DecodeLibrary, info: GD.IFinalBlendDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.material;
     return decodeParameter(library, library.materials[materialIndex]);
+}
+
+// three.js only exposes vUv/vUv2 - anything past channel 1 isn't supported
+function decodeTexCoordSourceModifier(library: DecodeLibrary, info: GD.ITexCoordSourceDecodeInfo): GD.IDecodedParameter {
+    const parameter = decodeParameter(library, library.materials[info.material]);
+
+    if (!parameter) return parameter;
+
+    if (info.uvIndex !== 0 && info.uvIndex !== 1) {
+        debugger;
+        throw new Error(`Unsupported texture coordinate channel: ${info.uvIndex}`);
+    }
+
+    parameter.uvIndex = info.uvIndex;
+
+    return parameter;
 }
 
 function decodeColorModifier(library: DecodeLibrary, info: GD.IColorModifierDecodeInfo, overrideMaterial?: string): GD.IDecodedParameter {
@@ -190,6 +382,7 @@ function _decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierD
         case "envMapTexture": param = decodeTexEnvMapModifer(library, info as GD.ITexEnvMapDecodeInfo); break;
         case "colorModifier": param = decodeColorModifier(library, info as GD.IColorModifierDecodeInfo, overrideMaterial); break;
         case "finalBlend": param = decodeFinalBlendModifier(library, info as GD.IFinalBlendDecodeInfo, overrideMaterial); break;
+        case "texCoordSource": param = decodeTexCoordSourceModifier(library, info as GD.ITexCoordSourceDecodeInfo); break;
         default: throw new Error(`Unknown modifier type: ${info.modifierType}`);
     }
 
@@ -228,6 +421,9 @@ function decodeParameter(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInf
         case "shader":
             // Shaders nested in modifiers (like ColorModifier) should return the diffuse parameter
             param = decodeParameter(library, library.materials[(info as GD.IShaderDecodeInfo).diffuse]); break;
+        case "combiner":
+            // Combiners nested in a single map slot can't run their own blend - approximate with material1
+            param = decodeParameter(library, library.materials[(info as GD.ICombinerDecodeInfo).material1]); break;
         default: throw new Error(`Unsupported decoder parameter: ${info.materialType}`);
     }
 
@@ -265,18 +461,23 @@ function decodeCombiner(library: DecodeLibrary, info: GD.ICombinerDecodeInfo): M
 }
 
 function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshStaticMaterial {
+    // D3DTSS_COLOROP = D3DTOP_BLENDCURRENTALPHA (L2.dusk_and_dawn.trace call 9416187, TextureStageState2)
+    const useSelfIllumination = !info.specular && !!info.selfIllumination && !!info.selfIlluminationMask;
+
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, library.materials[info.diffuse]),
         opacity: decodeParameter(library, library.materials[info.opacity]),
-        specular: decodeParameter(library, library.materials[info.specular]),
-        specularMask: decodeParameter(library, library.materials[info.specularMask]),
+        specular: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIllumination : info.specular]),
+        specularMask: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIlluminationMask : info.specularMask]),
         side: info.doubleSide ? DoubleSide : FrontSide,
         blendingMode: info.blendingMode,
         transparent: info.transparent,
         alphaTest: info.alphaTest,
         depthWrite: info.depthWrite,
         depthTest: info.depthTest,
-        visible: info.visible
+        visible: info.visible,
+        modulateStaticLighting2X: info.modulateStaticLighting2X,
+        selfIllumination: useSelfIllumination
     });
 }
 
@@ -324,7 +525,7 @@ function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDe
         specular: isShader ? _decodeModifier(library, info, shader.specular) : null,
         specularMask: isShader ? _decodeModifier(library, info, shader.specularMask) : null,
         side: (isColorMod && colorMod.doubleSide) ? DoubleSide : (isFinalBlend ? (finalBlend.doubleSide ? DoubleSide : FrontSide) : ((info as GD.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide)),
-        blendingMode: isFinalBlend ? finalBlend.blendingMode : (shader.blendingMode ?? "normal"),
+        blendingMode: isFinalBlend ? finalBlend.blendingMode : (isShader ? shader.blendingMode ?? "normal" : "normal"),
         transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false)),
         depthWrite: isFinalBlend ? finalBlend.depthWrite : (isShader ? shader.depthWrite : true),
         depthTest: isFinalBlend ? finalBlend.depthTest : (isShader ? shader.depthTest ?? true : true),
@@ -435,8 +636,16 @@ function decodeEmptyMaterial(): MeshStaticMaterial {
 }
 
 function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMaterialDecodeInfo): THREE.Material | THREE.Material[] {
-    const baseMaterial = library.materials[info.material];
+    const baseMaterial = info.material ? library.materials[info.material] : null;
     const { blendingMode, opacity } = info;
+
+    // particle materials are plain init-settings objects, the empty fallback must match that shape
+    function decodeEmpty(): any {
+        return { name: "empty", type: "texture", map: null, blendingMode, opacity };
+    }
+
+    if (!info.material) return decodeEmpty();
+    if (!baseMaterial) throw new Error(`Particle material '${info.material}' not found`);
 
     function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): any {
         return {
@@ -460,9 +669,17 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
     }
 
     function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+        if (!info) return decodeEmpty();
+
         switch (info.materialType) {
             case "texture": return decodeTexture(library, info as GD.ITextureDecodeInfo);
             case "sprite": return decodeSprite(library, info as GD.IAnimatedSpriteDecodeInfo);
+            case "empty": return decodeEmpty();
+            // particles can't render full shaders, approximate with the shader's diffuse map
+            case "shader": {
+                const shader = info as GD.IShaderDecodeInfo;
+                return decodeMaterial(library, shader.diffuse ? library.materials[shader.diffuse] : null);
+            }
             default: throw new Error(`Unknown decodable type: ${info.materialType}`);
         }
     }
@@ -473,8 +690,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: GD.IParticleMateri
 
     switch (baseMaterial.materialType) {
         case "group": return decodeGroup(library, baseMaterial as GD.IMaterialGroupDecodeInfo);
-        case "texture": return decodeMaterial(library, baseMaterial as GD.ITextureDecodeInfo);
-        default: throw new Error(`Unknown decodable type: ${baseMaterial.materialType}`);
+        default: return decodeMaterial(library, baseMaterial);
     }
 }
 
@@ -504,7 +720,7 @@ function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo
 
     if (info.name && material) {
         if (Array.isArray(material)) {
-            material.forEach(m => { if (m) m.name = info.name; });
+            material.forEach(m => { if (m && !m.name) m.name = info.name; });
         } else {
             material.name = info.name;
         }
@@ -514,5 +730,4 @@ function decodeMaterial(library: DecodeLibrary, info: GD.IBaseMaterialDecodeInfo
 }
 
 export default decodeMaterial;
-export { decodeMaterial };
-
+export { canonicalizeStaticMeshMaterials, decodeMaterial, decodeStaticMeshMaterial };

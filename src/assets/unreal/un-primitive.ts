@@ -30,12 +30,12 @@ abstract class UPrimitive extends UObject {
     public decodeBoundsInfo(): GD.IBoundsDecodeInfo {
         return {
             sphere: {
-                center: [this.boundingSphere.x, this.boundingSphere.z, this.boundingSphere.y],
+                center: [this.boundingSphere.x, this.boundingSphere.y, this.boundingSphere.z],
                 radius: this.boundingSphere.w
             },
             box: this.boundingBox.isValid ? {
-                min: [this.boundingBox.min.x, this.boundingBox.min.z, this.boundingBox.min.y],
-                max: [this.boundingBox.max.x, this.boundingBox.max.z, this.boundingBox.max.y]
+                min: [this.boundingBox.min.x, this.boundingBox.min.y, this.boundingBox.min.z],
+                max: [this.boundingBox.max.x, this.boundingBox.max.y, this.boundingBox.max.z]
             } : null
         };
     }
