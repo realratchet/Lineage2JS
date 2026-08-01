@@ -329,7 +329,8 @@ declare global {
                     geometry: string;
                     materials?: string;
                     skeleton: IBoneDecodeInfo[];
-                    animations: Record<string, IKeyframeDecodeInfo_T[]>
+                    animations: Record<string, IKeyframeDecodeInfo_T[]>;
+                    animationSet?: string;
                 }
 
                 export interface IEmitterDecodeInfo extends IBaseObjectDecodeInfo {
@@ -497,6 +498,12 @@ declare global {
                     isCsg: boolean;
                 }
 
+                export interface IVolumeBspDecodeInfo {
+                    isRootOutside: boolean;
+                    worldToLocal: Matrix4Arr;
+                    nodes: IMusicVolumeBspNode[];
+                }
+
                 // Add IZoneFogInfo for L2FogInfo object
                 export interface IL2FogInfoDecodeInfo extends IBaseObjectDecodeInfo {
                     type: "L2FogInfo",
@@ -597,6 +604,34 @@ declare global {
                 export interface IMaterialGroupDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "group",
                     materials: string[]
+                }
+
+                export interface ICharacterGroup {
+                    index: number,
+                    name: string,
+                    faceVariants: number,
+                    hairStyles: number[],
+                    hairColours: Record<number, number[]>,
+                    armor: ICharacterArmorOptions
+                }
+
+                export interface ICharacterArmorOption {
+                    id: number,
+                    label: string
+                }
+
+                export interface ICharacterArmorOptions {
+                    chest: ICharacterArmorOption[],
+                    legs: ICharacterArmorOption[],
+                    gloves: ICharacterArmorOption[],
+                    boots: ICharacterArmorOption[]
+                }
+
+                export interface ICharacterArmorSelection {
+                    chest: number,
+                    legs: number,
+                    gloves: number,
+                    boots: number
                 }
 
                 export interface IParticleMaterialDecodeInfo extends IBaseMaterialDecodeInfo {
@@ -783,11 +818,22 @@ declare global {
                     zoneNumber: number,
                     priority: number,
                     bounds: IBoundsDecodeInfo,
-                    bsp: {
-                        isRootOutside: boolean,
-                        worldToLocal: Matrix4Arr,
-                        nodes: IMusicVolumeBspNode[]
-                    }
+                    bsp: IVolumeBspDecodeInfo
+                }
+
+                export interface IWaterVolumeDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "WaterVolume",
+                    priority: number,
+                    fluidFriction: number,
+                    gravity: Vector3Arr,
+                    terminalVelocity: number,
+                    zoneVelocity: Vector3Arr,
+                    fog: {
+                        color: ColorArr,
+                        start: number,
+                        end: number
+                    } | null,
+                    bsp: IVolumeBspDecodeInfo
                 }
 
                 export interface IAmbientSoundObjectDecodeInfo extends IAudioDecodeInfo {

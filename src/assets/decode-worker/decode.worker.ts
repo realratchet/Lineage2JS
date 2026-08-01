@@ -70,6 +70,36 @@ async function handleMessage(msg: MainToWorkerMessage) {
             }
             break;
         }
+        case "precacheCharacters": {
+            try {
+                await engine.precacheCharacters(msg.settings);
+                post({ type: "charactersPrecached", requestId: msg.requestId });
+            } catch (e) {
+                console.error("[decode-worker] failed to precache characters:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "charGroups": {
+            try {
+                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups() });
+            } catch (e) {
+                console.error("[decode-worker] failed to decode character groups:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "decodeCharacter": {
+            try {
+                const buffer = await engine.decodeCharacterBinary(msg.settings, msg.charIndex, msg.faceVariant, msg.hairVariant, msg.hairColour, msg.armor, msg.includeAnimations);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error("[decode-worker] failed to decode character:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "musicInfo": {
             try {
                 post({ type: "musicInfoDecoded", requestId: msg.requestId, music: await engine.decodeMusicInfo() });

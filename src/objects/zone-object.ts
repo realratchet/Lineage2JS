@@ -23,6 +23,28 @@ const MAX_RECURSION_DEPTH = 4;
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
 type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number; transparent: number };
 
+function encompassesVolume(position: THREE.Vector3, bsp: GD.IVolumeBspDecodeInfo): boolean {
+    let outside = bsp.isRootOutside;
+    const nodes = bsp.nodes;
+
+    if (nodes.length > 0) {
+        let iNode = 0;
+
+        do {
+            const node = nodes[iNode];
+            const plane = node.plane;
+            const isFront = plane[0] * position.x + plane[1] * position.y + plane[2] * position.z - plane[3] > 0;
+
+            if (isFront) outside = outside || node.isCsg;
+            else outside = outside && !node.isCsg;
+
+            iNode = isFront ? node.iFront : node.iBack;
+        } while (iNode !== -1);
+    }
+
+    return !outside;
+}
+
 function getTransparentLookup(object: any, transparentMaterials: Set<number>): Uint8Array {
     let lookup = object.transparentLookup as Uint8Array;
     if (lookup) return lookup;
@@ -201,6 +223,7 @@ class SectorObject extends Object3D {
 
     // NEW: Precise Geometric volumes for runtime intersection
     public musicVolumes?: GD.IMusicVolumeDecodeInfo[];
+    public waterVolumes?: GD.IWaterVolumeDecodeInfo[];
     public ambientSounds?: GD.IAmbientSoundObjectDecodeInfo[];
 
     // NEW: BSP rendering data
@@ -380,37 +403,10 @@ class SectorObject extends Object3D {
         let isLooped = false, isForced = false;
         
         if (this.musicVolumes) {
-            const cx = cameraPosition.x, cy = cameraPosition.y, cz = cameraPosition.z;
-
             for (const vol of this.musicVolumes) {
                 if (vol.priority < highestPriority) continue;
 
-                // Planes are pre-baked to world space, just PlaneDot directly
-                let outside = vol.bsp.isRootOutside;
-                const nodes = vol.bsp.nodes;
-
-                if (nodes.length > 0) {
-                    let iNode = 0;
-                    let isFront = false;
-
-                    do {
-                        const node = nodes[iNode];
-                        const p = node.plane;
-                        // UE2 PlaneDot: X*P.X + Y*P.Y + Z*P.Z - W
-                        const dist = p[0] * cx + p[1] * cy + p[2] * cz - p[3];
-                        isFront = dist > 0;
-                        
-                        if (isFront) {
-                            outside = outside || node.isCsg;
-                        } else {
-                            outside = outside && !node.isCsg;
-                        }
-                        
-                        iNode = isFront ? node.iFront : node.iBack;
-                    } while (iNode !== -1);
-                }
-
-                if (!outside) {
+                if (encompassesVolume(cameraPosition, vol.bsp)) {
                     highestPriority = vol.priority;
                     selectedMusicId = vol.musicId;
                     isLooped = vol.isMusicLooped;
@@ -420,6 +416,19 @@ class SectorObject extends Object3D {
         }
 
         return { musicId: selectedMusicId, isLooped, isForced };
+    }
+
+    public getWaterVolumeAt(position: THREE.Vector3): GD.IWaterVolumeDecodeInfo | null {
+        let selected: GD.IWaterVolumeDecodeInfo = null;
+
+        if (!this.waterVolumes) return selected;
+
+        for (const volume of this.waterVolumes) {
+            if (selected && volume.priority < selected.priority) continue;
+            if (encompassesVolume(position, volume.bsp)) selected = volume;
+        }
+
+        return selected;
     }
 
     /**

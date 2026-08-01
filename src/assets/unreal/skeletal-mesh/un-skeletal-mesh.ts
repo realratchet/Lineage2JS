@@ -1,17 +1,45 @@
-import { BufferValue, UObject } from "@l2js/core";
+import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
-import FArray, { FArrayLazy, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/unreal/un-array";
-import FCoords from "../un-coords";
+import FArray, { FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/unreal/un-array";
 import ULodMesh from "../un-lod-mesh";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
-import { FIndexArray } from "@l2js/core/unreal/un-array";
 
 type SkeletalMeshDecodeResult_T = { object: GD.ISkinnedMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialGroupDecodeInfo };
 
-class FWeightIndex extends UObject {
+class FMeshVector {
+    public x: number;
+    public y: number;
+    public z: number;
+
+    public load(pkg: C.APackage): this {
+        this.x = pkg.read("float");
+        this.y = pkg.read("float");
+        this.z = pkg.read("float");
+
+        return this;
+    }
+}
+
+class FMeshCoords {
+    public origin = new FMeshVector();
+    public xAxis = new FMeshVector();
+    public yAxis = new FMeshVector();
+    public zAxis = new FMeshVector();
+
+    public load(pkg: C.APackage): this {
+        this.origin.load(pkg);
+        this.xAxis.load(pkg);
+        this.yAxis.load(pkg);
+        this.zAxis.load(pkg);
+
+        return this;
+    }
+}
+
+class FWeightIndex {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     public startBoneInf: number;
 
@@ -23,7 +51,7 @@ class FWeightIndex extends UObject {
     }
 }
 
-class FBoneInfluence extends UObject {
+class FBoneInfluence {
     public boneWeight: number;
     public boneIndex: number;
 
@@ -35,7 +63,7 @@ class FBoneInfluence extends UObject {
     }
 }
 
-class FJointPos extends UObject {
+class FJointPos {
     public rotation: FQuaternion;
     public position: FVector;
     public scale: FVector;
@@ -54,7 +82,7 @@ class FJointPos extends UObject {
 
 }
 
-class FMeshBone extends UObject {
+class FMeshBone {
     public boneName: string;
     public flags: number;
     public bonePos = new FJointPos();
@@ -76,7 +104,7 @@ class FMeshBone extends UObject {
     }
 }
 
-class FMeshNorm extends UObject {
+class FMeshNorm {
     public x = 10;
     public y = 10;
     public z = 10;
@@ -90,7 +118,7 @@ class FMeshNorm extends UObject {
     }
 }
 
-class FSkinPoint extends UObject {
+class FSkinPoint {
     public point: FVector;
     public normal: FMeshNorm;
 
@@ -103,7 +131,7 @@ class FSkinPoint extends UObject {
     }
 }
 
-class FSkelMeshSection extends UObject {
+class FSkelMeshSection {
     public materialIndex: number;
     public minStreamIndex: number;
     public minWedgeIndex: number;
@@ -133,7 +161,7 @@ class FSkelMeshSection extends UObject {
     }
 }
 
-class FAnimMeshVertex extends UObject {
+class FAnimMeshVertex {
     public position: FVector;
     public normal: FVector;
     public texU: number;
@@ -150,7 +178,7 @@ class FAnimMeshVertex extends UObject {
     }
 }
 
-class FSkinVertexStream extends UObject {
+class FSkinVertexStream {
     public revision: number;
     public unkVar0: number;
     public unkVar1: number;
@@ -166,7 +194,7 @@ class FSkinVertexStream extends UObject {
     }
 }
 
-class FTriangleLOD extends UObject {
+class FTriangleLOD {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
 
@@ -180,7 +208,7 @@ class FTriangleLOD extends UObject {
         return this;
     }
 }
-class FStaticModelLOD extends UObject {
+class FStaticModelLOD {
     public skinningData = new FPrimitiveArray(BufferValue.uint32);
     public skinPoints = new FArray(FSkinPoint);
     public numSoftWedges: number;
@@ -231,7 +259,7 @@ class FStaticModelLOD extends UObject {
     }
 }
 
-class FMeshWedge extends UObject {
+class FMeshWedge {
     public iVertex: number;
     public texU: number;
     public texV: number;
@@ -245,7 +273,7 @@ class FMeshWedge extends UObject {
     }
 }
 
-class FTriangle extends UObject {
+class FTriangle {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
     public materialIndex2: number;
@@ -264,7 +292,7 @@ class FTriangle extends UObject {
     }
 }
 
-class FVertexInfluence extends UObject {
+class FVertexInfluence {
     public weight: number;
     public iPoint: number;
     public iBone: number;
@@ -280,7 +308,7 @@ class FVertexInfluence extends UObject {
 
 abstract class USkeletalMesh extends ULodMesh {
 
-    protected points2 = new FArray(FVector);
+    protected points2 = new FArray(FMeshVector);
     protected refSkeleton = new FArray(FMeshBone);
     protected animationId: number;
     protected animation: GA.UMeshAnimation;
@@ -289,10 +317,10 @@ abstract class USkeletalMesh extends ULodMesh {
     protected boneInluences = new FArray(FBoneInfluence);
     protected attachAliases: string[];
     protected attachBoneNames: string[];
-    protected attachCoords = new FArray(FCoords);
+    protected attachCoords = new FArray(FMeshCoords);
     protected lodModels = new FArray(FStaticModelLOD);
     protected sk_unkIndex1: number;
-    protected points = new FArrayLazy(FVector);
+    protected points = new FArrayLazy(FMeshVector);
     protected wedges = new FArrayLazy(FMeshWedge);
     protected faces = new FArrayLazy(FTriangle);
     protected vertexInfluences = new FArrayLazy(FVertexInfluence);
@@ -314,7 +342,7 @@ abstract class USkeletalMesh extends ULodMesh {
         this.animationId = pkg.read("compat32");
 
         if (this.animationId !== 0)
-            this.animation = pkg.fetchObject<GA.UMeshAnimation>(this.animationId);
+            this.animation = pkg.fetchObject<GA.UMeshAnimation>(this.animationId).loadSelf();
 
         this.skeletalDepth = pkg.read("uint32");
         this.weightIndices.load(pkg);
@@ -357,13 +385,21 @@ abstract class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): SkeletalMeshDecodeResult_T {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true): SkeletalMeshDecodeResult_T {
         const section = this;
-        const { positions, uvs, bones, weights } = convertWedges(section.points, section.wedges, section.vertexInfluences);
-        const { indices, groups } = buildIndices(section.faces, this.lodMeshMaterials.length);
+
+        if (section.points.length > 0) section.points.getElem(0);
+        if (section.wedges.length > 0) section.wedges.getElem(0);
+        if (section.faces.length > 0) section.faces.getElem(0);
+        if (section.vertexInfluences.length > 0) section.vertexInfluences.getElem(0);
+
+        const lod = section.wedges.length === 0 && section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
+        const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton) : null;
+        const { positions, uvs, bones, weights } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences);
+        const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
 
-        const materials = this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat));
+        const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
 
         const materialInfo = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
         const geometryInfo = {
@@ -383,7 +419,7 @@ abstract class USkeletalMesh extends ULodMesh {
         const boneCount = this.refSkeleton.length;
         const boneMap = new Array(boneCount);
 
-        if (this.animation) {
+        if (decodeAnimations && this.animation) {
             const refBones = this.animation.refBones;
 
             for (let i = 0; i < boneCount; i++) {
@@ -392,10 +428,10 @@ abstract class USkeletalMesh extends ULodMesh {
                 for (let j = 0, len = refBones.length; j < len; j++) {
                     const boneAnim = refBones.getElem(j);
 
-                    if (boneSkeleton.boneName !== boneAnim.boneName)
+                    if (normalizeBoneName(boneSkeleton.boneName) !== normalizeBoneName(boneAnim.boneName))
                         continue;
 
-                    boneMap[i] = [boneAnim.boneName.replaceAll(" ", "_"), j];
+                    boneMap[i] = [normalizeBoneName(boneAnim.boneName), j];
                 }
             }
 
@@ -409,18 +445,22 @@ abstract class USkeletalMesh extends ULodMesh {
 
                 for (let i = 0, len = move.boneIndices.getElemCount(); i < len; i++) {
                     const boneIndexMesh = move.boneIndices.getElem(i);
-                    const [boneName, boneIndexAnim] = boneMap[boneIndexMesh];
+                    const boneMapping = boneMap[boneIndexMesh];
+
+                    if (!boneMapping) continue; // mesh bone the animation set does not drive
+
+                    const [boneName, boneIndexAnim] = boneMapping;
                     const track = move.animTracks.getElem(boneIndexAnim);
                     const trackFrameCount = track.keyTime.getElemCount();
 
                     const lenPos = track.keyPos.getElemCount();
                     const lenRot = track.keyQuat.getElemCount();
 
-                    const timesPos = new Float32Array(lenPos);
-                    const timesRot = new Float32Array(lenRot);
+                    const timesPos = new Float32Array(lenPos + 1);
+                    const timesRot = new Float32Array(lenRot + 1);
 
-                    const positions = new Float32Array(lenPos * 3);
-                    const rotations = new Float32Array(lenRot * 4);
+                    const positions = new Float32Array((lenPos + 1) * 3);
+                    const rotations = new Float32Array((lenRot + 1) * 4);
 
                     for (let j = 0; j < trackFrameCount; j++) {
                         const time = track.keyTime.getElem(j);
@@ -429,7 +469,7 @@ abstract class USkeletalMesh extends ULodMesh {
                             const idxPos = j * 3;
                             let pos = track.keyPos.getElem(j < lenPos ? j : lenPos - 1);
 
-                            pos = fixVector(pos);
+                            pos = makeVector(pos);
 
                             timesPos[j] = time / framerate;
 
@@ -444,9 +484,9 @@ abstract class USkeletalMesh extends ULodMesh {
                             const idxRot = j * 4;
 
 
-                            rot = fixRotation(rot);
+                            rot = makeQuaternion(rot);
 
-                            if (boneIndexAnim === 0)
+                            if (boneIndexAnim > 0)
                                 rot = rot.conjugate();
 
                             timesRot[j] = time / framerate;
@@ -457,6 +497,15 @@ abstract class USkeletalMesh extends ULodMesh {
                             rotations[idxRot + 3] = rot.w;
                         }
                     }
+
+                    // a sequence keys frames 0..frameCount-1 and loops back over the interval past the last one, which three only interpolates if the closing key is there
+                    const wrapTime = sequence.frameCount / framerate;
+
+                    timesPos[lenPos] = wrapTime;
+                    positions.copyWithin(lenPos * 3, 0, 3);
+
+                    timesRot[lenRot] = wrapTime;
+                    rotations.copyWithin(lenRot * 4, 0, 4);
 
                     keyframes.push({ name: `${boneName}.position`, times: timesPos, values: positions, type: "Vector" });
                     keyframes.push({ name: `${boneName}.quaternion`, times: timesRot, values: rotations, type: "Quaternion" });
@@ -519,7 +568,149 @@ function buildIndices(faces: FTriangle[], materialCount: number) {
     return { indices, groups };
 }
 
-function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVertexInfluence[]) {
+const tmpStreamBits = new Uint32Array(1);
+const tmpStreamFloat = new Float32Array(tmpStreamBits.buffer);
+
+function readStreamFloat(stream: FPrimitiveArray<"uint32">, index: number) {
+    tmpStreamBits[0] = stream.getElem(index);
+
+    return tmpStreamFloat[0];
+}
+
+// skinning stream commands, one per soft wedge: 0xF fetches a previously stored vertex, 0x8 stores this one
+const SKIN_FETCH_DUPE = 0xf0000000;
+const SKIN_STORE_DUPE = 0x80000000;
+
+function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uvs: Float32Array, bones: Uint8Array, weights: Float32Array) {
+    const stream = lod.skinningData;
+    const wedgeCount = lod.numSoftWedges;
+    const dupes: number[] = [];
+
+    let cursor = 0, pointIndex = 0;
+
+    for (let wedge = 0; wedge < wedgeCount; wedge++) {
+        const command = stream.getElem(cursor) >>> 0;
+        const offsetVertex = 3 * wedge, offsetUv = 2 * wedge, offsetBone = MAX_BONES * wedge;
+
+        if (command >= SKIN_FETCH_DUPE) {
+            const source = dupes[(command & 0x0fffffff) / 6];
+
+            positions.copyWithin(offsetVertex, 3 * source, 3 * source + 3);
+            bones.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
+            weights.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
+
+            cursor += 1;
+        } else {
+            const influenceCount = ((command >>> 28) & 0x7) + 1;
+            const point = lod.skinPoints[pointIndex++].point;
+
+            positions[offsetVertex + 0] = point.x;
+            positions[offsetVertex + 1] = point.y;
+            positions[offsetVertex + 2] = point.z;
+
+            let total = 0;
+
+            for (let i = 0; i < influenceCount && i < MAX_BONES; i++) {
+                const influence = stream.getElem(cursor + i) >>> 0;
+                const weight = ((influence >>> 12) & 0xffff) / 65535;
+
+                bones[offsetBone + i] = (influence & 0xfff) / 6;
+                weights[offsetBone + i] = weight;
+                total += weight;
+            }
+
+            if (influenceCount > MAX_BONES) {
+                for (let i = 0; i < MAX_BONES; i++)
+                    weights[offsetBone + i] /= total;
+            }
+
+            if (command & SKIN_STORE_DUPE) dupes.push(wedge);
+
+            cursor += influenceCount;
+        }
+
+        uvs[offsetUv + 0] = readStreamFloat(stream, cursor);
+        uvs[offsetUv + 1] = readStreamFloat(stream, cursor + 1);
+
+        cursor += 2;
+    }
+
+    if ((stream.getElem(cursor) >>> 0) !== 0xffffffff)
+        throw new Error(`Skinning stream stopped at ${cursor} of ${stream.getElemCount()} instead of its terminator after ${wedgeCount} wedges.`);
+}
+
+// cooked rigid sections never carry their joint index; the head parts that kept raw influences bind every vertex to Bip01_head
+function findRigidBone(section: FSkelMeshSection, refSkeleton: FMeshBone[]) {
+    if (section.boneIndex !== 0) return section.boneIndex;
+
+    for (let i = 0, len = refSkeleton.length; i < len; i++) {
+        if (/^bip01[ _]head$/i.test(refSkeleton[i].boneName)) return i;
+    }
+
+    return 0;
+}
+
+function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleton: FMeshBone[]) {
+    const rigidStream = lod.skinVertexStream.vertices;
+    const softCount = lod.numSoftWedges, rigidCount = rigidStream.length;
+    const vertexCount = softCount + rigidCount;
+
+    const positions = new Float32Array(3 * vertexCount);
+    const uvs = new Float32Array(2 * vertexCount);
+    const bones = new Uint8Array(MAX_BONES * vertexCount);
+    const weights = new Float32Array(MAX_BONES * vertexCount);
+
+    if (softCount > 0)
+        convertSkinningStream(lod, positions, uvs, bones, weights);
+
+    for (let i = 0; i < rigidCount; i++) {
+        const vertex = rigidStream.getElem(i);
+        const offsetVertex = 3 * (softCount + i), offsetUv = 2 * (softCount + i);
+
+        positions[offsetVertex + 0] = vertex.position.x;
+        positions[offsetVertex + 1] = vertex.position.y;
+        positions[offsetVertex + 2] = vertex.position.z;
+
+        uvs[offsetUv + 0] = vertex.texU;
+        uvs[offsetUv + 1] = vertex.texV;
+    }
+
+    const softBuffer = lod.softIndices.indices, rigidBuffer = lod.rigidIndices.indices;
+    const softIndexCount = softBuffer.getElemCount(), rigidIndexCount = rigidBuffer.getElemCount();
+    const IndexConstructor = getTypedArrayConstructor(vertexCount);
+    const indices = new IndexConstructor(softIndexCount + rigidIndexCount);
+
+    for (let i = 0; i < softIndexCount; i++)
+        indices[i] = softBuffer.getElem(i);
+
+    for (let i = 0; i < rigidIndexCount; i++)
+        indices[softIndexCount + i] = softCount + rigidBuffer.getElem(i);
+
+    const groups: GD.Vector3Arr[] = [];
+
+    for (let i = 0, len = lod.softSections.length; i < len; i++) {
+        const section = lod.softSections[i];
+
+        groups.push([3 * section.firstFace, 3 * section.numFaces, Math.min(section.materialIndex, materialCount - 1)]);
+    }
+
+    // rigid sections reuse the influence-count slot to name the single bone every vertex in the section binds to
+    for (let i = 0, len = lod.rigidSections.length; i < len; i++) {
+        const section = lod.rigidSections[i];
+        const boneIndex = findRigidBone(section, refSkeleton);
+
+        for (let vertex = section.minWedgeIndex; vertex <= section.maxWedgeIndex && vertex < rigidCount; vertex++) {
+            bones[MAX_BONES * (softCount + vertex)] = boneIndex;
+            weights[MAX_BONES * (softCount + vertex)] = 1;
+        }
+
+        groups.push([softIndexCount + 3 * section.firstFace, 3 * section.numFaces, Math.min(section.materialIndex, materialCount - 1)]);
+    }
+
+    return { positions, uvs, bones, weights, indices, groups };
+}
+
+function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[]) {
     const vertexInfos: VertexInfo_T[] = new Array(points.length);
 
     for (let i = 0, len = points.length; i < len; i++) {
@@ -576,14 +767,14 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
         const wedge = wedges[i];
         const vinfo = vertexInfos[wedge.iVertex];
 
-        const point = points[wedge.iVertex].getVectorElements();
+        const point = points[wedge.iVertex];
         const texU = wedge.texU, texV = wedge.texV;
 
         const offsetUv = 2 * i, offsetVertex = 3 * i, offsetBone = MAX_BONES * i;
 
-        positions[offsetVertex + 0] = point[0];
-        positions[offsetVertex + 1] = point[1];
-        positions[offsetVertex + 2] = point[2];
+        positions[offsetVertex + 0] = point.x;
+        positions[offsetVertex + 1] = point.y;
+        positions[offsetVertex + 2] = point.z;
 
         uvs[offsetUv + 0] = texU;
         uvs[offsetUv + 1] = texV;
@@ -599,6 +790,11 @@ function convertWedges(points: FVector[], wedges: FMeshWedge[], influences: FVer
     return { positions, uvs, bones, weights };
 }
 
+// bodyparts of one character disagree on the casing of shared bones, so one part's clip only binds to the others once names are canonical
+function normalizeBoneName(name: string) {
+    return name.replaceAll(" ", "_").toLowerCase();
+}
+
 function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
     const boneCount = refSkeleton.length;
     const boneInfos = new Array<IBoneDecodeInfo>(boneCount)
@@ -611,16 +807,16 @@ function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
         let bonePos = bone.bonePos.position.clone();
         let boneRot = bone.bonePos.rotation.clone();
 
-        if (boneIndex === 0)
+        if (boneIndex > 0)
             boneRot = boneRot.conjugate();
 
-        bonePos = fixVector(bonePos);
-        boneRot = fixRotation(boneRot);
+        bonePos = makeVector(bonePos);
+        boneRot = makeQuaternion(boneRot);
 
         boneInfos[boneIndex] = {
             type: "Bone",
             uuid: generateUUID(),
-            name: bone.boneName.replaceAll(" ", "_"),
+            name: normalizeBoneName(bone.boneName),
             parent: bone.parentIndex,
             position: [bonePos.x, bonePos.y, bonePos.z],
             quaternion: [boneRot.x, boneRot.y, boneRot.z, boneRot.w]
@@ -651,7 +847,7 @@ type VertexInfo_T = {
 }
 
 class FBoneCoord {
-    public origin: FVector = new FVector();
+    public origin: FVector = FVector.make();
     public axis: FAxis = new FAxis();
 
     public invert() {
@@ -704,5 +900,5 @@ class FBoneCoord {
     }
 }
 
-function fixVector(v: FVector) { return new FVector(v.x, v.z, v.y); }
-function fixRotation(v: FQuaternion) { return new FQuaternion(v.x, v.z, v.y, v.w); }
+function makeVector(v: { x: number, y: number, z: number }) { return FVector.make(v.x, v.y, v.z); }
+function makeQuaternion(v: { x: number, y: number, z: number, w: number }) { return FQuaternion.make(v.x, v.y, v.z, v.w); }

@@ -23,6 +23,7 @@ import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-ba
 import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
 import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
+import ColliderOverlay from "./collider-overlay";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -47,9 +48,14 @@ const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
+const tmpOrbitFollowTarget = new Vector3();
+const tmpOrbitFollowDelta = new Vector3();
+const tmpMouseIntersection = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
+const arrBSPGroups: Object3D[] = [];
+const arrBSPIntersections: THREE.Intersection[] = [];
 // off-screen emitters (in range but outside the frustum) simulate at this rate instead
 // of a hard freeze, so particle state doesn't go stale and pop when re-entering view
 // Two maintenance ticks keep offscreen loops alive without dominating visible frames.
@@ -75,6 +81,7 @@ const tmpColorByte_5 = new ColorByte(); // For cloud color blending
 const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
+const CLICK_MAX_MOVEMENT_SQ = 16;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
@@ -258,6 +265,9 @@ class RenderManager {
     protected parallelShaderCompileExt: any = undefined; // resolved lazily, null if unsupported
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected isOrbitControls = true;
+    protected isPrimaryMouseDown = false;
+    protected hasMouseDragged = false;
+    protected readonly mouseDownPosition = new Vector2();
     protected lastRender: number = 0;
     protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
     protected readonly _lastListenerQuat = new Quaternion(0, 0, 0, 0);
@@ -266,6 +276,14 @@ class RenderManager {
     protected readonly lastProjectionScreenMatrix = new Matrix4();
 
     public readonly player = new Player(this);
+    protected readonly colliderOverlay = new ColliderOverlay();
+    protected showColliders = false;
+    protected characterGroup = 1;
+    protected characterFace = 0;
+    protected characterHair = 0;
+    protected characterHairColour = 0;
+    protected followPlayer = false;
+    protected characterArmor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
 
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
@@ -326,6 +344,10 @@ class RenderManager {
                 this.objectGroup.visible = v;
             });
 
+        guiFolders.world.add(this, "showColliders")
+            .name("Show Colliders")
+            .onChange(v => this.setCollidersVisible(v));
+
         guiFolders.world.add(this.envConfig, "moverPosition", 0, 1, 0.01)
             .name("Door Position")
             .onChange(v => {
@@ -358,6 +380,7 @@ class RenderManager {
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+        this.scene.add(this.colliderOverlay);
         this.objectGroup.add(this.particleBatcher.root);
 
         // Create visualizer system (will be recreated when sector changes)
@@ -400,8 +423,8 @@ class RenderManager {
         // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // tower outside
-        this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-        this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
+        // this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
+        // this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
         // // cruma doors
         // this.camera.position.set(17635.92785265722, 110567.1123199521, -6404.763840433224);
@@ -518,11 +541,16 @@ class RenderManager {
         // this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
         // this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
 
+        this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
+        this.controls.orbit.target.set(-87086.51708877791, 239936.94718888338, -3685.930229617832);
+
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
 
         viewport.appendChild(this.renderer.domElement);
 
+        viewport.addEventListener("mousedown", this.onHandleMouseDown.bind(this));
+        viewport.addEventListener("mousemove", this.onHandleMouseMove.bind(this));
         viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));
         window.addEventListener("keydown", this.onHandleKeyDown.bind(this));
         window.addEventListener("keyup", this.onHandleKeyUp.bind(this));
@@ -539,7 +567,7 @@ class RenderManager {
         // this.player.visible = false;
         // this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
         // this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
-        this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
+        this.player.position.set(-87063.33997244012, 239964.66910649382, -3637.2213744465607);   // outside village
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
         addResizeListeners(this);
@@ -614,11 +642,11 @@ class RenderManager {
     }
 
     public toScreenSpaceCoords(point: Vector2) {
-        const { width, height } = this.renderer.getSize(new Vector2());
+        const bounds = this.renderer.domElement.getBoundingClientRect();
 
         return new Vector2(
-            point.x / width * 2 - 1,
-            1 - point.y / height * 2
+            (point.x - bounds.left) / bounds.width * 2 - 1,
+            1 - (point.y - bounds.top) / bounds.height * 2
         );
     }
 
@@ -791,6 +819,8 @@ class RenderManager {
                 this.shiftTimeDown = Date.now();
                 this.dirKeys.shift = true;
             } break;
+            case "t": this.player.teleportTo(this.camera.position); break;
+
         }
     }
 
@@ -836,53 +866,89 @@ class RenderManager {
         }
     }
 
-    public onHandleMouseUp(event: MouseEvent) {
+    protected movePlayerTo(position: Vector3) {
+        this.player.goTo(position);
+    }
+
+    public onHandleMouseDown(event: MouseEvent) {
         if (event.button !== 0 || !this.isOrbitControls) return;
 
+        this.isPrimaryMouseDown = true;
+        this.hasMouseDragged = false;
+        this.mouseDownPosition.set(event.clientX, event.clientY);
+    }
+
+    public onHandleMouseMove(event: MouseEvent) {
+        if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
+
+        const dx = event.clientX - this.mouseDownPosition.x;
+        const dy = event.clientY - this.mouseDownPosition.y;
+
+        if (dx * dx + dy * dy > CLICK_MAX_MOVEMENT_SQ) this.hasMouseDragged = true;
+    }
+
+    public onHandleMouseUp(event: MouseEvent) {
+        if (event.button !== 0) return;
+
+        const dx = event.clientX - this.mouseDownPosition.x;
+        const dy = event.clientY - this.mouseDownPosition.y;
+        const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
+
+        this.isPrimaryMouseDown = false;
+
+        if (!isClick || !this.isOrbitControls) return;
+
         try {
-            const position = new Vector2(event.pageX, event.pageY);
+            const position = new Vector2(event.clientX, event.clientY);
             const ssPosition = this.toScreenSpaceCoords(position);
-            const intersections: THREE.Intersection[] = [];
 
             this.raycaster.setFromCamera(ssPosition, this.camera);
-            this.raycaster.intersectObject(this.scene, true, intersections);
+            const physicsRay = new RAPIER.Ray(this.raycaster.ray.origin, this.raycaster.ray.direction);
+            const physicsIntersection = this.physicsWorld.castRayAndGetNormal(physicsRay, this.camera.far, false, undefined, undefined, this.player.getCollider(), this.player.getRigidbody());
 
-            if (intersections.length === 0) return;
+            if (physicsIntersection) {
+                tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(physicsIntersection.toi).add(this.raycaster.ray.origin);
+                this.movePlayerTo(tmpMouseIntersection);
 
-            const intersection = intersections[0];
+                const owner = this.colliderOwners.get(physicsIntersection.collider.handle);
 
-            const collidable = intersections.find(i => (i.object as any).isCollidable);
-
-            if (collidable)
-                // this.player.getRigidbody().setTranslation(
-                //     new Vector3().addVectors(intersection.point, new Vector3(0, 100 * 1, 0)),
-                //     true
-                // );
-                this.player.goTo(collidable.point);
-
-            console.log(intersection);
-
-            if ((intersection.object as any).isMesh) {
-                const mesh = intersection.object as THREE.Mesh;
-                const geometry = mesh.geometry;
-                if (geometry.attributes.nodeIndex) {
-                    const nodeIndexAttr = geometry.attributes.nodeIndex;
-                    const indexAttr = geometry.index;
-                    let vertexIndex;
-
-                    if (indexAttr) {
-                        vertexIndex = indexAttr.getX(intersection.faceIndex! * 3);
-                    } else {
-                        vertexIndex = intersection.faceIndex! * 3;
-                    }
-
-                    const nodeIndex = nodeIndexAttr.getX(vertexIndex);
-                    console.log(`Node ID: ${nodeIndex}`);
-                }
+                console.log(owner, physicsIntersection);
             }
+
+            this.pickBSPNode(physicsIntersection ? physicsIntersection.toi : this.camera.far);
         } catch (e) {
             console.error(e);
         }
+    }
+
+    protected pickBSPNode(maxDistance: number) {
+        arrBSPGroups.length = 0;
+        arrBSPIntersections.length = 0;
+
+        this.sectors.forEach(column => column.forEach(sector => {
+            if (sector.bspGroup) arrBSPGroups.push(sector.bspGroup);
+        }));
+
+        if (arrBSPGroups.length === 0) return;
+
+        const prevFar = this.raycaster.far;
+
+        this.raycaster.far = maxDistance;
+        this.raycaster.intersectObjects(arrBSPGroups, true, arrBSPIntersections);
+        this.raycaster.far = prevFar;
+
+        if (arrBSPIntersections.length === 0) return;
+
+        const intersection = arrBSPIntersections[0];
+        const geometry = (intersection.object as THREE.Mesh).geometry;
+        const nodeIndexAttr = geometry.attributes.nodeIndex;
+
+        if (!nodeIndexAttr) return;
+
+        const indexAttr = geometry.index;
+        const vertexIndex = indexAttr ? indexAttr.getX(intersection.faceIndex * 3) : intersection.faceIndex * 3;
+
+        console.log(intersection, `Node ID: ${nodeIndexAttr.getX(vertexIndex)}`);
     }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {
@@ -1037,6 +1103,95 @@ class RenderManager {
             obj.visible = visible;
         });
         this.needsUpdate = true;
+    }
+
+    public async addCharacterControls(): Promise<void> {
+        const groups = await this.assetManager.getCharGroups();
+        const state = { group: this.characterGroup, face: this.characterFace, hair: this.characterHair, hairColour: this.characterHairColour, chest: this.characterArmor.chest, legs: this.characterArmor.legs, gloves: this.characterArmor.gloves, boots: this.characterArmor.boots };
+        const groupOptions: Record<string, number> = {};
+        const folder = gui.addFolder("Character");
+
+        for (const group of groups)
+            groupOptions[group.name] = group.index;
+
+        let faceControl: dat.GUIController = null;
+        let hairControl: dat.GUIController = null;
+        let hairColourControl: dat.GUIController = null;
+        let armorControls: dat.GUIController[] = [];
+
+        const applyCharacter = () => this.assetManager.loadCharacter(this, this.characterGroup, this.characterFace, this.characterHair, this.characterHairColour, this.characterArmor);
+
+        const buildArmorControls = () => {
+            const group = groups[this.characterGroup];
+
+            armorControls.forEach(control => folder.remove(control));
+            armorControls = [];
+
+            for (const slot of Object.keys(this.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
+                const options: Record<string, number> = { None: 0 };
+
+                for (const item of group.armor[slot])
+                    options[item.label] = item.id;
+
+                state[slot] = this.characterArmor[slot];
+                armorControls.push(folder.add(state, slot, options).name(slot[0].toUpperCase() + slot.slice(1)).onChange(async v => {
+                    this.characterArmor[slot] = Number(v);
+                    await applyCharacter();
+                }));
+            }
+        };
+
+        // a style only ships some of the colours, so the colour options get rebuilt whenever the style changes
+        const buildColourControl = () => {
+            const colours = groups[this.characterGroup].hairColours[this.characterHair];
+
+            if (hairColourControl) folder.remove(hairColourControl);
+
+            state.hairColour = this.characterHairColour = colours.includes(this.characterHairColour) ? this.characterHairColour : colours[0];
+
+            hairColourControl = folder.add(state, "hairColour", colours).name("Hair Color").onChange(async v => {
+                this.characterHairColour = Number(v);
+                await applyCharacter();
+            });
+        };
+
+        const buildVariantControls = () => {
+            const group = groups[this.characterGroup];
+
+            if (faceControl) folder.remove(faceControl);
+            if (hairControl) folder.remove(hairControl);
+
+            state.face = this.characterFace = Math.min(this.characterFace, group.faceVariants - 1);
+            state.hair = this.characterHair = group.hairStyles.includes(this.characterHair) ? this.characterHair : group.hairStyles[0];
+
+            const faceOptions = Array.from({ length: group.faceVariants }, (_, i) => i);
+
+            faceControl = folder.add(state, "face", faceOptions).name("Face").onChange(async v => {
+                this.characterFace = Number(v);
+                await applyCharacter();
+            });
+
+            hairControl = folder.add(state, "hair", group.hairStyles).name("Hair").onChange(async v => {
+                this.characterHair = Number(v);
+                buildColourControl();
+                await applyCharacter();
+            });
+
+            buildColourControl();
+            buildArmorControls();
+        };
+
+        folder.add(state, "group", groupOptions).name("Character").onChange(async v => {
+            this.characterGroup = Number(v);
+            this.characterArmor = { chest: 0, legs: 0, gloves: 0, boots: 0 };
+            buildVariantControls();
+            await applyCharacter();
+        });
+
+        folder.add(this, "followPlayer").name("Follow Player").onChange(() => this.needsUpdate = true);
+
+        buildVariantControls();
+        folder.open();
     }
 
     public addClippingRangeControls(): void {
@@ -1688,6 +1843,23 @@ class RenderManager {
             }
         }
 
+        const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
+
+        if (waterVolume) {
+            if (waterVolume.fog) {
+                targetFogColor.set(waterVolume.fog.color[0], waterVolume.fog.color[1], waterVolume.fog.color[2], 255);
+                targetFogStart = waterVolume.fog.start;
+                targetFogEnd = waterVolume.fog.end;
+            } else {
+                const waterEnv = env.getEnv().waterVolume;
+
+                targetFogColor.copy(waterEnv.fogColor);
+                targetFogStart = waterEnv.fogStart;
+                targetFogEnd = waterEnv.fogEnd;
+            }
+
+            skyVisibility = 0;
+        }
 
         // Initialize with default Sky Color as fallback
         const targetClearColor = targetSkyColor.clone();
@@ -1791,21 +1963,30 @@ class RenderManager {
         // }
 
         this.emitterSimDue = this.nextPhysicsTick <= currentTime;
+        this.player.update(this, currentTime, deltaTime / 1000);
 
-        if (this.emitterSimDue) {
-            // this.physicsWorld.step();
-            // this.player.update(this, currentTime, deltaTime);
-
-            // console.log(this.player.position);
-
-            this.nextPhysicsTick = currentTime + 1000 / 30;
+        if (this.isOrbitControls && this.followPlayer) {
+            this.player.getCameraTargetPosition(tmpOrbitFollowTarget);
+            tmpOrbitFollowDelta.copy(tmpOrbitFollowTarget).sub(this.controls.orbit.target);
+            this.camera.position.add(tmpOrbitFollowDelta);
+            this.controls.orbit.target.copy(tmpOrbitFollowTarget);
+            this.controls.orbit.update();
+            this.camera.updateMatrixWorld();
+            this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+            this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
         }
 
+        let physicsTicks = 0;
+
+        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < 8) {
+            this.physicsWorld.step();
+            this.nextPhysicsTick += 1000 / 30;
+        }
+
+        if (this.nextPhysicsTick <= currentTime)
+            this.nextPhysicsTick = currentTime + 1000 / 30;
+
         this.audioManager.update(currentTime);
-
-        const desiredPosition = new Vector3().copy(this.player.getRigidbody().translation() as THREE.Vector3).add(new Vector3(0, -this.player.getColliderSize().y * 0.5 - this.player.getStepHeight(), 0));
-
-        this.player.position.lerp(desiredPosition, 0.1);
 
         this._updateObjects(currentTime, deltaTime);
 
@@ -2062,32 +2243,93 @@ class RenderManager {
     protected _postRender(_currentTime: number, _deltaTime: number) { }
 
     public startRendering() {
-        this.physicsWorld.step();
-        this.nextPhysicsTick = 3000;
-        this.scene.updateMatrixWorld(true);
+        const currentTime = performance.now();
 
+        this.scene.updateMatrixWorld(true);
         this.collectColliders();
+        this.physicsWorld.timestep = 1 / 30;
+        this.physicsWorld.step();
+        this.lastRender = currentTime;
+        this.nextPhysicsTick = currentTime + 1000 / 30;
         this.stitchTerrains();
 
-        this.onHandleRender(0);
+        this.onHandleRender(currentTime);
     }
 
-    protected readonly collidables: ICollidable[] = [];
-    public readonly colliderMap = new WeakMap<RAPIER.Collider, ICollidable>()
+    protected readonly collidables = new Set<ICollidable>();
+    protected readonly colliderOwners = new Map<number, ICollidable>();
 
     protected collectColliders() {
-        this.scene.traverse((obj: ICollidable) => {
-            if (!obj.isCollidable) return;
+        this.registerColliders(this.scene);
+    }
 
-            // if (this.collidables.length > 1) return;
+    protected setCollidersVisible(visible: boolean) {
+        this.showColliders = visible;
+        this.colliderOverlay.visible = visible;
 
-            this.collidables.push(obj);
-            this.colliderMap.set(obj.createCollider(this.physicsWorld), obj);
+        if (visible) this.colliderOverlay.rebuild(this.collectPhysicsColliders());
+
+        this.needsUpdate = true;
+    }
+
+    protected collectPhysicsColliders(): RAPIER.Collider[] {
+        const colliders: RAPIER.Collider[] = [];
+
+        this.physicsWorld.colliders.forEach(collider => colliders.push(collider));
+
+        return colliders;
+    }
+
+    protected registerColliders(root: Object3D) {
+        root.updateMatrixWorld(true);
+        root.traverse((object: ICollidable) => {
+            if ((object as any).isTerrainBatch)
+                for (const terrain of (object as any).sectors) this.registerCollider(terrain);
+
+            this.registerCollider(object);
         });
 
-        // debugger;
+        if (this.showColliders) this.colliderOverlay.rebuild(this.collectPhysicsColliders());
+    }
 
-        // this.collidables.push(this.player.createCollider(this.physicsWorld));
+    protected registerCollider(object: ICollidable) {
+        if (!object.isCollidable || this.collidables.has(object)) return;
+
+        const collider = object.createCollider(this.physicsWorld);
+        const colliders = object.getColliders ? object.getColliders() : [collider];
+
+        this.collidables.add(object);
+
+        for (const collider of colliders)
+            this.colliderOwners.set(collider.handle, object);
+    }
+
+    protected unregisterColliders(root: Object3D) {
+        root.traverse((object: ICollidable) => {
+            if ((object as any).isTerrainBatch)
+                for (const terrain of (object as any).sectors) this.unregisterCollider(terrain);
+
+            this.unregisterCollider(object);
+        });
+
+        if (this.showColliders) this.colliderOverlay.rebuild(this.collectPhysicsColliders());
+    }
+
+    protected unregisterCollider(object: ICollidable) {
+        if (!this.collidables.has(object)) return;
+
+        const collider = object.getCollider();
+        const colliders = object.getColliders ? object.getColliders() : [collider];
+        const rigidbody = object.getRigidbody();
+
+        this.collidables.delete(object);
+
+        for (const collider of colliders)
+            if (collider) this.colliderOwners.delete(collider.handle);
+
+        if (rigidbody) this.physicsWorld.removeRigidBody(rigidbody);
+        else for (const collider of colliders)
+            if (collider) this.physicsWorld.removeCollider(collider, false);
     }
 
     public setSky(sector: SectorObject) {
@@ -2134,6 +2376,7 @@ class RenderManager {
         this.sectorBounds.push(sector.worldBounds);
 
         this.objectGroup.add(sector);
+        this.registerColliders(sector);
         this.stitchTerrains();
 
         setLightingGate(sector, false);
@@ -2314,6 +2557,7 @@ class RenderManager {
         sector.worldBounds.setFromObject(sector);
 
         sector.staticMeshGroup.updateMatrixWorld(true);
+        this.registerColliders(sector.staticMeshGroup);
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
 
         setLightingGate(sector.staticMeshGroup, false);
@@ -2347,6 +2591,7 @@ class RenderManager {
             this.waitingMovableObjects.delete(mover);
         });
 
+        this.unregisterColliders(sector);
         this.objectGroup.remove(sector);
         this.stitchTerrains();
 

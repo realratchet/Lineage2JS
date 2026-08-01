@@ -81,11 +81,16 @@ class Terrain extends Mesh implements ICollidable {
         if (fieldInfo) this.setTerrainField(fieldInfo);
     }
 
-    public setTerrainField({ segments: [vx, vz], heightfield, bounds, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
+    public setTerrainField({ bounds, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
         this.bounds = bounds;
         this.boundsSize = bounds.getSize(new Vector3());
         this.boundsPosition = bounds.getCenter(new Vector3());
-        this.colliderDesc = ColliderDesc.heightfield(vx, vz, heightfield, { x: this.boundsSize.x, y: 1, z: this.boundsSize.z });
+
+        const vertices = this.geometry.getAttribute("position").array as Float32Array;
+        const arrIndices = this.geometry.index.array;
+        const indices = arrIndices instanceof Uint32Array ? arrIndices : new Uint32Array(arrIndices);
+
+        this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
         this.rigidbodyDesc = RigidBodyDesc.fixed();
 
         if (mapX !== undefined) this.mapX = mapX;
@@ -455,7 +460,7 @@ class Terrain extends Mesh implements ICollidable {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
-        this.rigidbody.setTranslation(this.position, false);
+        this.rigidbody.setTranslation(this.getWorldPosition(tmpVertex), false);
 
         return this.collider;
     }
@@ -621,8 +626,6 @@ export type TerrainLightingInfo = {
 }
 
 type TerrainFieldInfo_T = {
-    segments: [number, number],
-    heightfield: Float32Array,
     bounds: THREE.Box3,
     mapX?: number,
     mapY?: number,

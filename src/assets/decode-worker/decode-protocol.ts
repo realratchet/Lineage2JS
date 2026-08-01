@@ -28,12 +28,46 @@ interface DecodeEnvMessage {
     requestId: number;
 }
 
+type DecodeCharacterMessage_T = {
+    type: "decodeCharacter";
+    requestId: number;
+    settings: GD.LoadSettings_T;
+    charIndex: number;
+    faceVariant: number;
+    hairVariant: number;
+    hairColour: number;
+    armor: GD.ICharacterArmorSelection;
+    includeAnimations: boolean;
+};
+
+type CharGroupsMessage_T = {
+    type: "charGroups";
+    requestId: number;
+};
+
+type PrecacheCharactersMessage_T = {
+    type: "precacheCharacters";
+    requestId: number;
+    settings: GD.LoadSettings_T;
+};
+
+type CharactersPrecachedMessage_T = {
+    type: "charactersPrecached";
+    requestId: number;
+};
+
+type CharGroupsDecodedMessage_T = {
+    type: "charGroupsDecoded";
+    requestId: number;
+    groups: GD.ICharacterGroup[];
+};
+
 interface MusicInfoMessage {
     type: "musicInfo";
     requestId: number;
 }
 
-type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | MusicInfoMessage;
+type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | DecodeCharacterMessage_T | CharGroupsMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage;
 
 interface ReadyMessage {
     type: "ready";
@@ -77,6 +111,6 @@ interface MusicInfoDecodedMessage {
     music: Record<number, string[]>; // music id -> package paths
 }
 
-type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | MusicInfoDecodedMessage;
+type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | CharGroupsDecodedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage;
 
-export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };
+export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, DecodeCharacterMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };

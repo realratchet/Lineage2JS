@@ -25,7 +25,7 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 6 // bump when decode logic changes, invalidates all previously cached sectors
+            version: 13 // bump when decode logic changes, invalidates all previously cached sectors
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
@@ -108,7 +108,9 @@ async function startCore() {
 
     renderManager.addClippingRangeControls();
     renderManager.addDisplayGammaControls();
-    
+    await renderManager.addCharacterControls();
+
+    void precacheCharacters(assetManager);
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
@@ -371,6 +373,14 @@ async function startCore() {
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
     renderManager.startRendering();
+}
+
+async function precacheCharacters(assetManager: AssetManager) {
+    try {
+        await assetManager.precacheCharacters();
+    } catch (e) {
+        console.warn(`[characters] precache failed:`, e);
+    }
 }
 
 export default startCore;

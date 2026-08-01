@@ -1,6 +1,6 @@
 interface IDatContainerType {
     isContainerType: boolean;
-    read(pkg: C.UEncodedFile): any[];
+    read(pkg: C.UEncodedFile, values: Record<string, any>): any[];
 }
 
 interface ISchemaValue {

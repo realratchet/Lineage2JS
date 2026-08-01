@@ -1,11 +1,37 @@
-import { BufferValue } from "@l2js/core";
-import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
-import UObject from "@l2js/core";
-import FQuaternion from "../un-quaternion";
-import FVector from "../un-vector";
-import { FIndexArray } from "@l2js/core/unreal/un-array";
+import UObject, { BufferValue } from "@l2js/core";
+import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/unreal/un-array";
 
-class FNamedBone extends UObject {
+class FAnimVector {
+    public x: number;
+    public y: number;
+    public z: number;
+
+    public load(pkg: C.APackage): this {
+        this.x = pkg.read("float");
+        this.y = pkg.read("float");
+        this.z = pkg.read("float");
+
+        return this;
+    }
+}
+
+class FAnimQuaternion {
+    public x: number;
+    public y: number;
+    public z: number;
+    public w: number;
+
+    public load(pkg: C.APackage): this {
+        this.x = pkg.read("float");
+        this.y = pkg.read("float");
+        this.z = pkg.read("float");
+        this.w = pkg.read("float");
+
+        return this;
+    }
+}
+
+class FNamedBone {
     public boneName: string;
     public unkVar0: number;
     public unkVar1: number;
@@ -19,10 +45,10 @@ class FNamedBone extends UObject {
     }
 }
 
-class FAnalogTrack extends UObject {
+class FAnalogTrack {
     public flags: number;
-    public keyQuat = new FArray(FQuaternion);
-    public keyPos = new FArray(FVector);
+    public keyQuat = new FArray(FAnimQuaternion);
+    public keyPos = new FArray(FAnimVector);
     public keyTime = new FPrimitiveArray(BufferValue.float);
 
     public load(pkg: C.APackage): this {
@@ -35,8 +61,8 @@ class FAnalogTrack extends UObject {
     }
 }
 
-class FMotionChunk extends UObject {
-    public rootSpeed3d: FVector;
+class FMotionChunk {
+    public rootSpeed3d = new FAnimVector();
     public trackTime: number;
     public startBone: number;
     public flags: number;
@@ -45,7 +71,7 @@ class FMotionChunk extends UObject {
     public rootTrack = new FAnalogTrack()
 
     public load(pkg: C.APackage): this {
-        this.rootSpeed3d = FVector.make().load(pkg);
+        this.rootSpeed3d.load(pkg);
         this.trackTime = pkg.read("float");
         this.startBone = pkg.read("uint32");
         this.flags = pkg.read("uint32");
@@ -57,7 +83,7 @@ class FMotionChunk extends UObject {
     }
 }
 
-class FMeshAnimNotify extends UObject {
+class FMeshAnimNotify {
     public time: number;
     public name: string;
     public notifyObjectId: number;
@@ -80,7 +106,7 @@ class FMeshAnimNotify extends UObject {
     }
 }
 
-class FLineageUnk2 extends UObject {
+class FLineageUnk2 {
     public unkVar0: number;
     public unkVar1: number;
 
@@ -92,7 +118,7 @@ class FLineageUnk2 extends UObject {
     }
 }
 
-class FLineageUnk3 extends UObject {
+class FLineageUnk3 {
     public unkVar0: number;
     public unkArr0 = new FArray(FLineageUnk2)
 
@@ -104,7 +130,7 @@ class FLineageUnk3 extends UObject {
     }
 }
 
-class FLineageUnk4 extends UObject {
+class FLineageUnk4 {
     public unkArr0 = new FArray(FLineageUnk2);
     public unkVar0: number;
     public unkArr1 = new FArray(FLineageUnk3);
@@ -131,7 +157,7 @@ class FLineageUnk4 extends UObject {
     }
 }
 
-class FAnimSequence extends UObject {
+class FAnimSequence {
     public unkVar0: number;
     public name: string;
     public groupNames: string[];

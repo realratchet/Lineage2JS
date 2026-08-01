@@ -1,6 +1,10 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ICollidable } from "./objects";
 import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
+import { Quaternion, Vector3 } from "three";
+
+const tmpPosition = new Vector3();
+const tmpQuaternion = new Quaternion();
 
 class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
@@ -27,8 +31,8 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
-        this.rigidbody.setTranslation(this.position, false);
-        this.rigidbody.setRotation(this.quaternion, false);
+        this.rigidbody.setTranslation(this.getWorldPosition(tmpPosition), false);
+        this.rigidbody.setRotation(this.getWorldQuaternion(tmpQuaternion), false);
 
         return this.collider;
     }
@@ -39,5 +43,4 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
 
 export default CollidingMesh;
 export { CollidingMesh };
-
 

@@ -1,13 +1,14 @@
 import RenderManager from "@client/rendering/render-manager";
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { createSectorStaticMeshDecodeJob, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
+import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
 import { getUserConfig } from "@unreal/conf-files/un-conf-system";
-import { Vector3 } from "three";
+import { Matrix4, Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
 
 const tmpCameraPosition = new Vector3();
+const tmpAttachMatrix = new Matrix4();
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
@@ -92,6 +93,7 @@ class AssetManager {
 
         const envInfo = await this.decodeWorker.decodeEnv();
         const musicInfo = await this.decodeWorker.getMusicInfo();
+        const characterLibrary = await this.decodeWorker.decodeCharacter(this.loadSettings);
         const skyLibrary = await this.decodeWorker.decodeSector("skylevel", {
             ...this.loadSettings, isSkyLevel: true,
             loadTerrain: true,
@@ -106,9 +108,46 @@ class AssetManager {
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
+        this.applyCharacter(renderManager, characterLibrary);
+
         renderManager.setEnv(decodeEnv(envInfo));
         renderManager.setSky(decodePackage(skyLibrary));
         renderManager.audioManager.setMusicInfo(musicInfo);
+    }
+
+    protected applyCharacter(renderManager: RenderManager, characterLibrary: GD.DecodeLibrary) {
+        characterLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (characterLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        const bodyparts = characterLibrary.pawnActors.map(info => decodeObject3D(characterLibrary, info) as THREE.SkinnedMesh);
+        const animations = (bodyparts[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
+        const player = renderManager.player;
+
+        if (!animations) throw new Error(`'${characterLibrary.name}' animations failed to decode.`);
+
+        attachLooseBoneChains(bodyparts);
+
+        player.setAnimations(animations);
+        player.setIdleAnimation(findAnimation(animations, "Wait_Hand"));
+        player.setWalkingAnimation(findAnimation(animations, "Walk_Hand"));
+        player.setRunningAnimation(findAnimation(animations, "Run_Hand"));
+        player.setDeathAnimation(findAnimation(animations, "Death"));
+        player.setFallingAnimation(findAnimation(animations, "Falling"));
+        player.setMeshes(bodyparts);
+        player.initAnimations();
+    }
+
+    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection) {
+        this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor));
+        renderManager.needsUpdate = true;
+    }
+
+    public precacheCharacters(): Promise<void> {
+        return this.decodeWorker.precacheCharacters(this.loadSettings);
+    }
+
+    public getCharGroups(): Promise<GD.ICharacterGroup[]> {
+        return this.decodeWorker.getCharGroups();
     }
 
     public async setAlwaysLoaded(renderManager: RenderManager, sectorName: string) {
@@ -339,8 +378,43 @@ class AssetManager {
     }
 }
 
-export default AssetManager;
-export { AssetManager };
+function isHeadBone(name: string) {
+    return /^bip01[ _]head$/i.test(name);
+}
+
+function findAnimation(animations: Record<string, THREE.AnimationClip>, prefix: string): string {
+    const name = Object.keys(animations).find(name => name.startsWith(prefix));
+
+    if (!name) throw new Error(`Character has no '${prefix}' animation.`);
+
+    return name;
+}
+
+// hair bodyparts ship their own Hair01 chain instead of the Bip01 skeleton, so nothing in the body's clip drives them
+function attachLooseBoneChains(bodyparts: THREE.SkinnedMesh[]) {
+    const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
+
+    if (!host) throw new Error(`Character has no bodypart carrying a head bone to attach its hair to.`);
+
+    const headBone = host.skeleton.bones.find(bone => isHeadBone(bone.name));
+
+    host.updateMatrixWorld(true);
+
+    for (const part of bodyparts) {
+        if (part === host || !/(?:^|_)(?:ah|bh)$/i.test(part.name) || part.skeleton.bones.some(bone => isHeadBone(bone.name))) continue;
+
+        const root = part.skeleton.bones[0];
+
+        part.updateMatrixWorld(true);
+
+        tmpAttachMatrix.copy(headBone.matrixWorld).invert().multiply(root.matrixWorld);
+        tmpAttachMatrix.decompose(root.position, root.quaternion, root.scale);
+
+        headBone.add(root);
+
+        (part as any).isBoneAttachment = true;
+    }
+}
 
 /**
  * Distance from the camera to a sector's bounds (0 inside it), using the same
@@ -355,3 +429,6 @@ function sectorDistance(cameraPosition: THREE.Vector3, x: number, y: number): nu
 
     return Math.sqrt(dx * dx + dy * dy);
 }
+
+export default AssetManager;
+export { AssetManager };

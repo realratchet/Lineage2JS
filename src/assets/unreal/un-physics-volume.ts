@@ -1,6 +1,13 @@
 import UVolume from "./un-volume";
 
 abstract class UPhysicsVolume extends UVolume {
+    declare protected zoneVelocity: GA.FVector;
+    declare protected gravity: GA.FVector;
+    declare protected terminalVelocity: number;
+    declare protected priority: number;
+    declare protected fluidFriction: number;
+    declare protected isWaterVolume: boolean;
+    declare protected isL2WaterVolume: boolean;
     // protected locationPriority: number;
     // protected locationName: string;
 
@@ -43,25 +50,25 @@ abstract class UPhysicsVolume extends UVolume {
     // protected waitHitEffect: any;
     // protected runHitEffect: any;
 
-    // protected getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
     //         "LocationPriority": "locationPriority",
     //         "LocationName": "locationName",
     //         "DecoList": "decoList",
 
     //         "bPainCausing": "_bPainCausing",
-    //         "ZoneVelocity": "_zoneVelocity",
-    //         "Gravity": "_gravity",
+            "ZoneVelocity": "zoneVelocity",
+            "Gravity": "gravity",
     //         "GroundFriction": "_groundFriction",
-    //         "TerminalVelocity": "_terminalVelocity",
+            "TerminalVelocity": "terminalVelocity",
     //         "DamagePerSec": "_damagePerSec",
     //         "DamageType": "_damageType",
-    //         "Priority": "_priority",
+            "Priority": "priority",
     //         "EntrySound": "_entrySound",
     //         "ExitSound": "_exitSound",
     //         "EntryActor": "_entryActor",
     //         "ExitActor": "_exitActor",
-    //         "FluidFriction": "_fluidFriction",
+            "FluidFriction": "fluidFriction",
     //         "ViewFlash": "_viewFlash",
     //         "ViewFog": "_viewFog",
     //         "bDestructive": "_bDestructive",
@@ -69,7 +76,7 @@ abstract class UPhysicsVolume extends UVolume {
     //         "bMoveProjectiles": "_bMoveProjectiles",
     //         "bBounceVelocity": "_bBounceVelocity",
     //         "bNeutralZone": "_bNeutralZone",
-    //         "bWaterVolume": "_bWaterVolume",
+            "bWaterVolume": "isWaterVolume",
     //         "PainTimer": "_painTimer",
     //         "bUseDistanceFogColor": "_bUseDistanceFogColor",
     //         "bUseCellophane": "_bUseCellophane",
@@ -78,7 +85,7 @@ abstract class UPhysicsVolume extends UVolume {
     //         "KExtraAngularDamping": "_kExtraAngularDamping",
     //         "KBuoyancy": "_kBuoyancy",
     //         "NextPhysicsVolume": "_nextPhysicsVolume",
-    //         "bL2WaterVolume": "_bL2WaterVolume",
+            "bL2WaterVolume": "isL2WaterVolume"
     //         "bL2StepVolume": "_bL2StepVolume",
     //         "StepSoundID": "_stepSoundID",
 
@@ -87,8 +94,33 @@ abstract class UPhysicsVolume extends UVolume {
     //         "EntryActorName": "entryActorName",
     //         "WaitHitEffect": "waitHitEffect",
     //         "RunHitEffect": "runHitEffect",
-    //     });
-    // }
+        });
+    }
+
+    public getDecodeInfo(library: GD.DecodeLibrary): GD.IWaterVolumeDecodeInfo | null {
+        if (!this.isWaterVolume && !this.isL2WaterVolume && this.constructor.friendlyName !== "WaterVolume") return null;
+        if (!this.brush) return null;
+
+        const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as GD.Vector3Arr;
+        const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as GD.Vector3Arr;
+        const fog = this.hasDistanceFog && this.distanceFogColor ? {
+            color: this.distanceFogColor.toArray() as GD.ColorArr,
+            start: this.distanceFogStart,
+            end: this.distanceFogEnd
+        } : null;
+
+        return {
+            ...super.getDecodeInfo(library),
+            type: "WaterVolume",
+            priority: this.priority ?? this.locationPriority ?? 0,
+            fluidFriction: this.fluidFriction ?? 2.4,
+            gravity,
+            terminalVelocity: this.terminalVelocity ?? 2500,
+            zoneVelocity,
+            fog,
+            bsp: this.getWorldBspInfo()
+        };
+    }
 }
 
 export default UPhysicsVolume;

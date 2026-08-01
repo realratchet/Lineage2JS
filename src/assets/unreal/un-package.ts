@@ -18,6 +18,7 @@ import ULight from "./un-light";
 import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
 import UPlayerStart from "./un-player-start";
 import UPhysicsVolume from "./un-physics-volume";
+import UDefaultPhysicsVolume from "./un-physics";
 import UBlockingVolume from "./un-blocking-volume";
 import UMusicVolume from "./un-music-volume";
 import UConvexVolume from "./un-convex-volume";
@@ -216,6 +217,8 @@ class UEnginePackage extends UPackage implements C.IEnginePackage {
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMeshInstance");
@@ -334,6 +337,7 @@ class UNativePackage extends ANativePackage {
             case "Camera": Constructor = UCamera; break;
 
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
             case "BlockingVolume": Constructor = UBlockingVolume; break;
             case "MusicVolume": Constructor = UMusicVolume; break;
             case "ConvexVolume": Constructor = UConvexVolume; break;
@@ -768,4 +772,3 @@ export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
 
 //     return { imp, exp };
 // }
-

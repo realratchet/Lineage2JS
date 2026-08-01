@@ -44,7 +44,9 @@ class DecodeWorkerClient {
     protected pending = new Map<number, PendingRequest_T>();
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>(); // sector -> worker that decoded it
+    protected characterWorker = new Map<number, number>();
     protected mainThreadEngine: DecodeEngine = null;
+    protected characterAnimationSets = new Set<number>();
     protected readonly binaryDecodeQueue: BinaryDecodeRequest_T[] = [];
     protected isDecodingBinary = false;
 
@@ -115,6 +117,23 @@ class DecodeWorkerClient {
         return best;
     }
 
+    protected pickCharacterWorker(stickyIndex?: number): number {
+        if (stickyIndex !== undefined) {
+            const slot = this.slots[stickyIndex];
+
+            if (slot && !slot.isDead) return stickyIndex;
+        }
+
+        let best = -1, bestLoad = Infinity;
+
+        for (let i = this.slots.length - 1; i >= 0; i--) {
+            if (this.slots[i].isDead) continue;
+            if (this.slots[i].inFlight < bestLoad) { best = i; bestLoad = this.slots[i].inFlight; }
+        }
+
+        return best;
+    }
+
     public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
             const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings);
@@ -175,6 +194,62 @@ class DecodeWorkerClient {
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
 
         return this.dispatch(workerIndex, { type: "decodeEnv" });
+    }
+
+    public async decodeCharacter(settings: GD.LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }): Promise<DecodeLibrary> {
+        const includeAnimations = !this.characterAnimationSets.has(charIndex);
+
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations);
+
+            this.characterAnimationSets.add(charIndex);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = this.pickCharacterWorker(this.characterWorker.get(charIndex));
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        this.characterWorker.set(charIndex, workerIndex);
+
+        const library = await this.dispatch(workerIndex, { type: "decodeCharacter", settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations });
+
+        this.characterAnimationSets.add(charIndex);
+
+        return library;
+    }
+
+    public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
+
+        const characterWorkers = new Set(this.characterWorker.values());
+        let workerIndex = -1;
+
+        for (let i = this.slots.length - 1; i >= 0; i--) {
+            const slot = this.slots[i];
+
+            if (!characterWorkers.has(i) && !slot.isDead && slot.inFlight === 0) {
+                workerIndex = i;
+                break;
+            }
+        }
+
+        if (workerIndex < 0) workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "precacheCharacters", settings });
+    }
+
+    public async getCharGroups(): Promise<GD.ICharacterGroup[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "charGroups" });
     }
 
     public getMusicInfo(): Promise<Record<number, string[]>> {
@@ -258,6 +333,20 @@ class DecodeWorkerClient {
                 if (!request) break;
 
                 request.resolve(msg.music);
+                break;
+            }
+            case "charactersPrecached": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(undefined);
+                break;
+            }
+            case "charGroupsDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.groups);
                 break;
             }
         }

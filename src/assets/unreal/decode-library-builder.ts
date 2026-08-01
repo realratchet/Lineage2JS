@@ -1,5 +1,6 @@
 import DecodeLibrary from "./decode-library";
 import type { HeightMapInfo_T } from "./un-terrain-sector";
+import UPhysicsVolume from "./un-physics-volume";
 
 class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
@@ -92,12 +93,12 @@ class DecodeLibraryBuilder {
         return soundEntry;
     }
 
-    public pullSkeletalMesh(mesh: GA.USkeletalMesh): GD.ISkinnedMeshObjectDecodeInfo {
+    public pullSkeletalMesh(mesh: GA.USkeletalMesh, animations: boolean = true, materials: boolean = true): GD.ISkinnedMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
 
         if (this.skeletalMeshes.has(mesh.uuid)) return this.skeletalMeshes.get(mesh.uuid);
 
-        const result = mesh.getDecodeInfo(this);
+        const result = mesh.getDecodeInfo(this, animations, materials);
 
         this.library.geometries[mesh.uuid] = result.geometry;
         this.library.materials[mesh.uuid] = result.material;
@@ -217,6 +218,13 @@ class DecodeLibraryBuilder {
 
         for (const actor of actors) {
             if (!actor) continue;
+
+            if (actor instanceof UPhysicsVolume) {
+                const volumeInfo = actor.loadSelf().getDecodeInfo(this.library);
+
+                if (volumeInfo) this.library.waterVolumes.push(volumeInfo);
+                continue;
+            }
 
             switch (actor.constructor.friendlyName) {
                 case "TerrainInfo": {

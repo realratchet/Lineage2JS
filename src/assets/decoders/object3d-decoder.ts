@@ -14,8 +14,11 @@ import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
 import SwayingObject from "@client/objects/swaying-object";
 import TerrainDecoration from "@client/objects/terrain-decoration";
+import LocalSpaceSkeleton from "@client/objects/local-space-skeleton";
+import BSPCollider from "@client/objects/bsp-collider";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
+const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
 
 function getAttributeForTypedArray(IndexArrayConstructor: GD.IndexTypedArray): GD.IndexTypedArrayAttribute {
     switch (IndexArrayConstructor) {
@@ -344,12 +347,18 @@ function decodeSectorCore(library: GD.DecodeLibrary) {
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
     library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
     sector.musicVolumes = library.musicVolumes;
+    sector.waterVolumes = library.waterVolumes;
     sector.ambientSounds = library.ambientSounds;
+
+    for (const pawnInfo of library.pawnActors)
+        sector.pawns.add(decodeObject3D(library, pawnInfo));
 
     // traverseBSP/static mesh visibility need these even without renderable BSP sections
     (sector as any).decodeLibrary = library;
     sector.nodeToSection = library.nodeToSection;
     sector.nodeZoneMasks = library.nodeZoneMasks;
+
+    if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes));
 
     // NEW: Render BSP sections (UE2-style section-based rendering)
     if (library.bspSections && library.bspSections.length > 0) {
@@ -544,9 +553,6 @@ function decodePackage(library: GD.DecodeLibrary) {
     const sector = decodeSectorCore(library);
     decodeSectorStaticMeshes(library, sector);
 
-    for (const pawnInfo of library.pawnActors)
-        sector.pawns.add(decodeObject3D(library, pawnInfo));
-
     if (library.helpersZoneBounds) {
         const boundsGroup = new Object3D();
         sector.helpers.add(boundsGroup);
@@ -620,8 +626,6 @@ function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     const infoGeo = library.geometries[info.geometry];
     const { geometry, materials } = decodeStaticMeshData(library, info);
 
-    const positions = infoGeo.attributes.positions;
-    const heightfield = new Float32Array(17 * 17);
     const { min, max } = (infoGeo.bounds as any).box;
 
     const bounds = new Box3();
@@ -629,18 +633,8 @@ function decodeTerrainSegment(library: GD.DecodeLibrary, info: GD.IStaticMeshObj
     bounds.min.fromArray(min);
     bounds.max.fromArray(max);
 
-    for (let x = 0; x < 17; x++) {
-        for (let y = 0; y < 17; y++) {
-            const value = positions[(y * 17 + x) * 3 + 1];
-
-            heightfield[x * 17 + y] = value;
-        }
-    }
-
     const terrainInfo = info as any as GD.ITerrainSegmentDecodeInfo;
     const terrain = new Terrain(geometry, materials, {
-        segments: [16, 16],
-        heightfield,
         bounds,
         mapX: terrainInfo.mapX,
         mapY: terrainInfo.mapY,
@@ -738,6 +732,24 @@ function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyfram
     return clip;
 }
 
+function decodeAnimations(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjectDecodeInfo): Record<string, AnimationClip> {
+    if (info.animationSet && cacheAnimationSets.has(info.animationSet))
+        return cacheAnimationSets.get(info.animationSet)!;
+
+    if (info.animationSet && Object.keys(info.animations).length === 0)
+        throw new Error(`Animation set '${info.animationSet}' has not been decoded.`);
+
+    const animations = Object.keys(info.animations).reduce((acc, k) => {
+        acc[k] = decodeAnimation(library, k, info.animations[k]);
+
+        return acc;
+    }, {} as Record<string, AnimationClip>);
+
+    if (info.animationSet) cacheAnimationSets.set(info.animationSet, animations);
+
+    return animations;
+}
+
 function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjectDecodeInfo) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
     const infoMats = library.materials[info.materials];
@@ -745,18 +757,17 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
 
     const bones = decodeBones(library, info.skeleton);
-    const skeleton = new Skeleton(bones);
+    const skeleton = new LocalSpaceSkeleton(bones);
 
     const mesh = new SkinnedMesh(geometry, materials);
 
     mesh.add(bones[0]);
     mesh.bind(skeleton);
 
-    const animations = Object.keys(info.animations).reduce((acc, k) => {
-        acc[k] = decodeAnimation(library, k, info.animations[k]);
+    skeleton.mesh = mesh;
+    mesh.bindMode = "detached"; // the skeleton already brings its bones into mesh space
 
-        return acc;
-    }, {} as Record<string, AnimationClip>);
+    const animations = decodeAnimations(library, info);
 
     (mesh as any).meshAnimations = animations; // .animations is taken by three's own AnimationClip[] slot
 

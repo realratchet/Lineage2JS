@@ -32,6 +32,7 @@ class DecodeLibrary {
     public readonly fogInfos: any[] = []; // Stores fog settings (FogInfoObject)
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly musicVolumes: GD.IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
+    public readonly waterVolumes: GD.IWaterVolumeDecodeInfo[] = [];
     public readonly ambientSounds: GD.IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
