@@ -50,17 +50,11 @@ const tmpPawnWorldPos = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
-// off-screen emitters (in range but outside the frustum) simulate at this rate instead
-// of a hard freeze, so particle state doesn't go stale and pop when re-entering view
-// Two maintenance ticks keep offscreen loops alive without dominating visible frames.
 const OFFSCREEN_EMITTER_HZ = 2;
 const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
-// Lineage II configures UE2's MinDesiredFrameRate to 35. UE2 raises bDropDetail
-// below that rate, then bAggressiveLOD another 5 FPS lower.
-const MIN_DESIRED_FRAME_RATE = 35;
+const MIN_DESIRED_FRAME_RATE = 35; // Lineage II configures UE2's MinDesiredFrameRate to 35. UE2 raises bDropDetail below that rate, then bAggressiveLOD another 5 FPS lower.
 const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
-// AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
-const CLIPPING_RANGE_SCALE = 2048;
+const CLIPPING_RANGE_SCALE = 2048; // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
 const DROP_DETAIL_FRAME_TIME_MS = 1000 / MIN_DESIRED_FRAME_RATE;
 const AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / AGGRESSIVE_LOD_FRAME_RATE;
 const MAX_OFFSCREEN_EMITTER_UPDATES = 32;
@@ -193,9 +187,7 @@ function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetai
     if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
 
     const phase = getEmitterPhase(emitter) + detailFrame;
-    // UE2's drop-detail xEmitter path retains roughly 65% of the normal particle
-    // budget. Keep all particles drawn here, but distribute an equivalent amount
-    // of simulation work across frames. Aggressive LOD lowers that to one half.
+
     return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
 }
 
@@ -1122,9 +1114,6 @@ class RenderManager {
         }));
     }
 
-    // pawns move freely across sector boundaries, so unlike StaticMeshActor (leaf-baked at decode
-    // time into whichever sector's grid cell it fell in) their portal/leaf visibility has to be
-    // resolved live against wherever they currently are, not the sector they happen to be parented under
     protected updatePawnVisibility(): void {
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
@@ -1296,8 +1285,7 @@ class RenderManager {
                     parent = parent.parent;
                 }
 
-                // Skip lighting updates for objects in non-active (distant) sectors,
-                // except objects that were never lit at all (freshly streamed sectors)
+                // Skip lighting updates for objects in non-active (distant) sectors, except objects that were never lit at all (freshly streamed sectors)
                 if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
                     // emitters outside the camera's sector still simulate, just throttled to OFFSCREEN_EMITTER_HZ
                     if ((child as any).particlePool) {
@@ -1309,9 +1297,7 @@ class RenderManager {
                             (child as any).update(currentTime);
                             freezeEmitterParticles(child);
                         } else if (!wasOffscreen) {
-                            // A budgeted-out first maintenance tick must still stop the
-                            // emitter's previous visible state from being submitted.
-                            freezeEmitterParticles(child);
+                            freezeEmitterParticles(child); // A budgeted-out first maintenance tick must still stop the emitter's previous visible state from being submitted.
                         }
 
                         (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
@@ -1454,7 +1440,7 @@ class RenderManager {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-            if (zone && zone.isFogZone && zone.fog) {
+           if (zone && zone.fog) {
                 if (zone.isSunAffected) {
                     const zR = zone.fog.color.r * 255;
                     const zG = zone.fog.color.g * 255;
@@ -1692,10 +1678,8 @@ class RenderManager {
         // Initialize with default Sky Color as fallback
         const targetClearColor = targetSkyColor.clone();
 
-        // If useFogColorClear is active for the current weighted zone state, 
-        // we should clear to the fog color instead.
-        // We use the skyVisibility (which is derived from bClearToFogColor weights)
-        // to blend between Sky Color and Fog Color for a smooth transition.
+        // If useFogColorClear is active for the current weighted zone state, we should clear to the fog color instead.
+        // We use the skyVisibility (which is derived from bClearToFogColor weights) to blend between Sky Color and Fog Color for a smooth transition.
         if (skyVisibility < 1.0) {
             // Linear blend: 1.0 Visibility = Pure Sky, 0.0 Visibility = Pure Fog
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
@@ -1890,8 +1874,7 @@ class RenderManager {
                 if (!placed) break;
             }
 
-            // Update listener position from camera - AudioParam writes cross to the
-            // audio thread, skip them while the camera is still
+            // Update listener position from camera - AudioParam writes cross to the audio thread, skip them while the camera is still
             if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
                 this._lastListenerPos.copy(camPos);
                 this._lastListenerQuat.copy(this.camera.quaternion);
