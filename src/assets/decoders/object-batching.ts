@@ -9,6 +9,7 @@ import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import { MeshLight } from "@client/objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { StaticMeshBatchManifest_T, BatchElement_T } from "./batch-data";
+import type { CollisionTriangleIndex_T } from "@client/objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };
@@ -45,6 +46,7 @@ function createBatchObject(
     materials: Material | Material[],
     mergedLightInfo: MeshLight | null,
     mergedColliderIndices: Uint32Array | null,
+    collisionIndex: CollisionTriangleIndex_T | null,
     actors: GD.IStaticMeshActorDecodeInfo[],
     perActorAmbient: any[],
     batchElements: BatchElement_T[]
@@ -54,6 +56,7 @@ function createBatchObject(
         materials,
         lightInfo: mergedLightInfo,
         colliderIndices: mergedColliderIndices,
+        collisionIndex,
         scaledGlow: actors[0].scaledGlow,
         isSunAffected: actors.some(a => a.isSunAffected ?? true),
         ambient: actors[0].ambient
@@ -136,7 +139,7 @@ export function decodeStaticMeshInstance(
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
 
-    return { geometry, materials, collider, lights };
+    return { geometry, materials, collider, lights, staticMeshCollision: infoGeo.staticMeshCollision, collisionIndex: (infoGeo as any).collisionIndex as CollisionTriangleIndex_T };
 }
 
 function createStaticMeshBatchJob(
@@ -185,6 +188,7 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
                 materials,
                 lightInfo,
                 batch.colliderIndices,
+                (geometryInfo as any).collisionIndex,
                 batch.actors,
                 batch.perActorAmbient,
                 batch.batchElements

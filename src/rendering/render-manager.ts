@@ -6,6 +6,7 @@ import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbi
 import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
+import type BaseActor from "@client/base-actor";
 import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
@@ -24,6 +25,7 @@ import MovableObject from "@client/objects/movable-object";
 import RotatingObject from "@client/objects/rotating-object";
 import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
+import CollisionWorld, { CollisionBackend_T } from "@client/physics/collision-world";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -44,6 +46,14 @@ const stats = new (Stats as any)(0);
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom);
 
+function getCollisionBackend(): CollisionBackend_T {
+    const backend = new URLSearchParams(location.search).get("collisionBackend") || "ue";
+
+    if (backend !== "ue" && backend !== "rapier" && backend !== "compare") throw new Error(`Unknown collision backend '${backend}'.`);
+
+    return backend;
+}
+
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
@@ -51,6 +61,8 @@ const tmpPawnWorldPos = new Vector3();
 const tmpOrbitFollowTarget = new Vector3();
 const tmpOrbitFollowDelta = new Vector3();
 const tmpMouseIntersection = new Vector3();
+const tmpPickBounds = new Box3();
+const tmpSimDirection = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
@@ -82,9 +94,14 @@ const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 const CLICK_MAX_MOVEMENT_SQ = 16;
+const SIMULATED_PAWN_COUNT = 10;
+const SIMULATED_PAWN_LIFETIME = 15000;
+const SIMULATED_PAWN_TURN_INTERVAL = 1000;
+const SIMULATED_PAWN_CONCURRENCY = 3;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
+type SimulatedPawn_T = { pawn: BaseActor, expires: number, nextTurn: number };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[] };
 type SectorWarmup_T = {
     sector: SectorObject,
@@ -246,6 +263,8 @@ class RenderManager {
     protected readonly activeMovableObjects = new Set<MovableObject>();
     protected readonly waitingMovableObjects = new Map<MovableObject, number>();
     protected readonly rotatingObjects = new Set<RotatingObject>();
+    protected readonly simulatedPawns = new Set<SimulatedPawn_T>();
+    protected simCharGroups: GD.ICharacterGroup[] = null;
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected lastRenderOrderSector: SectorObject | null = null;
 
@@ -289,6 +308,7 @@ class RenderManager {
     protected readonly sunCam: THREE.Camera;
 
     public readonly physicsWorld: RAPIER.World;
+    public readonly collisionWorld: CollisionWorld;
 
     protected activeSector = 0;
     protected sectorBounds = new Array<THREE.Box3>();
@@ -388,6 +408,7 @@ class RenderManager {
         this.wireEmitterVisibilityHandlers();
 
         this.physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
+        this.collisionWorld = new CollisionWorld(this.physicsWorld, getCollisionBackend());
 
 
         // lightmapped water
@@ -903,22 +924,55 @@ class RenderManager {
             const ssPosition = this.toScreenSpaceCoords(position);
 
             this.raycaster.setFromCamera(ssPosition, this.camera);
-            const physicsRay = new RAPIER.Ray(this.raycaster.ray.origin, this.raycaster.ray.direction);
-            const physicsIntersection = this.physicsWorld.castRayAndGetNormal(physicsRay, this.camera.far, false, undefined, undefined, this.player.getCollider(), this.player.getRigidbody());
+
+            const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
+            const physicsIntersection = pickDistance > 0 ? this.collisionWorld.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
 
             if (physicsIntersection) {
-                tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(physicsIntersection.toi).add(this.raycaster.ray.origin);
+                tmpMouseIntersection.copy(physicsIntersection.location);
                 this.movePlayerTo(tmpMouseIntersection);
 
-                const owner = this.colliderOwners.get(physicsIntersection.collider.handle);
-
-                console.log(owner, physicsIntersection);
+                console.log(physicsIntersection.actor, physicsIntersection);
             }
 
-            this.pickBSPNode(physicsIntersection ? physicsIntersection.toi : this.camera.far);
+            this.pickBSPNode(physicsIntersection ? physicsIntersection.distance : pickDistance);
         } catch (e) {
             console.error(e);
         }
+    }
+
+    // camera.far is the depth-buffer far, not a world distance; clip the pick to loaded sectors
+    protected getPickDistance(origin: Vector3, direction: Vector3): number {
+        if (this.sectorBounds.length === 0) return this.camera.far;
+
+        tmpPickBounds.makeEmpty();
+
+        for (const bounds of this.sectorBounds) tmpPickBounds.union(bounds);
+
+        let near = 0, far = this.camera.far;
+
+        for (let axis = 0; axis < 3; axis++) {
+            const delta = direction.getComponent(axis);
+            const start = origin.getComponent(axis);
+            const min = tmpPickBounds.min.getComponent(axis);
+            const max = tmpPickBounds.max.getComponent(axis);
+
+            if (Math.abs(delta) < 1e-12) {
+                if (start < min || start > max) return 0;
+                continue;
+            }
+
+            let a = (min - start) / delta, b = (max - start) / delta;
+
+            if (a > b) [a, b] = [b, a];
+
+            near = Math.max(near, a);
+            far = Math.min(far, b);
+
+            if (near > far) return 0;
+        }
+
+        return far;
     }
 
     protected pickBSPNode(maxDistance: number) {
@@ -1189,6 +1243,7 @@ class RenderManager {
         });
 
         folder.add(this, "followPlayer").name("Follow Player").onChange(() => this.needsUpdate = true);
+        folder.add({ simulate: () => this.simulatePawns() }, "simulate").name("Simulate Pawns");
 
         buildVariantControls();
         folder.open();
@@ -1256,6 +1311,68 @@ class RenderManager {
 
         for (const mover of Array.from(this.activeMovableObjects))
             this.scheduleMovableObject(mover, mover.updateMover(currentTime));
+    }
+
+    public async simulatePawns(count: number = SIMULATED_PAWN_COUNT) {
+        const groups = this.simCharGroups || (this.simCharGroups = await this.assetManager.getCharGroups());
+        let next = 0;
+
+        // a character decode is seconds long and ten at once starves the worker pool, so they load
+        // a few at a time and each pawn enters the world as soon as its own model is ready
+        const worker = async () => {
+            while (next < count) {
+                const index = next++;
+                const group = groups[Math.floor(Math.random() * groups.length)];
+                const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
+                const colours = group.hairColours[hair];
+                const armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
+                const pawn = new Player(this);
+
+                for (const slot of Object.keys(armor) as (keyof GD.ICharacterArmorSelection)[]) {
+                    const items = group.armor[slot];
+
+                    armor[slot] = items.length > 0 && Math.random() < 0.75 ? items[Math.floor(Math.random() * items.length)].id : 0;
+                }
+
+                pawn.name = `SimPawn${index}`;
+
+                await this.assetManager.loadCharacter(this, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
+
+                this.scene.add(pawn);
+                pawn.position.copy(this.controls.orbit.target);
+                pawn.updateMatrixWorld(true);
+                this.registerCollider(pawn);
+                pawn.ignoreOverlappingActors(Array.from(this.simulatedPawns, entry => entry.pawn).concat(this.player));
+                this.simulatedPawns.add({ pawn, expires: performance.now() + SIMULATED_PAWN_LIFETIME, nextTurn: 0 });
+                this.needsUpdate = true;
+            }
+        };
+
+        await Promise.all(Array.from({ length: SIMULATED_PAWN_CONCURRENCY }, worker));
+    }
+
+    protected updateSimulatedPawns(currentTime: number, deltaTime: number): void {
+        for (const entry of Array.from(this.simulatedPawns)) {
+            if (currentTime >= entry.expires) {
+                this.unregisterCollider(entry.pawn);
+                entry.pawn.release();
+                this.scene.remove(entry.pawn);
+                this.simulatedPawns.delete(entry);
+                continue;
+            }
+
+            if (currentTime < entry.nextTurn) continue;
+
+            entry.nextTurn = currentTime + SIMULATED_PAWN_TURN_INTERVAL;
+
+            const angle = Math.random() * Math.PI * 2;
+
+            entry.pawn.moveInDirection(tmpSimDirection.set(Math.cos(angle), Math.sin(angle), 0));
+        }
+
+        for (const entry of this.simulatedPawns) entry.pawn.update(this, currentTime, deltaTime / 1000);
+
+        if (this.simulatedPawns.size > 0) this.needsUpdate = true;
     }
 
     protected updateRotatingObjects(deltaTime: number): void {
@@ -1361,9 +1478,6 @@ class RenderManager {
         // Use helper camera position only when active (frozen), otherwise use main camera
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const bspCullingPosition = bspCullingCamera.position;
-
-        this.updateMovableObjects(currentTime);
-        this.updateRotatingObjects(deltaTime);
 
         // Pass 1: Visibility updates
         // UE2: DistanceFogEnd IS the far clip plane — no padding needed
@@ -1965,6 +2079,22 @@ class RenderManager {
         this.emitterSimDue = this.nextPhysicsTick <= currentTime;
         this.player.update(this, currentTime, deltaTime / 1000);
 
+        this.updateMovableObjects(currentTime);
+        this.updateRotatingObjects(deltaTime);
+        this.updateSimulatedPawns(currentTime, deltaTime);
+
+        // nothing reads the rapier world under the analytical backend
+        const stepsRapier = this.collisionWorld.usesRapier();
+        let physicsTicks = 0;
+
+        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < 8) {
+            if (stepsRapier) this.physicsWorld.step();
+            this.nextPhysicsTick += 1000 / 30;
+        }
+
+        if (this.nextPhysicsTick <= currentTime)
+            this.nextPhysicsTick = currentTime + 1000 / 30;
+
         if (this.isOrbitControls && this.followPlayer) {
             this.player.getCameraTargetPosition(tmpOrbitFollowTarget);
             tmpOrbitFollowDelta.copy(tmpOrbitFollowTarget).sub(this.controls.orbit.target);
@@ -1975,16 +2105,6 @@ class RenderManager {
             this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
             this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
         }
-
-        let physicsTicks = 0;
-
-        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < 8) {
-            this.physicsWorld.step();
-            this.nextPhysicsTick += 1000 / 30;
-        }
-
-        if (this.nextPhysicsTick <= currentTime)
-            this.nextPhysicsTick = currentTime + 1000 / 30;
 
         this.audioManager.update(currentTime);
 
@@ -2257,7 +2377,6 @@ class RenderManager {
     }
 
     protected readonly collidables = new Set<ICollidable>();
-    protected readonly colliderOwners = new Map<number, ICollidable>();
 
     protected collectColliders() {
         this.registerColliders(this.scene);
@@ -2299,9 +2418,7 @@ class RenderManager {
         const colliders = object.getColliders ? object.getColliders() : [collider];
 
         this.collidables.add(object);
-
-        for (const collider of colliders)
-            this.colliderOwners.set(collider.handle, object);
+        this.collisionWorld.register(object, colliders);
     }
 
     protected unregisterColliders(root: Object3D) {
@@ -2323,13 +2440,14 @@ class RenderManager {
         const rigidbody = object.getRigidbody();
 
         this.collidables.delete(object);
-
-        for (const collider of colliders)
-            if (collider) this.colliderOwners.delete(collider.handle);
+        this.collisionWorld.unregister(colliders);
 
         if (rigidbody) this.physicsWorld.removeRigidBody(rigidbody);
         else for (const collider of colliders)
             if (collider) this.physicsWorld.removeCollider(collider, false);
+
+        // removed handles are dead; createCollider must not hand the cached set back on re-stream
+        if (object.releaseCollider) object.releaseCollider();
     }
 
     public setSky(sector: SectorObject) {
@@ -2672,7 +2790,15 @@ class RenderManager {
 
         if (terrains.length < 2) return;
 
+        for (const terrain of terrains)
+            this.unregisterCollider(terrain);
+
         (window as any).terrainDebug = Terrain.stitchAll(terrains);
+
+        for (const terrain of terrains) {
+            terrain.refreshCollisionGeometry();
+            this.registerCollider(terrain);
+        }
     }
 }
 

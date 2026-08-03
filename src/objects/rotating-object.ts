@@ -1,4 +1,4 @@
-import { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
+import { RigidBodyDesc } from "@dimforge/rapier3d";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight } from "./lit-actor";
 
@@ -22,7 +22,7 @@ class RotatingObject extends CollidingMesh {
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
-        this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
+        super.makeCollider(indices, vertices);
         this.rigidbodyDesc = RigidBodyDesc.kinematicPositionBased();
     }
 

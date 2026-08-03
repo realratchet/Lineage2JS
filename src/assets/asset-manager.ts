@@ -1,4 +1,9 @@
 import RenderManager from "@client/rendering/render-manager";
+import type BaseActor from "@client/base-actor";
+import UConfigWarrior from "@client/assets/unreal/conf-files/un-conf-warrior";
+
+// matches decodeCharacter's own default charIndex
+const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
@@ -16,6 +21,7 @@ const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
 const STATIC_MESH_BUILD_FRAME_MS = 2;
+const BIND_POSE_EPSILON = 1e-3;
 
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
@@ -41,6 +47,8 @@ class AssetManager {
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
     public userConfig: GA.IUserConfig = null;
+    protected warriorConfig: UConfigWarrior = null;
+    protected charGroups: GD.ICharacterGroup[] = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
     protected readonly lastCameraPosition = new Vector3();
@@ -91,6 +99,9 @@ class AssetManager {
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
+        this.warriorConfig = await new UConfigWarrior("assets/system/lineagewarrior.int").decode().then(config => config.load());
+        this.charGroups = await this.decodeWorker.getCharGroups();
+
         const envInfo = await this.decodeWorker.decodeEnv();
         const musicInfo = await this.decodeWorker.getMusicInfo();
         const characterLibrary = await this.decodeWorker.decodeCharacter(this.loadSettings);
@@ -108,38 +119,51 @@ class AssetManager {
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-        this.applyCharacter(renderManager, characterLibrary);
+        this.applyCharacter(renderManager, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
         renderManager.setEnv(decodeEnv(envInfo));
         renderManager.setSky(decodePackage(skyLibrary));
         renderManager.audioManager.setMusicInfo(musicInfo);
     }
 
-    protected applyCharacter(renderManager: RenderManager, characterLibrary: GD.DecodeLibrary) {
+    protected applyCharacter(renderManager: RenderManager, characterLibrary: GD.DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
         characterLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (characterLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         const bodyparts = characterLibrary.pawnActors.map(info => decodeObject3D(characterLibrary, info) as THREE.SkinnedMesh);
         const animations = (bodyparts[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
-        const player = renderManager.player;
+        const player = actor || renderManager.player;
 
         if (!animations) throw new Error(`'${characterLibrary.name}' animations failed to decode.`);
 
+        shareSkeletons(bodyparts);
         attachLooseBoneChains(bodyparts);
 
+        const declared = this.warriorConfig.getAnimations(this.getClassName(charIndex));
+
         player.setAnimations(animations);
-        player.setIdleAnimation(findAnimation(animations, "Wait_Hand"));
-        player.setWalkingAnimation(findAnimation(animations, "Walk_Hand"));
-        player.setRunningAnimation(findAnimation(animations, "Run_Hand"));
-        player.setDeathAnimation(findAnimation(animations, "Death"));
-        player.setFallingAnimation(findAnimation(animations, "Falling"));
+        player.setIdleAnimation(findAnimation(animations, declared.wait));
+        player.setWalkingAnimation(findAnimation(animations, declared.walk));
+        player.setRunningAnimation(findAnimation(animations, declared.run));
+        player.setDeathAnimation(findAnimation(animations, declared.death));
+        player.setFallingAnimation(findAnimation(animations, declared.falling));
+        player.setSwimmingAnimation(findAnimation(animations, declared.swim));
+        player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
         player.setMeshes(bodyparts);
         player.initAnimations();
     }
 
-    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection) {
-        this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor));
+    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection, actor?: BaseActor) {
+        this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor), actor, charIndex);
         renderManager.needsUpdate = true;
+    }
+
+    protected getClassName(charIndex: number): string {
+        const group = this.charGroups.find(group => group.index === charIndex);
+
+        if (!group) throw new Error(`No character group for index ${charIndex}.`);
+
+        return group.name;
     }
 
     public precacheCharacters(): Promise<void> {
@@ -336,8 +360,10 @@ class AssetManager {
              */
             const sectorsToLoad: string[] = [];
 
-            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx))
-                sectorsToLoad.push(originIdx);
+            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx)) {
+                this.requestSector(renderManager, originIdx);
+                return;
+            }
 
             const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
             const [psx, psy] = renderManager.getSectorId(tmpPrefetchPosition);
@@ -368,9 +394,7 @@ class AssetManager {
                 : this.maxConcurrentDecodes;
 
             for (let i = 0; i < sectorsToLoad.length; i++) {
-                const isOrigin = i === 0 && sectorsToLoad[i] === originIdx;
-
-                this.requestSector(renderManager, sectorsToLoad[i], isOrigin ? this.maxConcurrentDecodes : backgroundLimit);
+                this.requestSector(renderManager, sectorsToLoad[i], backgroundLimit);
             }
         } finally {
             this.isTicking = false;
@@ -382,12 +406,53 @@ function isHeadBone(name: string) {
     return /^bip01[ _]head$/i.test(name);
 }
 
-function findAnimation(animations: Record<string, THREE.AnimationClip>, prefix: string): string {
-    const name = Object.keys(animations).find(name => name.startsWith(prefix));
+// system/lineagewarrior.int names the clip in full; casing differs from the package, and UE
+// compares names case-insensitively
+function findAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
+    const match = declared.toLowerCase();
+    const name = Object.keys(animations).find(name => name.toLowerCase() === match);
 
-    if (!name) throw new Error(`Character has no '${prefix}' animation.`);
+    if (!name) throw new Error(`Character has no '${declared}' animation.`);
 
     return name;
+}
+
+// decode hands every bodypart its own copy of the character skeleton, so a pawn carries six or seven
+// identical bone trees - one tree per pawn is that many times less matrix, mixer and bone texture work
+function shareSkeletons(bodyparts: THREE.SkinnedMesh[]) {
+    const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
+
+    if (!host) throw new Error(`Character has no bodypart carrying a head bone to share its skeleton from.`);
+
+    for (const part of bodyparts) {
+        if (part === host || !isSameBindPose(host, part)) continue;
+
+        part.remove(part.skeleton.bones[0]);
+        part.bind(host.skeleton, part.bindMatrix);
+
+        (part as any).sharesSkeleton = true;
+    }
+}
+
+// armor bodyparts can ship extra bones (skirts, coat tails) or a differently posed reference frame
+function isSameBindPose(host: THREE.SkinnedMesh, part: THREE.SkinnedMesh): boolean {
+    const hostSkeleton = host.skeleton, partSkeleton = part.skeleton;
+
+    if (hostSkeleton.bones.length !== partSkeleton.bones.length) return false;
+    if (host.position.distanceTo(part.position) > BIND_POSE_EPSILON) return false;
+    if (host.scale.distanceTo(part.scale) > BIND_POSE_EPSILON) return false;
+    if (Math.abs(host.quaternion.dot(part.quaternion)) < 1 - BIND_POSE_EPSILON) return false;
+
+    for (let i = 0, len = hostSkeleton.bones.length; i < len; i++) {
+        if (hostSkeleton.bones[i].name !== partSkeleton.bones[i].name) return false;
+
+        const hostInverse = hostSkeleton.boneInverses[i].elements, partInverse = partSkeleton.boneInverses[i].elements;
+
+        for (let j = 0; j < 16; j++)
+            if (Math.abs(hostInverse[j] - partInverse[j]) > BIND_POSE_EPSILON) return false;
+    }
+
+    return true;
 }
 
 // hair bodyparts ship their own Hair01 chain instead of the Bip01 skeleton, so nothing in the body's clip drives them

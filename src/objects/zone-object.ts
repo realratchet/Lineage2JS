@@ -3,6 +3,7 @@ import type { L2Environment } from "@client/rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
 import type { Terrain } from "@client/objects/terrain";
 import type { TerrainDecoration } from "@client/objects/terrain-decoration";
+import { encompassesVolume } from "@client/physics/volume-bsp";
 
 import { ColorByte } from "@client/utils/color-byte";
 
@@ -22,28 +23,6 @@ const MAX_RECURSION_DEPTH = 4;
 
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
 type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number; transparent: number };
-
-function encompassesVolume(position: THREE.Vector3, bsp: GD.IVolumeBspDecodeInfo): boolean {
-    let outside = bsp.isRootOutside;
-    const nodes = bsp.nodes;
-
-    if (nodes.length > 0) {
-        let iNode = 0;
-
-        do {
-            const node = nodes[iNode];
-            const plane = node.plane;
-            const isFront = plane[0] * position.x + plane[1] * position.y + plane[2] * position.z - plane[3] > 0;
-
-            if (isFront) outside = outside || node.isCsg;
-            else outside = outside && !node.isCsg;
-
-            iNode = isFront ? node.iFront : node.iBack;
-        } while (iNode !== -1);
-    }
-
-    return !outside;
-}
 
 function getTransparentLookup(object: any, transparentMaterials: Set<number>): Uint8Array {
     let lookup = object.transparentLookup as Uint8Array;

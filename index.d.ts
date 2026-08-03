@@ -272,11 +272,25 @@ declare global {
                     mover?: IMoverDecodeInfo,
                     rotating?: IRotatingDecodeInfo,
                     swaying?: ISwayingDecodeInfo,
+                    collision: IActorCollisionDecodeInfo,
                     ambient: {
                         glow: number,
                         vector: Vector3Arr,
                         isUnlit: boolean
                     }
+                }
+
+                export interface IActorCollisionDecodeInfo {
+                    collideActors: boolean,
+                    collideWorld: boolean,
+                    blockActors: boolean,
+                    blockPlayers: boolean,
+                    blockZeroExtent: boolean,
+                    blockNonZeroExtent: boolean,
+                    worldGeometry: boolean,
+                    useCylinderCollision: boolean,
+                    collisionRadius: number,
+                    collisionHeight: number
                 }
 
                 export interface IRotatingDecodeInfo {
@@ -331,6 +345,10 @@ declare global {
                     skeleton: IBoneDecodeInfo[];
                     animations: Record<string, IKeyframeDecodeInfo_T[]>;
                     animationSet?: string;
+                    meshScale: Vector3Arr;
+                    meshOrigin: Vector3Arr;
+                    meshRotOrigin: Vector3Arr;
+                    meshRotOriginQuaternion: QuaternionArr;
                 }
 
                 export interface IEmitterDecodeInfo extends IBaseObjectDecodeInfo {
@@ -658,8 +676,17 @@ declare global {
                     };
                     indices?: IndexLikeArray;
                     colliderIndices?: Uint32Array;
+                    staticMeshCollision?: IStaticMeshCollisionDecodeInfo;
                     groups?: ArrGeometryGroup[],
                     bounds?: IBoundsDecodeInfo
+                }
+
+                export interface IStaticMeshCollisionDecodeInfo {
+                    useSimpleLineCollision: boolean;
+                    useSimpleBoxCollision: boolean;
+                    collisionModel: string | null;
+                    nodes: Int32Array;
+                    bounds: Float32Array;
                 }
 
                 export interface IMaterialModifier {

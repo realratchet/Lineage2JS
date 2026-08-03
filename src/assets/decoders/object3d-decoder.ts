@@ -175,12 +175,12 @@ function decodeStaticMeshWrapped(library: GD.DecodeLibrary, info: GD.IStaticMesh
 
 function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshActorDecodeInfo): CollidingMesh {
     const instanceInfo = info.instance;
-    const { geometry, materials, collider, lights } = decodeStaticMeshInstance(library, instanceInfo, fetchGeometry);
+    const { geometry, materials, collider, lights, staticMeshCollision, collisionIndex } = decodeStaticMeshInstance(library, instanceInfo, fetchGeometry);
     const scaledGlow = info.scaledGlow;
     const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
     const ambient = info.ambient;
 
-    const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient };
+    const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient, collision: info.collision, staticMeshCollision, collisionIndex };
     const object = info.mover ? new MovableObject({ ...props, mover: info.mover })
         : info.swaying ? new SwayingObject({ ...props, swaying: info.swaying })
             : info.rotating ? new RotatingObject({ ...props, rotating: info.rotating })
@@ -761,8 +761,14 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
 
     const mesh = new SkinnedMesh(geometry, materials);
 
+    mesh.position.fromArray(info.meshOrigin);
+    mesh.quaternion.fromArray(info.meshRotOriginQuaternion);
+    mesh.scale.fromArray(info.meshScale);
+
     mesh.add(bones[0]);
     mesh.bind(skeleton);
+
+    bones[0].visible = false; // projectObject returns at an invisible node, so the chain stays out of the renderer's per-frame walk
 
     skeleton.mesh = mesh;
     mesh.bindMode = "detached"; // the skeleton already brings its bones into mesh space

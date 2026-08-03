@@ -90,6 +90,8 @@ abstract class UStaticMesh extends UPrimitive {
             "Frequency": "frequency",
             "MaxSwayAngle": "maxSwayAngle",
             "bUseVertexColor": "useVertexColor",
+            "UseSimpleLineCollision": "useSimpleLineCollision",
+            "UseSimpleBoxCollision": "UseSimpleBoxCollision",
         });
     }
 
@@ -356,9 +358,10 @@ abstract class UStaticMesh extends UPrimitive {
             const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
             const offset = i * 3;
 
-            collision[offset + 0] = verts[0];
+            // winding is (v2,v1,v0): only that order reproduces the triangle's own stored plane
+            collision[offset + 0] = verts[2];
             collision[offset + 1] = verts[1];
-            collision[offset + 2] = verts[2];
+            collision[offset + 2] = verts[0];
 
             // collision[offset + 0] = verts[0][0];
             // collision[offset + 1] = verts[0][1];
@@ -373,6 +376,22 @@ abstract class UStaticMesh extends UPrimitive {
             // collision[offset + 8] = verts[2][2];
         }
 
+        const collisionNodes = new Int32Array(this.collisionNodes.length * 4);
+        const collisionBounds = new Float32Array(this.collisionNodes.length * 6);
+
+        for (let i = 0; i < this.collisionNodes.length; i++) {
+            const node = this.collisionNodes.getElem(i);
+            const offset = i * 4;
+            const bounds = node.bounds.getDecodeInfo();
+
+            collisionNodes[offset] = node.vertices[2];
+            collisionNodes[offset + 1] = node.vertices[3];
+            collisionNodes[offset + 2] = node.vertices[1];
+            collisionNodes[offset + 3] = node.vertices[0];
+            collisionBounds.set(bounds.min, i * 6);
+            collisionBounds.set(bounds.max, i * 6 + 3);
+        }
+
         const geometryInfo = {
             attributes: {
                 positions,
@@ -382,6 +401,13 @@ abstract class UStaticMesh extends UPrimitive {
             },
             indices,
             colliderIndices: collision,
+            staticMeshCollision: {
+                useSimpleLineCollision: this.useSimpleLineCollision,
+                useSimpleBoxCollision: this.UseSimpleBoxCollision,
+                collisionModel: this.collisionModel ? this.collisionModel.uuid : null,
+                nodes: collisionNodes,
+                bounds: collisionBounds
+            },
             groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
             bounds: this.decodeBoundsInfo()
         };

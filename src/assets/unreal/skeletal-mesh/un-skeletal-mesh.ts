@@ -523,7 +523,11 @@ abstract class USkeletalMesh extends ULodMesh {
                 geometry: this.uuid,
                 materials: this.uuid,
                 skeleton,
-                animations
+                animations,
+                meshScale: this.meshScale.getElements(),
+                meshOrigin: this.meshOrigin.getElements(),
+                meshRotOrigin: this.meshRotOrigin.toArray(),
+                meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements()
             } as ISkinnedMeshObjectDecodeInfo,
             geometry: geometryInfo,
             material: materialInfo

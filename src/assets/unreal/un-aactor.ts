@@ -52,6 +52,12 @@ abstract class UAActor extends UObject {
     declare public readonly isRangeIgnored: boolean;
     declare public readonly isBlockingActors: boolean;
     declare public readonly isBlockingPlayers: boolean;
+    declare public readonly isCollidingActors: boolean;
+    declare public readonly isCollidingWorld: boolean;
+    declare public readonly isBlockingZeroExtentTraces: boolean;
+    declare public readonly isBlockingNonZeroExtentTraces: boolean;
+    declare public readonly isWorldGeometry: boolean;
+    declare public readonly isUsingCylinderCollision: boolean;
     declare public readonly isBlockingKarma: boolean;
     declare public readonly isDynamicLight: boolean;
     declare public readonly isStaticLighting: boolean;
@@ -259,6 +265,12 @@ abstract class UAActor extends UObject {
             "bIgnoredRange": "isRangeIgnored",
             "bBlockActors": "isBlockingActors",
             "bBlockPlayers": "isBlockingPlayers",
+            "bCollideActors": "isCollidingActors",
+            "bCollideWorld": "isCollidingWorld",
+            "bBlockZeroExtentTraces": "isBlockingZeroExtentTraces",
+            "bBlockNonZeroExtentTraces": "isBlockingNonZeroExtentTraces",
+            "bWorldGeometry": "isWorldGeometry",
+            "bUseCylinderCollision": "isUsingCylinderCollision",
             "bBlockKarma": "isBlockingKarma",
             "bDynamicLight": "isDynamicLight",
             "bStaticLighting": "isStaticLighting",

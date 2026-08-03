@@ -1,5 +1,6 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
+import buildTriangleIndex from "@client/physics/triangle-index";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),
@@ -67,6 +68,7 @@ type PreparedActorGeometryData_T = {
     scaledGlow: number;
     isSunAffected: boolean;
     collider: Uint32Array | null;
+    collision: any;
 }
 
 function groupActorsForBatching(
@@ -216,11 +218,21 @@ function prepareActorGeometriesData(
             ambient: actor.ambient,
             scaledGlow: actor.scaledGlow,
             isSunAffected: actor.isSunAffected ?? true,
-            collider: meshGeo.colliderIndices || null
+            collider: meshGeo.colliderIndices || null,
+            collision: (actor as any).collision || null
         } as PreparedActorGeometryData_T;
     });
 
     return { actorGeometries, materialUuids };
+}
+
+function blocksPawn(collision: any): boolean {
+    if (!collision) return true;
+    if (!collision.blockNonZeroExtent) return false;
+    if (collision.worldGeometry) return collision.blockPlayers;
+    if (!collision.collideActors) return false;
+
+    return collision.blockPlayers;
 }
 
 // rangeStart/rangeEnd bound the actors that actually reference this light, so
@@ -278,7 +290,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     for (const geo of actorGeometries) {
         totalVertices += geo.vertexCount;
         totalIndices += geo.indices ? geo.indices.length : 0;
-        if (geo.collider) totalColliderIndices += geo.collider.length;
+        if (geo.collider && blocksPawn(geo.collision)) totalColliderIndices += geo.collider.length;
         if (geo.colors) {
             hasColors = true;
             ColorArrayConstructor = geo.colors.constructor;
@@ -314,7 +326,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const tmpN = new Vector3();
 
     for (let ai = 0; ai < actorGeometries.length; ai++) {
-        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, collider } = actorGeometries[ai];
+        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, collider, collision } = actorGeometries[ai];
 
         for (let vi = 0; vi < vertexCount; vi++) {
             tmpV.fromArray(positions, vi * 3);
@@ -369,7 +381,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             indexOffset += indices.length;
         }
 
-        if (mergedColliderIndices && collider) {
+        if (mergedColliderIndices && collider && blocksPawn(collision)) {
             if (reverseWinding) {
                 for (let ci = 0; ci < collider.length; ci += 3) {
                     mergedColliderIndices[colliderIndexOffset + ci] = collider[ci] + vertexOffset;
@@ -598,6 +610,7 @@ function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchMan
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
+                collisionIndex: mergedColliderIndices && mergedColliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, mergedColliderIndices) : null,
                 groups: finalGroups
             } as GD.IGeometryDecodeInfo;
             library.materials[batchUuid] = {

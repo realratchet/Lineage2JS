@@ -32,11 +32,6 @@ abstract class UStaticMeshActor extends UAActor {
     declare protected stepSound1: GA.USound;
     declare protected stepSound2: GA.USound;
     declare protected stepSound3: GA.USound;
-    declare protected isCollidingActors: boolean;
-
-    declare protected isBlockingZeroExtentTraces: boolean;
-    declare protected isBlockingNonZeroExtentTraces: boolean;
-
     declare protected forcedRegion: number;
 
     declare protected lodViewDuration: number;
@@ -80,10 +75,6 @@ abstract class UStaticMeshActor extends UAActor {
             "StepSound_1": "stepSound1",
             "StepSound_2": "stepSound2",
             "StepSound_3": "stepSound3",
-            "bCollideActors": "isCollidingActors",
-            "bBlockZeroExtentTraces": "isBlockingZeroExtentTraces",
-            "bBlockNonZeroExtentTraces": "isBlockingNonZeroExtentTraces",
-
             "ForcedRegion": "forcedRegion",
 
             "L2LodViewDuration": "lodViewDuration",
@@ -252,6 +243,18 @@ abstract class UStaticMeshActor extends UAActor {
             bounds: {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
+            },
+            collision: {
+                collideActors: this.isCollidingActors ?? true,
+                collideWorld: this.isCollidingWorld ?? true,
+                blockActors: this.isBlockingActors ?? true,
+                blockPlayers: this.isBlockingPlayers ?? true,
+                blockZeroExtent: this.isBlockingZeroExtentTraces ?? true,
+                blockNonZeroExtent: this.isBlockingNonZeroExtentTraces ?? true,
+                worldGeometry: this.isWorldGeometry ?? true,
+                useCylinderCollision: !!this.isUsingCylinderCollision,
+                collisionRadius: this.collisionRadius,
+                collisionHeight: this.collisionHeight
             },
             ...this.getActorDecodeInfo()
         } as GD.IStaticMeshActorDecodeInfo;

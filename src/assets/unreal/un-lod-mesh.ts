@@ -55,7 +55,9 @@ abstract class ULodMesh extends UMesh {
     protected vertexCount: number;
     protected unkArr0 = new FPrimitiveArray(BufferValue.uint32);
 
-    protected unkArr1: number[];
+    protected meshScale: FVector;
+    protected meshOrigin: FVector;
+    protected meshRotOrigin: FRotator;
     protected unkArr2 = new FPrimitiveArray(BufferValue.uint16);
     protected unkArr3 = new FArray(FUnknownStruct1);
     protected unkArr4 = new FPrimitiveArray(BufferValue.uint16);
@@ -82,7 +84,9 @@ abstract class ULodMesh extends UMesh {
 
         this.lodMeshMaterials.load(pkg);
 
-        this.unkArr1 = new Array(9).fill(1).map(() => pkg.read("float"));
+        this.meshScale = FVector.make(pkg.read("float"), pkg.read("float"), pkg.read("float"));
+        this.meshOrigin = FVector.make(pkg.read("float"), pkg.read("float"), pkg.read("float"));
+        this.meshRotOrigin = FRotator.make(pkg.read("int32"), pkg.read("int32"), pkg.read("int32"));
 
         if (this.version < 2) {
             debugger;

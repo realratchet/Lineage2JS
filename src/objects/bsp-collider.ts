@@ -1,6 +1,6 @@
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { Object3D, Quaternion, Vector3 } from "three";
-import type { ICollidable } from "./objects";
+import { Box3, Object3D, Quaternion, Vector3 } from "three";
+import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -17,6 +17,9 @@ class BSPCollider extends Object3D implements ICollidable {
     public readonly isCollidable = true;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
+    protected readonly analyticalHulls: CollisionHull_T[] = [];
+    protected readonly analyticalBounds = new Box3();
+    protected readonly analyticalPrimitive: CollisionPrimitive_T;
     protected readonly colliders: RAPIER.Collider[] = [];
     protected rigidbody: RAPIER.RigidBody = null;
 
@@ -40,8 +43,21 @@ class BSPCollider extends Object3D implements ICollidable {
 
             const min = collision.bounds.min;
             const max = collision.bounds.max;
+            const bounds = new Box3(new Vector3().fromArray(min), new Vector3().fromArray(max));
             const center = new Vector3((min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5);
             const geometry = buildHullGeometry(nodes, collision, center);
+
+            this.analyticalHulls.push({
+                planes: collision.flags.map(flag => {
+                    const nodeIndex = flag & ~HULL_FLIP;
+                    const plane = nodes[nodeIndex].plane;
+                    const scale = flag & HULL_FLIP ? -1 : 1;
+
+                    return [plane[0] * scale, plane[1] * scale, plane[2] * scale, plane[3] * scale, nodeIndex];
+                }),
+                bounds
+            });
+            this.analyticalBounds.union(bounds);
 
             if (geometry.indices.length < 3) throw new Error(`BSP collision hull ${i} has no faces.`);
 
@@ -50,6 +66,8 @@ class BSPCollider extends Object3D implements ICollidable {
             colliderDesc.setTranslation(center.x, center.y, center.z);
             this.colliderDescs.push({ desc: colliderDesc, nodeIndex: i });
         }
+
+        this.analyticalPrimitive = { kind: "bsp", hulls: this.analyticalHulls, index: buildHullIndex(this.analyticalHulls), bounds: this.analyticalBounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
     }
 
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {
@@ -72,9 +90,68 @@ class BSPCollider extends Object3D implements ICollidable {
         return this.colliders[0];
     }
 
+    public releaseCollider() {
+        this.colliders.length = 0;
+        this.rigidbody = null;
+    }
+
     public getCollider(): RAPIER.Collider { return this.colliders[0]; }
     public getColliders(): RAPIER.Collider[] { return this.colliders; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
+    public getCollisionPrimitive(): CollisionPrimitive_T { return this.analyticalPrimitive; }
+}
+
+function buildHullIndex(hulls: CollisionHull_T[]): CollisionBspIndex_T {
+    const cellSize = 1024;
+    const cacheCells = new Map<string, number[]>();
+    const largeHullIndices: number[] = [];
+
+    for (let i = 0; i < hulls.length; i++) {
+        const bounds = hulls[i].bounds;
+        const minX = Math.floor(bounds.min.x / cellSize), minY = Math.floor(bounds.min.y / cellSize);
+        const maxX = Math.floor(bounds.max.x / cellSize), maxY = Math.floor(bounds.max.y / cellSize);
+        const cellCount = (maxX - minX + 1) * (maxY - minY + 1);
+
+        if (!Number.isFinite(cellCount) || cellCount <= 0 || cellCount > 4096) {
+            largeHullIndices.push(i);
+            continue;
+        }
+
+        for (let x = minX; x <= maxX; x++)
+            for (let y = minY; y <= maxY; y++) {
+                const key = `${x},${y}`;
+                let arrIndices = cacheCells.get(key);
+
+                if (!arrIndices) {
+                    arrIndices = [];
+                    cacheCells.set(key, arrIndices);
+                }
+
+                arrIndices.push(i);
+            }
+    }
+
+    const cells = [...cacheCells].map(([key, arrIndices]) => ({ key: [...key.split(",").map(Number), 0], arrIndices }));
+
+    cells.sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2]);
+
+    const keys = new Int32Array(cells.length * 3);
+    const offsets = new Uint32Array(cells.length + 1);
+    let hullIndexCount = 0;
+
+    for (let i = 0; i < cells.length; i++) {
+        keys.set(cells[i].key, i * 3);
+        offsets[i] = hullIndexCount;
+        hullIndexCount += cells[i].arrIndices.length;
+    }
+
+    offsets[cells.length] = hullIndexCount;
+
+    const hullIndices = new Uint32Array(hullIndexCount);
+
+    for (let i = 0; i < cells.length; i++) hullIndices.set(cells[i].arrIndices, offsets[i]);
+
+    return { cellSize, keys, offsets, hullIndices, largeHullIndices: new Uint32Array(largeHullIndices), marks: new Uint32Array(hulls.length), queryTag: 0 };
 }
 
 function buildHullGeometry(nodes: GD.IBSPNodeDecodeInfo_T[], collision: GD.IBSPNodeCollisionInfo_T, center: Vector3): HullGeometry_T {

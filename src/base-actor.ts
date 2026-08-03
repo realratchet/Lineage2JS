@@ -1,26 +1,37 @@
-import { AnimationAction, AnimationClip, Bone, Mesh, Object3D, Quaternion, Vector3 } from "three";
+import { AnimationAction, AnimationClip, Bone, Box3, Mesh, Object3D, Quaternion, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
-import type { ICollidable } from "./objects/objects";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
+import type { CheckResult_T } from "./physics/collision-world";
+import { findVolumeTransition } from "./physics/volume-bsp";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
+const tmpWaterEnd = new Vector3();
 const tmpSwimStart = new Vector3();
 const tmpBodyPosition = new Vector3();
 const tmpMovement = new Vector3();
 const tmpRemaining = new Vector3();
 const tmpStepRemaining = new Vector3();
 const tmpStepPosition = new Vector3();
+const tmpStepStart = new Vector3();
 const tmpStepUp = new Vector3();
 const tmpDown = new Vector3();
 const tmpAccelDir = new Vector3();
 const tmpOldVelocity = new Vector3();
-const tmpSumVelocity = new Vector3();
 const tmpVelocityDelta = new Vector3();
 const tmpNormal = new Vector3();
 const tmpStepNormal = new Vector3();
+const tmpDesiredDirection = new Vector3();
+const tmpLedgeDelta = new Vector3();
+const tmpLedgeEnd = new Vector3();
+const tmpLedgeSide = new Vector3();
+const tmpLedgeDir = new Vector3();
+const tmpLedgeDrop = new Vector3();
+const tmpTraceExtent = new Vector3();
+const tmpGravityDirection = new Vector3();
+const tmpVelocityDirection = new Vector3();
 const tmpUp = new Vector3(0, 0, 1);
-const tmpColliderRotation = new Quaternion();
 const tmpHairVelocity = new Vector3();
 const tmpHairRotationX = new Quaternion();
 const tmpHairRotationY = new Quaternion();
@@ -29,8 +40,11 @@ const tmpHairAxisY = new Vector3(0, 1, 0);
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 
 // Retail APawn::physWalking (0x8d4880) and APawn::stepUp (0x8cf640).
-const COLLISION_RADIUS = 6.5;
-const COLLISION_HEIGHT = 22.5;
+// live retail pawn (APawn+752/+756)
+const COLLISION_RADIUS = 7.5;
+const COLLISION_HEIGHT = 23;
+const WYVERN_COLLISION_RADIUS = 60;
+const WYVERN_COLLISION_HEIGHT = 80;
 const MAX_STEP_HEIGHT = 10;
 const FLOOR_CHECK_DISTANCE = 12;
 const MIN_FLOOR_DISTANCE = 1.9;
@@ -38,17 +52,23 @@ const MAX_FLOOR_DISTANCE = 2.4;
 const FLOOR_DISTANCE = 0.5 * (MIN_FLOOR_DISTANCE + MAX_FLOOR_DISTANCE);
 const MIN_FLOOR_Z = 0.7;
 const MAX_STEP_SIDE_Z = 0.7;
-const GROUND_SPEED = 120;
+const STEP_RECURSE_DIST_SQ = 144;
+const LEDGE_PROBE = 4;
+const LEDGE_DROP = 14;
+// live retail player pawn: run speed is APawn+5228, picked by the mode at +1712 (0x8d49ae)
+const GROUND_SPEED = 133.88;
+const WALK_SPEED = 95;
 const WATER_SPEED = 80;
+// Retail live wyvern pawn AirSpeed.
+const AIR_SPEED = 118.09999084472656;
+// live retail player pawn (APawn+5240)
 const ACCEL_RATE = 2048;
-// Retail Engine.u Pawn.RotationRate.Yaw=20000; APawn::physicsRotation 0x8c9f82.
-const YAW_RATE = 20000 * Math.PI * 2 / 65536;
-const GROUND_FRICTION = 8;
-const BRAKE_STEP = 0.03;
-const MIN_BRAKE_SPEED_SQ = 100;
+const DEFAULT_VOLUME_GRAVITY_Z = -1500;
+// Retail live FMagic: RotationRate.Yaw=65000, Controller.EnemyTurnSpeed=45000; APawn::physicsRotation doubles EnemyTurnSpeed.
+const YAW_RATE = 65000;
+const PLAYER_YAW_RATE = 90000;
 const SPAWN_FLOOR_PROBE = 1000;
 const GRAVITY_Z = -980;
-const CONTACT_OFFSET = 0.05;
 // Retail USubSkeletalMeshInstance::DynamicHairGetFrame (0x94f010) writes simulated bone coordinates.
 const HAIR_STEP = 1 / 60;
 const HAIR_SPRING = 32;
@@ -71,16 +91,36 @@ class BaseActor extends Object3D implements ICollidable {
 
     protected collider: RAPIER.Collider = null;
     protected rigidbody: RAPIER.RigidBody = null;
-    protected readonly colliderShape = new RAPIER.Cylinder(COLLISION_HEIGHT, COLLISION_RADIUS);
     protected readonly velocity = new Vector3();
     protected readonly acceleration = new Vector3();
-    protected readonly lastWallPosition = new Vector3();
-    protected readonly lastWallNormal = new Vector3();
-    protected desiredYaw = 0;
-    protected hasDesiredYaw = false;
-    protected hasWallPosition = false;
+    protected readonly floor = new Vector3(0, 0, 1);
+    protected collisionRadius = COLLISION_RADIUS;
+    protected collisionHeight = COLLISION_HEIGHT;
+    protected readonly analyticalCenter = new Vector3();
+    protected readonly analyticalBounds = new Box3();
+    protected readonly analyticalOrigin = new Vector3(NaN, NaN, NaN);
+    protected readonly collisionProfile: ActorCollisionProfile_T = {
+        collideActors: true,
+        collideWorld: true,
+        blockActors: true,
+        blockPlayers: true,
+        blockZeroExtent: true,
+        blockNonZeroExtent: true,
+        worldGeometry: false,
+        useCylinderCollision: true,
+        collisionRadius: COLLISION_RADIUS,
+        collisionHeight: COLLISION_HEIGHT,
+        isPawn: true
+    };
+    protected readonly analyticalPrimitive: CollisionPrimitive_T = { kind: "cylinder", center: this.analyticalCenter, radius: this.collisionRadius, halfHeight: this.collisionHeight, bounds: this.analyticalBounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
+    protected rotationYaw = 0;
+    protected desiredRotationYaw = 0;
+    protected hasDesiredRotation = false;
     protected isGrounded = false;
     protected hasStartedPhysics = false;
+    protected physicsMode: PhysicsMode_T = "falling";
+    protected isWalking = false;
+    protected airSpeed = AIR_SPEED;
     protected waterVolume: GD.IWaterVolumeDecodeInfo = null;
     protected renderManager: RenderManager;
     protected meshes: Mesh[] = [];
@@ -94,13 +134,16 @@ class BaseActor extends Object3D implements ICollidable {
     protected blinkNextTime = 0;
     protected blinkIndex = 0;
     protected readonly blinkFaces: BlinkFaceState_T[] = [];
+    protected readonly ignoredActors = new Set<ICollidable>();
     protected readonly actorState = new ActorState();
     protected readonly basicActorAnimations: BasicActorAnimations_T = {
         idle: null,
         walking: null,
         running: null,
         dying: null,
-        falling: null
+        falling: null,
+        swimming: null,
+        swimmingIdle: null
     };
 
     public constructor(renderManager: RenderManager) {
@@ -110,14 +153,38 @@ class BaseActor extends Object3D implements ICollidable {
         this.up.copy(tmpUp);
     }
 
+    public getCollisionRadius() { return this.collisionRadius; }
+    public getCollisionHeight() { return this.collisionHeight; }
     public getCollider(): RAPIER.Collider { return this.collider; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
+    public getCollisionProfile(): ActorCollisionProfile_T {
+        this.collisionProfile.collisionRadius = this.collisionRadius;
+        this.collisionProfile.collisionHeight = this.collisionHeight;
+
+        return this.collisionProfile;
+    }
+
+    public getCollisionPrimitive(): CollisionPrimitive_T {
+        // getWorldPosition re-multiplies the whole parent chain; every trace asks every pawn for its
+        // primitive, so at n pawns that is n^2 chain walks per substep unless nothing moved
+        if (this.analyticalOrigin.equals(this.position)) return this.analyticalPrimitive;
+
+        this.analyticalOrigin.copy(this.position);
+        this.getWorldPosition(this.analyticalCenter);
+        this.analyticalCenter.z += this.collisionHeight;
+        this.analyticalBounds.min.set(this.analyticalCenter.x - this.collisionRadius, this.analyticalCenter.y - this.collisionRadius, this.analyticalCenter.z - this.collisionHeight);
+        this.analyticalBounds.max.set(this.analyticalCenter.x + this.collisionRadius, this.analyticalCenter.y + this.collisionRadius, this.analyticalCenter.z + this.collisionHeight);
+        this.analyticalPrimitive.radius = this.collisionRadius;
+        this.analyticalPrimitive.halfHeight = this.collisionHeight;
+
+        return this.analyticalPrimitive;
+    }
 
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {
         if (this.collider) return this.collider;
 
-        const rigidbodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(this.position.x, this.position.y, this.position.z + COLLISION_HEIGHT);
-        const colliderDesc = RAPIER.ColliderDesc.cylinder(COLLISION_HEIGHT, COLLISION_RADIUS).setRotation(colliderRotation);
+        const rigidbodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(this.position.x, this.position.y, this.position.z + this.collisionHeight);
+        const colliderDesc = RAPIER.ColliderDesc.cylinder(this.collisionHeight, this.collisionRadius).setRotation(colliderRotation);
 
         this.rigidbody = physicsWorld.createRigidBody(rigidbodyDesc);
         this.collider = physicsWorld.createCollider(colliderDesc, this.rigidbody);
@@ -132,33 +199,64 @@ class BaseActor extends Object3D implements ICollidable {
             return;
         }
 
+        this.renderManager.collisionWorld.updateDynamicEntries(currentTime);
+
         let remainingTime = Math.min(deltaTime, 0.4);
         let iteration = 0;
 
         while (remainingTime > 0 && iteration++ < 8) {
-            const tick = remainingTime > 0.05 ? Math.min(0.05, remainingTime * 0.5) : remainingTime;
+            const tick = remainingTime <= 0.05 ? remainingTime : Math.min(0.1, remainingTime * 0.5);
 
             remainingTime -= tick;
             this.tickPhysics(tick);
         }
 
-        this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + COLLISION_HEIGHT));
+        this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + this.collisionHeight));
         this.checkAnimationState();
         this.updateHair(currentTime * 0.001, deltaTime);
         this.updateBlink(currentTime * 0.001);
     }
 
+    // UE ignores a blocking actor you spawned inside of until you are no longer intersecting it
+    protected updateIgnoredActors(position: Vector3) {
+        if (this.ignoredActors.size === 0) return;
+
+        for (const actor of this.ignoredActors)
+            if (!this.isOverlapping(actor, position)) this.ignoredActors.delete(actor);
+    }
+
+    protected isOverlapping(actor: ICollidable, position: Vector3): boolean {
+        const primitive = actor.getCollisionPrimitive ? actor.getCollisionPrimitive() : null;
+
+        if (!primitive || primitive.kind !== "cylinder") return false;
+
+        const dx = primitive.center.x - position.x;
+        const dy = primitive.center.y - position.y;
+        const dz = primitive.center.z - (position.z + this.collisionHeight);
+        const radius = primitive.radius + this.collisionRadius;
+
+        return dx * dx + dy * dy < radius * radius && Math.abs(dz) < primitive.halfHeight + this.collisionHeight;
+    }
+
+    public ignoreOverlappingActors(actors: Iterable<ICollidable>) {
+        for (const actor of actors)
+            if (actor !== (this as any) && this.isOverlapping(actor, this.position)) this.ignoredActors.add(actor);
+    }
+
     protected tickPhysics(deltaTime: number) {
         const desired = this.actorState.desired;
         const position = tmpPosition.copy(this.position);
+
+        this.updateIgnoredActors(position);
         const waterVolume = this.getWaterVolume(position);
 
         if (!this.hasStartedPhysics) {
             if (waterVolume) {
                 this.hasStartedPhysics = true;
+                this.physicsMode = "swimming";
             } else {
                 const floorMovement = tmpMovement.set(0, 0, -SPAWN_FLOOR_PROBE);
-                const floorHit = this.castShape(position, floorMovement);
+                const floorHit = this.findFloor(position, floorMovement);
 
                 if (!floorHit) return;
 
@@ -166,88 +264,83 @@ class BaseActor extends Object3D implements ICollidable {
 
                 if (tmpNormal.z < MIN_FLOOR_Z) return;
 
-                position.addScaledVector(floorMovement, floorHit.toi).addScaledVector(tmpUp, FLOOR_DISTANCE);
+                position.addScaledVector(floorMovement, floorHit.time).addScaledVector(tmpUp, FLOOR_DISTANCE);
                 this.isGrounded = true;
                 this.hasStartedPhysics = true;
+                this.physicsMode = "walking";
             }
         }
 
+        if (desired.actor)
+            desired.actor.getWorldPosition(desired.position);
+
         const distanceX = desired.position.x - position.x;
         const distanceY = desired.position.y - position.y;
-        const distanceZ = waterVolume ? desired.position.z - position.z : 0;
+        const isThreeDimensional = this.physicsMode === "swimming" || this.physicsMode === "flying";
+        const distanceZ = isThreeDimensional ? desired.position.z - position.z : 0;
         const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ);
-        const maxSpeed = waterVolume ? WATER_SPEED : GROUND_SPEED;
+        const maxSpeed = this.physicsMode === "swimming" ? WATER_SPEED : this.physicsMode === "flying" ? this.airSpeed : this.isWalking ? WALK_SPEED : GROUND_SPEED;
 
-        if (this.actorState.locomotion && distance <= Math.max(1, maxSpeed * deltaTime)) {
-            this.actorState.locomotion = false;
-            this.hasWallPosition = false;
-        }
+        const willReachDestination = this.actorState.locomotion && Math.max(0, distance - desired.offset) <= maxSpeed * deltaTime;
 
         if (this.actorState.locomotion) {
             this.acceleration.set(distanceX, distanceY, distanceZ).normalize().multiplyScalar(ACCEL_RATE);
-            this.desiredYaw = Math.atan2(distanceY, distanceX) - Math.PI / 2;
-            this.hasDesiredYaw = true;
+
+            if (desired.faceTarget) {
+                desired.faceTarget.getWorldPosition(tmpMovement);
+                this.setDesiredHeading(tmpMovement.x - position.x, tmpMovement.y - position.y);
+            } else if (desired.faceMovement) this.setDesiredHeading(distanceX, distanceY);
         } else {
             this.acceleration.set(0, 0, 0);
         }
 
-        if (this.hasDesiredYaw) {
-            const yawDelta = Math.atan2(Math.sin(this.desiredYaw - this.rotation.z), Math.cos(this.desiredYaw - this.rotation.z));
-            const maxYawDelta = YAW_RATE * deltaTime;
-
-            this.rotation.x = 0;
-            this.rotation.y = 0;
-            this.rotation.z += Math.max(-maxYawDelta, Math.min(maxYawDelta, yawDelta));
-
-            if (Math.abs(yawDelta) <= maxYawDelta) this.hasDesiredYaw = false;
+        if (!this.actorState.locomotion && this.physicsMode === "walking" && this.isGrounded) {
+            this.velocity.set(0, 0, 0);
+            this.physicsRotation(deltaTime);
+            this.position.copy(position);
+            this.waterVolume = waterVolume;
+            return;
         }
 
-        if (waterVolume) {
-            this.isGrounded = false;
-            this.physSwimming(position, deltaTime, waterVolume);
-        } else if (this.isGrounded) this.physWalking(position, deltaTime);
-        else this.physFalling(position, deltaTime);
+        if (this.physicsMode === "walking" && waterVolume) this.physicsMode = "swimming";
+
+        switch (this.physicsMode) {
+            case "none": this.velocity.set(0, 0, 0); break;
+            case "walking": this.physWalking(position, deltaTime); break;
+            case "falling": this.physFalling(position, deltaTime); break;
+            case "swimming": this.physSwimming(position, deltaTime, waterVolume); break;
+            case "flying": this.physFlying(position, deltaTime); break;
+            default: throw new Error(`Unknown player physics mode '${this.physicsMode}'.`);
+        }
+
+        if (willReachDestination) {
+            const dx = desired.position.x - position.x;
+            const dy = desired.position.y - position.y;
+            const dz = isThreeDimensional ? desired.position.z - position.z : 0;
+
+            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= desired.offset + 0.01)
+                this.actorState.locomotion = false;
+        }
+
+        this.physicsRotation(deltaTime);
 
         this.position.copy(position);
         this.waterVolume = this.getWaterVolume(position);
     }
 
-    protected calcVelocity(accelDir: Vector3, deltaTime: number, maxSpeed: number, friction: number) {
+    protected calcVelocity(position: Vector3, accelDir: Vector3, deltaTime: number, maxSpeed: number) {
         if (this.acceleration.lengthSq() === 0) {
-            const oldVelocity = tmpOldVelocity.copy(this.velocity);
-            const sumVelocity = tmpSumVelocity.set(0, 0, 0);
-            let remainingTime = deltaTime;
-
-            while (remainingTime > BRAKE_STEP) {
-                this.velocity.addScaledVector(this.velocity, -2 * BRAKE_STEP * friction);
-
-                if (this.velocity.dot(oldVelocity) > 0) sumVelocity.addScaledVector(this.velocity, BRAKE_STEP / deltaTime);
-
-                remainingTime -= BRAKE_STEP;
-            }
-
-            this.velocity.addScaledVector(this.velocity, -2 * remainingTime * friction);
-
-            if (this.velocity.dot(oldVelocity) > 0) sumVelocity.addScaledVector(this.velocity, remainingTime / deltaTime);
-
-            this.velocity.copy(sumVelocity);
-
-            if (oldVelocity.dot(this.velocity) < 0 || this.velocity.lengthSq() < MIN_BRAKE_SPEED_SQ)
-                this.velocity.set(0, 0, 0);
-        } else {
-            const velSize = this.velocity.length();
-
-            if (this.acceleration.lengthSq() > ACCEL_RATE * ACCEL_RATE)
-                this.acceleration.copy(accelDir).multiplyScalar(ACCEL_RATE);
-
-            tmpVelocityDelta.copy(this.velocity).addScaledVector(accelDir, -velSize).multiplyScalar(deltaTime * friction);
-            this.velocity.sub(tmpVelocityDelta);
+            this.velocity.set(0, 0, 0);
+            return;
         }
 
-        this.velocity.addScaledVector(this.acceleration, deltaTime);
+        const dx = this.actorState.desired.position.x - position.x;
+        const dy = this.actorState.desired.position.y - position.y;
+        const dz = this.physicsMode === "swimming" || this.physicsMode === "flying" ? this.actorState.desired.position.z - position.z : 0;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) - this.actorState.desired.offset;
+        const speed = Math.min(maxSpeed, Math.max(0, distance / deltaTime));
 
-        if (this.velocity.lengthSq() > maxSpeed * maxSpeed)
-            this.velocity.normalize().multiplyScalar(maxSpeed);
+        this.velocity.copy(accelDir).multiplyScalar(speed);
     }
 
     protected physWalking(position: Vector3, deltaTime: number) {
@@ -261,7 +354,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
 
-        this.calcVelocity(tmpAccelDir, deltaTime, GROUND_SPEED, GROUND_FRICTION);
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.isWalking ? WALK_SPEED : GROUND_SPEED);
 
         tmpMovement.set(this.velocity.x * deltaTime, this.velocity.y * deltaTime, 0);
 
@@ -271,30 +364,36 @@ class BaseActor extends Object3D implements ICollidable {
         if (tmpMovement.lengthSq() > 0) this.moveWalking(position, tmpMovement);
 
         const floorMovement = tmpMovement.set(0, 0, -FLOOR_CHECK_DISTANCE);
-        const floorHit = this.castShape(position, floorMovement);
+        const floorHit = this.findFloor(position, floorMovement);
 
         if (floorHit) {
             this.getHitNormal(floorHit, tmpNormal);
 
             if (tmpNormal.z >= MIN_FLOOR_Z) {
-                const floorDistance = floorHit.toi * FLOOR_CHECK_DISTANCE;
+                const floorDistance = floorHit.time * FLOOR_CHECK_DISTANCE;
 
                 if (floorDistance > MAX_FLOOR_DISTANCE)
-                    position.z -= floorDistance - FLOOR_DISTANCE;
+                    this.moveSwept(position, tmpDown.set(0, 0, -(floorDistance - FLOOR_DISTANCE)));
                 else if (floorDistance > 0 && floorDistance < MIN_FLOOR_DISTANCE)
-                    position.z += FLOOR_DISTANCE - floorDistance;
+                    this.moveSwept(position, tmpStepUp.set(0, 0, FLOOR_DISTANCE - floorDistance));
 
                 this.updateWalkingVelocity(position, startX, startY, deltaTime);
                 return;
             }
 
+            // sliding off a steep floor stays in PHYS_Walking; retail only falls when there is no
+            // floor at all, or the steep one is not being walked into (0x8d56b1)
             if (deltaX * tmpNormal.x + deltaY * tmpNormal.y < 0) {
                 tmpStepUp.copy(tmpUp).multiplyScalar(MAX_STEP_HEIGHT).addScaledVector(tmpNormal, -MAX_STEP_HEIGHT * tmpNormal.z).multiplyScalar(-1);
                 this.moveSwept(position, tmpStepUp);
+                this.updateWalkingVelocity(position, startX, startY, deltaTime);
+
+                return;
             }
         }
 
         this.isGrounded = false;
+        this.physicsMode = "falling";
         this.updateWalkingVelocity(position, startX, startY, deltaTime);
     }
 
@@ -306,173 +405,474 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected moveWalking(position: Vector3, movement: Vector3) {
-        const hit = this.castShape(position, movement, CONTACT_OFFSET);
+        const hit = this.moveActor(position, movement);
 
-        if (!hit) {
-            position.add(movement);
+        if (!hit) return;
+
+        tmpDesiredDirection.copy(movement);
+
+        if (tmpDesiredDirection.lengthSq() > 0) tmpDesiredDirection.normalize();
+
+        tmpRemaining.copy(movement).multiplyScalar(1 - hit.time);
+        this.stepUp(position, tmpDesiredDirection, tmpRemaining, hit);
+    }
+
+    protected moveSwept(position: Vector3, movement: Vector3): CheckResult_T | null {
+        return this.moveActor(position, movement);
+    }
+
+    protected traceExtent(start: Vector3, movement: Vector3, radius: number, height: number): CheckResult_T | null {
+        return this.renderManager.collisionWorld.singleLineCheck({
+            location: tmpBodyPosition.copy(start).addScaledVector(tmpUp, this.collisionHeight),
+            delta: movement,
+            extent: tmpTraceExtent.set(radius, radius, height),
+            sourceCollider: this.collider,
+            sourceBody: this.rigidbody,
+            sourceIsPlayer: !!(this as any).isPlayer,
+            sourceProfile: this.collisionProfile,
+            ignoredActors: this.ignoredActors
+        });
+    }
+
+    // APawn::CheckForLedges (0x8ca7f0); StopAtLedge (0x7feef0) is a hard false, so a player redirects.
+    // Unreferenced: live capture over 5111 physWalking ticks got 0 hits here, so WantsLedgeCheck
+    // (0x7feec0, Pawn+5120 & 0x24) is false in normal play - wire it up once those bits are decoded.
+    protected checkForLedges(position: Vector3, accelDir: Vector3, movement: Vector3) {
+        const radius = this.collisionRadius;
+        const height = this.collisionHeight;
+
+        if (!this.traceExtent(position, tmpLedgeDelta.set(0, 0, -LEDGE_PROBE), radius, height)) return;
+
+        const distance = movement.length();
+
+        tmpLedgeEnd.copy(position).add(movement).addScaledVector(accelDir, radius);
+
+        if (this.traceExtent(position, tmpLedgeDelta.copy(tmpLedgeEnd).sub(position), 0, 0)) return;
+
+        const dropDistance = Math.max(MAX_STEP_HEIGHT, distance + radius) + height + LEDGE_PROBE;
+        const dropHit = this.traceExtent(tmpLedgeEnd, tmpLedgeDelta.set(0, 0, -dropDistance), 0, 0);
+
+        tmpLedgeEnd.copy(position).add(movement);
+
+        if (dropHit && dropHit.normal.z >= MIN_FLOOR_Z) {
+            const slope = Math.min(MAX_STEP_HEIGHT, (distance + radius) * Math.sqrt(1 - dropHit.normal.z * dropHit.normal.z) / dropHit.normal.z);
+
+            if (height + LEDGE_PROBE + slope >= dropDistance * dropHit.time) return;
+        }
+
+        if (this.traceExtent(position, tmpLedgeDelta.copy(tmpLedgeEnd).sub(position), radius, height)) return;
+
+        const floorHit = this.traceExtent(tmpLedgeEnd, tmpLedgeDelta.set(0, 0, -LEDGE_DROP), radius, height);
+
+        if (floorHit && floorHit.normal.z >= MIN_FLOOR_Z) return;
+
+        tmpLedgeDir.copy(tmpLedgeEnd).sub(position);
+
+        if (tmpLedgeDir.lengthSq() > 0) tmpLedgeDir.normalize();
+
+        tmpLedgeSide.set(tmpLedgeDir.y, -tmpLedgeDir.x, 0).multiplyScalar(distance);
+
+        if (this.findLedgeDetour(position, tmpLedgeEnd, tmpLedgeSide, movement, distance)) return;
+
+        tmpLedgeSide.multiplyScalar(-1);
+        this.findLedgeDetour(position, tmpLedgeEnd, tmpLedgeSide, movement, distance);
+    }
+
+    protected findLedgeDetour(position: Vector3, ledgeEnd: Vector3, side: Vector3, movement: Vector3, distance: number): boolean {
+        const radius = this.collisionRadius;
+        const height = this.collisionHeight;
+
+        if (this.traceExtent(ledgeEnd, side, radius, height)) return false;
+
+        tmpLedgeDelta.copy(ledgeEnd).add(side);
+
+        const floorHit = this.traceExtent(tmpLedgeDelta, tmpLedgeDrop.set(0, 0, -LEDGE_DROP), radius, height);
+
+        if (!floorHit || floorHit.normal.z < MIN_FLOOR_Z) return false;
+
+        movement.copy(tmpLedgeDelta).sub(position);
+
+        if (movement.lengthSq() > 0) movement.normalize();
+
+        movement.multiplyScalar(distance);
+
+        return true;
+    }
+
+    // APawn::stepUp (0x8cf640) is void; the step only counts when the lifted move is clear (0x8cf859)
+    protected stepUp(position: Vector3, desiredDir: Vector3, movement: Vector3, hit: CheckResult_T) {
+        tmpStepStart.copy(position);
+        this.getHitNormal(hit, tmpStepNormal);
+
+        let stepped = false;
+        let current: CheckResult_T | null = hit;
+
+        if (Math.abs(tmpStepNormal.z) < MAX_STEP_SIDE_Z || tmpStepNormal.z >= MIN_FLOOR_Z) {
+            this.moveActor(position, tmpStepUp.set(0, 0, MAX_STEP_HEIGHT));
+
+            current = this.moveActor(position, movement);
+            stepped = true;
+        } else if (this.physicsMode !== "walking") {
+            tmpStepRemaining.set(movement.x, movement.y, movement.z + movement.length() * tmpStepNormal.z);
+            current = this.moveActor(position, tmpStepRemaining);
+        }
+
+        if (!current) {
+            this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
             return;
         }
 
-        this.getHitNormal(hit, tmpNormal);
-        tmpStepNormal.copy(tmpNormal);
-
-        const length = movement.length();
-        const toi = Math.max(0, hit.toi - CONTACT_OFFSET / length);
-
-        position.addScaledVector(movement, toi);
-        tmpRemaining.copy(movement).multiplyScalar(1 - hit.toi);
-
-        if (hit.toi > 0) {
-            this.lastWallPosition.copy(position);
-            this.lastWallNormal.copy(tmpStepNormal);
-            this.hasWallPosition = true;
+        // AController::eventNotifyHitWall (0x642e00) returns false unprobed, so a blocked step unwinds
+        if (stepped) {
+            this.moveActor(position, tmpStepRemaining.copy(tmpStepStart).sub(position));
+            this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
+            return;
         }
 
-        if (this.stepUp(position, tmpRemaining, tmpStepNormal)) return;
+        this.getHitNormal(current, tmpNormal);
 
+        if (Math.abs(tmpNormal.z) < MAX_STEP_SIDE_Z && movement.lengthSq() * current.time > STEP_RECURSE_DIST_SQ) {
+            this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
+            tmpStepRemaining.copy(movement).multiplyScalar(1 - current.time);
+            this.stepUp(position, desiredDir, tmpStepRemaining, current);
+            return;
+        }
+
+        tmpStepNormal.copy(tmpNormal);
         tmpStepNormal.z = 0;
 
-        if (tmpStepNormal.lengthSq() <= 0) return;
+        if (tmpStepNormal.lengthSq() > 0) tmpStepNormal.normalize();
 
-        tmpStepNormal.normalize();
-        tmpRemaining.addScaledVector(tmpStepNormal, -tmpRemaining.dot(tmpStepNormal));
+        tmpStepRemaining.copy(movement).addScaledVector(tmpStepNormal, -movement.dot(tmpStepNormal)).multiplyScalar(1 - current.time);
 
-        const slideHit = this.castShape(position, tmpRemaining, CONTACT_OFFSET);
+        if (tmpStepRemaining.dot(desiredDir) >= 0) {
+            const slideHit = this.moveActor(position, tmpStepRemaining);
 
-        if (!slideHit) position.add(tmpRemaining);
-        else position.addScaledVector(tmpRemaining, Math.max(0, slideHit.toi - CONTACT_OFFSET / Math.max(tmpRemaining.length(), CONTACT_OFFSET)));
-    }
-
-    protected moveSwept(position: Vector3, movement: Vector3): RAPIER.ShapeColliderTOI | null {
-        const hit = this.castShape(position, movement, CONTACT_OFFSET);
-
-        if (!hit) {
-            position.add(movement);
-            return null;
-        }
-
-        position.addScaledVector(movement, Math.max(0, hit.toi - CONTACT_OFFSET / Math.max(movement.length(), CONTACT_OFFSET)));
-
-        return hit;
-    }
-
-    protected stepUp(position: Vector3, movement: Vector3, wallNormal: Vector3): boolean {
-        const startX = position.x;
-        const startY = position.y;
-
-        if (Math.abs(wallNormal.z) < MAX_STEP_SIDE_Z || wallNormal.z >= MIN_FLOOR_Z) {
-            const probePosition = tmpStepPosition.copy(position);
-
-            probePosition.x += wallNormal.x * CONTACT_OFFSET;
-            probePosition.y += wallNormal.y * CONTACT_OFFSET;
-
-            const upMovement = tmpStepUp.set(0, 0, MAX_STEP_HEIGHT);
-            const upHit = this.castShape(probePosition, upMovement, CONTACT_OFFSET);
-
-            position.addScaledVector(upMovement, upHit ? Math.max(0, upHit.toi - CONTACT_OFFSET / MAX_STEP_HEIGHT) : 1);
-
-            const forwardHit = this.moveSwept(position, movement);
-
-            if (forwardHit) {
-                this.getHitNormal(forwardHit, tmpNormal);
-                tmpNormal.z = 0;
-
-                if (tmpNormal.lengthSq() > 0) {
-                    tmpNormal.normalize();
-                    tmpStepRemaining.copy(movement).multiplyScalar(1 - forwardHit.toi);
-                    tmpStepRemaining.addScaledVector(tmpNormal, -tmpStepRemaining.dot(tmpNormal));
-                    this.moveSwept(position, tmpStepRemaining);
-                }
+            if (slideHit) {
+                this.getHitNormal(slideHit, tmpNormal);
+                twoWallAdjust(desiredDir, tmpStepRemaining, tmpNormal, tmpStepNormal, slideHit.time);
+                this.moveActor(position, tmpStepRemaining);
             }
         }
 
-        const downMovement = tmpDown.set(0, 0, -MAX_STEP_HEIGHT);
-        const downHit = this.castShape(position, downMovement);
-
-        if (downHit) this.getHitNormal(downHit, tmpNormal);
-
-        const downDistance = downHit ? downHit.toi * MAX_STEP_HEIGHT : MAX_STEP_HEIGHT;
-        const hasStepSurface = downHit && (tmpNormal.z >= MIN_FLOOR_Z || tmpNormal.z > CONTACT_OFFSET && downDistance >= MIN_FLOOR_DISTANCE);
-
-        position.addScaledVector(downMovement, hasStepSurface ? downHit.toi : 1);
-
-        const dx = position.x - startX;
-        const dy = position.y - startY;
-
-        return dx * dx + dy * dy > 0;
+        this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
     }
 
-    protected physFalling(position: Vector3, deltaTime: number) {
-        this.velocity.z += GRAVITY_Z * deltaTime;
-        tmpMovement.copy(this.velocity).multiplyScalar(deltaTime);
+    protected physFalling(position: Vector3, deltaTime: number, iterations: number = 0) {
+        if (deltaTime < 0.0003 || iterations > 7) return;
 
-        const hit = this.castShape(position, tmpMovement);
+        tmpOldVelocity.copy(this.velocity);
+        this.velocity.z = Math.max(-2500, this.velocity.z + GRAVITY_Z * deltaTime);
+        tmpMovement.addVectors(tmpOldVelocity, this.velocity).multiplyScalar(0.5 * deltaTime);
 
-        if (!hit) {
-            position.add(tmpMovement);
+        const start = tmpSwimStart.copy(position);
+        const waterTime = this.findWaterTransition(position, tmpMovement, false);
+
+        const pendingHit = this.castShape(position, tmpMovement);
+
+        if (waterTime < (pendingHit ? pendingHit.time : 1)) {
+            position.addScaledVector(tmpMovement, waterTime);
+            const remainingTime = deltaTime * (1 - waterTime);
+
+            if (this.velocity.z < 0 && this.velocity.z > -160)
+                this.velocity.z = -80 - Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y) * 0.7;
+
+            this.physicsMode = "swimming";
+            if (remainingTime > 0.01) this.physSwimming(position, remainingTime, this.getWaterVolume(position), iterations + 1);
             return;
         }
 
-        position.addScaledVector(tmpMovement, Math.max(0, hit.toi - CONTACT_OFFSET / Math.max(tmpMovement.length(), CONTACT_OFFSET)));
+        const hit = this.moveActor(position, tmpMovement);
+
+        if (!hit) return;
+
         this.getHitNormal(hit, tmpNormal);
 
         if (this.velocity.z <= 0 && tmpNormal.z >= MIN_FLOOR_Z) {
             this.velocity.z = 0;
             this.isGrounded = true;
+            this.physicsMode = "walking";
             return;
         }
 
-        this.velocity.addScaledVector(tmpNormal, -this.velocity.dot(tmpNormal));
+        tmpStepNormal.copy(tmpNormal);
+        tmpRemaining.copy(tmpMovement).multiplyScalar(1 - hit.time).addScaledVector(tmpNormal, -tmpRemaining.dot(tmpNormal));
+
+        const secondHit = this.moveSwept(position, tmpRemaining);
+
+        if (secondHit) {
+            this.getHitNormal(secondHit, tmpNormal);
+            twoWallAdjust(tmpMovement, tmpRemaining, tmpNormal, tmpStepNormal, secondHit.time);
+            this.moveSwept(position, tmpRemaining);
+        }
+
+        this.velocity.copy(position).sub(start).multiplyScalar(1 / deltaTime);
+
     }
 
-    protected physSwimming(position: Vector3, deltaTime: number, volume: GD.IWaterVolumeDecodeInfo) {
+    protected physSwimming(position: Vector3, deltaTime: number, volume: GD.IWaterVolumeDecodeInfo | null, iterations: number = 0) {
+        if (deltaTime < 0.0003 || iterations > 7) return;
+
+        if (!volume) {
+            this.physicsMode = "falling";
+            this.physFalling(position, deltaTime, iterations + 1);
+            return;
+        }
+
+        this.isGrounded = false;
         tmpAccelDir.copy(this.acceleration);
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
-        if (this.acceleration.lengthSq() > ACCEL_RATE * ACCEL_RATE)
-            this.acceleration.copy(tmpAccelDir).multiplyScalar(ACCEL_RATE);
-
-        const friction = 0.5 * volume.fluidFriction;
-        const velSize = this.velocity.length();
-
-        tmpVelocityDelta.copy(this.velocity).addScaledVector(tmpAccelDir, -velSize).multiplyScalar(deltaTime * friction);
-        this.velocity.sub(tmpVelocityDelta).multiplyScalar(Math.max(0, 1 - friction * deltaTime)).addScaledVector(this.acceleration, deltaTime);
-
-        if (this.velocity.lengthSq() > WATER_SPEED * WATER_SPEED)
-            this.velocity.normalize().multiplyScalar(WATER_SPEED);
+        this.calcVelocity(position, tmpAccelDir, deltaTime, WATER_SPEED);
 
         tmpSwimStart.copy(position);
         tmpMovement.copy(this.velocity).addScaledVector(tmpVelocityDelta.fromArray(volume.zoneVelocity), 25 * deltaTime).multiplyScalar(deltaTime);
+        const hit = this.moveWithWallResponse(position, tmpMovement);
+        const nextVolume = this.getWaterVolume(position);
+
+        tmpMovement.copy(position).sub(tmpSwimStart);
+
+        if (nextVolume) {
+            this.velocity.copy(tmpMovement).multiplyScalar(1 / deltaTime);
+            return;
+        }
+
+        let remainingTime = 0;
+
+        if (!hit) {
+            const outZ = position.z;
+
+            position.z = Math.min(tmpSwimStart.z, position.z);
+            remainingTime = deltaTime * Math.min(1, Math.abs(position.z - outZ) / tmpMovement.length());
+            tmpMovement.copy(position).sub(tmpSwimStart);
+
+            if (this.getWaterVolume(position)) {
+                if (remainingTime < deltaTime)
+                    this.velocity.copy(tmpMovement).multiplyScalar(1 / (deltaTime - remainingTime));
+
+                return;
+            }
+        }
+
+        this.velocity.copy(tmpMovement).multiplyScalar(1 / Math.max(0.0003, deltaTime - remainingTime));
+
+        if (this.velocity.z > 0 && this.velocity.z < 160)
+            this.velocity.z = 40 + Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y) * 0.4;
+
+        this.physicsMode = "falling";
+        this.physFalling(position, remainingTime, iterations + 1);
+    }
+
+    protected physFlying(position: Vector3, deltaTime: number) {
+        this.isGrounded = false;
+        tmpAccelDir.copy(this.acceleration);
+
+        if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
+
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.airSpeed);
+        tmpSwimStart.copy(position);
+
+        const volume = this.getWaterVolume(position);
+        const gravityZ = volume ? volume.gravity[2] : DEFAULT_VOLUME_GRAVITY_Z;
+
+        tmpVelocityDelta.set(0, 0, 0);
+
+        if (volume) {
+            tmpVelocityDelta.fromArray(volume.zoneVelocity);
+
+            if (!(this as any).isPlayer && tmpVelocityDelta.lengthSq() <= 90000)
+                tmpVelocityDelta.set(0, 0, 0);
+        }
+
+        tmpMovement.copy(this.velocity).add(tmpVelocityDelta).multiplyScalar(deltaTime);
+        tmpDesiredDirection.copy(tmpMovement);
+
+        if (tmpDesiredDirection.lengthSq() > 0) tmpDesiredDirection.normalize();
 
         const hit = this.moveSwept(position, tmpMovement);
 
-        if (hit) {
-            this.getHitNormal(hit, tmpNormal);
-            tmpRemaining.copy(tmpMovement).multiplyScalar(1 - hit.toi).addScaledVector(tmpNormal, -tmpRemaining.dot(tmpNormal));
-            this.moveSwept(position, tmpRemaining);
-        }
+        if (hit) this.resolveFlyingHit(position, tmpMovement, hit, gravityZ);
+        else this.floor.set(0, 0, 1);
 
         this.velocity.copy(position).sub(tmpSwimStart).multiplyScalar(1 / deltaTime);
     }
 
+    protected resolveFlyingHit(position: Vector3, movement: Vector3, hit: CheckResult_T, gravityZ: number) {
+        this.getHitNormal(hit, tmpStepNormal);
+        this.floor.copy(tmpStepNormal);
+        tmpGravityDirection.set(0, 0, gravityZ > 0 ? 1 : -1);
+        tmpVelocityDirection.copy(this.velocity);
+
+        if (tmpVelocityDirection.lengthSq() > 0) tmpVelocityDirection.normalize();
+
+        const gravityVelocityDot = tmpGravityDirection.dot(tmpVelocityDirection);
+
+        if (Math.abs(tmpStepNormal.z) < 0.2 && gravityVelocityDot > -0.2 && gravityVelocityDot < 0.5) {
+            tmpRemaining.copy(movement).multiplyScalar(1 - hit.time);
+            this.stepUpFlying(position, tmpRemaining, tmpGravityDirection, tmpDesiredDirection);
+            return;
+        }
+
+        tmpRemaining.copy(movement).addScaledVector(tmpStepNormal, -movement.dot(tmpStepNormal)).multiplyScalar(1 - hit.time);
+
+        if (movement.dot(tmpRemaining) < 0) return;
+
+        const secondHit = this.moveSwept(position, tmpRemaining);
+
+        if (!secondHit) return;
+
+        this.getHitNormal(secondHit, tmpNormal);
+        twoWallAdjust(tmpDesiredDirection, tmpRemaining, tmpNormal, tmpStepNormal, secondHit.time);
+        this.moveSwept(position, tmpRemaining);
+    }
+
+    protected stepUpFlying(position: Vector3, movement: Vector3, gravityDirection: Vector3, desiredDirection: Vector3) {
+        this.moveSwept(position, tmpStepUp.copy(gravityDirection).multiplyScalar(-MAX_STEP_HEIGHT));
+
+        const hit = this.moveSwept(position, movement);
+
+        if (hit) {
+            this.getHitNormal(hit, tmpStepNormal);
+            tmpStepNormal.z = 0;
+
+            if (tmpStepNormal.lengthSq() > 0) {
+                tmpStepNormal.normalize();
+                tmpStepRemaining.copy(movement).multiplyScalar(1 - hit.time).addScaledVector(tmpStepNormal, -tmpStepRemaining.dot(tmpStepNormal));
+
+                const secondHit = this.moveSwept(position, tmpStepRemaining);
+
+                if (secondHit) {
+                    this.getHitNormal(secondHit, tmpNormal);
+                    twoWallAdjust(desiredDirection, tmpStepRemaining, tmpNormal, tmpStepNormal, secondHit.time);
+                    this.moveSwept(position, tmpStepRemaining);
+                }
+            }
+        }
+
+        this.moveSwept(position, tmpDown.copy(gravityDirection).multiplyScalar(MAX_STEP_HEIGHT));
+    }
+
+    protected moveWithWallResponse(position: Vector3, movement: Vector3) {
+        const hit = this.moveSwept(position, movement);
+
+        if (!hit) return null;
+
+        this.getHitNormal(hit, tmpStepNormal);
+        tmpRemaining.copy(movement).multiplyScalar(1 - hit.time).addScaledVector(tmpStepNormal, -tmpRemaining.dot(tmpStepNormal));
+
+        const secondHit = this.moveSwept(position, tmpRemaining);
+
+        if (!secondHit) return hit;
+
+        this.getHitNormal(secondHit, tmpNormal);
+        twoWallAdjust(movement, tmpRemaining, tmpNormal, tmpStepNormal, secondHit.time);
+        this.moveSwept(position, tmpRemaining);
+
+        return hit;
+    }
+
     protected getWaterVolume(position: Vector3): GD.IWaterVolumeDecodeInfo | null {
-        const sector = this.renderManager.getSector(tmpWaterPosition.copy(position).addScaledVector(tmpUp, COLLISION_HEIGHT));
+        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
 
-        return sector ? sector.getWaterVolumeAt(tmpWaterPosition) : null;
+        let selected: GD.IWaterVolumeDecodeInfo = null;
+
+        for (const sector of this.renderManager.getLoadedSectors()) {
+            const volume = sector.getWaterVolumeAt(tmpWaterPosition);
+
+            if (volume && (!selected || volume.priority >= selected.priority)) selected = volume;
+        }
+
+        return selected;
     }
 
-    protected castShape(position: Vector3, movement: Vector3, verticalOffset: number = 0): RAPIER.ShapeColliderTOI | null {
-        const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, COLLISION_HEIGHT + verticalOffset);
+    protected findWaterTransition(position: Vector3, movement: Vector3, startsInWater: boolean): number {
+        tmpWaterEnd.copy(position).add(movement);
+        const volume = startsInWater ? this.getWaterVolume(position) : this.getWaterVolume(tmpWaterEnd);
 
-        return this.renderManager.physicsWorld.castShape(bodyPosition, colliderRotation, movement, this.colliderShape, 1, undefined, undefined, this.collider, this.rigidbody);
+        if (!volume) return 1;
+
+        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
+        tmpWaterEnd.addScaledVector(tmpUp, this.collisionHeight);
+
+        return findVolumeTransition(tmpWaterPosition, tmpWaterEnd, volume.bsp, startsInWater);
     }
 
-    protected getHitNormal(hit: RAPIER.ShapeColliderTOI, target: Vector3): Vector3 {
-        return target.copy(hit.normal1 as Vector3).applyQuaternion(tmpColliderRotation.copy(hit.collider.rotation() as Quaternion));
+    protected moveActor(position: Vector3, movement: Vector3): CheckResult_T | null {
+        const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
+        const hit = this.renderManager.collisionWorld.moveActor({
+            location: bodyPosition,
+            delta: movement,
+            extent: tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight),
+            sourceCollider: this.collider,
+            sourceBody: this.rigidbody,
+            sourceIsPlayer: !!(this as any).isPlayer,
+            sourceProfile: this.collisionProfile,
+            ignoredActors: this.ignoredActors
+        });
+
+        position.copy(bodyPosition).addScaledVector(tmpUp, -this.collisionHeight);
+
+        return hit;
+    }
+
+    protected castShape(position: Vector3, movement: Vector3): CheckResult_T | null {
+        const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
+
+        return this.renderManager.collisionWorld.singleLineCheck({
+            location: bodyPosition,
+            delta: movement,
+            extent: tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight),
+            sourceCollider: this.collider,
+            sourceBody: this.rigidbody,
+            sourceIsPlayer: !!(this as any).isPlayer,
+            sourceProfile: this.collisionProfile,
+            ignoredActors: this.ignoredActors
+        });
+    }
+
+    protected findFloor(position: Vector3, movement: Vector3): CheckResult_T | null {
+        let hit = this.castShape(position, movement);
+
+        if (hit && hit.normal.z >= MIN_FLOOR_Z) return hit;
+
+        hit = this.renderManager.collisionWorld.singleLineCheck({
+            location: tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight),
+            delta: movement,
+            extent: tmpStepPosition.set(0, 0, this.collisionHeight),
+            sourceCollider: this.collider,
+            sourceBody: this.rigidbody,
+            sourceIsPlayer: !!(this as any).isPlayer,
+            sourceProfile: this.collisionProfile,
+            ignoredActors: this.ignoredActors
+        });
+
+        return hit && hit.normal.z >= MIN_FLOOR_Z ? hit : null;
+    }
+
+    protected getHitNormal(hit: CheckResult_T, target: Vector3): Vector3 {
+        return target.copy(hit.normal);
+    }
+
+    protected setDesiredHeading(x: number, y: number) {
+        if (x === 0 && y === 0) return;
+
+        this.desiredRotationYaw = Math.round(Math.atan2(y, x) * 32768 / Math.PI) & 65535;
+        this.hasDesiredRotation = true;
+    }
+
+    protected physicsRotation(deltaTime: number) {
+        if (!this.hasDesiredRotation) return;
+
+        const deltaRate = (this as any).isPlayer ? Math.round(PLAYER_YAW_RATE * deltaTime) : Math.trunc(YAW_RATE * deltaTime);
+
+        this.rotationYaw = fixedTurn(this.rotationYaw, this.desiredRotationYaw, deltaRate);
+        this.rotation.set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+
+        if (this.rotationYaw === this.desiredRotationYaw) this.hasDesiredRotation = false;
     }
 
     protected checkAnimationState() {
-        const state: ValidStateNames_T = !this.hasStartedPhysics ? "idle" : !this.isGrounded && !this.waterVolume ? "falling" : this.actorState.locomotion ? "running" : "idle";
+        const state: ValidStateNames_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? this.actorState.locomotion ? "swimming" : "swimmingIdle" : this.actorState.locomotion ? this.isWalking ? "walking" : "running" : "idle";
 
         if (state === this.actorState.state) return;
 
@@ -484,6 +884,8 @@ class BaseActor extends Object3D implements ICollidable {
             case "dying": this.playAnimation(this.basicActorAnimations.dying); break;
             case "walking": this.playAnimation(this.basicActorAnimations.walking); break;
             case "running": this.playAnimation(this.basicActorAnimations.running); break;
+            case "swimming": this.playAnimation(this.basicActorAnimations.swimming); break;
+            case "swimmingIdle": this.playAnimation(this.basicActorAnimations.swimmingIdle); break;
             default: throw new Error(`Unknown actor state: '${this.actorState.state}'`);
         }
     }
@@ -702,6 +1104,17 @@ class BaseActor extends Object3D implements ICollidable {
         }
     }
 
+    // materials and textures stay - material-decoder hands those out of name-keyed shared caches
+    public release() {
+        this.stopAnimations();
+        this.disposeBlinkFaces();
+
+        for (const mesh of this.meshes) {
+            this.renderManager.mixer.uncacheRoot(mesh);
+            mesh.geometry.dispose();
+        }
+    }
+
     protected setBasicActorAnimation(key: ValidStateNames_T, animationName: string) {
         if (!(animationName in this.actorAnimations))
             throw new Error(`'${animationName}' is not available.`);
@@ -717,6 +1130,8 @@ class BaseActor extends Object3D implements ICollidable {
     public setRunningAnimation(animationName: string) { this.setBasicActorAnimation("running", animationName); }
     public setDeathAnimation(animationName: string) { this.setBasicActorAnimation("dying", animationName); }
     public setFallingAnimation(animationName: string) { this.setBasicActorAnimation("falling", animationName); }
+    public setSwimmingAnimation(animationName: string) { this.setBasicActorAnimation("swimming", animationName); }
+    public setSwimmingIdleAnimation(animationName: string) { this.setBasicActorAnimation("swimmingIdle", animationName); }
 
     public initAnimations() {
         this.isAnimationsInit = true;
@@ -734,6 +1149,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         for (const mesh of this.meshes) {
             if ((mesh as any).isBoneAttachment) continue; // rides the bone it hangs off, its own skeleton is untouched by this clip
+            if ((mesh as any).sharesSkeleton) continue; // skinned off the bodypart that owns the bone tree, one action drives both
 
             const prevAct = this.prevAnimations.get(mesh) || null;
             const currAct = this.currAnimations.get(mesh) || null;
@@ -754,35 +1170,85 @@ class BaseActor extends Object3D implements ICollidable {
     public goTo(position: Vector3) {
         console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
 
-        if (this.actorState.locomotion && this.velocity.lengthSq() < MIN_BRAKE_SPEED_SQ && this.hasWallPosition) {
-            tmpMovement.copy(position).sub(this.position);
-            tmpMovement.z = 0;
-
-            if (tmpMovement.dot(this.lastWallNormal) > 0) {
-                this.position.copy(this.lastWallPosition);
-                this.hasWallPosition = false;
-
-                if (this.rigidbody)
-                    this.rigidbody.setTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + COLLISION_HEIGHT), true);
-            }
-        }
-
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
+        this.actorState.desired.actor = null;
+        this.actorState.desired.offset = 0;
+        this.actorState.desired.faceMovement = true;
+        this.actorState.desired.faceTarget = null;
+    }
+
+    public goToActor(actor: Object3D, offset: number = 0) {
+        this.actorState.locomotion = true;
+        this.actorState.desired.actor = actor;
+        this.actorState.desired.offset = offset;
+        this.actorState.desired.faceMovement = true;
+        this.actorState.desired.faceTarget = null;
+    }
+
+    public moveInDirection(direction: Vector3, faceMovement: boolean = true) {
+        this.actorState.locomotion = true;
+        this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.position);
+        this.actorState.desired.actor = null;
+        this.actorState.desired.offset = 0;
+        this.actorState.desired.faceMovement = faceMovement;
+    }
+
+    public faceActor(actor: Object3D | null) {
+        this.actorState.desired.faceTarget = actor;
+    }
+
+    public stopMoving() {
+        this.actorState.locomotion = false;
+        this.acceleration.set(0, 0, 0);
+        this.velocity.set(0, 0, 0);
+    }
+
+    public setWalking(isWalking: boolean) {
+        this.isWalking = isWalking;
+    }
+
+    public setFlying(isFlying: boolean) {
+        this.physicsMode = isFlying ? "flying" : "falling";
+        this.isGrounded = false;
+
+        if (isFlying) {
+            this.hasStartedPhysics = true;
+            this.setCollisionSize(WYVERN_COLLISION_RADIUS, WYVERN_COLLISION_HEIGHT);
+        }
+    }
+
+    public setAirSpeed(airSpeed: number) {
+        if (!Number.isFinite(airSpeed) || airSpeed < 0) throw new Error(`Invalid pawn AirSpeed '${airSpeed}'.`);
+
+        this.airSpeed = airSpeed;
+    }
+
+    public setCollisionSize(collisionRadius: number, collisionHeight: number) {
+        if (!Number.isFinite(collisionRadius) || collisionRadius <= 0) throw new Error(`Invalid pawn CollisionRadius '${collisionRadius}'.`);
+        if (!Number.isFinite(collisionHeight) || collisionHeight <= 0) throw new Error(`Invalid pawn CollisionHeight '${collisionHeight}'.`);
+
+        this.collisionRadius = collisionRadius;
+        this.collisionHeight = collisionHeight;
+
+        if (this.collider) this.collider.setShape(new RAPIER.Cylinder(collisionHeight, collisionRadius));
+        if (this.rigidbody) this.rigidbody.setTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + collisionHeight), true);
     }
 
     public teleportTo(position: Vector3) {
         this.position.copy(position);
         this.velocity.set(0, 0, 0);
         this.isGrounded = false;
-        this.hasDesiredYaw = false;
-        this.hasWallPosition = false;
+        this.hasDesiredRotation = false;
+        this.physicsMode = "falling";
+        this.hasStartedPhysics = false;
 
         this.actorState.locomotion = false;
         this.actorState.desired.position.copy(position);
+        this.actorState.desired.actor = null;
 
         if (this.rigidbody)
-            this.rigidbody.setTranslation(tmpBodyPosition.set(position.x, position.y, position.z + COLLISION_HEIGHT), true);
+            this.rigidbody.setTranslation(tmpBodyPosition.set(position.x, position.y, position.z + this.collisionHeight), true);
     }
 }
 
@@ -790,7 +1256,11 @@ class ActorState {
     public state: ValidStateNames_T = "idle";
     public locomotion: boolean = false;
     public readonly desired: DesiredState_T = {
-        position: new Vector3()
+        position: new Vector3(),
+        actor: null,
+        offset: 0,
+        faceMovement: true,
+        faceTarget: null
     };
 
     public reset() {
@@ -805,13 +1275,21 @@ type BasicActorAnimations_T = {
     running: string;
     dying: string;
     falling: string;
+    swimming: string;
+    swimmingIdle: string;
 };
 
 type DesiredState_T = {
     position: Vector3;
+    actor: Object3D | null;
+    offset: number;
+    faceMovement: boolean;
+    faceTarget: Object3D | null;
 };
 
-type ValidStateNames_T = "idle" | "walking" | "running" | "dying" | "falling";
+type PhysicsMode_T = "none" | "walking" | "falling" | "swimming" | "flying";
+
+type ValidStateNames_T = "idle" | "walking" | "running" | "dying" | "falling" | "swimming" | "swimmingIdle";
 
 type HairChainState_T = {
     bones: Bone[];
@@ -844,6 +1322,38 @@ function hashName(name: string): number {
 
 function clampHairAngle(value: number): number {
     return Math.max(-HAIR_MAX_ANGLE, Math.min(HAIR_MAX_ANGLE, value));
+}
+
+function fixedTurn(current: number, desired: number, deltaRate: number): number {
+    current &= 65535;
+    desired &= 65535;
+
+    if (deltaRate === 0) return current;
+
+    let result = current;
+
+    if (current > desired) {
+        if (current - desired < 32768) result -= Math.min(current - desired, Math.abs(deltaRate));
+        else result += Math.min(desired + 65536 - current, Math.abs(deltaRate));
+    } else {
+        if (desired - current < 32768) result += Math.min(desired - current, Math.abs(deltaRate));
+        else result -= Math.min(current + 65536 - desired, Math.abs(deltaRate));
+    }
+
+    return result & 65535;
+}
+
+function twoWallAdjust(desiredDir: Vector3, delta: Vector3, hitNormal: Vector3, oldHitNormal: Vector3, hitTime: number) {
+    if (oldHitNormal.dot(hitNormal) <= 0) {
+        tmpStepUp.crossVectors(hitNormal, oldHitNormal).normalize();
+        delta.copy(tmpStepUp).multiplyScalar(delta.dot(tmpStepUp) * (1 - hitTime));
+
+        if (desiredDir.dot(delta) < 0) delta.multiplyScalar(-1);
+    } else {
+        delta.addScaledVector(hitNormal, -delta.dot(hitNormal)).multiplyScalar(1 - hitTime);
+
+        if (delta.dot(desiredDir) <= 0) delta.set(0, 0, 0);
+    }
 }
 
 export default BaseActor;

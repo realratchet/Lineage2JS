@@ -16,10 +16,11 @@
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
 import type { L2Environment } from "@client/rendering/l2-env";
-import { Mesh, Vector3 } from "three";
-import type { ICollidable } from "./objects";
+import { Box3, Mesh, Vector3 } from "three";
+import type { CollisionPrimitive_T, ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { ColorByte } from "@client/utils/color-byte";
+import buildTriangleIndex from "@client/physics/triangle-index";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -36,6 +37,9 @@ class Terrain extends Mesh implements ICollidable {
 
     protected collider: RAPIER.Collider;
     protected rigidbody: RAPIER.RigidBody;
+    protected analyticalIndices: Uint32Array;
+    protected readonly analyticalBounds = new Box3();
+    protected analyticalPrimitive: CollisionPrimitive_T;
 
     public bounds: THREE.Box3;
     protected boundsSize: THREE.Vector3;
@@ -90,6 +94,8 @@ class Terrain extends Mesh implements ICollidable {
         const arrIndices = this.geometry.index.array;
         const indices = arrIndices instanceof Uint32Array ? arrIndices : new Uint32Array(arrIndices);
 
+        this.analyticalIndices = indices;
+        this.analyticalPrimitive = { kind: "terrain", vertices, indices, index: buildTriangleIndex(vertices, indices), matrixWorld: this.matrixWorld, bounds: this.analyticalBounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
         this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
         this.rigidbodyDesc = RigidBodyDesc.fixed();
 
@@ -453,6 +459,11 @@ class Terrain extends Mesh implements ICollidable {
         return [idxA, idxB, alpha];
     }
 
+    public releaseCollider() {
+        this.collider = null;
+        this.rigidbody = null;
+    }
+
     public getCollider() { return this.collider; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
 
@@ -463,6 +474,40 @@ class Terrain extends Mesh implements ICollidable {
         this.rigidbody.setTranslation(this.getWorldPosition(tmpVertex), false);
 
         return this.collider;
+    }
+
+    public getCollisionPrimitive(): CollisionPrimitive_T {
+        this.analyticalBounds.setFromArray(this.analyticalPrimitive.vertices).applyMatrix4(this.matrixWorld);
+
+        return this.analyticalPrimitive;
+    }
+
+    public refreshCollisionGeometry() {
+        const attrPositions = this.geometry.getAttribute("position");
+
+        if (this.batchGeometry) {
+            const arrPositions = attrPositions.array as Float32Array;
+            const arrBatchPositions = this.batchGeometry.getAttribute("position").array as Float32Array;
+            const offset = this.batchVertexOffset * 3;
+
+            for (let i = 0; i < arrPositions.length; i += 3) {
+                arrPositions[i] = arrBatchPositions[offset + i] - this.position.x;
+                arrPositions[i + 1] = arrBatchPositions[offset + i + 1] - this.position.y;
+                arrPositions[i + 2] = arrBatchPositions[offset + i + 2] - this.position.z;
+            }
+
+            attrPositions.needsUpdate = true;
+            this.geometry.computeVertexNormals();
+        }
+
+        const arrIndices = this.geometry.index.array;
+        const indices = arrIndices instanceof Uint32Array ? arrIndices : new Uint32Array(arrIndices);
+
+        this.analyticalIndices = indices;
+        this.analyticalPrimitive.vertices = attrPositions.array as Float32Array;
+        this.analyticalPrimitive.indices = this.analyticalIndices;
+        this.analyticalPrimitive.index = buildTriangleIndex(this.analyticalPrimitive.vertices, this.analyticalIndices);
+        this.colliderDesc = ColliderDesc.trimesh(attrPositions.array as Float32Array, indices);
     }
 
     protected stitchEastNeighbor: Terrain | null = null;
