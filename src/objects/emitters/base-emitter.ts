@@ -793,7 +793,7 @@ abstract class BaseEmitter extends Object3D {
                 const refDistance = randRange(sound.radius[0], sound.radius[1]);
 
                 this.pendingSounds.push({
-                    soundDataUri: sound.soundDataUri,
+                    soundName: sound.soundName,
                     position: [tmpSoundWorldPos.x, tmpSoundWorldPos.y, tmpSoundWorldPos.z],
                     volume: randRange(sound.volume[0], sound.volume[1]), // UE2 also factors in owner.TransientSoundVolume, not tracked here
                     pitch: randRange(sound.pitch[0], sound.pitch[1]),
@@ -1791,7 +1791,7 @@ type Fade_T = { time: number; color: THREE.Vector4; };
 type FadeSettings_T = { fadeIn: Fade_T; fadeOut: Fade_T; };
 type Range3_T = { min: THREE.Vector3, max: THREE.Vector3 };
 type ChangesOverTime_T = { scale?: { times: number[], values: number[] }; };
-type PendingEmitterSound_T = { soundDataUri: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number };
+type PendingEmitterSound_T = { soundName: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number };
 
 // unimplemented particle feature marker, warns once per call site instead of
 // throwing so an exotic emitter can't kill the render loop

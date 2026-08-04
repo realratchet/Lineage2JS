@@ -189,8 +189,9 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
 }
 
 /**
- * Blob URLs are scoped to the session that created them - a cached library carries
- * stale ones. Re-mint them from the raw audio bytes kept in soundBlobCache.
+ * Blob URLs are scoped to the thread that created them, so the decode never mints one -
+ * whichever thread ends up owning the library does, here. Sound decode infos carry a
+ * name and resolve against this cache, see SectorObject.getSoundUri.
  */
 function refreshSoundBlobUris(library: any): void {
     const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array, mimeType: string }>;
@@ -200,13 +201,9 @@ function refreshSoundBlobUris(library: any): void {
     for (const entry of soundCache.values()) {
         if (!entry?.data) continue;
 
+        if (entry.uri) URL.revokeObjectURL(entry.uri);
+
         entry.uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }));
-    }
-
-    for (const info of library.ambientSounds ?? []) {
-        const entry = soundCache.get(info.soundName);
-
-        if (entry?.uri) info.soundDataUri = entry.uri;
     }
 }
 

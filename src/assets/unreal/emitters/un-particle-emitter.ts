@@ -631,12 +631,10 @@ abstract class UParticleSound extends UObject {
         if (!snd) return null;
 
         const soundKey = snd.objectName ?? snd.uuid;
-        const soundEntry = builder.pullSound(snd);
 
-        if (!soundEntry) return null;
+        if (!builder.pullSound(snd)) return null;
 
         return {
-            soundDataUri: soundEntry.uri,
             soundName: soundKey,
             radius: this.radius?.loadSelf().getDecodeInfo(library) ?? [0, 0],
             pitch: this.pitch?.loadSelf().getDecodeInfo(library) ?? [1, 1],

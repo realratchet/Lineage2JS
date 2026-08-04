@@ -38,11 +38,8 @@ abstract class UAmbientSoundObject extends UAActor {
         console.assert(isFinite(this.randomAmbient));
 
         const soundKey = snd.objectName ?? snd.uuid;
-        const soundEntry = builder.pullSound(snd);
 
-        if (!soundEntry) return null;
-
-        const soundDataUri = soundEntry.uri;
+        if (!builder.pullSound(snd)) return null;
 
         const position = this.location.getElements();
         const refDistance = this.radius;
@@ -60,7 +57,6 @@ abstract class UAmbientSoundObject extends UAActor {
             maxDistance,
             volume,
             pitch,
-            soundDataUri,
             soundName: soundKey,
             looping: randomChance <= 0 || randomChance >= 100,
             soundType: AS_TYPE_NAMES[(this.soundType?.valueOf() as ASType1_T) ?? ASType1_T.AST1_Always],

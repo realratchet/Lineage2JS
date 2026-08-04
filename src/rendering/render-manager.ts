@@ -112,6 +112,7 @@ const SIMULATED_PAWN_CONCURRENCY = 3;
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
 type SimulatedPawn_T = { pawn: BaseActor, expires: number, nextTurn: number };
+type Disposable_T = { dispose(): void };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[] };
 type SectorWarmup_T = {
     sector: SectorObject,
@@ -1723,8 +1724,8 @@ class RenderManager {
 
                     const pendingSounds = (child as any).pendingSounds;
                     if (pendingSounds.length) {
-                        for (const snd of pendingSounds)
-                            this.audioManager.playOneShotSound(snd.soundDataUri, snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
+                        if (sector) for (const snd of pendingSounds)
+                            this.audioManager.playOneShotSound(sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
                         pendingSounds.length = 0;
                     }
                 }
@@ -2220,7 +2221,7 @@ class RenderManager {
             const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
             const activeIds = this.audioManager.activeAmbientSoundIds;
             const audibleSounds = new Map<string, number>();
-            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, priority: number }[] = [];
+            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, sector: SectorObject, priority: number }[] = [];
 
             for (const [, sectorYMap] of this.sectors) {
                 for (const [, sector] of sectorYMap) {
@@ -2244,9 +2245,9 @@ class RenderManager {
                         audibleSounds.set(snd.uuid, priority);
 
                         if (activeIds.has(snd.uuid)) continue;
-                        if (!snd.looping && !this.audioManager.rollAmbientTrigger(snd.uuid, snd.soundDataUri, snd.randomChance, currentTime)) continue;
+                        if (!snd.looping && !this.audioManager.rollAmbientTrigger(snd.uuid, sector.getSoundUri(snd.soundName), snd.randomChance, currentTime)) continue;
 
-                        candidates.push({ uuid: snd.uuid, snd, priority });
+                        candidates.push({ uuid: snd.uuid, snd, sector, priority });
                     }
                 }
             }
@@ -2261,11 +2262,11 @@ class RenderManager {
 
             candidates.sort((a, b) => b.priority - a.priority);
 
-            for (const { uuid, snd, priority } of candidates) {
+            for (const { uuid, snd, sector, priority } of candidates) {
                 const placed = this.audioManager.playAmbientSound(
                     uuid,
                     snd.soundName,
-                    snd.soundDataUri,
+                    sector.getSoundUri(snd.soundName),
                     snd.position,
                     snd.volume,
                     snd.pitch,
@@ -2563,6 +2564,8 @@ class RenderManager {
     }
 
     public addSector(sector: SectorObject) {
+        retainSectorResources(sector, sector);
+
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
                 this.sectors.set(sector.index.x, new Map());
@@ -2754,6 +2757,8 @@ class RenderManager {
 
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
+        retainSectorResources(sector, sector.staticMeshGroup);
+
         sector.staticMeshGroup.traverse(child => {
             if ((child as any).isRotatingObject) {
                 this.rotatingObjects.add(child as RotatingObject);
@@ -2831,7 +2836,7 @@ class RenderManager {
             }
         }
 
-        disposeSectorResources(sector);
+        releaseSectorResources(sector);
     }
 
     /**
@@ -2920,54 +2925,86 @@ function addResizeListeners(manager: RenderManager) {
     (manager as any).onHandleResize();
 }
 
-/**
- * Frees GPU resources owned by a sector: geometries, materials and their textures
- * (both direct texture slots and shader uniforms). Textures and geometries are never
- * shared across sectors - every sector decodes from its own library - so disposing
- * everything under it is safe. dispose() is idempotent, shared-within-sector
- * resources getting disposed twice is fine.
- */
-function disposeSectorResources(sector: SectorObject) {
-    sector.traverse(child => {
+// material-decoder keys its caches by name (cacheTexturesByName, cacheStaticMaterialsByName),
+// so neighbouring sectors naming the same texture are handed the same instance - an unloading
+// sector must not free what a loaded one still draws with
+const resourceRefs = new Map<Disposable_T, number>();
+
+function collectMaterialResources(material: THREE.Material, target: Set<Disposable_T>) {
+    // a one-level uniform scan misses everything a transform chain nests
+    // (uniforms.shDiffuse.value.map.texture) and every sprite sheet slot
+    const textures = new Set<THREE.Texture>();
+
+    collectMaterialTextures(material, textures, new WeakSet());
+    for (const texture of textures) target.add(texture);
+
+    target.add(material);
+}
+
+function collectSectorResources(root: THREE.Object3D, target: Set<Disposable_T>) {
+    root.traverse(child => {
         const mesh = child as THREE.Mesh;
 
         if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
 
-        mesh.geometry?.dispose();
+        if (mesh.geometry) target.add(mesh.geometry);
 
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 
         for (const material of materials) {
             if (!material) continue;
 
-            // a one-level uniform scan misses everything a transform chain nests
-            // (uniforms.shDiffuse.value.map.texture) and every sprite sheet slot
-            const textures = new Set<THREE.Texture>();
-
-            collectMaterialTextures(material, textures, new WeakSet());
-            for (const texture of textures) texture.dispose();
-
-            material.dispose();
+            collectMaterialResources(material, target);
         }
     });
+}
 
+function collectCelestialResources(sector: SectorObject, target: Set<Disposable_T>) {
     for (const celestial of sector.celestials) {
-        if (celestial.sprite?.isTexture) celestial.sprite.dispose();
+        if (celestial.sprite?.isTexture) target.add(celestial.sprite);
 
         const materials = Array.isArray(celestial.material) ? celestial.material : [celestial.material];
+
         for (const material of materials) {
             if (!material) continue;
 
-            // MeshStaticMaterial textures nest several levels deep (uniforms.shDiffuse.value.map.texture)
-            if ((material as any).uniforms) {
-                const textures = new Set<THREE.Texture>();
-                collectTexturesDeep((material as any).uniforms, textures, new WeakSet());
-                for (const texture of textures) texture.dispose();
-            }
-
-            material.dispose();
+            collectMaterialResources(material, target);
         }
     }
+}
+
+// two passes per sector (staticMeshGroup only arrives once its progressive build finishes) and
+// idempotent, since a sector returning from the retirement grace period re-enters addSector.
+// Must run before queueSectorWarmup swaps the real materials out for fallbacks.
+function retainSectorResources(sector: SectorObject, root: THREE.Object3D) {
+    const resources = new Set<Disposable_T>();
+
+    collectSectorResources(root, resources);
+
+    if (root === sector) collectCelestialResources(sector, resources);
+
+    for (const resource of resources) {
+        if (sector.retainedResources.has(resource)) continue;
+
+        sector.retainedResources.add(resource);
+        resourceRefs.set(resource, (resourceRefs.get(resource) ?? 0) + 1);
+    }
+}
+
+function releaseSectorResources(sector: SectorObject) {
+    for (const resource of sector.retainedResources) {
+        const refs = (resourceRefs.get(resource) ?? 1) - 1;
+
+        if (refs > 0) {
+            resourceRefs.set(resource, refs);
+            continue;
+        }
+
+        resourceRefs.delete(resource);
+        resource.dispose();
+    }
+
+    sector.retainedResources.clear();
 }
 
 // procedural maps nest several levels deep (uniforms.shDiffuse.value.map.texture), needs a real walk

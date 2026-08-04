@@ -784,8 +784,7 @@ declare global {
                 };
 
                 export interface IParticleSoundDecodeInfo {
-                    soundDataUri: string,
-                    soundName: string,
+                    soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
                     radius: [number, number],
                     pitch: [number, number],
                     volume: [number, number],
@@ -876,8 +875,7 @@ declare global {
                     maxDistance: number,
                     volume: number,
                     pitch: number,
-                    soundDataUri: string,
-                    soundName: string,
+                    soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
                     looping: boolean,
                     soundType: AmbientSoundTypes_T,
                     randomChance: number,

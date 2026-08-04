@@ -219,6 +219,8 @@ class SectorObject extends Object3D {
     public visibleLeaves: Set<number> = new Set();
     public readonly lights: Record<string, DynamicLight> = {};
     public readonly lightList: DynamicLight[] = [];
+    // everything this sector counts a reference on, see RenderManager's retainSectorResources
+    public readonly retainedResources = new Set<{ dispose(): void }>();
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
 
@@ -251,6 +253,16 @@ class SectorObject extends Object3D {
         }
 
         return this;
+    }
+
+    // blob URLs are session-scoped and re-minted per decode, so sound decode infos carry a
+    // name and resolve here instead of baking a URL that goes stale on the next load
+    public getSoundUri(soundName: string): string {
+        const entry = (this as any).decodeLibrary?.soundBlobCache?.get(soundName);
+
+        if (!entry?.uri) throw new Error(`Sector '${this.name}' has no decoded sound '${soundName}'.`);
+
+        return entry.uri;
     }
 
     // GetRelevantLights, UnRenderVisibility.cpp line 439 - the Consider list only carries lights
