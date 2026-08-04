@@ -17,6 +17,10 @@ const tmpAttachMatrix = new Matrix4();
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
+// a sector holds its whole decode library (every texture, geometry and sound buffer it
+// decoded) for as long as it is retained, so the grace period needs a count ceiling too -
+// crossing boundaries faster than it expires is what runs the tab out of memory
+const MAX_RETIRED_SECTORS = 3;
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
@@ -259,15 +263,23 @@ class AssetManager {
         const now = performance.now();
 
         for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
-            if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS) continue;
+            /* Map iterates in insertion order, so anything past the cap is the oldest retirement */
+            if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS && this.retiredSectors.size <= MAX_RETIRED_SECTORS) continue;
 
             console.log(`Disposing sector '${sectorIdx}'.`);
 
             this.retiredSectors.delete(sectorIdx);
+            this.dropPendingBuild(sector);
             renderManager.disposeSector(sector);
 
             this.decodeWorker?.freeSector(sectorIdx);
         }
+    }
+
+    protected dropPendingBuild(sector: SectorObject) {
+        const jobIndex = this.pendingStaticMeshBuilds.findIndex(job => job.sector === sector);
+
+        if (jobIndex >= 0) this.pendingStaticMeshBuilds.splice(jobIndex, 1);
     }
 
     protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
@@ -276,6 +288,10 @@ class AssetManager {
 
         for (let i = 0; i < this.pendingStaticMeshBuilds.length; i++) {
             const sector = this.pendingStaticMeshBuilds[i].sector;
+
+            /* retired: attaching now would register colliders and movers nothing ever unregisters */
+            if (!sector.parent) continue;
+
             const distance = sectorDistance(cameraPosition, sector.index.x, sector.index.y);
 
             if (distance >= jobDistance) continue;

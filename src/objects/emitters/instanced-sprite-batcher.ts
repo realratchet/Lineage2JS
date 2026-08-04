@@ -2,8 +2,9 @@ import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribu
 
 const baseGeometry = new PlaneGeometry(2, 2);
 const DEPTH_BUCKET_SIZE = 2048;
+const BATCH_IDLE_MS = 5000;
 
-type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: any[] };
+type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: any[]; lastUsed: number };
 
 const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
@@ -108,6 +109,18 @@ class SpriteParticleBatch {
     public reset() {
         this.mesh.visible = false;
         this.mesh.geometry.instanceCount = 0;
+    }
+
+    public dispose() {
+        const geometry = this.mesh.geometry;
+
+        // position/uv/index are baseGeometry's own attributes - dropping them first stops
+        // dispose from deleting buffers every other batch still draws from
+        geometry.deleteAttribute("position");
+        geometry.deleteAttribute("uv");
+        geometry.setIndex(null);
+        geometry.dispose();
+        this.mesh.material.dispose();
     }
 
     public update(emitters: any[]) {
@@ -283,6 +296,8 @@ class InstancedSpriteBatcher {
     }
 
     public update(emitters: any[], camera: Camera) {
+        const currentTime = performance.now();
+
         for (const group of this.groups.values()) group.emitters.length = 0;
 
         camera.updateMatrixWorld();
@@ -305,7 +320,7 @@ class InstancedSpriteBatcher {
             const key = `${materialKey(material)}|order:${mesh.renderOrder}|depth:${depthBucket}`;
             let group = this.groups.get(key);
             if (!group) {
-                group = { material, renderOrder: mesh.renderOrder, emitters: [] };
+                group = { material, renderOrder: mesh.renderOrder, emitters: [], lastUsed: currentTime };
                 this.groups.set(key, group);
             }
             group.material = material;
@@ -315,7 +330,25 @@ class InstancedSpriteBatcher {
         for (const batch of this.batches.values()) batch.reset();
 
         for (const [key, group] of this.groups) {
-            if (group.emitters.length === 0) continue;
+            if (group.emitters.length === 0) {
+                // the key carries a texture uuid and a depth bucket, both of which churn as sectors
+                // re-stream and the camera moves - retiring idle ones keeps the map from growing
+                // for the whole session, holding on to every material (and its textures) it ever saw
+                if (currentTime - group.lastUsed < BATCH_IDLE_MS) continue;
+
+                const idle = this.batches.get(key);
+
+                if (idle) {
+                    this.root.remove(idle.mesh);
+                    idle.dispose();
+                    this.batches.delete(key);
+                }
+
+                this.groups.delete(key);
+                continue;
+            }
+
+            group.lastUsed = currentTime;
 
             let batch = this.batches.get(key);
             if (!batch) {

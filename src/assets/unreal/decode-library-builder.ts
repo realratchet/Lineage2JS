@@ -83,11 +83,11 @@ class DecodeLibraryBuilder {
 
         const fileType = sound.getFileType()?.toLowerCase() ?? "wav";
         const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
-        const audioBuffer = new ArrayBuffer(audioData.byteLength);
-        new Uint8Array(audioBuffer).set(audioData);
-        const blob = new Blob([audioBuffer], { type: mimeType });
 
-        soundEntry = { uri: URL.createObjectURL(blob), data: audioData, mimeType };
+        // no blob URL here - the decode runs in the worker, where one is unreachable from the
+        // consumer, permanently pins a second copy of the bytes and never gets revoked.
+        // refreshSoundBlobUris mints them on whichever thread ends up owning the library.
+        soundEntry = { uri: null, data: audioData, mimeType };
         this.library.soundBlobCache.set(soundKey, soundEntry);
 
         return soundEntry;

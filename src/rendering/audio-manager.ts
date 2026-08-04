@@ -531,6 +531,13 @@ class AudioManager {
         this.activeAmbientSounds.delete(id);
     }
 
+    // the cache is keyed by blob URL, and a sector re-decode mints fresh ones - without this
+    // every unloaded sector leaves its decoded PCM behind under a key nothing can hit again
+    public releaseSound(dataUri: string) {
+        this.ambientBufferCache.delete(dataUri);
+        this.pendingAmbientBuffers.delete(dataUri);
+    }
+
     public updateListenerPosition(px: number, py: number, pz: number, fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) {
         const listener = this.audioContext.listener;
 

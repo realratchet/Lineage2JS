@@ -534,16 +534,25 @@ class Terrain extends Mesh implements ICollidable {
         // Otherwise, use relative offsets.
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
         const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
+        let changed = false;
 
         for (let y = 0; y < 17; y++) {
             const selfIdx = selfOffset + (y * 17 + 16) * 3 + 2; // Right Edge (x=16)
             const neighborIdx = neighborOffset + (y * 17 + 0) * 3 + 2; // Neighbor Left Edge (x=0)
-            pos[selfIdx] = nPos[neighborIdx] + hDiff;
+            const height = nPos[neighborIdx] + hDiff;
+
+            if (pos[selfIdx] === height) continue;
+
+            pos[selfIdx] = height;
+            changed = true;
         }
+
+        this.stitchEastNeighbor = neighbor;
+
+        if (!changed) return false;
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
-        this.stitchEastNeighbor = neighbor;
         return true;
     }
 
@@ -565,16 +574,25 @@ class Terrain extends Mesh implements ICollidable {
 
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
         const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
+        let changed = false;
 
         for (let x = 0; x < 17; x++) {
             const selfIdx = selfOffset + (16 * 17 + x) * 3 + 2; // Bottom Edge (y=16)
             const neighborIdx = neighborOffset + (0 * 17 + x) * 3 + 2; // Neighbor Top Edge (y=0)
-            pos[selfIdx] = nPos[neighborIdx] + hDiff;
+            const height = nPos[neighborIdx] + hDiff;
+
+            if (pos[selfIdx] === height) continue;
+
+            pos[selfIdx] = height;
+            changed = true;
         }
+
+        this.stitchSouthNeighbor = neighbor;
+
+        if (!changed) return false;
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
-        this.stitchSouthNeighbor = neighbor;
         return true;
     }
 
@@ -599,11 +617,15 @@ class Terrain extends Mesh implements ICollidable {
 
         const selfIdx = selfOffset + (16 * 17 + 16) * 3 + 2; // Bottom-Right corner
         const neighborIdx = neighborOffset + (0 * 17 + 0) * 3 + 2; // Neighbor Top-Left corner
-        pos[selfIdx] = nPos[neighborIdx] + hDiff;
+        const height = nPos[neighborIdx] + hDiff;
 
+        this.stitchCornerNeighbor = neighbor;
+
+        if (pos[selfIdx] === height) return false;
+
+        pos[selfIdx] = height;
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
-        this.stitchCornerNeighbor = neighbor;
         return true;
     }
 
@@ -612,7 +634,7 @@ class Terrain extends Mesh implements ICollidable {
      * Identifies neighbors and delegates to instance stitching methods.
      */
     public static stitchAll(terrains: Terrain[]) {
-        if (terrains.length < 2) return { processed: terrains.length, stitches: 0 };
+        if (terrains.length < 2) return { processed: terrains.length, stitches: 0, modified: [] as Terrain[] };
 
         const terrainMap = new Map<string, Terrain>();
         for (const t of terrains) {
@@ -620,42 +642,52 @@ class Terrain extends Mesh implements ICollidable {
             terrainMap.set(key, t);
         }
 
+        // only the edges whose heights actually moved need their collision geometry rebuilt;
+        // re-stitching a settled boundary writes back the same values every time
+        const modified = new Set<Terrain>();
+
         const debugInfo = {
             processed: terrains.length,
-            stitches: 0
+            stitches: 0,
+            modified: [] as Terrain[]
         };
 
         for (const t of terrains) {
             const mapX = Number(t.mapX);
             const mapY = Number(t.mapY);
 
-            // Horizontal: The Western map (t.offsetX === 240) modifies its Right Edge 
+            // Horizontal: The Western map (t.offsetX === 240) modifies its Right Edge
             // to match the Eastern map's (mapX + 1, offsetX === 0) Left Edge.
             if (t.offsetX === 240) {
                 const neighbor = terrainMap.get(`${mapX + 1}_${mapY}_0_${t.offsetY}`);
                 if (neighbor && t.stitchWestToEast(neighbor)) {
                     debugInfo.stitches++;
+                    modified.add(t);
                 }
             }
 
-            // Vertical: The Northern map (t.offsetY === 240) modifies its Bottom Edge 
+            // Vertical: The Northern map (t.offsetY === 240) modifies its Bottom Edge
             // to match the Southern map's (mapY + 1, offsetY === 0) Top Edge.
             if (t.offsetY === 240) {
                 const neighbor = terrainMap.get(`${mapX}_${mapY + 1}_${t.offsetX}_0`);
                 if (neighbor && t.stitchNorthToSouth(neighbor)) {
                     debugInfo.stitches++;
+                    modified.add(t);
                 }
             }
 
-            // Diagonal: The North-Western map (240, 240) modifies its single Bottom-Right corner 
+            // Diagonal: The North-Western map (240, 240) modifies its single Bottom-Right corner
             // to match the South-Eastern map's (mapX + 1, mapY + 1, 0, 0) Top-Left corner vertex.
             if (t.offsetX === 240 && t.offsetY === 240) {
                 const neighbor = terrainMap.get(`${mapX + 1}_${mapY + 1}_0_0`);
                 if (neighbor && t.stitchCorner(neighbor)) {
                     debugInfo.stitches++;
+                    modified.add(t);
                 }
             }
         }
+
+        debugInfo.modified = [...modified];
 
         return debugInfo;
     }

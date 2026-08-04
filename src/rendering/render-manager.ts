@@ -2819,6 +2819,18 @@ class RenderManager {
     }
 
     public disposeSector(sector: SectorObject) {
+        const soundCache = (sector as any).decodeLibrary?.soundBlobCache as Map<string, { uri: string }>;
+
+        if (soundCache) {
+            for (const entry of soundCache.values()) {
+                if (!entry.uri) continue;
+
+                this.audioManager.releaseSound(entry.uri);
+                URL.revokeObjectURL(entry.uri);
+                entry.uri = null;
+            }
+        }
+
         disposeSectorResources(sector);
     }
 
@@ -2886,12 +2898,14 @@ class RenderManager {
 
         if (terrains.length < 2) return;
 
-        for (const terrain of terrains)
+        const result = Terrain.stitchAll(terrains);
+
+        (window as any).terrainDebug = result;
+
+        // a settled boundary re-stitches to identical heights, so rebuilding every terrain's
+        // trimesh here cost ~160ms per sector add/remove; only the moved edges need it
+        for (const terrain of result.modified) {
             this.unregisterCollider(terrain);
-
-        (window as any).terrainDebug = Terrain.stitchAll(terrains);
-
-        for (const terrain of terrains) {
             terrain.refreshCollisionGeometry();
             this.registerCollider(terrain);
         }
@@ -2926,17 +2940,12 @@ function disposeSectorResources(sector: SectorObject) {
         for (const material of materials) {
             if (!material) continue;
 
-            for (const value of Object.values(material)) {
-                if ((value as THREE.Texture)?.isTexture) (value as THREE.Texture).dispose();
-            }
+            // a one-level uniform scan misses everything a transform chain nests
+            // (uniforms.shDiffuse.value.map.texture) and every sprite sheet slot
+            const textures = new Set<THREE.Texture>();
 
-            const uniforms = (material as any).uniforms;
-
-            if (uniforms) {
-                for (const uniform of Object.values(uniforms) as any[]) {
-                    if (uniform?.value?.isTexture) uniform.value.dispose();
-                }
-            }
+            collectMaterialTextures(material, textures, new WeakSet());
+            for (const texture of textures) texture.dispose();
 
             material.dispose();
         }

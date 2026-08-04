@@ -307,6 +307,8 @@ class DecodeEngine {
 
         if (convertToRGBA) convertDDSMaterialsToRGBA(library);
 
+        refreshSoundBlobUris(library); /* only reached on the main thread (pool size 0) - the worker path mints in processBinaryDecodeQueue */
+
         return { library, fromCache: false };
     }
 
