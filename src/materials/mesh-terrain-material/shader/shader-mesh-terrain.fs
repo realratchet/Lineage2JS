@@ -21,6 +21,11 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+uniform sampler2D shadowMap;
+uniform float shadowDarkness;
+uniform float shadowActive;
+varying vec4 vShadowCoord;
+
 #ifdef USE_UV_TEXTURE
     #pragma params_include_layers
 
@@ -62,6 +67,13 @@ void main() {
     #include <aomap_fragment>
     reflectedLight.indirectDiffuse *= diffuseColor.rgb;
     vec3 outgoingLight = reflectedLight.indirectDiffuse;
+
+    if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
+        vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
+
+        if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
+            outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
+    }
     #include <envmap_fragment>
     #include <output_fragment>
     #include <tonemapping_fragment>

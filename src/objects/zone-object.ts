@@ -15,6 +15,7 @@ const tmpVec4 = new Vector4();
 const tmpSphere = new Sphere();
 const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
+const arrLightSortKeys = new Float64Array(8);
 const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 const TRANSPARENT_SORT_DISTANCE_SQ = 128 * 128;
 
@@ -217,6 +218,7 @@ class SectorObject extends Object3D {
     // rebuilt each updateVisibility call; render-manager's Pass 2 leaf-checks live pawn positions against it
     public visibleLeaves: Set<number> = new Set();
     public readonly lights: Record<string, DynamicLight> = {};
+    public readonly lightList: DynamicLight[] = [];
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
 
@@ -245,9 +247,40 @@ class SectorObject extends Object3D {
     public setLights(lights: DynamicLight[]): this {
         for (const light of lights) {
             this.lights[light.name] = light;
+            this.lightList.push(light);
         }
 
         return this;
+    }
+
+    // GetRelevantLights, UnRenderVisibility.cpp line 439 - the Consider list only carries lights
+    // relevant to the actor's zone, so a sunlight actor never reaches one that isn't sun-affected
+    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean): DynamicLight[] {
+        target.length = 0;
+
+        for (const light of this.lightList) {
+            if (light.isSunlight && !allowSunlight) continue;
+
+            const key = light.getSortKey(position, radius);
+
+            if (key <= 0) continue;
+            if (target.length === maxLights && key <= arrLightSortKeys[maxLights - 1]) continue;
+
+            let index = Math.min(target.length, maxLights - 1);
+
+            while (index > 0 && arrLightSortKeys[index - 1] < key) {
+                target[index] = target[index - 1];
+                arrLightSortKeys[index] = arrLightSortKeys[index - 1];
+                index--;
+            }
+
+            target[index] = light;
+            arrLightSortKeys[index] = key;
+
+            if (target.length > maxLights) target.length = maxLights;
+        }
+
+        return target;
     }
 
     public constructor() {

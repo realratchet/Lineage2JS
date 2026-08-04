@@ -6,6 +6,9 @@ import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vecto
 
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
+// Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
+const NUM_ACTOR_LIGHTS = 4;
+
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
@@ -63,6 +66,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
             defines["ROTATE"] = 1;
             defines["OSCILLATE"] = 2;
             defines["ENVMAP"] = 3;
+            defines["ENVMAPWORLD"] = 4;
             defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
 
             // nested UV transforms for NMoon1
@@ -323,6 +327,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
+
+        // Projector leaves bProjectOnAlpha False, so alpha-blended surfaces - ocean, glass - take no decal
+        if (this.transparent) this.defines["NO_SHADOW_RECEIVE"] = "";
     }
 
     public setLightmap(lightmap: GD.MapData_T) {
@@ -407,6 +414,28 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    // per-vertex hardware lighting instead of a baked stream: EnableLighting(1,0,1) (UnSkeletalMesh.cpp line 4908)
+    public setActorLit() {
+        this.uniforms.actorAmbient = new Uniform(new Color(0, 0, 0));
+        this.uniforms.actorScaledGlow = new Uniform(1);
+        this.uniforms.numActorLights = new Uniform(0);
+        this.uniforms.actorLights = new Uniform(Array.from({ length: NUM_ACTOR_LIGHTS }, () => ({
+            position: new Vector3(),
+            direction: new Vector3(),
+            color: new Color(0, 0, 0),
+            radius: 0,
+            cone: 0,
+            effect: 0
+        })));
+
+        this.defines["USE_ACTOR_LIGHTS"] = "";
+        this.defines["NUM_ACTOR_LIGHTS"] = NUM_ACTOR_LIGHTS;
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
     public setUnlit() {
         delete this.defines["USE_AMBIENT"];
         delete this.defines["USE_LIGHTMAP"];
@@ -466,3 +495,5 @@ type MeshStaticMaterialParameters = {
         alphaFrom2: boolean
     }
 };
+
+export { NUM_ACTOR_LIGHTS };

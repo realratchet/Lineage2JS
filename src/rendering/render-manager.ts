@@ -26,6 +26,10 @@ import RotatingObject from "@client/objects/rotating-object";
 import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import CollisionWorld, { CollisionBackend_T } from "@client/physics/collision-world";
+import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
+import ShadowProjector from "@client/objects/shadow-projector";
+import type DynamicLight from "@client/objects/dynamic-light";
+import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -58,6 +62,11 @@ const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
+const tmpPawnSunAmbient = new ColorByte();
+const arrPawnLights: DynamicLight[] = [];
+const tmpShadowDirection = new Vector3(0, 0, -1);
+const arrShadowCasters: THREE.Object3D[] = [];
+const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
 const tmpOrbitFollowTarget = new Vector3();
 const tmpOrbitFollowDelta = new Vector3();
 const tmpMouseIntersection = new Vector3();
@@ -295,6 +304,7 @@ class RenderManager {
     protected readonly lastProjectionScreenMatrix = new Matrix4();
 
     public readonly player = new Player(this);
+    protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
     protected characterGroup = 1;
@@ -1416,6 +1426,71 @@ class RenderManager {
         }));
     }
 
+    // actor meshes carry no baked lighting stream, they take the ambient of whatever zone they
+    // stand in plus hardware lights (USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908)
+    protected updatePawnLighting(): void {
+        const sunAmbient = this.environment.getAmbientPlaneActorLightHalved(tmpPawnSunAmbient);
+
+        this.sectors.forEach(row => row.forEach(sector => {
+            for (const pawn of sector.pawns.children)
+                if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
+        }));
+
+        this.updateActorLighting(this.player, sunAmbient);
+        this.updatePawnShadow();
+
+        for (const entry of this.simulatedPawns)
+            this.updateActorLighting(entry.pawn, sunAmbient);
+    }
+
+    // AShadowProjector::UpdateLightInfo (0x9363d0): the sun by day, straight overhead otherwise -
+    // never the actor's own lights. lowpoly: player only, upgrade when NPCs cast
+    protected updatePawnShadow(): void {
+        const timeOfDay = this.environment.getTimeOfDay();
+
+        this.player.getWorldPosition(tmpPawnWorldPos);
+
+        const sector = this.getSector(tmpPawnWorldPos);
+        // the env sun, not the pawn's own light list - retail takes it globally and only drops to
+        // straight overhead when it is not day
+        const sun = sector && timeOfDay >= 7 && timeOfDay < 23 ? sector.lightList.find(light => light.isSunlight) : null;
+
+        if (sun) tmpShadowDirection.copy(sun.lightDirection).normalize();
+        else tmpShadowDirection.set(0, 0, -1);
+
+        // z is forced to at least half of x so a grazing sun cannot rake the shadow across the world
+        const minVertical = Math.abs(tmpShadowDirection.x) * 0.5;
+
+        if (minVertical >= Math.abs(tmpShadowDirection.z))
+            tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
+
+        arrShadowCasters.length = 0;
+        arrShadowCasters.push(this.player);
+
+        for (const entry of this.simulatedPawns) arrShadowCasters.push(entry.pawn);
+
+        if (sector) for (const pawn of sector.pawns.children) arrShadowCasters.push(pawn);
+
+        this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
+    }
+
+    protected updateActorLighting(actor: THREE.Object3D, sunAmbient: ColorByte): void {
+        actor.getWorldPosition(tmpPawnWorldPos);
+
+        const sector = this.getSector(tmpPawnWorldPos);
+
+        if (!sector) return;
+
+        const zoneIndex = sector.findPositionZone(tmpPawnWorldPos);
+        const zoneInfo = zoneIndex === null ? null : sector.bspZones[zoneIndex]?.zoneInfo;
+        const lights = sector.getRelevantLights(tmpPawnWorldPos, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
+
+        actor.traverse(object => {
+            if ((object as LitSkinnedMesh).isLitSkinnedMesh)
+                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, lights, sunAmbient);
+        });
+    }
+
     protected _updateObjects(currentTime: number, deltaTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
@@ -1550,6 +1625,7 @@ class RenderManager {
         }
 
         this.updatePawnVisibility();
+        this.updatePawnLighting();
 
         // Pass 2: Object & Material updates (active sector only — skip distant sectors)
         this.scene.traverseVisible(child => {
@@ -1723,7 +1799,7 @@ class RenderManager {
             const zoneIndex = sector.findPositionZone(this.camera.position);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-            if (zone && zone.isFogZone && zone.fog) {
+            if (zone && zone.fog) {
                 if (zone.isSunAffected) {
                     const zR = zone.fog.color.r * 255;
                     const zG = zone.fog.color.g * 255;
@@ -2219,7 +2295,14 @@ class RenderManager {
 
         // Render Sky (Background)
         this.renderer.clear();
+
+        // bProjectActor=False - the sky pass shares the global projector uniforms, mute it for the pass
+        const shadowActive = GLOBAL_UNIFORMS.shadowActive.value;
+
+        GLOBAL_UNIFORMS.shadowActive.value = 0;
         this.skyRenderer.render(this.renderer);
+        GLOBAL_UNIFORMS.shadowActive.value = shadowActive;
+
         this.renderer.clearDepth();
 
         // Check for sector change and recreate visualizer if needed

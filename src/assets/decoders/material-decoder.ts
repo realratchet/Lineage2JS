@@ -176,7 +176,9 @@ function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | nul
 
     const nestedTransforms = decoded.uniforms.innerTransforms ?? [];
 
-    if (decoded.transformType === "none")
+    // env-map types replace the coordinate source rather than transforming incoming UVs, so they
+    // carry no matrix and never belong in the chain
+    if (decoded.transformType === "none" || decoded.transformType === "envMap" || decoded.transformType === "envMapWorld")
         return { map: decoded.uniforms.map, innerTransforms: nestedTransforms };
 
     return {
@@ -311,14 +313,15 @@ function decodeTexEnvMapModifer(library: DecodeLibrary, info: GD.ITexEnvMapDecod
 
     return {
         isUsingMap,
-        transformType: "none",
+        // UTexEnvMap::GetMatrix (0x879c90) carries no matrix of its own, it only selects
+        // TCS_WorldEnvMapCoords/TCS_CameraEnvMapCoords - the coords come from the reflection vector
+        transformType: info.envMapType === "world" ? "envMapWorld" : "envMap",
         defines: {
             USE_DIFFUSE: "",
             USE_ENVMAP: ""
         },
         uniforms: {
-            map: isUsingMap ? fetchMapTexture(library, library.materials[info.map]) : null,
-            envMapType: info.envMapType
+            map: isUsingMap ? fetchMapTexture(library, library.materials[info.map]) : null
         }
     };
 }

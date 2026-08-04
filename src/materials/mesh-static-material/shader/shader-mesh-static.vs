@@ -89,7 +89,7 @@
             #ifdef USE_MAP_DIFFUSE
                 TextureData map;
 
-                #ifdef USE_MAP_DIFFUSE_TRANSFORM
+                #if defined(USE_MAP_DIFFUSE_TRANSFORM) && USE_MAP_DIFFUSE_TRANSFORM != ENVMAP && USE_MAP_DIFFUSE_TRANSFORM != ENVMAPWORLD
                     TransformDiffuseData transform;
 
                     #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
@@ -139,7 +139,7 @@
             #ifdef USE_MAP_OPACITY
                 TextureData map;
 
-                #ifdef USE_MAP_OPACITY_TRANSFORM
+                #if defined(USE_MAP_OPACITY_TRANSFORM) && USE_MAP_OPACITY_TRANSFORM != ENVMAP && USE_MAP_OPACITY_TRANSFORM != ENVMAPWORLD
                 TransformOpacityData transform;
 
                 #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
@@ -203,7 +203,7 @@
                     FadeData fadeColors;
                 #endif
 
-                #ifdef USE_MAP_SPECULAR_TRANSFORM
+                #if defined(USE_MAP_SPECULAR_TRANSFORM) && USE_MAP_SPECULAR_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_TRANSFORM != ENVMAPWORLD
                     TransformSpecularData transform;
 
                     #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
@@ -253,7 +253,7 @@
             #ifdef USE_MAP_SPECULAR_MASK
                 TextureData map;
 
-                #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+                #if defined(USE_MAP_SPECULAR_MASK_TRANSFORM) && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAPWORLD
                 TransformSpecularMaskData transform;
 
                 #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
@@ -286,7 +286,96 @@
     attribute vec3 lighting;
     attribute float sunAffected;
     uniform vec3 staticMeshSunAmbient;
+#endif
+
+#ifdef USE_ACTOR_LIGHTS
+    const int LE_STATIC_SPOT = 8;
+    const int LE_SPOTLIGHT = 12;
+    const int LE_NON_INCIDENCE = 13;
+    const int LE_CYLINDER = 17;
+    const int LE_SUNLIGHT = 19;
+    const int LE_QUADRATIC_NON_INCIDENCE = 20;
+
+    struct ActorLight {
+        vec3 position;
+        vec3 direction;
+        vec3 color;
+        float radius;
+        float cone;
+        int effect;
+    };
+
+    uniform ActorLight actorLights[NUM_ACTOR_LIGHTS];
+    uniform int numActorLights;
+    uniform vec3 actorAmbient;
+    uniform float actorScaledGlow;
+
+    float actorLightAttenuation(float distance, float radius, vec3 delta, vec3 normal) {
+        float incidence = dot(delta, normal);
+
+        if (incidence <= 0.0 || distance > radius) return 0.0;
+
+        float a = distance / radius;
+        float b = 2.0 * a * a * a - 3.0 * a * a + 1.0;
+
+        return b / a * abs(incidence / radius) * 2.0;
+    }
+
+    // port of DynamicLight.sampleIntensity (dynamic-light.ts)
+    float actorLightIntensity(ActorLight light, vec3 position, vec3 normal) {
+        // 0x903da8 bails when N.Direction >= 0 and scales by flt_AAEF80 = -2.0 otherwise
+        if (light.effect == LE_SUNLIGHT) return max(-dot(light.direction, normal), 0.0) * 2.0;
+
+        vec3 delta = light.position - position;
+        float distanceSquared = dot(delta, delta);
+        float distance = sqrt(distanceSquared);
+        float radiusSquared = light.radius * light.radius;
+
+        if (light.effect == LE_CYLINDER) {
+            if (distance >= light.radius) return 0.0;
+
+            return max(0.0, 1.0 - (delta.x * delta.x + delta.y * delta.y) / radiusSquared) * 2.0;
+        }
+
+        if (light.effect == LE_NON_INCIDENCE) {
+            if (dot(delta, normal) <= 0.0 || distance >= light.radius) return 0.0;
+
+            return sqrt(1.02 - distance / light.radius) * 2.0;
+        }
+
+        if (light.effect == LE_QUADRATIC_NON_INCIDENCE) {
+            if (dot(delta, normal) <= 0.0 || distanceSquared >= radiusSquared) return 0.0;
+
+            return (1.02 - distanceSquared / radiusSquared) * 2.0;
+        }
+
+        float attenuation = actorLightAttenuation(distance, light.radius, delta, normal);
+
+        if (light.effect == LE_SPOTLIGHT || light.effect == LE_STATIC_SPOT) {
+            if (attenuation <= 0.0) return 0.0;
+
+            float sine = 1.0 - light.cone / 256.0;
+            float rSine = 1.0 / (1.0 - sine);
+            float vDotV = -dot(delta, light.direction);
+
+            if (vDotV <= 0.0 || vDotV * vDotV <= sine * sine * distanceSquared) return 0.0;
+
+            float cone = vDotV * rSine / distance - sine * rSine;
+
+            return cone * cone * attenuation;
+        }
+
+        return attenuation;
+    }
+#endif
+
+#if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
     varying vec3 vLitColor;
+#endif
+
+#if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+    uniform mat4 shadowMatrix;
+    varying vec4 vShadowCoord;
 #endif
 
 // #ifdef USE_DIRECTIONAL_AMBIENT
@@ -524,7 +613,7 @@ void main() {
     // #endif
 
     #include <color_vertex>
-    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS )
+    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS ) || defined( USE_ACTOR_LIGHTS )
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
@@ -546,6 +635,24 @@ void main() {
     #endif
     #include <morphtarget_vertex>
     #include <skinning_vertex>
+    #ifdef USE_ACTOR_LIGHTS
+        vec3 actorPosition = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+        vec3 actorNormal = normalize( mat3( modelMatrix ) * objectNormal );
+        vec3 actorLighting = actorAmbient;
+
+        for ( int i = 0; i < NUM_ACTOR_LIGHTS; i++ ) {
+            if ( i >= numActorLights ) break;
+
+            // SampleIntensity carries UE's own x2; D3D hardware lighting has none, it is just
+            // Diffuse * atten * N.L - so halve to land on the term the baked static-mesh pass produces
+            actorLighting += actorLights[i].color * ( actorLightIntensity( actorLights[i], actorPosition, actorNormal ) * actorScaledGlow * 0.5 );
+        }
+
+        vLitColor = clamp( actorLighting, 0.0, 1.0 );
+    #endif
+    #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+        vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
+    #endif
     #include <project_vertex>
     #ifdef USE_TERRAIN_DECORATION_FADE
         float terrainDecorationFadeRangeSize = max(terrainDecorationFadeRange.y - terrainDecorationFadeRange.x, 1.0);
@@ -556,6 +663,41 @@ void main() {
     #include <clipping_planes_vertex>
     #include <worldpos_vertex>
     #include <envmap_vertex>
+
+    // TCS_CameraEnvMapCoords feeds D3D the camera-space reflection vector, TCS_WorldEnvMapCoords
+    // transposes WorldToCamera back out of it (D3DMaterialState.cpp line 452). Shine0 is a 64x64
+    // clamped sphere map, so the [-1,1] vector is biased to cover it once instead of clamping to its edge
+    #ifdef USE_MAP_DIFFUSE_TRANSFORM
+        #if USE_MAP_DIFFUSE_TRANSFORM == ENVMAP
+            vUvTransformedDiffuse = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_DIFFUSE_TRANSFORM == ENVMAPWORLD
+            vUvTransformedDiffuse = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_OPACITY_TRANSFORM
+        #if USE_MAP_OPACITY_TRANSFORM == ENVMAP
+            vUvTransformedOpacity = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_OPACITY_TRANSFORM == ENVMAPWORLD
+            vUvTransformedOpacity = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_SPECULAR_TRANSFORM
+        #if USE_MAP_SPECULAR_TRANSFORM == ENVMAP
+            vUvTransformedSpecular = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_SPECULAR_TRANSFORM == ENVMAPWORLD
+            vUvTransformedSpecular = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+        #if USE_MAP_SPECULAR_MASK_TRANSFORM == ENVMAP
+            vUvTransformedSpecularMask = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_SPECULAR_MASK_TRANSFORM == ENVMAPWORLD
+            vUvTransformedSpecularMask = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
 
     // #ifdef USE_DIRECTIONAL_AMBIENT
     ///     #include <lights_lambert_vertex>

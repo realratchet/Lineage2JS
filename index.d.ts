@@ -185,7 +185,7 @@ declare global {
                     uniforms: Record<string, any>,
                     defines: Record<string, any>,
                     isUsingMap: boolean,
-                    transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap",
+                    transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap" | "envMapWorld",
                     sprites?: any[],
                     framerate?: number,
                     uvIndex?: number
@@ -349,6 +349,11 @@ declare global {
                     meshOrigin: Vector3Arr;
                     meshRotOrigin: Vector3Arr;
                     meshRotOriginQuaternion: QuaternionArr;
+                    scaledGlow?: number;
+                    ambient?: {
+                        glow: number,
+                        isUnlit: boolean
+                    };
                 }
 
                 export interface IEmitterDecodeInfo extends IBaseObjectDecodeInfo {

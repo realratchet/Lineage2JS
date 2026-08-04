@@ -201,6 +201,11 @@ class L2Environment {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().ambient.actor, target);
     }
 
+    public getAmbientPlaneActorLightHalved(target: ColorByte): ColorByte {
+        this.getAmbientPlaneActorLight(target);
+        return target.shr(1);
+    }
+
     public getAmbientPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().ambient.staticMesh, target);
     }

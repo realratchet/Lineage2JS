@@ -7,6 +7,9 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+uniform mat4 shadowMatrix;
+varying vec4 vShadowCoord;
+
 // gl_VertexID (vertex index)
 
 // varying float vVertexIndex;
@@ -121,6 +124,7 @@ void main() {
     #include <begin_vertex>
     #include <morphtarget_vertex>
     #include <skinning_vertex>
+    vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
     #include <project_vertex>
     #include <logdepthbuf_vertex>
     #include <clipping_planes_vertex>

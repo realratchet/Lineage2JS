@@ -90,7 +90,7 @@ uniform float opacity;
             #ifdef USE_MAP_DIFFUSE
                 TextureData map;
 
-                #ifdef USE_MAP_DIFFUSE_TRANSFORM
+                #if defined(USE_MAP_DIFFUSE_TRANSFORM) && USE_MAP_DIFFUSE_TRANSFORM != ENVMAP && USE_MAP_DIFFUSE_TRANSFORM != ENVMAPWORLD
                 TransformDiffuseData transform;
 
                 #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
@@ -152,7 +152,7 @@ uniform float opacity;
             #ifdef USE_MAP_OPACITY
                 TextureData map;
             #endif
-            #ifdef USE_MAP_OPACITY_TRANSFORM
+            #if defined(USE_MAP_OPACITY_TRANSFORM) && USE_MAP_OPACITY_TRANSFORM != ENVMAP && USE_MAP_OPACITY_TRANSFORM != ENVMAPWORLD
                 TransformOpacityData transform;
 
                 #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
@@ -227,7 +227,7 @@ uniform float opacity;
                 TextureData map;
             #endif
 
-            #ifdef USE_MAP_SPECULAR_TRANSFORM
+            #if defined(USE_MAP_SPECULAR_TRANSFORM) && USE_MAP_SPECULAR_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_TRANSFORM != ENVMAPWORLD
                 TransformSpecularData transform;
 
                 #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
@@ -288,7 +288,7 @@ uniform float opacity;
             #ifdef USE_MAP_SPECULAR_MASK
                 TextureData map;
             #endif
-            #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+            #if defined(USE_MAP_SPECULAR_MASK_TRANSFORM) && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAPWORLD
                 TransformSpecularMaskData transform;
 
                 #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
@@ -420,8 +420,15 @@ uniform float opacity;
     varying vec3 vColorInstance;
 #endif
 
-#ifdef USE_LIT_ATTRIBUTES
+#if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
     varying vec3 vLitColor;
+#endif
+
+#if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+    uniform sampler2D shadowMap;
+    uniform float shadowDarkness;
+    uniform float shadowActive;
+    varying vec4 vShadowCoord;
 #endif
 
 void main() {
@@ -514,12 +521,12 @@ void main() {
         // reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
         reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
     #else
-        #if !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES) && !defined(USE_LIT_ATTRIBUTES)
+        #if !defined(USE_AMBIENT) && !defined(USE_INSTANCED_ATTRIBUTES) && !defined(USE_LIT_ATTRIBUTES) && !defined(USE_ACTOR_LIGHTS)
             reflectedLight.indirectDiffuse += vec3( 1.0 );
         #endif
 
         // D3DTOP_MODULATE2X: static mesh relight dispatcher (0x90d33d) passes EnableLighting Modulate2X=1
-        #ifdef USE_LIT_ATTRIBUTES
+        #if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
             reflectedLight.indirectDiffuse += vLitColor * 2.0;
         #endif
 
@@ -595,6 +602,15 @@ void main() {
     #endif
 
     vec3 outgoingLight = reflectedLight.indirectDiffuse + reflectedLight.directDiffuse;
+
+    #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+        if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
+            vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
+
+            if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
+                outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
+        }
+    #endif
     
     #include <envmap_fragment>
     #include <output_fragment>

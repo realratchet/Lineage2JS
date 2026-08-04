@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, SkinnedMesh, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
+import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
 import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -16,6 +16,7 @@ import SwayingObject from "@client/objects/swaying-object";
 import TerrainDecoration from "@client/objects/terrain-decoration";
 import LocalSpaceSkeleton from "@client/objects/local-space-skeleton";
 import BSPCollider from "@client/objects/bsp-collider";
+import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
@@ -754,12 +755,28 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     const geometry = fetchGeometry(library.geometries[info.geometry]);
     const infoMats = library.materials[info.materials];
 
+    // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
+    if (!geometry.getAttribute("normal")) {
+        geometry.computeVertexNormals();
+
+        // wedges keep UE's winding, which ue2-conventions.ts undoes by flipping X in clip space
+        const arrNormals = geometry.getAttribute("normal").array as Float32Array;
+
+        for (let i = 0; i < arrNormals.length; i++) arrNormals[i] = -arrNormals[i];
+    }
+
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
 
     const bones = decodeBones(library, info.skeleton);
     const skeleton = new LocalSpaceSkeleton(bones);
 
-    const mesh = new SkinnedMesh(geometry, materials);
+    const mesh = new LitSkinnedMesh(geometry, materials);
+
+    mesh.scaledGlow = info.scaledGlow ?? 1;
+    mesh.ambientGlow = info.ambient?.glow ?? 0;
+    mesh.isUnlit = info.ambient?.isUnlit ?? false;
+
+    (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setActorLit?.());
 
     mesh.position.fromArray(info.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);
