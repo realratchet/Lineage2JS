@@ -946,6 +946,9 @@ class RenderManager {
                 this.movePlayerTo(tmpMouseIntersection);
 
                 console.log(physicsIntersection.actor, physicsIntersection);
+            } else if (pickDistance > 0) {
+                // UInteraction::ScreenToWorld (0x855ee0) deprojects to a direction, not a hit location
+                this.movePlayerTo(tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin));
             }
 
             this.pickBSPNode(physicsIntersection ? physicsIntersection.distance : pickDistance);
