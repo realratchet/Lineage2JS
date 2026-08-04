@@ -21,6 +21,12 @@ const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 const PF_Unlit = 0x00400000; // from UnObj.h line 254
 
+// Retail draws water sheets D3DCULL_NONE while terrain and the static meshes around them stay
+// D3DCULL_CW (L2.water.trace: cullmode flips to NONE at call 17626640, back to CW at 17626663), yet
+// the shipped surfs carry no PF_TwoSided - 0x80000 is the only bit every water sheet holds and no
+// other surface in 16_24/16_25/17_24/17_25 does. The engine-side gate for this is still unknown.
+const PF_WaterSheet = 0x00080000;
+
 const nodeCache = new Array<number>();
 
 class FVectorArray implements C.IConstructable {
@@ -462,7 +468,8 @@ abstract class UModel extends UPrimitive {
                     lightmapTextureIndex: lightmapTextureIndex,
                     totalVertices: 0,
                     nodes: [],
-                    isOutdoor
+                    isOutdoor,
+                    isWaterSheet: !!(surf.flags & PF_WaterSheet)
                 });
             }
 
@@ -611,7 +618,7 @@ abstract class UModel extends UPrimitive {
                 depthWrite: this.isSky ? false : undefined,
                 depthTest: this.isSky ? false : undefined,
                 fog: this.isSky ? true : undefined,
-                side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided)) ? 2 : undefined, // 2 = DoubleSide
+                side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided) || sectionData.isWaterSheet) ? 2 : undefined, // 2 = DoubleSide
                 blendingMode: this.isSky ? (!(sectionData.polyFlags & PolyFlags_T.PF_TwoSided) ? "brighten" : "normal") :
                     ((sectionData.polyFlags & PolyFlags_T.PF_Additive) ? "brighten" : undefined),
             };
@@ -653,7 +660,8 @@ type ObjectsForSection_T = {
     lightmapTextureIndex: number,  // iLightMapTexture index
     totalVertices: number,
     nodes: NodeInfo_T[],
-    isOutdoor: boolean
+    isOutdoor: boolean,
+    isWaterSheet: boolean
 };
 type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo | null, nodeIndex: number };
 

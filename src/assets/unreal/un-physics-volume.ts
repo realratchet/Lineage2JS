@@ -8,6 +8,9 @@ abstract class UPhysicsVolume extends UVolume {
     declare protected fluidFriction: number;
     declare protected isWaterVolume: boolean;
     declare protected isL2WaterVolume: boolean;
+    declare protected useDistanceFogColor: boolean;
+    declare protected useCellophane: boolean;
+    declare protected cellophaneColor: GA.FColor;
     // protected locationPriority: number;
     // protected locationName: string;
 
@@ -78,9 +81,9 @@ abstract class UPhysicsVolume extends UVolume {
     //         "bNeutralZone": "_bNeutralZone",
             "bWaterVolume": "isWaterVolume",
     //         "PainTimer": "_painTimer",
-    //         "bUseDistanceFogColor": "_bUseDistanceFogColor",
-    //         "bUseCellophane": "_bUseCellophane",
-    //         "CellophaneColor": "_cellophaneColor",
+            "bUseDistanceFogColor": "useDistanceFogColor",
+            "bUseCellophane": "useCellophane",
+            "CellophaneColor": "cellophaneColor",
     //         "KExtraLinearDamping": "_kExtraLinearDamping",
     //         "KExtraAngularDamping": "_kExtraAngularDamping",
     //         "KBuoyancy": "_kBuoyancy",
@@ -103,7 +106,9 @@ abstract class UPhysicsVolume extends UVolume {
 
         const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as GD.Vector3Arr;
         const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as GD.Vector3Arr;
-        const fog = this.hasDistanceFog && this.distanceFogColor ? {
+        // without bUseDistanceFogColor the volume's own DistanceFog is only worn for the frame the camera
+        // enters it, then Env.int [WaterVolume] takes over for good (L2.water.trace frames 4621 -> 4622)
+        const fog = this.useDistanceFogColor && this.hasDistanceFog && this.distanceFogColor ? {
             color: this.distanceFogColor.toArray() as GD.ColorArr,
             start: this.distanceFogStart,
             end: this.distanceFogEnd
@@ -118,6 +123,7 @@ abstract class UPhysicsVolume extends UVolume {
             terminalVelocity: this.terminalVelocity ?? 2500,
             zoneVelocity,
             fog,
+            cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as GD.ColorArr : null,
             bsp: this.getWorldBspInfo()
         };
     }

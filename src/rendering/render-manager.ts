@@ -14,6 +14,7 @@ import Visualizer, { VisualizerMode, EmitterDebugInfo } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
+import UnderWaterEffect from "./under-water-effect";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
@@ -247,6 +248,7 @@ class RenderManager {
     public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
+    public readonly underWaterEffect = new UnderWaterEffect();
 
     protected assetManager: AssetManager;
     protected uGlowPass: UGlowPass;
@@ -411,6 +413,7 @@ class RenderManager {
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
         this.scene.add(this.colliderOverlay);
+        this.scene.add(this.underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
 
         // Create visualizer system (will be recreated when sector changes)
@@ -2035,6 +2038,8 @@ class RenderManager {
 
         const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
 
+        this.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+
         if (waterVolume) {
             if (waterVolume.fog) {
                 targetFogColor.set(waterVolume.fog.color[0], waterVolume.fog.color[1], waterVolume.fog.color[2], 255);
@@ -2107,6 +2112,8 @@ class RenderManager {
 
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
+
+        this.underWaterEffect.update(this.camera, deltaTime);
 
         if (!this.isOrbitControls) {
             let forwardVelocity = 0, sidewaysVelocity = 0;
@@ -2207,6 +2214,7 @@ class RenderManager {
             const camPos = this.camera.position;
             const timeOfDay = this.environment.getTimeOfDay(); // 0-24 hours
             const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
+            const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
             const activeIds = this.audioManager.activeAmbientSoundIds;
             const audibleSounds = new Map<string, number>();
             const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, priority: number }[] = [];
@@ -2217,7 +2225,7 @@ class RenderManager {
                     for (const snd of sector.ambientSounds) {
                         if (snd.soundType === "day" && !isDaytime) continue;
                         if (snd.soundType === "night" && isDaytime) continue;
-                        if (snd.soundType === "water") continue; // TODO: plays only while the listener is in a water volume
+                        if (snd.soundType === "water" && !isSubmerged) continue;
 
                         const dx = snd.position[0] - camPos.x;
                         const dy = snd.position[1] - camPos.y;
@@ -2434,6 +2442,8 @@ class RenderManager {
 
         // Render World
         this.renderer.render(this.scene, this.camera);
+
+        this.underWaterEffect.renderCellophane(this.renderer);
 
         // // Apply Native Bloom (Sun/Glow) -> Screen
         // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);

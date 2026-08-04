@@ -865,6 +865,7 @@ declare global {
                         start: number,
                         end: number
                     } | null,
+                    cellophane: ColorArr | null,
                     bsp: IVolumeBspDecodeInfo
                 }
 

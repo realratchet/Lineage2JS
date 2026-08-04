@@ -260,6 +260,9 @@ export default class SkyRenderer {
         // Re-enable Sky Layers group (individual layers will be filtered in updateSkyLayers)
         this.skyLayerGroup.visible = true;
 
+        // retail keeps drawing the dome underwater, just fogged to solid water color - which is the clear color
+        this.celestialScene.visible = skyVisibility > 0;
+
         // Apply Fog to Celestial Scene
         const fogColorThree = new Color().setRGB(_fogColor.r / 255, _fogColor.g / 255, _fogColor.b / 255);
         if (!this.celestialScene.fog) {
