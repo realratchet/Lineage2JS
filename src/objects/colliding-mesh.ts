@@ -1,5 +1,5 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import type { ActorCollisionProfile_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
+import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
 import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "@client/physics/triangle-index";
@@ -7,6 +7,8 @@ import buildTriangleIndex from "@client/physics/triangle-index";
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
 const tmpScale = new Vector3();
+const tmpSimpleBounds = new Box3();
+const HULL_FLIP = 0x40000000;
 
 class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
@@ -24,7 +26,9 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     protected collisionIndex: CollisionTriangleIndex_T;
     protected readonly analyticalBounds = new Box3();
     protected readonly analyticalCenter = new Vector3();
+    protected readonly simpleCollisionBounds = new Box3();
     protected analyticalPrimitive: CollisionPrimitive_T = null;
+    protected readonly basedActors = new Set<ICollidable>();
 
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: GD.IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
         super(props);
@@ -44,7 +48,12 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
         this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
         this.rigidbodyDesc = RigidBodyDesc.fixed();
 
-        const usesCollisionModel = !!this.staticMeshCollision?.collisionModel;
+        const collisionModel = this.staticMeshCollision?.collisionModel;
+        const simpleCollisionHulls = collisionModel ? buildCollisionHulls(collisionModel) : null;
+
+        this.simpleCollisionBounds.makeEmpty();
+        if (simpleCollisionHulls)
+            for (const hull of simpleCollisionHulls) this.simpleCollisionBounds.union(hull.bounds);
 
         if (this.staticMeshCollision?.nodes.length) {
             this.collisionNodes = this.staticMeshCollision.nodes;
@@ -64,11 +73,14 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
                 collisionNodes: this.collisionNodes,
                 collisionBounds: this.collisionBounds,
                 index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices)),
+                simpleCollisionHulls,
+                useSimpleLineCollision: !!collisionModel && this.staticMeshCollision.useSimpleLineCollision,
+                useSimpleBoxCollision: !!collisionModel && this.staticMeshCollision.useSimpleBoxCollision,
                 matrixWorld: this.matrixWorld,
                 bounds: this.analyticalBounds,
-                supportsZeroExtent: !(usesCollisionModel && this.staticMeshCollision.useSimpleLineCollision),
-                supportsNonZeroExtent: !(usesCollisionModel && this.staticMeshCollision.useSimpleBoxCollision),
-                supportsPointCheck: !(usesCollisionModel && this.staticMeshCollision.useSimpleBoxCollision)
+                supportsZeroExtent: true,
+                supportsNonZeroExtent: true,
+                supportsPointCheck: true
             };
         }
     }
@@ -110,6 +122,9 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     public getCollider(): Collider { return this.collider; }
     public getRigidbody(): RigidBody { return this.rigidbody; }
     public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
+    public getBasedActors(): ReadonlySet<ICollidable> { return this.basedActors; }
+    public addBasedActor(actor: ICollidable) { this.basedActors.add(actor); }
+    public removeBasedActor(actor: ICollidable) { this.basedActors.delete(actor); }
     public getCollisionPrimitive(): CollisionPrimitive_T | null {
         if (!this.analyticalPrimitive) return null;
 
@@ -117,10 +132,46 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
             this.getWorldPosition(this.analyticalCenter);
             this.analyticalBounds.min.set(this.analyticalCenter.x - this.analyticalPrimitive.radius, this.analyticalCenter.y - this.analyticalPrimitive.radius, this.analyticalCenter.z - this.analyticalPrimitive.halfHeight);
             this.analyticalBounds.max.set(this.analyticalCenter.x + this.analyticalPrimitive.radius, this.analyticalCenter.y + this.analyticalPrimitive.radius, this.analyticalCenter.z + this.analyticalPrimitive.halfHeight);
-        } else this.analyticalBounds.setFromArray(this.colliderVertices).applyMatrix4(this.matrixWorld);
+        } else {
+            this.updateWorldMatrix(true, false);
+            this.analyticalBounds.setFromArray(this.colliderVertices).applyMatrix4(this.matrixWorld);
+
+            if (!this.simpleCollisionBounds.isEmpty())
+                this.analyticalBounds.union(tmpSimpleBounds.copy(this.simpleCollisionBounds).applyMatrix4(this.matrixWorld));
+        }
 
         return this.analyticalPrimitive;
     }
+}
+
+function buildCollisionHulls(model: GD.IBSPCollisionModelDecodeInfo): CollisionHull_T[] {
+    const hulls: CollisionHull_T[] = [];
+    const cacheHulls = new Set<string>();
+
+    for (const collision of model.hulls) {
+        if (!collision.bounds.isValid) continue;
+
+        const key = `${collision.flags.join(",")}/${collision.bounds.min.join(",")}/${collision.bounds.max.join(",")}`;
+
+        if (cacheHulls.has(key)) continue;
+
+        cacheHulls.add(key);
+
+        hulls.push({
+            planes: collision.flags.map(flag => {
+                const nodeIndex = flag & ~HULL_FLIP;
+                const plane = model.planes[nodeIndex];
+                const scale = flag & HULL_FLIP ? -1 : 1;
+
+                if (!plane) throw new Error(`Collision model plane '${nodeIndex}' is missing.`);
+
+                return [plane[0] * scale, plane[1] * scale, plane[2] * scale, plane[3] * scale, nodeIndex];
+            }),
+            bounds: new Box3(new Vector3().fromArray(collision.bounds.min), new Vector3().fromArray(collision.bounds.max))
+        });
+    }
+
+    return hulls;
 }
 
 export default CollidingMesh;

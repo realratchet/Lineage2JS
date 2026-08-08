@@ -319,7 +319,8 @@ declare global {
                     collisionRadius: number,
                     collisionHeight: number,
                     isGliding: boolean,
-                    triggerOnceOnly: boolean
+                    triggerOnceOnly: boolean,
+                    moverEncroachType: "stop" | "return" | "crush" | "ignore"
                 }
 
                 export interface IBaseMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
@@ -689,9 +690,14 @@ declare global {
                 export interface IStaticMeshCollisionDecodeInfo {
                     useSimpleLineCollision: boolean;
                     useSimpleBoxCollision: boolean;
-                    collisionModel: string | null;
+                    collisionModel: IBSPCollisionModelDecodeInfo | null;
                     nodes: Int32Array;
                     bounds: Float32Array;
+                }
+
+                export interface IBSPCollisionModelDecodeInfo {
+                    planes: Vector4Arr[];
+                    hulls: IBSPNodeCollisionInfo_T[];
                 }
 
                 export interface IMaterialModifier {

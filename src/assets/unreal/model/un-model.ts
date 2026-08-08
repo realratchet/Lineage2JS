@@ -325,6 +325,34 @@ abstract class UModel extends UPrimitive {
         return result;
     }
 
+    public getCollisionModelDecodeInfo(): GD.IBSPCollisionModelDecodeInfo {
+        const planes = this.bspNodes.map((node: FBSPNode) => node.plane.getElements());
+        const hulls: GD.IBSPNodeCollisionInfo_T[] = [];
+        const leafHulls = this.leafHulls.getTypedArray() as Int32Array;
+
+        for (const node of this.bspNodes) {
+            if (node.iCollisionBound < 0) continue;
+
+            const hullIndexList = leafHulls.slice(node.iCollisionBound);
+            let hullPlanesCount = 0;
+
+            while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
+
+            const bounds = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 7)).buffer);
+
+            hulls.push({
+                flags: [...hullIndexList.slice(0, hullPlanesCount)],
+                bounds: {
+                    isValid: true,
+                    min: [bounds[0], bounds[1], bounds[2]],
+                    max: [bounds[3], bounds[4], bounds[5]]
+                }
+            });
+        }
+
+        return { planes, hulls };
+    }
+
     public getDecodeInfo(builder: GD.DecodeLibraryBuilder, uLevelInfo: GA.ULevelInfo): ModelDecodeResult_T {
         const library = builder.library;
         const result: ModelDecodeResult_T = Object.assign(this.getZoneDecodeInfo(library, uLevelInfo), {

@@ -73,6 +73,7 @@ const tmpOrbitFollowDelta = new Vector3();
 const tmpMouseIntersection = new Vector3();
 const tmpPickBounds = new Box3();
 const tmpSimDirection = new Vector3();
+const arrMoverPawns: BaseActor[] = [];
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
@@ -1311,6 +1312,10 @@ class RenderManager {
     }
 
     protected updateMovableObjects(currentTime: number): void {
+        arrMoverPawns.length = 0;
+        arrMoverPawns.push(this.player);
+        for (const entry of this.simulatedPawns) arrMoverPawns.push(entry.pawn);
+
         if (!this.lastMoverTriggerPosition.equals(this.camera.position)) {
             this.lastMoverTriggerPosition.copy(this.camera.position);
 
@@ -1323,11 +1328,11 @@ class RenderManager {
 
         for (const [mover, wakeTime] of Array.from(this.waitingMovableObjects)) {
             if (currentTime >= wakeTime)
-                this.scheduleMovableObject(mover, mover.updateMover(currentTime));
+                this.scheduleMovableObject(mover, mover.updateMover(currentTime, arrMoverPawns));
         }
 
         for (const mover of Array.from(this.activeMovableObjects))
-            this.scheduleMovableObject(mover, mover.updateMover(currentTime));
+            this.scheduleMovableObject(mover, mover.updateMover(currentTime, arrMoverPawns));
     }
 
     public async simulatePawns(count: number = SIMULATED_PAWN_COUNT) {
@@ -2164,10 +2169,9 @@ class RenderManager {
         // }
 
         this.emitterSimDue = this.nextPhysicsTick <= currentTime;
-        this.player.update(this, currentTime, deltaTime / 1000);
-
         this.updateMovableObjects(currentTime);
         this.updateRotatingObjects(deltaTime);
+        this.player.update(this, currentTime, deltaTime / 1000);
         this.updateSimulatedPawns(currentTime, deltaTime);
 
         // nothing reads the rapier world under the analytical backend

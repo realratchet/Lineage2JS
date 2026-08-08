@@ -11,6 +11,10 @@ export interface ICollidable extends THREE.Object3D<THREE.Event> {
     getRigidbody(): RAPIER.RigidBody;
     getCollisionProfile?(): ActorCollisionProfile_T;
     getCollisionPrimitive?(): CollisionPrimitive_T;
+    getBaseActor?(): ICollidable | null;
+    getBasedActors?(): ReadonlySet<ICollidable>;
+    addBasedActor?(actor: ICollidable): void;
+    removeBasedActor?(actor: ICollidable): void;
 }
 
 export type CollisionHull_T = {
@@ -56,6 +60,9 @@ export type CollisionPrimitive_T = {
     collisionNodes: Int32Array;
     collisionBounds: Float32Array;
     index?: CollisionTriangleIndex_T;
+    simpleCollisionHulls?: CollisionHull_T[];
+    useSimpleLineCollision?: boolean;
+    useSimpleBoxCollision?: boolean;
     matrixWorld: THREE.Matrix4;
     bounds: THREE.Box3;
     supportsZeroExtent: boolean;

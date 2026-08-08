@@ -82,7 +82,9 @@ function groupActorsForBatching(
         const actor = actorBase as GD.IStaticMeshActorDecodeInfo;
         const meshMaterials = actor.instance?.mesh?.materials;
         const meshGeometry = library.geometries[actor.instance?.mesh?.geometry];
-        const isBatchable = !(actor as any).dontBatch && meshMaterials && meshGeometry;
+        const collision = actor.collision;
+        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel;
+        const isBatchable = !(actor as any).dontBatch && !hasDistinctCollision && meshMaterials && meshGeometry;
 
         if (!isBatchable) {
             unbatchable.push(actor);
@@ -229,7 +231,7 @@ function prepareActorGeometriesData(
 function blocksPawn(collision: any): boolean {
     if (!collision) return true;
     if (!collision.blockNonZeroExtent) return false;
-    if (collision.worldGeometry) return collision.blockPlayers;
+    if (collision.worldGeometry) return true;
     if (!collision.collideActors) return false;
 
     return collision.blockPlayers;

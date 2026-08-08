@@ -443,9 +443,9 @@ abstract class USkeletalMesh extends ULodMesh {
                 const framerate = sequence.framerate;
                 const keyframes: IKeyframeDecodeInfo_T[] = [];
 
-                for (let i = 0, len = move.boneIndices.getElemCount(); i < len; i++) {
-                    const boneIndexMesh = move.boneIndices.getElem(i);
-                    const boneMapping = boneMap[boneIndexMesh];
+                // MotionChunk.BoneIndices is never used (UnSkeletalMesh.cpp line 376).
+                for (let i = 0; i < boneCount; i++) {
+                    const boneMapping = boneMap[i];
 
                     if (!boneMapping) continue; // mesh bone the animation set does not drive
 

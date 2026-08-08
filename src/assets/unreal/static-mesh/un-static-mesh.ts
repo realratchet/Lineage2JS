@@ -404,7 +404,7 @@ abstract class UStaticMesh extends UPrimitive {
             staticMeshCollision: {
                 useSimpleLineCollision: this.useSimpleLineCollision,
                 useSimpleBoxCollision: this.UseSimpleBoxCollision,
-                collisionModel: this.collisionModel ? this.collisionModel.uuid : null,
+                collisionModel: this.collisionModel ? this.collisionModel.loadSelf().getCollisionModelDecodeInfo() : null,
                 nodes: collisionNodes,
                 bounds: collisionBounds
             },

@@ -26,11 +26,15 @@ const tmpHullHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
 const tmpBestHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
 const tmpPointHit: PrimitiveHit_T = { time: 0, normal: new Vector3(), item: -1 };
 const clipState: ClipState_T = { t0: -1, t1: 1, normal: new Vector3(), item: -1, hit: false };
+const arrModelPlanes: HullPlane_T[] = [];
 let pointBestDistance = Infinity;
 let staticPrimitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }> = null;
 let staticStart: Vector3 = null;
 let staticEnd: Vector3 = null;
 let staticExtent: Vector3 = null;
+let staticWorldStart: Vector3 = null;
+let staticWorldEnd: Vector3 = null;
+let staticWorldExtent: Vector3 = null;
 let staticBestTime = 1;
 let staticBestItem = -1;
 let bspPrimitive: Extract<CollisionPrimitive_T, { kind: "bsp" }> = null;
@@ -48,6 +52,7 @@ let gridClipT1 = 1;
 type PrimitiveHit_T = { time: number, normal: Vector3, item: number };
 type ClipState_T = { t0: number, t1: number, normal: Vector3, item: number, hit: boolean };
 type GridCellVisitor_T = (x: number, y: number) => void;
+type HullPlane_T = [number, number, number, number, number];
 
 function resetClip(maxTime: number, item: number) {
     clipState.t0 = -1;
@@ -419,7 +424,11 @@ function staticTriangle(index: number): PrimitiveHit_T | null {
     loadStaticVertex(staticPrimitive.indices[offset + 1], tmpB);
     loadStaticVertex(staticPrimitive.indices[offset + 2], tmpC);
 
-    return sweptTriangle(staticStart, staticEnd, staticExtent, tmpA, tmpB, tmpC, index, staticBestTime);
+    tmpA.applyMatrix4(staticPrimitive.matrixWorld);
+    tmpB.applyMatrix4(staticPrimitive.matrixWorld);
+    tmpC.applyMatrix4(staticPrimitive.matrixWorld);
+
+    return sweptTriangle(staticWorldStart, staticWorldEnd, staticWorldExtent, tmpA, tmpB, tmpC, index, staticBestTime);
 }
 
 function queryStaticNode(index: number) {
@@ -480,14 +489,15 @@ function queryStaticTree(primitive: Extract<CollisionPrimitive_T, { kind: "stati
     staticStart = tmpLocalStart;
     staticEnd = tmpLocalEnd;
     staticExtent = tmpLocalExtent;
+    staticWorldStart = start;
+    staticWorldEnd = end;
+    staticWorldExtent = extent;
     staticBestTime = maxTime;
     staticBestItem = -1;
     queryStaticNode(0);
 
     if (staticBestItem < 0) return null;
 
-    tmpNormalMatrix.getNormalMatrix(primitive.matrixWorld);
-    tmpBestHit.normal.applyMatrix3(tmpNormalMatrix).normalize();
     tmpBestHit.time = staticBestTime;
     tmpBestHit.item = staticBestItem;
 
@@ -513,6 +523,9 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     staticStart = tmpLocalStart;
     staticEnd = tmpLocalEnd;
     staticExtent = tmpLocalExtent;
+    staticWorldStart = start;
+    staticWorldEnd = end;
+    staticWorldExtent = extent;
     staticBestTime = maxTime;
     staticBestItem = -1;
 
@@ -520,8 +533,6 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
 
     if (staticBestItem < 0) return null;
 
-    tmpNormalMatrix.getNormalMatrix(primitive.matrixWorld);
-    tmpBestHit.normal.applyMatrix3(tmpNormalMatrix).normalize();
     tmpBestHit.time = staticBestTime;
     tmpBestHit.item = staticBestItem;
 
@@ -835,6 +846,44 @@ function pointHull(hull: CollisionHull_T, location: Vector3, extent: Vector3): P
     return tmpPointHit;
 }
 
+function pointModelHull(location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+    pointBestDistance = Infinity;
+
+    for (const plane of arrModelPlanes)
+        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+
+    for (let i = 0; i < arrModelPlanes.length; i++) {
+        const a = arrModelPlanes[i];
+
+        for (let j = 0; j < i; j++) {
+            const b = arrModelPlanes[j];
+            const flags = planeFlags(a[0], a[1], a[2]) | planeFlags(b[0], b[1], b[2]);
+
+            if (!intersectPlanes(a, b)) continue;
+
+            if ((flags & 3) === 3) {
+                tmpN.set(0, -tmpD.z, tmpD.y).normalize();
+                if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
+                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+            }
+            if ((flags & 12) === 12) {
+                tmpN.set(tmpD.z, 0, -tmpD.x).normalize();
+                if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
+                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+            }
+            if ((flags & 48) === 48) {
+                tmpN.set(-tmpD.y, tmpD.x, 0).normalize();
+                if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
+                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+            }
+        }
+    }
+
+    tmpPointHit.item = -1;
+
+    return tmpPointHit;
+}
+
 function findBspCell(x: number, y: number, z: number): number {
     const keys = bspPrimitive.index.keys;
     let min = 0, max = keys.length / 3 - 1;
@@ -933,6 +982,9 @@ function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, exte
 
         return tmpPointHit;
     }
+
+    if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && primitive.useSimpleBoxCollision)
+        return pointModel(primitive, location, extent);
 
     if (primitive.kind === "bsp") {
         tmpBounds.min.copy(location).sub(extent);
@@ -1052,8 +1104,121 @@ function queryHull(hull: CollisionHull_T, start: Vector3, end: Vector3, extent: 
     return tmpHullHit;
 }
 
+function queryModelHull(start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
+    resetClip(maxTime, -1);
+
+    for (const plane of arrModelPlanes)
+        if (!clipBspPlane(plane[0], plane[1], plane[2], plane[3], plane[4], start, end, extent)) return null;
+
+    for (let i = 0; i < arrModelPlanes.length; i++) {
+        const a = arrModelPlanes[i];
+
+        for (let j = 0; j < i; j++) {
+            const b = arrModelPlanes[j];
+            const flags = planeFlags(a[0], a[1], a[2]) | planeFlags(b[0], b[1], b[2]);
+
+            if ((flags & 3) === 3 && !clipHullEdge(a, b, 0, start, end, extent)) return null;
+            if ((flags & 12) === 12 && !clipHullEdge(a, b, 1, start, end, extent)) return null;
+            if ((flags & 48) === 48 && !clipHullEdge(a, b, 2, start, end, extent)) return null;
+        }
+    }
+
+    if (!clipState.hit || clipState.t0 < 0 || clipState.t0 >= clipState.t1 || clipState.t1 <= 0) return null;
+
+    tmpHullHit.time = clipState.t0;
+    tmpHullHit.normal.copy(clipState.normal);
+    tmpHullHit.item = clipState.item;
+
+    return tmpHullHit;
+}
+
+function addModelPlane(nx: number, ny: number, nz: number, constant: number, item: number, matrix: Matrix4) {
+    tmpN.set(nx, ny, nz);
+    tmpIntersection.copy(tmpN).multiplyScalar(constant / tmpN.lengthSq()).applyMatrix4(matrix);
+    tmpN.applyMatrix3(tmpNormalMatrix).normalize();
+    arrModelPlanes.push([tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), item]);
+}
+
+function loadModelPlanes(hull: CollisionHull_T, matrix: Matrix4) {
+    arrModelPlanes.length = 0;
+    tmpNormalMatrix.getNormalMatrix(matrix);
+
+    for (const plane of hull.planes) addModelPlane(plane[0], plane[1], plane[2], plane[3], plane[4], matrix);
+
+    const min = hull.bounds.min, max = hull.bounds.max;
+
+    addModelPlane(0, 0, -1, 0.1 - min.z, -1, matrix);
+    addModelPlane(0, 0, 1, max.z + 0.1, -1, matrix);
+    addModelPlane(-1, 0, 0, 0.1 - min.x, -1, matrix);
+    addModelPlane(1, 0, 0, max.x - 0.1, -1, matrix);
+    addModelPlane(0, -1, 0, 0.1 - min.y, -1, matrix);
+    addModelPlane(0, 1, 0, max.y - 0.1, -1, matrix);
+}
+
+function getLocalQuery(matrix: Matrix4, start: Vector3, end: Vector3, extent: Vector3) {
+    tmpMatrix.copy(matrix).invert();
+    tmpLocalStart.copy(start).applyMatrix4(tmpMatrix);
+    tmpLocalEnd.copy(end).applyMatrix4(tmpMatrix);
+
+    const elements = tmpMatrix.elements;
+
+    tmpLocalExtent.set(
+        Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z,
+        Math.abs(elements[1]) * extent.x + Math.abs(elements[5]) * extent.y + Math.abs(elements[9]) * extent.z,
+        Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z
+    );
+}
+
+function queryModel(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
+    getLocalQuery(primitive.matrixWorld, start, end, extent);
+
+    let bestTime = maxTime;
+    let bestItem = -1;
+
+    for (const hull of primitive.simpleCollisionHulls) {
+        if (!sweptIntersectsBox(tmpLocalStart, tmpLocalEnd, tmpLocalExtent, hull.bounds)) continue;
+
+        loadModelPlanes(hull, primitive.matrixWorld);
+
+        const hit = queryModelHull(start, end, extent, bestTime);
+
+        if (!hit || hit.time >= bestTime) continue;
+
+        bestTime = hit.time;
+        bestItem = hit.item;
+        tmpBestHit.normal.copy(hit.normal);
+    }
+
+    if (bestItem < 0 && bestTime === maxTime) return null;
+
+    tmpBestHit.time = bestTime;
+    tmpBestHit.item = bestItem;
+
+    return tmpBestHit;
+}
+
+function pointModel(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }>, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+    getLocalQuery(primitive.matrixWorld, location, location, extent);
+    tmpBounds.min.copy(tmpLocalStart).sub(tmpLocalExtent);
+    tmpBounds.max.copy(tmpLocalStart).add(tmpLocalExtent);
+
+    for (const hull of primitive.simpleCollisionHulls) {
+        if (!tmpBounds.intersectsBox(hull.bounds)) continue;
+
+        loadModelPlanes(hull, primitive.matrixWorld);
+
+        const hit = pointModelHull(location, extent);
+
+        if (hit) return hit;
+    }
+
+    return null;
+}
+
 function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number = 1): PrimitiveHit_T | null {
     if (primitive.kind === "cylinder") return queryCylinder(primitive, start, end, extent, maxTime);
+    if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && (extent.lengthSq() === 0 ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
+        return queryModel(primitive, start, end, extent, maxTime);
     if (primitive.kind !== "bsp") return queryTriangles(primitive, start, end, extent, maxTime);
 
     return queryBsp(primitive, start, end, extent, maxTime);

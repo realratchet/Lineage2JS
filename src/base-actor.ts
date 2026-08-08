@@ -14,7 +14,6 @@ const tmpMovement = new Vector3();
 const tmpRemaining = new Vector3();
 const tmpStepRemaining = new Vector3();
 const tmpStepPosition = new Vector3();
-const tmpStepStart = new Vector3();
 const tmpStepUp = new Vector3();
 const tmpDown = new Vector3();
 const tmpAccelDir = new Vector3();
@@ -37,6 +36,14 @@ const tmpHairRotationX = new Quaternion();
 const tmpHairRotationY = new Quaternion();
 const tmpHairAxisX = new Vector3(1, 0, 0);
 const tmpHairAxisY = new Vector3(0, 1, 0);
+const tmpBasePosition = new Vector3();
+const tmpBaseQuaternion = new Quaternion();
+const tmpBaseInverseQuaternion = new Quaternion();
+const tmpBaseDeltaQuaternion = new Quaternion();
+const tmpBaseOffset = new Vector3();
+const tmpWalkingStart = new Vector3();
+const tmpWalkingSubStart = new Vector3();
+const tmpDesiredMove = new Vector3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 
 // Retail APawn::physWalking (0x8d4880) and APawn::stepUp (0x8cf640).
@@ -68,7 +75,9 @@ const DEFAULT_VOLUME_GRAVITY_Z = -1500;
 const YAW_RATE = 65000;
 const PLAYER_YAW_RATE = 90000;
 const SPAWN_FLOOR_PROBE = 1000;
-const GRAVITY_Z = -980;
+const DEFAULT_VOLUME_TERMINAL_VELOCITY = 2500;
+const MOVEMENT_TWEEN_TIME = 0.1;
+const IDLE_TWEEN_TIME = 0.2;
 // Retail USubSkeletalMeshInstance::DynamicHairGetFrame (0x94f010) writes simulated bone coordinates.
 const HAIR_STEP = 1 / 60;
 const HAIR_SPRING = 32;
@@ -122,6 +131,11 @@ class BaseActor extends Object3D implements ICollidable {
     protected isWalking = false;
     protected airSpeed = AIR_SPEED;
     protected waterVolume: GD.IWaterVolumeDecodeInfo = null;
+    protected base: (ICollidable & Object3D) = null;
+    protected readonly basedActors = new Set<ICollidable>();
+    protected readonly basePosition = new Vector3();
+    protected readonly baseQuaternion = new Quaternion();
+    protected readonly baseRelativePosition = new Vector3();
     protected renderManager: RenderManager;
     protected meshes: Mesh[] = [];
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
@@ -157,6 +171,10 @@ class BaseActor extends Object3D implements ICollidable {
     public getCollisionHeight() { return this.collisionHeight; }
     public getCollider(): RAPIER.Collider { return this.collider; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
+    public getBaseActor(): ICollidable | null { return this.base; }
+    public getBasedActors(): ReadonlySet<ICollidable> { return this.basedActors; }
+    public addBasedActor(actor: ICollidable) { this.basedActors.add(actor); }
+    public removeBasedActor(actor: ICollidable) { this.basedActors.delete(actor); }
     public getCollisionProfile(): ActorCollisionProfile_T {
         this.collisionProfile.collisionRadius = this.collisionRadius;
         this.collisionProfile.collisionHeight = this.collisionHeight;
@@ -205,7 +223,7 @@ class BaseActor extends Object3D implements ICollidable {
         let iteration = 0;
 
         while (remainingTime > 0 && iteration++ < 8) {
-            const tick = remainingTime <= 0.05 ? remainingTime : Math.min(0.1, remainingTime * 0.5);
+            const tick = this.hasStartedPhysics && this.physicsMode === "walking" ? remainingTime : remainingTime <= 0.05 ? remainingTime : Math.min(0.05, remainingTime * 0.5);
 
             remainingTime -= tick;
             this.tickPhysics(tick);
@@ -243,10 +261,22 @@ class BaseActor extends Object3D implements ICollidable {
             if (actor !== (this as any) && this.isOverlapping(actor, this.position)) this.ignoredActors.add(actor);
     }
 
+    public moveSmooth(movement: Vector3, ignoredActor?: ICollidable) {
+        const position = tmpPosition.copy(this.position);
+        const wasIgnored = ignoredActor && this.ignoredActors.has(ignoredActor);
+
+        if (ignoredActor) this.ignoredActors.add(ignoredActor);
+        this.moveWithWallResponse(position, movement);
+        if (ignoredActor && !wasIgnored) this.ignoredActors.delete(ignoredActor);
+
+        this.position.copy(position);
+    }
+
     protected tickPhysics(deltaTime: number) {
         const desired = this.actorState.desired;
         const position = tmpPosition.copy(this.position);
 
+        this.updateBaseMovement(position);
         this.updateIgnoredActors(position);
         const waterVolume = this.getWaterVolume(position);
 
@@ -258,16 +288,20 @@ class BaseActor extends Object3D implements ICollidable {
                 const floorMovement = tmpMovement.set(0, 0, -SPAWN_FLOOR_PROBE);
                 const floorHit = this.findFloor(position, floorMovement);
 
-                if (!floorHit) return;
-
-                this.getHitNormal(floorHit, tmpNormal);
-
-                if (tmpNormal.z < MIN_FLOOR_Z) return;
-
-                position.addScaledVector(floorMovement, floorHit.time).addScaledVector(tmpUp, FLOOR_DISTANCE);
-                this.isGrounded = true;
                 this.hasStartedPhysics = true;
-                this.physicsMode = "walking";
+                this.isGrounded = false;
+                this.physicsMode = "falling";
+
+                if (floorHit) {
+                    this.getHitNormal(floorHit, tmpNormal);
+
+                    if (tmpNormal.z >= MIN_FLOOR_Z) {
+                        position.addScaledVector(floorMovement, floorHit.time).addScaledVector(tmpUp, FLOOR_DISTANCE);
+                        this.isGrounded = true;
+                        this.physicsMode = "walking";
+                        this.setBase(floorHit.actor, tmpNormal);
+                    }
+                }
             }
         }
 
@@ -294,14 +328,6 @@ class BaseActor extends Object3D implements ICollidable {
             this.acceleration.set(0, 0, 0);
         }
 
-        if (!this.actorState.locomotion && this.physicsMode === "walking" && this.isGrounded) {
-            this.velocity.set(0, 0, 0);
-            this.physicsRotation(deltaTime);
-            this.position.copy(position);
-            this.waterVolume = waterVolume;
-            return;
-        }
-
         if (this.physicsMode === "walking" && waterVolume) this.physicsMode = "swimming";
 
         switch (this.physicsMode) {
@@ -325,6 +351,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.physicsRotation(deltaTime);
 
         this.position.copy(position);
+        this.updateBaseRelativePosition();
         this.waterVolume = this.getWaterVolume(position);
     }
 
@@ -343,10 +370,76 @@ class BaseActor extends Object3D implements ICollidable {
         this.velocity.copy(accelDir).multiplyScalar(speed);
     }
 
-    protected physWalking(position: Vector3, deltaTime: number) {
-        const startX = position.x;
-        const startY = position.y;
+    protected updateBaseMovement(position: Vector3) {
+        if (!this.base) return;
 
+        this.base.getWorldPosition(tmpBasePosition);
+        this.base.getWorldQuaternion(tmpBaseQuaternion);
+
+        if (tmpBasePosition.equals(this.basePosition) && tmpBaseQuaternion.equals(this.baseQuaternion)) return;
+
+        tmpBaseInverseQuaternion.copy(this.baseQuaternion).invert();
+        tmpBaseOffset.copy(position).sub(this.basePosition).applyQuaternion(tmpBaseInverseQuaternion).applyQuaternion(tmpBaseQuaternion).add(tmpBasePosition);
+        tmpMovement.copy(tmpBaseOffset).sub(position);
+
+        const wasIgnored = this.ignoredActors.has(this.base);
+
+        this.ignoredActors.add(this.base);
+        const hit = this.moveActor(position, tmpMovement);
+        if (!wasIgnored) this.ignoredActors.delete(this.base);
+
+        if (hit) {
+            this.setBase(null);
+            return;
+        }
+
+        tmpBaseDeltaQuaternion.copy(tmpBaseQuaternion).multiply(tmpBaseInverseQuaternion);
+
+        const yaw = Math.atan2(2 * (tmpBaseDeltaQuaternion.w * tmpBaseDeltaQuaternion.z + tmpBaseDeltaQuaternion.x * tmpBaseDeltaQuaternion.y), 1 - 2 * (tmpBaseDeltaQuaternion.y * tmpBaseDeltaQuaternion.y + tmpBaseDeltaQuaternion.z * tmpBaseDeltaQuaternion.z));
+
+        this.rotationYaw = (this.rotationYaw + Math.round(yaw * 32768 / Math.PI)) & 65535;
+        this.rotation.set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.basePosition.copy(tmpBasePosition);
+        this.baseQuaternion.copy(tmpBaseQuaternion);
+    }
+
+    protected setBase(actor: ICollidable | null, floor?: Vector3) {
+        const base = actor as ICollidable & Object3D;
+
+        if (floor) this.floor.copy(floor);
+        if (base === this.base) return;
+
+        const visited = new Set<ICollidable>();
+
+        for (let current = base; current; current = current.getBaseActor ? current.getBaseActor() as ICollidable & Object3D : null) {
+            if (current === this || visited.has(current)) return;
+
+            visited.add(current);
+        }
+
+        if (this.base && this.base.removeBasedActor) this.base.removeBasedActor(this);
+
+        this.base = base;
+
+        if (!base) return;
+
+        if (base.addBasedActor) base.addBasedActor(this);
+
+        base.getWorldPosition(this.basePosition);
+        base.getWorldQuaternion(this.baseQuaternion);
+        this.updateBaseRelativePosition();
+    }
+
+    protected updateBaseRelativePosition() {
+        if (!this.base) return;
+
+        this.base.getWorldPosition(tmpBasePosition);
+        this.base.getWorldQuaternion(tmpBaseQuaternion);
+        tmpBaseInverseQuaternion.copy(tmpBaseQuaternion).invert();
+        this.baseRelativePosition.copy(this.position).sub(tmpBasePosition).applyQuaternion(tmpBaseInverseQuaternion);
+    }
+
+    protected physWalking(position: Vector3, deltaTime: number, iterations: number = 0) {
         this.velocity.z = 0;
         this.acceleration.z = 0;
 
@@ -355,53 +448,76 @@ class BaseActor extends Object3D implements ICollidable {
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
 
         this.calcVelocity(position, tmpAccelDir, deltaTime, this.isWalking ? WALK_SPEED : GROUND_SPEED);
+        tmpDesiredMove.copy(this.velocity);
+        tmpDesiredMove.z = 0;
+        tmpWalkingStart.copy(position);
 
-        tmpMovement.set(this.velocity.x * deltaTime, this.velocity.y * deltaTime, 0);
+        let remainingTime = deltaTime;
 
-        const deltaX = tmpMovement.x;
-        const deltaY = tmpMovement.y;
+        while (remainingTime > 0 && iterations++ < 8) {
+            const timeTick = (this as any).isPlayer && remainingTime > 0.05 ? Math.min(0.05, remainingTime * 0.5) : remainingTime;
 
-        if (tmpMovement.lengthSq() > 0) this.moveWalking(position, tmpMovement);
+            remainingTime -= timeTick;
+            tmpMovement.copy(tmpDesiredMove).multiplyScalar(timeTick);
+            tmpWalkingSubStart.copy(position);
 
-        const floorMovement = tmpMovement.set(0, 0, -FLOOR_CHECK_DISTANCE);
-        const floorHit = this.findFloor(position, floorMovement);
+            const deltaX = tmpMovement.x;
+            const deltaY = tmpMovement.y;
+            const desiredDistance = tmpMovement.length();
 
-        if (floorHit) {
-            this.getHitNormal(floorHit, tmpNormal);
+            if (desiredDistance > 0) this.moveWalking(position, tmpMovement);
+            else remainingTime = 0;
 
-            if (tmpNormal.z >= MIN_FLOOR_Z) {
-                const floorDistance = floorHit.time * FLOOR_CHECK_DISTANCE;
+            const floorMovement = tmpMovement.set(0, 0, -FLOOR_CHECK_DISTANCE);
+            const floorHit = this.castShape(position, floorMovement);
 
-                if (floorDistance > MAX_FLOOR_DISTANCE)
-                    this.moveSwept(position, tmpDown.set(0, 0, -(floorDistance - FLOOR_DISTANCE)));
-                else if (floorDistance > 0 && floorDistance < MIN_FLOOR_DISTANCE)
-                    this.moveSwept(position, tmpStepUp.set(0, 0, FLOOR_DISTANCE - floorDistance));
+            if (floorHit) {
+                this.getHitNormal(floorHit, tmpNormal);
 
-                this.updateWalkingVelocity(position, startX, startY, deltaTime);
-                return;
+                if (tmpNormal.z >= MIN_FLOOR_Z) {
+                    const floorDistance = floorHit.time * FLOOR_CHECK_DISTANCE;
+
+                    if (floorDistance > MAX_FLOOR_DISTANCE)
+                        this.moveSwept(position, tmpDown.set(0, 0, -(floorDistance - FLOOR_DISTANCE)));
+                    else if (floorDistance > 0 && floorDistance < MIN_FLOOR_DISTANCE)
+                        this.moveSwept(position, tmpStepUp.set(0, 0, FLOOR_DISTANCE - floorDistance));
+
+                    this.setBase(floorHit.actor, tmpNormal);
+                    continue;
+                }
+
+                if (deltaX * tmpNormal.x + deltaY * tmpNormal.y < 0) {
+                    tmpStepUp.copy(tmpUp).multiplyScalar(MAX_STEP_HEIGHT).addScaledVector(tmpNormal, -MAX_STEP_HEIGHT * tmpNormal.z).multiplyScalar(-1);
+
+                    const slopeHit = this.moveSwept(position, tmpStepUp);
+
+                    if (slopeHit) {
+                        this.getHitNormal(slopeHit, tmpNormal);
+
+                        if (tmpNormal.z >= MIN_FLOOR_Z) {
+                            this.setBase(slopeHit.actor, tmpNormal);
+                            continue;
+                        }
+                    }
+                }
             }
 
-            // sliding off a steep floor stays in PHYS_Walking; retail only falls when there is no
-            // floor at all, or the steep one is not being walked into (0x8d56b1)
-            if (deltaX * tmpNormal.x + deltaY * tmpNormal.y < 0) {
-                tmpStepUp.copy(tmpUp).multiplyScalar(MAX_STEP_HEIGHT).addScaledVector(tmpNormal, -MAX_STEP_HEIGHT * tmpNormal.z).multiplyScalar(-1);
-                this.moveSwept(position, tmpStepUp);
-                this.updateWalkingVelocity(position, startX, startY, deltaTime);
+            const actualX = position.x - tmpWalkingSubStart.x;
+            const actualY = position.y - tmpWalkingSubStart.y;
+            const actualDistance = Math.sqrt(actualX * actualX + actualY * actualY);
 
-                return;
-            }
+            if (desiredDistance > 0) remainingTime += timeTick * (1 - Math.min(1, actualDistance / desiredDistance));
+
+            this.setBase(null);
+            this.isGrounded = false;
+            this.physicsMode = "falling";
+            this.velocity.z = 0;
+            this.physFalling(position, remainingTime, iterations);
+            return;
         }
 
-        this.isGrounded = false;
-        this.physicsMode = "falling";
-        this.updateWalkingVelocity(position, startX, startY, deltaTime);
-    }
-
-    protected updateWalkingVelocity(position: Vector3, startX: number, startY: number, deltaTime: number) {
-        const dx = position.x - startX;
-        const dy = position.y - startY;
-
-        this.velocity.set(dx / deltaTime, dy / deltaTime, 0);
+        this.velocity.copy(position).sub(tmpWalkingStart).multiplyScalar(1 / deltaTime);
+        this.velocity.z = 0;
     }
 
     protected moveWalking(position: Vector3, movement: Vector3) {
@@ -428,6 +544,7 @@ class BaseActor extends Object3D implements ICollidable {
             extent: tmpTraceExtent.set(radius, radius, height),
             sourceCollider: this.collider,
             sourceBody: this.rigidbody,
+            sourceActor: this,
             sourceIsPlayer: !!(this as any).isPlayer,
             sourceProfile: this.collisionProfile,
             ignoredActors: this.ignoredActors
@@ -501,30 +618,20 @@ class BaseActor extends Object3D implements ICollidable {
 
     // APawn::stepUp (0x8cf640) is void; the step only counts when the lifted move is clear (0x8cf859)
     protected stepUp(position: Vector3, desiredDir: Vector3, movement: Vector3, hit: CheckResult_T) {
-        tmpStepStart.copy(position);
         this.getHitNormal(hit, tmpStepNormal);
 
-        let stepped = false;
         let current: CheckResult_T | null = hit;
 
         if (Math.abs(tmpStepNormal.z) < MAX_STEP_SIDE_Z || tmpStepNormal.z >= MIN_FLOOR_Z) {
             this.moveActor(position, tmpStepUp.set(0, 0, MAX_STEP_HEIGHT));
 
             current = this.moveActor(position, movement);
-            stepped = true;
         } else if (this.physicsMode !== "walking") {
             tmpStepRemaining.set(movement.x, movement.y, movement.z + movement.length() * tmpStepNormal.z);
             current = this.moveActor(position, tmpStepRemaining);
         }
 
         if (!current) {
-            this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
-            return;
-        }
-
-        // AController::eventNotifyHitWall (0x642e00) returns false unprobed, so a blocked step unwinds
-        if (stepped) {
-            this.moveActor(position, tmpStepRemaining.copy(tmpStepStart).sub(position));
             this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
             return;
         }
@@ -561,8 +668,9 @@ class BaseActor extends Object3D implements ICollidable {
     protected physFalling(position: Vector3, deltaTime: number, iterations: number = 0) {
         if (deltaTime < 0.0003 || iterations > 7) return;
 
+        this.setBase(null);
         tmpOldVelocity.copy(this.velocity);
-        this.velocity.z = Math.max(-2500, this.velocity.z + GRAVITY_Z * deltaTime);
+        this.velocity.z = Math.max(-DEFAULT_VOLUME_TERMINAL_VELOCITY, this.velocity.z + DEFAULT_VOLUME_GRAVITY_Z * deltaTime);
         tmpMovement.addVectors(tmpOldVelocity, this.velocity).multiplyScalar(0.5 * deltaTime);
 
         const start = tmpSwimStart.copy(position);
@@ -588,10 +696,15 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.getHitNormal(hit, tmpNormal);
 
-        if (this.velocity.z <= 0 && tmpNormal.z >= MIN_FLOOR_Z) {
+        if (tmpNormal.z >= MIN_FLOOR_Z) {
             this.velocity.z = 0;
             this.isGrounded = true;
             this.physicsMode = "walking";
+            this.setBase(hit.actor, tmpNormal);
+
+            const remainingTime = deltaTime * (1 - hit.time);
+
+            if (remainingTime >= 0.0003) this.physWalking(position, remainingTime, iterations);
             return;
         }
 
@@ -613,6 +726,7 @@ class BaseActor extends Object3D implements ICollidable {
     protected physSwimming(position: Vector3, deltaTime: number, volume: GD.IWaterVolumeDecodeInfo | null, iterations: number = 0) {
         if (deltaTime < 0.0003 || iterations > 7) return;
 
+        this.setBase(null);
         if (!volume) {
             this.physicsMode = "falling";
             this.physFalling(position, deltaTime, iterations + 1);
@@ -664,6 +778,7 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected physFlying(position: Vector3, deltaTime: number) {
+        this.setBase(null);
         this.isGrounded = false;
         tmpAccelDir.copy(this.acceleration);
 
@@ -797,7 +912,7 @@ class BaseActor extends Object3D implements ICollidable {
         return findVolumeTransition(tmpWaterPosition, tmpWaterEnd, volume.bsp, startsInWater);
     }
 
-    protected moveActor(position: Vector3, movement: Vector3): CheckResult_T | null {
+    public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null {
         const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
         const hit = this.renderManager.collisionWorld.moveActor({
             location: bodyPosition,
@@ -805,9 +920,11 @@ class BaseActor extends Object3D implements ICollidable {
             extent: tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight),
             sourceCollider: this.collider,
             sourceBody: this.rigidbody,
+            sourceActor: this,
             sourceIsPlayer: !!(this as any).isPlayer,
             sourceProfile: this.collisionProfile,
-            ignoredActors: this.ignoredActors
+            ignoredActors: this.ignoredActors,
+            ignoreBases: true
         });
 
         position.copy(bodyPosition).addScaledVector(tmpUp, -this.collisionHeight);
@@ -824,6 +941,7 @@ class BaseActor extends Object3D implements ICollidable {
             extent: tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight),
             sourceCollider: this.collider,
             sourceBody: this.rigidbody,
+            sourceActor: this,
             sourceIsPlayer: !!(this as any).isPlayer,
             sourceProfile: this.collisionProfile,
             ignoredActors: this.ignoredActors
@@ -841,6 +959,7 @@ class BaseActor extends Object3D implements ICollidable {
             extent: tmpStepPosition.set(0, 0, this.collisionHeight),
             sourceCollider: this.collider,
             sourceBody: this.rigidbody,
+            sourceActor: this,
             sourceIsPlayer: !!(this as any).isPlayer,
             sourceProfile: this.collisionProfile,
             ignoredActors: this.ignoredActors
@@ -872,20 +991,21 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected checkAnimationState() {
-        const state: ValidStateNames_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? this.actorState.locomotion ? "swimming" : "swimmingIdle" : this.actorState.locomotion ? this.isWalking ? "walking" : "running" : "idle";
+        const isMoving = this.velocity.lengthSq() > 0;
+        const state: ValidStateNames_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : "idle";
 
         if (state === this.actorState.state) return;
 
         this.actorState.state = state;
 
         switch (this.actorState.state) {
-            case "falling": this.playAnimation(this.basicActorAnimations.falling); break;
-            case "idle": this.playAnimation(this.basicActorAnimations.idle); break;
-            case "dying": this.playAnimation(this.basicActorAnimations.dying); break;
-            case "walking": this.playAnimation(this.basicActorAnimations.walking); break;
-            case "running": this.playAnimation(this.basicActorAnimations.running); break;
-            case "swimming": this.playAnimation(this.basicActorAnimations.swimming); break;
-            case "swimmingIdle": this.playAnimation(this.basicActorAnimations.swimmingIdle); break;
+            case "falling": this.playAnimation(this.basicActorAnimations.falling, MOVEMENT_TWEEN_TIME); break;
+            case "idle": this.playAnimation(this.basicActorAnimations.idle, IDLE_TWEEN_TIME); break;
+            case "dying": this.playAnimation(this.basicActorAnimations.dying, MOVEMENT_TWEEN_TIME); break;
+            case "walking": this.playAnimation(this.basicActorAnimations.walking, MOVEMENT_TWEEN_TIME); break;
+            case "running": this.playAnimation(this.basicActorAnimations.running, MOVEMENT_TWEEN_TIME); break;
+            case "swimming": this.playAnimation(this.basicActorAnimations.swimming, MOVEMENT_TWEEN_TIME); break;
+            case "swimmingIdle": this.playAnimation(this.basicActorAnimations.swimmingIdle, IDLE_TWEEN_TIME); break;
             default: throw new Error(`Unknown actor state: '${this.actorState.state}'`);
         }
     }
@@ -1135,10 +1255,10 @@ class BaseActor extends Object3D implements ICollidable {
 
     public initAnimations() {
         this.isAnimationsInit = true;
-        this.playAnimation(this.basicActorAnimations.idle);
+        this.playAnimation(this.basicActorAnimations.idle, IDLE_TWEEN_TIME);
     }
 
-    public playAnimation(animationName: string) {
+    public playAnimation(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME) {
         if (!this.isAnimationsInit) return;
 
         if (!(animationName in this.actorAnimations))
@@ -1155,12 +1275,14 @@ class BaseActor extends Object3D implements ICollidable {
             const currAct = this.currAnimations.get(mesh) || null;
             const nextAct = mixer.clipAction(clip, mesh);
 
+            if (currAct === nextAct) continue;
+
             this.currAnimations.set(mesh, nextAct);
 
             if (prevAct) prevAct.stop();
             if (currAct) {
                 this.prevAnimations.set(mesh, currAct);
-                currAct.crossFadeTo(nextAct, 0.25, false);
+                currAct.crossFadeTo(nextAct, tweenTime, false);
             }
 
             nextAct.play();
@@ -1209,6 +1331,7 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public setFlying(isFlying: boolean) {
+        this.setBase(null);
         this.physicsMode = isFlying ? "flying" : "falling";
         this.isGrounded = false;
 
@@ -1236,6 +1359,7 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public teleportTo(position: Vector3) {
+        this.setBase(null);
         this.position.copy(position);
         this.velocity.set(0, 0, 0);
         this.isGrounded = false;

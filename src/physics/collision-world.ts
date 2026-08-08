@@ -30,9 +30,11 @@ type CollisionQuery_T = {
     extent: Vector3;
     sourceCollider?: RAPIER.Collider;
     sourceBody?: RAPIER.RigidBody;
+    sourceActor?: ICollidable;
     sourceIsPlayer: boolean;
     sourceProfile?: ActorCollisionProfile_T;
     ignoredActors?: Set<ICollidable>;
+    ignoreBases?: boolean;
     zeroExtent?: boolean;
 };
 
@@ -163,9 +165,8 @@ class CollisionWorld {
     };
     protected readonly rapierFilter = (collider: RAPIER.Collider) => {
         const actor = this.colliderOwners.get(collider.handle);
-        const sourceActor = this.rapierQuery.sourceCollider ? this.colliderOwners.get(this.rapierQuery.sourceCollider.handle) : null;
 
-        if (actor && actor === sourceActor) return false;
+        if (actor && this.shouldIgnoreActor(actor, this.rapierQuery)) return false;
 
         return !actor || this.shouldBlockActor(actor, this.rapierQuery, this.rapierZeroExtent);
     };
@@ -322,7 +323,10 @@ class CollisionWorld {
         this.rayQuery.delta = tmpRayDelta.copy(direction).multiplyScalar(maxDistance);
         this.rayQuery.sourceCollider = sourceCollider;
         this.rayQuery.sourceBody = sourceBody;
+        this.rayQuery.sourceActor = sourceCollider ? this.colliderOwners.get(sourceCollider.handle) : null;
         this.rayQuery.sourceIsPlayer = sourceIsPlayer;
+        this.rayQuery.ignoredActors = null;
+        this.rayQuery.ignoreBases = false;
 
         if (this.backend === "ue") return this.analyticalRayCheck(this.rayQuery, maxDistance);
         if (this.backend === "rapier") return this.rapierRayCheck(this.rayQuery, direction, maxDistance);
@@ -440,14 +444,13 @@ class CollisionWorld {
 
     protected analyticalOverlapCheck(query: CollisionQuery_T): ICollidable | null {
         const bounds = tmpSweepBounds;
-        const sourceActor = query.sourceCollider ? this.colliderOwners.get(query.sourceCollider.handle) : null;
         let unsupported = false;
 
         bounds.min.copy(query.location).sub(query.extent);
         bounds.max.copy(query.location).add(query.extent);
 
         for (const entry of this.analyticalEntries) {
-            if (!entry.active || entry.actor === sourceActor) continue;
+            if (!entry.active || this.shouldIgnoreActor(entry.actor, query)) continue;
             if (!this.shouldBlockActor(entry.actor, query, false)) continue;
             if (entry.dynamic) {
                 entry.primitive = entry.actor.getCollisionPrimitive();
@@ -572,10 +575,7 @@ class CollisionWorld {
 
         entry.queryMark = this.queryMark;
 
-        const sourceActor = this.analyticalQuery.sourceCollider ? this.colliderOwners.get(this.analyticalQuery.sourceCollider.handle) : null;
-
-        if (entry.actor === sourceActor) return;
-        if (this.analyticalQuery.ignoredActors && this.analyticalQuery.ignoredActors.has(entry.actor)) return;
+        if (this.shouldIgnoreActor(entry.actor, this.analyticalQuery)) return;
 
         if (!this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent)) return;
 
@@ -713,6 +713,20 @@ class CollisionWorld {
 
         return target.isPawn ? source.blockPlayers : source.blockActors;
     }
+
+    protected shouldIgnoreActor(actor: ICollidable, query: CollisionQuery_T): boolean {
+        const source = query.sourceActor || (query.sourceCollider ? this.colliderOwners.get(query.sourceCollider.handle) : null);
+
+        if (actor === source) return true;
+        if (query.ignoredActors && query.ignoredActors.has(actor)) return true;
+        if (!query.ignoreBases || !source) return false;
+
+        const profile = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile;
+
+        if (profile.worldGeometry) return false;
+
+        return isBasedOn(source, actor) || isBasedOn(actor, source);
+    }
 }
 
 function removeEntry(entries: AnalyticalEntry_T[], entry: AnalyticalEntry_T) {
@@ -721,10 +735,26 @@ function removeEntry(entries: AnalyticalEntry_T[], entry: AnalyticalEntry_T) {
     if (index >= 0) entries.splice(index, 1);
 }
 
+function isBasedOn(actor: ICollidable, base: ICollidable): boolean {
+    const visited = new Set<ICollidable>();
+    let current = actor.getBaseActor ? actor.getBaseActor() : null;
+
+    while (current && !visited.has(current)) {
+        if (current === base) return true;
+
+        visited.add(current);
+        current = current.getBaseActor ? current.getBaseActor() : null;
+    }
+
+    return false;
+}
+
 function getTraceBackoff(primitive: CollisionPrimitive_T | null, testDistance: number, zeroExtent: boolean): number {
     if (!primitive) return 0;
     if (primitive.kind === "terrain") return 0.5;
     if (primitive.kind === "bsp") return zeroExtent ? 0.5 : Math.max(0.1, Math.min(4, 0.1 * testDistance));
+    if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && (zeroExtent ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
+        return zeroExtent ? 0.5 : Math.max(0.1, Math.min(4, 0.1 * testDistance));
     if (primitive.kind === "staticMesh") return Math.max(0.1, Math.min(1, 0.1 * testDistance));
 
     return 0;

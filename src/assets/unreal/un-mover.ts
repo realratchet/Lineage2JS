@@ -6,6 +6,13 @@ enum EMoverGlideType_T {
     MV_GlideByTime
 }
 
+enum EMoverEncroachType_T {
+    ME_StopWhenEncroach,
+    ME_ReturnWhenEncroach,
+    ME_CrushWhenEncroach,
+    ME_IgnoreWhenEncroach
+}
+
 // Likely for doors and stuff
 abstract class UMover extends UStaticMeshActor {
     public readonly careUnread: boolean = false;
@@ -22,6 +29,7 @@ abstract class UMover extends UStaticMeshActor {
     declare protected basePos: GA.FVector;
     declare protected baseRot: GA.FRotator;
     declare protected initialState: string;
+    declare protected moverEncroachType: EMoverEncroachType_T;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -36,7 +44,8 @@ abstract class UMover extends UStaticMeshActor {
             "KeyRot": "keyRot",
             "BasePos": "basePos",
             "BaseRot": "baseRot",
-            "InitialState": "initialState"
+            "InitialState": "initialState",
+            "MoverEncroachType": "moverEncroachType"
         });
     }
 
@@ -74,11 +83,22 @@ abstract class UMover extends UStaticMeshActor {
                 collisionRadius: this.collisionRadius,
                 collisionHeight: this.collisionHeight,
                 isGliding: this.moverGlideType === EMoverGlideType_T.MV_GlideByTime,
-                triggerOnceOnly: this.triggerOnceOnly
+                triggerOnceOnly: this.triggerOnceOnly,
+                moverEncroachType: getMoverEncroachType(this.moverEncroachType)
             }
         };
     }
 }
 
+function getMoverEncroachType(value: EMoverEncroachType_T): GD.IMoverDecodeInfo["moverEncroachType"] {
+    switch (value) {
+        case EMoverEncroachType_T.ME_StopWhenEncroach: return "stop";
+        case EMoverEncroachType_T.ME_ReturnWhenEncroach: return "return";
+        case EMoverEncroachType_T.ME_CrushWhenEncroach: return "crush";
+        case EMoverEncroachType_T.ME_IgnoreWhenEncroach: return "ignore";
+        default: throw new Error(`Unknown mover encroach type '${value}'.`);
+    }
+}
+
 export default UMover;
-export { UMover, EMoverGlideType_T };
+export { UMover, EMoverEncroachType_T, EMoverGlideType_T };
