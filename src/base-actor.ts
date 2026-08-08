@@ -210,12 +210,8 @@ class BaseActor extends Object3D implements ICollidable {
         return this.collider;
     }
 
-    public update(_renderManager: RenderManager, currentTime: number, deltaTime: number) {
-        if (!this.rigidbody) {
-            this.updateHair(currentTime * 0.001, deltaTime);
-            this.updateBlink(currentTime * 0.001);
-            return;
-        }
+    public updatePhysics(currentTime: number, deltaTime: number) {
+        if (!this.rigidbody) return;
 
         this.renderManager.collisionWorld.updateDynamicEntries(currentTime);
 
@@ -231,8 +227,16 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + this.collisionHeight));
         this.checkAnimationState();
+    }
+
+    public updatePresentation(currentTime: number, deltaTime: number) {
         this.updateHair(currentTime * 0.001, deltaTime);
         this.updateBlink(currentTime * 0.001);
+    }
+
+    public update(_renderManager: RenderManager, currentTime: number, deltaTime: number) {
+        this.updatePhysics(currentTime, deltaTime);
+        this.updatePresentation(currentTime, deltaTime);
     }
 
     // UE ignores a blocking actor you spawned inside of until you are no longer intersecting it
@@ -1040,6 +1044,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.initHair();
         this.initBlink();
+        this.renderManager.invalidatePawnLighting(this);
     }
 
     protected initHair() {

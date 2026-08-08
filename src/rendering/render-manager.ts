@@ -109,10 +109,31 @@ const SIMULATED_PAWN_COUNT = 10;
 const SIMULATED_PAWN_LIFETIME = 15000;
 const SIMULATED_PAWN_TURN_INTERVAL = 1000;
 const SIMULATED_PAWN_CONCURRENCY = 3;
+const PLAYER_PHYSICS_HZ = 60;
+const SIMULATED_PAWN_PHYSICS_HZ = 30;
+const PLAYER_PHYSICS_INTERVAL_MS = 1000 / PLAYER_PHYSICS_HZ;
+const SIMULATED_PAWN_PHYSICS_INTERVAL_MS = 1000 / SIMULATED_PAWN_PHYSICS_HZ;
+const MAX_PHYSICS_TICKS = 8;
+const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 
 type ZoneObject = import("../objects/zone-object").ZoneObject;
 type SectorObject = import("../objects/zone-object").SectorObject;
 type SimulatedPawn_T = { pawn: BaseActor, expires: number, nextTurn: number };
+type PawnLightingState_T = {
+    position: Vector3,
+    lightingPosition: Vector3,
+    sector: SectorObject | null,
+    lightingSector: SectorObject | null,
+    leafIndex: number | null,
+    lightingLeafIndex: number | null,
+    zoneIndex: number | null,
+    lightingZoneIndex: number | null,
+    envVersion: number,
+    ambientR: number,
+    ambientG: number,
+    ambientB: number,
+    lights: DynamicLight[]
+};
 type Disposable_T = { dispose(): void };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[] };
 type SectorWarmup_T = {
@@ -277,6 +298,7 @@ class RenderManager {
     protected readonly waitingMovableObjects = new Map<MovableObject, number>();
     protected readonly rotatingObjects = new Set<RotatingObject>();
     protected readonly simulatedPawns = new Set<SimulatedPawn_T>();
+    protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
     protected simCharGroups: GD.ICharacterGroup[] = null;
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected lastRenderOrderSector: SectorObject | null = null;
@@ -1373,7 +1395,7 @@ class RenderManager {
         await Promise.all(Array.from({ length: SIMULATED_PAWN_CONCURRENCY }, worker));
     }
 
-    protected updateSimulatedPawns(currentTime: number, deltaTime: number): void {
+    protected maintainSimulatedPawns(currentTime: number): void {
         for (const entry of Array.from(this.simulatedPawns)) {
             if (currentTime >= entry.expires) {
                 this.unregisterCollider(entry.pawn);
@@ -1392,9 +1414,17 @@ class RenderManager {
             entry.pawn.moveInDirection(tmpSimDirection.set(Math.cos(angle), Math.sin(angle), 0));
         }
 
-        for (const entry of this.simulatedPawns) entry.pawn.update(this, currentTime, deltaTime / 1000);
-
         if (this.simulatedPawns.size > 0) this.needsUpdate = true;
+    }
+
+    protected tickSimulatedPawns(currentTime: number): void {
+        for (const entry of this.simulatedPawns)
+            entry.pawn.updatePhysics(currentTime, 1 / SIMULATED_PAWN_PHYSICS_HZ);
+    }
+
+    protected updateSimulatedPawnPresentation(currentTime: number, deltaTime: number): void {
+        for (const entry of this.simulatedPawns)
+            entry.pawn.updatePresentation(currentTime, deltaTime / 1000);
     }
 
     protected updateRotatingObjects(deltaTime: number): void {
@@ -1422,18 +1452,14 @@ class RenderManager {
     protected updatePawnVisibility(): void {
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
-                pawn.getWorldPosition(tmpPawnWorldPos);
+                const state = this.resolvePawnLocation(pawn);
 
-                const containingSector = this.getSector(tmpPawnWorldPos);
-
-                if (!containingSector) {
+                if (!state.sector) {
                     pawn.visible = false;
                     continue;
                 }
 
-                const leafIndex = containingSector.findPositionLeaf(tmpPawnWorldPos);
-
-                pawn.visible = leafIndex !== null && containingSector.visibleLeaves.has(leafIndex);
+                pawn.visible = state.leafIndex !== null && state.sector.visibleLeaves.has(state.leafIndex);
             }
         }));
     }
@@ -1449,7 +1475,7 @@ class RenderManager {
         }));
 
         this.updateActorLighting(this.player, sunAmbient);
-        this.updatePawnShadow();
+        if (this.emitterSimDue) this.updatePawnShadow();
 
         for (const entry of this.simulatedPawns)
             this.updateActorLighting(entry.pawn, sunAmbient);
@@ -1486,21 +1512,96 @@ class RenderManager {
         this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
     }
 
-    protected updateActorLighting(actor: THREE.Object3D, sunAmbient: ColorByte): void {
+    public invalidatePawnLighting(actor: THREE.Object3D): void {
+        this.pawnLightingStates.delete(actor);
+    }
+
+    protected getPawnLightingState(actor: THREE.Object3D): PawnLightingState_T {
+        let state = this.pawnLightingStates.get(actor);
+
+        if (state) return state;
+
+        state = {
+            position: new Vector3(NaN, NaN, NaN),
+            lightingPosition: new Vector3(NaN, NaN, NaN),
+            sector: null,
+            lightingSector: null,
+            leafIndex: null,
+            lightingLeafIndex: null,
+            zoneIndex: null,
+            lightingZoneIndex: null,
+            envVersion: -1,
+            ambientR: -1,
+            ambientG: -1,
+            ambientB: -1,
+            lights: []
+        };
+
+        this.pawnLightingStates.set(actor, state);
+
+        return state;
+    }
+
+    protected resolvePawnLocation(actor: THREE.Object3D): PawnLightingState_T {
+        const state = this.getPawnLightingState(actor);
+
         actor.getWorldPosition(tmpPawnWorldPos);
 
-        const sector = this.getSector(tmpPawnWorldPos);
+        if (state.position.equals(tmpPawnWorldPos) && state.sector) return state;
+
+        state.position.copy(tmpPawnWorldPos);
+        state.sector = this.getSector(tmpPawnWorldPos);
+        state.leafIndex = state.sector ? state.sector.findPositionLeaf(tmpPawnWorldPos) : null;
+        state.zoneIndex = state.sector ? state.sector.findPositionZone(tmpPawnWorldPos) : null;
+
+        return state;
+    }
+
+    protected updateActorLighting(actor: THREE.Object3D, sunAmbient: ColorByte): void {
+        const state = this.resolvePawnLocation(actor);
+        const sector = state.sector;
 
         if (!sector) return;
 
-        const zoneIndex = sector.findPositionZone(tmpPawnWorldPos);
-        const zoneInfo = zoneIndex === null ? null : sector.bspZones[zoneIndex]?.zoneInfo;
-        const lights = sector.getRelevantLights(tmpPawnWorldPos, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
+        const zoneInfo = state.zoneIndex === null ? null : sector.bspZones[state.zoneIndex]?.zoneInfo;
+        const moved = state.lightingPosition.distanceToSquared(state.position) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
+        const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
+        const envVersion = this.environment.getEnvVersion();
+        const ambientChanged = state.envVersion !== envVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
+        let relevantLightsChanged = false;
+        let relevantLightUpdated = false;
+
+        for (const light of state.lights)
+            relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
+
+        if (moved || locationChanged) {
+            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
+            relevantLightsChanged = state.lights.length !== arrPawnLights.length;
+
+            for (let i = 0; i < arrPawnLights.length; i++) {
+                relevantLightsChanged = relevantLightsChanged || state.lights[i] !== arrPawnLights[i];
+                relevantLightUpdated = relevantLightUpdated || arrPawnLights[i].needsUpdate;
+            }
+
+            state.lights.length = 0;
+            state.lights.push(...arrPawnLights);
+            state.lightingPosition.copy(state.position);
+            state.lightingSector = sector;
+            state.lightingLeafIndex = state.leafIndex;
+            state.lightingZoneIndex = state.zoneIndex;
+        }
+
+        if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated) return;
 
         actor.traverse(object => {
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, lights, sunAmbient);
+                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient);
         });
+
+        state.envVersion = envVersion;
+        state.ambientR = sunAmbient.r;
+        state.ambientG = sunAmbient.g;
+        state.ambientB = sunAmbient.b;
     }
 
     protected _updateObjects(currentTime: number, deltaTime: number) {
@@ -2099,6 +2200,7 @@ class RenderManager {
     }
 
 
+    protected nextPlayerPhysicsTick: number;
     protected nextPhysicsTick: number;
 
     protected _preRender(currentTime: number, deltaTime: number) {
@@ -2169,22 +2271,35 @@ class RenderManager {
         // }
 
         this.emitterSimDue = this.nextPhysicsTick <= currentTime;
+        this.maintainSimulatedPawns(currentTime);
         this.updateMovableObjects(currentTime);
         this.updateRotatingObjects(deltaTime);
-        this.player.update(this, currentTime, deltaTime / 1000);
-        this.updateSimulatedPawns(currentTime, deltaTime);
+
+        let playerPhysicsTicks = 0;
+
+        while (this.nextPlayerPhysicsTick <= currentTime && playerPhysicsTicks++ < MAX_PHYSICS_TICKS) {
+            this.player.updatePhysics(this.nextPlayerPhysicsTick, 1 / PLAYER_PHYSICS_HZ);
+            this.nextPlayerPhysicsTick += PLAYER_PHYSICS_INTERVAL_MS;
+        }
+
+        if (this.nextPlayerPhysicsTick <= currentTime)
+            this.nextPlayerPhysicsTick = currentTime + PLAYER_PHYSICS_INTERVAL_MS;
 
         // nothing reads the rapier world under the analytical backend
         const stepsRapier = this.collisionWorld.usesRapier();
         let physicsTicks = 0;
 
-        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < 8) {
+        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < MAX_PHYSICS_TICKS) {
+            this.tickSimulatedPawns(this.nextPhysicsTick);
             if (stepsRapier) this.physicsWorld.step();
-            this.nextPhysicsTick += 1000 / 30;
+            this.nextPhysicsTick += SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
         }
 
         if (this.nextPhysicsTick <= currentTime)
-            this.nextPhysicsTick = currentTime + 1000 / 30;
+            this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
+
+        this.player.updatePresentation(currentTime, deltaTime / 1000);
+        this.updateSimulatedPawnPresentation(currentTime, deltaTime);
 
         if (this.isOrbitControls && this.followPlayer) {
             this.player.getCameraTargetPosition(tmpOrbitFollowTarget);
@@ -2471,7 +2586,8 @@ class RenderManager {
         this.physicsWorld.timestep = 1 / 30;
         this.physicsWorld.step();
         this.lastRender = currentTime;
-        this.nextPhysicsTick = currentTime + 1000 / 30;
+        this.nextPlayerPhysicsTick = currentTime + PLAYER_PHYSICS_INTERVAL_MS;
+        this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
         this.stitchTerrains();
 
         this.onHandleRender(currentTime);
@@ -2569,6 +2685,7 @@ class RenderManager {
 
     public addSector(sector: SectorObject) {
         retainSectorResources(sector, sector);
+        this.pawnLightingStates = new WeakMap();
 
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
@@ -2793,6 +2910,8 @@ class RenderManager {
      * be re-added as is; call disposeSector once it is certain not to return.
      */
     public removeSector(sector: SectorObject) {
+        this.pawnLightingStates = new WeakMap();
+
         if (sector.index)
             this.sectors.get(sector.index.x)?.delete(sector.index.y);
 
