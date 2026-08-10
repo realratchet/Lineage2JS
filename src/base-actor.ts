@@ -172,7 +172,9 @@ class BaseActor extends Object3D implements ICollidable {
     public getBasedActors(): ReadonlySet<ICollidable> { return this.basedActors; }
     public addBasedActor(actor: ICollidable) { this.basedActors.add(actor); }
     public removeBasedActor(actor: ICollidable) { this.basedActors.delete(actor); }
+    public isInteractive(): boolean { return this.renderManager.isSectorCollisionReady(this.position); }
     public getCollisionProfile(): ActorCollisionProfile_T {
+        this.collisionProfile.collideActors = this.isInteractive();
         this.collisionProfile.collisionRadius = this.collisionRadius;
         this.collisionProfile.collisionHeight = this.collisionHeight;
 
@@ -207,7 +209,11 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public updatePhysics(currentTime: number, deltaTime: number) {
-        if (!this.rigidbody) return;
+        const isInteractive = this.isInteractive();
+
+        this.collisionProfile.collideActors = isInteractive;
+
+        if (!this.rigidbody || !isInteractive) return;
 
         this.renderManager.collisionWorld.updateDynamicEntries(currentTime);
 
@@ -262,6 +268,8 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public moveSmooth(movement: Vector3, ignoredActor?: ICollidable) {
+        if (!this.isInteractive()) return;
+
         const position = tmpPosition.copy(this.position);
         const wasIgnored = ignoredActor && this.ignoredActors.has(ignoredActor);
 
@@ -1303,6 +1311,8 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public goTo(position: Vector3) {
+        if (!this.isInteractive()) return;
+
         // console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
@@ -1313,6 +1323,8 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public goToActor(actor: Object3D, offset: number = 0) {
+        if (!this.isInteractive()) return;
+
         this.actorState.locomotion = true;
         this.actorState.desired.actor = actor;
         this.actorState.desired.offset = offset;
@@ -1321,6 +1333,8 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public moveInDirection(direction: Vector3, faceMovement: boolean = true) {
+        if (!this.isInteractive()) return;
+
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.position);
         this.actorState.desired.actor = null;
@@ -1329,6 +1343,8 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public faceActor(actor: Object3D | null) {
+        if (!this.isInteractive()) return;
+
         this.actorState.desired.faceTarget = actor;
     }
 

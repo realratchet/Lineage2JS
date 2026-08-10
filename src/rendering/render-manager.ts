@@ -1168,6 +1168,12 @@ class RenderManager {
         return this.getSectorByCoords(...this.getSectorId(position));
     }
 
+    public isSectorCollisionReady(position: THREE.Vector3): boolean {
+        const sector = this.getSector(position);
+
+        return !!sector && !!sector.staticMeshGroup;
+    }
+
     public getSectorByCoords(sectorX: number, sectorY: number): SectorObject | null {
         if (!this.sectors.has(sectorX))
             return null;
