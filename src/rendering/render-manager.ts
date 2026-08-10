@@ -627,9 +627,13 @@ class RenderManager {
         this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
         this.controls.orbit.target.set(-87086.51708877791, 239936.94718888338, -3685.930229617832);
 
-        // bad colon lights in EG catacombs
-        this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
-        this.controls.orbit.target.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
+        // // bad colon lights in EG catacombs
+        // this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
+        // this.controls.orbit.target.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
+
+        // // spazzing lights in EG
+        // this.camera.position.set(53950.071968593744, 143417.81573602077, -3453.68081217737);
+        // this.controls.orbit.target.set(54012.7525325647, 143339.90150973402, -3454.402090498997);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();

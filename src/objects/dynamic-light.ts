@@ -170,14 +170,7 @@ class DynamicLight extends Object3D {
         this.isSunlight = props.lightEffect === LE_SUNLIGHT;
 
         // Sunlight method actors have dynamic direction based on time of day
-        this.isTimeBased = props.isSunlightColor ||
-            props.lightMethod === "Sunlight" ||
-            this.lightType === LT_PULSE ||
-            this.lightType === LT_BLINK ||
-            this.lightType === LT_FLICKER ||
-            this.lightType === LT_STROBE ||
-            this.lightType === LT_SUBTLE_PULSE ||
-            this.lightType === LT_TEXTURE_PALETTE_LOOP;
+        this.isTimeBased = props.isSunlightColor || props.lightMethod === "Sunlight";
     }
 
     public update(envManager: L2Environment, levelBrightness: number) {
