@@ -473,7 +473,7 @@ function decodeShader(library: DecodeLibrary, info: GD.IShaderDecodeInfo): MeshS
         side: info.doubleSide ? DoubleSide : FrontSide,
         blendingMode: info.blendingMode,
         transparent: info.transparent,
-        alphaTest: info.alphaTest,
+        alphaTest: info.transparent && info.alphaTest === 0 ? 1e-6 : info.alphaTest,
         depthWrite: info.depthWrite,
         depthTest: info.depthTest,
         visible: info.visible,
