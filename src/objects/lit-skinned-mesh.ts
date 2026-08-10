@@ -1,6 +1,5 @@
-
 import DynamicLight from "@client/objects/dynamic-light";
-import { SkinnedMesh } from "three";
+import { BufferGeometry, Material, SkinnedMesh } from "three";
 import { ColorByte } from "@client/utils/color-byte";
 
 const tmpColorByte = new ColorByte();
@@ -8,11 +7,17 @@ const arrEmptyLights: DynamicLight[] = [];
 const arrNoAmbient = [0, 0, 0];
 
 class LitSkinnedMesh extends SkinnedMesh {
-    public readonly isLitSkinnedMesh = true;
+    declare public readonly isLitSkinnedMesh: boolean;
 
     public scaledGlow: number = 1;
     public ambientGlow: number = 0;
     public isUnlit: boolean = false;
+
+    public constructor(geometry: BufferGeometry, material: Material | Material[]) {
+        super(geometry, material);
+
+        (this as any).isLitSkinnedMesh = true;
+    }
 
     public updateActorLighting(zoneInfo: any, lights: DynamicLight[], sunAmbient: ColorByte) {
         if (this.isUnlit) {
@@ -23,8 +28,7 @@ class LitSkinnedMesh extends SkinnedMesh {
             // one env plane, halved per byte (shr at 0x959d63) - the sun itself arrives as a hardware light
             tmpColorByte.copy(sunAmbient);
         } else {
-            // SetAmbientLight(Owner->AmbientColor) at 0x959d96, unshifted - measured (40,40,40) at
-            // (17709,117342,-12072), exactly what this zone decodes to on our side
+            // SetAmbientLight 0x959d96 uses the unshifted zone color; retail measured (40,40,40).
             const ambient = zoneInfo?.ambient ?? arrNoAmbient;
 
             tmpColorByte.set(
@@ -34,9 +38,11 @@ class LitSkinnedMesh extends SkinnedMesh {
             );
         }
 
-        const materials = this.material instanceof Array ? this.material : [this.material];
+        const materials = this.material;
+        const materialCount = Array.isArray(materials) ? materials.length : 1;
 
-        for (const material of materials) {
+        for (let materialIndex = 0; materialIndex < materialCount; materialIndex++) {
+            const material = Array.isArray(materials) ? materials[materialIndex] : materials;
             const uniforms = (material as any)?.uniforms;
 
             if (!uniforms?.actorLights) continue;

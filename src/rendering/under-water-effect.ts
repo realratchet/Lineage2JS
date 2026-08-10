@@ -3,14 +3,7 @@ import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import ParticleMaterial from "@client/materials/particle-material/particle-material";
 import ColorByte from "@client/utils/color-byte";
 
-// UUnderWaterEffect (Engine.dll, PostRender at 0x7de880) blends a full screen cellophane tile over the
-// finished frame - FCanvasUtil::DrawTile with a 1x1 white texture and CellophaneColor as the tile color.
-// The shafts are the PlayerController's SunBeam emitter (Engine.u: var emitter SunBeam, next to
-// FloatingSolid and UnderWaterLoopSound in the same zodiac block).
-//
-// SunBeam geometry measured off L2.water.trace call 22083952: 60 ribbons, 9 segments of 92 units, all
-// sharing the direction below, widths 46-120, tops jittered around the water plane, spawned in an
-// 800x970 box around the camera, ONE/ONE with a black fog color so distance fades them out.
+// UUnderWaterEffect::PostRender 0x7de880 and L2.water.trace 22083952: cellophane plus 60 SunBeam ribbons.
 
 const BEAM_COUNT = 60;
 const BEAM_SEGMENTS = 9;
@@ -61,6 +54,8 @@ class UnderWaterEffect extends Object3D {
     protected readonly mesh: Mesh;
     protected readonly positions: Float32Array;
     protected readonly colors: Float32Array;
+    protected readonly beamTexture: DataTexture;
+    protected readonly beamMaterial: ParticleMaterial;
     protected readonly cellophaneMaterial: MeshBasicMaterial;
     protected readonly cellophaneQuad: FullScreenQuad;
     protected surfaceZ = 0;
@@ -109,11 +104,12 @@ class UnderWaterEffect extends Object3D {
         geometry.setIndex(new BufferAttribute(indices, 1));
         geometry.boundingSphere = null;
 
-        const material = new ParticleMaterial({ map: { uniforms: { map: { texture: makeBeamTexture() } } } as any, blendingMode: "brighten", name: "SunBeam" });
+        this.beamTexture = makeBeamTexture();
+        this.beamMaterial = new ParticleMaterial({ map: { uniforms: { map: { texture: this.beamTexture } } } as any, blendingMode: "brighten", name: "SunBeam" });
 
-        material.vertexColors = true;
+        this.beamMaterial.vertexColors = true;
 
-        this.mesh = new Mesh(geometry, material);
+        this.mesh = new Mesh(geometry, this.beamMaterial);
         this.mesh.frustumCulled = false;
         this.mesh.renderOrder = 3000;
 
@@ -190,15 +186,22 @@ class UnderWaterEffect extends Object3D {
 
         this.cellophaneQuad.render(renderer);
     }
+
+    public dispose(): void {
+        this.mesh.geometry.dispose();
+        this.beamMaterial.dispose();
+        this.beamTexture.dispose();
+        this.cellophaneQuad.dispose();
+        this.cellophaneMaterial.dispose();
+    }
 }
 
 // the water sheet sits on the volume brush's +Z plane
 function surfaceHeight(volume: GD.IWaterVolumeDecodeInfo) {
     let best = -Infinity;
 
-    volume.bsp.nodes.forEach(node => {
+    for (const node of volume.bsp.nodes)
         if (node.plane[2] > 0.99) best = Math.max(best, node.plane[3]);
-    });
 
     return best === -Infinity ? 0 : best;
 }

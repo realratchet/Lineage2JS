@@ -14,7 +14,7 @@ type BSPColliderDesc_T = { desc: ColliderDesc, nodeIndex: number };
 type HullGeometry_T = { vertices: Float32Array, indices: Uint32Array };
 
 class BSPCollider extends Object3D implements ICollidable {
-    public readonly isCollidable = true;
+    declare public readonly isCollidable: boolean;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
     protected readonly analyticalHulls: CollisionHull_T[] = [];
@@ -26,11 +26,13 @@ class BSPCollider extends Object3D implements ICollidable {
     public constructor(nodes: GD.IBSPNodeDecodeInfo_T[]) {
         super();
 
+        (this as any).isCollidable = true;
+
         this.name = "BSPCollision";
 
         const cacheHulls = new Set<string>();
 
-        for (let i = 0; i < nodes.length; i++) {
+        for (let i = 0, len = nodes.length; i < len; i++) {
             const collision = nodes[i].collision;
 
             if (!collision || !collision.bounds.isValid) continue;
@@ -106,7 +108,7 @@ function buildHullIndex(hulls: CollisionHull_T[]): CollisionBspIndex_T {
     const cacheCells = new Map<string, number[]>();
     const largeHullIndices: number[] = [];
 
-    for (let i = 0; i < hulls.length; i++) {
+    for (let i = 0, len = hulls.length; i < len; i++) {
         const bounds = hulls[i].bounds;
         const minX = Math.floor(bounds.min.x / cellSize), minY = Math.floor(bounds.min.y / cellSize);
         const maxX = Math.floor(bounds.max.x / cellSize), maxY = Math.floor(bounds.max.y / cellSize);
@@ -139,7 +141,7 @@ function buildHullIndex(hulls: CollisionHull_T[]): CollisionBspIndex_T {
     const offsets = new Uint32Array(cells.length + 1);
     let hullIndexCount = 0;
 
-    for (let i = 0; i < cells.length; i++) {
+    for (let i = 0, len = cells.length; i < len; i++) {
         keys.set(cells[i].key, i * 3);
         offsets[i] = hullIndexCount;
         hullIndexCount += cells[i].arrIndices.length;
@@ -149,7 +151,7 @@ function buildHullIndex(hulls: CollisionHull_T[]): CollisionBspIndex_T {
 
     const hullIndices = new Uint32Array(hullIndexCount);
 
-    for (let i = 0; i < cells.length; i++) hullIndices.set(cells[i].arrIndices, offsets[i]);
+    for (let i = 0, len = cells.length; i < len; i++) hullIndices.set(cells[i].arrIndices, offsets[i]);
 
     return { cellSize, keys, offsets, hullIndices, largeHullIndices: new Uint32Array(largeHullIndices), marks: new Uint32Array(hulls.length), queryTag: 0 };
 }

@@ -112,11 +112,23 @@ async function handleMessage(msg: MainToWorkerMessage) {
     }
 }
 
-/* process messages strictly in order - a decode must not start before init finishes */
-let queue: Promise<void> = Promise.resolve();
+const arrMessages: MainToWorkerMessage[] = [];
+let isProcessingMessages = false;
 
 function onMessage(event: MessageEvent<MainToWorkerMessage>) {
-    queue = queue.then(handleMessage.bind(null, event.data));
+    arrMessages.push(event.data);
+    void processMessages();
+}
+
+async function processMessages(): Promise<void> {
+    if (isProcessingMessages) return;
+
+    isProcessingMessages = true;
+
+    while (arrMessages.length > 0)
+        await handleMessage(arrMessages.shift()!);
+
+    isProcessingMessages = false;
 }
 
 ctx.onmessage = onMessage;

@@ -65,6 +65,7 @@ const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
 const arrPawnLights: DynamicLight[] = [];
+const arrLightingObjects: THREE.Object3D[] = [];
 const tmpShadowDirection = new Vector3(0, 0, -1);
 const arrShadowCasters: THREE.Object3D[] = [];
 const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
@@ -308,6 +309,7 @@ class RenderManager {
 
     protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
+    protected readonly arrLoadedSectors: SectorObject[] = [];
 
     protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
     protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
@@ -956,29 +958,24 @@ class RenderManager {
 
         if (!isClick || !this.isOrbitControls) return;
 
-        try {
-            const position = new Vector2(event.clientX, event.clientY);
-            const ssPosition = this.toScreenSpaceCoords(position);
+        const position = new Vector2(event.clientX, event.clientY);
+        const ssPosition = this.toScreenSpaceCoords(position);
 
-            this.raycaster.setFromCamera(ssPosition, this.camera);
+        this.raycaster.setFromCamera(ssPosition, this.camera);
 
-            const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
-            const physicsIntersection = pickDistance > 0 ? this.collisionWorld.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
+        const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
+        const physicsIntersection = pickDistance > 0 ? this.collisionWorld.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
 
-            if (physicsIntersection) {
-                tmpMouseIntersection.copy(physicsIntersection.location);
-                this.movePlayerTo(tmpMouseIntersection);
-
-                console.log(physicsIntersection.actor, physicsIntersection);
-            } else if (pickDistance > 0) {
-                // UInteraction::ScreenToWorld (0x855ee0) deprojects to a direction, not a hit location
-                this.movePlayerTo(tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin));
-            }
-
-            this.pickBSPNode(physicsIntersection ? physicsIntersection.distance : pickDistance);
-        } catch (e) {
-            console.error(e);
+        if (physicsIntersection) {
+            tmpMouseIntersection.copy(physicsIntersection.location);
+            this.movePlayerTo(tmpMouseIntersection);
+            // console.log(physicsIntersection.actor, physicsIntersection);
+        } else if (pickDistance > 0) {
+            // UInteraction::ScreenToWorld (0x855ee0) deprojects to a direction, not a hit location
+            this.movePlayerTo(tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin));
         }
+
+        this.pickBSPNode(physicsIntersection ? physicsIntersection.distance : pickDistance);
     }
 
     // camera.far is the depth-buffer far, not a world distance; clip the pick to loaded sectors
@@ -1019,9 +1016,9 @@ class RenderManager {
         arrBSPGroups.length = 0;
         arrBSPIntersections.length = 0;
 
-        this.sectors.forEach(column => column.forEach(sector => {
-            if (sector.bspGroup) arrBSPGroups.push(sector.bspGroup);
-        }));
+        for (const column of this.sectors.values())
+            for (const sector of column.values())
+                if (sector.bspGroup) arrBSPGroups.push(sector.bspGroup);
 
         if (arrBSPGroups.length === 0) return;
 
@@ -1042,7 +1039,7 @@ class RenderManager {
         const indexAttr = geometry.index;
         const vertexIndex = indexAttr ? indexAttr.getX(intersection.faceIndex * 3) : intersection.faceIndex * 3;
 
-        console.log(intersection, `Node ID: ${nodeIndexAttr.getX(vertexIndex)}`);
+        // console.log(intersection, `Node ID: ${nodeIndexAttr.getX(vertexIndex)}`);
     }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {
@@ -1200,6 +1197,7 @@ class RenderManager {
     }
 
     public async addCharacterControls(): Promise<void> {
+        const renderManager = this;
         const groups = await this.assetManager.getCharGroups();
         const state = { group: this.characterGroup, face: this.characterFace, hair: this.characterHair, hairColour: this.characterHairColour, chest: this.characterArmor.chest, legs: this.characterArmor.legs, gloves: this.characterArmor.gloves, boots: this.characterArmor.boots };
         const groupOptions: Record<string, number> = {};
@@ -1213,67 +1211,69 @@ class RenderManager {
         let hairColourControl: dat.GUIController = null;
         let armorControls: dat.GUIController[] = [];
 
-        const applyCharacter = () => this.assetManager.loadCharacter(this, this.characterGroup, this.characterFace, this.characterHair, this.characterHairColour, this.characterArmor);
+        function applyCharacter(): Promise<void> {
+            return renderManager.assetManager.loadCharacter(renderManager, renderManager.characterGroup, renderManager.characterFace, renderManager.characterHair, renderManager.characterHairColour, renderManager.characterArmor);
+        }
 
-        const buildArmorControls = () => {
-            const group = groups[this.characterGroup];
+        function buildArmorControls(): void {
+            const group = groups[renderManager.characterGroup];
 
-            armorControls.forEach(control => folder.remove(control));
+            for (const control of armorControls) folder.remove(control);
             armorControls = [];
 
-            for (const slot of Object.keys(this.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
+            for (const slot of Object.keys(renderManager.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
                 const options: Record<string, number> = { None: 0 };
 
                 for (const item of group.armor[slot])
                     options[item.label] = item.id;
 
-                state[slot] = this.characterArmor[slot];
+                state[slot] = renderManager.characterArmor[slot];
                 armorControls.push(folder.add(state, slot, options).name(slot[0].toUpperCase() + slot.slice(1)).onChange(async v => {
-                    this.characterArmor[slot] = Number(v);
+                    renderManager.characterArmor[slot] = Number(v);
                     await applyCharacter();
                 }));
             }
-        };
+        }
 
         // a style only ships some of the colours, so the colour options get rebuilt whenever the style changes
-        const buildColourControl = () => {
-            const colours = groups[this.characterGroup].hairColours[this.characterHair];
+        function buildColourControl(): void {
+            const colours = groups[renderManager.characterGroup].hairColours[renderManager.characterHair];
 
             if (hairColourControl) folder.remove(hairColourControl);
 
-            state.hairColour = this.characterHairColour = colours.includes(this.characterHairColour) ? this.characterHairColour : colours[0];
+            state.hairColour = renderManager.characterHairColour = colours.includes(renderManager.characterHairColour) ? renderManager.characterHairColour : colours[0];
 
             hairColourControl = folder.add(state, "hairColour", colours).name("Hair Color").onChange(async v => {
-                this.characterHairColour = Number(v);
+                renderManager.characterHairColour = Number(v);
                 await applyCharacter();
             });
-        };
+        }
 
-        const buildVariantControls = () => {
-            const group = groups[this.characterGroup];
+        function buildVariantControls(): void {
+            const group = groups[renderManager.characterGroup];
 
             if (faceControl) folder.remove(faceControl);
             if (hairControl) folder.remove(hairControl);
 
-            state.face = this.characterFace = Math.min(this.characterFace, group.faceVariants - 1);
-            state.hair = this.characterHair = group.hairStyles.includes(this.characterHair) ? this.characterHair : group.hairStyles[0];
+            state.face = renderManager.characterFace = Math.min(renderManager.characterFace, group.faceVariants - 1);
+            state.hair = renderManager.characterHair = group.hairStyles.includes(renderManager.characterHair) ? renderManager.characterHair : group.hairStyles[0];
 
             const faceOptions = Array.from({ length: group.faceVariants }, (_, i) => i);
 
             faceControl = folder.add(state, "face", faceOptions).name("Face").onChange(async v => {
-                this.characterFace = Number(v);
+                renderManager.characterFace = Number(v);
                 await applyCharacter();
             });
 
             hairControl = folder.add(state, "hair", group.hairStyles).name("Hair").onChange(async v => {
-                this.characterHair = Number(v);
+                renderManager.characterHair = Number(v);
                 buildColourControl();
                 await applyCharacter();
             });
 
             buildColourControl();
             buildArmorControls();
-        };
+        }
 
         folder.add(state, "group", groupOptions).name("Character").onChange(async v => {
             this.characterGroup = Number(v);
@@ -1295,7 +1295,10 @@ class RenderManager {
         guiFolders.quality.add(clippingRange, "actor", 1, 12, 0.5)
             .name("Emitter Range")
             .onChange(() => {
-                this.sectors.forEach(column => column.forEach(sector => (sector as any).visibilityCacheInitialized = false));
+                for (const column of this.sectors.values())
+                    for (const sector of column.values())
+                        (sector as any).visibilityCacheInitialized = false;
+
                 this.needsUpdate = true;
             });
     }
@@ -1358,19 +1361,20 @@ class RenderManager {
     }
 
     public async simulatePawns(count: number = SIMULATED_PAWN_COUNT) {
+        const renderManager = this;
         const groups = this.simCharGroups || (this.simCharGroups = await this.assetManager.getCharGroups());
+        const arrWorkers: Promise<void>[] = [];
         let next = 0;
 
-        // a character decode is seconds long and ten at once starves the worker pool, so they load
-        // a few at a time and each pawn enters the world as soon as its own model is ready
-        const worker = async () => {
+        // Ten character decodes at once starve the fucking worker pool.
+        async function worker(): Promise<void> {
             while (next < count) {
                 const index = next++;
                 const group = groups[Math.floor(Math.random() * groups.length)];
                 const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
                 const colours = group.hairColours[hair];
                 const armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
-                const pawn = new Player(this);
+                const pawn = new Player(renderManager);
 
                 for (const slot of Object.keys(armor) as (keyof GD.ICharacterArmorSelection)[]) {
                     const items = group.armor[slot];
@@ -1380,23 +1384,31 @@ class RenderManager {
 
                 pawn.name = `SimPawn${index}`;
 
-                await this.assetManager.loadCharacter(this, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
+                await renderManager.assetManager.loadCharacter(renderManager, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
 
-                this.scene.add(pawn);
-                pawn.position.copy(this.controls.orbit.target);
+                renderManager.scene.add(pawn);
+                pawn.position.copy(renderManager.controls.orbit.target);
                 pawn.updateMatrixWorld(true);
-                this.registerCollider(pawn);
-                pawn.ignoreOverlappingActors(Array.from(this.simulatedPawns, entry => entry.pawn).concat(this.player));
-                this.simulatedPawns.add({ pawn, expires: performance.now() + SIMULATED_PAWN_LIFETIME, nextTurn: 0 });
-                this.needsUpdate = true;
-            }
-        };
+                renderManager.registerCollider(pawn);
 
-        await Promise.all(Array.from({ length: SIMULATED_PAWN_CONCURRENCY }, worker));
+                arrMoverPawns.length = 0;
+                arrMoverPawns.push(renderManager.player);
+
+                for (const entry of renderManager.simulatedPawns) arrMoverPawns.push(entry.pawn);
+
+                pawn.ignoreOverlappingActors(arrMoverPawns);
+                renderManager.simulatedPawns.add({ pawn, expires: performance.now() + SIMULATED_PAWN_LIFETIME, nextTurn: 0 });
+                renderManager.needsUpdate = true;
+            }
+        }
+
+        for (let i = 0; i < SIMULATED_PAWN_CONCURRENCY; i++) arrWorkers.push(worker());
+
+        await Promise.all(arrWorkers);
     }
 
     protected maintainSimulatedPawns(currentTime: number): void {
-        for (const entry of Array.from(this.simulatedPawns)) {
+        for (const entry of this.simulatedPawns) {
             if (currentTime >= entry.expires) {
                 this.unregisterCollider(entry.pawn);
                 entry.pawn.release();
@@ -1464,15 +1476,14 @@ class RenderManager {
         }));
     }
 
-    // actor meshes carry no baked lighting stream, they take the ambient of whatever zone they
-    // stand in plus hardware lights (USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908)
+    // USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908: zone ambient plus hardware lights.
     protected updatePawnLighting(): void {
         const sunAmbient = this.environment.getAmbientPlaneActorLightHalved(tmpPawnSunAmbient);
 
-        this.sectors.forEach(row => row.forEach(sector => {
-            for (const pawn of sector.pawns.children)
-                if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
-        }));
+        for (const row of this.sectors.values())
+            for (const sector of row.values())
+                for (const pawn of sector.pawns.children)
+                    if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
 
         this.updateActorLighting(this.player, sunAmbient);
         if (this.emitterSimDue) this.updatePawnShadow();
@@ -1481,17 +1492,22 @@ class RenderManager {
             this.updateActorLighting(entry.pawn, sunAmbient);
     }
 
-    // AShadowProjector::UpdateLightInfo (0x9363d0): the sun by day, straight overhead otherwise -
-    // never the actor's own lights. lowpoly: player only, upgrade when NPCs cast
+    // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
     protected updatePawnShadow(): void {
         const timeOfDay = this.environment.getTimeOfDay();
 
         this.player.getWorldPosition(tmpPawnWorldPos);
 
         const sector = this.getSector(tmpPawnWorldPos);
-        // the env sun, not the pawn's own light list - retail takes it globally and only drops to
-        // straight overhead when it is not day
-        const sun = sector && timeOfDay >= 7 && timeOfDay < 23 ? sector.lightList.find(light => light.isSunlight) : null;
+        let sun: DynamicLight = null;
+
+        // Retail takes the environment sun globally and falls straight down outside daytime.
+        if (sector && timeOfDay >= 7 && timeOfDay < 23)
+            for (const light of sector.lightList)
+                if (light.isSunlight) {
+                    sun = light;
+                    break;
+                }
 
         if (sun) tmpShadowDirection.copy(sun.lightDirection).normalize();
         else tmpShadowDirection.set(0, 0, -1);
@@ -1578,13 +1594,14 @@ class RenderManager {
             sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
             relevantLightsChanged = state.lights.length !== arrPawnLights.length;
 
-            for (let i = 0; i < arrPawnLights.length; i++) {
+            for (let i = 0, len = arrPawnLights.length; i < len; i++) {
                 relevantLightsChanged = relevantLightsChanged || state.lights[i] !== arrPawnLights[i];
                 relevantLightUpdated = relevantLightUpdated || arrPawnLights[i].needsUpdate;
             }
 
             state.lights.length = 0;
             state.lights.push(...arrPawnLights);
+
             state.lightingPosition.copy(state.position);
             state.lightingSector = sector;
             state.lightingLeafIndex = state.leafIndex;
@@ -1593,10 +1610,17 @@ class RenderManager {
 
         if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated) return;
 
-        actor.traverse(object => {
+        arrLightingObjects.length = 0;
+        arrLightingObjects.push(actor);
+
+        while (arrLightingObjects.length > 0) {
+            const object = arrLightingObjects.pop()!;
+
+            for (const child of object.children) arrLightingObjects.push(child);
+
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
                 (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient);
-        });
+        }
 
         state.envVersion = envVersion;
         state.ambientR = sunAmbient.r;
@@ -2671,28 +2695,24 @@ class RenderManager {
         this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
     }
 
-    public getLoadedSectors() {
-        const activeSectors: SectorObject[] = [];
-
-        for (const secs of this.sectors.values()) {
-            for (const sec of secs.values()) {
-                activeSectors.push(sec);
-            }
-        }
-
-        return activeSectors;
-    }
+    public getLoadedSectors(): readonly SectorObject[] { return this.arrLoadedSectors; }
 
     public addSector(sector: SectorObject) {
-        retainSectorResources(sector, sector);
-        this.pawnLightingStates = new WeakMap();
-
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
                 this.sectors.set(sector.index.x, new Map());
 
-            this.sectors.get(sector.index.x).set(sector.index.y, sector);
+            const column = this.sectors.get(sector.index.x);
+
+            if (column.has(sector.index.y) || this.arrLoadedSectors.includes(sector))
+                throw new Error(`Sector '${sector.index.x}_${sector.index.y}' is already loaded.`);
+
+            column.set(sector.index.y, sector);
+            this.arrLoadedSectors.push(sector);
         }
+
+        retainSectorResources(sector, sector);
+        this.pawnLightingStates = new WeakMap();
 
         sector.traverse(child => {
             if ((child as any).isRotatingObject) {
@@ -2915,6 +2935,10 @@ class RenderManager {
         if (sector.index)
             this.sectors.get(sector.index.x)?.delete(sector.index.y);
 
+        const sectorIndex = this.arrLoadedSectors.indexOf(sector);
+
+        if (sectorIndex >= 0) this.arrLoadedSectors.splice(sectorIndex, 1);
+
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
@@ -3030,8 +3054,7 @@ class RenderManager {
 
         (window as any).terrainDebug = result;
 
-        // a settled boundary re-stitches to identical heights, so rebuilding every terrain's
-        // trimesh here cost ~160ms per sector add/remove; only the moved edges need it
+        // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
         for (const terrain of result.modified) {
             this.unregisterCollider(terrain);
             terrain.refreshCollisionGeometry();
@@ -3040,22 +3063,16 @@ class RenderManager {
     }
 }
 
-export default RenderManager;
-export { RenderManager }
-
 function addResizeListeners(manager: RenderManager) {
     global.addEventListener("resize", (manager as any).onHandleResize.bind(manager));
     (manager as any).onHandleResize();
 }
 
-// material-decoder keys its caches by name (cacheTexturesByName, cacheStaticMaterialsByName),
-// so neighbouring sectors naming the same texture are handed the same instance - an unloading
-// sector must not free what a loaded one still draws with
+// Name-keyed material caches share resources across neighbouring sectors.
 const resourceRefs = new Map<Disposable_T, number>();
 
 function collectMaterialResources(material: THREE.Material, target: Set<Disposable_T>) {
-    // a one-level uniform scan misses everything a transform chain nests
-    // (uniforms.shDiffuse.value.map.texture) and every sprite sheet slot
+    // Uniform textures may be nested under transform chains and sprite-sheet slots.
     const textures = new Set<THREE.Texture>();
 
     collectMaterialTextures(material, textures, new WeakSet());
@@ -3096,9 +3113,7 @@ function collectCelestialResources(sector: SectorObject, target: Set<Disposable_
     }
 }
 
-// two passes per sector (staticMeshGroup only arrives once its progressive build finishes) and
-// idempotent, since a sector returning from the retirement grace period re-enters addSector.
-// Must run before queueSectorWarmup swaps the real materials out for fallbacks.
+// Retain twice safely because progressive static meshes arrive after the sector root.
 function retainSectorResources(sector: SectorObject, root: THREE.Object3D) {
     const resources = new Set<Disposable_T>();
 
@@ -3258,3 +3273,6 @@ function reportShaderErrors(gl: WebGL2RenderingContext, program: any) {
         `Fragment Shader Log: ${gl.getShaderInfoLog(program.fragmentShader)}`
     );
 }
+
+export default RenderManager;
+export { RenderManager };

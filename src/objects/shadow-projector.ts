@@ -1,25 +1,17 @@
-
-import { Matrix4, Mesh, MeshBasicMaterial, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, Vector2, Vector3, WebGLRenderTarget, LinearFilter, RGBAFormat, ClampToEdgeWrapping } from "three";
+import { ClampToEdgeWrapping, Color, LinearFilter, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, OrthographicCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, Vector2, Vector3, WebGLRenderTarget } from "three";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 
-// AShadowProjector::CheckVisible (0x93dc80): GL2ProjectorCR * 32768 * 0.0625, i.e. clipping range in
-// kilounits, against the horizontal distance to the view target, inside a -200..200 vertical band
-const PROJECTOR_CLIPPING_RANGE = 0.2;
+const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
 const SHADOW_RANGE = PROJECTOR_CLIPPING_RANGE * 2048;
-const SHADOW_BAND_Z = 200;
+const SHADOW_BAND_Z = 200; // AShadowProjector::CheckVisible 0x93dc80.
 
 const LIGHT_DISTANCE = 704;
 const SHADOW_DARKNESS = 255 / 255;
 
-// lowpoly: retail gives every actor its own 256x256 projector, this is one shared map over the whole
-// range - upgrade to per-caster targets when the resolution stops holding up
-const SHADOW_SIZE = 1024;
+const SHADOW_SIZE = 1024; // Retail uses one 256x256 projector per actor; this covers the full shared range.
 const MAX_CASTERS = 16;
 
-// separable gaussian over the silhouette. The tap offsets below are the precomputed linear-sampling
-// weights for a one-texel step, so widening is done by iterating the pass, not by scaling the step -
-// scaling it just lands five discrete copies of the silhouette instead of a smooth falloff
-const SHADOW_BLUR_PASSES = 3;
+const SHADOW_BLUR_PASSES = 3; // One-texel separable gaussian; scaling the taps produces discrete silhouettes.
 
 const BLUR_VERTEX = `
 varying vec2 vUv;
@@ -44,8 +36,11 @@ void main() {
 const tmpFocusPos = new Vector3();
 const tmpCasterPos = new Vector3();
 const tmpLightPos = new Vector3();
-const arrSwapped: THREE.Material[] = [];
-const arrCasting: THREE.Object3D[] = [];
+const tmpClearColor = new Color();
+const arrSwappedObjects: Mesh[] = [];
+const arrSwappedMaterials: (Material | Material[])[] = [];
+const arrCasting: Object3D[] = [];
+const arrTraverse: Object3D[] = [];
 
 // NDC -> texture space, folded into the projector matrix
 const matBias = new Matrix4().set(
@@ -60,6 +55,7 @@ class ShadowProjector {
     protected readonly blurTarget = new WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { minFilter: LinearFilter, magFilter: LinearFilter, format: RGBAFormat, depthBuffer: false });
     protected readonly blurScene = new Scene();
     protected readonly blurCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    protected readonly blurGeometry = new PlaneGeometry(2, 2);
     protected readonly blurMaterial = new ShaderMaterial({ vertexShader: BLUR_VERTEX, fragmentShader: BLUR_FRAGMENT, depthTest: false, depthWrite: false, uniforms: { tSource: { value: null }, direction: { value: new Vector2() } } });
 
     // the sun is directional, so the casters share one orthographic projection instead of a cone
@@ -72,7 +68,7 @@ class ShadowProjector {
 
         GLOBAL_UNIFORMS.shadowMap.value = this.target.texture;
         GLOBAL_UNIFORMS.shadowDarkness.value = SHADOW_DARKNESS;
-        this.blurScene.add(new Mesh(new PlaneGeometry(2, 2), this.blurMaterial));
+        this.blurScene.add(new Mesh(this.blurGeometry, this.blurMaterial));
     }
 
     protected blur(renderer: THREE.WebGLRenderer) {
@@ -127,20 +123,17 @@ class ShadowProjector {
             return;
         }
 
-        arrSwapped.length = 0;
+        arrSwappedObjects.length = 0;
+        arrSwappedMaterials.length = 0;
 
-        for (const caster of arrCasting) {
-            caster.traverse(object => {
-                const mesh = object as THREE.Mesh;
-                if (!mesh.material) return;
-
-                arrSwapped.push(mesh.material as THREE.Material);
-                mesh.material = this.silhouette;
-            });
-        }
+        for (const caster of arrCasting)
+            swapMaterials(caster, this.silhouette);
 
         const prevTarget = renderer.getRenderTarget();
         const prevAutoClear = renderer.autoClear;
+        const prevClearAlpha = renderer.getClearAlpha();
+
+        renderer.getClearColor(tmpClearColor);
 
         renderer.setRenderTarget(this.target);
         renderer.setClearColor(0x000000, 0);
@@ -154,17 +147,10 @@ class ShadowProjector {
         if (SHADOW_BLUR_PASSES > 0) this.blur(renderer);
 
         renderer.setRenderTarget(prevTarget);
+        renderer.setClearColor(tmpClearColor, prevClearAlpha);
 
-        let i = 0;
-
-        for (const caster of arrCasting) {
-            caster.traverse(object => {
-                const mesh = object as THREE.Mesh;
-                if (!mesh.material) return;
-
-                mesh.material = arrSwapped[i++];
-            });
-        }
+        for (let i = 0, len = arrSwappedObjects.length; i < len; i++)
+            arrSwappedObjects[i].material = arrSwappedMaterials[i];
 
         (GLOBAL_UNIFORMS.shadowMatrix.value as Matrix4)
             .copy(matBias)
@@ -177,8 +163,27 @@ class ShadowProjector {
     public dispose() {
         this.target.dispose();
         this.blurTarget.dispose();
+        this.blurGeometry.dispose();
         this.blurMaterial.dispose();
         this.silhouette.dispose();
+    }
+}
+
+function swapMaterials(root: Object3D, material: Material): void {
+    arrTraverse.length = 0;
+    arrTraverse.push(root);
+
+    while (arrTraverse.length > 0) {
+        const object = arrTraverse.pop()!;
+        const mesh = object as Mesh;
+
+        for (const child of object.children) arrTraverse.push(child);
+
+        if (!mesh.material) continue;
+
+        arrSwappedObjects.push(mesh);
+        arrSwappedMaterials.push(mesh.material);
+        mesh.material = material;
     }
 }
 

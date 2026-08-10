@@ -10,7 +10,7 @@ const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
         // doing its own quaternion/matrix work on the CPU
         cameraBillboardRight: new Uniform(new Vector3(1, 0, 0)),
         cameraBillboardUp: new Uniform(new Vector3(0, 1, 0)),
-        // lowpoly: one AShadowProjector (the player), upgrade when NPCs need to cast
+        // One shared AShadowProjector until NPCs need to cast.
         shadowMap: new Uniform(null),
         shadowMatrix: new Uniform(new Matrix4()),
         shadowDarkness: new Uniform(1),

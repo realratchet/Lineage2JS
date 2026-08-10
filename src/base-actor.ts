@@ -2,7 +2,7 @@ import { AnimationAction, AnimationClip, Bone, Box3, Mesh, Object3D, Quaternion,
 import RAPIER from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
-import type { CheckResult_T } from "./physics/collision-world";
+import type { CheckResult_T, CollisionQuery_T } from "./physics/collision-world";
 import { findVolumeTransition } from "./physics/volume-bsp";
 
 const tmpPosition = new Vector3();
@@ -46,40 +46,33 @@ const tmpWalkingSubStart = new Vector3();
 const tmpDesiredMove = new Vector3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 
-// Retail APawn::physWalking (0x8d4880) and APawn::stepUp (0x8cf640).
-// live retail pawn (APawn+752/+756)
-const COLLISION_RADIUS = 7.5;
-const COLLISION_HEIGHT = 23;
-const WYVERN_COLLISION_RADIUS = 60;
-const WYVERN_COLLISION_HEIGHT = 80;
-const MAX_STEP_HEIGHT = 10;
-const FLOOR_CHECK_DISTANCE = 12;
-const MIN_FLOOR_DISTANCE = 1.9;
-const MAX_FLOOR_DISTANCE = 2.4;
+const COLLISION_RADIUS = 7.5; // Live retail pawn APawn+752.
+const COLLISION_HEIGHT = 23; // Live retail pawn APawn+756.
+const WYVERN_COLLISION_RADIUS = 60; // Live retail wyvern; l2j-lisvus npc.sql agrees.
+const WYVERN_COLLISION_HEIGHT = 80; // Live retail wyvern; l2j-lisvus npc.sql instead has 58.
+const MAX_STEP_HEIGHT = 10; // EngineClasses.h UCONST_MAXSTEPHEIGHT; retail APawn::stepUp 0x8cf65f.
+const FLOOR_CHECK_DISTANCE = MAX_STEP_HEIGHT + 2; // Retail APawn::physWalking 0x8d4b6f.
+const MIN_FLOOR_DISTANCE = 1.9; // Engine/Inc/UnPhysic.h; retail APawn::physWalking 0x8d5482.
+const MAX_FLOOR_DISTANCE = 2.4; // Engine/Inc/UnPhysic.h; retail APawn::physWalking 0x8d53d2.
 const FLOOR_DISTANCE = 0.5 * (MIN_FLOOR_DISTANCE + MAX_FLOOR_DISTANCE);
-const MIN_FLOOR_Z = 0.7;
-const MAX_STEP_SIDE_Z = 0.7;
-const STEP_RECURSE_DIST_SQ = 144;
-const LEDGE_PROBE = 4;
-const LEDGE_DROP = 14;
-// live retail player pawn: run speed is APawn+5228, picked by the mode at +1712 (0x8d49ae)
-const GROUND_SPEED = 133.88;
-const WALK_SPEED = 95;
-const WATER_SPEED = 80;
-// Retail live wyvern pawn AirSpeed.
-const AIR_SPEED = 118.09999084472656;
-// live retail player pawn (APawn+5240)
-const ACCEL_RATE = 2048;
-const DEFAULT_VOLUME_GRAVITY_Z = -1500;
-// Retail live FMagic: RotationRate.Yaw=65000, Controller.EnemyTurnSpeed=45000; APawn::physicsRotation doubles EnemyTurnSpeed.
-const YAW_RATE = 65000;
-const PLAYER_YAW_RATE = 90000;
+const MIN_FLOOR_Z = 0.7; // EngineClasses.h UCONST_MINFLOORZ; retail APawn::physWalking 0x8d4df4.
+const MAX_STEP_SIDE_Z = MIN_FLOOR_Z; // Retail APawn::stepUp 0x8cf6c1; leaked UnPhysic.h instead has 0.08.
+const STEP_RECURSE_DIST_SQ = FLOOR_CHECK_DISTANCE * FLOOR_CHECK_DISTANCE; // Retail APawn::stepUp 0x8cfd2d.
+const LEDGE_PROBE = 4; // Retail APawn::CheckForLedges 0x8ca895.
+const LEDGE_DROP = MAX_STEP_HEIGHT + LEDGE_PROBE; // Retail APawn::CheckForLedges 0x8cac56.
+const GROUND_SPEED = 120; // l2j-lisvus classTemplates.xml Archmage baseRunSpd; retail APawn+5224 is the packet base times its movement multiplier.
+const WALK_SPEED = GROUND_SPEED * 78 / 120; // l2j-lisvus classTemplates.xml Archmage baseWalkSpd/run ratio.
+const WATER_SPEED = GROUND_SPEED * 50 / 120; // l2j-lisvus PcStat unmounted swimming base/run ratio.
+const AIR_SPEED = 118.09999084472656; // Live retail wyvern APawn+5232.
+const ACCEL_RATE = 2048; // Live retail player APawn+5240; Engine.u Pawn default.
+const DEFAULT_VOLUME_GRAVITY_Z = -1500; // Engine.u PhysicsVolume default Gravity.Z.
+const YAW_RATE = 65000; // Live retail FMagic RotationRate.Yaw.
+const PLAYER_YAW_RATE = 45000 * 2; // Live Controller.EnemyTurnSpeed; APawn::physicsRotation doubles it.
 const SPAWN_FLOOR_PROBE = 1000;
-const DEFAULT_VOLUME_TERMINAL_VELOCITY = 2500;
-const MOVEMENT_TWEEN_TIME = 0.1;
-const IDLE_TWEEN_TIME = 0.2;
-// Retail USubSkeletalMeshInstance::DynamicHairGetFrame (0x94f010) writes simulated bone coordinates.
-const HAIR_STEP = 1 / 60;
+const DEFAULT_VOLUME_TERMINAL_VELOCITY = 2500; // Engine.u PhysicsVolume default TerminalVelocity.
+const MOVEMENT_TWEEN_TIME = 0.1; // LineageWarrior.u retains this in the disabled LineagePawn walking/running blend calls.
+const IDLE_TWEEN_TIME = MOVEMENT_TWEEN_TIME * 2; // LineageWarrior.u LineagePawn AnimateStanding uses 0.2.
+const HAIR_STEP = 1 / 60; // Local fixed step; retail DynamicHairGetFrame 0x94f010 only supplies bone coordinates.
 const HAIR_SPRING = 32;
 const HAIR_DAMPING = 8;
 const HAIR_MAX_ANGLE = 0.24;
@@ -95,7 +88,7 @@ const BLINK_OPEN_TIME = 0.12;
 
 class BaseActor extends Object3D implements ICollidable {
     public readonly isActor = true;
-    public readonly isCollidable = true;
+    declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
 
     protected collider: RAPIER.Collider = null;
@@ -149,6 +142,8 @@ class BaseActor extends Object3D implements ICollidable {
     protected blinkIndex = 0;
     protected readonly blinkFaces: BlinkFaceState_T[] = [];
     protected readonly ignoredActors = new Set<ICollidable>();
+    protected readonly visitedBases = new Set<ICollidable>();
+    protected readonly collisionQuery: CollisionQuery_T = { location: null, delta: null, extent: null, sourceIsPlayer: false };
     protected readonly actorState = new ActorState();
     protected readonly basicActorAnimations: BasicActorAnimations_T = {
         idle: null,
@@ -162,6 +157,8 @@ class BaseActor extends Object3D implements ICollidable {
 
     public constructor(renderManager: RenderManager) {
         super();
+
+        (this as any).isCollidable = true;
 
         this.renderManager = renderManager;
         this.up.copy(tmpUp);
@@ -183,8 +180,7 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public getCollisionPrimitive(): CollisionPrimitive_T {
-        // getWorldPosition re-multiplies the whole parent chain; every trace asks every pawn for its
-        // primitive, so at n pawns that is n^2 chain walks per substep unless nothing moved
+        // Caching avoids an n^2 getWorldPosition chain walk across pawn traces.
         if (this.analyticalOrigin.equals(this.position)) return this.analyticalPrimitive;
 
         this.analyticalOrigin.copy(this.position);
@@ -413,12 +409,12 @@ class BaseActor extends Object3D implements ICollidable {
         if (floor) this.floor.copy(floor);
         if (base === this.base) return;
 
-        const visited = new Set<ICollidable>();
+        this.visitedBases.clear();
 
         for (let current = base; current; current = current.getBaseActor ? current.getBaseActor() as ICollidable & Object3D : null) {
-            if (current === this || visited.has(current)) return;
+            if (current === this || this.visitedBases.has(current)) return;
 
-            visited.add(current);
+            this.visitedBases.add(current);
         }
 
         if (this.base && this.base.removeBasedActor) this.base.removeBasedActor(this);
@@ -542,22 +538,24 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected traceExtent(start: Vector3, movement: Vector3, radius: number, height: number): CheckResult_T | null {
-        return this.renderManager.collisionWorld.singleLineCheck({
-            location: tmpBodyPosition.copy(start).addScaledVector(tmpUp, this.collisionHeight),
-            delta: movement,
-            extent: tmpTraceExtent.set(radius, radius, height),
-            sourceCollider: this.collider,
-            sourceBody: this.rigidbody,
-            sourceActor: this,
-            sourceIsPlayer: !!(this as any).isPlayer,
-            sourceProfile: this.collisionProfile,
-            ignoredActors: this.ignoredActors
-        });
+        const query = this.collisionQuery;
+
+        query.location = tmpBodyPosition.copy(start).addScaledVector(tmpUp, this.collisionHeight);
+        query.delta = movement;
+        query.extent = tmpTraceExtent.set(radius, radius, height);
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.sourceActor = this;
+        query.sourceIsPlayer = !!(this as any).isPlayer;
+        query.sourceProfile = this.collisionProfile;
+        query.ignoredActors = this.ignoredActors;
+        query.ignoreBases = false;
+        query.zeroExtent = false;
+
+        return this.renderManager.collisionWorld.singleLineCheck(query);
     }
 
-    // APawn::CheckForLedges (0x8ca7f0); StopAtLedge (0x7feef0) is a hard false, so a player redirects.
-    // Unreferenced: live capture over 5111 physWalking ticks got 0 hits here, so WantsLedgeCheck
-    // (0x7feec0, Pawn+5120 & 0x24) is false in normal play - wire it up once those bits are decoded.
+    // APawn::CheckForLedges 0x8ca7f0; StopAtLedge is false and WantsLedgeCheck had zero hits over 5111 ticks.
     protected checkForLedges(position: Vector3, accelDir: Vector3, movement: Vector3) {
         const radius = this.collisionRadius;
         const height = this.collisionHeight;
@@ -918,18 +916,21 @@ class BaseActor extends Object3D implements ICollidable {
 
     public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null {
         const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
-        const hit = this.renderManager.collisionWorld.moveActor({
-            location: bodyPosition,
-            delta: movement,
-            extent: tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight),
-            sourceCollider: this.collider,
-            sourceBody: this.rigidbody,
-            sourceActor: this,
-            sourceIsPlayer: !!(this as any).isPlayer,
-            sourceProfile: this.collisionProfile,
-            ignoredActors: this.ignoredActors,
-            ignoreBases: true
-        });
+        const query = this.collisionQuery;
+
+        query.location = bodyPosition;
+        query.delta = movement;
+        query.extent = tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.sourceActor = this;
+        query.sourceIsPlayer = !!(this as any).isPlayer;
+        query.sourceProfile = this.collisionProfile;
+        query.ignoredActors = this.ignoredActors;
+        query.ignoreBases = true;
+        query.zeroExtent = false;
+
+        const hit = this.renderManager.collisionWorld.moveActor(query);
 
         position.copy(bodyPosition).addScaledVector(tmpUp, -this.collisionHeight);
 
@@ -938,18 +939,21 @@ class BaseActor extends Object3D implements ICollidable {
 
     protected castShape(position: Vector3, movement: Vector3): CheckResult_T | null {
         const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
+        const query = this.collisionQuery;
 
-        return this.renderManager.collisionWorld.singleLineCheck({
-            location: bodyPosition,
-            delta: movement,
-            extent: tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight),
-            sourceCollider: this.collider,
-            sourceBody: this.rigidbody,
-            sourceActor: this,
-            sourceIsPlayer: !!(this as any).isPlayer,
-            sourceProfile: this.collisionProfile,
-            ignoredActors: this.ignoredActors
-        });
+        query.location = bodyPosition;
+        query.delta = movement;
+        query.extent = tmpStepPosition.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.sourceActor = this;
+        query.sourceIsPlayer = !!(this as any).isPlayer;
+        query.sourceProfile = this.collisionProfile;
+        query.ignoredActors = this.ignoredActors;
+        query.ignoreBases = false;
+        query.zeroExtent = false;
+
+        return this.renderManager.collisionWorld.singleLineCheck(query);
     }
 
     protected findFloor(position: Vector3, movement: Vector3): CheckResult_T | null {
@@ -957,17 +961,21 @@ class BaseActor extends Object3D implements ICollidable {
 
         if (hit && hit.normal.z >= MIN_FLOOR_Z) return hit;
 
-        hit = this.renderManager.collisionWorld.singleLineCheck({
-            location: tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight),
-            delta: movement,
-            extent: tmpStepPosition.set(0, 0, this.collisionHeight),
-            sourceCollider: this.collider,
-            sourceBody: this.rigidbody,
-            sourceActor: this,
-            sourceIsPlayer: !!(this as any).isPlayer,
-            sourceProfile: this.collisionProfile,
-            ignoredActors: this.ignoredActors
-        });
+        const query = this.collisionQuery;
+
+        query.location = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
+        query.delta = movement;
+        query.extent = tmpStepPosition.set(0, 0, this.collisionHeight);
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.sourceActor = this;
+        query.sourceIsPlayer = !!(this as any).isPlayer;
+        query.sourceProfile = this.collisionProfile;
+        query.ignoredActors = this.ignoredActors;
+        query.ignoreBases = false;
+        query.zeroExtent = false;
+
+        hit = this.renderManager.collisionWorld.singleLineCheck(query);
 
         return hit && hit.normal.z >= MIN_FLOOR_Z ? hit : null;
     }
@@ -1086,7 +1094,7 @@ class BaseActor extends Object3D implements ICollidable {
         }
 
         for (const chain of this.hairChains) {
-            for (let i = 0; i < chain.bones.length; i++) {
+            for (let i = 0, len = chain.bones.length; i < len; i++) {
                 const strength = (i + 1) / chain.bones.length;
 
                 tmpHairRotationX.setFromAxisAngle(tmpHairAxisX, chain.angleX * strength);
@@ -1165,7 +1173,7 @@ class BaseActor extends Object3D implements ICollidable {
             const indices = new Uint16Array(candidates);
             const openZ = new Float32Array(indices.length);
 
-            for (let i = 0; i < indices.length; i++)
+            for (let i = 0, len = indices.length; i < len; i++)
                 openZ[i] = arrPosition[indices[i] * 3 + 2];
 
             this.blinkFaces.push({ mesh, position, indices, openZ, creaseZ });
@@ -1199,7 +1207,7 @@ class BaseActor extends Object3D implements ICollidable {
         for (const face of this.blinkFaces) {
             const arrPosition = face.position.array as Float32Array;
 
-            for (let i = 0; i < face.indices.length; i++) {
+            for (let i = 0, len = face.indices.length; i < len; i++) {
                 const offset = face.indices[i] * 3 + 2;
 
                 arrPosition[offset] = face.openZ[i] + (face.creaseZ - face.openZ[i]) * amount;
@@ -1295,8 +1303,7 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public goTo(position: Vector3) {
-        console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
-
+        // console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
@@ -1441,7 +1448,7 @@ type BlinkFaceState_T = {
 function hashName(name: string): number {
     let hash = 2166136261;
 
-    for (let i = 0; i < name.length; i++) {
+    for (let i = 0, len = name.length; i < len; i++) {
         hash ^= name.charCodeAt(i);
         hash = Math.imul(hash, 16777619);
     }

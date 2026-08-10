@@ -50,10 +50,7 @@ function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [
     return [polar, yaw, brightness];
 }
 
-// ANMovableSunLight::Tick (0x869af0): the modifier's first output is a polar angle off +Z, not a
-// pitch off the horizon, and the vector is tilted about X by envManager+0x174 before being negated
-// into the actor's Rotation. dword_E06CF0 inverts the tilt and reads 0 in a live client
-const SUN_TILT = 30 * DEG2RAD;
+const SUN_TILT = 30 * DEG2RAD; // ANMovableSunLight::Tick 0x869af0 applies envManager+0x174 about X.
 
 function sunModifierToDirection(polar: number, yaw: number, target: Vector3): Vector3 {
     const sinPolar = Math.sin(polar);
@@ -375,8 +372,7 @@ class DynamicLight extends Object3D {
         // const n = new Vector3(0, 1, 0);
 
         if (this.lightEffect === LE_SUNLIGHT) {
-            // SampleIntensity 0x903da8: bails when N·Direction >= 0 and otherwise returns it
-            // scaled by flt_AAEF80 = -2.0 - Direction is where the light travels, not where it comes from
+            // SampleIntensity 0x903da8 returns N·Direction * -2 below zero.
             const dot = -direction.dot(sampleNormal);
             if (dot > 0)
                 return dot * 2;

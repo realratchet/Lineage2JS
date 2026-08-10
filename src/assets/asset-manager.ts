@@ -17,10 +17,7 @@ const tmpAttachMatrix = new Matrix4();
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
-// a sector holds its whole decode library (every texture, geometry and sound buffer it
-// decoded) for as long as it is retained, so the grace period needs a count ceiling too -
-// crossing boundaries faster than it expires is what runs the tab out of memory
-const MAX_RETIRED_SECTORS = 3;
+const MAX_RETIRED_SECTORS = 3; // Caps grace-period libraries during rapid boundary crossings.
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
@@ -103,7 +100,9 @@ class AssetManager {
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
-        this.warriorConfig = await new UConfigWarrior("assets/system/lineagewarrior.int").decode().then(config => config.load());
+        const warriorConfig = await new UConfigWarrior("assets/system/lineagewarrior.int").decode();
+
+        this.warriorConfig = await warriorConfig.load();
         this.charGroups = await this.decodeWorker.getCharGroups();
 
         const envInfo = await this.decodeWorker.decodeEnv();
@@ -263,7 +262,7 @@ class AssetManager {
         const now = performance.now();
 
         for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
-            /* Map iterates in insertion order, so anything past the cap is the oldest retirement */
+            // Map insertion order makes capped entries the oldest.
             if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS && this.retiredSectors.size <= MAX_RETIRED_SECTORS) continue;
 
             console.log(`Disposing sector '${sectorIdx}'.`);
@@ -289,7 +288,7 @@ class AssetManager {
         for (let i = 0; i < this.pendingStaticMeshBuilds.length; i++) {
             const sector = this.pendingStaticMeshBuilds[i].sector;
 
-            /* retired: attaching now would register colliders and movers nothing ever unregisters */
+            // Never attach a completed build after its sector retires.
             if (!sector.parent) continue;
 
             const distance = sectorDistance(cameraPosition, sector.index.x, sector.index.y);
@@ -422,8 +421,7 @@ function isHeadBone(name: string) {
     return /^bip01[ _]head$/i.test(name);
 }
 
-// system/lineagewarrior.int names the clip in full; casing differs from the package, and UE
-// compares names case-insensitively
+// system/lineagewarrior.int clip names are case-insensitive against package names.
 function findAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
     const match = declared.toLowerCase();
     const name = Object.keys(animations).find(name => name.toLowerCase() === match);
@@ -433,8 +431,7 @@ function findAnimation(animations: Record<string, THREE.AnimationClip>, declared
     return name;
 }
 
-// decode hands every bodypart its own copy of the character skeleton, so a pawn carries six or seven
-// identical bone trees - one tree per pawn is that many times less matrix, mixer and bone texture work
+// Share one bone tree instead of decoding six or seven identical trees per pawn.
 function shareSkeletons(bodyparts: THREE.SkinnedMesh[]) {
     const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
 

@@ -44,6 +44,11 @@ class ColliderOverlay extends Object3D {
 
         return super.clear();
     }
+
+    public dispose(): void {
+        this.clear();
+        this.material.dispose();
+    }
 }
 
 function buildShapeGeometry(shape: RAPIER.Shape): BufferGeometry | null {

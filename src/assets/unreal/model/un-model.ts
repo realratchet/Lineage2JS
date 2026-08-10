@@ -14,6 +14,7 @@ import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
 import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "@client/assets/unreal/un-box";
+import { DoubleSide } from "three";
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
@@ -21,11 +22,7 @@ const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
 const PF_Unlit = 0x00400000; // from UnObj.h line 254
 
-// Retail draws water sheets D3DCULL_NONE while terrain and the static meshes around them stay
-// D3DCULL_CW (L2.water.trace: cullmode flips to NONE at call 17626640, back to CW at 17626663), yet
-// the shipped surfs carry no PF_TwoSided - 0x80000 is the only bit every water sheet holds and no
-// other surface in 16_24/16_25/17_24/17_25 does. The engine-side gate for this is still unknown.
-const PF_WaterSheet = 0x00080000;
+const PF_WaterSheet = 0x00080000; // L2.water.trace 17626640: uniquely marks shipped D3DCULL_NONE water sheets.
 
 const nodeCache = new Array<number>();
 
@@ -646,7 +643,7 @@ abstract class UModel extends UPrimitive {
                 depthWrite: this.isSky ? false : undefined,
                 depthTest: this.isSky ? false : undefined,
                 fog: this.isSky ? true : undefined,
-                side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided) || sectionData.isWaterSheet) ? 2 : undefined, // 2 = DoubleSide
+                side: (this.isSky || (sectionData.polyFlags & PolyFlags_T.PF_TwoSided) || sectionData.isWaterSheet) ? DoubleSide : undefined,
                 blendingMode: this.isSky ? (!(sectionData.polyFlags & PolyFlags_T.PF_TwoSided) ? "brighten" : "normal") :
                     ((sectionData.polyFlags & PolyFlags_T.PF_Additive) ? "brighten" : undefined),
             };

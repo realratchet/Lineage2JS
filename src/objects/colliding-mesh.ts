@@ -92,14 +92,14 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
             const vertices = new Float32Array(this.colliderVertices.length);
             const indices = new Uint32Array(this.colliderIndices);
 
-            for (let i = 0; i < vertices.length; i += 3) {
+            for (let i = 0, len = vertices.length; i < len; i += 3) {
                 vertices[i] = this.colliderVertices[i] * tmpScale.x;
                 vertices[i + 1] = this.colliderVertices[i + 1] * tmpScale.y;
                 vertices[i + 2] = this.colliderVertices[i + 2] * tmpScale.z;
             }
 
             if (tmpScale.x * tmpScale.y * tmpScale.z < 0)
-                for (let i = 0; i < indices.length; i += 3)
+                for (let i = 0, len = indices.length; i < len; i += 3)
                     [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
 
             this.colliderDesc = ColliderDesc.trimesh(vertices, indices);

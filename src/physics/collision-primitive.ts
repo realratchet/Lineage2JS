@@ -138,8 +138,7 @@ function clipTriangleEdge(point: Vector3, next: Vector3, normal: Vector3, start:
     return true;
 }
 
-// UStaticMesh::LineCheck picks a zero-extent triangle check for rays and the swept box only for
-// extents; the box path's per-edge bevel planes collapse when the extent is zero
+// UStaticMesh::LineCheck uses triangles for rays because zero extent collapses box bevel planes.
 function lineTriangle(start: Vector3, end: Vector3, a: Vector3, b: Vector3, c: Vector3, item: number, maxTime: number): PrimitiveHit_T | null {
     tmpD.copy(b).sub(a);
     tmpE.copy(c).sub(a);
@@ -630,7 +629,7 @@ function queryTriangles(primitive: Extract<CollisionPrimitive_T, { kind: "static
     let bestTime = maxTime;
     let bestItem = -1;
 
-    for (let i = 0; i < primitive.indices.length; i += 3) {
+    for (let i = 0, len = primitive.indices.length; i < len; i += 3) {
         transformVertex(primitive, primitive.indices[i], tmpA);
         transformVertex(primitive, primitive.indices[i + 1], tmpB);
         transformVertex(primitive, primitive.indices[i + 2], tmpC);
@@ -814,7 +813,7 @@ function pointHull(hull: CollisionHull_T, location: Vector3, extent: Vector3): P
     if (!pointClip(0, -1, 0, 0.1 - min.y, location, extent)) return null;
     if (!pointClip(0, 1, 0, max.y - 0.1, location, extent)) return null;
 
-    for (let i = 0; i < hull.planes.length; i++) {
+    for (let i = 0, len = hull.planes.length; i < len; i++) {
         const a = hull.planes[i];
 
         for (let j = 0; j < i; j++) {
@@ -852,7 +851,7 @@ function pointModelHull(location: Vector3, extent: Vector3): PrimitiveHit_T | nu
     for (const plane of arrModelPlanes)
         if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
 
-    for (let i = 0; i < arrModelPlanes.length; i++) {
+    for (let i = 0, len = arrModelPlanes.length; i < len; i++) {
         const a = arrModelPlanes[i];
 
         for (let j = 0; j < i; j++) {
@@ -1009,7 +1008,7 @@ function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, exte
         return queryTriangles(primitive, tmpPointStart, tmpPointEnd, tmpPointExtent, 1);
     }
 
-    for (let i = 0; i < primitive.indices.length; i += 3) {
+    for (let i = 0, len = primitive.indices.length; i < len; i += 3) {
         transformVertex(primitive, primitive.indices[i], tmpA);
         transformVertex(primitive, primitive.indices[i + 1], tmpB);
         transformVertex(primitive, primitive.indices[i + 2], tmpC);
@@ -1082,7 +1081,7 @@ function queryHull(hull: CollisionHull_T, start: Vector3, end: Vector3, extent: 
     if (!clipBspPlane(0, -1, 0, 0.1 - min.y, -1, start, end, extent)) return null;
     if (!clipBspPlane(0, 1, 0, max.y - 0.1, -1, start, end, extent)) return null;
 
-    for (let i = 0; i < hull.planes.length; i++) {
+    for (let i = 0, len = hull.planes.length; i < len; i++) {
         const a = hull.planes[i];
 
         for (let j = 0; j < i; j++) {
@@ -1110,7 +1109,7 @@ function queryModelHull(start: Vector3, end: Vector3, extent: Vector3, maxTime: 
     for (const plane of arrModelPlanes)
         if (!clipBspPlane(plane[0], plane[1], plane[2], plane[3], plane[4], start, end, extent)) return null;
 
-    for (let i = 0; i < arrModelPlanes.length; i++) {
+    for (let i = 0, len = arrModelPlanes.length; i < len; i++) {
         const a = arrModelPlanes[i];
 
         for (let j = 0; j < i; j++) {

@@ -255,8 +255,7 @@ class SectorObject extends Object3D {
         return this;
     }
 
-    // blob URLs are session-scoped and re-minted per decode, so sound decode infos carry a
-    // name and resolve here instead of baking a URL that goes stale on the next load
+    // Resolve session-scoped blob URLs here instead of baking stale decode-time URLs.
     public getSoundUri(soundName: string): string {
         const entry = (this as any).decodeLibrary?.soundBlobCache?.get(soundName);
 
@@ -265,8 +264,7 @@ class SectorObject extends Object3D {
         return entry.uri;
     }
 
-    // GetRelevantLights, UnRenderVisibility.cpp line 439 - the Consider list only carries lights
-    // relevant to the actor's zone, so a sunlight actor never reaches one that isn't sun-affected
+    // GetRelevantLights, UnRenderVisibility.cpp line 439: Consider only contains zone-relevant lights.
     public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean): DynamicLight[] {
         target.length = 0;
 

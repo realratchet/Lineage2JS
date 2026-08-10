@@ -39,12 +39,12 @@ class NumberContainerType implements IDatContainerType {
 
     protected dtype: BufferValue<any>;
 
-    constructor(dtype: C.ValidTypes_T<any>) {
+    public constructor(dtype: C.ValidTypes_T<any>) {
         this.dtype = new BufferValue(dtype);
     }
 
     public read(pkg: C.UEncodedFile): number[] {
-        const count = pkg.read("uint8");
+        const count = pkg.read("compat32");
 
         if (count === 0) return [];
 

@@ -379,7 +379,7 @@ abstract class UStaticMesh extends UPrimitive {
         const collisionNodes = new Int32Array(this.collisionNodes.length * 4);
         const collisionBounds = new Float32Array(this.collisionNodes.length * 6);
 
-        for (let i = 0; i < this.collisionNodes.length; i++) {
+        for (let i = 0, len = this.collisionNodes.length; i < len; i++) {
             const node = this.collisionNodes.getElem(i);
             const offset = i * 4;
             const bounds = node.bounds.getDecodeInfo();

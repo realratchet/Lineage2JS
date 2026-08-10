@@ -4,7 +4,7 @@ const tmpMeshInverse = new Matrix4();
 const tmpBoneMatrix = new Matrix4();
 const tmpIdentity = new Matrix4();
 
-const frozenUpdateMatrixWorld = function () { };
+function frozenUpdateMatrixWorld(): void { }
 
 type BoneAttachment_T = { object: Object3D, bone: number };
 
@@ -28,8 +28,7 @@ class LocalSpaceSkeleton extends Skeleton {
         if (this.boneTexture !== null) this.boneTexture.needsUpdate = true;
     }
 
-    // the bone chain hangs off the mesh, so composing it here in mesh space is the pose the shader
-    // wants - three's own world-space walk over the chain is redundant and gets frozen off
+    // Compose the mesh-space pose directly and freeze three's redundant world-space walk.
     protected updateOwnedPose(): void {
         const bones = this.bones;
         const inverses = this.boneInverses;
@@ -85,7 +84,7 @@ class LocalSpaceSkeleton extends Skeleton {
 
         if (!this.ownsBones) return; // a loose chain attached onto some other skeleton's bone, see attachLooseBoneChains
 
-        bones.forEach((bone, i) => indices.set(bone, i));
+        for (let i = 0, len = bones.length; i < len; i++) indices.set(bones[i], i);
 
         for (let i = 0, len = bones.length; i < len; i++) {
             const parent = bones[i].parent;

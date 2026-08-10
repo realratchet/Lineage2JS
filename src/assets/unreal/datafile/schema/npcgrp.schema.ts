@@ -1,7 +1,7 @@
 import { BufferValue } from "@l2js/core";
-import { NumberContainerType, UTF16ContainerType } from "./dat-container";
+import { NumberContainerType, UTF16ContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
 
-const SCHEMA_NPCGRP_DAT = [
+const SCHEMA_NPCGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
     { type: "utf16", name: "class" },
     { type: "utf16", name: "mesh" },
@@ -24,7 +24,7 @@ const SCHEMA_NPCGRP_DAT = [
     { type: "float", name: "soundRandom" },
     { type: "uint32", name: "quest" },
     { type: "uint32", name: "classLim" }
-] as ISchemaValue[];
+];
 
 export default SCHEMA_NPCGRP_DAT;
 export { SCHEMA_NPCGRP_DAT };

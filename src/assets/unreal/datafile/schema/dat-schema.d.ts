@@ -4,7 +4,6 @@ interface IDatContainerType {
 }
 
 interface ISchemaValue {
-    type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T,
-    name: string,
-    array?: boolean
+    type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T;
+    name: string;
 }

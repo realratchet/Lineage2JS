@@ -762,7 +762,7 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
         // wedges keep UE's winding, which ue2-conventions.ts undoes by flipping X in clip space
         const arrNormals = geometry.getAttribute("normal").array as Float32Array;
 
-        for (let i = 0; i < arrNormals.length; i++) arrNormals[i] = -arrNormals[i];
+        for (let i = 0, len = arrNormals.length; i < len; i++) arrNormals[i] = -arrNormals[i];
     }
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
@@ -776,7 +776,9 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     mesh.ambientGlow = info.ambient?.glow ?? 0;
     mesh.isUnlit = info.ambient?.isUnlit ?? false;
 
-    (materials instanceof Array ? materials : [materials]).forEach(mat => (mat as any)?.setActorLit?.());
+    if (Array.isArray(materials))
+        for (const material of materials) (material as any).setActorLit?.();
+    else (materials as any).setActorLit?.();
 
     mesh.position.fromArray(info.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);

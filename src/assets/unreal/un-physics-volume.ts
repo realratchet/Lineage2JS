@@ -1,6 +1,8 @@
 import UVolume from "./un-volume";
 
 abstract class UPhysicsVolume extends UVolume {
+    declare public readonly isPhysicsVolume: boolean;
+
     declare protected zoneVelocity: GA.FVector;
     declare protected gravity: GA.FVector;
     declare protected terminalVelocity: number;
@@ -52,6 +54,12 @@ abstract class UPhysicsVolume extends UVolume {
     // protected entryActorName: any;
     // protected waitHitEffect: any;
     // protected runHitEffect: any;
+
+    public constructor() {
+        super();
+
+        (this as any).isPhysicsVolume = true;
+    }
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -106,8 +114,7 @@ abstract class UPhysicsVolume extends UVolume {
 
         const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as GD.Vector3Arr;
         const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as GD.Vector3Arr;
-        // without bUseDistanceFogColor the volume's own DistanceFog is only worn for the frame the camera
-        // enters it, then Env.int [WaterVolume] takes over for good (L2.water.trace frames 4621 -> 4622)
+        // L2.water.trace 4621-4622: Env.int fog replaces DistanceFog unless bUseDistanceFogColor.
         const fog = this.useDistanceFogColor && this.hasDistanceFog && this.distanceFogColor ? {
             color: this.distanceFogColor.toArray() as GD.ColorArr,
             start: this.distanceFogStart,

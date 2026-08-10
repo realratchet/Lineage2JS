@@ -1,10 +1,7 @@
 import AssetLoader from "@client/assets/asset-loader";
 import UConfigEnv from "@unreal/conf-files/un-conf-env";
 import UDataFile from "@unreal/datafile/un-datafile";
-import { SCHEMA_MUSICINFO_DAT } from "@unreal/datafile/schema/schema-types";
-import SCHEMA_CHARGRP_DAT from "@unreal/datafile/schema/chargrp.schema";
-import SCHEMA_ARMORGRP_DAT from "@unreal/datafile/schema/armorgrp.schema";
-import SCHEMA_ITEMNAME_E_DAT from "@unreal/datafile/schema/itemname-e.schema";
+import { CHARGRP_RECORD_COUNT, SCHEMA_ARMORGRP_DAT, SCHEMA_CHARGRP_DAT, SCHEMA_ITEMNAME_E_DAT, SCHEMA_MUSICINFO_DAT } from "@unreal/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "@client/assets/decoders/batch-data";
 import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
@@ -48,11 +45,11 @@ function copyCharacterMaterial(target: DecodeLibrary, source: DecodeLibrary, roo
         if (!value || typeof value !== "object" || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return;
 
         if (Array.isArray(value)) {
-            value.forEach(copyReferences);
+            for (const entry of value) copyReferences(entry);
             return;
         }
 
-        Object.values(value).forEach(copyReferences);
+        for (const entry of Object.values(value)) copyReferences(entry);
     }
 
     function copyMaterial(uuid: string) {
@@ -91,7 +88,7 @@ function splitObjectPath(path: string): [string, string] {
 function getCharacterRow(rows: Record<string, any>[], charIndex: number): Record<string, any> {
     const row = rows[charIndex];
 
-    if (!row) throw new Error(`Character group '${charIndex}' does not exist.`);
+    if (!row || row.face_mesh.length === 0) throw new Error(`Character group '${charIndex}' does not exist.`);
 
     return row;
 }
@@ -307,7 +304,8 @@ class DecodeEngine {
 
         if (convertToRGBA) convertDDSMaterialsToRGBA(library);
 
-        refreshSoundBlobUris(library); /* only reached on the main thread (pool size 0) - the worker path mints in processBinaryDecodeQueue */
+        // Main-thread decode owns these blob URLs.
+        refreshSoundBlobUris(library);
 
         return { library, fromCache: false };
     }
@@ -394,7 +392,7 @@ class DecodeEngine {
 
         library.name = splitObjectPath(row.face_mesh[0])[1];
 
-        for (let i = 0; i < meshPaths.length; i++) {
+        for (let i = 0, len = meshPaths.length; i < len; i++) {
             const mesh = await this.fetchSkeletalMesh(meshPaths[i]);
             const texture = await this.fetchCharacterMaterial(texturePaths[i]);
             const meshInfo = builder.pullSkeletalMesh(mesh, i === 0 && includeAnimations, false);
@@ -446,7 +444,7 @@ class DecodeEngine {
 
         library.name = manifest.name;
 
-        for (let i = 0; i < meshPaths.length; i++) {
+        for (let i = 0, len = meshPaths.length; i < len; i++) {
             const actor = actors.get(manifest.meshes[meshPaths[i]]);
             const textureUuid = manifest.materials[texturePaths[i]];
 
@@ -484,13 +482,13 @@ class DecodeEngine {
         const texturePaths = new Set<string>();
         const hairPieces = await this.characterHairPieces(charIndex);
 
-        for (let face = 0; face < row.face_tex.length; face++) {
+        for (let face = 0, len = row.face_tex.length; face < len; face++) {
             for (const [hair, colours] of hairPieces) {
                 for (const colour of colours.keys()) {
                     const [meshes, textures] = resolveCharacterPartPaths(row, hairPieces, [], face, hair, colour, { chest: 0, legs: 0, gloves: 0, boots: 0 });
 
-                    meshes.forEach(path => meshPaths.add(path));
-                    textures.forEach(path => texturePaths.add(path));
+                    for (const path of meshes) meshPaths.add(path);
+                    for (const path of textures) texturePaths.add(path);
                 }
             }
         }
@@ -607,8 +605,14 @@ class DecodeEngine {
         const itemNames = new Map((await this.decodeItemNames()).map(item => [item.id as number, item]));
         const groups: GD.ICharacterGroup[] = [];
 
-        for (let index = 0; index < rows.length; index++) {
+        for (let index = 0, len = rows.length; index < len; index++) {
             const row = rows[index];
+
+            if (row.face_mesh.length === 0) {
+                if (index !== CHARGRP_RECORD_COUNT - 1) throw new Error(`Character group '${index}' is unexpectedly empty.`);
+                continue;
+            }
+
             const pieces = await this.characterHairPieces(index);
             const armor = { chest: [], legs: [], gloves: [], boots: [] } as GD.ICharacterArmorOptions;
 
@@ -641,7 +645,7 @@ class DecodeEngine {
     protected async decodeCharGrp(): Promise<Record<string, any>[]> {
         if (this.cacheCharGrpRows) return this.cacheCharGrpRows;
 
-        const file = await (new UDataFile(SCHEMA_CHARGRP_DAT, "assets/system/chargrp.dat", false).asReadable()).decode();
+        const file = await (new UDataFile(SCHEMA_CHARGRP_DAT, "assets/system/chargrp.dat", CHARGRP_RECORD_COUNT).asReadable()).decode();
 
         this.cacheCharGrpRows = file.datarows;
 

@@ -114,8 +114,7 @@ class SpriteParticleBatch {
     public dispose() {
         const geometry = this.mesh.geometry;
 
-        // position/uv/index are baseGeometry's own attributes - dropping them first stops
-        // dispose from deleting buffers every other batch still draws from
+        // Drop shared attributes before dispose so other batches keep their buffers.
         geometry.deleteAttribute("position");
         geometry.deleteAttribute("uv");
         geometry.setIndex(null);
@@ -331,9 +330,7 @@ class InstancedSpriteBatcher {
 
         for (const [key, group] of this.groups) {
             if (group.emitters.length === 0) {
-                // the key carries a texture uuid and a depth bucket, both of which churn as sectors
-                // re-stream and the camera moves - retiring idle ones keeps the map from growing
-                // for the whole session, holding on to every material (and its textures) it ever saw
+                // Texture/depth keys churn, so retire idle batches instead of retaining every material.
                 if (currentTime - group.lastUsed < BATCH_IDLE_MS) continue;
 
                 const idle = this.batches.get(key);

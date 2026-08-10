@@ -14,13 +14,13 @@ const zeroExtentVector = new Vector3();
 const CELL_SIZE = 1024;
 const MAX_QUERY_CELLS = 4096;
 const MAX_ENTRY_CELLS = 16384;
-// dynamic entries are re-gridded once a frame, so their footprint carries enough slack to cover
-// however far they travel across that frame's substeps - a pawn at ground speed covers 134 a second
-const DYNAMIC_CELL_MARGIN = 256;
+const DYNAMIC_CELL_MARGIN = 256; // Covers a ground-speed pawn's substep travel between dynamic re-grids.
 // ULevel::MoveActor (0x85b3b0) extends the test by 2 units and subtracts them back off the result
 const MOVE_ACTOR_EXTENSION = 2;
 const COMPARISON_TIME_EPSILON = 0.001;
 const COMPARISON_NORMAL_EPSILON = 0.001;
+const CHECK_RESULT_POOL_SIZE = 128;
+const RAY_RESULT_POOL_SIZE = 2;
 
 type CollisionBackend_T = "ue" | "rapier" | "compare";
 
@@ -120,6 +120,8 @@ class CollisionWorld {
     protected readonly largeEntries: AnalyticalEntry_T[] = [];
     protected readonly cells = new Map<number, Map<number, Map<number, AnalyticalEntry_T[]>>>();
     protected readonly arrShapes: { x: number, y: number, z: number, shape: RAPIER.Shape }[] = [];
+    protected readonly arrCheckResults: CheckResult_T[] = [];
+    protected readonly arrRayResults: RayCheckResult_T[] = [];
     protected readonly zeroShape = new RAPIER.Ball(0.001);
     protected readonly analyticalBestNormal = new Vector3();
     protected readonly ray = new RAPIER.Ray(zeroExtentVector, zeroExtentVector);
@@ -141,6 +143,8 @@ class CollisionWorld {
     protected analyticalUnsupported = false;
     protected rapierQuery: CollisionQuery_T = null;
     protected rapierZeroExtent = false;
+    protected checkResultIndex = 0;
+    protected rayResultIndex = 0;
     protected readonly stats: CollisionStats_T = {
         backend: "ue",
         queries: 0,
@@ -163,16 +167,26 @@ class CollisionWorld {
         registeredUnsupportedNonZeroExtent: 0,
         registeredUnsupportedPointCheck: 0
     };
-    protected readonly rapierFilter = (collider: RAPIER.Collider) => {
+    protected readonly rapierFilter: (collider: RAPIER.Collider) => boolean;
+
+    protected filterRapierCollider(collider: RAPIER.Collider): boolean {
         const actor = this.colliderOwners.get(collider.handle);
 
         if (actor && this.shouldIgnoreActor(actor, this.rapierQuery)) return false;
 
         return !actor || this.shouldBlockActor(actor, this.rapierQuery, this.rapierZeroExtent);
-    };
+    }
 
     public constructor(world: RAPIER.World, backend: CollisionBackend_T = "ue") {
         this.world = world;
+        this.rapierFilter = this.filterRapierCollider.bind(this);
+
+        for (let i = 0; i < CHECK_RESULT_POOL_SIZE; i++)
+            this.arrCheckResults.push({ time: 0, location: new Vector3(), normal: new Vector3(), collider: null, actor: null });
+
+        for (let i = 0; i < RAY_RESULT_POOL_SIZE; i++)
+            this.arrRayResults.push({ distance: 0, location: new Vector3(), normal: new Vector3(), collider: null, actor: null });
+
         this.setBackend(backend);
     }
 
@@ -260,8 +274,7 @@ class CollisionWorld {
         }
     }
 
-    // without this the grid would only hold the static world and every trace would have to walk the
-    // whole dynamic list; one re-grid a frame replaces ~180 full scans of it
+    // One dynamic re-grid per frame replaces roughly 180 full actor scans.
     public updateDynamicEntries(mark: number) {
         if (mark === this.dynamicMark) return;
 
@@ -334,7 +347,7 @@ class CollisionWorld {
         const analyticalHit = this.analyticalRayCheck(this.rayQuery, maxDistance);
         const rapierHit = this.rapierRayCheck(this.rayQuery, direction, maxDistance);
 
-        this.recordComparison(analyticalHit ? { ...analyticalHit, time: analyticalHit.distance / maxDistance } : null, rapierHit ? { ...rapierHit, time: rapierHit.distance / maxDistance } : null);
+        this.recordComparison(this.rayAsCheckResult(analyticalHit, maxDistance), this.rayAsCheckResult(rapierHit, maxDistance));
 
         return analyticalHit;
     }
@@ -371,7 +384,7 @@ class CollisionWorld {
 
         if (!hit) return null;
 
-        return { distance: hit.time * maxDistance, location: hit.location, normal: hit.normal, collider: hit.collider, actor: hit.actor };
+        return this.makeRayResult(hit.time * maxDistance, hit.location, hit.normal, hit.collider, hit.actor);
     }
 
     protected rapierRayCheck(query: CollisionQuery_T, direction: Vector3, maxDistance: number): RayCheckResult_T | null {
@@ -389,13 +402,7 @@ class CollisionWorld {
 
         if (!hit) return null;
 
-        return {
-            distance: hit.toi,
-            location: tmpBodyPosition.copy(direction).multiplyScalar(hit.toi).add(query.location).clone(),
-            normal: tmpNormal.copy(hit.normal as Vector3).clone(),
-            collider: hit.collider,
-            actor: this.colliderOwners.get(hit.collider.handle) || null
-        };
+        return this.makeRayResult(hit.toi, tmpBodyPosition.copy(direction).multiplyScalar(hit.toi).add(query.location), tmpNormal.copy(hit.normal as Vector3), hit.collider, this.colliderOwners.get(hit.collider.handle) || null);
     }
 
     protected timedAnalyticalLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
@@ -497,7 +504,7 @@ class CollisionWorld {
 
         tmpNormal.copy(hit.normal1 as Vector3).normalize();
 
-        return { time, location: tmpBodyPosition.copy(query.location).addScaledVector(query.delta, time).clone(), normal: tmpNormal.clone(), collider: hit.collider, actor };
+        return this.makeCheckResult(time, tmpBodyPosition.copy(query.location).addScaledVector(query.delta, time), tmpNormal, hit.collider, actor);
     }
 
     protected analyticalLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
@@ -545,7 +552,7 @@ class CollisionWorld {
 
         if (requestedTime > 1) return null;
 
-        return { time: requestedTime, location: tmpBodyPosition.copy(query.location).addScaledVector(query.delta, requestedTime).clone(), normal: this.analyticalBestNormal.clone(), collider: this.analyticalBestCollider, actor: this.analyticalBestActor };
+        return this.makeCheckResult(requestedTime, tmpBodyPosition.copy(query.location).addScaledVector(query.delta, requestedTime), this.analyticalBestNormal, this.analyticalBestCollider, this.analyticalBestActor);
     }
 
     protected beginAnalyticalQuery(query: CollisionQuery_T, start: Vector3, end: Vector3, extent: Vector3, testDistance: number, zeroExtent: boolean) {
@@ -684,6 +691,40 @@ class CollisionWorld {
         return shape;
     }
 
+    protected makeCheckResult(time: number, location: Vector3, normal: Vector3, collider: RAPIER.Collider, actor: ICollidable | null): CheckResult_T {
+        const result = this.arrCheckResults[this.checkResultIndex++];
+
+        if (this.checkResultIndex === this.arrCheckResults.length) this.checkResultIndex = 0;
+
+        result.time = time;
+        result.location.copy(location);
+        result.normal.copy(normal);
+        result.collider = collider;
+        result.actor = actor;
+
+        return result;
+    }
+
+    protected makeRayResult(distance: number, location: Vector3, normal: Vector3, collider: RAPIER.Collider, actor: ICollidable | null): RayCheckResult_T {
+        const result = this.arrRayResults[this.rayResultIndex++];
+
+        if (this.rayResultIndex === this.arrRayResults.length) this.rayResultIndex = 0;
+
+        result.distance = distance;
+        result.location.copy(location);
+        result.normal.copy(normal);
+        result.collider = collider;
+        result.actor = actor;
+
+        return result;
+    }
+
+    protected rayAsCheckResult(hit: RayCheckResult_T | null, maxDistance: number): CheckResult_T | null {
+        if (!hit) return null;
+
+        return this.makeCheckResult(hit.distance / maxDistance, hit.location, hit.normal, hit.collider, hit.actor);
+    }
+
     protected recordComparison(a: CheckResult_T | null, b: CheckResult_T | null) {
         this.stats.comparisons++;
 
@@ -698,8 +739,7 @@ class CollisionWorld {
         if (a.normal.dot(b.normal) < 1 - COMPARISON_NORMAL_EPSILON) this.stats.comparisonNormalDifferences++;
     }
 
-    // AActor::IsBlockedBy (0x7cd650): world geometry answers from the source's bCollideWorld, every
-    // other pairing is mutual - both actors must agree before the hit counts
+    // AActor::IsBlockedBy 0x7cd650: actor blocking is mutual; world geometry uses bCollideWorld.
     protected shouldBlockActor(actor: ICollidable, query: CollisionQuery_T, zeroExtent: boolean): boolean {
         const target = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile;
 
@@ -736,13 +776,12 @@ function removeEntry(entries: AnalyticalEntry_T[], entry: AnalyticalEntry_T) {
 }
 
 function isBasedOn(actor: ICollidable, base: ICollidable): boolean {
-    const visited = new Set<ICollidable>();
     let current = actor.getBaseActor ? actor.getBaseActor() : null;
 
-    while (current && !visited.has(current)) {
+    for (let depth = 0; current; depth++) {
         if (current === base) return true;
+        if (depth === 63) throw new Error("Actor base chain is cyclic.");
 
-        visited.add(current);
         current = current.getBaseActor ? current.getBaseActor() : null;
     }
 

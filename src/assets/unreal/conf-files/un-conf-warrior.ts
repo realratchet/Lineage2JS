@@ -1,7 +1,6 @@
 import BaseConfigFile from "./un-base-config";
 
-// system/lineagewarrior.int declares the animation names per playable class, indexed by stance:
-// WaitAnimName[0]=wait_1HS_MFighter, SwimWaitAnimName[0]=SwimWait_MFighter, ...
+// system/lineagewarrior.int declares stance-indexed animation names per playable class.
 type WarriorAnimations_T = {
     wait: string;
     walk: string;

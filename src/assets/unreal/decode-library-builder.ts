@@ -1,6 +1,6 @@
 import DecodeLibrary from "./decode-library";
 import type { HeightMapInfo_T } from "./un-terrain-sector";
-import UPhysicsVolume from "./un-physics-volume";
+import type UPhysicsVolume from "./un-physics-volume";
 
 class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
@@ -84,9 +84,7 @@ class DecodeLibraryBuilder {
         const fileType = sound.getFileType()?.toLowerCase() ?? "wav";
         const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
 
-        // no blob URL here - the decode runs in the worker, where one is unreachable from the
-        // consumer, permanently pins a second copy of the bytes and never gets revoked.
-        // refreshSoundBlobUris mints them on whichever thread ends up owning the library.
+        // Blob URLs are minted by refreshSoundBlobUris on the thread that owns the library.
         soundEntry = { uri: null, data: audioData, mimeType };
         this.library.soundBlobCache.set(soundKey, soundEntry);
 
@@ -219,8 +217,8 @@ class DecodeLibraryBuilder {
         for (const actor of actors) {
             if (!actor) continue;
 
-            if (actor instanceof UPhysicsVolume) {
-                const volumeInfo = actor.loadSelf().getDecodeInfo(this.library);
+            if ((actor as any).isPhysicsVolume) {
+                const volumeInfo = (actor.loadSelf() as UPhysicsVolume).getDecodeInfo(this.library);
 
                 if (volumeInfo) this.library.waterVolumes.push(volumeInfo);
                 continue;

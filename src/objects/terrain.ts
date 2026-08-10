@@ -490,7 +490,7 @@ class Terrain extends Mesh implements ICollidable {
             const arrBatchPositions = this.batchGeometry.getAttribute("position").array as Float32Array;
             const offset = this.batchVertexOffset * 3;
 
-            for (let i = 0; i < arrPositions.length; i += 3) {
+            for (let i = 0, len = arrPositions.length; i < len; i += 3) {
                 arrPositions[i] = arrBatchPositions[offset + i] - this.position.x;
                 arrPositions[i + 1] = arrBatchPositions[offset + i + 1] - this.position.y;
                 arrPositions[i + 2] = arrBatchPositions[offset + i + 2] - this.position.z;
@@ -642,8 +642,7 @@ class Terrain extends Mesh implements ICollidable {
             terrainMap.set(key, t);
         }
 
-        // only the edges whose heights actually moved need their collision geometry rebuilt;
-        // re-stitching a settled boundary writes back the same values every time
+        // Only height-changing edges need their collision geometry rebuilt.
         const modified = new Set<Terrain>();
 
         const debugInfo = {

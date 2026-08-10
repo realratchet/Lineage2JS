@@ -1,6 +1,8 @@
 import { UTF16SizedContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
 
-const SCHEMA_CHARGRP_DAT = [
+const CHARGRP_RECORD_COUNT = 15; // L2FileEdit C4/chargrp.ddf RECCNT.
+
+const SCHEMA_CHARGRP_DAT: ISchemaValue[] = [
     { type: "utf16", name: "face_icon" },
     { type: "uint32", name: "cnt_hm" },
     { type: "uint32", name: "cnt_ht" },
@@ -36,7 +38,7 @@ const SCHEMA_CHARGRP_DAT = [
     { type: new UTF16SizedContainerType("cntu"), name: "voice_snd_unknown" },
     { type: "uint32", name: "cntf" },
     { type: new UTF16SizedContainerType("cntf"), name: "voice_snd_fist" }
-] as ISchemaValue[];
+];
 
 export default SCHEMA_CHARGRP_DAT;
-export { SCHEMA_CHARGRP_DAT };
+export { CHARGRP_RECORD_COUNT, SCHEMA_CHARGRP_DAT };
