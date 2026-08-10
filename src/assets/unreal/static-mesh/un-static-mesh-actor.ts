@@ -161,8 +161,13 @@ abstract class UStaticMeshActor extends UAActor {
 
         if (!this.isSunAffected) {
             if (leaves.length > 0) {
+                const hasIndoorLeaf = leaves.some(leaf => !(xmodel.getZoneActor(leaf.iZone) as any).isSunAffected);
+
                 for (const leaf of leaves) { // seems that precalculated may be wrong for some objects and need to re-calc from zone, already had this regression, not sure why i gone back to using zone vector
-                    const amb = xmodel.getZoneActor(leaf.iZone).ambientVector;
+                    const zone = xmodel.getZoneActor(leaf.iZone);
+                    if (hasIndoorLeaf && (zone as any).isSunAffected) continue;
+
+                    const amb = zone.ambientVector;
 
                     ambX = Math.max(ambX, amb.x);
                     ambY = Math.max(ambY, amb.y);

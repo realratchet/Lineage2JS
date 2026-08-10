@@ -19,20 +19,13 @@ abstract class UL2FogInfo extends AInfo {
         const level = this.getLevel();
         const model = level?.getModel();
 
-        const radius = this.affectRange.max;
-        const origin = this.location;
-        const extent = FVector.make(radius, radius, radius);
-
-        // Find leaves touching this box
-        const leafIndices = model.boxLeavesRecursive(0, origin, extent);
+        const leafIndices = model.boxLeavesRecursive(0, this.location, FVector.make(0, 0, 0));
 
         for (const leafIndex of leafIndices) {
             const leaf = library.bspLeaves[leafIndex];
-            if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+            if (leaf && leaf.zone !== undefined && leaf.zone >= 0)
                 zoneMask |= (1n << BigInt(leaf.zone));
-            }
         }
-
 
         return {
             type: "L2FogInfo",

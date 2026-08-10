@@ -147,6 +147,27 @@ type SectorWarmup_T = {
     releaseEmitters: boolean
 };
 
+function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
+    const object = intersection.object as any;
+
+    if (!object.isBatch || !intersection.face || !object.perActorAmbient || !object.batchElements) return null;
+
+    const vertexIndex = intersection.face.a;
+
+    for (let actorIndex = 0; actorIndex < object.perActorAmbient.length; actorIndex++) {
+        const actor = object.perActorAmbient[actorIndex];
+
+        if (vertexIndex >= actor.startVertex && vertexIndex < actor.startVertex + actor.count) {
+            const actorUuid = object.batchActorUuids[actorIndex];
+            const actorName = actorUuid.slice(actorUuid.indexOf("_") + 1, actorUuid.lastIndexOf("_"));
+
+            return { actorIndex, actorName, actorUuid };
+        }
+    }
+
+    return null;
+}
+
 const frozenUpdateMatrixWorld = function () { };
 
 // undoes addSector's early freeze once live content attaches, or its matrixWorld never updates again
@@ -974,8 +995,18 @@ class RenderManager {
 
         if (arrMouseIntersections.length > 0) {
             const intersection = arrMouseIntersections[0];
+            const actor = getBatchIntersectionActor(intersection);
 
-            console.log(intersection.object.name, intersection);
+            if (actor) {
+                console.log(actor.actorName, {
+                    batch: intersection.object.name,
+                    element: actor.actorIndex,
+                    distance: intersection.distance,
+                    point: intersection.point,
+                    faceIndex: intersection.faceIndex,
+                    uuid: actor.actorUuid
+                });
+            } else console.log(intersection.object.name, intersection);
         }
 
         const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
@@ -1949,6 +1980,7 @@ class RenderManager {
 
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
+            const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
             if (zone && zone.fog) {
@@ -2014,8 +2046,7 @@ class RenderManager {
 
             // closest active fog wins
             fogInfos.forEach(fogInfo => {
-                const visibleMask = sector.lastZoneMask;
-                if (fogInfo.zoneMask && visibleMask && !(fogInfo.zoneMask & visibleMask)) {
+                if (fogInfo.zoneMask && !(fogInfo.zoneMask & cameraZoneMask)) {
                     return;
                 }
 
