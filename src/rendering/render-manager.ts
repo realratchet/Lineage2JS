@@ -78,6 +78,7 @@ const arrMoverPawns: BaseActor[] = [];
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
+const arrMouseIntersections: THREE.Intersection[] = [];
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
 // off-screen emitters (in range but outside the frustum) simulate at this rate instead
@@ -601,8 +602,13 @@ class RenderManager {
         // this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
         // this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
 
+        // player
         this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
         this.controls.orbit.target.set(-87086.51708877791, 239936.94718888338, -3685.930229617832);
+
+        // bad colon lights in EG catacombs
+        this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
+        this.controls.orbit.target.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
 
         this.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.update();
@@ -962,6 +968,15 @@ class RenderManager {
         const ssPosition = this.toScreenSpaceCoords(position);
 
         this.raycaster.setFromCamera(ssPosition, this.camera);
+
+        arrMouseIntersections.length = 0;
+        this.raycaster.intersectObject(this.scene, true, arrMouseIntersections);
+
+        if (arrMouseIntersections.length > 0) {
+            const intersection = arrMouseIntersections[0];
+
+            console.log(intersection.object.name, intersection);
+        }
 
         const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
         const physicsIntersection = pickDistance > 0 ? this.collisionWorld.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
