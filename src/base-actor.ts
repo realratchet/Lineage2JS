@@ -1055,6 +1055,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         for (const mesh of meshes) {
             (mesh as any).hasStartedAnimation = true;
+            mesh.frustumCulled = false;
             this.add(mesh);
         }
 

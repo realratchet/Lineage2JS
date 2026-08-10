@@ -1514,6 +1514,11 @@ class RenderManager {
     // time into whichever sector's grid cell it fell in) their portal/leaf visibility has to be
     // resolved live against wherever they currently are, not the sector they happen to be parented under
     protected updatePawnVisibility(): void {
+        this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(this.player.getCollisionPrimitive().bounds);
+
+        for (const entry of this.simulatedPawns)
+            entry.pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(entry.pawn.getCollisionPrimitive().bounds);
+
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
                 const state = this.resolvePawnLocation(pawn);
