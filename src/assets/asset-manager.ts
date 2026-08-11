@@ -26,6 +26,7 @@ const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
 const STATIC_MESH_BUILD_FRAME_MS = 2;
 const BIND_POSE_EPSILON = 1e-3;
+const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
 
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
@@ -105,6 +106,7 @@ class AssetManager {
     public userConfig: GA.IUserConfig = null;
     protected warriorConfig: UConfigWarrior = null;
     protected charGroups: GD.ICharacterGroup[] = null;
+    protected landmarkLibrary: GD.DecodeLibrary = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
     protected readonly lastCameraPosition = new Vector3();
@@ -163,6 +165,7 @@ class AssetManager {
         const envInfo = await this.decodeWorker.decodeEnv();
         const musicInfo = await this.decodeWorker.getMusicInfo();
         const characterLibrary = await this.decodeWorker.decodeCharacter(this.loadSettings);
+        const landmarkLibrary = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, LANDMARK_EFFECTS);
         const skyLibrary = await this.decodeWorker.decodeSector("skylevel", {
             ...this.loadSettings, isSkyLevel: true,
             loadTerrain: true,
@@ -176,12 +179,26 @@ class AssetManager {
 
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+        landmarkLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (landmarkLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        this.landmarkLibrary = landmarkLibrary;
 
         this.applyCharacter(renderManager, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
         renderManager.setEnv(decodeEnv(envInfo));
         renderManager.setSky(decodePackage(skyLibrary));
         renderManager.audioManager.setMusicInfo(musicInfo);
+    }
+
+    public createLandmarkEffect(classPath: string): THREE.Object3D {
+        if (!this.landmarkLibrary) throw new Error("Landmark effect templates have not loaded.");
+
+        const info = this.landmarkLibrary.effectTemplates[classPath] || this.landmarkLibrary.effectTemplates[classPath.toLowerCase()];
+
+        if (!info) throw new Error(`Landmark effect template '${classPath}' is missing.`);
+
+        return decodeObject3D(this.landmarkLibrary, info);
     }
 
     protected applyCharacter(renderManager: RenderManager, characterLibrary: GD.DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {

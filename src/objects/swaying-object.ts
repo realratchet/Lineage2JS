@@ -61,11 +61,11 @@ class SwayingObject extends RotatingObject {
             }
         }
 
-        this.setQuaternionFromRotator(
+        this.rotator.set(
             orgRotator[0] + this.currentMax[0] * Math.sin(this.phase[0]),
             orgRotator[1] + this.currentMax[1] * Math.sin(this.phase[1]),
             orgRotator[2] + this.currentMax[2] * Math.sin(this.phase[2])
-        );
+        ).toQuaternion(this.quaternion);
 
         for (const attachment of this.attached) {
             attachment.object.position.copy(attachment.relativeLocation).applyQuaternion(this.quaternion).add(this.position);

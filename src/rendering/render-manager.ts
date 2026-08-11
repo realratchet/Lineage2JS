@@ -31,6 +31,7 @@ import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
 import ShadowProjector from "@client/objects/shadow-projector";
 import type DynamicLight from "@client/objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
+import Landmark from "./landmark";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -166,6 +167,15 @@ function getBatchIntersectionActor(intersection: THREE.Intersection): { actorInd
     }
 
     return null;
+}
+
+function isLandmarkSurface(actor: ICollidable | null): boolean {
+    if (!actor) return false;
+    if ((actor as any).isTerrain || (actor as any).isStaticMeshActor) return true;
+
+    const primitive = actor.getCollisionPrimitive ? actor.getCollisionPrimitive() : null;
+
+    return !!primitive && primitive.kind === "bsp";
 }
 
 const frozenUpdateMatrixWorld = function () { };
@@ -354,6 +364,7 @@ class RenderManager {
     protected readonly lastProjectionScreenMatrix = new Matrix4();
 
     public readonly player = new Player(this);
+    protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.assetManager.createLandmarkEffect(classPath));
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
@@ -954,6 +965,7 @@ class RenderManager {
     }
 
     protected movePlayerTo(position: Vector3) {
+        this.landmark.deleteLandmark(true);
         this.player.goTo(position);
     }
 
@@ -1015,6 +1027,7 @@ class RenderManager {
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);
             this.movePlayerTo(tmpMouseIntersection);
+            if (isLandmarkSurface(physicsIntersection.actor)) this.landmark.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
             // console.log(physicsIntersection.actor, physicsIntersection);
         } else if (pickDistance > 0) {
             // UInteraction::ScreenToWorld (0x855ee0) deprojects to a direction, not a hit location
@@ -1534,10 +1547,10 @@ class RenderManager {
     // time into whichever sector's grid cell it fell in) their portal/leaf visibility has to be
     // resolved live against wherever they currently are, not the sector they happen to be parented under
     protected updatePawnVisibility(): void {
-        this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(this.player.getRenderBounds());
+        this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(this.player.getRenderSphere());
 
         for (const entry of this.simulatedPawns)
-            entry.pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(entry.pawn.getRenderBounds());
+            entry.pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(entry.pawn.getRenderSphere());
 
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
@@ -2400,6 +2413,7 @@ class RenderManager {
             this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
 
         this.player.updatePresentation(currentTime, deltaTime / 1000);
+        this.landmark.update();
         this.updateSimulatedPawnPresentation(currentTime, deltaTime);
 
         if (this.isOrbitControls && this.followPlayer) {

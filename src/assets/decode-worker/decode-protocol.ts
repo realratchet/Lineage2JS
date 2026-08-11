@@ -52,6 +52,13 @@ type DecodeSkeletalMeshMessage_T = {
     includeAnimations: boolean;
 };
 
+type DecodeEffectTemplatesMessage_T = {
+    type: "decodeEffectTemplates";
+    requestId: number;
+    settings: GD.LoadSettings_T;
+    classPaths: string[];
+};
+
 type CharGroupsMessage_T = {
     type: "charGroups";
     requestId: number;
@@ -91,7 +98,7 @@ interface MusicInfoMessage {
     requestId: number;
 }
 
-type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage;
+type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | DecodeEffectTemplatesMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage;
 
 interface ReadyMessage {
     type: "ready";
@@ -137,4 +144,4 @@ interface MusicInfoDecodedMessage {
 
 type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | CharGroupsDecodedMessage_T | NpcResolvedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage;
 
-export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, NpcResolvedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };
+export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, DecodeEffectTemplatesMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, NpcResolvedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };

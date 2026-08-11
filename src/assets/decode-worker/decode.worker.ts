@@ -120,6 +120,17 @@ async function handleMessage(msg: MainToWorkerMessage) {
             }
             break;
         }
+        case "decodeEffectTemplates": {
+            try {
+                const buffer = await engine.decodeEffectTemplatesBinary(msg.settings, msg.classPaths);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error("[decode-worker] failed to decode effect templates:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "musicInfo": {
             try {
                 post({ type: "musicInfoDecoded", requestId: msg.requestId, music: await engine.decodeMusicInfo() });

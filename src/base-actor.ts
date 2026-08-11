@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, Bone, Box3, Mesh, Object3D, Quaternion, Vector3 } from "three";
+import { AnimationAction, AnimationClip, Bone, Box3, Mesh, Object3D, Quaternion, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
@@ -47,7 +47,7 @@ const tmpBaseOffset = new Vector3();
 const tmpWalkingStart = new Vector3();
 const tmpWalkingSubStart = new Vector3();
 const tmpDesiredMove = new Vector3();
-const tmpRenderBounds = new Box3();
+const tmpRenderSphere = new Sphere();
 const tmpRotator = new Rotator();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 
@@ -112,8 +112,8 @@ class BaseActor extends Object3D implements ICollidable {
     protected readonly analyticalCenter = new Vector3();
     protected readonly analyticalBounds = new Box3();
     protected readonly analyticalOrigin = new Vector3(NaN, NaN, NaN);
-    protected readonly renderBoundsLocal = new Box3();
-    protected readonly renderBoundsWorld = new Box3();
+    protected readonly renderSphereLocal = new Sphere();
+    protected readonly renderSphereWorld = new Sphere();
     protected readonly collisionProfile: ActorCollisionProfile_T = {
         collideActors: true,
         collideWorld: true,
@@ -1181,12 +1181,12 @@ class BaseActor extends Object3D implements ICollidable {
         return false;
     }
 
-    public getRenderBounds(): Box3 {
-        if (this.renderBoundsLocal.isEmpty()) return this.getCollisionPrimitive().bounds;
+    public getRenderSphere(): Sphere {
+        if (this.renderSphereLocal.isEmpty()) return this.getCollisionPrimitive().bounds.getBoundingSphere(this.renderSphereWorld);
 
         this.updateWorldMatrix(true, false);
 
-        return this.renderBoundsWorld.copy(this.renderBoundsLocal).applyMatrix4(this.matrixWorld);
+        return this.renderSphereWorld.copy(this.renderSphereLocal).applyMatrix4(this.matrixWorld);
     }
 
     public setMeshes(meshes: Mesh[]) {
@@ -1197,15 +1197,15 @@ class BaseActor extends Object3D implements ICollidable {
             this.remove(mesh);
 
         this.meshes = meshes;
-        this.renderBoundsLocal.makeEmpty();
+        this.renderSphereLocal.makeEmpty();
 
         for (const mesh of meshes) {
             (mesh as any).hasStartedAnimation = true;
             mesh.frustumCulled = false;
             mesh.updateMatrix();
 
-            if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-            if (mesh.geometry.boundingBox) this.renderBoundsLocal.union(tmpRenderBounds.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrix));
+            if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+            if (mesh.geometry.boundingSphere) this.renderSphereLocal.union(tmpRenderSphere.copy(mesh.geometry.boundingSphere).applyMatrix4(mesh.matrix));
 
             this.add(mesh);
         }
@@ -1530,6 +1530,8 @@ class BaseActor extends Object3D implements ICollidable {
         this.isWalking = isWalking;
     }
 
+    public isIdle(): boolean { return this.actorState.state === "idle"; }
+    public isLocomoting(): boolean { return this.actorState.locomotion; }
     public isWalkingMovement(): boolean { return this.isWalking; }
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
 

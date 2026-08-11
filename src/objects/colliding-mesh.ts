@@ -33,6 +33,8 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: GD.IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
         super(props);
 
+        (this as any).isStaticMeshActor = true;
+
         this.collisionProfile = props.collision;
         this.staticMeshCollision = props.staticMeshCollision;
         this.collisionIndex = props.collisionIndex;

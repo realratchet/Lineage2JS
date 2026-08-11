@@ -258,8 +258,10 @@ abstract class BaseEmitter extends Object3D {
     protected currentSpawningSoundIndex: number = 0;
 
     public getCurrentTime() { return this.currentTime; }
+    public isFinished() { return this.isDisabled || this.allParticlesDead; }
+    public kill() { this.killPending = true; }
 
-    constructor(config: GD.EmitterConfig_T) {
+    public constructor(config: GD.EmitterConfig_T) {
         super();
 
         this.fadingSettings = {
@@ -1321,7 +1323,7 @@ abstract class BaseEmitter extends Object3D {
         if (this.instancedMesh) this.worldParticleExtent = maxParticleExtent * this.maxSizeScale * this.scale.x;
 
         // Finalize state.
-        if ((deadParticles >= this.maxActiveParticles || (this.activeParticles - deadParticles) <= 0) && this.particlesPerSecond === 0 && !this.isRespawningDeadParticles)
+        if ((deadParticles >= this.maxActiveParticles || (this.activeParticles - deadParticles) <= 0) && (this.killPending || this.particlesPerSecond === 0 && !this.isRespawningDeadParticles))
             this.allParticlesDead = true;
         else
             this.allParticlesDead = false;

@@ -476,17 +476,20 @@ class DecodeEngine {
             for (const entry of info.program.entries)
                 if (typeof entry.value === "string" && /^LineageEffect\./i.test(entry.value)) paths.add(entry.value);
 
-        for (const path of paths) {
-            const [pkg, cls] = await this.fetchScriptClass(path);
-            const emitter = pkg.newObject<GA.UEmitter>(cls);
+        for (const path of paths) await this.pullEffectTemplate(library, builder, path);
+    }
 
-            emitter.objectName = cls.objectName;
+    protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string): Promise<void> {
+        const [pkg, cls] = await this.fetchScriptClass(path);
+        const emitter = pkg.newObject<GA.UEmitter>(cls);
 
-            const info = emitter.getTemplateDecodeInfo(builder);
+        emitter.objectName = cls.objectName;
 
-            info.scriptClassId = cls.name;
-            library.effectTemplates[cls.name] = info;
-        }
+        const info = emitter.getTemplateDecodeInfo(builder);
+
+        info.scriptClassId = cls.name;
+        library.effectTemplates[path] = info;
+        library.effectTemplates[cls.name] = info;
     }
 
     protected async buildNpcBundle(settings: GD.LoadSettings_T, bundleName: string): Promise<DecodeLibrary> {
@@ -678,6 +681,21 @@ class DecodeEngine {
             builder.pullScriptClasses([cls]);
             await this.pullScriptEffectTemplates(library, builder);
         }
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+
+        return library;
+    }
+
+    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[]): Promise<DecodeLibrary> {
+        const library = new DecodeLibrary();
+        const builder = new DecodeLibraryBuilder(library, settings);
+
+        library.name = "EffectTemplates";
+
+        for (const path of classPaths) await this.pullEffectTemplate(library, builder, path);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -901,6 +919,10 @@ class DecodeEngine {
 
     public async decodeSkeletalMeshBinary(settings: GD.LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<ArrayBuffer> {
         return serializeLibrary(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations)).buffer as ArrayBuffer;
+    }
+
+    public async decodeEffectTemplatesBinary(settings: GD.LoadSettings_T, classPaths: string[]): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeEffectTemplates(settings, classPaths)).buffer as ArrayBuffer;
     }
 
     public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
