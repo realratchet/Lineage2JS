@@ -385,7 +385,7 @@ abstract class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true): SkeletalMeshDecodeResult_T {
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true, decodeAnimationNotifies: boolean = decodeAnimations): SkeletalMeshDecodeResult_T {
         const section = this;
 
         if (section.points.length > 0) section.points.getElem(0);
@@ -420,31 +420,36 @@ abstract class USkeletalMesh extends ULodMesh {
         const boneCount = this.refSkeleton.length;
         const boneMap = new Array(boneCount);
 
-        if (decodeAnimations && this.animation) {
+        if ((decodeAnimations || decodeAnimationNotifies) && this.animation) {
             const refBones = this.animation.refBones;
 
-            for (let i = 0; i < boneCount; i++) {
-                const boneSkeleton = this.refSkeleton.getElem(i);
+            if (decodeAnimations) {
+                for (let i = 0; i < boneCount; i++) {
+                    const boneSkeleton = this.refSkeleton.getElem(i);
 
-                for (let j = 0, len = refBones.length; j < len; j++) {
-                    const boneAnim = refBones.getElem(j);
+                    for (let j = 0, len = refBones.length; j < len; j++) {
+                        const boneAnim = refBones.getElem(j);
 
-                    if (normalizeBoneName(boneSkeleton.boneName) !== normalizeBoneName(boneAnim.boneName))
-                        continue;
+                        if (normalizeBoneName(boneSkeleton.boneName) !== normalizeBoneName(boneAnim.boneName))
+                            continue;
 
-                    boneMap[i] = [normalizeBoneName(boneAnim.boneName), j];
+                        boneMap[i] = [normalizeBoneName(boneAnim.boneName), j];
+                    }
                 }
             }
 
             for (let k = 0, animCount = this.animation.sequences.getElemCount(); k < animCount; k++) {
                 const sequence = this.animation.sequences.getElem(k);
-                const move = this.animation.moves[k];
-
                 const animName = sequence.name;
+
+                if (decodeAnimationNotifies)
+                    animationNotifies[animName] = this.animation.getSequenceNotifies(builder, sequence);
+
+                if (!decodeAnimations) continue;
+
+                const move = this.animation.moves[k];
                 const framerate = sequence.framerate;
                 const keyframes: IKeyframeDecodeInfo_T[] = [];
-
-                animationNotifies[animName] = this.animation.getSequenceNotifies(builder, sequence);
 
                 // MotionChunk.BoneIndices is never used (UnSkeletalMesh.cpp line 376).
                 for (let i = 0; i < boneCount; i++) {

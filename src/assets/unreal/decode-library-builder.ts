@@ -92,12 +92,12 @@ class DecodeLibraryBuilder {
         return soundEntry;
     }
 
-    public pullSkeletalMesh(mesh: GA.USkeletalMesh, animations: boolean = true, materials: boolean = true): GD.ISkinnedMeshObjectDecodeInfo {
+    public pullSkeletalMesh(mesh: GA.USkeletalMesh, animations: boolean = true, materials: boolean = true, animationNotifies: boolean = animations): GD.ISkinnedMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
 
         if (this.skeletalMeshes.has(mesh.uuid)) return this.skeletalMeshes.get(mesh.uuid);
 
-        const result = mesh.getDecodeInfo(this, animations, materials);
+        const result = mesh.getDecodeInfo(this, animations, materials, animationNotifies);
 
         this.library.geometries[mesh.uuid] = result.geometry;
         this.library.materials[mesh.uuid] = result.material;

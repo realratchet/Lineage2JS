@@ -715,7 +715,7 @@ class DecodeEngine {
         for (let i = 0, len = meshPaths.length; i < len; i++) {
             const mesh = await this.fetchSkeletalMesh(meshPaths[i]);
             const texture = await this.fetchCharacterMaterial(texturePaths[i]);
-            const meshInfo = builder.pullSkeletalMesh(mesh, i === 0 && includeAnimations, false);
+            const meshInfo = builder.pullSkeletalMesh(mesh, i === 0 && includeAnimations, false, i === 0);
             const textureUuid = builder.pullMaterial(texture);
             const material = library.materials[meshInfo.materials] as GD.IMaterialGroupDecodeInfo;
 
