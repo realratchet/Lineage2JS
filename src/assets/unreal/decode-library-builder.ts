@@ -1,4 +1,5 @@
 import DecodeLibrary from "./decode-library";
+import pullScriptDumps, { pullScriptClasses } from "./script-dump-loader";
 import type { HeightMapInfo_T } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
 
@@ -205,6 +206,15 @@ class DecodeLibraryBuilder {
 
         this.pullModel(model, levelInfo, this.settings.loadBaseModel !== false);
         this.pullActors(level);
+        this.pullScriptDumps(level.getActors(), level.getAmbientActors());
+    }
+
+    public pullScriptClasses(classes: Iterable<C.UClass>): void {
+        pullScriptClasses(this.library, classes);
+    }
+
+    public pullScriptDumps(...actorLists: Iterable<C.UObject>[]): void {
+        pullScriptDumps(this.library, ...actorLists);
     }
 
     public pullActors(level: GA.ULevel): void {
@@ -276,7 +286,10 @@ class DecodeLibraryBuilder {
 
                         const pawnInfo = pawn.getDecodeInfo(this);
 
-                        if (pawnInfo) this.library.pawnActors.push(pawnInfo);
+                        if (pawnInfo) {
+                            this.setScriptClass(pawn, pawnInfo);
+                            this.library.pawnActors.push(pawnInfo);
+                        }
                     } catch (e) {
                         console.warn(`Pawn '${actor.objectName}' failed to decode`, e);
                     }
@@ -332,6 +345,8 @@ class DecodeLibraryBuilder {
 
         if (!result) return;
 
+        this.setScriptClass(actor, result.object);
+
         for (const leafIndex of result.leafIndices)
             if (this.library.leafActors[leafIndex])
                 this.library.leafActors[leafIndex].push(result.object);
@@ -358,6 +373,8 @@ class DecodeLibraryBuilder {
     public pullEmitter(actor: GA.UEmitter): void {
         const result = actor.getDecodeInfo(this);
 
+        this.setScriptClass(actor, result.object);
+
         for (const leafIndex of result.leafIndices)
             if (this.library.leafActors[leafIndex])
                 this.library.leafActors[leafIndex].push(result.object);
@@ -367,6 +384,12 @@ class DecodeLibraryBuilder {
         const zoneInfo = this.library.bspZones[this.library.bspZoneIndexMap[result.zoneUuid]].zoneInfo;
 
         zoneInfo.children.push(result.object);
+    }
+
+    protected setScriptClass(actor: C.UObject, info: GD.IBaseObjectDecodeInfo): void {
+        const cls = (actor.constructor as any).hostClass as C.UClass;
+
+        if (cls) info.scriptClassId = cls.name;
     }
 }
 

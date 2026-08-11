@@ -60,7 +60,24 @@ declare global {
                     | "SkillVisualEffect"
                     | "SkillAction"
                     | "SkillAction_LocateEffect"
-                    | "SkillAction_SwordTrail";
+                    | "SkillAction_SwordTrail"
+                    | "AnimNotify"
+                    | "AnimNotify_IdleSound"
+                    | "AnimNotify_MatSubAction"
+                    | "AnimNotify_Scripted"
+                    | "AnimNotify_Script"
+                    | "AnimNotify_Sound"
+                    | "AnimNotify_SwimSound"
+                    | "AnimNotify_DestroyEffect"
+                    | "AnimNotify_Effect"
+                    | "AnimNotify_AttackVoice"
+                    | "AnimNotify_Channeling"
+                    | "AnimNotify_AttackPreShot"
+                    | "AnimNotify_AttackShot"
+                    | "AnimNotify_AttackItem"
+                    | "AnimNotify_ScreenFade"
+                    | "AnimNotify_ViewShake"
+                    | "AnimNotify_BoneScale";
 
                 export type USound = import("@unreal/un-sound").USound;
                 export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;
@@ -158,6 +175,76 @@ declare global {
                 export type DecodeLibraryBuilder = import("@unreal/decode-library-builder").DecodeLibraryBuilder;
                 export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
+                export interface INpcDefinition {
+                    id: number;
+                    name: string;
+                    className: string;
+                    mesh: string;
+                    textures: string[];
+                }
+
+                export type ScriptBytecodeValue_T = number | string | null | Vector3Arr | IScriptBytecodeOffsetDecodeInfo | IScriptBytecodeLabelDecodeInfo;
+
+                export interface IScriptBytecodeOffsetDecodeInfo {
+                    virtualOffset: number,
+                    entryIndex: number
+                }
+
+                export interface IScriptBytecodeLabelDecodeInfo extends IScriptBytecodeOffsetDecodeInfo {
+                    name: string,
+                }
+
+                export interface IScriptBytecodeEntryDecodeInfo {
+                    virtualOffset: number,
+                    type: string,
+                    value: ScriptBytecodeValue_T,
+                    tokenName?: string
+                }
+
+                export interface IScriptProgramDecodeInfo {
+                    virtualSize: number,
+                    entries: IScriptBytecodeEntryDecodeInfo[]
+                }
+
+                export interface IScriptFieldDecodeInfo {
+                    id: string,
+                    name: string,
+                    type: C.PropertyTypes_T,
+                    arrayDimensions: number,
+                    flags: number
+                }
+
+                export interface IScriptFunctionDecodeInfo {
+                    id: string,
+                    owner: string,
+                    name: string,
+                    nativeIndex: number,
+                    operatorPrecedence: number,
+                    flags: number,
+                    replicationOffset: number,
+                    fields: IScriptFieldDecodeInfo[],
+                    program: IScriptProgramDecodeInfo
+                }
+
+                export interface IScriptStateDecodeInfo {
+                    id: string,
+                    owner: string,
+                    name: string,
+                    flags: number,
+                    probeMask: bigint,
+                    ignoreMask: bigint,
+                    labelTableVirtualOffset: number,
+                    fields: IScriptFieldDecodeInfo[],
+                    functionIds: string[],
+                    program: IScriptProgramDecodeInfo
+                }
+
+                export interface IScriptClassDecodeInfo extends IScriptStateDecodeInfo {
+                    superClassId: string | null,
+                    classFlags: number,
+                    stateIds: string[]
+                }
+
                 export type LoadSettings_T = {
                     loadTerrain?: boolean,
                     loadBaseModel?: boolean,
@@ -249,6 +336,7 @@ declare global {
                 export interface IBaseObjectDecodeInfo extends IBaseObjectOrInstanceDecodeInfo {
                     type: DecodableObject_T,
                     name?: string,
+                    scriptClassId?: string,
                     position?: Vector3Arr,
                     rotation?: EulerArr,
                     quaternion?: QuaternionArr,
@@ -345,6 +433,7 @@ declare global {
                     materials?: string;
                     skeleton: IBoneDecodeInfo[];
                     animations: Record<string, IKeyframeDecodeInfo_T[]>;
+                    animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>;
                     animationSet?: string;
                     meshScale: Vector3Arr;
                     meshOrigin: Vector3Arr;
@@ -355,6 +444,61 @@ declare global {
                         glow: number,
                         isUnlit: boolean
                     };
+                }
+
+                export interface IAnimationNotifyDecodeInfo {
+                    time: number;
+                    name: string;
+                    object: IAnimationNotifyObjectDecodeInfo | null;
+                }
+
+                export type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
+
+                export interface IAnimationNativeNotifyDecodeInfo {
+                    type: "native";
+                    className: string;
+                    objectName: string;
+                }
+
+                export interface IAnimationSoundNotifyDecodeInfo {
+                    type: "sound";
+                    className: "AnimNotify_Sound";
+                    objectName: string;
+                    sound: string | null;
+                    volume: number;
+                    radius: number;
+                    random: number;
+                    defaultWalkSounds: string[];
+                    defaultRunSounds: string[];
+                    grassWalkSounds: string[];
+                    grassRunSounds: string[];
+                    waterWalkSounds: string[];
+                    waterRunSounds: string[];
+                    defaultActorWalkSounds: string[];
+                    defaultActorRunSounds: string[];
+                }
+
+                export interface IAnimationSwimSoundNotifyDecodeInfo {
+                    type: "swimSound";
+                    className: "AnimNotify_SwimSound";
+                    objectName: string;
+                }
+
+                export interface IAnimationEffectNotifyDecodeInfo {
+                    type: "effect";
+                    className: "AnimNotify_Effect";
+                    objectName: string;
+                    effectClass: string | null;
+                    bone: string;
+                    offsetLocation: Vector3Arr;
+                    offsetRotation: Vector3Arr;
+                    attach: boolean;
+                    tag: string;
+                    drawScale: number;
+                    drawScale3D: Vector3Arr;
+                    trailCamera: boolean;
+                    independentRotation: boolean;
+                    effectScale: number;
                 }
 
                 export interface IEmitterDecodeInfo extends IBaseObjectDecodeInfo {

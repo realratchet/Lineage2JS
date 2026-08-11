@@ -3,6 +3,7 @@ import type { WorkerToMainMessage, PrecacheResult_T } from "./decode-protocol";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
+import getNpcBundleName from "./npc-bundle";
 
 type PendingRequest_T = {
     resolve(value: any): void;
@@ -45,8 +46,10 @@ class DecodeWorkerClient {
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>(); // sector -> worker that decoded it
     protected characterWorker = new Map<number, number>();
+    protected npcWorker = new Map<string, number>();
     protected mainThreadEngine: DecodeEngine = null;
     protected characterAnimationSets = new Set<number>();
+    protected npcAnimationSets = new Set<string>();
     protected readonly binaryDecodeQueue: BinaryDecodeRequest_T[] = [];
     protected isDecodingBinary = false;
 
@@ -220,6 +223,42 @@ class DecodeWorkerClient {
         return library;
     }
 
+    public async decodeSkeletalMesh(settings: GD.LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null): Promise<DecodeLibrary> {
+        const bundleName = npcId === null ? null : getNpcBundleName(packageName);
+        const animationSet = `${packageName}.${meshName}`.toLowerCase();
+        const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);
+
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations);
+
+            if (npcId !== null) this.npcAnimationSets.add(animationSet);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = bundleName === null ? this.pickWorker() : this.pickCharacterWorker(this.npcWorker.get(bundleName));
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        if (bundleName !== null) this.npcWorker.set(bundleName, workerIndex);
+
+        const library = await this.dispatch(workerIndex, { type: "decodeSkeletalMesh", settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations });
+
+        if (npcId !== null) this.npcAnimationSets.add(animationSet);
+
+        return library;
+    }
+
+    public resolveNpc(selector: string | number): Promise<GD.INpcDefinition> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.resolveNpc(selector);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "resolveNpc", selector });
+    }
+
     public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
         if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
 
@@ -347,6 +386,13 @@ class DecodeWorkerClient {
                 if (!request) break;
 
                 request.resolve(msg.groups);
+                break;
+            }
+            case "npcResolved": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.npc);
                 break;
             }
         }

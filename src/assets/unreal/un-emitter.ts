@@ -133,8 +133,7 @@ abstract class UEmitter extends UAActor {
         return this;
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): EmitterDecodeResult_T {
-        const library = builder.library;
+    protected getEmitterDecodeInfos(builder: GD.DecodeLibraryBuilder): GD.EmitterConfig_T[] {
         const emittersInfo: GD.EmitterConfig_T[] = [];
 
         this.emitters.loadSelf().forEach(emitter => {
@@ -151,6 +150,26 @@ abstract class UEmitter extends UAActor {
 
             if (emitterInfo) emittersInfo.push(emitterInfo);
         });
+
+        return emittersInfo;
+    }
+
+    public getTemplateDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseObjectDecodeInfo {
+        return {
+            uuid: this.uuid,
+            type: "Emitter",
+            name: this.objectName,
+            position: [0, 0, 0],
+            scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
+            quaternion: this.rotation.getQuaternionElements(),
+            children: this.getEmitterDecodeInfos(builder),
+            isRangeIgnored: !!this.isRangeIgnored
+        };
+    }
+
+    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): EmitterDecodeResult_T {
+        const library = builder.library;
+        const emittersInfo = this.getEmitterDecodeInfos(builder);
 
         const level = this.getLevel();
         const baseModel = level.getModel();

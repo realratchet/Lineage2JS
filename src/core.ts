@@ -1,6 +1,6 @@
 import * as dat from "dat.gui";
 import RenderManager from "./rendering/render-manager";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
+import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
 import AssetManager from "@client/assets/asset-manager";
 import runSectorPrecache from "@client/sector-precache";
@@ -25,7 +25,7 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 26 // bump when decode logic changes, invalidates all previously cached sectors
+            version: 0 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
@@ -105,6 +105,8 @@ async function startCore() {
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
     await assetManager.initialize(renderManager);
+
+    await renderManager.spawnNpc("Antharas");
 
     renderManager.addClippingRangeControls();
     renderManager.addDisplayGammaControls();

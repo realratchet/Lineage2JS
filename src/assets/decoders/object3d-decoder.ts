@@ -17,6 +17,7 @@ import TerrainDecoration from "@client/objects/terrain-decoration";
 import LocalSpaceSkeleton from "@client/objects/local-space-skeleton";
 import BSPCollider from "@client/objects/bsp-collider";
 import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
+import UnScriptVM from "@client/assets/unreal/un-script-vm";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
@@ -82,6 +83,10 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
 function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibrary, object: T, info: GD.IBaseObjectDecodeInfo) {
 
     if (info.name) object.name = info.name;
+    if (info.scriptClassId) {
+        (object as any).scriptClassId = info.scriptClassId;
+        (object as any).scriptProperties = new Map();
+    }
     if (info.position) object.position.fromArray(info.position);
     if (info.scale) object.scale.fromArray(info.scale);
 
@@ -104,9 +109,9 @@ function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDeco
     // library.leafActors (and this wrapper's bounds/zoneMask) are keyed by info.uuid,
     // not each sub-emitter's own uuid - propagate it down so render-manager's Pass 2
     // can look up BSP visibility for the actual particlePool-bearing children
-    for (const child of object.children) {
-        (child as any).emitterActorUuid = info.uuid;
-    }
+    for (const child of object.children)
+        if (info.bounds) (child as any).emitterActorUuid = info.uuid;
+        else (child as any).isActorAttachedEmitter = true;
 
     return object;
 }
@@ -332,6 +337,7 @@ function decodeSectorCore(library: GD.DecodeLibrary) {
 
     sector.name = library.name;
     sector.brightness = library.brightness;
+    sector.scriptVM = new UnScriptVM(library);
 
     if (library.sector) {
         sector.index = new Vector2().fromArray(library.sector);
@@ -716,7 +722,7 @@ function decodeBones(library: GD.DecodeLibrary, infos: GD.IBoneDecodeInfo[]): Bo
     return bones;
 }
 
-function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[]) {
+function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], notifications: GD.IAnimationNotifyDecodeInfo[]) {
     const tracks = info.map(info => {
         let KeyframeTrackConstructor: typeof KeyframeTrack;
 
@@ -730,6 +736,8 @@ function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyfram
 
     const clip = new AnimationClip(name, -1, tracks);
 
+    (clip as any).animationNotifies = notifications;
+
     return clip;
 }
 
@@ -741,7 +749,7 @@ function decodeAnimations(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObject
         throw new Error(`Animation set '${info.animationSet}' has not been decoded.`);
 
     const animations = Object.keys(info.animations).reduce((acc, k) => {
-        acc[k] = decodeAnimation(library, k, info.animations[k]);
+        acc[k] = decodeAnimation(library, k, info.animations[k], info.animationNotifies[k] || []);
 
         return acc;
     }, {} as Record<string, AnimationClip>);
@@ -795,6 +803,7 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     const animations = decodeAnimations(library, info);
 
     (mesh as any).meshAnimations = animations; // .animations is taken by three's own AnimationClip[] slot
+    (mesh as any).animationNotifies = info.animationNotifies;
 
     applySimpleProperties(library, mesh, info);
 

@@ -4,6 +4,8 @@ import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from 
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T, CollisionQuery_T } from "./physics/collision-world";
 import { findVolumeTransition } from "./physics/volume-bsp";
+import LocalSpaceSkeleton from "./objects/local-space-skeleton";
+import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "./assets/unreal/un-script-vm";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
@@ -44,6 +46,7 @@ const tmpBaseOffset = new Vector3();
 const tmpWalkingStart = new Vector3();
 const tmpWalkingSubStart = new Vector3();
 const tmpDesiredMove = new Vector3();
+const tmpRenderBounds = new Box3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 
 const COLLISION_RADIUS = 7.5; // Live retail pawn APawn+752.
@@ -70,6 +73,7 @@ const YAW_RATE = 65000; // Live retail FMagic RotationRate.Yaw.
 const PLAYER_YAW_RATE = 45000 * 2; // Live Controller.EnemyTurnSpeed; APawn::physicsRotation doubles it.
 const SPAWN_FLOOR_PROBE = 1000;
 const DEFAULT_VOLUME_TERMINAL_VELOCITY = 2500; // Engine.u PhysicsVolume default TerminalVelocity.
+const WATERLINE_DEPTH = 13; // Retail APawn::findWaterLine 0x8d2959.
 const MOVEMENT_TWEEN_TIME = 0.1; // LineageWarrior.u retains this in the disabled LineagePawn walking/running blend calls.
 const IDLE_TWEEN_TIME = MOVEMENT_TWEEN_TIME * 2; // LineageWarrior.u LineagePawn AnimateStanding uses 0.2.
 const HAIR_STEP = 1 / 60; // Local fixed step; retail DynamicHairGetFrame 0x94f010 only supplies bone coordinates.
@@ -86,10 +90,15 @@ const BLINK_CLOSE_TIME = 0.08;
 const BLINK_HOLD_TIME = 0.06;
 const BLINK_OPEN_TIME = 0.12;
 
+type AnimationNotifyHandler_T = (actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo) => void;
+type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
+
 class BaseActor extends Object3D implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
+    public scriptClassId: string = null;
+    public scriptProperties: Map<string, ScriptValue_T> = null;
 
     protected collider: RAPIER.Collider = null;
     protected rigidbody: RAPIER.RigidBody = null;
@@ -101,6 +110,8 @@ class BaseActor extends Object3D implements ICollidable {
     protected readonly analyticalCenter = new Vector3();
     protected readonly analyticalBounds = new Box3();
     protected readonly analyticalOrigin = new Vector3(NaN, NaN, NaN);
+    protected readonly renderBoundsLocal = new Box3();
+    protected readonly renderBoundsWorld = new Box3();
     protected readonly collisionProfile: ActorCollisionProfile_T = {
         collideActors: true,
         collideWorld: true,
@@ -134,6 +145,9 @@ class BaseActor extends Object3D implements ICollidable {
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
     protected prevAnimations = new WeakMap<Mesh, AnimationAction>();
     protected actorAnimations: Record<string, AnimationClip> = {};
+    protected animationNotifyAction: AnimationAction = null;
+    protected animationNotifyTime = 0;
+    protected animationNotifyHandler: AnimationNotifyHandler_T = null;
     protected isAnimationsInit = false;
     protected hairStepTime = 0;
     protected readonly hairChains: HairChainState_T[] = [];
@@ -154,6 +168,9 @@ class BaseActor extends Object3D implements ICollidable {
         swimming: null,
         swimmingIdle: null
     };
+    protected scriptVM: UnScriptVM = null;
+    protected scriptObjectFactory: ScriptObjectFactory_T = null;
+    protected hasBegunPlay = false;
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -162,6 +179,57 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.renderManager = renderManager;
         this.up.copy(tmpUp);
+    }
+
+    public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
+        this.scriptVM = vm;
+        this.scriptClassId = classId;
+        this.scriptProperties = new Map();
+        this.scriptObjectFactory = objectFactory;
+    }
+
+    public beginPlay(): void {
+        if (this.hasBegunPlay || !this.scriptVM) return;
+
+        this.hasBegunPlay = true;
+        this.scriptVM.call(this, "PostBeginPlay");
+    }
+
+    public resolveUnrealObject(id: string): string { return id; }
+
+    public handlesUnrealScriptFunction(fn: GD.IScriptFunctionDecodeInfo): boolean {
+        switch (fn.id.toLowerCase()) {
+            case "engine.actor.postbeginplay":
+            case "engine.pawn.postbeginplay":
+            case "lineagewarrior.lineagepawn.postbeginplay": return true;
+            default: return false;
+        }
+    }
+
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        const context = call.context as any;
+        const name = call.name.toLowerCase();
+
+        if (call.index === 278 || name === "spawn") {
+            if (!this.scriptObjectFactory) throw new Error(`${this.type} cannot spawn script object '${call.args[0]}'.`);
+
+            return this.scriptObjectFactory(call.args[0] as string);
+        }
+
+        switch (name) {
+            case "attachtobone": {
+                if (typeof context.attachObjectToBone !== "function") throw new Error(`'${context.scriptClassId}' cannot attach an object to a bone.`);
+
+                return context.attachObjectToBone(call.args[0] as unknown as Object3D, call.args[1] as string);
+            }
+            case "setrelativelocation": {
+                if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' has no relative location.`);
+
+                context.position.fromArray(call.args[0] as GD.Vector3Arr);
+                return true;
+            }
+            default: throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${context.scriptClassId}'.`);
+        }
     }
 
     public getCollisionRadius() { return this.collisionRadius; }
@@ -232,8 +300,41 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public updatePresentation(currentTime: number, deltaTime: number) {
+        this.updateAnimationNotifies();
         this.updateHair(currentTime * 0.001, deltaTime);
         this.updateBlink(currentTime * 0.001);
+    }
+
+    protected updateAnimationNotifies() {
+        const action = this.animationNotifyAction;
+
+        if (!action) return;
+
+        const oldTime = this.animationNotifyTime;
+        const time = action.time;
+
+        this.animationNotifyTime = time;
+
+        if (!this.animationNotifyHandler || time === oldTime) return;
+
+        const duration = action.getClip().duration;
+        const notifications = (action.getClip() as any).animationNotifies as GD.IAnimationNotifyDecodeInfo[];
+
+        if (!notifications || notifications.length === 0 || duration <= 0) return;
+
+        const oldFrame = oldTime / duration;
+        const frame = time / duration;
+        const forward = action.getEffectiveTimeScale() >= 0;
+
+        for (let i = 0, len = notifications.length; i < len; i++) {
+            const notify = notifications[i];
+            const notifyTime = notify.time;
+            const crossed = forward
+                ? frame >= oldFrame ? oldFrame < notifyTime && notifyTime <= frame : oldFrame < notifyTime || notifyTime <= frame
+                : frame <= oldFrame ? frame <= notifyTime && notifyTime < oldFrame : notifyTime < oldFrame || frame <= notifyTime;
+
+            if (crossed) this.animationNotifyHandler(this, notify);
+        }
     }
 
     public update(_renderManager: RenderManager, currentTime: number, deltaTime: number) {
@@ -313,12 +414,14 @@ class BaseActor extends Object3D implements ICollidable {
             }
         }
 
-        if (desired.actor)
+        if (desired.actor) {
             desired.actor.getWorldPosition(desired.position);
+            desired.swimToDepth = !!this.getWaterVolumeAt(desired.position);
+        }
 
         const distanceX = desired.position.x - position.x;
         const distanceY = desired.position.y - position.y;
-        const isThreeDimensional = this.physicsMode === "swimming" || this.physicsMode === "flying";
+        const isThreeDimensional = this.physicsMode === "flying" || this.physicsMode === "swimming" && desired.swimToDepth;
         const distanceZ = isThreeDimensional ? desired.position.z - position.z : 0;
         const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ);
         const maxSpeed = this.physicsMode === "swimming" ? WATER_SPEED : this.physicsMode === "flying" ? this.airSpeed : this.isWalking ? WALK_SPEED : GROUND_SPEED;
@@ -371,7 +474,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         const dx = this.actorState.desired.position.x - position.x;
         const dy = this.actorState.desired.position.y - position.y;
-        const dz = this.physicsMode === "swimming" || this.physicsMode === "flying" ? this.actorState.desired.position.z - position.z : 0;
+        const dz = this.physicsMode === "flying" || this.physicsMode === "swimming" && this.actorState.desired.swimToDepth ? this.actorState.desired.position.z - position.z : 0;
         const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) - this.actorState.desired.offset;
         const speed = Math.min(maxSpeed, Math.max(0, distance / deltaTime));
 
@@ -897,12 +1000,16 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected getWaterVolume(position: Vector3): GD.IWaterVolumeDecodeInfo | null {
-        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
+        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
 
+        return this.getWaterVolumeAt(tmpWaterPosition);
+    }
+
+    protected getWaterVolumeAt(position: Vector3): GD.IWaterVolumeDecodeInfo | null {
         let selected: GD.IWaterVolumeDecodeInfo = null;
 
         for (const sector of this.renderManager.getLoadedSectors()) {
-            const volume = sector.getWaterVolumeAt(tmpWaterPosition);
+            const volume = sector.getWaterVolumeAt(position);
 
             if (volume && (!selected || volume.priority >= selected.priority)) selected = volume;
         }
@@ -916,8 +1023,8 @@ class BaseActor extends Object3D implements ICollidable {
 
         if (!volume) return 1;
 
-        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
-        tmpWaterEnd.addScaledVector(tmpUp, this.collisionHeight);
+        tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
+        tmpWaterEnd.addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
 
         return findVolumeTransition(tmpWaterPosition, tmpWaterEnd, volume.bsp, startsInWater);
     }
@@ -1044,6 +1151,34 @@ class BaseActor extends Object3D implements ICollidable {
         throw new Error(`${this.type} has no '${name}' bone.`);
     }
 
+    public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number): boolean {
+        for (const mesh of this.meshes) {
+            const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
+
+            if (skeleton && skeleton.attachObject(object, boneNameOrIndex)) return true;
+        }
+
+        return false;
+    }
+
+    public detachBoneObject(object: Object3D): boolean {
+        for (const mesh of this.meshes) {
+            const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
+
+            if (skeleton && skeleton.detachObject(object)) return true;
+        }
+
+        return false;
+    }
+
+    public getRenderBounds(): Box3 {
+        if (this.renderBoundsLocal.isEmpty()) return this.getCollisionPrimitive().bounds;
+
+        this.updateWorldMatrix(true, false);
+
+        return this.renderBoundsWorld.copy(this.renderBoundsLocal).applyMatrix4(this.matrixWorld);
+    }
+
     public setMeshes(meshes: Mesh[]) {
         this.stopAnimations();
         this.disposeBlinkFaces();
@@ -1052,10 +1187,16 @@ class BaseActor extends Object3D implements ICollidable {
             this.remove(mesh);
 
         this.meshes = meshes;
+        this.renderBoundsLocal.makeEmpty();
 
         for (const mesh of meshes) {
             (mesh as any).hasStartedAnimation = true;
             mesh.frustumCulled = false;
+            mesh.updateMatrix();
+
+            if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+            if (mesh.geometry.boundingBox) this.renderBoundsLocal.union(tmpRenderBounds.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrix));
+
             this.add(mesh);
         }
 
@@ -1239,11 +1380,19 @@ class BaseActor extends Object3D implements ICollidable {
         this.actorAnimations = animations;
     }
 
+    public setAnimationNotifyHandler(handler: AnimationNotifyHandler_T) {
+        this.animationNotifyHandler = handler;
+        this.animationNotifyTime = this.animationNotifyAction ? this.animationNotifyAction.time : 0;
+    }
+
     public stopAnimations() {
         for (const mesh of this.meshes) {
             if (this.prevAnimations.has(mesh)) this.prevAnimations.get(mesh).stop();
             if (this.currAnimations.has(mesh)) this.currAnimations.get(mesh).stop();
         }
+
+        this.animationNotifyAction = null;
+        this.animationNotifyTime = 0;
     }
 
     // materials and textures stay - material-decoder hands those out of name-keyed shared caches
@@ -1288,6 +1437,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         const clip = this.actorAnimations[animationName];
         const mixer = this.renderManager.mixer;
+        let notifyAction: AnimationAction = null;
 
         for (const mesh of this.meshes) {
             if ((mesh as any).isBoneAttachment) continue; // rides the bone it hangs off, its own skeleton is untouched by this clip
@@ -1296,6 +1446,8 @@ class BaseActor extends Object3D implements ICollidable {
             const prevAct = this.prevAnimations.get(mesh) || null;
             const currAct = this.currAnimations.get(mesh) || null;
             const nextAct = mixer.clipAction(clip, mesh);
+
+            if (!notifyAction) notifyAction = nextAct;
 
             if (currAct === nextAct) continue;
 
@@ -1309,15 +1461,21 @@ class BaseActor extends Object3D implements ICollidable {
 
             nextAct.play();
         }
+
+        if (this.animationNotifyAction !== notifyAction) {
+            this.animationNotifyAction = notifyAction;
+            this.animationNotifyTime = notifyAction ? notifyAction.time : 0;
+        }
     }
 
     public goTo(position: Vector3) {
         if (!this.isInteractive()) return;
 
-        // console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
+        console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
+        this.actorState.desired.swimToDepth = !!this.getWaterVolumeAt(position);
         this.actorState.desired.offset = 0;
         this.actorState.desired.faceMovement = true;
         this.actorState.desired.faceTarget = null;
@@ -1327,7 +1485,9 @@ class BaseActor extends Object3D implements ICollidable {
         if (!this.isInteractive()) return;
 
         this.actorState.locomotion = true;
+        actor.getWorldPosition(this.actorState.desired.position);
         this.actorState.desired.actor = actor;
+        this.actorState.desired.swimToDepth = !!this.getWaterVolumeAt(this.actorState.desired.position);
         this.actorState.desired.offset = offset;
         this.actorState.desired.faceMovement = true;
         this.actorState.desired.faceTarget = null;
@@ -1339,6 +1499,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.position);
         this.actorState.desired.actor = null;
+        this.actorState.desired.swimToDepth = true;
         this.actorState.desired.offset = 0;
         this.actorState.desired.faceMovement = faceMovement;
     }
@@ -1358,6 +1519,9 @@ class BaseActor extends Object3D implements ICollidable {
     public setWalking(isWalking: boolean) {
         this.isWalking = isWalking;
     }
+
+    public isWalkingMovement(): boolean { return this.isWalking; }
+    public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
 
     public setFlying(isFlying: boolean) {
         this.setBase(null);
@@ -1399,6 +1563,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.actorState.locomotion = false;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
+        this.actorState.desired.swimToDepth = false;
 
         if (this.rigidbody)
             this.rigidbody.setTranslation(tmpBodyPosition.set(position.x, position.y, position.z + this.collisionHeight), true);
@@ -1411,6 +1576,7 @@ class ActorState {
     public readonly desired: DesiredState_T = {
         position: new Vector3(),
         actor: null,
+        swimToDepth: false,
         offset: 0,
         faceMovement: true,
         faceTarget: null
@@ -1435,6 +1601,7 @@ type BasicActorAnimations_T = {
 type DesiredState_T = {
     position: Vector3;
     actor: Object3D | null;
+    swimToDepth: boolean;
     offset: number;
     faceMovement: boolean;
     faceTarget: Object3D | null;

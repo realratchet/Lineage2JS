@@ -17,6 +17,60 @@ class LocalSpaceSkeleton extends Skeleton {
     protected locals: Matrix4[] = null;
     protected attachments: BoneAttachment_T[] = null;
     protected ownsBones: boolean = false;
+    protected visibleAttachmentCount = 0;
+
+    public attachObject(object: Object3D, boneNameOrIndex: string | number): boolean {
+        if (this.parents === null) this.claimBones();
+        if (!this.ownsBones) return false;
+
+        const index = typeof boneNameOrIndex === "number"
+            ? boneNameOrIndex
+            : this.bones.findIndex(bone => bone.name.toLowerCase() === boneNameOrIndex.toLowerCase());
+
+        if (index < 0 || index >= this.bones.length) return false;
+
+        const bone = this.bones[index];
+        const attachment = this.attachments.find(attachment => attachment.object === object);
+        const oldBone = attachment?.bone;
+
+        bone.add(object);
+        bone.updateWorldMatrix = frozenUpdateMatrixWorld;
+
+        if (attachment) {
+            attachment.bone = index;
+
+            if (oldBone !== index && !this.attachments.some(entry => entry !== attachment && entry.bone === oldBone))
+                this.bones[oldBone].updateWorldMatrix = Object3D.prototype.updateWorldMatrix;
+        }
+        else {
+            this.attachments.push({ object, bone: index });
+            this.visibleAttachmentCount++;
+            this.bones[0].visible = true;
+        }
+
+        return true;
+    }
+
+    public detachObject(object: Object3D): boolean {
+        if (this.parents === null) this.claimBones();
+
+        const index = this.attachments.findIndex(attachment => attachment.object === object);
+
+        if (index < 0) return false;
+
+        const bone = this.attachments[index].bone;
+
+        this.attachments.splice(index, 1);
+        object.removeFromParent();
+        this.visibleAttachmentCount--;
+
+        if (!this.attachments.some(attachment => attachment.bone === bone))
+            this.bones[bone].updateWorldMatrix = Object3D.prototype.updateWorldMatrix;
+
+        if (this.visibleAttachmentCount === 0) this.bones[0].visible = false;
+
+        return true;
+    }
 
     public update(): void {
         if (this.parents === null) this.claimBones();
@@ -52,7 +106,7 @@ class LocalSpaceSkeleton extends Skeleton {
         for (let i = 0, len = this.attachments.length; i < len; i++) {
             const attachment = this.attachments[i];
 
-            bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, locals[attachment.bone]);
+            bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, this.mesh.bindMatrixInverse).multiply(locals[attachment.bone]);
             attachment.object.updateMatrixWorld(true);
         }
     }
@@ -95,8 +149,12 @@ class LocalSpaceSkeleton extends Skeleton {
 
             this.parents[i] = index;
 
-            for (const child of bones[i].children)
-                if (!indices.has(child)) this.attachments.push({ object: child, bone: i });
+            for (const child of bones[i].children) {
+                if (indices.has(child)) continue;
+
+                this.attachments.push({ object: child, bone: i });
+                bones[i].updateWorldMatrix = frozenUpdateMatrixWorld;
+            }
         }
 
         bones[0].updateMatrixWorld = frozenUpdateMatrixWorld;

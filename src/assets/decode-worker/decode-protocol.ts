@@ -40,9 +40,27 @@ type DecodeCharacterMessage_T = {
     includeAnimations: boolean;
 };
 
+type DecodeSkeletalMeshMessage_T = {
+    type: "decodeSkeletalMesh";
+    requestId: number;
+    settings: GD.LoadSettings_T;
+    packageName: string;
+    meshName: string;
+    scriptClassPath: string;
+    texturePaths: string[];
+    npcId: number | null;
+    includeAnimations: boolean;
+};
+
 type CharGroupsMessage_T = {
     type: "charGroups";
     requestId: number;
+};
+
+type ResolveNpcMessage_T = {
+    type: "resolveNpc";
+    requestId: number;
+    selector: string | number;
 };
 
 type PrecacheCharactersMessage_T = {
@@ -62,12 +80,18 @@ type CharGroupsDecodedMessage_T = {
     groups: GD.ICharacterGroup[];
 };
 
+type NpcResolvedMessage_T = {
+    type: "npcResolved";
+    requestId: number;
+    npc: GD.INpcDefinition;
+};
+
 interface MusicInfoMessage {
     type: "musicInfo";
     requestId: number;
 }
 
-type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | DecodeCharacterMessage_T | CharGroupsMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage;
+type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage;
 
 interface ReadyMessage {
     type: "ready";
@@ -111,6 +135,6 @@ interface MusicInfoDecodedMessage {
     music: Record<number, string[]>; // music id -> package paths
 }
 
-type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | CharGroupsDecodedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage;
+type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | CharGroupsDecodedMessage_T | NpcResolvedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage;
 
-export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, DecodeCharacterMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };
+export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, NpcResolvedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };

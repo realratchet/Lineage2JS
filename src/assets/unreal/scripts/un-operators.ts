@@ -107,6 +107,10 @@ function Right(a: string, b: number) { return Mid(a.toString(), -b); }
 function Caps(a: string) { return a.toString().toUpperCase(); }
 function Chr(a: number) { return String.fromCharCode(a); }
 function Asc(a: string) { return a.charCodeAt(0); }
+function op_eq_object_object(a: unknown, b: unknown) { return a === b; }
+function op_neq_object_object(a: unknown, b: unknown) { return a !== b; }
+function op_eq_name_name(a: string, b: string) { return a.toLowerCase() === b.toLowerCase(); }
+function op_neq_name_name(a: string, b: string) { return !op_eq_name_name(a, b); }
 
 function registerNativeFuncs(registry: UNativeRegistry) {
     const native = registry.registerNativeFunc.bind(registry);
@@ -273,12 +277,12 @@ function registerNativeFuncs(registry: UNativeRegistry) {
     native(237, Asc); // static final function int    Asc    ( string S );
 
     // Object operators.
-    native(114, fn_not_implemented); // static final operator(24) bool == ( Object A, Object B );
-    native(119, fn_not_implemented); // static final operator(26) bool != ( Object A, Object B );
+    native(114, op_eq_object_object); // static final operator(24) bool == ( Object A, Object B );
+    native(119, op_neq_object_object); // static final operator(26) bool != ( Object A, Object B );
 
     // Name operators.
-    native(254, fn_not_implemented); // static final operator(24) bool == ( name A, name B );
-    native(255, fn_not_implemented); // static final operator(26) bool != ( name A, name B );
+    native(254, op_eq_name_name); // static final operator(24) bool == ( name A, name B );
+    native(255, op_neq_name_name); // static final operator(26) bool != ( name A, name B );
 
     // InterpCurve operator
     native("InterpCurveEval", function InterpCurveEval() { fn_not_implemented() }); //   static final function float InterpCurveEval( InterpCurve curve, float input );

@@ -469,7 +469,12 @@ class AudioManager {
         source.start(0);
     }
 
-    public async playOneShotSound(dataUri: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number) {
+    public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number) {
+        const sourcePosition = position as any;
+        const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
+        const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
+        const z = sourcePosition.z === undefined ? sourcePosition[2] : sourcePosition.z;
+
         await this.ensureUnlocked();
 
         let buffer = this.ambientBufferCache.get(dataUri);
@@ -491,9 +496,9 @@ class AudioManager {
         panner.refDistance = refDistance;
         panner.maxDistance = maxDistance;
         panner.rolloffFactor = ROLLOFF;
-        panner.positionX.value = position[0];
-        panner.positionY.value = position[1];
-        panner.positionZ.value = position[2];
+        panner.positionX.value = x;
+        panner.positionY.value = y;
+        panner.positionZ.value = z;
 
         const gain = this.audioContext.createGain();
         gain.gain.value = volume;

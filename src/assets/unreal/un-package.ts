@@ -410,7 +410,24 @@ class UNativePackage extends ANativePackage {
             case "SkillVisualEffect":
             case "SkillAction":
             case "SkillAction_LocateEffect":
-            case "SkillAction_SwordTrail": Constructor = UObject; break;
+            case "SkillAction_SwordTrail":
+            case "AnimNotify":
+            case "AnimNotify_IdleSound":
+            case "AnimNotify_MatSubAction":
+            case "AnimNotify_Scripted":
+            case "AnimNotify_Script":
+            case "AnimNotify_Sound":
+            case "AnimNotify_SwimSound":
+            case "AnimNotify_DestroyEffect":
+            case "AnimNotify_Effect":
+            case "AnimNotify_AttackVoice":
+            case "AnimNotify_Channeling":
+            case "AnimNotify_AttackPreShot":
+            case "AnimNotify_AttackShot":
+            case "AnimNotify_AttackItem":
+            case "AnimNotify_ScreenFade":
+            case "AnimNotify_ViewShake":
+            case "AnimNotify_BoneScale": Constructor = UObject; break;
 
             default: // objects that we never saw before
                 debugger;

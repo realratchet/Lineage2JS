@@ -32,6 +32,12 @@ const UNativeRegistry = new class UNativeRegistry {
 
         return NATIVE_FUNCS[nativeIndex].name;
     }
+    public getNativeFunc(nativeIndex: number | string): Function {
+        if (!this.hasNativeFunc(nativeIndex))
+            throw new Error(`Native index '${nativeIndex}' not registered!`);
+
+        return NATIVE_FUNCS[nativeIndex];
+    }
 }();
 
 registerNativeFuncs(UNativeRegistry);

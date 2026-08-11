@@ -429,8 +429,7 @@ abstract class UParticleEmitter extends UObject {
         // debugger;
         // console.log(this);
 
-        if (this.sizeScale?.length === 1)
-            debugger;
+        // if (this.sizeScale?.length === 1) debugger;
 
         return {
             name: this.uuid,

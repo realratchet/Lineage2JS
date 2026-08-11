@@ -1459,6 +1459,26 @@ class RenderManager {
         await Promise.all(arrWorkers);
     }
 
+    public addPawn(pawn: BaseActor): void {
+        this.scene.add(pawn);
+        pawn.updateMatrixWorld(true);
+        this.registerCollider(pawn);
+
+        arrMoverPawns.length = 0;
+        arrMoverPawns.push(this.player);
+
+        for (const entry of this.simulatedPawns) arrMoverPawns.push(entry.pawn);
+
+        pawn.ignoreOverlappingActors(arrMoverPawns);
+        this.simulatedPawns.add({ pawn, expires: Infinity, nextTurn: Infinity });
+        pawn.beginPlay();
+        this.needsUpdate = true;
+    }
+
+    public spawnNpc(selector: string | number, position: Vector3 = null): Promise<BaseActor> {
+        return this.assetManager.spawnNpc(this, selector, position);
+    }
+
     protected maintainSimulatedPawns(currentTime: number): void {
         for (const entry of this.simulatedPawns) {
             if (currentTime >= entry.expires) {
@@ -1514,10 +1534,10 @@ class RenderManager {
     // time into whichever sector's grid cell it fell in) their portal/leaf visibility has to be
     // resolved live against wherever they currently are, not the sector they happen to be parented under
     protected updatePawnVisibility(): void {
-        this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(this.player.getCollisionPrimitive().bounds);
+        this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(this.player.getRenderBounds());
 
         for (const entry of this.simulatedPawns)
-            entry.pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(entry.pawn.getCollisionPrimitive().bounds);
+            entry.pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsBox(entry.pawn.getRenderBounds());
 
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
@@ -1861,7 +1881,7 @@ class RenderManager {
                 // within the active sector, reuse zone-object.ts's BSP visibility (Pass 1 fills visibleEmitterUuids) instead of a standalone frustum test
                 if ((child as any).particlePool) {
                     const emitterUuid = (child as any).emitterActorUuid;
-                    const isVisible = !!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid);
+                    const isVisible = (child as any).isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
 
                     if (!isVisible) {
                         // throttle instead of freezing outright so particle state doesn't go stale and pop back in once visible

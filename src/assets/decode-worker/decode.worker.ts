@@ -100,6 +100,26 @@ async function handleMessage(msg: MainToWorkerMessage) {
             }
             break;
         }
+        case "resolveNpc": {
+            try {
+                post({ type: "npcResolved", requestId: msg.requestId, npc: await engine.resolveNpc(msg.selector) });
+            } catch (e) {
+                console.error(`[decode-worker] failed to resolve NPC '${msg.selector}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "decodeSkeletalMesh": {
+            try {
+                const buffer = await engine.decodeSkeletalMeshBinary(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error(`[decode-worker] failed to decode skeletal mesh '${msg.packageName}.${msg.meshName}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "musicInfo": {
             try {
                 post({ type: "musicInfoDecoded", requestId: msg.requestId, music: await engine.decodeMusicInfo() });

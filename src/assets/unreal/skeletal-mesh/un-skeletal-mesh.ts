@@ -415,6 +415,7 @@ abstract class USkeletalMesh extends ULodMesh {
         };
 
         const animations: Record<string, IKeyframeDecodeInfo_T[]> = {};
+        const animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]> = {};
 
         const boneCount = this.refSkeleton.length;
         const boneMap = new Array(boneCount);
@@ -442,6 +443,8 @@ abstract class USkeletalMesh extends ULodMesh {
                 const animName = sequence.name;
                 const framerate = sequence.framerate;
                 const keyframes: IKeyframeDecodeInfo_T[] = [];
+
+                animationNotifies[animName] = this.animation.getSequenceNotifies(builder, sequence);
 
                 // MotionChunk.BoneIndices is never used (UnSkeletalMesh.cpp line 376).
                 for (let i = 0; i < boneCount; i++) {
@@ -524,6 +527,7 @@ abstract class USkeletalMesh extends ULodMesh {
                 materials: this.uuid,
                 skeleton,
                 animations,
+                animationNotifies,
                 meshScale: this.meshScale.getElements(),
                 meshOrigin: this.meshOrigin.getElements(),
                 meshRotOrigin: this.meshRotOrigin.toArray(),

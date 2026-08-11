@@ -1,5 +1,5 @@
 import RenderManager from "@client/rendering/render-manager";
-import type BaseActor from "@client/base-actor";
+import BaseActor from "@client/base-actor";
 import UConfigWarrior from "@client/assets/unreal/conf-files/un-conf-warrior";
 
 // matches decodeCharacter's own default charIndex
@@ -11,9 +11,12 @@ import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-clien
 import { getUserConfig } from "@unreal/conf-files/un-conf-system";
 import { Matrix4, Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
+import UnScriptVM from "@client/assets/unreal/un-script-vm";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
+const tmpPawnSoundPosition = new Vector3();
+const npcSpawnOffset = new Vector3(-600, -600, 0);
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
@@ -28,6 +31,58 @@ const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+
+function findPawnSoundProfile(animations: Record<string, THREE.AnimationClip>): GD.IAnimationSoundNotifyDecodeInfo {
+    for (const animation of Object.values(animations)) {
+        const notifications = (animation as any).animationNotifies as GD.IAnimationNotifyDecodeInfo[];
+
+        if (!notifications) continue;
+
+        for (let i = 0, len = notifications.length; i < len; i++) {
+            const object = notifications[i].object;
+
+            if (object?.type === "sound" && object.waterRunSounds.length > 0) return object;
+        }
+    }
+
+    return null;
+}
+
+function playPawnAnimationSound(renderManager: RenderManager, library: GD.DecodeLibrary, profile: GD.IAnimationSoundNotifyDecodeInfo, actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo): void {
+    const object = notify.object;
+
+    if (!object || object.type !== "sound" && object.type !== "swimSound") return;
+
+    const info = object.type === "sound" ? object : profile;
+
+    if (!info || object.type === "swimSound" && !actor.isSwimmingMovement()) return;
+    if (object.type === "sound" && Math.random() * 100 >= info.random) return;
+
+    let soundName = object.type === "sound" ? object.sound : null;
+
+    if (!soundName) {
+        const sounds = actor.isSwimmingMovement()
+            ? actor.isWalkingMovement() ? info.waterWalkSounds : info.waterRunSounds
+            : actor.isWalkingMovement() ? info.defaultWalkSounds : info.defaultRunSounds;
+
+        if (sounds.length === 0) return;
+
+        soundName = sounds[Math.floor(Math.random() * sounds.length)];
+    }
+
+    const sound = library.soundBlobCache.get(soundName);
+
+    if (!sound?.uri) throw new Error(`Pawn '${actor.name}' has no decoded sound '${soundName}'.`);
+
+    actor.getWorldPosition(tmpPawnSoundPosition);
+    renderManager.audioManager.playOneShotSound(sound.uri, tmpPawnSoundPosition, info.volume / 255, 1, info.radius, info.radius * 100);
+}
+
+function setPawnAnimationSounds(renderManager: RenderManager, library: GD.DecodeLibrary, animations: Record<string, THREE.AnimationClip>, actor: BaseActor): void {
+    const profile = findPawnSoundProfile(animations);
+
+    actor.setAnimationNotifyHandler((actor, notify) => playPawnAnimationSound(renderManager, library, profile, actor, notify));
+}
 
 /**
  * Streams the world in and out around the camera. All ue2 asset decoding happens in
@@ -154,11 +209,73 @@ class AssetManager {
         player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
         player.setMeshes(bodyparts);
         player.initAnimations();
+        setPawnAnimationSounds(renderManager, characterLibrary, animations, player);
     }
 
     public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection, actor?: BaseActor) {
         this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor), actor, charIndex);
         renderManager.needsUpdate = true;
+    }
+
+    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null) {
+        const library = await this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId);
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        const meshes = library.pawnActors.map(info => decodeObject3D(library, info) as THREE.SkinnedMesh);
+        const animations = (meshes[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
+
+        if (!animations) throw new Error(`'${library.name}' animations failed to decode.`);
+
+        const idle = findNpcIdleAnimation(animations, idleAnimation);
+
+        actor.setAnimations(animations);
+        actor.setIdleAnimation(idle);
+        actor.setWalkingAnimation(findNpcMovementAnimation(animations, "walk", idle));
+        actor.setRunningAnimation(findNpcMovementAnimation(animations, "run", idle));
+        actor.setDeathAnimation(idle);
+        actor.setFallingAnimation(idle);
+        actor.setSwimmingAnimation(idle);
+        actor.setSwimmingIdleAnimation(idle);
+        actor.setMeshes(meshes);
+        actor.initAnimations();
+        setPawnAnimationSounds(renderManager, library, animations, actor);
+
+        if (scriptClassPath) {
+            const classId = library.pawnActors[0].scriptClassId;
+
+            if (!classId) throw new Error(`'${library.name}' has no transferred script class.`);
+
+            actor.setScriptRuntime(new UnScriptVM(library), classId, effectClassId => {
+                const info = library.effectTemplates[effectClassId] || library.effectTemplates[effectClassId.toLowerCase()];
+
+                if (!info) throw new Error(`Effect template '${effectClassId}' is not in '${library.name}'.`);
+
+                return decodeObject3D(library, info) as any;
+            });
+        }
+
+        renderManager.needsUpdate = true;
+    }
+
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null): Promise<BaseActor> {
+        const npc = await this.decodeWorker.resolveNpc(selector);
+        const index = npc.mesh.indexOf(".");
+
+        if (index < 0) throw new Error(`NPC '${npc.id}' has invalid mesh path '${npc.mesh}'.`);
+
+        const actor = new BaseActor(renderManager);
+
+        actor.name = npc.name;
+        actor.position.copy(position || renderManager.player.position);
+
+        if (!position) actor.position.add(npcSpawnOffset);
+
+        await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id);
+        renderManager.addPawn(actor);
+
+        return actor;
     }
 
     protected getClassName(charIndex: number): string {
@@ -429,6 +546,27 @@ function findAnimation(animations: Record<string, THREE.AnimationClip>, declared
     if (!name) throw new Error(`Character has no '${declared}' animation.`);
 
     return name;
+}
+
+function findNpcIdleAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
+    const names = Object.keys(animations);
+    const match = declared.toLowerCase();
+    const name = names.find(name => name.toLowerCase() === match)
+        || names.find(name => /^wait(?:_|$)/i.test(name))
+        || names.find(name => /^spwait/i.test(name));
+
+    if (!name) throw new Error(`NPC has no '${declared}' animation.`);
+
+    return name;
+}
+
+function findNpcMovementAnimation(animations: Record<string, THREE.AnimationClip>, movement: string, idle: string): string {
+    const names = Object.keys(animations);
+    const index = idle.indexOf("_");
+    const suffix = index < 0 ? "" : idle.slice(index);
+    const match = `${movement}${suffix}`.toLowerCase();
+
+    return names.find(name => name.toLowerCase() === match) || names.find(name => new RegExp(`^${movement}(?:_|$)`, "i").test(name)) || idle;
 }
 
 // Share one bone tree instead of decoding six or seven identical trees per pawn.

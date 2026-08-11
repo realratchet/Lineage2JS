@@ -1,4 +1,4 @@
-import { serializeLibrary, deserializeLibrary, isSerializedLibrary } from "./library-serializer";
+import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 
 /**
  * OPFS-backed cache of fully decoded (and sanitized) sector libraries, mirroring how
@@ -81,14 +81,27 @@ async function hasCachedLibrary(sectorName: string, settings: GD.LoadSettings_T)
 }
 
 async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<any | null> {
+    const seekable = await openCachedLibrary(sectorName, settings);
+
+    if (!seekable) return null;
+
+    try {
+        return await hydrateLibraryFile(seekable);
+    } catch (e) {
+        console.warn(`[decode-cache] failed to read cached sector '${sectorName}', re-decoding:`, e);
+        return null;
+    }
+}
+
+async function openCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<SeekableLibrary_T | null> {
     const file = await getCachedFile(sectorName, settings);
 
     if (!file) return null;
 
     try {
-        return deserializeLibrary(await file.arrayBuffer());
+        return await openLibraryFile(file);
     } catch (e) {
-        console.warn(`[decode-cache] failed to read cached sector '${sectorName}', re-decoding:`, e);
+        console.warn(`[decode-cache] failed to open cached sector '${sectorName}', re-decoding:`, e);
         return null;
     }
 }
@@ -207,4 +220,5 @@ function refreshSoundBlobUris(library: any): void {
     }
 }
 
-export { hasCachedLibrary, loadCachedLibrary, loadCachedLibraryBuffer, storeCachedLibrary, storeCachedLibraryDurable, storeCachedLibraryBufferDurable, sweepDecodeCache, refreshSoundBlobUris };
+export type { SeekableLibrary_T };
+export { hasCachedLibrary, loadCachedLibrary, openCachedLibrary, hydrateLibraryFile, loadCachedLibraryBuffer, storeCachedLibrary, storeCachedLibraryDurable, storeCachedLibraryBufferDurable, sweepDecodeCache, refreshSoundBlobUris };
