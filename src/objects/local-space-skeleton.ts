@@ -6,7 +6,7 @@ const tmpIdentity = new Matrix4();
 
 function frozenUpdateMatrixWorld(): void { }
 
-type BoneAttachment_T = { object: Object3D, bone: number };
+type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolean };
 
 // three skins through world space, where float32 quantizes a vertex to ~0.03 units at level coordinates - a whole frame of idle motion
 class LocalSpaceSkeleton extends Skeleton {
@@ -38,12 +38,13 @@ class LocalSpaceSkeleton extends Skeleton {
 
         if (attachment) {
             attachment.bone = index;
+            attachment.usesBindMatrix = true;
 
             if (oldBone !== index && !this.attachments.some(entry => entry !== attachment && entry.bone === oldBone))
                 this.bones[oldBone].updateWorldMatrix = Object3D.prototype.updateWorldMatrix;
         }
         else {
-            this.attachments.push({ object, bone: index });
+            this.attachments.push({ object, bone: index, usesBindMatrix: true });
             this.visibleAttachmentCount++;
             this.bones[0].visible = true;
         }
@@ -106,7 +107,10 @@ class LocalSpaceSkeleton extends Skeleton {
         for (let i = 0, len = this.attachments.length; i < len; i++) {
             const attachment = this.attachments[i];
 
-            bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, this.mesh.bindMatrixInverse).multiply(locals[attachment.bone]);
+            if (attachment.usesBindMatrix)
+                bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, this.mesh.bindMatrixInverse).multiply(locals[attachment.bone]);
+            else bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, locals[attachment.bone]);
+
             attachment.object.updateMatrixWorld(true);
         }
     }
@@ -152,7 +156,7 @@ class LocalSpaceSkeleton extends Skeleton {
             for (const child of bones[i].children) {
                 if (indices.has(child)) continue;
 
-                this.attachments.push({ object: child, bone: i });
+                this.attachments.push({ object: child, bone: i, usesBindMatrix: false });
                 bones[i].updateWorldMatrix = frozenUpdateMatrixWorld;
             }
         }

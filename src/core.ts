@@ -106,7 +106,7 @@ async function startCore() {
 
     await assetManager.initialize(renderManager);
 
-    await renderManager.spawnNpc("Baium");
+    await renderManager.spawnNpc("Antharas");
 
     renderManager.addClippingRangeControls();
     renderManager.addDisplayGammaControls();
