@@ -820,7 +820,7 @@ declare global {
                         sway?: Float32Array,
                         uvs?: Float32Array | Float32Array[];
                         uvs2?: Float32Array | Float32Array[];
-                        skinIndex?: Uint8Array;
+                        skinIndex?: Uint8Array | Uint16Array | Uint32Array;
                         skinWeight?: Float32Array;
                         nodeIndex?: Uint32Array;
                     };

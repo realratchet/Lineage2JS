@@ -8,6 +8,7 @@ import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
 
 type SkeletalMeshDecodeResult_T = { object: GD.ISkinnedMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialGroupDecodeInfo };
+type SkinIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 
 class FMeshVector {
     public x: number;
@@ -395,7 +396,7 @@ abstract class USkeletalMesh extends ULodMesh {
 
         const lod = section.wedges.length === 0 && section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
         const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton) : null;
-        const { positions, uvs, bones, weights } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences);
+        const { positions, uvs, bones, weights } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length);
         const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
 
@@ -594,7 +595,7 @@ function readStreamFloat(stream: FPrimitiveArray<"uint32">, index: number) {
 const SKIN_FETCH_DUPE = 0xf0000000;
 const SKIN_STORE_DUPE = 0x80000000;
 
-function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uvs: Float32Array, bones: Uint8Array, weights: Float32Array) {
+function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uvs: Float32Array, bones: SkinIndexArray_T, weights: Float32Array) {
     const stream = lod.skinningData;
     const wedgeCount = lod.numSoftWedges;
     const dupes: number[] = [];
@@ -670,7 +671,8 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
 
     const positions = new Float32Array(3 * vertexCount);
     const uvs = new Float32Array(2 * vertexCount);
-    const bones = new Uint8Array(MAX_BONES * vertexCount);
+    const BoneIndexConstructor = getTypedArrayConstructor(refSkeleton.length);
+    const bones = new BoneIndexConstructor(MAX_BONES * vertexCount);
     const weights = new Float32Array(MAX_BONES * vertexCount);
 
     if (softCount > 0)
@@ -723,7 +725,7 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
     return { positions, uvs, bones, weights, indices, groups };
 }
 
-function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[]) {
+function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[], boneCount: number) {
     const vertexInfos: VertexInfo_T[] = new Array(points.length);
 
     for (let i = 0, len = points.length; i < len; i++) {
@@ -772,7 +774,8 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
     const wedgeCount = wedges.length
     const positions = new Float32Array(3 * wedgeCount);
     const uvs = new Float32Array(2 * wedgeCount);
-    const bones = new Uint8Array(MAX_BONES * wedgeCount);
+    const BoneIndexConstructor = getTypedArrayConstructor(boneCount);
+    const bones = new BoneIndexConstructor(MAX_BONES * wedgeCount);
     const weights = new Float32Array(MAX_BONES * wedgeCount);
 
     // create vertices
