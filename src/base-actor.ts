@@ -6,6 +6,7 @@ import type { CheckResult_T, CollisionQuery_T } from "./physics/collision-world"
 import { findVolumeTransition } from "./physics/volume-bsp";
 import LocalSpaceSkeleton from "./objects/local-space-skeleton";
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "./assets/unreal/un-script-vm";
+import Rotator from "./utils/rotator";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
@@ -47,6 +48,7 @@ const tmpWalkingStart = new Vector3();
 const tmpWalkingSubStart = new Vector3();
 const tmpDesiredMove = new Vector3();
 const tmpRenderBounds = new Box3();
+const tmpRotator = new Rotator();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 
 const COLLISION_RADIUS = 7.5; // Live retail pawn APawn+752.
@@ -226,6 +228,14 @@ class BaseActor extends Object3D implements ICollidable {
                 if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' has no relative location.`);
 
                 context.position.fromArray(call.args[0] as GD.Vector3Arr);
+                return true;
+            }
+            case "setrelativerotation": {
+                if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' has no relative rotation.`);
+
+                const [pitch, yaw, roll] = call.args[0] as GD.Vector3Arr;
+
+                tmpRotator.set(pitch, yaw, roll).toQuaternion(context.quaternion);
                 return true;
             }
             default: throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${context.scriptClassId}'.`);

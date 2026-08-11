@@ -25,7 +25,7 @@ class LocalSpaceSkeleton extends Skeleton {
 
         const index = typeof boneNameOrIndex === "number"
             ? boneNameOrIndex
-            : this.bones.findIndex(bone => bone.name.toLowerCase() === boneNameOrIndex.toLowerCase());
+            : this.bones.findIndex(bone => bone.name === boneNameOrIndex.replaceAll(" ", "_").toLowerCase());
 
         if (index < 0 || index >= this.bones.length) return false;
 

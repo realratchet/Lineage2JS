@@ -1020,7 +1020,7 @@ class DecodeEngine {
         const matches = definitions.filter(npc => npc.name.trim().toLowerCase() === name);
 
         if (matches.length === 0) throw new Error(`NPC name '${selector}' does not exist.`);
-        if (matches.length > 1) throw new Error(`NPC name '${selector}' matches IDs ${matches.map(npc => npc.id).sort((a, b) => a - b).join(", ")}; spawn by ID.`);
+        if (matches.length > 1) console.warn(`NPC name '${selector}' matches IDs ${matches.map(npc => npc.id).join(", ")}; spawning ID ${matches[0].id}.`);
 
         return matches[0];
     }
