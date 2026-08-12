@@ -2,7 +2,7 @@ import "./ue2-conventions";
 import "../materials/shader-chunks/register-chunks";
 import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbit-controls";
+import { ZUpOrbitControls } from "./camera/controllers/zup-orbit-controls";
 import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
@@ -297,7 +297,7 @@ class RenderManager {
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
-    public readonly controls: { orbit: OrbitControls, fps: ZUpPointerLockControls } = { orbit: null, fps: null };
+    public readonly controls: { orbit: ZUpOrbitControls, fps: ZUpPointerLockControls } = { orbit: null, fps: null };
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public readonly raycaster = new Raycaster();
@@ -463,7 +463,7 @@ class RenderManager {
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
         this.camera.up.set(0, 0, 1);
-        this.controls.orbit = new OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.orbit = new ZUpOrbitControls(this.camera, this.renderer.domElement);
         this.controls.fps = new ZUpPointerLockControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
@@ -1351,7 +1351,11 @@ class RenderManager {
             await applyCharacter();
         });
 
-        folder.add(this, "followPlayer").name("Follow Player").onChange(() => this.needsUpdate = true);
+        folder.add(this, "followPlayer").name("Follow Player").onChange(() => {
+            this.controls.orbit?.setNativeLikeControls(this.followPlayer);
+            this.needsUpdate = true
+
+        });
         folder.add({ simulate: () => this.simulatePawns() }, "simulate").name("Simulate Pawns");
 
         buildVariantControls();

@@ -29,6 +29,7 @@ class ZUpOrbitControls extends EventDispatcher {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
+    protected nativeLike: boolean;
 
     [key: string]: any;
 
@@ -108,6 +109,11 @@ class ZUpOrbitControls extends EventDispatcher {
 
         // the target DOM element for key events
         this._domElementKeyEvents = null;
+        this.nativeLike = false;
+
+        this.setNativeLikeControls = function (nativeLike: boolean) {
+            this.nativeLike = nativeLike;
+        }
 
         //
         // public methods
@@ -596,15 +602,12 @@ class ZUpOrbitControls extends EventDispatcher {
 
         function handleMouseWheel(event: WheelEvent) {
 
-            if (event.deltaY < 0) {
+            let dollyFunc = null;
 
-                dollyIn(getZoomScale());
+            if (event.deltaY < 0) dollyFunc = scope.nativeLike ? dollyOut : dollyIn;
+            else if (event.deltaY > 0) dollyFunc = scope.nativeLike ? dollyIn : dollyOut;
 
-            } else if (event.deltaY > 0) {
-
-                dollyOut(getZoomScale());
-
-            }
+            dollyFunc?.(getZoomScale());
 
             scope.update();
 
@@ -883,7 +886,7 @@ class ZUpOrbitControls extends EventDispatcher {
 
                 case 0:
 
-                    mouseAction = scope.mouseButtons.LEFT;
+                    mouseAction = scope.nativeLike ? scope.mouseButtons.RIGHT : scope.mouseButtons.LEFT;
                     break;
 
                 case 1:
@@ -893,7 +896,7 @@ class ZUpOrbitControls extends EventDispatcher {
 
                 case 2:
 
-                    mouseAction = scope.mouseButtons.RIGHT;
+                    mouseAction = scope.nativeLike ? scope.mouseButtons.LEFT : scope.mouseButtons.RIGHT;
                     break;
 
                 default:
