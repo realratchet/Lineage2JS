@@ -220,7 +220,7 @@ class DecodeLibraryBuilder {
     public pullActors(level: GA.ULevel): void {
         const actors = new Set<GA.AActor>(level.getActors());
 
-        if (this.settings.loadAudio !== false)
+        if (this.settings.loadAudio)
             for (const actor of level.getAmbientActors())
                 actors.add(actor);
 

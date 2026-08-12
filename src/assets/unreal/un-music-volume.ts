@@ -15,7 +15,6 @@ abstract class UMusicVolume extends UVolume {
 
     public getDecodeInfo(library: GD.DecodeLibrary) {
         const region = this.getRegion()?.loadSelf();
-
         const decodeInfo: GD.IMusicVolumeDecodeInfo = {
             ...super.getDecodeInfo(),
             type: "MusicVolume",
@@ -23,6 +22,7 @@ abstract class UMusicVolume extends UVolume {
             isMusicForced: this.isMusicForced,
             isMusicLooped: this.isMusicLooped,
             zoneNumber: region.getZoneNumber(),
+            leafIndex: region.getLeaf(),
             priority: this.locationPriority,
             bsp: this.getWorldBspInfo()
         };

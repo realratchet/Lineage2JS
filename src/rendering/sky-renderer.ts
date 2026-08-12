@@ -94,13 +94,9 @@ export default class SkyRenderer {
                 skyZoneInfos.push(obj);
             }
         });
-        console.log(`[SkyRenderer] Found ${skyZoneInfos.length} SkyZoneInfo actors in skylevel`);
-        skyZoneInfos.forEach(szi => console.log(`  > ${szi.name}: Position(${szi.position.toArray().map((v: number) => v.toFixed(2))})`));
 
         const celestials = skyLevel.celestials;
-
-
-        const stetup = envInfo.setup
+        const setup = envInfo.setup;
 
         this.moonActors.forEach(actor => this.celestialScene.remove(actor.mesh));
         this.moonActors = [];

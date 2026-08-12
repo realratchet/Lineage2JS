@@ -148,8 +148,6 @@ class AssetManager {
         this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && hasS3TC);
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
-        console.info(`[textures] mode=${textureMode}, s3tc=${hasS3TC} -> uploading ${this.preferCompressedTextures ? "compressed DDS" : "converted RGBA"}`);
-
         this.userConfig = await getUserConfig();
 
         /* everything below comes out of the decode worker - the app cannot run without it */

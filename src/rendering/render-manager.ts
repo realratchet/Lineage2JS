@@ -638,6 +638,10 @@ class RenderManager {
         this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
         this.controls.orbit.target.set(-87086.51708877791, 239936.94718888338, -3685.930229617832);
 
+        // audio regression
+        this.camera.position.set(19254.357244041046, 145494.0525086215, -3056.262971968217);
+        this.controls.orbit.target.set(19259.976684368154, 145593.79108779877, -3051.7200968751245);
+
         // // bad colon lights in EG catacombs
         // this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
         // this.controls.orbit.target.set(43402.97624528142, 144358.5101364896, -5277.364565211859);

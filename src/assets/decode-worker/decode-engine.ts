@@ -363,6 +363,7 @@ class DecodeEngine {
 
         if (cached) {
             if (convertToRGBA) convertDDSMaterialsToRGBA(cached); /* the cache stores DDS (4-8x smaller than RGBA) */
+
             DecodeCache.refreshSoundBlobUris(cached);                         /* blob URLs are session-scoped */
 
             return { library: cached, fromCache: true };
@@ -882,7 +883,7 @@ class DecodeEngine {
         const styles = new Map<number, Map<number, [string, string][]>>();
 
         for (const entry of pkg.exportGroups.SkeletalMesh) {
-            const name = entry.export.objectName as string;
+            const name = entry.export.objectName;
             const match = pattern.exec(name.toLowerCase());
 
             if (!match) continue;

@@ -396,13 +396,12 @@ abstract class USkeletalMesh extends ULodMesh {
 
         const lod = section.wedges.length === 0 && section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
         const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton) : null;
-        const { positions, uvs, bones, weights } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length);
+        const { positions, uvs, bones, weights, numInfs } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length);
         const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
+        const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: GA.UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
 
-        const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
-
-        const materialInfo = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
+        const materialInfo = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
         const geometryInfo = {
             attributes: {
                 positions,
@@ -415,7 +414,11 @@ abstract class USkeletalMesh extends ULodMesh {
             bounds: this.decodeBoundsInfo()
         };
 
-        const animations: Record<string, IKeyframeDecodeInfo_T[]> = {};
+        if (numInfs > MAX_BONES)
+            console.warn(`Too many bone for influences ${numInfs} >= ${MAX_BONES} for ${this.name}`);
+    
+
+        const animations: Record<string, GD.IKeyframeDecodeInfo_T[]> = {};
         const animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]> = {};
 
         const boneCount = this.refSkeleton.length;
@@ -450,7 +453,7 @@ abstract class USkeletalMesh extends ULodMesh {
 
                 const move = this.animation.moves[k];
                 const framerate = sequence.framerate;
-                const keyframes: IKeyframeDecodeInfo_T[] = [];
+                const keyframes: GD.IKeyframeDecodeInfo_T[] = [];
 
                 // MotionChunk.BoneIndices is never used (UnSkeletalMesh.cpp line 376).
                 for (let i = 0; i < boneCount; i++) {
@@ -538,7 +541,7 @@ abstract class USkeletalMesh extends ULodMesh {
                 meshOrigin: this.meshOrigin.getElements(),
                 meshRotOrigin: this.meshRotOrigin.toArray(),
                 meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements()
-            } as ISkinnedMeshObjectDecodeInfo,
+            } as GD.ISkinnedMeshObjectDecodeInfo,
             geometry: geometryInfo,
             material: materialInfo
         };
@@ -567,7 +570,7 @@ function buildIndices(faces: FTriangle[], materialCount: number) {
     }
 
     const indices = new TypedIndicesArray(indicesByMaterial.flat());
-    const groups: ArrGeometryGroup[] = new Array(materialCount);
+    const groups: GD.ArrGeometryGroup[] = new Array(materialCount);
 
     let firstIndex = 0;
 
@@ -722,7 +725,7 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
         groups.push([softIndexCount + 3 * section.firstFace, 3 * section.numFaces, Math.min(section.materialIndex, materialCount - 1)]);
     }
 
-    return { positions, uvs, bones, weights, indices, groups };
+    return { positions, uvs, bones, weights, indices, groups, numInfs: MAX_BONES - 1 };
 }
 
 function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[], boneCount: number) {
@@ -736,16 +739,20 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
         }
     }
 
+    let numInfs = 0;
+
     // collect influences per vertex
     for (const infl of influences) {
         const vinfo = vertexInfos[infl.iPoint];
-        const numInfs = vinfo.numInfs++;
+
+        numInfs = vinfo.numInfs++;
+
         const idx = numInfs;
 
-        if (numInfs >= MAX_BONES) {
-            console.warn("Too many bone influences");
-            // debugger;
-        }
+        // if (numInfs >= MAX_BONES) {
+        //     console.warn(`Too many bone influences: ${numInfs} >= ${MAX_BONES}`);
+        //     // debugger;
+        // }
 
         // add the influence
         vinfo.bones[idx] = infl.iBone;
@@ -803,7 +810,7 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
         }
     }
 
-    return { positions, uvs, bones, weights };
+    return { positions, uvs, bones, weights, numInfs };
 }
 
 // bodyparts of one character disagree on the casing of shared bones, so one part's clip only binds to the others once names are canonical
@@ -811,9 +818,9 @@ function normalizeBoneName(name: string) {
     return name.replaceAll(" ", "_").toLowerCase();
 }
 
-function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
+function collectSkeleton(refSkeleton: FMeshBone[]): GD.IBoneDecodeInfo[] {
     const boneCount = refSkeleton.length;
-    const boneInfos = new Array<IBoneDecodeInfo>(boneCount)
+    const boneInfos = new Array<GD.IBoneDecodeInfo>(boneCount)
     const boneCoords = new Array<FBoneCoord>(boneCount);
     // const matrices = [];
 
@@ -836,7 +843,7 @@ function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
             parent: bone.parentIndex,
             position: [bonePos.x, bonePos.y, bonePos.z],
             quaternion: [boneRot.x, boneRot.y, boneRot.z, boneRot.w]
-        } as IBoneDecodeInfo;
+        } as GD.IBoneDecodeInfo;
 
         boneRot.w = -boneRot.w;
 
