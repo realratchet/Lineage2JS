@@ -267,14 +267,10 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             case "normal":
                 this.blending = NormalBlending;
                 // UE2 OB_Normal: when opacity is present, forces ZWrite=0 and enables alpha blending
-                // (D3DMaterialState.cpp line 1506-1512)
-                if (info.opacity) {
-                    this.depthWrite = false;
-                }
+                if (info.opacity) this.depthWrite = false;
                 break;
             case "masked":
-                // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending
-                // AlphaRef=127 (~0.498), ZWrite=1
+                // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending - AlphaRef=127 (~0.498), ZWrite=1
                 this.blending = NormalBlending;
                 this.transparent = false;
                 uniforms.alphaTest.value = 127 / 255;
@@ -327,6 +323,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
+
+        // ApplyFinalBlend runs for ZWrite per D3DMaterialState
+        if (info.modifyFramebufferBlending) this.depthWrite = info.depthWrite;
 
         // Projector leaves bProjectOnAlpha False, so alpha-blended surfaces - ocean, glass - take no decal
         if (this.transparent) this.defines["NO_SHADOW_RECEIVE"] = "";
@@ -483,6 +482,7 @@ type MeshStaticMaterialParameters = {
     alphaTest?: number,
     depthWrite: boolean,
     depthTest: boolean,
+    modifyFramebufferBlending?: boolean,
     visible: boolean,
     modulateStaticLighting2X?: boolean,
     selfIllumination?: boolean,

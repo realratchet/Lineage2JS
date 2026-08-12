@@ -530,6 +530,7 @@ function decodeModifier(library: DecodeLibrary, info: GD.IBaseMaterialModifierDe
         transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false)),
         depthWrite: isFinalBlend ? finalBlend.depthWrite : (isShader ? shader.depthWrite : true),
         depthTest: isFinalBlend ? finalBlend.depthTest : (isShader ? shader.depthTest ?? true : true),
+        modifyFramebufferBlending: isFinalBlend,
         visible: isShader ? shader.visible : true,
         alphaTest: isFinalBlend ? (finalBlend.alphaTest ? finalBlend.alphaRef : 0) : (isShader ? shader.alphaTest : 0)
     });

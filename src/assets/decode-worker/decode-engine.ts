@@ -91,6 +91,17 @@ function copyAnimationSounds(target: DecodeLibrary, source: DecodeLibrary, anima
         target.soundBlobCache.set(name, sound);
     }
 
+    const soundsToCopy = [
+        "defaultWalkSounds",
+        "defaultRunSounds",
+        "grassWalkSounds",
+        "grassRunSounds",
+        "waterWalkSounds",
+        "waterRunSounds",
+        "defaultActorWalkSounds",
+        "defaultActorRunSounds"
+    ] as const;
+
     for (const notifications of Object.values(animationNotifies)) {
         for (const notify of notifications) {
             const object = notify.object;
@@ -99,14 +110,9 @@ function copyAnimationSounds(target: DecodeLibrary, source: DecodeLibrary, anima
 
             copySound(object.sound);
 
-            for (const name of object.defaultWalkSounds) copySound(name);
-            for (const name of object.defaultRunSounds) copySound(name);
-            for (const name of object.grassWalkSounds) copySound(name);
-            for (const name of object.grassRunSounds) copySound(name);
-            for (const name of object.waterWalkSounds) copySound(name);
-            for (const name of object.waterRunSounds) copySound(name);
-            for (const name of object.defaultActorWalkSounds) copySound(name);
-            for (const name of object.defaultActorRunSounds) copySound(name);
+            for (const soundKey of soundsToCopy)
+                for (const name of object[soundKey])
+                    copySound(name);
         }
     }
 }
