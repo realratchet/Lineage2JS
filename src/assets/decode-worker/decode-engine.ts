@@ -267,6 +267,13 @@ class DecodeEngine {
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
 
+    protected async sweepCache(settings: GD.LoadSettings_T): Promise<void> {
+        if (this.hasSweptCache) return;
+
+        await DecodeCache.sweepDecodeCache(settings);
+        this.hasSweptCache = true;
+    }
+
     public async initialize(): Promise<void> {
         const assetList = await (await fetch("asset-list.json")).json();
 
@@ -299,10 +306,7 @@ class DecodeEngine {
     }
 
     public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
-        if (!this.hasSweptCache) {
-            await DecodeCache.sweepDecodeCache(settings);
-            this.hasSweptCache = true;
-        }
+        await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
 
@@ -315,10 +319,7 @@ class DecodeEngine {
     }
 
     public async decodeSectorBinary(sectorName: string, settings: GD.LoadSettings_T): Promise<BinarySector_T> {
-        if (!this.hasSweptCache) {
-            await DecodeCache.sweepDecodeCache(settings);
-            this.hasSweptCache = true;
-        }
+        await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
 
@@ -331,10 +332,7 @@ class DecodeEngine {
     }
 
     public async precacheSector(sectorName: string, settings: GD.LoadSettings_T): Promise<PrecacheResult_T> {
-        if (!this.hasSweptCache) {
-            await DecodeCache.sweepDecodeCache(settings);
-            this.hasSweptCache = true;
-        }
+        await this.sweepCache(settings);
 
         if (await DecodeCache.hasCachedLibrary(sectorName, settings))
             return { cached: true, bytes: 0 };
@@ -746,6 +744,8 @@ class DecodeEngine {
     }
 
     public async decodeCharacter(settings: GD.LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true): Promise<DecodeLibrary> {
+        await this.sweepCache(settings);
+
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const [meshPaths, texturePaths] = await this.characterPartPaths(charIndex, faceVariant, hairVariant, hairColour, armor);
@@ -933,9 +933,12 @@ class DecodeEngine {
     }
 
     public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
-        const groups = await this.decodeCharGroups();
+        await this.sweepCache(settings);
 
-        if (settings.cache?.enabled === false) return;
+        const groups = await this.decodeCharGroups();
+        const cache = settings.cache;
+
+        if (cache === false || cache?.enabled === false) return;
 
         for (const group of groups) {
             const name = characterBundleCacheName(group.index, group.name);

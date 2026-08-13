@@ -7,7 +7,7 @@ import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryF
  *
  * Invalidation: settings.cache.version (bump when decode logic changes) and the
  * load-settings hash are baked into the filename; entries older than CACHE_TTL_DAYS
- * are swept on init. settings.cache.enabled toggles the cache entirely.
+ * are swept on init. settings.cache toggles the cache entirely.
  *
  * Libraries are cached before DXT->RGBA conversion (DDS is 4-8x smaller); the worker
  * re-runs the conversion after a hit. Blob URLs in the library are session-scoped, so
@@ -20,11 +20,11 @@ const CACHE_DIR = "decode-cache";
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 function isCacheEnabled(settings: GD.LoadSettings_T): boolean {
-    return settings.cache?.enabled !== false;
+    return settings.cache === false ? false : settings.cache?.enabled ?? true;
 }
 
 function getCacheVersion(settings: GD.LoadSettings_T): number {
-    return settings.cache?.version ?? 0;
+    return settings.cache === false ? 0 : settings.cache?.version ?? 0;
 }
 
 function hashSettings(settings: GD.LoadSettings_T): string {
@@ -132,7 +132,7 @@ function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, lib
 }
 
 async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSettings_T, library: any): Promise<number> {
-    if (!isCacheEnabled(settings)) throw new Error("Decode cache is disabled");
+    if (!isCacheEnabled(settings)) return 0;
 
     const bytes = serializeLibrary(library);
 
@@ -176,12 +176,13 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
     }
 
     const currentVersion = `.v${getCacheVersion(settings)}.`;
+    const enabled = isCacheEnabled(settings);
     const doomed: string[] = [];
 
     for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
         if (handle.kind !== "file") continue;
 
-        if (!name.includes(currentVersion)) {
+        if (!enabled || !name.includes(currentVersion)) {
             doomed.push(name);
             continue;
         }
@@ -198,7 +199,7 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
     }
 
     if (doomed.length > 0)
-        console.log(`[decode-cache] swept ${doomed.length} stale cache entries`);
+        console.log(`[decode-cache] ${enabled ? "swept" : "cleared"} ${doomed.length} cache entries`);
 }
 
 /**

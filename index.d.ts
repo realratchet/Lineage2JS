@@ -261,7 +261,7 @@ declare global {
                         terrain?: boolean,
                         staticMeshes?: boolean
                     },
-                    cache?: {
+                    cache?: false | {
                         enabled?: boolean,
                         version?: number
                     },
