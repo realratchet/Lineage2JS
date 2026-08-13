@@ -49,6 +49,8 @@ function fetchGeometry(info: GD.IGeometryDecodeInfo) {
     if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
+    if (info.attributes.skinIndex2) geometry.setAttribute("skinIndex2", new BufferAttribute(info.attributes.skinIndex2, 4));
+    if (info.attributes.skinWeight2) geometry.setAttribute("skinWeight2", new BufferAttribute(info.attributes.skinWeight2, 4));
     if (info.attributes.nodeIndex) geometry.setAttribute("nodeIndex", new BufferAttribute(info.attributes.nodeIndex, 1));
     if (info.attributes.sway) geometry.setAttribute("sway", new BufferAttribute(info.attributes.sway, 4));
     if ((info.attributes as any).terrainIndex) geometry.setAttribute("terrainIndex", new BufferAttribute((info.attributes as any).terrainIndex, 1));
@@ -774,6 +776,7 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     }
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
+    const extendedBoneInfluences = geometry.getAttribute("skinWeight2") !== undefined;
 
     const bones = decodeBones(library, info.skeleton);
     const skeleton = new LocalSpaceSkeleton(bones);
@@ -784,9 +787,15 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     mesh.ambientGlow = info.ambient?.glow ?? 0;
     mesh.isUnlit = info.ambient?.isUnlit ?? false;
 
-    if (Array.isArray(materials))
-        for (const material of materials) (material as any).setActorLit?.();
-    else (materials as any).setActorLit?.();
+    if (Array.isArray(materials)) {
+        for (const material of materials) {
+            if (extendedBoneInfluences) (material as any).setExtendedBoneInfluences?.();
+            (material as any).setActorLit?.();
+        }
+    } else {
+        if (extendedBoneInfluences) (materials as any).setExtendedBoneInfluences?.();
+        (materials as any).setActorLit?.();
+    }
 
     mesh.position.fromArray(info.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);

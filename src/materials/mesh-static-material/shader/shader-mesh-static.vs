@@ -16,6 +16,11 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+#if defined(USE_SKINNING) && defined(USE_EXTENDED_BONE_INFLUENCES)
+    attribute vec4 skinIndex2;
+    attribute vec4 skinWeight2;
+#endif
+
 #ifdef USE_TERRAIN_DECORATION_FADE
     uniform vec2 terrainDecorationFadeRange;
     varying float vTerrainDecorationFade;
@@ -617,7 +622,31 @@ void main() {
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
-        #include <skinnormal_vertex>
+        #if defined(USE_SKINNING) && defined(USE_EXTENDED_BONE_INFLUENCES)
+            mat4 boneMat4 = getBoneMatrix(skinIndex2.x);
+            mat4 boneMat5 = getBoneMatrix(skinIndex2.y);
+            mat4 boneMat6 = getBoneMatrix(skinIndex2.z);
+            mat4 boneMat7 = getBoneMatrix(skinIndex2.w);
+
+            mat4 skinMatrix = mat4(0.0);
+            skinMatrix += skinWeight.x * boneMatX;
+            skinMatrix += skinWeight.y * boneMatY;
+            skinMatrix += skinWeight.z * boneMatZ;
+            skinMatrix += skinWeight.w * boneMatW;
+            skinMatrix += skinWeight2.x * boneMat4;
+            skinMatrix += skinWeight2.y * boneMat5;
+            skinMatrix += skinWeight2.z * boneMat6;
+            skinMatrix += skinWeight2.w * boneMat7;
+            skinMatrix = bindMatrixInverse * skinMatrix * bindMatrix;
+
+            objectNormal = vec4(skinMatrix * vec4(objectNormal, 0.0)).xyz;
+
+            #ifdef USE_TANGENT
+                objectTangent = vec4(skinMatrix * vec4(objectTangent, 0.0)).xyz;
+            #endif
+        #else
+            #include <skinnormal_vertex>
+        #endif
         #include <defaultnormal_vertex>
     #endif
     #include <begin_vertex>
@@ -634,7 +663,23 @@ void main() {
         }
     #endif
     #include <morphtarget_vertex>
-    #include <skinning_vertex>
+    #if defined(USE_SKINNING) && defined(USE_EXTENDED_BONE_INFLUENCES)
+        vec4 skinVertex = bindMatrix * vec4(transformed, 1.0);
+
+        vec4 skinned = vec4(0.0);
+        skinned += boneMatX * skinVertex * skinWeight.x;
+        skinned += boneMatY * skinVertex * skinWeight.y;
+        skinned += boneMatZ * skinVertex * skinWeight.z;
+        skinned += boneMatW * skinVertex * skinWeight.w;
+        skinned += boneMat4 * skinVertex * skinWeight2.x;
+        skinned += boneMat5 * skinVertex * skinWeight2.y;
+        skinned += boneMat6 * skinVertex * skinWeight2.z;
+        skinned += boneMat7 * skinVertex * skinWeight2.w;
+
+        transformed = (bindMatrixInverse * skinned).xyz;
+    #else
+        #include <skinning_vertex>
+    #endif
     #ifdef USE_ACTOR_LIGHTS
         vec3 actorPosition = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
         vec3 actorNormal = normalize( mat3( modelMatrix ) * objectNormal );

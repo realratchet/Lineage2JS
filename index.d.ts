@@ -250,6 +250,7 @@ declare global {
                     loadBaseModel?: boolean,
                     loadStaticModels?: boolean,
                     loadStaticModelList?: (number | string)[],
+                    loadExtendedBoneInfluences?: boolean,
                     loadEmitters?: boolean,
                     loadEmitterList?: { name: string, emitters?: string[] }[],
                     loadAudio?: boolean,
@@ -823,6 +824,8 @@ declare global {
                         uvs2?: Float32Array | Float32Array[];
                         skinIndex?: Uint8Array | Uint16Array | Uint32Array;
                         skinWeight?: Float32Array;
+                        skinIndex2?: Uint8Array | Uint16Array | Uint32Array;
+                        skinWeight2?: Float32Array;
                         nodeIndex?: Uint32Array;
                     };
                     indices?: IndexLikeArray;

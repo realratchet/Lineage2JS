@@ -30,7 +30,7 @@ function getCacheVersion(settings: GD.LoadSettings_T): number {
 function hashSettings(settings: GD.LoadSettings_T): string {
     /* the cache config and worker pool size must not affect the content hash; texture
        mode neither - conversion happens after the cache, which always stores DDS */
-    const json = JSON.stringify({ ...settings, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
+    const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)

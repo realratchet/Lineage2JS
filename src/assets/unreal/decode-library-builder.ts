@@ -16,6 +16,8 @@ class DecodeLibraryBuilder {
         this.settings = settings;
     }
 
+    public isLoadingExtendedBoneInfluences() { return this.settings.loadExtendedBoneInfluences !== false; }
+
     public pullMaterial(material: GA.UMaterial): string {
         if (!material) return null;
 

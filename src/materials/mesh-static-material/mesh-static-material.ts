@@ -413,6 +413,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    public setExtendedBoneInfluences() {
+        this.defines["USE_EXTENDED_BONE_INFLUENCES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
     // per-vertex hardware lighting instead of a baked stream: EnableLighting(1,0,1) (UnSkeletalMesh.cpp line 4908)
     public setActorLit() {
         this.uniforms.actorAmbient = new Uniform(new Color(0, 0, 0));

@@ -394,15 +394,16 @@ abstract class USkeletalMesh extends ULodMesh {
         if (section.faces.length > 0) section.faces.getElem(0);
         if (section.vertexInfluences.length > 0) section.vertexInfluences.getElem(0);
 
+        const maxBoneInfluences = builder.isLoadingExtendedBoneInfluences() ? MAX_EXTENDED_INFLUENCES : MAX_BONES;
         const lod = section.wedges.length === 0 && section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
-        const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton) : null;
-        const { positions, uvs, bones, weights, numInfs } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length);
+        const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton, maxBoneInfluences) : null;
+        const { positions, uvs, bones, weights, bones2, weights2, numInfs } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length, maxBoneInfluences);
         const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
         const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: GA.UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
 
         const materialInfo = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
-        const geometryInfo = {
+        const geometryInfo: GD.IGeometryDecodeInfo = {
             attributes: {
                 positions,
                 skinIndex: bones,
@@ -414,8 +415,11 @@ abstract class USkeletalMesh extends ULodMesh {
             bounds: this.decodeBoundsInfo()
         };
 
-        if (numInfs > MAX_BONES)
-            console.warn(`Too many bone for influences ${numInfs} >= ${MAX_BONES} for ${this.name}`);
+        if (bones2) geometryInfo.attributes.skinIndex2 = bones2;
+        if (weights2) geometryInfo.attributes.skinWeight2 = weights2;
+
+        if (numInfs > maxBoneInfluences)
+            console.warn(`Too many bone influences ${numInfs} > ${maxBoneInfluences} for ${this.name}`);
     
 
         const animations: Record<string, GD.IKeyframeDecodeInfo_T[]> = {};
@@ -552,6 +556,7 @@ export default USkeletalMesh;
 export { USkeletalMesh };
 
 const MAX_BONES = 4;
+const MAX_EXTENDED_INFLUENCES = 8;
 
 function buildIndices(faces: FTriangle[], materialCount: number) {
     const countFaces = faces.length;
@@ -598,10 +603,34 @@ function readStreamFloat(stream: FPrimitiveArray<"uint32">, index: number) {
 const SKIN_FETCH_DUPE = 0xf0000000;
 const SKIN_STORE_DUPE = 0x80000000;
 
-function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uvs: Float32Array, bones: SkinIndexArray_T, weights: Float32Array) {
+function getSkinningStreamMaxInfluences(lod: FStaticModelLOD) {
+    const stream = lod.skinningData;
+    let cursor = 0, numInfs = 0;
+
+    for (let wedge = 0; wedge < lod.numSoftWedges; wedge++) {
+        const command = stream.getElem(cursor) >>> 0;
+
+        if (command >= SKIN_FETCH_DUPE) {
+            cursor += 1;
+        } else {
+            const influenceCount = ((command >>> 28) & 0x7) + 1;
+
+            numInfs = Math.max(numInfs, influenceCount);
+            cursor += influenceCount;
+        }
+
+        cursor += 2;
+    }
+
+    return numInfs;
+}
+
+function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uvs: Float32Array, bones: SkinIndexArray_T, weights: Float32Array, bones2: SkinIndexArray_T | null, weights2: Float32Array | null, maxBoneInfluences: number) {
     const stream = lod.skinningData;
     const wedgeCount = lod.numSoftWedges;
     const dupes: number[] = [];
+    const arrBones = new Array(MAX_EXTENDED_INFLUENCES);
+    const arrWeights = new Array(MAX_EXTENDED_INFLUENCES);
 
     let cursor = 0, pointIndex = 0;
 
@@ -616,6 +645,9 @@ function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uv
             bones.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
             weights.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
 
+            if (bones2) bones2.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
+            if (weights2) weights2.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
+
             cursor += 1;
         } else {
             const influenceCount = ((command >>> 28) & 0x7) + 1;
@@ -625,20 +657,43 @@ function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uv
             positions[offsetVertex + 1] = point.y;
             positions[offsetVertex + 2] = point.z;
 
-            let total = 0;
-
-            for (let i = 0; i < influenceCount && i < MAX_BONES; i++) {
+            for (let i = 0; i < influenceCount; i++) {
                 const influence = stream.getElem(cursor + i) >>> 0;
-                const weight = ((influence >>> 12) & 0xffff) / 65535;
 
-                bones[offsetBone + i] = (influence & 0xfff) / 6;
-                weights[offsetBone + i] = weight;
-                total += weight;
+                arrBones[i] = (influence & 0xfff) / 6;
+                arrWeights[i] = ((influence >>> 12) & 0xffff) / 65535;
             }
 
-            if (influenceCount > MAX_BONES) {
-                for (let i = 0; i < MAX_BONES; i++)
-                    weights[offsetBone + i] /= total;
+            for (let i = 1; i < influenceCount; i++) {
+                const bone = arrBones[i], weight = arrWeights[i];
+                let j = i;
+
+                while (j > 0 && weight > arrWeights[j - 1]) {
+                    arrBones[j] = arrBones[j - 1];
+                    arrWeights[j] = arrWeights[j - 1];
+                    j--;
+                }
+
+                arrBones[j] = bone;
+                arrWeights[j] = weight;
+            }
+
+            const storedInfluenceCount = Math.min(influenceCount, maxBoneInfluences);
+            let total = 0;
+
+            for (let i = 0; i < storedInfluenceCount; i++)
+                total += arrWeights[i];
+
+            for (let i = 0; i < storedInfluenceCount; i++) {
+                const targetIndex = offsetBone + i % MAX_BONES;
+
+                if (i < MAX_BONES) {
+                    bones[targetIndex] = arrBones[i];
+                    weights[targetIndex] = arrWeights[i] / total;
+                } else {
+                    bones2![targetIndex] = arrBones[i];
+                    weights2![targetIndex] = arrWeights[i] / total;
+                }
             }
 
             if (command & SKIN_STORE_DUPE) dupes.push(wedge);
@@ -667,19 +722,23 @@ function findRigidBone(section: FSkelMeshSection, refSkeleton: FMeshBone[]) {
     return 0;
 }
 
-function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleton: FMeshBone[]) {
+function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleton: FMeshBone[], maxBoneInfluences: number) {
     const rigidStream = lod.skinVertexStream.vertices;
     const softCount = lod.numSoftWedges, rigidCount = rigidStream.length;
     const vertexCount = softCount + rigidCount;
+    const numInfs = softCount > 0 ? getSkinningStreamMaxInfluences(lod) : 0;
+    const useExtendedBoneInfluences = maxBoneInfluences > MAX_BONES && numInfs > MAX_BONES;
 
     const positions = new Float32Array(3 * vertexCount);
     const uvs = new Float32Array(2 * vertexCount);
     const BoneIndexConstructor = getTypedArrayConstructor(refSkeleton.length);
     const bones = new BoneIndexConstructor(MAX_BONES * vertexCount);
     const weights = new Float32Array(MAX_BONES * vertexCount);
+    const bones2 = useExtendedBoneInfluences ? new BoneIndexConstructor(MAX_BONES * vertexCount) : null;
+    const weights2 = useExtendedBoneInfluences ? new Float32Array(MAX_BONES * vertexCount) : null;
 
     if (softCount > 0)
-        convertSkinningStream(lod, positions, uvs, bones, weights);
+        convertSkinningStream(lod, positions, uvs, bones, weights, bones2, weights2, maxBoneInfluences);
 
     for (let i = 0; i < rigidCount; i++) {
         const vertex = rigidStream.getElem(i);
@@ -725,17 +784,17 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
         groups.push([softIndexCount + 3 * section.firstFace, 3 * section.numFaces, Math.min(section.materialIndex, materialCount - 1)]);
     }
 
-    return { positions, uvs, bones, weights, indices, groups, numInfs: MAX_BONES - 1 };
+    return { positions, uvs, bones, weights, bones2, weights2, indices, groups, numInfs };
 }
 
-function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[], boneCount: number) {
+function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[], boneCount: number, maxBoneInfluences: number) {
     const vertexInfos: VertexInfo_T[] = new Array(points.length);
 
     for (let i = 0, len = points.length; i < len; i++) {
         vertexInfos[i] = {
             numInfs: 0,
-            bones: new Array(MAX_BONES).fill(0),
-            weights: new Array(MAX_BONES).fill(0)
+            bones: new Array(MAX_EXTENDED_INFLUENCES).fill(0),
+            weights: new Array(MAX_EXTENDED_INFLUENCES).fill(0)
         }
     }
 
@@ -745,9 +804,9 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
     for (const infl of influences) {
         const vinfo = vertexInfos[infl.iPoint];
 
-        numInfs = vinfo.numInfs++;
+        const idx = vinfo.numInfs++;
 
-        const idx = numInfs;
+        numInfs = Math.max(numInfs, vinfo.numInfs);
 
         // if (numInfs >= MAX_BONES) {
         //     console.warn(`Too many bone influences: ${numInfs} >= ${MAX_BONES}`);
@@ -763,18 +822,32 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
     for (const V of vertexInfos) {
         if (!V || V.numInfs === 0) {
             // debugger;
+            continue;
         }
 
-        if (V.numInfs <= MAX_BONES) continue;   // no normalization is required
+        for (let i = 1; i < V.numInfs; i++) {
+            const bone = V.bones[i], weight = V.weights[i];
+            let j = i;
 
+            while (j > 0 && weight > V.weights[j - 1]) {
+                V.bones[j] = V.bones[j - 1];
+                V.weights[j] = V.weights[j - 1];
+                j--;
+            }
+
+            V.bones[j] = bone;
+            V.weights[j] = weight;
+        }
+
+        const influenceCount = Math.min(V.numInfs, maxBoneInfluences);
         let s = 0;
 
-        for (let j = 0; j < MAX_BONES; j++)     // count sum
+        for (let j = 0; j < influenceCount; j++)     // count sum
             s += V.weights[j];
 
         s = 1.0 / s;
 
-        for (let j = 0; j < MAX_BONES; j++)     // adjust weights
+        for (let j = 0; j < influenceCount; j++)     // adjust weights
             V.weights[j] *= s;
     }
 
@@ -784,6 +857,9 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
     const BoneIndexConstructor = getTypedArrayConstructor(boneCount);
     const bones = new BoneIndexConstructor(MAX_BONES * wedgeCount);
     const weights = new Float32Array(MAX_BONES * wedgeCount);
+    const useExtendedBoneInfluences = maxBoneInfluences > MAX_BONES && numInfs > MAX_BONES;
+    const bones2 = useExtendedBoneInfluences ? new BoneIndexConstructor(MAX_BONES * wedgeCount) : null;
+    const weights2 = useExtendedBoneInfluences ? new Float32Array(MAX_BONES * wedgeCount) : null;
 
     // create vertices
     for (let i = 0; i < wedgeCount; i++) {
@@ -802,15 +878,20 @@ function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: 
         uvs[offsetUv + 0] = texU;
         uvs[offsetUv + 1] = texV;
 
-        for (let j = 0, len = vinfo.numInfs; j < len; j++) {
-            const off = offsetBone + j;
+        for (let j = 0, len = Math.min(vinfo.numInfs, maxBoneInfluences); j < len; j++) {
+            const off = offsetBone + j % MAX_BONES;
 
-            bones[off] = vinfo.bones[j];
-            weights[off] = vinfo.weights[j];
+            if (j < MAX_BONES) {
+                bones[off] = vinfo.bones[j];
+                weights[off] = vinfo.weights[j];
+            } else {
+                bones2![off] = vinfo.bones[j];
+                weights2![off] = vinfo.weights[j];
+            }
         }
     }
 
-    return { positions, uvs, bones, weights, numInfs };
+    return { positions, uvs, bones, weights, bones2, weights2, numInfs };
 }
 
 // bodyparts of one character disagree on the casing of shared bones, so one part's clip only binds to the others once names are canonical

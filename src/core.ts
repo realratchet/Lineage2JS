@@ -24,7 +24,7 @@ async function startCore() {
             staticMeshes: true
         },
         cache: {
-            enabled: true,
+            enabled: false,
             version: 2 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
@@ -32,6 +32,7 @@ async function startCore() {
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
+        loadExtendedBoneInfluences: true,
         loadEmitters: true,
         loadAudio: true,
         _loadEmitterList: [],
