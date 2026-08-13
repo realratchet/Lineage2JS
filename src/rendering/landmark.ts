@@ -4,6 +4,7 @@ import type Player from "@client/player";
 const ACTIVE_EFFECT = "LineageEffect.e_u093_a";
 const COMPLETION_EFFECT = "LineageEffect.e_u093_b";
 const COMPLETION_DISTANCE_SQ = 30 * 30;
+const MIN_SURFACE_NORMAL_Z = 0.5; // FLandMark::AddLandMark 0x82a74b-0x82a785
 const axisUp = new Vector3(0, 0, 1);
 const tmpNormal = new Vector3();
 
@@ -26,7 +27,9 @@ class Landmark {
     }
 
     public addLandmark(position: Vector3, normal: Vector3): void {
-        this.removeEffect(this.activeEffect);
+        if (normal.z <= MIN_SURFACE_NORMAL_Z || normal.z > 1) return;
+
+        this.deleteLandmark(true);
 
         const effect = this.activeEffect = this.createEffect(ACTIVE_EFFECT);
 
@@ -86,10 +89,15 @@ class Landmark {
             this.activeEffect = null;
         }
 
-        if (!immediate || !this.completionEffect) return;
+        if (!immediate) return;
 
-        this.removeEffect(this.completionEffect);
-        this.completionEffect = null;
+        if (this.completionEffect) {
+            this.removeEffect(this.completionEffect);
+            this.completionEffect = null;
+        }
+
+        for (const effect of this.retiringEffects) this.removeEffect(effect);
+        this.retiringEffects.clear();
     }
 
     protected killEffect(effect: Object3D): void {
