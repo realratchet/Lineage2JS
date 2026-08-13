@@ -64,7 +64,7 @@ type PreparedActorGeometryData_T = {
     normalMatrix: Matrix3;
     reverseWinding: boolean;
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
-    ambient: { glow: number, vector: GD.Vector3Arr, isUnlit: boolean };
+    ambient: { glow: number, vector: GD.Vector3Arr, isUnlit: boolean, hardwareLighting?: boolean };
     scaledGlow: number;
     isSunAffected: boolean;
     collider: Uint32Array | null;

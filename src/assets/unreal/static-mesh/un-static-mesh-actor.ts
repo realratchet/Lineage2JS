@@ -21,6 +21,21 @@ function getSwayPhase(uuid: string): number {
     return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
 }
 
+function hasStaticLightingData(instance: { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } | null): boolean {
+    if (!instance) return false;
+
+    if (instance.color)
+        for (let i = 0; i < instance.color.length; i++)
+            if (instance.color[i] !== 0) return true;
+
+    const flags = new Uint8Array(instance.lights.flags);
+
+    for (let i = 0; i < flags.length; i++)
+        if (flags[i] !== 0) return true;
+
+    return false;
+}
+
 abstract class UStaticMeshActor extends UAActor {
 
     declare protected mesh: GA.UStaticMesh | GA.UTexture;
@@ -182,7 +197,8 @@ abstract class UStaticMeshActor extends UAActor {
         const ambientProps = {
             glow: ambActor.ambientGlow,
             vector: ambVector,
-            isUnlit: this.isUnlit
+            isUnlit: this.isUnlit,
+            hardwareLighting: !this.isUnlit && !this.isSunAffected && ambActor.ambientGlow === 0 && ambVector[0] === 0 && ambVector[1] === 0 && ambVector[2] === 0 && !hasStaticLightingData(instance)
         };
 
         return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);

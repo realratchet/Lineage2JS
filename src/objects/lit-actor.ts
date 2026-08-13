@@ -4,11 +4,14 @@ import { SectorObject } from "@client/objects/zone-object";
 import { BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { ColorByte } from "@client/utils/color-byte";
+import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
+const tmpHardwareCenter = new Vector3();
 // const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
+const arrHardwareLights: DynamicLight[] = [];
 
 // Vertex indices a light actually influences, decoded once from its flags bitmask
 // (LSB-first per byte). The dynamic pass runs per animated light per frame, and
@@ -46,7 +49,7 @@ class LitActorMesh extends Mesh {
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
-    protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
+    protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
 
     public isBatch?: boolean;
     public batchActorUuids?: string[];
@@ -71,7 +74,7 @@ class LitActorMesh extends Mesh {
     public needsRelightPass?: boolean; // set by zone-object.ts when a batch element's visibility flips
     protected vertexToElement?: Uint32Array;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
@@ -200,6 +203,58 @@ class LitActorMesh extends Mesh {
 
                 if (intensity > 0) {
                     target[vi * 3 + 0] += Math.floor(col.r * intensity);
+                    target[vi * 3 + 1] += Math.floor(col.g * intensity);
+                    target[vi * 3 + 2] += Math.floor(col.b * intensity);
+                }
+            }
+        }
+    }
+
+    protected computeHardwareLighting(sector: SectorObject, target: Uint8ClampedArray) {
+        const attrPositions = this.geometry.getAttribute("position");
+        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, ambient: typeof this.ambient }[] | undefined;
+
+        if (perActorAmbient) {
+            for (let ei = 0; ei < perActorAmbient.length; ei++) {
+                const actor = perActorAmbient[ei];
+                if (!actor.ambient?.hardwareLighting) continue;
+
+                const elem = this.batchElements![ei];
+                const min = elem.boundsMin, max = elem.boundsMax;
+                const dx = max[0] - min[0], dy = max[1] - min[1], dz = max[2] - min[2];
+
+                tmpHardwareCenter.set((min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5);
+                this.computeHardwareLightingRange(sector, target, actor.startVertex, actor.count, actor.scaledGlow, actor.isSunAffected, Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5);
+            }
+        } else if (this.ambient?.hardwareLighting) {
+            if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
+
+            tmpHardwareCenter.copy(this.geometry.boundingSphere!.center).applyMatrix4(this.matrixWorld);
+            const radius = this.geometry.boundingSphere!.radius * this.matrixWorld.getMaxScaleOnAxis();
+
+            this.computeHardwareLightingRange(sector, target, 0, attrPositions.count, this.scaledGlow, this.isSunAffected, radius);
+        }
+    }
+
+    protected computeHardwareLightingRange(sector: SectorObject, target: Uint8ClampedArray, startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, radius: number) {
+        sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, isSunAffected);
+
+        const attrPositions = this.geometry.getAttribute("position");
+        const attrNormals = this.geometry.getAttribute("normal");
+
+        for (const light of arrHardwareLights) {
+            if (light.isDynamic || light.isTimeBased) continue;
+
+            const col = light.color;
+
+            for (let vi = startVertex, end = startVertex + count; vi < end; vi++) {
+                tmpVertex.fromBufferAttribute(attrPositions, vi).applyMatrix4(this.matrixWorld);
+                tmpNormal.fromBufferAttribute(attrNormals, vi).transformDirection(this.matrixWorld);
+
+                const intensity = scaledGlow * 0.5 * this.sampleIntensity(light, tmpVertex, tmpNormal);
+
+                if (intensity > 0) {
+                    target[vi * 3] += Math.floor(col.r * intensity);
                     target[vi * 3 + 1] += Math.floor(col.g * intensity);
                     target[vi * 3 + 2] += Math.floor(col.b * intensity);
                 }
@@ -376,6 +431,8 @@ class LitActorMesh extends Mesh {
                 if (lerp < 1.0) this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp);
                 if (lerp > 0.0) this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp);
             } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0);
+
+            this.computeHardwareLighting(sector, this.staticLightingCache);
         }
 
         // Apply static cache to the vertex attribute

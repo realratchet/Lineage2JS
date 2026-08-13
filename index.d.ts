@@ -364,7 +364,8 @@ declare global {
                     ambient: {
                         glow: number,
                         vector: Vector3Arr,
-                        isUnlit: boolean
+                        isUnlit: boolean,
+                        hardwareLighting?: boolean
                     }
                 }
 
