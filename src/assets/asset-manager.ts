@@ -1,6 +1,8 @@
 import RenderManager from "@client/rendering/render-manager";
 import BaseActor from "@client/base-actor";
 import UConfigWarrior from "@client/assets/unreal/conf-files/un-conf-warrior";
+import UConfigLocalization, { LocalizationProperty_T } from "@client/assets/unreal/conf-files/un-conf-localization";
+import { UnProperties } from "@l2js/core";
 
 // matches decodeCharacter's own default charIndex
 const DEFAULT_CHAR_INDEX = 1;
@@ -11,7 +13,8 @@ import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-clien
 import { getUserConfig } from "@unreal/conf-files/un-conf-system";
 import { Matrix4, Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
-import UnScriptVM from "@client/assets/unreal/un-script-vm";
+import UnScriptVM from "@client/ue-script/vm";
+import LineagePlayerController from "@client/objects/lineage-player-controller";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
@@ -27,39 +30,101 @@ const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
 const STATIC_MESH_BUILD_FRAME_MS = 2;
 const BIND_POSE_EPSILON = 1e-3;
 const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
+const UNDERWATER_EFFECTS = ["LineageEffect.e_u061_cam", "LineageEffect.e_u061_beam"];
+const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
 
-function findPawnSoundProfile(animations: Record<string, THREE.AnimationClip>): GD.IAnimationSoundNotifyDecodeInfo {
-    for (const animation of Object.values(animations)) {
-        const notifications = (animation as any).animationNotifies as GD.IAnimationNotifyDecodeInfo[];
+function findScriptField(library: GD.DecodeLibrary, classId: string, name: string): GD.IScriptFieldDecodeInfo {
+    const lowerName = name.toLowerCase();
+    let cls = library.scriptClasses[classId];
 
-        if (!notifications) continue;
+    while (cls) {
+        const field = cls.fields.find(field => field.name.toLowerCase() === lowerName);
 
-        for (let i = 0, len = notifications.length; i < len; i++) {
-            const object = notifications[i].object;
-
-            if (object?.type === "sound" && object.waterRunSounds.length > 0) return object;
-        }
+        if (field) return field;
+        cls = cls.superClassId ? library.scriptClasses[cls.superClassId] : null;
     }
 
-    return null;
+    throw new Error(`UnrealScript class '${classId}' has no property '${name}'.`);
 }
 
-function playPawnAnimationSound(renderManager: RenderManager, library: GD.DecodeLibrary, profile: GD.IAnimationSoundNotifyDecodeInfo, actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo): void {
+function findScriptDefault(library: GD.DecodeLibrary, classId: string, name: string): GD.ScriptPropertyValue_T {
+    const lowerName = name.toLowerCase();
+    let cls = library.scriptClasses[classId];
+
+    while (cls) {
+        const key = Object.keys(cls.defaults).find(key => key.toLowerCase() === lowerName);
+
+        if (key) return cls.defaults[key];
+        cls = cls.superClassId ? library.scriptClasses[cls.superClassId] : null;
+    }
+
+    throw new Error(`UnrealScript class '${classId}' has no default for '${name}'.`);
+}
+
+function parseLocalizedValue(field: GD.IScriptFieldDecodeInfo, value: string): GD.ScriptPropertyValue_T {
+    switch (field.type.toLowerCase()) {
+        case "name":
+        case "str":
+        case "string": return value.length >= 2 && value[0] === '"' && value[value.length - 1] === '"' ? value.slice(1, -1) : value;
+        case "byte":
+        case "int":
+        case "float": {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) throw new Error(`Localized UnrealScript property '${field.id}' has invalid number '${value}'.`);
+
+            return number;
+        }
+        case "bool":
+            if (/^(true|1)$/i.test(value)) return true;
+            if (/^(false|0)$/i.test(value)) return false;
+            throw new Error(`Localized UnrealScript property '${field.id}' has invalid bool '${value}'.`);
+        default: throw new Error(`Localized UnrealScript property '${field.id}' has unsupported type '${field.type}'.`);
+    }
+}
+
+function applyScriptLocalization(library: GD.DecodeLibrary, classId: string, properties: LocalizationProperty_T[]): void {
+    const cls = library.scriptClasses[classId];
+
+    if (!cls) throw new Error(`UnrealScript class '${classId}' is not in '${library.name}'.`);
+
+    for (const property of properties) {
+        const field = findScriptField(library, classId, property.name);
+
+        if (!(field.flags & UnProperties.PropertyFlags_T.CPF_Localized)) throw new Error(`UnrealScript property '${field.id}' is not localized.`);
+
+        if (property.index < 0) {
+            cls.defaults[field.name] = parseLocalizedValue(field, property.value);
+            continue;
+        }
+
+        const inherited = findScriptDefault(library, classId, field.name);
+
+        if (!Array.isArray(inherited)) throw new Error(`Localized UnrealScript property '${field.id}' is not an array.`);
+        if (property.index >= field.arrayDimensions) throw new Error(`Localized UnrealScript property '${field.id}' index '${property.index}' is out of bounds.`);
+
+        const values = Array.isArray(cls.defaults[field.name]) ? (cls.defaults[field.name] as GD.ScriptPropertyValue_T[]).slice() : inherited.slice();
+
+        values[property.index] = parseLocalizedValue(field, property.value);
+        cls.defaults[field.name] = values;
+    }
+}
+
+function playPawnAnimationSound(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo): void {
     const object = notify.object;
 
-    if (!object || object.type !== "sound" && object.type !== "swimSound") return;
+    if (!object || object.type !== "sound") return;
 
-    const info = object.type === "sound" ? object : profile;
+    const info = object;
 
-    if (!info || object.type === "swimSound" && !actor.isSwimmingMovement()) return;
-    if (object.type === "sound" && Math.random() * 100 >= info.random) return;
+    if (Math.random() * 100 >= info.random) return;
 
-    let soundName = object.type === "sound" ? object.sound : null;
+    let soundName = object.sound;
 
     if (!soundName) {
         const sounds = actor.isSwimmingMovement()
@@ -79,10 +144,47 @@ function playPawnAnimationSound(renderManager: RenderManager, library: GD.Decode
     renderManager.audioManager.playOneShotSound(sound.uri, tmpPawnSoundPosition, info.volume / 255, 1, info.radius, info.radius * 100);
 }
 
-function setPawnAnimationSounds(renderManager: RenderManager, library: GD.DecodeLibrary, animations: Record<string, THREE.AnimationClip>, actor: BaseActor): void {
-    const profile = findPawnSoundProfile(animations);
+function playPawnSwimSound(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor, info: GD.IAnimationSwimSoundNotifyDecodeInfo): void {
+    if (!actor.isSwimmingMovement()) return;
 
-    actor.setAnimationNotifyHandler((actor, notify) => playPawnAnimationSound(renderManager, library, profile, actor, notify));
+    const soundSet = actor.isUnderwaterMovement() ? info.underwater : info.surface;
+
+    if (!soundSet) throw new Error(`Swim sound notify '${info.objectName}' has no audio profile.`);
+    if (Math.random() * 100 >= soundSet.random) return;
+
+    const soundName = soundSet.sounds[Math.floor(Math.random() * soundSet.sounds.length)];
+    const sound = library.soundBlobCache.get(soundName);
+
+    if (!sound?.uri) throw new Error(`Pawn '${actor.name}' has no decoded swim sound '${soundName}'.`);
+
+    actor.getWorldPosition(tmpPawnSoundPosition);
+    renderManager.audioManager.playOneShotSound(sound.uri, tmpPawnSoundPosition, soundSet.volume / 255, 1, soundSet.radius, soundSet.radius * 100);
+}
+
+function getNpcEnterSoundUri(library: GD.DecodeLibrary, event: GD.INpcEnterEvent): string {
+    if (!event.sound || event.sound.toLowerCase() === "none") return null;
+
+    const soundName = library.sounds[event.sound];
+    const sound = library.soundBlobCache.get(soundName);
+
+    if (!sound?.uri) throw new Error(`NPC enter sound '${event.sound}' failed to decode.`);
+
+    return sound.uri;
+}
+
+function setPawnAnimationNotifies(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor): void {
+    actor.setAnimationNotifyHandler((actor, notify) => {
+        const object = notify.object;
+
+        if (!object) return;
+
+        switch (object.type) {
+            case "sound": playPawnAnimationSound(renderManager, library, actor, notify); break;
+            case "swimSound": playPawnSwimSound(renderManager, library, actor, object); break;
+            case "screenFade": renderManager.screenFadeBlink(object); break;
+            case "viewShake": renderManager.addViewShake(actor, object); break;
+        }
+    });
 }
 
 /**
@@ -105,8 +207,9 @@ class AssetManager {
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
     public userConfig: GA.IUserConfig = null;
     protected warriorConfig: UConfigWarrior = null;
+    protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
     protected charGroups: GD.ICharacterGroup[] = null;
-    protected landmarkLibrary: GD.DecodeLibrary = null;
+    protected effectLibrary: GD.DecodeLibrary = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
     protected readonly lastCameraPosition = new Vector3();
@@ -163,7 +266,10 @@ class AssetManager {
         const envInfo = await this.decodeWorker.decodeEnv();
         const musicInfo = await this.decodeWorker.getMusicInfo();
         const characterLibrary = await this.decodeWorker.decodeCharacter(this.loadSettings);
-        const landmarkLibrary = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, LANDMARK_EFFECTS);
+        const playerControllerLibrary = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]);
+        const playerController = new LineagePlayerController(playerControllerLibrary);
+        const underwaterLoopSound = playerController.underWaterLoopSound;
+        const effectLibrary = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS], [underwaterLoopSound]);
         const skyLibrary = await this.decodeWorker.decodeSector("skylevel", {
             ...this.loadSettings, isSkyLevel: true,
             loadTerrain: true,
@@ -177,12 +283,21 @@ class AssetManager {
 
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
-        landmarkLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (landmarkLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+        effectLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (effectLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-        this.landmarkLibrary = landmarkLibrary;
+        this.effectLibrary = effectLibrary;
 
         this.applyCharacter(renderManager, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
+
+        renderManager.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
+
+        const underwaterSoundName = effectLibrary.sounds[underwaterLoopSound];
+        const underwaterSound = effectLibrary.soundBlobCache.get(underwaterSoundName);
+
+        if (!underwaterSound?.uri) throw new Error(`Underwater loop sound '${underwaterLoopSound}' failed to decode.`);
+
+        renderManager.audioManager.setUnderwaterLoopSound(underwaterSound.uri);
 
         renderManager.setEnv(decodeEnv(envInfo));
         renderManager.setSky(decodePackage(skyLibrary));
@@ -190,13 +305,17 @@ class AssetManager {
     }
 
     public createLandmarkEffect(classPath: string): THREE.Object3D {
-        if (!this.landmarkLibrary) throw new Error("Landmark effect templates have not loaded.");
+        return this.createEffect(classPath);
+    }
 
-        const info = this.landmarkLibrary.effectTemplates[classPath] || this.landmarkLibrary.effectTemplates[classPath.toLowerCase()];
+    public createEffect(classPath: string): THREE.Object3D {
+        if (!this.effectLibrary) throw new Error("Effect templates have not loaded.");
 
-        if (!info) throw new Error(`Landmark effect template '${classPath}' is missing.`);
+        const info = this.effectLibrary.effectTemplates[classPath] || this.effectLibrary.effectTemplates[classPath.toLowerCase()];
 
-        return decodeObject3D(this.landmarkLibrary, info);
+        if (!info) throw new Error(`Effect template '${classPath}' is missing.`);
+
+        return decodeObject3D(this.effectLibrary, info);
     }
 
     protected applyCharacter(renderManager: RenderManager, characterLibrary: GD.DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
@@ -224,7 +343,7 @@ class AssetManager {
         player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
         player.setMeshes(bodyparts);
         player.initAnimations();
-        setPawnAnimationSounds(renderManager, characterLibrary, animations, player);
+        setPawnAnimationNotifies(renderManager, characterLibrary, player);
     }
 
     public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection, actor?: BaseActor) {
@@ -233,7 +352,8 @@ class AssetManager {
     }
 
     public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null) {
-        const library = await this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId);
+        const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
+        const [library, localization] = await Promise.all([this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId), localizationPromise]);
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (library as any).preferCompressedTextures = this.preferCompressedTextures;
@@ -255,12 +375,14 @@ class AssetManager {
         actor.setSwimmingIdleAnimation(idle);
         actor.setMeshes(meshes);
         actor.initAnimations();
-        setPawnAnimationSounds(renderManager, library, animations, actor);
+        setPawnAnimationNotifies(renderManager, library, actor);
 
         if (scriptClassPath) {
             const classId = library.pawnActors[0].scriptClassId;
 
             if (!classId) throw new Error(`'${library.name}' has no transferred script class.`);
+
+            applyScriptLocalization(library, classId, localization);
 
             actor.setScriptRuntime(new UnScriptVM(library), classId, effectClassId => {
                 const info = library.effectTemplates[effectClassId] || library.effectTemplates[effectClassId.toLowerCase()];
@@ -272,6 +394,26 @@ class AssetManager {
         }
 
         renderManager.needsUpdate = true;
+
+        return library;
+    }
+
+    protected async getScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
+        const separator = scriptClassPath.indexOf(".");
+
+        if (separator < 1 || separator === scriptClassPath.length - 1) throw new Error(`Invalid UnrealScript class path '${scriptClassPath}'.`);
+
+        const packageName = scriptClassPath.slice(0, separator).toLowerCase();
+        const className = scriptClassPath.slice(separator + 1);
+        let config = this.scriptLocalizations.get(packageName);
+
+        if (!config) {
+            config = await new UConfigLocalization(`assets/system/${packageName}.int`).decode();
+            await config.load();
+            this.scriptLocalizations.set(packageName, config);
+        }
+
+        return config.getProperties(className);
     }
 
     public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null): Promise<BaseActor> {
@@ -287,8 +429,10 @@ class AssetManager {
 
         if (!position) actor.position.add(npcSpawnOffset);
 
-        await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id);
+        const library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id);
         renderManager.addPawn(actor);
+
+        if (npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent, getNpcEnterSoundUri(library, npc.enterEvent));
 
         return actor;
     }

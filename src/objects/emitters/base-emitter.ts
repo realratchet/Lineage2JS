@@ -260,6 +260,10 @@ abstract class BaseEmitter extends Object3D {
     public getCurrentTime() { return this.currentTime; }
     public isFinished() { return this.isDisabled || this.allParticlesDead; }
     public kill() { this.killPending = true; }
+    public setStartLocationRangeXZ(x: number, z: number): void {
+        this.initialSettings.position.min.x = this.initialSettings.position.max.x = x;
+        this.initialSettings.position.min.z = this.initialSettings.position.max.z = z;
+    }
 
     public constructor(config: GD.EmitterConfig_T) {
         super();

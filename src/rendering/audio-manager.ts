@@ -26,8 +26,10 @@ class AudioManager {
     protected readonly musicFiles: Record<number, string[]> = {};
     protected audioContext: AudioContext;
     protected masterGain: GainNode;
+    protected soundscapeGainNode: GainNode;
     protected musicGainNode: GainNode;
     protected ambientGainNode: GainNode;
+    protected effectsGainNode: GainNode;
     protected unlocked = false;
     protected currentSource?: AudioBufferSourceNode;
     protected currentGain?: GainNode;
@@ -40,6 +42,11 @@ class AudioManager {
     protected fadeEndTime?: number;
     protected lastTime = 0;
     protected prevTime = 0;
+    protected underwaterSoundUri: string = null;
+    protected underwaterSource: AudioBufferSourceNode = null;
+    protected underwaterGain: GainNode = null;
+    protected underwaterPlayId = 0;
+    protected isUnderwater = false;
 
     protected currentPlayId = 0;
 
@@ -50,13 +57,21 @@ class AudioManager {
         this.masterGain.connect(this.audioContext.destination);
         this.masterGain.gain.value = 1;
 
+        this.soundscapeGainNode = this.audioContext.createGain();
+        this.soundscapeGainNode.connect(this.masterGain);
+        this.soundscapeGainNode.gain.value = 1;
+
         this.musicGainNode = this.audioContext.createGain();
-        this.musicGainNode.connect(this.masterGain);
+        this.musicGainNode.connect(this.soundscapeGainNode);
         this.musicGainNode.gain.value = 0.1;
 
         this.ambientGainNode = this.audioContext.createGain();
-        this.ambientGainNode.connect(this.masterGain);
+        this.ambientGainNode.connect(this.soundscapeGainNode);
         this.ambientGainNode.gain.value = 0.3;
+
+        this.effectsGainNode = this.audioContext.createGain();
+        this.effectsGainNode.connect(this.masterGain);
+        this.effectsGainNode.gain.value = 0.3;
 
         this.setupUnlock();
     }
@@ -65,10 +80,83 @@ class AudioManager {
     public set musicVolume(v: number) { this.musicGainNode.gain.value = v; }
 
     public get ambientVolume(): number { return this.ambientGainNode.gain.value; }
-    public set ambientVolume(v: number) { this.ambientGainNode.gain.value = v; }
+    public set ambientVolume(v: number) {
+        this.ambientGainNode.gain.value = v;
+        this.effectsGainNode.gain.value = v;
+    }
 
     public setMusicInfo(musicAssets: Record<number, string[]>) {
         Object.assign(this.musicFiles, musicAssets);
+    }
+
+    public setUnderwaterLoopSound(dataUri: string): void {
+        if (this.underwaterSoundUri === dataUri) return;
+
+        this.stopUnderwaterLoop();
+        this.underwaterSoundUri = dataUri;
+
+        if (this.isUnderwater) this.startUnderwaterLoop(++this.underwaterPlayId);
+    }
+
+    public setUnderwater(isUnderwater: boolean): void {
+        if (this.isUnderwater === isUnderwater) return;
+
+        this.isUnderwater = isUnderwater;
+
+        const now = this.audioContext.currentTime;
+        const gain = this.soundscapeGainNode.gain;
+
+        gain.cancelScheduledValues(now);
+        gain.setValueAtTime(gain.value, now);
+        gain.linearRampToValueAtTime(isUnderwater ? 0 : 1, now + 0.15);
+
+        if (isUnderwater) {
+            if (this.underwaterSoundUri) this.startUnderwaterLoop(++this.underwaterPlayId);
+        } else {
+            this.stopUnderwaterLoop();
+        }
+    }
+
+    protected async startUnderwaterLoop(playId: number): Promise<void> {
+        const dataUri = this.underwaterSoundUri;
+
+        await this.ensureUnlocked();
+
+        const buffer = await this.loadAmbientBuffer(dataUri);
+
+        if (!buffer || !this.isUnderwater || dataUri !== this.underwaterSoundUri || playId !== this.underwaterPlayId) return;
+
+        this.stopUnderwaterSource();
+
+        const source = this.audioContext.createBufferSource();
+        const gain = this.audioContext.createGain();
+
+        source.buffer = buffer;
+        source.loop = true;
+        source.connect(gain);
+        gain.connect(this.masterGain);
+        source.start(0);
+
+        this.underwaterSource = source;
+        this.underwaterGain = gain;
+    }
+
+    protected stopUnderwaterLoop(): void {
+        this.underwaterPlayId++;
+        this.stopUnderwaterSource();
+    }
+
+    protected stopUnderwaterSource(): void {
+        if (this.underwaterSource) {
+            try { this.underwaterSource.stop(); } catch { }
+            this.underwaterSource.disconnect();
+            this.underwaterSource = null;
+        }
+
+        if (this.underwaterGain) {
+            this.underwaterGain.disconnect();
+            this.underwaterGain = null;
+        }
     }
 
     public async playMusic(index: number, isLooped: boolean = false, isForced: boolean = false, currentTime?: number) {
@@ -509,7 +597,7 @@ class AudioManager {
 
         source.connect(gain);
         gain.connect(panner);
-        panner.connect(this.ambientGainNode);
+        panner.connect(this.effectsGainNode);
 
         source.onended = () => {
             source.disconnect();

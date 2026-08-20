@@ -62,6 +62,7 @@ import UPawn from "@client/assets/unreal/un-pawn";
 import USkeletalMesh from "@client/assets/unreal/skeletal-mesh/un-skeletal-mesh";
 import USkeletalMeshInstance from "@client/assets/unreal/un-skeletal-mesh-instance";
 import UMeshAnimation from "@client/assets/unreal/skeletal-mesh/un-mesh-animation";
+import * as AnimNotify from "@client/assets/unreal/skeletal-mesh/un-anim-notify";
 
 type CoreStructs_T =
     | "Vector"
@@ -364,6 +365,7 @@ class UNativePackage extends ANativePackage {
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
+            case "WaterHitEmitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
             case "BeamEmitter": Constructor = UBeamEmitter; break;
@@ -411,24 +413,25 @@ class UNativePackage extends ANativePackage {
             case "SkillVisualEffect":
             case "SkillAction":
             case "SkillAction_LocateEffect":
-            case "SkillAction_SwordTrail":
-            case "AnimNotify":
-            case "AnimNotify_IdleSound":
-            case "AnimNotify_MatSubAction":
-            case "AnimNotify_Scripted":
-            case "AnimNotify_Script":
-            case "AnimNotify_Sound":
-            case "AnimNotify_SwimSound":
-            case "AnimNotify_DestroyEffect":
-            case "AnimNotify_Effect":
-            case "AnimNotify_AttackVoice":
-            case "AnimNotify_Channeling":
-            case "AnimNotify_AttackPreShot":
-            case "AnimNotify_AttackShot":
-            case "AnimNotify_AttackItem":
-            case "AnimNotify_ScreenFade":
-            case "AnimNotify_ViewShake":
-            case "AnimNotify_BoneScale": Constructor = UObject; break;
+            case "SkillAction_SwordTrail": Constructor = UObject; break;
+
+            case "AnimNotify": Constructor = AnimNotify.UAnimNotify; break;
+            case "AnimNotify_IdleSound": Constructor = AnimNotify.UAnimNotifyIdleSound; break;
+            case "AnimNotify_MatSubAction": Constructor = AnimNotify.UAnimNotifyMatSubAction; break;
+            case "AnimNotify_Scripted": Constructor = AnimNotify.UAnimNotifyScripted; break;
+            case "AnimNotify_Script": Constructor = AnimNotify.UAnimNotifyScript; break;
+            case "AnimNotify_Sound": Constructor = AnimNotify.UAnimNotifySound; break;
+            case "AnimNotify_SwimSound": Constructor = AnimNotify.UAnimNotifySwimSound; break;
+            case "AnimNotify_DestroyEffect": Constructor = AnimNotify.UAnimNotifyDestroyEffect; break;
+            case "AnimNotify_Effect": Constructor = AnimNotify.UAnimNotifyEffect; break;
+            case "AnimNotify_AttackVoice": Constructor = AnimNotify.UAnimNotifyAttackVoice; break;
+            case "AnimNotify_Channeling": Constructor = AnimNotify.UAnimNotifyChanneling; break;
+            case "AnimNotify_AttackPreShot": Constructor = AnimNotify.UAnimNotifyAttackPreShot; break;
+            case "AnimNotify_AttackShot": Constructor = AnimNotify.UAnimNotifyAttackShot; break;
+            case "AnimNotify_AttackItem": Constructor = AnimNotify.UAnimNotifyAttackItem; break;
+            case "AnimNotify_ScreenFade": Constructor = AnimNotify.UAnimNotifyScreenFade; break;
+            case "AnimNotify_ViewShake": Constructor = AnimNotify.UAnimNotifyViewShake; break;
+            case "AnimNotify_BoneScale": Constructor = AnimNotify.UAnimNotifyBoneScale; break;
 
             default: // objects that we never saw before
                 debugger;

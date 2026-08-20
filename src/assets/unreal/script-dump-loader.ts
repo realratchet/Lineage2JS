@@ -12,6 +12,81 @@ function getObjectId(object: C.UObject): string {
     return object.name;
 }
 
+function dumpPropertyValue(value: any): GD.ScriptPropertyValue_T {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") return value;
+    if (Array.isArray(value)) return [...value].map(dumpPropertyValue);
+    if (typeof value.getElements === "function") return value.getElements().map(dumpPropertyValue);
+    if (typeof value.toArray === "function") return value.toArray().map(dumpPropertyValue);
+    if (value.constructor?.plainStructFields) {
+        const propertyMap = value.constructor._propertyMapCache || value.getPropertyMap();
+        const result: Record<string, GD.ScriptPropertyValue_T> = {};
+
+        for (const [name, field] of Object.entries(propertyMap)) result[name] = dumpPropertyValue(value[field as string]);
+
+        return result;
+    }
+    if (value.isObject) return value.name || value.objectName || null;
+
+    throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
+}
+
+function dumpObjectScriptProperties(object: C.UObject): Record<string, GD.ScriptPropertyValue_T> {
+    const properties: Record<string, GD.ScriptPropertyValue_T> = {};
+
+    for (const name of Map.prototype.keys.call(object.propertyDict))
+        properties[name] = dumpPropertyValue(object.propertyDict.get(name));
+
+    return properties;
+}
+
+function makeStructDefault(field: C.UStructProperty): GD.ScriptPropertyValue_T {
+    const struct = field.value.loadSelf();
+    const name = struct.friendlyName.toLowerCase();
+
+    switch (name) {
+        case "vector":
+        case "rotator": return [0, 0, 0];
+        case "color":
+        case "plane":
+        case "quat":
+        case "quaternion": return [0, 0, 0, 0];
+    }
+
+    const value: Record<string, GD.ScriptPropertyValue_T> = {};
+
+    for (const child of struct.childPropFields.values()) {
+        child.loadSelf();
+
+        const childValue = child.getDefaultValue();
+
+        value[child.propertyName] = childValue === null && child.getTypeName() === "Struct"
+            ? makeStructDefault(child as C.UStructProperty)
+            : dumpPropertyValue(childValue);
+    }
+
+    return value;
+}
+
+function dumpClassDefaults(cls: C.UClass): Record<string, GD.ScriptPropertyValue_T> {
+    const defaults = dumpObjectScriptProperties(cls);
+
+    for (const field of cls.childPropFields.values()) {
+        field.loadSelf();
+
+        const name = field.propertyName;
+        if (name in defaults) continue;
+
+        const value = field.getDefaultValue();
+
+        defaults[name] = value === null && field.getTypeName() === "Struct"
+            ? makeStructDefault(field as C.UStructProperty)
+            : dumpPropertyValue(value);
+    }
+
+    return defaults;
+}
+
 function resolveEntryIndex(entriesByOffset: Map<number, number>, virtualSize: number, virtualOffset: number): number {
     if (virtualOffset === virtualSize) return entriesByOffset.size;
 
@@ -170,7 +245,8 @@ function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<C.UClass
             ...stateInfo,
             superClassId: superClass ? getObjectId(superClass) : null,
             classFlags: cls.getClassFlags(),
-            stateIds: cls.childStates.map(state => getObjectId(state))
+            stateIds: cls.childStates.map(state => getObjectId(state)),
+            defaults: dumpClassDefaults(cls)
         };
     }
 
@@ -194,4 +270,4 @@ function pullScriptDumps(library: GD.DecodeLibrary, ...actorLists: Iterable<C.UO
 }
 
 export default pullScriptDumps;
-export { pullScriptDumps, pullScriptClasses };
+export { pullScriptDumps, pullScriptClasses, dumpObjectScriptProperties };

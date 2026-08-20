@@ -1,4 +1,4 @@
-import { BufferValue } from "@l2js/core";
+
 import UObject from "@l2js/core";
 import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
@@ -652,7 +652,8 @@ abstract class UParticleBeamEndPoint extends UObject {
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
             "ActorTag": "_actorTag",
-            "Offset": "offset",
+            // Retail LineageEffect.u serializes this field as lowercase "offset".
+            "offset": "offset",
             "Weight": "weight"
         });
     }

@@ -17,7 +17,7 @@ import TerrainDecoration from "@client/objects/terrain-decoration";
 import LocalSpaceSkeleton from "@client/objects/local-space-skeleton";
 import BSPCollider from "@client/objects/bsp-collider";
 import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
-import UnScriptVM from "@client/assets/unreal/un-script-vm";
+import UnScriptVM from "@client/ue-script/vm";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
@@ -87,7 +87,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibra
     if (info.name) object.name = info.name;
     if (info.scriptClassId) {
         (object as any).scriptClassId = info.scriptClassId;
-        (object as any).scriptProperties = new Map();
+        (object as any).scriptProperties = new Map(Object.entries(info.scriptProperties || {}));
     }
     if (info.position) object.position.fromArray(info.position);
     if (info.scale) object.scale.fromArray(info.scale);

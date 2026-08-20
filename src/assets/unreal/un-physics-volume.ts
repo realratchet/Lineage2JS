@@ -49,11 +49,8 @@ abstract class UPhysicsVolume extends UVolume {
     // protected _bL2StepVolume: any;
     // protected _stepSoundID: any;
 
-    // protected entrySoundName: any;
-    // protected exitSoundName: any;
-    // protected entryActorName: any;
-    // protected waitHitEffect: any;
-    // protected runHitEffect: any;
+    declare protected waitHitEffect: string;
+    declare protected runHitEffect: string;
 
     public constructor() {
         super();
@@ -96,15 +93,12 @@ abstract class UPhysicsVolume extends UVolume {
     //         "KExtraAngularDamping": "_kExtraAngularDamping",
     //         "KBuoyancy": "_kBuoyancy",
     //         "NextPhysicsVolume": "_nextPhysicsVolume",
-            "bL2WaterVolume": "isL2WaterVolume"
+            "bL2WaterVolume": "isL2WaterVolume",
     //         "bL2StepVolume": "_bL2StepVolume",
     //         "StepSoundID": "_stepSoundID",
 
-    //         "EntrySoundName": "entrySoundName",
-    //         "ExitSoundName": "exitSoundName",
-    //         "EntryActorName": "entryActorName",
-    //         "WaitHitEffect": "waitHitEffect",
-    //         "RunHitEffect": "runHitEffect",
+            "WaitHitEffect": "waitHitEffect",
+            "RunHitEffect": "runHitEffect",
         });
     }
 
@@ -131,6 +125,8 @@ abstract class UPhysicsVolume extends UVolume {
             zoneVelocity,
             fog,
             cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as GD.ColorArr : null,
+            waitHitEffect: this.waitHitEffect ?? null,
+            runHitEffect: this.runHitEffect ?? null,
             bsp: this.getWorldBspInfo()
         };
     }

@@ -1,5 +1,5 @@
 import ParticleMaterial from "@client/materials/particle-material/particle-material";
-import { BufferAttribute, BufferGeometry, Mesh, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
 
 // BeamEmitter: every particle is a beam made of HighFrequencyPoints points along a
@@ -74,6 +74,11 @@ function scaleNoise(factors: BeamScale_T[], repeats: number, i: number, count: n
 const tmpBeamDirection = new Vector3();
 const tmpBeamEndPoint = new Vector3();
 const tmpBeamNoise = new Vector3();
+const tmpBeamOwnerOffset = new Vector3();
+const tmpBeamOwnerPosition = new Vector3();
+const tmpBeamOldOwnerPosition = new Vector3();
+const tmpBeamWorldScale = new Vector3();
+const tmpBeamWorldQuaternion = new Quaternion();
 
 class BeamEmitter extends BaseEmitter {
     protected beam: BeamSettings_T;
@@ -253,6 +258,38 @@ class BeamEmitter extends BaseEmitter {
 
         for (let i = 0; i < points.length; i += 3)
             this.boundingBox.expandByPoint(this.tmpVec.set(points[i], points[i + 1], points[i + 2]));
+    }
+
+    protected updateParticles(deltaTime: number): number {
+        if (this.coordinateSystem === "independent" && this.parent) {
+            this.parent.getWorldPosition(tmpBeamOwnerPosition);
+            tmpBeamOldOwnerPosition.copy(this.oldOwnerLocation);
+
+            if (this.parent.parent) this.parent.parent.localToWorld(tmpBeamOldOwnerPosition);
+
+            tmpBeamOwnerOffset.subVectors(tmpBeamOwnerPosition, tmpBeamOldOwnerPosition);
+
+            if (tmpBeamOwnerOffset.lengthSq() > 0) {
+                // UBeamEmitter::UpdateParticles treats non-relative HFPoints as world-space.
+                this.getWorldQuaternion(tmpBeamWorldQuaternion).invert();
+                this.getWorldScale(tmpBeamWorldScale);
+                tmpBeamOwnerOffset.applyQuaternion(tmpBeamWorldQuaternion).divide(tmpBeamWorldScale);
+
+                for (const particle of this.particlePool) {
+                    const points = (particle as any).beamPoints as Float32Array | undefined;
+
+                    if (!points) continue;
+
+                    for (let i = 0; i < points.length; i += 3) {
+                        points[i] -= tmpBeamOwnerOffset.x;
+                        points[i + 1] -= tmpBeamOwnerOffset.y;
+                        points[i + 2] -= tmpBeamOwnerOffset.z;
+                    }
+                }
+            }
+        }
+
+        return super.updateParticles(deltaTime);
     }
 
     // dynamic noise timing, whole steps of the sampled interval

@@ -15,6 +15,7 @@ import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import UnderWaterEffect from "./under-water-effect";
+import WaterHitEffect from "./water-hit-effect";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
@@ -73,6 +74,9 @@ const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, size
 const tmpOrbitFollowTarget = new Vector3();
 const tmpOrbitFollowDelta = new Vector3();
 const tmpMouseIntersection = new Vector3();
+const tmpViewShakePosition = new Vector3();
+const tmpViewShakeQuaternion = new Quaternion();
+const tmpViewShakeDirection = new Vector3();
 const tmpPickBounds = new Box3();
 const tmpSimDirection = new Vector3();
 const arrMoverPawns: BaseActor[] = [];
@@ -108,6 +112,18 @@ const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 const CLICK_MAX_MOVEMENT_SQ = 16;
+
+type ViewShakeState_T = {
+    type: GD.IAnimationViewShakeNotifyDecodeInfo["shakeType"];
+    direction: Vector3;
+    remainingTime: number;
+    target: number;
+    savedTarget: number;
+    phase: number;
+    rate: number;
+    repeats: number;
+    countLimit: number;
+};
 const SIMULATED_PAWN_COUNT = 10;
 const SIMULATED_PAWN_LIFETIME = 15000;
 const SIMULATED_PAWN_TURN_INTERVAL = 1000;
@@ -289,6 +305,55 @@ function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetai
     return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
 }
 
+function checkViewShake(state: ViewShakeState_T): void {
+    const crossed = state.target > 0 ? state.phase >= state.target : state.phase <= state.target;
+
+    if (!crossed) return;
+
+    state.phase = state.target;
+
+    if (state.repeats <= 1) {
+        state.target = 0;
+        state.phase = 0;
+        state.rate = 0;
+        return;
+    }
+
+    if (state.target <= 0) state.target *= -1;
+    else switch (state.type) {
+        case "damage": state.target *= 1 / (state.countLimit - state.repeats) - 1; break;
+        case "down": state.target *= 1 / state.repeats - 1; break;
+        case "up":
+        case "upDown": state.target *= -1.1; break;
+    }
+
+    state.repeats -= 1;
+    state.rate *= -1;
+}
+
+function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
+    if (deltaTime === 0 || state.remainingTime === 0) return false;
+
+    state.remainingTime -= deltaTime;
+
+    if (state.remainingTime <= 0.0001) return false;
+
+    if (state.rate !== 0) {
+        state.phase = (Math.trunc(state.phase) + Math.trunc(deltaTime * state.rate)) & 0xffff;
+        if (state.phase >= 0x8000) state.phase -= 0x10000;
+
+        if (state.type === "upDown" && state.target > state.savedTarget) {
+            state.type = "down";
+            state.target = state.savedTarget;
+            state.countLimit = Math.trunc(state.repeats + 2);
+        }
+
+        if (state.type === "damage" || state.type === "up" || state.type === "down" || state.type === "upDown") checkViewShake(state);
+    }
+
+    return true;
+}
+
 class RenderManager {
     public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
@@ -362,8 +427,17 @@ class RenderManager {
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
+    protected readonly viewShakeStates: ViewShakeState_T[] = [];
+    protected viewShakeDelta = 1 / 60;
+    protected readonly screenFadeElement = document.createElement("div");
+    protected screenFadeStartedAt = -1;
+    protected screenFadeOutDuration = 0;
+    protected screenBlackOutDuration = 0;
+    protected screenFadeInDuration = 0;
+    protected screenFadeColorAlpha = 1;
 
     public readonly player = new Player(this);
+    protected readonly waterHitEffect = new WaterHitEffect(this.player, this.scene);
     protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.assetManager.createLandmarkEffect(classPath));
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
@@ -474,6 +548,12 @@ class RenderManager {
         this.scene.add(this.colliderOverlay);
         this.scene.add(this.underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
+        this.mixer.addEventListener("finished", (event: any) => {
+            let object = event.action.getRoot() as Object3D;
+
+            while (object && !(object as any).isActor) object = object.parent;
+            if (object) (object as BaseActor).onAnimationFinished(event.action);
+        });
 
         // Create visualizer system (will be recreated when sector changes)
         this.visualizer = new Visualizer(this.scene);
@@ -650,6 +730,15 @@ class RenderManager {
         this.controls.orbit.update();
 
         viewport.appendChild(this.renderer.domElement);
+
+        Object.assign(this.screenFadeElement.style, {
+            position: "fixed",
+            inset: "0px",
+            pointerEvents: "none",
+            opacity: "0",
+            zIndex: "9999"
+        });
+        viewport.appendChild(this.screenFadeElement);
 
         viewport.addEventListener("mousedown", this.onHandleMouseDown.bind(this));
         viewport.addEventListener("mousemove", this.onHandleMouseMove.bind(this));
@@ -1163,7 +1252,7 @@ class RenderManager {
             this._doRender(currentTime, deltaTime);
             this._postRender(currentTime, deltaTime);
             stats.end();
-            this.needsUpdate = false;
+            this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
         }
 
         this.lastRender = currentTime;
@@ -1172,6 +1261,127 @@ class RenderManager {
     }
 
     public enableZoneCulling = true;
+
+    public screenFadeBlink(info: GD.IAnimationScreenFadeNotifyDecodeInfo): void {
+        // UGameEngine::ScreenFadeBlink (L2.exe 0x825650) rejects a blink while either fade state is active.
+        if (this.screenFadeStartedAt >= 0) return;
+
+        const color = info.fadeOutColor;
+
+        this.screenFadeOutDuration = Math.max(0, info.fadeOutDuration);
+        this.screenBlackOutDuration = Math.max(0, info.blackOutDuration);
+        this.screenFadeInDuration = Math.max(0, info.fadeInDuration);
+        this.screenFadeColorAlpha = color[3] / 255;
+        this.screenFadeElement.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        this.screenFadeStartedAt = performance.now();
+        this.needsUpdate = true;
+    }
+
+    public addViewShake(actor: BaseActor, info: GD.IAnimationViewShakeNotifyDecodeInfo): void {
+        if (!this.followPlayer) return;
+
+        const direction = new Vector3().fromArray(info.shakeVector);
+
+        if (direction.lengthSq() === 0) direction.set(Math.random(), Math.random(), 0);
+        direction.normalize();
+        direction.z = 0;
+        direction.normalize();
+
+        const sourcePosition = actor.getWorldPosition(new Vector3());
+        const distance = this.player.position.distanceTo(sourcePosition);
+        const intensity = sourcePosition.lengthSq() !== 0 && info.shakeRange !== 0 ? info.shakeIntensity / Math.cosh(distance / info.shakeRange) : info.shakeIntensity;
+        const frameRate = 1 / this.viewShakeDelta;
+        const frameScale = frameRate < 30 ? frameRate / 30 : 1;
+        const repeats = info.shakeCount * frameScale;
+        const target = info.shakeType === "upDown" ? 1 : intensity;
+
+        this.viewShakeStates.push({
+            type: info.shakeType,
+            direction,
+            remainingTime: 5 + info.shakeCount * this.viewShakeDelta,
+            target,
+            savedTarget: intensity,
+            phase: 0,
+            rate: info.shakeIntensity * 50,
+            repeats,
+            countLimit: Math.trunc(Math.max(direction.x * frameScale, direction.y * frameScale, direction.z * frameScale, repeats) + 2)
+        });
+        this.needsUpdate = true;
+    }
+
+    protected updateScreenFade(currentTime: number): void {
+        if (this.screenFadeStartedAt < 0) return;
+
+        let time = currentTime - this.screenFadeStartedAt;
+        let opacity: number;
+
+        if (time < this.screenFadeOutDuration) {
+            opacity = this.screenFadeOutDuration > 0 ? time / this.screenFadeOutDuration : 1;
+        } else {
+            time -= this.screenFadeOutDuration;
+
+            if (time < this.screenBlackOutDuration) {
+                opacity = 1;
+            } else {
+                time -= this.screenBlackOutDuration;
+
+                if (time < this.screenFadeInDuration) opacity = this.screenFadeInDuration > 0 ? 1 - time / this.screenFadeInDuration : 0;
+                else {
+                    opacity = 0;
+                    this.screenFadeStartedAt = -1;
+                }
+            }
+        }
+
+        this.screenFadeElement.style.opacity = `${opacity * this.screenFadeColorAlpha}`;
+    }
+
+    protected applyViewShake(_currentTime: number): boolean {
+        if (!this.followPlayer) {
+            this.viewShakeStates.length = 0;
+            return false;
+        }
+
+        if (this.viewShakeStates.length === 0) return false;
+
+        tmpViewShakePosition.copy(this.camera.position);
+        tmpViewShakeQuaternion.copy(this.camera.quaternion);
+
+        let pitch = 0, yaw = 0;
+
+        for (let i = this.viewShakeStates.length - 1; i >= 0; i--) {
+            const state = this.viewShakeStates[i];
+
+            if (!updateViewShake(state, this.viewShakeDelta)) {
+                this.viewShakeStates.splice(i, 1);
+                continue;
+            }
+
+            pitch += Math.trunc(Math.abs(state.direction.y) * state.phase);
+            yaw += Math.trunc(Math.abs(state.direction.x) * state.phase);
+        }
+
+        tmpViewShakeDirection.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+
+        const currentYaw = Math.atan2(tmpViewShakeDirection.y, tmpViewShakeDirection.x);
+        const currentPitch = Math.atan2(tmpViewShakeDirection.z, Math.hypot(tmpViewShakeDirection.x, tmpViewShakeDirection.y));
+        const nextYaw = currentYaw + yaw / 32768 * Math.PI;
+        const nextPitch = currentPitch + pitch / 32768 * Math.PI;
+        const cosPitch = Math.cos(nextPitch);
+
+        tmpViewShakeDirection.set(Math.cos(nextYaw) * cosPitch, Math.sin(nextYaw) * cosPitch, Math.sin(nextPitch)).add(this.camera.position);
+        this.camera.lookAt(tmpViewShakeDirection);
+
+        this.camera.updateMatrixWorld();
+
+        return true;
+    }
+
+    protected restoreViewShake(): void {
+        this.camera.position.copy(tmpViewShakePosition);
+        this.camera.quaternion.copy(tmpViewShakeQuaternion);
+        this.camera.updateMatrixWorld();
+    }
 
     public getSectorId(position: THREE.Vector3): [number, number] {
         const sectorSize = 256 * 128;
@@ -1353,6 +1563,7 @@ class RenderManager {
 
         folder.add(this, "followPlayer").name("Follow Player").onChange(() => {
             this.controls.orbit?.setNativeLikeControls(this.followPlayer);
+            if (!this.followPlayer) this.viewShakeStates.length = 0;
             this.needsUpdate = true
 
         });
@@ -2271,6 +2482,7 @@ class RenderManager {
         const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
 
         this.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+        this.audioManager.setUnderwater(!!waterVolume);
 
         if (waterVolume) {
             if (waterVolume.fog) {
@@ -2326,10 +2538,14 @@ class RenderManager {
     protected nextPhysicsTick: number;
 
     protected _preRender(currentTime: number, deltaTime: number) {
+        this.updateScreenFade(currentTime);
+
         this.assetManager.tick(this);
         this.processSectorWarmups();
         this.processShaderDiagnostics();
+        this.viewShakeDelta = deltaTime / 1000;
         this.mixer.update(deltaTime / 1000);
+        this.waterHitEffect.update(this.arrLoadedSectors, deltaTime);
 
         const timeScale = this.environment.getTimeScale();
 
@@ -2346,7 +2562,10 @@ class RenderManager {
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
 
-        this.underWaterEffect.update(this.camera, deltaTime);
+        const timeOfDay = this.environment.getTimeOfDay();
+
+        // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
+        this.underWaterEffect.update(this.camera, timeOfDay >= 6 && timeOfDay <= 24, this.collisionWorld);
 
         if (!this.isOrbitControls) {
             let forwardVelocity = 0, sidewaysVelocity = 0;
@@ -2541,6 +2760,8 @@ class RenderManager {
     }
 
     protected _doRender(_currentTime: number, _deltaTime: number) {
+        const viewShakeActive = this.applyViewShake(_currentTime);
+
         // // Redirect to Main Target for Bloom
         // i think bloom pass is only enabled when shader rendering used which is off by default
         // this.renderer.setRenderTarget(this.mainRenderTarget);
@@ -2697,6 +2918,8 @@ class RenderManager {
         // this.renderer.setRenderTarget(null);
 
         if (this.displayGammaEnabled) this.displayGammaPass.render(this.renderer);
+
+        if (viewShakeActive) this.restoreViewShake();
     }
 
     protected _postRender(_currentTime: number, _deltaTime: number) { }

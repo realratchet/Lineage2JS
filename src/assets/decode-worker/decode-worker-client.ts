@@ -249,9 +249,9 @@ class DecodeWorkerClient {
         return library;
     }
 
-    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[]): Promise<DecodeLibrary> {
+    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
-            const library = await this.mainThreadEngine.decodeEffectTemplates(settings, classPaths);
+            const library = await this.mainThreadEngine.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths);
 
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
@@ -260,7 +260,7 @@ class DecodeWorkerClient {
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
-        return this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths });
+        return this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths, soundPaths, scriptClassPaths });
     }
 
     public resolveNpc(selector: string | number): Promise<GD.INpcDefinition> {

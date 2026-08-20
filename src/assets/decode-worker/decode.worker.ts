@@ -122,7 +122,7 @@ async function handleMessage(msg: MainToWorkerMessage) {
         }
         case "decodeEffectTemplates": {
             try {
-                const buffer = await engine.decodeEffectTemplatesBinary(msg.settings, msg.classPaths);
+                const buffer = await engine.decodeEffectTemplatesBinary(msg.settings, msg.classPaths, msg.soundPaths, msg.scriptClassPaths);
 
                 post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
             } catch (e) {

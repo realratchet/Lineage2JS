@@ -8,10 +8,12 @@ import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary } from "./library-serializer";
+import { dumpObjectScriptProperties } from "@client/assets/unreal/script-dump-loader";
 import type { PrecacheResult_T } from "./decode-protocol";
 import DecodeLibrary from "@client/assets/unreal/decode-library";
 import DecodeLibraryBuilder from "@client/assets/unreal/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
+import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@unreal/conf-files/un-conf-audio";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {
@@ -106,7 +108,17 @@ function copyAnimationSounds(target: DecodeLibrary, source: DecodeLibrary, anima
         for (const notify of notifications) {
             const object = notify.object;
 
-            if (!object || object.type !== "sound") continue;
+            if (!object) continue;
+
+            if (object.type === "swimSound") {
+                if (!object.surface || !object.underwater) throw new Error(`Swim sound notify '${object.objectName}' has no audio profile.`);
+
+                for (const name of object.surface.sounds) copySound(name);
+                for (const name of object.underwater.sounds) copySound(name);
+                continue;
+            }
+
+            if (object.type !== "sound") continue;
 
             copySound(object.sound);
 
@@ -266,6 +278,7 @@ class DecodeEngine {
     protected cacheCharacterBundles = new Map<number, CachedBundle_T>();
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
+    protected cacheSwimSoundConfig: SwimSoundConfig_T = null;
 
     protected async sweepCache(settings: GD.LoadSettings_T): Promise<void> {
         if (this.hasSweptCache) return;
@@ -341,6 +354,7 @@ class DecodeEngine {
             const pkg = await this.assetLoader.using(this.assetLoader.getPackage(sectorName, "Level"));
             const library = buildDecodeLibrary(pkg, sectorName, settings);
 
+            await this.pullWaterVolumeEffects(library, settings);
             buildStaticMeshBatchData(library);
             prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -370,6 +384,7 @@ class DecodeEngine {
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(sectorName, "Level"));
         const library = buildDecodeLibrary(pkg, sectorName, settings);
 
+        await this.pullWaterVolumeEffects(library, settings);
         buildStaticMeshBatchData(library);
 
         /*
@@ -407,6 +422,7 @@ class DecodeEngine {
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(sectorName, "Level"));
         const library = buildDecodeLibrary(pkg, sectorName, settings);
 
+        await this.pullWaterVolumeEffects(library, settings);
         buildStaticMeshBatchData(library);
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -473,6 +489,59 @@ class DecodeEngine {
         return [pkg, cls.loadSelf()];
     }
 
+    protected async getSwimSoundConfig(): Promise<SwimSoundConfig_T> {
+        if (this.cacheSwimSoundConfig) return this.cacheSwimSoundConfig;
+
+        const config = await new UConfigAudio("assets/system/alaudio.int").decode();
+
+        this.cacheSwimSoundConfig = config.load().getSwimSound();
+
+        return this.cacheSwimSoundConfig;
+    }
+
+    protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string): Promise<string> {
+        const [packageName, objectName] = splitObjectPath(path);
+        const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Sound"), { neverUnload: true });
+        const lowerName = objectName.toLowerCase();
+        const entry = pkg.exportGroups.Sound.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
+
+        if (!entry) throw new Error(`Sound '${objectName}' not found in '${packageName}'.`);
+
+        const sound = pkg.fetchObject<GA.USound>(entry.index + 1).loadSelf();
+        const soundName = sound.objectName ?? sound.uuid;
+
+        if (!builder.pullSound(sound)) throw new Error(`Sound '${path}' has no audio data.`);
+
+        return soundName;
+    }
+
+    protected async pullSwimSoundSet(builder: DecodeLibraryBuilder, config: SwimSoundSet_T): Promise<GD.IAnimationSwimSoundSetDecodeInfo> {
+        return {
+            sounds: await Promise.all(config.sounds.map(path => this.pullSoundPath(builder, path))),
+            volume: config.volume,
+            radius: config.radius,
+            random: config.random
+        };
+    }
+
+    protected async pullAnimationNotifyAssets(builder: DecodeLibraryBuilder, animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]>): Promise<void> {
+        const swimNotifies: GD.IAnimationSwimSoundNotifyDecodeInfo[] = [];
+
+        for (const notifications of Object.values(animationNotifies))
+            for (const notify of notifications)
+                if (notify.object?.type === "swimSound") swimNotifies.push(notify.object);
+
+        if (swimNotifies.length === 0) return;
+
+        const config = await this.getSwimSoundConfig();
+        const [surface, underwater] = await Promise.all([this.pullSwimSoundSet(builder, config.surface), this.pullSwimSoundSet(builder, config.underwater)]);
+
+        for (const notify of swimNotifies) {
+            notify.surface = surface;
+            notify.underwater = underwater;
+        }
+    }
+
     protected async pullScriptEffectTemplates(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> {
         const paths = new Set<string>();
         const programs = [...Object.values(library.scriptFunctions), ...Object.values(library.scriptStates), ...Object.values(library.scriptClasses)];
@@ -484,7 +553,7 @@ class DecodeEngine {
         for (const path of paths) await this.pullEffectTemplate(library, builder, path);
     }
 
-    protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string): Promise<void> {
+    protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string, pullScript: boolean = false): Promise<void> {
         const [pkg, cls] = await this.fetchScriptClass(path);
         const emitter = pkg.newObject<GA.UEmitter>(cls);
 
@@ -493,8 +562,26 @@ class DecodeEngine {
         const info = emitter.getTemplateDecodeInfo(builder);
 
         info.scriptClassId = cls.name;
+        info.scriptProperties = dumpObjectScriptProperties(emitter);
         library.effectTemplates[path] = info;
         library.effectTemplates[cls.name] = info;
+
+        if (pullScript) builder.pullScriptClasses([cls]);
+    }
+
+    protected async pullWaterVolumeEffects(library: DecodeLibrary, settings: GD.LoadSettings_T): Promise<void> {
+        const paths = new Set<string>();
+
+        for (const volume of library.waterVolumes) {
+            if (volume.waitHitEffect) paths.add(volume.waitHitEffect);
+            if (volume.runHitEffect) paths.add(volume.runHitEffect);
+        }
+
+        if (paths.size === 0) return;
+
+        const builder = new DecodeLibraryBuilder(library, settings);
+
+        for (const path of paths) await this.pullEffectTemplate(library, builder, path, true);
     }
 
     protected async buildNpcBundle(settings: GD.LoadSettings_T, bundleName: string): Promise<DecodeLibrary> {
@@ -535,6 +622,8 @@ class DecodeEngine {
             meshIndices.set(meshPath, library.pawnActors.length);
             library.pawnActors.push(info);
         }
+
+        for (const info of library.pawnActors) await this.pullAnimationNotifyAssets(builder, info.animationNotifies);
 
         for (const npc of definitions) {
             const classPath = npc.className.toLowerCase();
@@ -649,6 +738,10 @@ class DecodeEngine {
         copyAnimationSounds(library, bundle, sourceInfo.animationNotifies);
         copyScriptClass(library, bundle, entry.scriptClassId);
         await this.pullScriptEffectTemplates(library, builder);
+
+        if (npc.enterEvent?.sound && npc.enterEvent.sound.toLowerCase() !== "none")
+            library.sounds[npc.enterEvent.sound] = await this.pullSoundPath(builder, npc.enterEvent.sound);
+
         library.pawnActors.push(info);
 
         if (cached.seekable) await DecodeCache.hydrateLibraryFile(cached.seekable, library);
@@ -667,6 +760,8 @@ class DecodeEngine {
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, settings);
         const meshInfo = builder.pullSkeletalMesh(mesh, true, texturePaths.length === 0);
+
+        await this.pullAnimationNotifyAssets(builder, meshInfo.animationNotifies);
 
         library.name = mesh.objectName;
         library.pawnActors.push(meshInfo);
@@ -694,13 +789,19 @@ class DecodeEngine {
         return library;
     }
 
-    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[]): Promise<DecodeLibrary> {
+    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, settings);
 
         library.name = "EffectTemplates";
 
         for (const path of classPaths) await this.pullEffectTemplate(library, builder, path);
+        for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path);
+        for (const path of scriptClassPaths) {
+            const [, cls] = await this.fetchScriptClass(path);
+
+            builder.pullScriptClasses([cls]);
+        }
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -735,6 +836,8 @@ class DecodeEngine {
 
             library.pawnActors.push(meshInfo);
         }
+
+        if (library.pawnActors.length > 0) await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -853,6 +956,8 @@ class DecodeEngine {
         for (const path of texturePaths)
             manifest.materials[path] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
 
+        await this.pullAnimationNotifyAssets(builder, manifest.animationNotifies);
+
         (library as any).characterBundle = manifest;
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
@@ -928,8 +1033,8 @@ class DecodeEngine {
         return serializeLibrary(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations)).buffer as ArrayBuffer;
     }
 
-    public async decodeEffectTemplatesBinary(settings: GD.LoadSettings_T, classPaths: string[]): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeEffectTemplates(settings, classPaths)).buffer as ArrayBuffer;
+    public async decodeEffectTemplatesBinary(settings: GD.LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths)).buffer as ArrayBuffer;
     }
 
     public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
@@ -1060,18 +1165,29 @@ class DecodeEngine {
     protected async decodeNpcDefinitions(): Promise<GD.INpcDefinition[]> {
         if (this.cacheNpcDefinitions) return this.cacheNpcDefinitions;
 
-        const [groups, names] = await Promise.all([
+        const [groups, names, enterEvents] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_NPCGRP_DAT, "assets/system/Npcgrp.dat").asReadable()).decode(),
-            (new UDataFile(SchemasC4.SCHEMA_NPCNAME_E_DAT, "assets/system/npcname-e.dat").asReadable()).decode()
+            (new UDataFile(SchemasC4.SCHEMA_NPCNAME_E_DAT, "assets/system/npcname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_ENTEREVENTGRP_DAT, "assets/system/entereventgrp.dat").asReadable()).decode()
         ]);
         const namesById = new Map(names.datarows.map(row => [row.id as number, row.name as string]));
+        const enterEventsById = new Map(enterEvents.datarows.map(row => [row.id as number, {
+            sound: row.skill_sound as string,
+            soundVolume: row.sound_vol as number,
+            soundRadius: row.sound_rad as number,
+            isRise: !!row.isrise,
+            spawnType: row.spawn_type as number,
+            effect: row.effect_name as string,
+            animation: row.anim_name as string
+        }]));
 
         this.cacheNpcDefinitions = groups.datarows.map(row => ({
             id: row.tag as number,
             name: namesById.get(row.tag as number) || "",
             className: row.class as string,
             mesh: row.mesh as string,
-            textures: [...row.tex1 as string[], ...row.tex2 as string[]].filter(path => path && path.toLowerCase() !== "none")
+            textures: [...row.tex1 as string[], ...row.tex2 as string[]].filter(path => path && path.toLowerCase() !== "none"),
+            enterEvent: enterEventsById.get(row.tag as number) || null
         }));
 
         return this.cacheNpcDefinitions;

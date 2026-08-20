@@ -1,7 +1,7 @@
 import { MathUtils } from "three";
-import FVector from "../un-vector";
+import FVector from "../assets/unreal/un-vector";
 
-type UNativeRegistry = typeof import("./un-native-registry").UNativeRegistry;
+type UNativeRegistry = typeof import("./native-registry").UNativeRegistry;
 
 function pre_op_not_bool                /* !  */(a: boolean) { return !a; }
 function op_eq_bool_bool                /* == */(a: boolean, b: boolean) { return a === b; }
@@ -89,22 +89,23 @@ function VRand() { return FVector.make(Math.random(), Math.random(), Math.random
 function Log(s: string, tag?: string) { console.log(`[UEScript] ${tag ? `{${tag}} ` : ""}${s}`); }
 function Warn(s: string) { console.warn(`[UEScript] ${s}`); }
 
-function op_cat_str_str(a: string, b: string) { return a.toString() + b.toString(); }
-function op_scat_str_str(a: string, b: string) { return a.toString() + " " + b.toString(); }
-function op_le_str_str(a: string, b: string) { return a.toString() < b.toString(); }
-function op_ge_str_str(a: string, b: string) { return a.toString() > b.toString(); }
-function op_leq_str_str(a: string, b: string) { return a.toString() <= b.toString(); }
-function op_geq_str_str(a: string, b: string) { return a.toString() >= b.toString(); }
-function op_eq_str_str(a: string, b: string) { return a.toString() === b.toString(); }
-function op_neq_str_str(a: string, b: string) { return a.toString() !== b.toString(); }
-function op_eq_case_str_str(a: string, b: string) { return a.toString().toLowerCase() === b.toString().toLowerCase(); }
+function asString(value: string | null | undefined): string { return value === null || value === undefined ? "" : `${value}`; }
+function op_cat_str_str(a: string, b: string) { return asString(a) + asString(b); }
+function op_scat_str_str(a: string, b: string) { return asString(a) + " " + asString(b); }
+function op_le_str_str(a: string, b: string) { return asString(a) < asString(b); }
+function op_ge_str_str(a: string, b: string) { return asString(a) > asString(b); }
+function op_leq_str_str(a: string, b: string) { return asString(a) <= asString(b); }
+function op_geq_str_str(a: string, b: string) { return asString(a) >= asString(b); }
+function op_eq_str_str(a: string, b: string) { return asString(a) === asString(b); }
+function op_neq_str_str(a: string, b: string) { return asString(a) !== asString(b); }
+function op_eq_case_str_str(a: string, b: string) { return asString(a).toLowerCase() === asString(b).toLowerCase(); }
 
-function Len(a: string): number { return a.toString().length; }
-function InStr(a: string, b: string): number { return a.toString().indexOf(b.toString()); }
-function Mid(a: string, ...b: [number, number?]) { return a.toString().slice(...b); }
-function Left(a: string, b: number) { return Mid(a.toString(), 0, b); }
-function Right(a: string, b: number) { return Mid(a.toString(), -b); }
-function Caps(a: string) { return a.toString().toUpperCase(); }
+function Len(a: string): number { return asString(a).length; }
+function InStr(a: string, b: string): number { return asString(a).indexOf(asString(b)); }
+function Mid(a: string, ...b: [number, number?]) { return asString(a).slice(...b); }
+function Left(a: string, b: number) { return Mid(asString(a), 0, b); }
+function Right(a: string, b: number) { return Mid(asString(a), -b); }
+function Caps(a: string) { return asString(a).toUpperCase(); }
 function Chr(a: number) { return String.fromCharCode(a); }
 function Asc(a: string) { return a.charCodeAt(0); }
 function op_eq_object_object(a: unknown, b: unknown) { return a === b; }

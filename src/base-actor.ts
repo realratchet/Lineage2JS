@@ -1,15 +1,16 @@
-import { AnimationAction, AnimationClip, Bone, Box3, Mesh, Object3D, Quaternion, Sphere, Vector3 } from "three";
+import { AnimationAction, AnimationClip, Bone, Box3, LoopOnce, LoopRepeat, Mesh, Object3D, Quaternion, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T, CollisionQuery_T } from "./physics/collision-world";
 import { findVolumeTransition } from "./physics/volume-bsp";
 import LocalSpaceSkeleton from "./objects/local-space-skeleton";
-import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "./assets/unreal/un-script-vm";
+import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T, isScriptSlot } from "./ue-script/vm";
 import Rotator from "./utils/rotator";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
+const cacheOnceAnimations = new WeakMap<AnimationClip, AnimationClip>();
 const tmpWaterEnd = new Vector3();
 const tmpSwimStart = new Vector3();
 const tmpBodyPosition = new Vector3();
@@ -93,6 +94,28 @@ const BLINK_HOLD_TIME = 0.06;
 const BLINK_OPEN_TIME = 0.12;
 
 type AnimationNotifyHandler_T = (actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo) => void;
+
+function getOnceAnimation(clip: AnimationClip): AnimationClip {
+    let once = cacheOnceAnimations.get(clip);
+
+    if (once) return once;
+
+    once = clip.clone();
+
+    // decoded looping clips close on frame 0; LoopOnce holds the preceding real frame instead
+    for (const track of once.tracks) {
+        const size = track.getValueSize();
+
+        if (track.values.length >= size * 2)
+            track.values.copyWithin(track.values.length - size, track.values.length - size * 2, track.values.length - size);
+    }
+
+    (once as any).animationNotifies = (clip as any).animationNotifies;
+    cacheOnceAnimations.set(clip, once);
+
+    return once;
+}
+
 type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
 
 class BaseActor extends Object3D implements ICollidable {
@@ -188,6 +211,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.scriptClassId = classId;
         this.scriptProperties = new Map();
         this.scriptObjectFactory = objectFactory;
+        this.scriptVM.initializeHost(this);
     }
 
     public beginPlay(): void {
@@ -199,18 +223,103 @@ class BaseActor extends Object3D implements ICollidable {
 
     public resolveUnrealObject(id: string): string { return id; }
 
-    public handlesUnrealScriptFunction(fn: GD.IScriptFunctionDecodeInfo): boolean {
-        switch (fn.id.toLowerCase()) {
-            case "engine.actor.postbeginplay":
-            case "engine.pawn.postbeginplay":
-            case "lineagewarrior.lineagepawn.postbeginplay": return true;
-            default: return false;
+    public getUnrealScriptProperty(id: string): ScriptValue_T {
+        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
+
+        switch (name) {
+            case "location": return [this.position.x, this.position.y, this.position.z];
+            case "velocity": return [this.velocity.x, this.velocity.y, this.velocity.z];
+            case "acceleration": return [this.acceleration.x, this.acceleration.y, this.acceleration.z];
+            case "collisionradius": return this.collisionRadius;
+            case "collisionheight": return this.collisionHeight;
+            case "biswalking": return this.isWalking;
+            case "physics": return ["none", "walking", "falling", "swimming", "flying"].indexOf(this.physicsMode);
         }
+
+        const properties = this.scriptProperties;
+
+        if (!properties) return null;
+        if (properties.has(id)) return properties.get(id);
+
+        for (const [key, value] of properties)
+            if (key.toLowerCase() === name) return value;
+
+        return null;
+    }
+
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
+        const field = id.slice(id.lastIndexOf(".") + 1);
+
+        switch (field.toLowerCase()) {
+            case "location": this.position.fromArray(value as GD.Vector3Arr); return;
+            case "velocity": this.velocity.fromArray(value as GD.Vector3Arr); return;
+            case "acceleration": this.acceleration.fromArray(value as GD.Vector3Arr); return;
+            case "collisionradius": this.collisionRadius = Number(value); return;
+            case "collisionheight": this.collisionHeight = Number(value); return;
+            case "biswalking": this.isWalking = !!value; return;
+            case "physics": {
+                const modes: PhysicsMode_T[] = ["none", "walking", "falling", "swimming", "flying"];
+                const mode = modes[Number(value)];
+
+                if (!mode) throw new Error(`Unsupported UnrealScript physics mode '${value}'.`);
+
+                this.physicsMode = mode;
+                return;
+            }
+        }
+
+        if (!this.scriptProperties) throw new Error(`${this.type} has no UnrealScript property storage.`);
+
+        for (const key of this.scriptProperties.keys())
+            if (key.toLowerCase() === field.toLowerCase()) {
+                this.scriptProperties.set(key, value);
+                return;
+            }
+
+        this.scriptProperties.set(field, value);
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         const context = call.context as any;
         const name = call.name.toLowerCase();
+
+        if (call.index === 259 || call.index === 260 || name === "playanim" || name === "loopanim") {
+            const sequence = call.args[0] as string;
+            const rate = call.args.length > 1 ? Number(call.args[1]) : 1;
+            const tweenTime = call.args.length > 2 ? Number(call.args[2]) : 0;
+            const channel = call.args.length > 3 ? Number(call.args[3]) : 0;
+            const loop = call.index === 260 || name === "loopanim";
+
+            if (channel !== 0) throw new Error(`UnrealScript ${call.name} channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+            if (sequence === "None") return undefined;
+
+            context.playAnimation(sequence, tweenTime, rate, loop, true);
+            return undefined;
+        }
+
+        if (call.index === 282 || name === "isanimating") {
+            const channel = call.args.length > 0 ? Number(call.args[0]) : 0;
+
+            if (channel !== 0) throw new Error(`UnrealScript IsAnimating channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+
+            return !!context.animationNotifyAction && context.animationNotifyAction.isRunning();
+        }
+
+        if (call.index === 0 && name === "getanimparams") {
+            const channel = Number(call.args[0]);
+            const outName = call.args[1], outFrame = call.args[2], outRate = call.args[3];
+
+            if (channel !== 0) throw new Error(`UnrealScript GetAnimParams channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+            if (!isScriptSlot(outName) || !isScriptSlot(outFrame) || !isScriptSlot(outRate)) throw new Error("UnrealScript GetAnimParams requires out parameters.");
+
+            const action = context.animationNotifyAction as AnimationAction;
+            const duration = action ? action.getClip().duration : 0;
+
+            outName.set(action ? action.getClip().name : "None");
+            outFrame.set(action && duration > 0 ? action.time / duration : 0);
+            outRate.set(action ? action.getEffectiveTimeScale() : 0);
+            return undefined;
+        }
 
         if (call.index === 278 || name === "spawn") {
             if (!this.scriptObjectFactory) throw new Error(`${this.type} cannot spawn script object '${call.args[0]}'.`);
@@ -1417,13 +1526,15 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected setBasicActorAnimation(key: ValidStateNames_T, animationName: string) {
-        if (!(animationName in this.actorAnimations))
+        const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+
+        if (!resolvedName)
             throw new Error(`'${animationName}' is not available.`);
 
         if (!(key in this.basicActorAnimations))
             throw new Error(`'${key}' is not a valid basic actor animation`);
 
-        (this.basicActorAnimations as any)[key] = animationName;
+        (this.basicActorAnimations as any)[key] = resolvedName;
     }
 
     public setIdleAnimation(animationName: string) { this.setBasicActorAnimation("idle", animationName); }
@@ -1439,13 +1550,45 @@ class BaseActor extends Object3D implements ICollidable {
         this.playAnimation(this.basicActorAnimations.idle, IDLE_TWEEN_TIME);
     }
 
-    public playAnimation(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME) {
+    public spawnEnterEvent(event: GD.INpcEnterEvent, soundUri: string = null) {
+        if (event.effect) throw new Error(`NPC enter effect '${event.effect}' is not implemented.`);
+        if (event.isRise) throw new Error("Rising NPC enter events are not implemented.");
+
+        if (event.animation) this.playAnimation(event.animation, MOVEMENT_TWEEN_TIME, 1, false, true);
+
+        if (event.sound && event.sound.toLowerCase() !== "none") {
+            if (!soundUri) throw new Error(`NPC enter sound '${event.sound}' has no decoded audio.`);
+
+            this.getWorldPosition(tmpPosition);
+            this.renderManager.audioManager.playOneShotSound(soundUri, tmpPosition, event.soundVolume / 255, 1, event.soundRadius, event.soundRadius * 100);
+        }
+    }
+
+    public onAnimationFinished(action: AnimationAction) {
+        if (action !== this.animationNotifyAction) return;
+
+        this.animationNotifyTime = 0;
+
+        if (this.scriptVM) {
+            this.scriptVM.call(this, "AnimEnd", [0]);
+
+            if (this.animationNotifyAction !== action) return;
+        }
+
+        action.stop();
+        this.animationNotifyAction = null;
+    }
+
+    public playAnimation(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false) {
         if (!this.isAnimationsInit) return;
 
-        if (!(animationName in this.actorAnimations))
+        const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+
+        if (!resolvedName)
             throw new Error(`'${animationName}' is not available.`);
 
-        const clip = this.actorAnimations[animationName];
+        const sourceClip = this.actorAnimations[resolvedName];
+        const clip = loop ? sourceClip : getOnceAnimation(sourceClip);
         const mixer = this.renderManager.mixer;
         let notifyAction: AnimationAction = null;
 
@@ -1459,15 +1602,24 @@ class BaseActor extends Object3D implements ICollidable {
 
             if (!notifyAction) notifyAction = nextAct;
 
-            if (currAct === nextAct) continue;
+            nextAct.setEffectiveTimeScale(rate);
+            nextAct.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
+            nextAct.clampWhenFinished = !loop;
+
+            if (currAct === nextAct) {
+                if (restart || !nextAct.isRunning()) nextAct.reset().play();
+                continue;
+            }
 
             this.currAnimations.set(mesh, nextAct);
 
             if (prevAct) prevAct.stop();
-            if (currAct) {
+            nextAct.reset();
+
+            if (currAct && (currAct.isRunning() || currAct.enabled && currAct.paused)) {
                 this.prevAnimations.set(mesh, currAct);
                 currAct.crossFadeTo(nextAct, tweenTime, false);
-            }
+            } else if (currAct) currAct.stop();
 
             nextAct.play();
         }
@@ -1534,6 +1686,12 @@ class BaseActor extends Object3D implements ICollidable {
     public isLocomoting(): boolean { return this.actorState.locomotion; }
     public isWalkingMovement(): boolean { return this.isWalking; }
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
+    public getSpeed(): number { return this.velocity.length(); }
+    public isUnderwaterMovement(): boolean {
+        tmpWaterPosition.copy(this.position).addScaledVector(tmpUp, this.collisionHeight * 2);
+
+        return !!this.getWaterVolumeAt(tmpWaterPosition);
+    }
 
     public setFlying(isFlying: boolean) {
         this.setBase(null);

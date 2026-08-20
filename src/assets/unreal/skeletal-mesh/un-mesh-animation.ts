@@ -1,90 +1,15 @@
 import UObject, { BufferValue } from "@l2js/core";
 import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/unreal/un-array";
-
-function pullSound(builder: GD.DecodeLibraryBuilder, value: C.UObject): string {
-    if (!value) return null;
-
-    const sound = value.loadSelf() as GA.USound;
-    const soundName = sound.objectName ?? sound.uuid;
-
-    return builder.pullSound(sound) ? soundName : null;
-}
-
-function pullSounds(builder: GD.DecodeLibraryBuilder, values: C.UObject[]): string[] {
-    if (!values) return [];
-
-    const names: string[] = [];
-
-    for (let i = 0, len = values.length; i < len; i++) {
-        const name = pullSound(builder, values[i]);
-
-        if (name) names.push(name);
-    }
-
-    return names;
-}
-
-function getObjectName(value: C.UObject): string {
-    return value ? value.name : null;
-}
-
-function getNotifyProperty<T>(notify: C.UObject, name: string, fallback: T): T {
-    const value = notify.propertyDict.get(name);
-
-    return value === null || value === undefined ? fallback : value;
-}
-
-function getVector(value: GA.FVector, fallback: GD.Vector3Arr): GD.Vector3Arr {
-    return value ? value.getElements() : fallback;
-}
-
-function getRotator(value: GA.FRotator, fallback: GD.Vector3Arr): GD.Vector3Arr {
-    return value ? value.toArray() as GD.Vector3Arr : fallback;
-}
+import UAnimNotify from "./un-anim-notify";
 
 function decodeNotifyObject(builder: GD.DecodeLibraryBuilder, notify: C.UObject): GD.IAnimationNotifyObjectDecodeInfo {
     if (!notify) return null;
 
-    const className = (notify.constructor as any).friendlyName as string;
-    const objectName = notify.name;
+    const info = (notify as UAnimNotify).getDecodeInfo(builder);
 
-    switch (className) {
-        case "AnimNotify_Sound": return {
-            type: "sound",
-            className,
-            objectName,
-            sound: pullSound(builder, getNotifyProperty(notify, "Sound", null)),
-            volume: getNotifyProperty(notify, "Volume", 1),
-            radius: getNotifyProperty(notify, "Radius", 0),
-            random: getNotifyProperty(notify, "Random", 100),
-            defaultWalkSounds: pullSounds(builder, getNotifyProperty(notify, "DefaultWalkSound", null)),
-            defaultRunSounds: pullSounds(builder, getNotifyProperty(notify, "DefaultRunSound", null)),
-            grassWalkSounds: pullSounds(builder, getNotifyProperty(notify, "GrassWalkSound", null)),
-            grassRunSounds: pullSounds(builder, getNotifyProperty(notify, "GrassRunSound", null)),
-            waterWalkSounds: pullSounds(builder, getNotifyProperty(notify, "WaterWalkSound", null)),
-            waterRunSounds: pullSounds(builder, getNotifyProperty(notify, "WaterRunSound", null)),
-            defaultActorWalkSounds: pullSounds(builder, getNotifyProperty(notify, "DefaultActorWalkSound", null)),
-            defaultActorRunSounds: pullSounds(builder, getNotifyProperty(notify, "DefaultActorRunSound", null))
-        };
-        case "AnimNotify_SwimSound": return { type: "swimSound", className, objectName };
-        case "AnimNotify_Effect": return {
-            type: "effect",
-            className,
-            objectName,
-            effectClass: getObjectName(getNotifyProperty(notify, "EffectClass", null)),
-            bone: getNotifyProperty(notify, "Bone", "None"),
-            offsetLocation: getVector(getNotifyProperty(notify, "OffsetLocation", null), [0, 0, 0]),
-            offsetRotation: getRotator(getNotifyProperty(notify, "OffsetRotation", null), [0, 0, 0]),
-            attach: getNotifyProperty(notify, "Attach", false),
-            tag: getNotifyProperty(notify, "Tag", "None"),
-            drawScale: getNotifyProperty(notify, "DrawScale", 1),
-            drawScale3D: getVector(getNotifyProperty(notify, "DrawScale3D", null), [1, 1, 1]),
-            trailCamera: getNotifyProperty(notify, "TrailCamera", false),
-            independentRotation: getNotifyProperty(notify, "IndependentRotation", false),
-            effectScale: getNotifyProperty(notify, "EffectScale", 1)
-        };
-        default: return { type: "native", className, objectName };
-    }
+    if (info === undefined) throw new Error(`Animation notify '${notify.name}' returned undefined decode info.`);
+
+    return info;
 }
 
 class FAnimVector {
@@ -225,7 +150,7 @@ class FLineageUnk4 {
     public unkArr2 = new FArray(FLineageUnk2);
 
     public load(pkg: C.APackage): this {
-        const verArchive = pkg.header.getArchiveFileVersion();
+        // const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verLicense === 0x1A) {

@@ -24,8 +24,8 @@ async function startCore() {
             staticMeshes: true
         },
         cache: {
-            enabled: false,
-            version: 2 // bump when decode logic changes, invalidates all previously cached assets
+            enabled: true,
+            version: 7 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
@@ -107,7 +107,7 @@ async function startCore() {
 
     await assetManager.initialize(renderManager);
 
-    await renderManager.spawnNpc("Valakas");
+    renderManager.spawnNpc("Baium");
 
     renderManager.addClippingRangeControls();
     renderManager.addDisplayGammaControls();

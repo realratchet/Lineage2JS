@@ -1,5 +1,5 @@
 import DecodeLibrary from "./decode-library";
-import pullScriptDumps, { pullScriptClasses } from "./script-dump-loader";
+import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses } from "./script-dump-loader";
 import type { HeightMapInfo_T } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
 
@@ -391,7 +391,10 @@ class DecodeLibraryBuilder {
     protected setScriptClass(actor: C.UObject, info: GD.IBaseObjectDecodeInfo): void {
         const cls = (actor.constructor as any).hostClass as C.UClass;
 
-        if (cls) info.scriptClassId = cls.name;
+        if (!cls) return;
+
+        info.scriptClassId = cls.name;
+        info.scriptProperties = dumpObjectScriptProperties(actor);
     }
 }
 

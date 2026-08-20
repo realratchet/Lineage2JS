@@ -1,4 +1,4 @@
-import registerNativeFuncs from "./un-operators";
+import registerNativeFuncs from "./operators";
 
 const NATIVE: Record<string, any> = {
 };

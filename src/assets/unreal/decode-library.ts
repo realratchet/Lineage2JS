@@ -35,6 +35,7 @@ class DecodeLibrary {
     public readonly waterVolumes: GD.IWaterVolumeDecodeInfo[] = [];
     public readonly ambientSounds: GD.IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
+    public readonly sounds: Record<string, string> = {};
     public readonly scriptClasses: Record<string, GD.IScriptClassDecodeInfo> = {};
     public readonly scriptFunctions: Record<string, GD.IScriptFunctionDecodeInfo> = {};
     public readonly scriptStates: Record<string, GD.IScriptStateDecodeInfo> = {};

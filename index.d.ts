@@ -181,6 +181,17 @@ declare global {
                     className: string;
                     mesh: string;
                     textures: string[];
+                    enterEvent: INpcEnterEvent | null;
+                }
+
+                export interface INpcEnterEvent {
+                    sound: string;
+                    soundVolume: number;
+                    soundRadius: number;
+                    isRise: boolean;
+                    spawnType: number;
+                    effect: string;
+                    animation: string;
                 }
 
                 export type ScriptBytecodeValue_T = number | string | null | Vector3Arr | IScriptBytecodeOffsetDecodeInfo | IScriptBytecodeLabelDecodeInfo;
@@ -242,8 +253,11 @@ declare global {
                 export interface IScriptClassDecodeInfo extends IScriptStateDecodeInfo {
                     superClassId: string | null,
                     classFlags: number,
-                    stateIds: string[]
+                    stateIds: string[],
+                    defaults: Record<string, ScriptPropertyValue_T>
                 }
+
+                export type ScriptPropertyValue_T = number | boolean | string | null | ScriptPropertyValue_T[] | { [key: string]: ScriptPropertyValue_T };
 
                 export type LoadSettings_T = {
                     loadTerrain?: boolean,
@@ -338,6 +352,7 @@ declare global {
                     type: DecodableObject_T,
                     name?: string,
                     scriptClassId?: string,
+                    scriptProperties?: Record<string, ScriptPropertyValue_T>,
                     position?: Vector3Arr,
                     rotation?: EulerArr,
                     quaternion?: QuaternionArr,
@@ -454,7 +469,7 @@ declare global {
                     object: IAnimationNotifyObjectDecodeInfo | null;
                 }
 
-                export type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
+                export type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationScreenFadeNotifyDecodeInfo | IAnimationViewShakeNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
 
                 export interface IAnimationNativeNotifyDecodeInfo {
                     type: "native";
@@ -484,6 +499,36 @@ declare global {
                     type: "swimSound";
                     className: "AnimNotify_SwimSound";
                     objectName: string;
+                    surface: IAnimationSwimSoundSetDecodeInfo | null;
+                    underwater: IAnimationSwimSoundSetDecodeInfo | null;
+                }
+
+                export interface IAnimationSwimSoundSetDecodeInfo {
+                    sounds: string[];
+                    volume: number;
+                    radius: number;
+                    random: number;
+                }
+
+                export interface IAnimationScreenFadeNotifyDecodeInfo {
+                    type: "screenFade";
+                    className: "AnimNotify_ScreenFade";
+                    objectName: string;
+                    fadeOutDuration: number;
+                    fadeOutColor: Vector4Arr;
+                    blackOutDuration: number;
+                    fadeInDuration: number;
+                }
+
+                export interface IAnimationViewShakeNotifyDecodeInfo {
+                    type: "viewShake";
+                    className: "AnimNotify_ViewShake";
+                    objectName: string;
+                    shakeType: "damage" | "vibration" | "user" | "up" | "down" | "upDown" | "downUp";
+                    shakeIntensity: number;
+                    shakeVector: Vector3Arr;
+                    shakeRange: number;
+                    shakeCount: number;
                 }
 
                 export interface IAnimationEffectNotifyDecodeInfo {
@@ -1019,6 +1064,8 @@ declare global {
                         end: number
                     } | null,
                     cellophane: ColorArr | null,
+                    waitHitEffect: string | null,
+                    runHitEffect: string | null,
                     bsp: IVolumeBspDecodeInfo
                 }
 

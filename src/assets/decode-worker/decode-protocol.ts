@@ -57,6 +57,8 @@ type DecodeEffectTemplatesMessage_T = {
     requestId: number;
     settings: GD.LoadSettings_T;
     classPaths: string[];
+    soundPaths: string[];
+    scriptClassPaths: string[];
 };
 
 type CharGroupsMessage_T = {
