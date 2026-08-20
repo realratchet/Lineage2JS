@@ -1,4 +1,5 @@
 import fetchAssetHandle from "@client/assets/asset-handle";
+import { ASCFType } from "@client/assets/unreal/datafile/schema/dat-container";
 import { UEncodedFile, BufferValue } from "@l2js/core";
 
 class UDataFile extends UEncodedFile {
@@ -50,9 +51,11 @@ class UDataFile extends UEncodedFile {
     }
 }
 
-function loadSingleValue(readable: UDataFile, type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T, values: Record<string, any>) {
+function loadSingleValue(readable: UDataFile, type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T | "ASCF", values: Record<string, any>) {
     if (typeof type === "string") {
-        const schemaValue = readable.read(type as any);
+        if (type === "ASCF") return new ASCFType().read(readable);
+
+        const schemaValue = type === "utf16" ? readable.read(new BufferValue(BufferValue.utf16)).value : readable.read(type as any);
         const value = schemaValue;
 
         return value as any;
