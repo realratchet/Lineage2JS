@@ -151,7 +151,6 @@ abstract class UAActor extends UObject {
             DY = this.scale.y * this.drawScale,
             DZ = this.scale.z * this.drawScale;
 
-        // Calculate UE2 matrix components (same as localToWorld)
         const ue2_XX = CP * CY * DX;
         const ue2_XY = CP * DX * SY;
         const ue2_XZ = DX * SP;

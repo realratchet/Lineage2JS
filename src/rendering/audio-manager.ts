@@ -325,7 +325,6 @@ class AudioManager {
         this.prevTime = this.lastTime;
         this.lastTime = currentTime;
 
-        // Handle music delays
         if (this.nextMusicTrackTime !== undefined && currentTime >= this.nextMusicTrackTime) {
             const playId = this.nextMusicPlayId;
             this.nextMusicTrackTime = undefined;
@@ -544,7 +543,6 @@ class AudioManager {
         source.playbackRate.value = info.pitch;
         source.connect(gain);
 
-        // Update frees a non-looping voice once AL reports its source AL_STOPPED
         if (!info.looping) source.onended = () => {
             if (this.activeAmbientSounds.get(id) !== entry || entry.source !== source) return;
 

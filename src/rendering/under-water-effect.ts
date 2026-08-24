@@ -25,6 +25,7 @@ class UnderWaterEffect extends Object3D {
     protected readonly cellophaneQuad: FullScreenQuad;
     protected volume: GD.IWaterVolumeDecodeInfo = null;
     protected hasSampled = false;
+    protected isDay = false;
 
     public constructor() {
 
@@ -56,15 +57,12 @@ class UnderWaterEffect extends Object3D {
     }
 
     public setVolume(volume: GD.IWaterVolumeDecodeInfo | null, envCellophane: ColorByte): void {
-        const wasVisible = this.visible;
+        if (this.volume !== volume) this.hasSampled = false;
 
         this.volume = volume;
         this.visible = !!volume;
 
-        if (!volume) {
-            if (wasVisible) this.hasSampled = false;
-            return;
-        }
+        if (!volume) return;
 
         const color = volume.cellophane ?? [envCellophane.r, envCellophane.g, envCellophane.b, envCellophane.a];
 
@@ -79,9 +77,14 @@ class UnderWaterEffect extends Object3D {
         tmpSamplingLocation.copy(camera.position);
 
         if (!isDay) {
+            this.isDay = false;
+            this.hasSampled = false;
             this.sunBeam.visible = false;
             return;
         }
+
+        if (!this.isDay) this.hasSampled = false;
+        this.isDay = true;
 
         if (this.hasSampled && this.lastSamplingLocation.distanceToSquared(tmpSamplingLocation) <= SAMPLE_DISTANCE_SQ) return;
 

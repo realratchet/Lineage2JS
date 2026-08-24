@@ -1,19 +1,5 @@
 import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 
-/**
- * OPFS-backed cache of fully decoded (and sanitized) sector libraries, mirroring how
- * packages are cached. A warm hit skips deserialization, decode-info generation and
- * batch merging entirely.
- *
- * Invalidation: settings.cache.version (bump when decode logic changes) and the
- * load-settings hash are baked into the filename; entries older than CACHE_TTL_DAYS
- * are swept on init. settings.cache toggles the cache entirely.
- *
- * Libraries are cached before DXT->RGBA conversion (DDS is 4-8x smaller); the worker
- * re-runs the conversion after a hit. Blob URLs in the library are session-scoped, so
- * refreshSoundBlobUris() re-mints them from the raw bytes after a hit.
- */
-
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
 
@@ -28,8 +14,6 @@ function getCacheVersion(settings: GD.LoadSettings_T): number {
 }
 
 function hashSettings(settings: GD.LoadSettings_T): string {
-    /* the cache config and worker pool size must not affect the content hash; texture
-       mode neither - conversion happens after the cache, which always stores DDS */
     const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
@@ -112,10 +96,6 @@ async function loadCachedLibraryBuffer(sectorName: string, settings: GD.LoadSett
     return file ? file.arrayBuffer() : null;
 }
 
-/**
- * Serializes synchronously (must happen before postMessage detaches the buffers), then
- * writes to OPFS in the background - a failed write only costs the next warm load.
- */
 function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, library: any): void {
     if (!isCacheEnabled(settings)) return;
 
@@ -202,11 +182,7 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
         console.log(`[decode-cache] ${enabled ? "swept" : "cleared"} ${doomed.length} cache entries`);
 }
 
-/**
- * Blob URLs are scoped to the thread that created them, so the decode never mints one -
- * whichever thread ends up owning the library does, here. Sound decode infos carry a
- * name and resolve against this cache, see SectorObject.getSoundUri.
- */
+// Blob URLs are scoped to the thread owning the library.
 function refreshSoundBlobUris(library: any): void {
     const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array, mimeType: string }>;
 

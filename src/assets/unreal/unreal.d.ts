@@ -91,7 +91,6 @@
 
 // type FMipmap = import("./un-mipmap").FMipmap;
 // type UDecoLayer = import("./un-deco-layer").UDecoLayer;
-// type FUnknownStruct = import("./un-unknown-struct").FUnknownStruct;
 // type FBSPNode = import("./bsp/un-bsp-node").FBSPNode;
 // type FBSPSurf = import("./bsp/un-bsp-surf").FBSPSurf;
 // type FVert = import("./model/un-vert").FVert;

@@ -55,8 +55,8 @@ class FVectorArray implements C.IConstructable {
 }
 
 class FBoxArray implements C.IConstructable {
-    declare private elementCount: number;
-    declare private data: DataView;
+    declare protected elementCount: number;
+    declare protected data: DataView;
 
     public readonly elementSize = 3 * 4 * 2 + 1;
 
@@ -426,24 +426,14 @@ abstract class UModel extends UPrimitive {
             // if (surf.flags === 4194304)
             //     continue
 
-            // Determine if node is in a SkyZone
-            // We check the front zone (iZone[1]) as the primary zone for the node
             const zoneIndex = node.iZone[1];
             const zoneProp = this.zones[zoneIndex];
             const zoneActor = zoneProp?.zoneActor;
 
-            // Check if this node belongs to a SkyZoneInfo
             const isSkyZone = zoneActor?.tag === "SkyZoneInfo";
 
-            // Filtering Logic:
-            // 1. If we are loading a Sky Level (library.isSkyLevel = true):
-            //    - We ONLY want to render the SkyZone geometry.
-            //    - So, if the node is NOT in a SkyZone, we skip it.
             if (library.isSkyLevel && !isSkyZone) continue;
 
-            // 2. If we are loading a Normal Level (library.isSkyLevel = false):
-            //    - We want to EXCLUDE the SkyZone geometry (it will be handled by SkyRenderer).
-            //    - So, if the node IS in a SkyZone, we skip it.
             if (!library.isSkyLevel && isSkyZone) continue;
 
             if (node.iCollisionBound >= 0) {
@@ -455,7 +445,6 @@ abstract class UModel extends UPrimitive {
             const priority: PriorityGroups_T = /*false &&*/ surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
 
-            // Get material UUID
             const materialUuid = builder.pullMaterial(surf.material);
             const lightmapTextureIndex = lightmapIndex ? lightmapIndex.iLightmapTexture : -1;
 
@@ -465,21 +454,13 @@ abstract class UModel extends UPrimitive {
 
             // debugger;
 
-            // UE2 groups sections by: Material + PolyFlags + iLightMapTexture
-            // PolyFlags used: PF_Unlit | PF_Selected | PF_TwoSided (from UnModel.cpp line 1000)
-            // PF_Unlit = 0x00400000 (from UnObj.h line 254)
-            // UE2 groups sections by: Material + PolyFlags + iLightMapTexture
             // PolyFlags used: PF_Unlit | PF_Selected | PF_TwoSided (from UnModel.cpp line 1000)
             const sectionPolyFlags = surf.flags & (PF_Unlit | PolyFlags_T.PF_Selected | PolyFlags_T.PF_TwoSided);
 
-            // Create section key matching UE2's exact criteria
             const sectionKey = `${materialUuid}/${sectionPolyFlags}/${lightmapTextureIndex}`;
 
-            // Determine if node is in "Outdoor" zone (Front Zone)
-            // (zoneIndex, zoneProp, zoneActor are determined above for filtering)
             const isOutdoor = zoneIndex === 0 || (zoneActor && (zoneActor as any).isSunAffected); // zone 0 is LevelInfo (Outdoor)
 
-            // Split sections by Ambient Type (Outdoor vs Indoor)
             const composedKey = `${sectionKey}/${isOutdoor}`;
 
             if (!sectionMap.has(priority)) sectionMap.set(priority, new Map());
@@ -498,13 +479,12 @@ abstract class UModel extends UPrimitive {
                 });
             }
 
-            // UE2 line 1003: Only nodes with NumVertices > 0 get added to sections
             const vcount = node.numVertices;
-            if (vcount <= 0) continue; // Skip nodes without vertices (splitter nodes)
+            if (vcount <= 0) continue;
 
             const section = prioritySections.get(composedKey);
 
-            const light: LightmapInfo = !lightmap ? null : {
+            const light: LightmapInfo_T = !lightmap ? null : {
                 uuid: lightmap.uuid,
                 resolution: { width: lightmap.width, height: lightmap.height },
                 offset: { x: lightmapIndex.offsetX, y: lightmapIndex.offsetY },
@@ -521,7 +501,6 @@ abstract class UModel extends UPrimitive {
         const _textureX: FVector = FVector.make(), _textureY: FVector = FVector.make();
         const _tangentZ: FVector = FVector.make();
 
-        // Create sections from sectionMap (UE2-style: material + lightmap only, NOT split by zone)
         const createSection = (priority: PriorityGroups_T, sectionKey: string, sectionData: ObjectsForSection_T): number => {
             const { material, lightmap, totalVertices, nodes } = sectionData;
 
@@ -536,14 +515,12 @@ abstract class UModel extends UPrimitive {
 
             let dstVertices = 0;
 
-            // Process all nodes in this section (UE2: sections can span multiple zones)
             for (const { node, surf, light, nodeIndex } of nodes) {
                 const textureBase: FVector = this.points.getElem(surf.pBase, _textureBase);
                 const textureX: FVector = this.vectors.getElem(surf.vTextureU, _textureX);
                 const textureY: FVector = this.vectors.getElem(surf.vTextureV, _textureY);
                 const tangentZ: FVector = this.vectors.getElem(surf.vNormal, _tangentZ);
 
-                // Extract material dimensions for correct UV scaling (UE2 standard)
                 const texSize = surf.material?.loadSelf?.().getTextureSize();
                 const texWidth = texSize?.width ?? TEXEL_SCALE;
                 const texHeight = texSize?.height ?? TEXEL_SCALE;
@@ -551,7 +528,6 @@ abstract class UModel extends UPrimitive {
                 const fcount = node.numVertices - 2;
                 const findex = dstVertices; // Starting vertex index for this node
 
-                // Process vertices first (so we know the correct vertex count)
                 for (let vertexIndex = 0, vcount = node.numVertices; vertexIndex < vcount; vertexIndex++) {
                     const vert: FVert = this.vertices.getElem(node.iVertPool + vertexIndex);
                     const position: FVector = this.points.getElem(vert.pVertex, _position);
@@ -583,14 +559,11 @@ abstract class UModel extends UPrimitive {
                     dstVertices++;
                 }
 
-                // Create triangles after vertices are processed
                 for (let i = 0; i < fcount; i++) {
                     indices.push(findex, findex + i + 2, findex + i + 1);
                 }
 
-                // Store node index for this section
                 // UE2 line 1024: Node.iSection = Section - &Sections(0);
-                // Only nodes with NumVertices > 0 get section indices
                 // const nodeIndex = this.bspNodes.indexOf(node); // Optimized: passed via NodeInfo_T
                 if (nodeIndex >= 0 && node.numVertices > 0) {
                     nodeIndices.push(nodeIndex);
@@ -600,9 +573,6 @@ abstract class UModel extends UPrimitive {
                 }
             }
 
-            // extracted last time in sky_dumps.txt
-
-            // Create material (lightmapped or regular)
             let finalMaterialUuid: string;
             if (lightmap) {
                 finalMaterialUuid = `${material}+LM_${generateUUID()}`;
@@ -615,7 +585,6 @@ abstract class UModel extends UPrimitive {
                 finalMaterialUuid = material;
             }
 
-            // Create geometry for this section
             const geometryUuid = generateUUID();
             result.geometries.push([geometryUuid, {
                 groups: [[0, indices.length, 0]],
@@ -628,7 +597,6 @@ abstract class UModel extends UPrimitive {
                 }
             }]);
 
-            // Create section info (UE2-style: material + lightmap only, no zone splitting)
             const sectionInfo: GD.IBSPSectionDecodeInfo_T & { isOutdoor: boolean } = {
                 uuid: generateUUID(),
                 priority,
@@ -639,7 +607,6 @@ abstract class UModel extends UPrimitive {
                 isOutdoor: sectionData.isOutdoor,
                 isUnlit: !!(sectionData.polyFlags & PF_Unlit),
                 sectionName: sectionKey,
-                // Sky level defaults or surface overrides
                 depthWrite: this.isSky ? false : undefined,
                 depthTest: this.isSky ? false : undefined,
                 fog: this.isSky ? true : undefined,
@@ -677,7 +644,6 @@ function boxPushOut(normal: GA.FVector | GA.FPlane, size: GA.FVector) {
 type PriorityGroups_T = "opaque" | "transparent";
 type ModelZoneDecodeResult_T = { bspLeaves: GD.IBSPLeafDecodeInfo_T[], bspZones: GD.IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
 type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspNodes: GD.IBSPNodeDecodeInfo_T[], bspColliders: GD.IBoxDecodeInfo[], leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: GD.IBoxDecodeInfo[], bspSections: GD.IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, GD.IGeometryDecodeInfo][], materials: [string, GD.IBaseMaterialDecodeInfo][] };
-// NEW: Section-based organization (replaces zone-based)
 type ObjectsForSection_T = {
     material: string,  // material UUID
     lightmap: string | null,  // lightmap UUID
@@ -688,9 +654,9 @@ type ObjectsForSection_T = {
     isOutdoor: boolean,
     isWaterSheet: boolean
 };
-type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo | null, nodeIndex: number };
+type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo_T | null, nodeIndex: number };
 
-type LightmapInfo = {
+type LightmapInfo_T = {
     uuid: string,
     offset: { x: number; y: number; },
     resolution: { width: number; height: number; },

@@ -1744,29 +1744,31 @@ class BaseActor extends Object3D implements ICollidable {
     public setDeathAnimationFromScript() {
         if (!this.scriptVM) throw new Error(`${this.type} has no UnrealScript runtime.`);
 
-        const oldWeaponType = Number(this.getUnrealScriptProperty("CurWeaponType"));
+        const oldWeaponType = this.getUnrealScriptProperty("CurWeaponType");
         let invalidAnimationName: string = null;
 
-        for (let weaponType = 0; weaponType < 8; weaponType++) {
-            this.setUnrealScriptProperty("CurWeaponType", weaponType);
+        try {
+            for (let weaponType = 0; weaponType < 8; weaponType++) {
+                this.setUnrealScriptProperty("CurWeaponType", weaponType);
 
-            const animationName = this.scriptVM.call(this, "GetDeathAnimName");
+                const animationName = this.scriptVM.call(this, "GetDeathAnimName");
 
-            if (typeof animationName !== "string") throw new Error(`${this.type} has invalid death animation '${animationName}'.`);
-            if (animationName.toLowerCase() === "none") continue;
+                if (typeof animationName !== "string") throw new Error(`${this.type} has invalid death animation '${animationName}'.`);
+                if (animationName.toLowerCase() === "none") continue;
 
-            const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+                const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
 
-            if (!resolvedName) {
-                invalidAnimationName = animationName;
-                continue;
+                if (!resolvedName) {
+                    invalidAnimationName = animationName;
+                    continue;
+                }
+
+                this.setDeathAnimation(resolvedName);
+                return;
             }
-
-            this.setDeathAnimation(resolvedName);
-            return;
+        } finally {
+            this.setUnrealScriptProperty("CurWeaponType", oldWeaponType);
         }
-
-        this.setUnrealScriptProperty("CurWeaponType", oldWeaponType);
 
         if (invalidAnimationName) throw new Error(`'${invalidAnimationName}' is not available.`);
     }

@@ -1,6 +1,7 @@
-import { Object3D, Scene, Vector3 } from "three";
+import { Vector3 } from "three";
 import type BaseActor from "@client/base-actor";
 import type { SectorObject } from "@client/objects/zone-object";
+import type RenderManager from "@client/rendering/render-manager";
 import decodeObject3D from "@client/assets/decoders/object3d-decoder";
 import { encompassesVolume, findVolumeTransition } from "@client/physics/volume-bsp";
 
@@ -13,69 +14,38 @@ const tmpEnd = new Vector3();
 const tmpPosition = new Vector3();
 
 type SurfaceHit_T = { sector: SectorObject, volume: GD.IWaterVolumeDecodeInfo, time: number };
-
-function isEffectFinished(effect: Object3D): boolean {
-    let hasEmitter = false;
-    let isFinished = true;
-
-    for (const child of effect.children) {
-        const emitter = child as any;
-
-        if (!emitter.particlePool) continue;
-
-        hasEmitter = true;
-        if (!emitter.isFinished()) isFinished = false;
-    }
-
-    return hasEmitter && isFinished;
-}
-
-function disposeEffect(effect: Object3D): void {
-    effect.removeFromParent();
-    effect.traverse(child => {
-        const mesh = child as any;
-
-        if (!mesh.isMesh) return;
-
-        const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
-
-        for (const material of materials) material.dispose();
-        if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
-    });
-}
+const tmpSurfaceHit: SurfaceHit_T = { sector: null, volume: null, time: 0 };
 
 class WaterHitEffect {
     protected readonly owner: BaseActor;
-    protected readonly scene: Scene;
-    protected readonly effects = new Set<Object3D>();
+    protected readonly renderManager: RenderManager;
     protected effectName: string = null;
     protected elapsed = 0;
     protected interval = 0;
 
-    public constructor(owner: BaseActor, scene: Scene) {
+    public constructor(owner: BaseActor, renderManager: RenderManager) {
 
         this.owner = owner;
-        this.scene = scene;
+        this.renderManager = renderManager;
     }
 
     public update(sectors: readonly SectorObject[], deltaTime: number): void {
-        for (const effect of this.effects) {
-            if (!isEffectFinished(effect)) continue;
-
-            disposeEffect(effect);
-            this.effects.delete(effect);
+        if (!this.owner.isSwimmingMovement()) {
+            this.effectName = null;
+            this.elapsed = 0;
+            return;
         }
 
         const hit = this.findSurface(sectors);
 
-        if (!hit || !this.owner.isSwimmingMovement()) {
+        if (!hit) {
             this.effectName = null;
             this.elapsed = 0;
             return;
         }
 
         const speed = this.owner.getSpeed();
-        const effectName = speed > 0 ? hit.volume.runHitEffect : hit.volume.waitHitEffect;
+        const effectName = this.getEffectName(hit, speed > 0);
 
         if (!effectName) return;
 
@@ -95,7 +65,9 @@ class WaterHitEffect {
         tmpEnd.copy(tmpStart);
         tmpEnd.z += height * 2 + SURFACE_HEIGHT;
 
-        let selected: SurfaceHit_T = null;
+        let selectedSector: SectorObject = null;
+        let selectedVolume: GD.IWaterVolumeDecodeInfo = null;
+        let selectedTime = 0;
 
         for (const sector of sectors) {
             if (!sector.waterVolumes) continue;
@@ -109,11 +81,21 @@ class WaterHitEffect {
                 const surfaceHeight = time * (height * 2 + SURFACE_HEIGHT);
 
                 if (surfaceHeight < height * (1 + MIN_SURFACE_HEIGHT)) continue;
-                if (!selected || volume.priority >= selected.volume.priority) selected = { sector, volume, time };
+                if (!selectedVolume || volume.priority >= selectedVolume.priority) {
+                    selectedSector = sector;
+                    selectedVolume = volume;
+                    selectedTime = time;
+                }
             }
         }
 
-        return selected;
+        if (!selectedVolume) return null;
+
+        tmpSurfaceHit.sector = selectedSector;
+        tmpSurfaceHit.volume = selectedVolume;
+        tmpSurfaceHit.time = selectedTime;
+
+        return tmpSurfaceHit;
     }
 
     protected spawn(hit: SurfaceHit_T, effectName: string, speed: number): void {
@@ -131,12 +113,32 @@ class WaterHitEffect {
         effect.scale.multiplyScalar(this.owner.getCollisionRadius() * SIZE_SCALE);
         if (speed > 0) effect.quaternion.copy(this.owner.quaternion);
 
-        this.scene.add(effect);
-        this.effects.add(effect);
+        this.renderManager.addTransientEffect(effect);
 
         const spawnRate = Number(hit.sector.scriptVM.call(effect as any, "GetSpawnRate", [speed]));
 
-        this.interval = 1 / (spawnRate >= 0 ? spawnRate : 2);
+        this.interval = 1 / (spawnRate > 0 ? spawnRate : 2);
+    }
+
+    protected getEffectName(hit: SurfaceHit_T, isMoving: boolean): string | null {
+        const volume = hit.volume;
+
+        if (!volume.scriptClassId) throw new Error(`Water volume '${volume.name}' has no UnrealScript class.`);
+
+        let waitHitEffect: GD.ScriptPropertyValue_T = null;
+        let runHitEffect: GD.ScriptPropertyValue_T = null;
+        const waitSlot = { get: () => waitHitEffect, set: (value: GD.ScriptPropertyValue_T) => waitHitEffect = value };
+        const runSlot = { get: () => runHitEffect, set: (value: GD.ScriptPropertyValue_T) => runHitEffect = value };
+        const fn = hit.sector.scriptVM.findFunction(volume.scriptClassId, "GetHitEffectName");
+
+        hit.sector.scriptVM.invoke(volume, fn, [waitSlot, runSlot]);
+
+        const effectName = isMoving ? runHitEffect : waitHitEffect;
+
+        if (effectName === null) return null;
+        if (typeof effectName !== "string") throw new Error(`'${volume.scriptClassId}.GetHitEffectName' returned a non-name value.`);
+
+        return effectName;
     }
 }
 

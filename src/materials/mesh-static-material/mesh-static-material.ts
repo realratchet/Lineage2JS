@@ -82,13 +82,13 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
-    private spriteEntries: [string, SpriteParam_T][] = [];
-    private proceduralMaps: any[] = [];
+    protected spriteEntries: [string, SpriteParam_T][] = [];
+    protected proceduralMaps: any[] = [];
 
     public isUpdatable = false;
 
     // @ts-ignore
-    public constructor(info: MeshStaticMaterialParameters = {}) {
+    public constructor(info: MeshStaticMaterialParameters_T = {}) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -350,7 +350,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableAmbient({ vector, brightness }: IAmbientLighting) {
+    public enableAmbient({ vector, brightness }: AmbientLighting_T) {
         const u = this.uniforms.ambient.value;
 
         u.color.copy(vector);
@@ -363,7 +363,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableDirectionalAmbient({ vector, direction, brightness }: IDirectionalAmbientLighting) {
+    public enableDirectionalAmbient({ vector, direction, brightness }: DirectionalAmbientLighting_T) {
         const u = this.uniforms.directionalAmbient.value;
 
         u.color.copy(vector);
@@ -471,15 +471,15 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     }
 }
 
-type IBaseLighting = {
+type BaseLighting_T = {
     vector: THREE.Color,
     brightness: number
 };
 
-type IAmbientLighting = IBaseLighting;
-type IDirectionalAmbientLighting = IBaseLighting & { direction: THREE.Vector3 };
+type AmbientLighting_T = BaseLighting_T;
+type DirectionalAmbientLighting_T = BaseLighting_T & { direction: THREE.Vector3 };
 
-type MeshStaticMaterialParameters = {
+type MeshStaticMaterialParameters_T = {
     diffuse: GD.IDecodedParameter,
     opacity: GD.IDecodedParameter,
     specular: GD.IDecodedParameter,

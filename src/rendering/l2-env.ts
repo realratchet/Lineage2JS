@@ -10,50 +10,34 @@ import EnvInfo from "@client/rendering/env-info";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 
-/**
- * FogBlendState - Manages smooth fog transitions matching UE2/L2 behavior
- * Based on IDA analysis: interpolates over ~1 second when fog target changes
- */
 class FogBlendState {
-    // Target fog values (what we're transitioning to)
     public targetColor = new ColorByte();
     public targetStart = 2000;
     public targetEnd = 8000;
 
-    // Previous fog values (where we started)
     public prevColor = new ColorByte();
     public prevStart = 2000;
     public prevEnd = 8000;
 
-    // Current interpolated fog values
     public currentColor = new ColorByte();
     public currentStart = 2000;
     public currentEnd = 8000;
 
-    // Blend timing (default 1.0 second)
     public totalTime = 1.0;
     public remainingTime = 0;
 
-    /**
-     * Update the blend state based on elapsed time
-     * @param deltaTime Time since last frame in seconds
-     */
     public update(deltaTime: number): void {
         if (this.remainingTime <= 0) {
-            // No blending in progress, snap to target
             this.currentColor.copy(this.targetColor);
             this.currentStart = this.targetStart;
             this.currentEnd = this.targetEnd;
             return;
         }
 
-        // Decrease remaining time
         this.remainingTime = Math.max(0, this.remainingTime - deltaTime);
 
-        // Calculate blend factor (0 = prev, 1 = target)
         const t = 1.0 - (this.remainingTime / this.totalTime);
 
-        // Interpolate values
         this.currentStart = MathUtils.lerp(this.prevStart, this.targetStart, t);
         this.currentEnd = MathUtils.lerp(this.prevEnd, this.targetEnd, t);
         this.currentColor.set(
@@ -63,11 +47,7 @@ class FogBlendState {
         );
     }
 
-    /**
-     * Set new target fog values, triggering a blend transition
-     */
     public setTarget(color: ColorByte, start: number, end: number): void {
-        // Check if target actually changed
         const colorChanged = color.r !== this.targetColor.r ||
             color.g !== this.targetColor.g ||
             color.b !== this.targetColor.b;
@@ -75,23 +55,17 @@ class FogBlendState {
 
         if (!colorChanged && !rangeChanged) return;
 
-        // Store current as previous
         this.prevColor.copy(this.currentColor);
         this.prevStart = this.currentStart;
         this.prevEnd = this.currentEnd;
 
-        // Set new target
         this.targetColor.copy(color);
         this.targetStart = start;
         this.targetEnd = end;
 
-        // Start blend timer
         this.remainingTime = this.totalTime;
     }
 
-    /**
-     * Instantly snap to target values (no transition)
-     */
     public snapToTarget(color: ColorByte, start: number, end: number): void {
         this.targetColor.copy(color);
         this.targetStart = start;
@@ -114,8 +88,8 @@ class L2Environment {
     protected env: EnvInfo;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
 
-    protected time: number = 1 * 60 * 60; // in seconds
-    protected envVersion: number = 0; // Incremented when activeEnv changes
+    protected time: number = 1 * 60 * 60;
+    protected envVersion: number = 0;
     protected timeScale: number = 0;
 
     public constructor(env: EnvInfo) {
@@ -141,14 +115,12 @@ class L2Environment {
 
     public getEnv() { return this.env; }
 
-    /** Get normalized time (0-1 range representing 0-24 hours) */
     public getNormalizedTime() { return this.getTimeOfDay() / 24; }
 
     public getBaseColorPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
         const timeOfDay = this.getTimeOfDay();
         const envColor = this.getEnvColor();
 
-        // light.staticMesh is TimeHSV[]
         return getColorByteFromHSV(timeOfDay, envColor.light.staticMesh, target);
     }
 
@@ -166,7 +138,6 @@ class L2Environment {
         const timeOfDay = this.getTimeOfDay();
         const envColor = this.getEnvColor();
 
-        // same fallback as getAmbientPlaneBSPLight - some envs never populate a distinct BSP curve
         const bspArray = envColor.light.bsp?.length > 0 ? envColor.light.bsp : envColor.light.staticMesh;
         return getColorByteFromHSV(timeOfDay, bspArray, target);
     }
@@ -188,10 +159,6 @@ class L2Environment {
         return getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
     }
 
-    /**
-     * Get terrain ambient color with per-byte halving (matching IDA: shr r/g/b, 1)
-     * The halving happens at byte level (0-255) BEFORE normalization.
-     */
     public getAmbientPlaneTerrainLightHalved(target: ColorByte): ColorByte {
         getColorFromTimeColor(this.getTimeOfDay(), this.getEnvColor().ambient.terrain, target);
         return target.shr(1);
@@ -217,7 +184,6 @@ class L2Environment {
 
     public getAmbientPlaneBSPLight(target: ColorByte): ColorByte {
         const envColor = this.getEnvColor();
-        // Fallback to staticMesh ambient if BSP ambient is not available
         const bspArray = envColor.ambient.bsp?.length > 0 ? envColor.ambient.bsp : envColor.ambient.staticMesh;
         return getColorFromTimeColor(this.getTimeOfDay(), bspArray, target);
     }
@@ -258,19 +224,10 @@ class L2Environment {
         return target;
     }
 
-    /**
-     * Get the current Fog Color (used for Global Fog / Clouds Zenith Tint)
-     * This should ideally come from the Zone Info (L2FogInfo) if available, otherwise TimeEnv.
-     */
     public getFogColor(target: ColorByte): ColorByte {
-        // In the absence of a connected Zone Info system here, we'll return a default
-        // or try to match the Haze Color as a fallback, since they often align.
         return this.getHazeColor(target);
     }
 
-    /**
-     * Build the haze gradient array from indexHaze and haze colors.
-     */
     public getHazeGradient(): ColorByte[] {
         const envColor = this.getEnvColor();
         const indexHaze = envColor.color.indexHaze;
@@ -278,7 +235,6 @@ class L2Environment {
         const timeOfDay = this.getTimeOfDay();
 
         if (!indexHaze || indexHaze.length === 0) {
-            // Fallback: return single haze color as gradient
             const single = this.getHazeColor(new ColorByte());
             return [single];
         }
@@ -288,7 +244,6 @@ class L2Environment {
             const hazeIdx = indexHaze[i];
             const target = new ColorByte();
 
-            // Get the haze color at this index, interpolated by time
             if (hazeColors && hazeIdx >= 0 && hazeIdx < hazeColors.length) {
                 const color = hazeColors[hazeIdx];
                 if (color) {
@@ -297,7 +252,6 @@ class L2Environment {
                     target.set(128, 128, 128, 255);
                 }
             } else if (hazeColors && hazeColors.length > 0) {
-                // Fallback to time-interpolated haze
                 getColorFromTimeColor(timeOfDay, hazeColors, target);
                 target.a = 255;
             } else {
@@ -352,12 +306,10 @@ class L2Environment {
         return [currEnvIndex, nextEnvIndex, lerp];
     }
 
-    /** Get interpolated sun scale for current time */
     public getSunScale(): number {
         return getScaleValue(this.getTimeOfDay(), this.getEnvColor().scale.sun);
     }
 
-    /** Get interpolated moon scale for current time */
     public getMoonScale(): number {
         return getScaleValue(this.getTimeOfDay(), this.getEnvColor().scale.moon);
     }
@@ -371,7 +323,6 @@ function pickArrayIndices<T extends { time: number }>(timeOfDay: number, array: 
     const nElementsMinusOne = nElements - 1;
     let idxCurr = 0, idxNext = 1;
 
-    // Find the current time slot
     while (idxCurr < nElementsMinusOne) {
         if (timeOfDay >= array[idxCurr].time && timeOfDay < array[idxNext].time) {
             break;
@@ -648,11 +599,6 @@ function interpolateFogInfoCloudColor(
         if (currentTime < prevTime) currentTime += 24;
         t = Math.max(0, Math.min(1, (currentTime - prevTime) / (nextTime - prevTime)));
     }
-
-    // Default fallbacks: index 0 (clouds) -> grey/opaque, index 1/2 (stars) -> black/transparent
-    // EXCEPT we want Cloud2/3 to default to index 0 if index 0 is available but 1/2 is not.
-    // However, this helper is usually called per-index. 
-    // The "default to 0th index" logic will be handled in RenderManager.
 
     const pC = prev.cloudColor?.[index];
     const nC = next.cloudColor?.[index];

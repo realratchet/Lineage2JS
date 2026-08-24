@@ -72,7 +72,7 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
     public spriteDirection: GD.SpriteDirections_T = "camera";
     public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
 
-    constructor(material: ParticleMaterial) {
+    public constructor(material: ParticleMaterial) {
         super(geometry, material);
     }
 
@@ -95,7 +95,6 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
         // In Right-Handed ThreeJS: Right = Front x Up
         const projRight = tmpProjRight.crossVectors(projFront, projUp).normalize();
 
-        // Ensure projUp is exactly orthogonal
         projUp.crossVectors(projRight, projFront).normalize();
 
         const direction = tmpDirection;
@@ -166,7 +165,6 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             right.copy(projRight);
         }
 
-        // Apply Roll (Spin)
         if (particle && particle.spin !== 0) {
             const spin = particle.spin;
             const cos = Math.cos(spin);
@@ -181,12 +179,10 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             up.copy(origUp).multiplyScalar(cos).sub(tmpSpinScaled.copy(origRight).multiplyScalar(sin));
         }
 
-        // We negate the projection front to point *towards* the camera (Standard PlaneGeometry face)
         // ...
         right.negate();
         up.negate();
 
-        // Ensure we supply a pure 1-determinant rotation matrix by computing normal exactly matching right/up cross
         const normal = tmpNormal.crossVectors(right, up).normalize();
 
         const matrix = tmpMatrix.makeBasis(right, up, normal);

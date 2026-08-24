@@ -18,8 +18,6 @@ type NpcReport_T = {
     selector?: string | number;
     index?: number;
     total?: number;
-    unique?: number;
-    duplicateOf?: number;
     ok?: boolean;
     phase?: NpcTestPhase_T;
     error?: string;
@@ -94,12 +92,6 @@ function getPriority(npc: GD.INpcDefinition): number {
     return index < 0 ? NPC_PRIORITY_NAMES.length : index;
 }
 
-function getNpcFingerprint(npc: GD.INpcDefinition): string {
-    const event = npc.enterEvent;
-
-    return `${npc.className.toLowerCase()}|${npc.mesh.toLowerCase()}|${npc.textures.map(path => path.toLowerCase()).join(",")}|${event ? `${event.sound}|${event.soundVolume}|${event.soundRadius}|${event.isRise}|${event.spawnType}|${event.effect}|${event.animation}` : ""}`;
-}
-
 async function runNpcTest(): Promise<void> {
     const params = new URLSearchParams(location.search);
     const start = parseInt(params.get("start") ?? "0", 10) || 0;
@@ -122,15 +114,7 @@ async function runNpcTest(): Promise<void> {
 
     if (only) npcs = npcs.filter(npc => only.includes(`${npc.id}`) || only.includes(npc.name.trim().toLowerCase()));
 
-    const representativeIds = new Map<string, number>();
-
-    for (const npc of npcs) {
-        const fingerprint = getNpcFingerprint(npc);
-
-        if (!representativeIds.has(fingerprint)) representativeIds.set(fingerprint, npc.id);
-    }
-
-    if (start === 0) await report({ note: `sweep started: ${npcs.length} NPCs, ${representativeIds.size} unique definitions` });
+    if (start === 0) await report({ note: `sweep started: ${npcs.length} NPCs` });
 
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -166,13 +150,6 @@ async function runNpcTest(): Promise<void> {
         errors.length = 0;
         warnings.length = 0;
 
-        const duplicateOf = representativeIds.get(getNpcFingerprint(npc));
-
-        if (duplicateOf !== npc.id) {
-            await report({ id: npc.id, name: npc.name, className: npc.className, mesh: npc.mesh, selector, index: i, total: npcs.length, unique: representativeIds.size, duplicateOf, ok: true, enterEvent: npc.enterEvent, ms: Math.round(performance.now() - startTime) });
-            continue;
-        }
-
         try {
             pawn = await withTimeout(renderManager.spawnNpc(selector, tmpSpawnPosition), NPC_TIMEOUT_MS, `spawn '${npc.name}' (${npc.id})`);
             phase = "render";
@@ -187,14 +164,14 @@ async function runNpcTest(): Promise<void> {
             if (errors.length > 0)
                 throw new Error(`console errors: ${errors.slice(0, 3).join(" | ")}`);
 
-            await report({ id: npc.id, name: npc.name, className: npc.className, mesh: npc.mesh, selector, index: i, total: npcs.length, unique: representativeIds.size, ok: true, enterEvent: npc.enterEvent, warnings: warnings.slice(0, 10), ms: Math.round(performance.now() - startTime) });
+            await report({ id: npc.id, name: npc.name, className: npc.className, mesh: npc.mesh, selector, index: i, total: npcs.length, ok: true, enterEvent: npc.enterEvent, warnings: warnings.slice(0, 10), ms: Math.round(performance.now() - startTime) });
         } catch (e) {
             const error = e as Error;
 
             if (pawn) renderManager.removePawn(pawn);
 
             await report({
-                id: npc.id, name: npc.name, className: npc.className, mesh: npc.mesh, selector, index: i, total: npcs.length, unique: representativeIds.size, ok: false, phase, enterEvent: npc.enterEvent,
+                id: npc.id, name: npc.name, className: npc.className, mesh: npc.mesh, selector, index: i, total: npcs.length, ok: false, phase, enterEvent: npc.enterEvent,
                 error: error?.message ?? String(e), stack: error?.stack, errors: errors.slice(0, 10), warnings: warnings.slice(0, 10),
                 ms: Math.round(performance.now() - startTime)
             });
@@ -208,7 +185,7 @@ async function runNpcTest(): Promise<void> {
     console.error = originalConsoleError;
     console.warn = originalConsoleWarn;
 
-    await report({ done: true, total: npcs.length, unique: representativeIds.size });
+    await report({ done: true, total: npcs.length });
     document.title = "npc-test: done";
     console.log("[npc-test] done");
 }

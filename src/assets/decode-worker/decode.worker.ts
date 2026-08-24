@@ -1,28 +1,20 @@
 import DecodeEngine from "./decode-engine";
-import type { MainToWorkerMessage, WorkerToMainMessage } from "./decode-protocol";
-
-/**
- * Dedicated worker that wires a DecodeEngine up to postMessage. Packages are shared
- * with the main thread at the OPFS file level, not in memory - this file only handles
- * the message protocol, the engine owns the actual decode.
- */
+import type { MainToWorkerMessage_T, WorkerToMainMessage_T } from "./decode-protocol";
 
 const ctx = self as any;
 
-/* webpack-dev-server injects its live-reload client into this worker too (target
-   "webworker" counts as a web target), and WorkerLocation has no reload() - without
-   this it throws uncaught on every save */
+// webpack-dev-server expects WorkerLocation.reload in its injected client.
 if (typeof ctx.location.reload !== "function") {
     ctx.location.reload = () => { };
 }
 
 const engine = new DecodeEngine();
 
-function post(message: WorkerToMainMessage, transfer?: Transferable[]) {
+function post(message: WorkerToMainMessage_T, transfer?: Transferable[]) {
     ctx.postMessage(message, transfer ?? []);
 }
 
-async function handleMessage(msg: MainToWorkerMessage) {
+async function handleMessage(msg: MainToWorkerMessage_T) {
     switch (msg.type) {
         case "init": {
             try {
@@ -152,10 +144,10 @@ async function handleMessage(msg: MainToWorkerMessage) {
     }
 }
 
-const arrMessages: MainToWorkerMessage[] = [];
+const arrMessages: MainToWorkerMessage_T[] = [];
 let isProcessingMessages = false;
 
-function onMessage(event: MessageEvent<MainToWorkerMessage>) {
+function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
     arrMessages.push(event.data);
     void processMessages();
 }

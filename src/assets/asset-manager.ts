@@ -4,7 +4,6 @@ import UConfigWarrior from "@client/assets/unreal/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@client/assets/unreal/conf-files/un-conf-localization";
 import { UnProperties } from "@l2js/core";
 
-// matches decodeCharacter's own default charIndex
 const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
@@ -191,40 +190,30 @@ function setPawnAnimationNotifies(renderManager: RenderManager, library: GD.Deco
     });
 }
 
-/**
- * Streams the world in and out around the camera. All ue2 asset decoding happens in
- * the decode worker (its own webpack bundle) - this side only ever sees plain decoded
- * data and instantiates three.js objects from it.
- */
 class AssetManager {
     protected isTicking: boolean = false;
     protected loadSettings: GD.LoadSettings_T;
     protected glCapabilities: WebGLCapabilities
     protected decodeWorker: DecodeWorkerClient = null;
     protected isWorkerReady = false;
-    protected failedSectors = new Map<string, number>(); // sector id -> retry-after timestamp
-    protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
-    protected inFlightSectors = new Set<string>(); // sector ids currently decoding, so a boundary crossing can't re-request them
+    protected failedSectors = new Map<string, number>();
+    protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>();
+    protected inFlightSectors = new Set<string>();
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
-    protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
+    protected readonly levelSectors = new Set<string>();
     protected readonly localizationFiles = new Map<string, string>();
-    protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
+    protected preferCompressedTextures = false;
     public userConfig: GA.IUserConfig = null;
     protected warriorConfig: UConfigWarrior = null;
     protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
     protected charGroups: GD.ICharacterGroup[] = null;
     protected effectLibrary: GD.DecodeLibrary = null;
     protected readonly decodeWorkerPoolSize: number;
-    protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
+    protected readonly maxConcurrentDecodes: number;
     protected readonly lastCameraPosition = new Vector3();
     protected lastCameraSampleTime = 0;
 
-    /**
-     * Sectors whose bounds intersect this radius around the camera or its projected
-     * position get loaded. Unloading only kicks in past the larger radius so boundary
-     * crossings don't thrash.
-     */
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
 
@@ -233,7 +222,6 @@ class AssetManager {
         this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
         this.maxConcurrentDecodes = Math.max(this.decodeWorkerPoolSize, 1);
 
-        /* level packages are <x>_<y>.unr - keep the sector ids for map-edge validity checks */
         for (const path of Object.keys(assetList.supported)) {
             if (!path.endsWith(".unr")) continue;
 
@@ -251,8 +239,6 @@ class AssetManager {
     public async initialize(renderManager: RenderManager): Promise<void> {
         this.glCapabilities = renderManager.renderer.capabilities;
 
-        // with s3tc the dxt data uploads as-is (full mip chain, 4-8x less vram),
-        // otherwise the worker converts to rgba like before
         const textureMode = (this.loadSettings as any).textures ?? "auto";
         const hasS3TC = !!renderManager.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
 
@@ -261,7 +247,6 @@ class AssetManager {
 
         this.userConfig = await getUserConfig();
 
-        /* everything below comes out of the decode worker - the app cannot run without it */
         this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
@@ -531,18 +516,10 @@ class AssetManager {
         renderManager.addSector(sector);
     }
 
-    /**
-     * Dispatches a sector decode to the worker pool without waiting for it to finish, so
-     * a boundary crossing can request the newly-important sector on a free worker instead
-     * of queueing behind whatever a previous tick already asked for. Returns true when a
-     * load was attempted (dispatched, or reused from the retired grace period), false when
-     * the sector was skipped (already in flight, failure cooldown, pool full, worker dead).
-     */
     protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes): boolean {
         const retired = this.retiredSectors.get(sectorIdx);
 
         if (retired) {
-            /* still in its disposal grace period - reuse it as is, no re-decode */
             this.retiredSectors.delete(sectorIdx);
             renderManager.addSector(retired.sector);
             return true;
@@ -555,7 +532,7 @@ class AssetManager {
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
         if (!this.isWorkerReady || this.decodeWorker.isDead) return false;
-        if (this.inFlightSectors.size >= maxInFlight) return false; // pool full, retry next tick
+        if (this.inFlightSectors.size >= maxInFlight) return false;
 
         this.inFlightSectors.add(sectorIdx);
 
@@ -564,9 +541,9 @@ class AssetManager {
                 decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
                 (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-                const sector = decodeSectorCore(decodeLibrary); // static meshes built later by processPendingBuilds
+                const sector = decodeSectorCore(decodeLibrary);
                 renderManager.addSector(sector);
-                renderManager.gateParticleWarmup(sector, false); // ungated again once materials finish, see attachStaticMeshGroup
+                renderManager.gateParticleWarmup(sector, false);
 
                 this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, decodeJob: null });
                 this.failedSectors.delete(sectorIdx);
@@ -582,11 +559,6 @@ class AssetManager {
         return true;
     }
 
-    /**
-     * Hides the sector immediately but keeps it (and its package refcounts) intact for
-     * RETIRED_SECTOR_DISPOSE_MS - returning within that window re-adds the retained
-     * object with no re-decode. destroyExpiredSectors does the real cleanup afterwards.
-     */
     protected retireSector(renderManager: RenderManager, sector: SectorObject) {
         const sectorIdx = `${sector.index.x}_${sector.index.y}`;
 
@@ -596,10 +568,6 @@ class AssetManager {
         this.retiredSectors.set(sectorIdx, { sector, retiredAt: performance.now() });
     }
 
-    /**
-     * Disposes retired sectors past their grace period and releases the package
-     * refcounts they took in the decode worker.
-     */
     protected destroyExpiredSectors(renderManager: RenderManager) {
         const now = performance.now();
 
@@ -630,7 +598,6 @@ class AssetManager {
         for (let i = 0; i < this.pendingStaticMeshBuilds.length; i++) {
             const sector = this.pendingStaticMeshBuilds[i].sector;
 
-            // Never attach a completed build after its sector retires.
             if (!sector.parent) continue;
 
             const distance = sectorDistance(cameraPosition, sector.index.x, sector.index.y);
@@ -694,11 +661,6 @@ class AssetManager {
             this.lastCameraPosition.copy(cameraPosition);
             this.lastCameraSampleTime = now;
 
-            /*
-             * Retire sectors past the unload radius; the gap between renderDistance and
-             * unloadDistance keeps boundary crossings from thrashing. Retired sectors
-             * stay reusable for a grace period before actually being disposed.
-             */
             for (const sector of sectorsLoaded) {
                 if (sector.neverUnload || !sector.index) continue;
                 if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= this.unloadDistance) continue;
@@ -709,12 +671,6 @@ class AssetManager {
             this.destroyExpiredSectors(renderManager);
             this.processPendingBuilds(renderManager, cameraPosition);
 
-            /*
-             * Sectors wanted this tick, most-important first: the sector the camera is
-             * in, then any sector near the projected camera position, nearest-first.
-             * Recomputing the list every tick makes a direction or boundary change
-             * reprioritize the next available worker.
-             */
             const sectorsToLoad: string[] = [];
 
             if (isValidOrigin && !sectorsLoadedIds.includes(originIdx)) {
@@ -795,7 +751,6 @@ function findNpcMovementAnimation(animations: Record<string, THREE.AnimationClip
     return names.find(name => name.toLowerCase() === match) || names.find(name => new RegExp(`^${movement}(?:_|$)`, "i").test(name)) || idle;
 }
 
-// Share one bone tree instead of decoding six or seven identical trees per pawn.
 function shareSkeletons(bodyparts: THREE.SkinnedMesh[]) {
     const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
 
@@ -811,7 +766,6 @@ function shareSkeletons(bodyparts: THREE.SkinnedMesh[]) {
     }
 }
 
-// armor bodyparts can ship extra bones (skirts, coat tails) or a differently posed reference frame
 function isSameBindPose(host: THREE.SkinnedMesh, part: THREE.SkinnedMesh): boolean {
     const hostSkeleton = host.skeleton, partSkeleton = part.skeleton;
 
@@ -832,7 +786,6 @@ function isSameBindPose(host: THREE.SkinnedMesh, part: THREE.SkinnedMesh): boole
     return true;
 }
 
-// hair bodyparts ship their own Hair01 chain instead of the Bip01 skeleton, so nothing in the body's clip drives them
 function attachLooseBoneChains(bodyparts: THREE.SkinnedMesh[]) {
     const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
 
@@ -858,10 +811,6 @@ function attachLooseBoneChains(bodyparts: THREE.SkinnedMesh[]) {
     }
 }
 
-/**
- * Distance from the camera to a sector's bounds (0 inside it), using the same
- * sector -> world mapping as RenderManager.getSectorId.
- */
 function sectorDistance(cameraPosition: THREE.Vector3, x: number, y: number): number {
     const minX = (x - 20) * SECTOR_WORLD_SIZE, maxX = minX + SECTOR_WORLD_SIZE;
     const minY = (y - 18) * SECTOR_WORLD_SIZE, maxY = minY + SECTOR_WORLD_SIZE;

@@ -1,5 +1,5 @@
 import RotatingObject from "./rotating-object";
-import { MeshLight } from "./lit-actor";
+import { MeshLight_T } from "./lit-actor";
 
 type AttachedActor_T = { object: THREE.Object3D, relativeLocation: THREE.Vector3, relativeRotation: THREE.Quaternion };
 
@@ -14,7 +14,7 @@ class SwayingObject extends RotatingObject {
     protected readonly phase: [number, number, number];
     protected readonly attached: AttachedActor_T[] = [];
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, swaying: GD.ISwayingDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, swaying: GD.ISwayingDecodeInfo }) {
         super({ ...props, rotating: { rotator: props.swaying.orgRotator, rate: [0, 0, 0] } });
 
         this.swaying = props.swaying;

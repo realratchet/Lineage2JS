@@ -1,31 +1,13 @@
-import {
-    EventDispatcher,
-    MOUSE,
-    Quaternion,
-    Spherical,
-    TOUCH,
-    Vector2,
-    Vector3
-} from "three";
+import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3 } from "three";
 import type { Matrix4 } from "three";
 
-/*
- * Forked from three/examples/jsm/controls/OrbitControls.js. Only change:
- * horizontal rotate/pan deltas are negated, to match the horizontal mirror in
- * the projection matrix (ue2-conventions.ts) — otherwise orbiting or panning
- * "right" visibly drags the view left. Mouse-drag state lives in closures
- * here, not on the prototype, so it couldn't be patched externally the way
- * PerspectiveCamera.updateProjectionMatrix was; hence the fork.
- */
+// Forked from three OrbitControls for the mirrored horizontal projection.
 
 const _changeEvent = { type: "change" };
 const _startEvent = { type: "start" };
 const _endEvent = { type: "end" };
 
 class ZUpOrbitControls extends EventDispatcher {
-    /* Real types for what render-manager.ts consumes; everything else below is
-     * this fork's own internal, dynamically-assigned state (same as the vendored
-     * original), covered by the index signature rather than typed field-by-field. */
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
@@ -33,7 +15,7 @@ class ZUpOrbitControls extends EventDispatcher {
 
     [key: string]: any;
 
-    constructor(object: any, domElement: any) {
+    public constructor(object: any, domElement: any) {
 
         super();
 
@@ -444,7 +426,6 @@ class ZUpOrbitControls extends EventDispatcher {
 
             return function pan(deltaX: number, deltaY: number) {
 
-                /* Negated to match the horizontal mirror in ue2-conventions.ts. */
                 deltaX = -deltaX;
 
                 const element = scope.domElement;

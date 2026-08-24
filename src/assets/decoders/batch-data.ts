@@ -96,7 +96,6 @@ function groupActorsForBatching(
         batchGroups.get(batchKey)!.push(actor);
     });
 
-    // Filter out groups with only one actor
     batchGroups.forEach((actors, key) => {
         if (actors.length < 2) {
             unbatchable.push(...actors);
@@ -175,7 +174,6 @@ function prepareActorGeometriesData(
         const meshGeo = library.geometries[info.mesh.geometry];
         const positions = meshGeo.attributes.positions as Float32Array;
         const vertexCount = positions.length / 3;
-        /* uvs may hold multiple uv sets; batching only carries the first (the "uv" attribute) */
         const uvs = Array.isArray(meshGeo.attributes.uvs) ? meshGeo.attributes.uvs[0] : meshGeo.attributes.uvs;
 
         const worldMatrix = new Matrix4();

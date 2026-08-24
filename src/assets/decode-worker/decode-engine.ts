@@ -261,13 +261,6 @@ function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: Charact
     ];
 }
 
-/**
- * Owns an AssetLoader and runs the full sector decode - deserialization, decode-info
- * generation, batch merging and DXT->RGBA conversion. Used by decode.worker.ts (message
- * driven, its own webpack bundle) and directly by DecodeWorkerClient on the main thread
- * when its pool size is 0, so a decode can be stepped through in regular devtools
- * instead of a worker context.
- */
 class DecodeEngine {
     protected assetLoader: AssetLoader = null;
     protected hasSweptCache = false;
@@ -292,7 +285,6 @@ class DecodeEngine {
 
         this.assetLoader = await AssetLoader.Instantiate(assetList.supported);
 
-        /* same bootstrap AssetManager.initialize performs before any level decode */
         await this.assetLoader.using(this.assetLoader.getNativePackage(), { neverUnload: true });
         const pkgCore = await this.assetLoader.using(this.assetLoader.getCorePackage(), { neverUnload: true });
         await this.assetLoader.using(this.assetLoader.getEnginePackage(), { neverUnload: true });
@@ -300,10 +292,6 @@ class DecodeEngine {
         pkgCore.loadNativeClasses();
     }
 
-    /**
-     * Every ArrayBuffer of a package decoded so far - used by the transfer walk to make
-     * sure no library value ever transfers (= detaches) a package buffer.
-     */
     protected collectPackageBuffers(): Set<ArrayBuffer> {
         const buffers = new Set<ArrayBuffer>();
 
@@ -367,16 +355,15 @@ class DecodeEngine {
     protected async decodeSectorCore(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
         const convertToRGBA = (settings as any).rgbaTextures !== false; // false = client uploads DDS as-is (s3tc)
 
-        // never cache the skylevel, sky renderer matches its sections against env config
-        // material uuids which are session-random - a cached skylevel never matches
+        // Sky-level material UUIDs are session-random.
         const cacheable = !(settings as any).isSkyLevel;
 
         const cached = cacheable ? await DecodeCache.loadCachedLibrary(sectorName, settings) : null;
 
         if (cached) {
-            if (convertToRGBA) convertDDSMaterialsToRGBA(cached); /* the cache stores DDS (4-8x smaller than RGBA) */
+            if (convertToRGBA) convertDDSMaterialsToRGBA(cached);
 
-            DecodeCache.refreshSoundBlobUris(cached);                         /* blob URLs are session-scoped */
+            DecodeCache.refreshSoundBlobUris(cached);
 
             return { library: cached, fromCache: true };
         }
@@ -387,11 +374,6 @@ class DecodeEngine {
         await this.pullWaterVolumeEffects(library, settings);
         buildStaticMeshBatchData(library);
 
-        /*
-         * Sanitize before caching so the cache only ever sees plain data; this pass's
-         * transfer list is discarded (the DXT conversion below swaps texture buffers).
-         * storeCachedLibrary serializes now and writes in the background.
-         */
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
         if (cacheable) DecodeCache.storeCachedLibrary(sectorName, settings, library);
@@ -1237,8 +1219,6 @@ class DecodeEngine {
         return this.cacheNpcDefinitions;
     }
 
-    /* postMessage transfer list for a value already produced by this engine - the sanitize
-       pass inside decodeSectorCore already ran, this only needs to (re)walk for buffers */
     public collectTransferables(value: any): ArrayBuffer[] {
         return prepareLibraryForTransfer(value, this.collectPackageBuffers());
     }

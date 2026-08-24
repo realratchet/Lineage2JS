@@ -7,7 +7,6 @@ import CollidingMesh from "@client/objects/colliding-mesh";
 import SpriteEmitter from "@client/objects/emitters/sprite-emitter";
 import MeshEmitter from "@client/objects/emitters/mesh-emitter";
 import BeamEmitter from "@client/objects/emitters/beam-emitter";
-import { MeshLight } from "@client/objects/lit-actor";
 import DynamicLight, { ColorHSV } from "@client/objects/dynamic-light";
 import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
 import MovableObject from "@client/objects/movable-object";
@@ -240,7 +239,7 @@ function decodeStaticMeshActor(library: GD.DecodeLibrary, info: GD.IStaticMeshAc
     const instanceInfo = info.instance;
     const { geometry, materials, collider, lights, staticMeshCollision, collisionIndex } = decodeStaticMeshInstance(library, instanceInfo, fetchGeometry);
     const scaledGlow = info.scaledGlow;
-    const isSunAffected = info.isSunAffected ?? true;  // Default to true for backwards compatibility
+    const isSunAffected = info.isSunAffected ?? true;
     const ambient = info.ambient;
 
     const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient, collision: info.collision, staticMeshCollision, collisionIndex };
@@ -336,7 +335,6 @@ function decodeBSPSection(library: GD.DecodeLibrary, sectionInfo: GD.IBSPSection
         }
     }
 
-    // Apply BSP Section overrides
     (Array.isArray(materials) ? materials : [materials]).forEach(m => {
         if (!m) return;
         if (sectionInfo.depthWrite !== undefined) m.depthWrite = sectionInfo.depthWrite;
@@ -414,6 +412,8 @@ function decodeSectorCore(library: GD.DecodeLibrary) {
     sector.waterVolumes = library.waterVolumes;
     sector.ambientSounds = library.ambientSounds;
 
+    for (const volume of sector.waterVolumes) sector.scriptVM.initializeHost(volume);
+
     for (const pawnInfo of library.pawnActors)
         sector.pawns.add(decodeObject3D(library, pawnInfo));
 
@@ -424,16 +424,13 @@ function decodeSectorCore(library: GD.DecodeLibrary) {
 
     if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes));
 
-    // NEW: Render BSP sections (UE2-style section-based rendering)
     if (library.bspSections && library.bspSections.length > 0) {
         const bspGroup = new Group();
         bspGroup.name = "BSP_Sections";
 
-        // Store BSP rendering data in sector for dynamic visibility updates
         sector.bspSections = library.bspSections;
         sector.bspGroup = bspGroup;
 
-        // Separate opaque and transparent sections for proper rendering order
         const opaqueSections: GD.IBSPSectionDecodeInfo_T[] = [];
         const transparentSections: GD.IBSPSectionDecodeInfo_T[] = [];
 
@@ -445,24 +442,22 @@ function decodeSectorCore(library: GD.DecodeLibrary) {
             }
         });
 
-        // Add opaque sections first (initially all visible, will be culled dynamically)
         opaqueSections.forEach(section => {
             try {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
-                mesh.visible = true; // Will be updated by updateVisibleBSPSections
+                mesh.visible = true;
                 bspGroup.add(mesh);
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
         });
 
-        // Add transparent sections after opaque
         transparentSections.forEach(section => {
             try {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
-                mesh.visible = true; // Will be updated by updateVisibleBSPSections
+                mesh.visible = true;
                 bspGroup.add(mesh);
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
@@ -496,7 +491,6 @@ function finishSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
     // here, not decodePackage - the live app builds static meshes via this progressive path (asset-manager processPendingBuilds)
     attachMoveEventActors(sector);
 
-    // Decode celestials (NSun, NMoon) with their textures
     library.celestials.forEach(celestialInfo => {
         try {
             // console.log(`[Celestials] Processing celestial: type=${celestialInfo.type}, sprites=${celestialInfo.sprites?.length || 0}`);
@@ -508,7 +502,6 @@ function finishSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
                 let spriteTextureInfo = materialInfo as GD.ITextureDecodeInfo | GD.IShaderDecodeInfo;
                 let texture = null;
 
-                // Handle Shader materials by extracting the diffuse texture
                 if (spriteTextureInfo && spriteTextureInfo.materialType === "shader") {
                     const shaderInfo = spriteTextureInfo as GD.IShaderDecodeInfo;
                     if (shaderInfo.diffuse && library.materials[shaderInfo.diffuse]) {
@@ -518,7 +511,6 @@ function finishSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
 
                 if (spriteTextureInfo) {
                     const mapData = decodeTexture(library, spriteTextureInfo as GD.ITextureDecodeInfo);
-                    // decodeTexture returns { texture, size } not { map }
                     texture = (mapData as any)?.texture || null;
                 }
 
@@ -534,12 +526,11 @@ function finishSectorStaticMeshes(library: GD.DecodeLibrary, sector: SectorObjec
         }
     });
 
-    // Add Fog Infos
     library.fogInfos.forEach(info => {
         try {
             const fogObject = decodeObject3D(library, info);
-            sector.fogInfos.push(fogObject as FogInfoObject); // Keep reference in array
-            sector.add(fogObject); // Add to scene graph
+            sector.fogInfos.push(fogObject as FogInfoObject);
+            sector.add(fogObject);
         } catch (e) {
             console.warn("Failed to decode fog info", e);
         }
@@ -662,7 +653,6 @@ function decodeTerrainInfo(library: GD.DecodeLibrary, info: GD.IBaseObjectDecode
     const group = new Object3D();
     applySimpleProperties(library, group, info);
 
-    // Identify terrain sectors among children
     const sectors: Terrain[] = [];
     const decorations: TerrainDecoration[] = [];
     group.children.forEach(child => {
@@ -980,9 +970,8 @@ function decodeFogInfo(library: GD.DecodeLibrary, info: GD.IBaseZoneDecodeInfo) 
     const object = new FogInfoObject();
 
     if (info.name) object.name = info.name;
-    if (info.position) object.position.fromArray(info.position); // L2FogInfo is an Actor, has location
+    if (info.position) object.position.fromArray(info.position);
 
-    // Convert array ranges [min, max] to objects {A, B} for compatibility with render-manager
     const toRange = (arr: number[] | undefined) => arr ? { A: arr[0], B: arr[1] } : { A: 0, B: 0 };
 
     object.affectRange = toRange(info.affectRange as any);

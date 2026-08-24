@@ -2,7 +2,7 @@ import { RigidBodyDesc } from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import type BaseActor from "@client/base-actor";
 import CollidingMesh from "./colliding-mesh";
-import { MeshLight } from "./lit-actor";
+import { MeshLight_T } from "./lit-actor";
 import { pointPrimitive } from "@client/physics/collision-primitive";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
@@ -29,7 +29,7 @@ class MovableObject extends CollidingMesh {
     protected stateStart: number = 0;
     protected transformAlpha: number = 0;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: GD.IMoverDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: GD.IMoverDecodeInfo }) {
         super(props);
 
         this.mover = props.mover;

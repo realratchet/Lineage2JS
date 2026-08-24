@@ -1,11 +1,3 @@
-/**
- * Binary serializer for sanitized DecodeLibrary objects (plain objects, arrays,
- * primitives, bigints, Maps, Sets, ArrayBuffers and typed arrays - see
- * collect-transferables.ts). Containers and buffers are memoized by identity and
- * encoded as back-references, preserving aliasing and surviving cycles. Anything
- * outside the supported set throws - callers treat that as "not cacheable".
- */
-
 const MAGIC = 0x4c324443; // "L2DC"
 const FORMAT_VERSION = 2;
 const HEADER_SIZE = 13;

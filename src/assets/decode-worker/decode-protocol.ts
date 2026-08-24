@@ -1,10 +1,8 @@
-// Message protocol between the main thread (DecodeWorkerClient) and decode.worker.ts.
-
-interface InitMessage {
+type InitMessage_T = {
     type: "init";
 }
 
-interface DecodeMessage {
+type DecodeMessage_T = {
     type: "decode";
     requestId: number;
     sectorName: string;
@@ -18,12 +16,12 @@ type PrecacheMessage_T = {
     settings: GD.LoadSettings_T;
 };
 
-interface FreeMessage {
+type FreeMessage_T = {
     type: "free";
     sectorName: string;
 }
 
-interface DecodeEnvMessage {
+type DecodeEnvMessage_T = {
     type: "decodeEnv";
     requestId: number;
 }
@@ -106,23 +104,23 @@ type NpcsListedMessage_T = {
     npcs: GD.INpcDefinition[];
 };
 
-interface MusicInfoMessage {
+type MusicInfoMessage_T = {
     type: "musicInfo";
     requestId: number;
 }
 
-type MainToWorkerMessage = InitMessage | DecodeMessage | PrecacheMessage_T | FreeMessage | DecodeEnvMessage | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | DecodeEffectTemplatesMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | ListNpcsMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage;
+type MainToWorkerMessage_T = InitMessage_T | DecodeMessage_T | PrecacheMessage_T | FreeMessage_T | DecodeEnvMessage_T | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | DecodeEffectTemplatesMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | ListNpcsMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage_T;
 
-interface ReadyMessage {
+type ReadyMessage_T = {
     type: "ready";
 }
 
-interface InitErrorMessage {
+type InitErrorMessage_T = {
     type: "initError";
     message: string;
 }
 
-interface DecodedMessage {
+type DecodedMessage_T = {
     type: "decoded";
     requestId: number;
     buffer: ArrayBuffer;
@@ -136,25 +134,25 @@ type PrecachedMessage_T = {
     result: PrecacheResult_T;
 };
 
-interface DecodeErrorMessage {
+type DecodeErrorMessage_T = {
     type: "decodeError";
     requestId: number;
     message: string;
     stack?: string; // worker-side stack for the main thread console
 }
 
-interface EnvDecodedMessage {
+type EnvDecodedMessage_T = {
     type: "envDecoded";
     requestId: number;
     info: any; // plain env decode info (UConfigEnv.getDecodeInfo)
 }
 
-interface MusicInfoDecodedMessage {
+type MusicInfoDecodedMessage_T = {
     type: "musicInfoDecoded";
     requestId: number;
     music: Record<number, string[]>; // music id -> package paths
 }
 
-type WorkerToMainMessage = ReadyMessage | InitErrorMessage | DecodedMessage | PrecachedMessage_T | DecodeErrorMessage | EnvDecodedMessage | CharGroupsDecodedMessage_T | NpcResolvedMessage_T | NpcsListedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage;
+type WorkerToMainMessage_T = ReadyMessage_T | InitErrorMessage_T | DecodedMessage_T | PrecachedMessage_T | DecodeErrorMessage_T | EnvDecodedMessage_T | CharGroupsDecodedMessage_T | NpcResolvedMessage_T | NpcsListedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage_T;
 
-export type { MainToWorkerMessage, WorkerToMainMessage, InitMessage, DecodeMessage, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage, DecodeEnvMessage, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, DecodeEffectTemplatesMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, ListNpcsMessage_T, NpcResolvedMessage_T, NpcsListedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage, ReadyMessage, InitErrorMessage, DecodedMessage, DecodeErrorMessage, EnvDecodedMessage, MusicInfoDecodedMessage };
+export type { MainToWorkerMessage_T, WorkerToMainMessage_T, InitMessage_T, DecodeMessage_T, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage_T, DecodeEnvMessage_T, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, DecodeEffectTemplatesMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, ListNpcsMessage_T, NpcResolvedMessage_T, NpcsListedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage_T, ReadyMessage_T, InitErrorMessage_T, DecodedMessage_T, DecodeErrorMessage_T, EnvDecodedMessage_T, MusicInfoDecodedMessage_T };

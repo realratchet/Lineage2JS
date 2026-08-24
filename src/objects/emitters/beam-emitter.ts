@@ -37,7 +37,7 @@ type BeamEmitterConfig_T = GD.EmitterConfig_T & { material: ParticleMaterialInit
 // EBeamEndPointType values
 const PTEP_Velocity = 0, PTEP_Distance = 1, PTEP_Offset = 2, PTEP_Actor = 3, PTEP_TraceOffset = 4, PTEP_OffsetAsAbsolute = 5;
 
-const randRange = (min: number, max: number) => min + Math.random() * (max - min);
+function randRange(min: number, max: number): number { return min + Math.random() * (max - min); }
 
 function randVec(range: BeamRangeVec_T | undefined, out: THREE.Vector3): THREE.Vector3 {
     if (!range) return out.set(0, 0, 0);

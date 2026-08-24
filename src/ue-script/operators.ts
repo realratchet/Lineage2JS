@@ -1,7 +1,7 @@
 import { MathUtils } from "three";
 import FVector from "../assets/unreal/un-vector";
 
-type UNativeRegistry = typeof import("./native-registry").UNativeRegistry;
+type UNativeRegistry_T = typeof import("./native-registry").UNativeRegistry;
 
 function pre_op_not_bool                /* !  */(a: boolean) { return !a; }
 function op_eq_bool_bool                /* == */(a: boolean, b: boolean) { return a === b; }
@@ -129,7 +129,7 @@ function op_neq_object_object(a: unknown, b: unknown) { return a !== b; }
 function op_eq_name_name(a: string, b: string) { return a.toLowerCase() === b.toLowerCase(); }
 function op_neq_name_name(a: string, b: string) { return !op_eq_name_name(a, b); }
 
-function registerNativeFuncs(registry: UNativeRegistry) {
+function registerNativeFuncs(registry: UNativeRegistry_T) {
     const native = registry.registerNativeFunc.bind(registry);
 
     // boolean operators

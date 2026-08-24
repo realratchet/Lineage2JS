@@ -1,6 +1,6 @@
 import { RigidBodyDesc } from "@dimforge/rapier3d";
 import CollidingMesh from "./colliding-mesh";
-import { MeshLight } from "./lit-actor";
+import { MeshLight_T } from "./lit-actor";
 import Rotator from "../utils/rotator";
 
 class RotatingObject extends CollidingMesh {
@@ -11,7 +11,7 @@ class RotatingObject extends CollidingMesh {
     protected readonly rateYaw: number;
     protected readonly rateRoll: number;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, rotating: GD.IRotatingDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, rotating: GD.IRotatingDecodeInfo }) {
         super(props);
 
         this.rotator = new Rotator(...props.rotating.rotator);

@@ -33,6 +33,7 @@ import ShadowProjector from "@client/objects/shadow-projector";
 import type DynamicLight from "@client/objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
 import Landmark from "./landmark";
+import type { ZoneObject, SectorObject } from "@client/objects/zone-object";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -86,13 +87,10 @@ const tmpBillboardRight = new Vector3();
 const arrMouseIntersections: THREE.Intersection[] = [];
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
-// off-screen emitters (in range but outside the frustum) simulate at this rate instead
-// of a hard freeze, so particle state doesn't go stale and pop when re-entering view
-// Two maintenance ticks keep offscreen loops alive without dominating visible frames.
+// Off-screen emitters keep a maintenance cadence instead of freezing.
 const OFFSCREEN_EMITTER_HZ = 2;
 const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
-// Lineage II configures UE2's MinDesiredFrameRate to 35. UE2 raises bDropDetail
-// below that rate, then bAggressiveLOD another 5 FPS lower.
+// Lineage II MinDesiredFrameRate is 35; aggressive LOD starts five FPS lower.
 const MIN_DESIRED_FRAME_RATE = 35;
 const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
 // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
@@ -104,9 +102,9 @@ const DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES = 8;
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
-const tmpColorByte_3 = new ColorByte(); // For sky color blending
-const tmpColorByte_4 = new ColorByte(); // For haze color blending
-const tmpColorByte_5 = new ColorByte(); // For cloud color blending
+const tmpColorByte_3 = new ColorByte();
+const tmpColorByte_4 = new ColorByte();
+const tmpColorByte_5 = new ColorByte();
 
 const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
@@ -135,8 +133,6 @@ const SIMULATED_PAWN_PHYSICS_INTERVAL_MS = 1000 / SIMULATED_PAWN_PHYSICS_HZ;
 const MAX_PHYSICS_TICKS = 8;
 const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 
-type ZoneObject = import("../objects/zone-object").ZoneObject;
-type SectorObject = import("../objects/zone-object").SectorObject;
 type SimulatedPawn_T = { pawn: BaseActor, expires: number, nextTurn: number };
 type PawnLightingState_T = {
     position: Vector3,
@@ -196,7 +192,6 @@ function isLandmarkSurface(actor: ICollidable | null): boolean {
 
 const frozenUpdateMatrixWorld = function () { };
 
-// undoes addSector's early freeze once live content attaches, or its matrixWorld never updates again
 function unfreezeAncestors(node: THREE.Object3D): void {
     for (let n = node.parent; n; n = n.parent)
         if (n.updateMatrixWorld === frozenUpdateMatrixWorld)
@@ -222,7 +217,6 @@ function findVisibleMaterialBinding(bindings: SectorMaterialBinding_T[], cacheVi
     return -1;
 }
 
-// overrides updateMatrixWorld to a no-op, but only once every child under a node is static too
 function freezeStaticSubtree(node: THREE.Object3D): boolean {
     if ((node as any).isMovableObject) {
         (node as MovableObject).freezeMover();
@@ -245,14 +239,13 @@ function freezeStaticSubtree(node: THREE.Object3D): boolean {
     return allChildrenFrozen;
 }
 
-// never touch the emitter's own .visible here - scene.traverseVisible skips it before the callback, permanently stranding it out of future traversal even once back in range
+// traverseVisible cannot thaw an emitter hidden at its root.
 function freezeEmitterParticles(emitter: any) {
     for (const p of emitter.particlePool) {
         p.visible = false;
         p.updateMatrixWorld = frozenUpdateMatrixWorld;
     }
 
-    // instanced sprite emitters render from one shared mesh - particlePool.visible above doesn't touch it
     if (emitter.instancedMesh) {
         emitter.instancedMesh.visible = false;
     }
@@ -278,9 +271,6 @@ function shouldUpdateOffscreenEmitter(emitter: any, currentTime: number) {
         return true;
     }
 
-    // Native UE2 stops ticking a ParticleEmitter after SecondsBeforeInactive.
-    // Stock UE2 defaults it to one second, while Lineage II defaults it to zero
-    // (disabled), in which case the low maintenance cadence continues.
     const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
     if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
         return false;
@@ -299,9 +289,7 @@ function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetai
     if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
 
     const phase = getEmitterPhase(emitter) + detailFrame;
-    // UE2's drop-detail xEmitter path retains roughly 65% of the normal particle
-    // budget. Keep all particles drawn here, but distribute an equivalent amount
-    // of simulation work across frames. Aggressive LOD lowers that to one half.
+    // UE2 drop-detail retains roughly 65% of the normal xEmitter budget.
     return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
 }
 
@@ -382,7 +370,7 @@ class RenderManager {
     public bspHelperActive: boolean = false;
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
-    private readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
+    protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
@@ -442,7 +430,7 @@ class RenderManager {
     protected screenFadeColorAlpha = 1;
 
     public readonly player = new Player(this);
-    protected readonly waterHitEffect = new WaterHitEffect(this.player, this.scene);
+    protected readonly waterHitEffect = new WaterHitEffect(this.player, this);
     protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.assetManager.createLandmarkEffect(classPath));
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
@@ -486,7 +474,6 @@ class RenderManager {
 
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
-        // Initialize Native Bloom System
         this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
             minFilter: LinearFilter,
             magFilter: LinearFilter,
@@ -560,7 +547,6 @@ class RenderManager {
             if (object) (object as BaseActor).onAnimationFinished(event.action);
         });
 
-        // Create visualizer system (will be recreated when sector changes)
         this.visualizer = new Visualizer(this.scene);
         this.wireEmitterVisibilityHandlers();
 
@@ -850,7 +836,6 @@ class RenderManager {
         if (document.activeElement?.tagName === "INPUT")
             return;
 
-        // Handle F1 separately to prevent browser help (must be before switch)
         if (event.key === "F1" || event.code === "F1") {
             event.preventDefault();
             event.stopPropagation();
@@ -858,7 +843,6 @@ class RenderManager {
             return;
         }
 
-        // Handle F2 to toggle frustum culling
         if (event.key === "F2" || event.code === "F2") {
             event.preventDefault();
             event.stopPropagation();
@@ -867,7 +851,6 @@ class RenderManager {
             return;
         }
 
-        // Handle F3 to toggle visualizer
         if (event.key === "F3" || event.code === "F3") {
             event.preventDefault();
             event.stopPropagation();
@@ -879,7 +862,6 @@ class RenderManager {
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
 
-                // Create a map with only the current sector
                 const currentSectorMap = new Map<number, Map<number, SectorObject>>();
                 if (currentSector.index) {
                     const sectorXMap = new Map<number, SectorObject>();
@@ -904,7 +886,6 @@ class RenderManager {
             return;
         }
 
-        // Handle F4 to cycle visualizer modes
         if (event.key === "F4" || event.code === "F4") {
             event.preventDefault();
             event.stopPropagation();
@@ -916,7 +897,6 @@ class RenderManager {
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
 
-                // Create a map with only the current sector
                 const currentSectorMap = new Map<number, Map<number, SectorObject>>();
                 if (currentSector.index) {
                     const sectorXMap = new Map<number, SectorObject>();
@@ -941,13 +921,11 @@ class RenderManager {
             return;
         }
 
-        // Handle F5 to cycle leaf visualizer detail (Auto / PerLeaf / PerZone)
         if (event.key === "F5" || event.code === "F5") {
             event.preventDefault();
             event.stopPropagation();
             this.visualizer.nextLeafDetail();
 
-            // If we're currently in Leaves mode and visualizer is enabled, refresh the visualization immediately.
             const currentSector = this.getSector(this.camera.position);
             if (currentSector && this.visualizer.getMode() === VisualizerMode.Leaves && this.visualizer.isEnabled()) {
                 const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
@@ -955,7 +933,6 @@ class RenderManager {
                     ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                     : this.frustum;
 
-                // Create a map with only the current sector
                 const currentSectorMap = new Map<number, Map<number, SectorObject>>();
                 if (currentSector.index) {
                     const sectorXMap = new Map<number, SectorObject>();
@@ -1216,8 +1193,6 @@ class RenderManager {
         const aspect = width / height;
         this.camera.aspect = aspect;
 
-        // Convert horizontal FOV to vertical FOV for Three.js PerspectiveCamera
-        // Formula: vFOV = 2 * atan(tan(hFOV / 2) / aspect)
         const hFOV = MathUtils.degToRad(DEFAULT_HORIZONTAL_FOV);
         const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / aspect);
         this.camera.fov = MathUtils.radToDeg(vFOV);
@@ -1232,11 +1207,6 @@ class RenderManager {
         this.setSize(width, height);
 
         const pixelRatio = this.pixelRatio;
-        // Use client dims * pixelRatio for render targets
-        const targetWidth = Math.floor(width); // setSize handles ratio internally usually, but here width is bounding rect width. 
-        // Wait, setSize at 547 uses renderer.setSize(width, height).
-        // renderer.setSize updates the canvas. 
-        // RenderTargets need exact pixel size.
         const rtWidth = width * pixelRatio;
         const rtHeight = height * pixelRatio;
 
@@ -1418,8 +1388,7 @@ class RenderManager {
         return xsect.get(sectorY);
     }
 
-    // F4 Emitters HUD feed, nearest first - capped since each entry redraws a canvas-texture label
-    private static readonly EMITTER_DEBUG_MAX = 80;
+    protected static readonly EMITTER_DEBUG_MAX = 80;
 
     public collectEmitterDebugInfo(): EmitterDebugInfo[] {
         const cameraPosition = this.camera.position;
@@ -1430,7 +1399,6 @@ class RenderManager {
             const emitter = obj as any;
             if (!emitter.particlePool) return;
 
-            // only the sector the camera is actually in, not streamed-in neighbors
             let sectorParent = emitter.parent;
             while (sectorParent && !sectorParent.isSectorObject) sectorParent = sectorParent.parent;
             if (sectorParent !== currentSector) return;
@@ -1460,7 +1428,6 @@ class RenderManager {
         return results.slice(0, RenderManager.EMITTER_DEBUG_MAX);
     }
 
-    // The BSP offscreen freeze only ever touches instancedMesh.visible/particle.visible, never the emitter's own .visible, so this sticks.
     public setEmitterVisible(uuid: string, visible: boolean): void {
         if (visible) this.manuallyHiddenEmitterUuids.delete(uuid);
         else this.manuallyHiddenEmitterUuids.add(uuid);
@@ -1651,7 +1618,7 @@ class RenderManager {
             });
     }
 
-    private wireEmitterVisibilityHandlers(): void {
+    protected wireEmitterVisibilityHandlers(): void {
         this.visualizer.setEmitterVisibilityHandlers(
             (uuid, visible) => this.setEmitterVisible(uuid, visible),
             (visible) => this.setAllEmittersVisible(visible)
@@ -1895,9 +1862,6 @@ class RenderManager {
 
         this.lastRenderOrderSector = activeSector;
 
-        // batch meshes (and BSP section meshes - their geometry is baked in world space, so matrixWorld
-        // is the identity origin and three's per-object z-sort is meaningless) project the sector origin
-        // for depth, so cross-sector transparent order rides on groupOrder - camera sector draws last
         this.sectors.forEach(row => row.forEach(sector => {
             const order = sector === activeSector ? 0 : -1;
             if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = order;
@@ -1905,9 +1869,6 @@ class RenderManager {
         }));
     }
 
-    // pawns move freely across sector boundaries, so unlike StaticMeshActor (leaf-baked at decode
-    // time into whichever sector's grid cell it fell in) their portal/leaf visibility has to be
-    // resolved live against wherever they currently are, not the sector they happen to be parented under
     protected updatePawnVisibility(): void {
         this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(this.player.getRenderSphere());
 
@@ -1953,7 +1914,6 @@ class RenderManager {
         const sector = this.getSector(tmpPawnWorldPos);
         let sun: DynamicLight = null;
 
-        // Retail takes the environment sun globally and falls straight down outside daytime.
         if (sector && timeOfDay >= 7 && timeOfDay < 23)
             for (const light of sector.lightList)
                 if (light.isSunlight) {
@@ -1964,7 +1924,6 @@ class RenderManager {
         if (sun) tmpShadowDirection.copy(sun.lightDirection).normalize();
         else tmpShadowDirection.set(0, 0, -1);
 
-        // z is forced to at least half of x so a grazing sun cannot rake the shadow across the world
         const minVertical = Math.abs(tmpShadowDirection.x) * 0.5;
 
         if (minVertical >= Math.abs(tmpShadowDirection.z))
@@ -2104,7 +2063,6 @@ class RenderManager {
             (ambientSun.b + sunColor.b) / 255
         );
 
-        // camera-facing billboard basis, computed once and shared as a uniform (was per-particle in sprite-emitter.ts's onBeforeRender)
         {
             const camera = this.camera;
             const projUp = tmpBillboardUp.copy(camera.up).normalize();
@@ -2115,10 +2073,8 @@ class RenderManager {
             (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
         }
 
-        // Update helper camera: copy from main camera if inactive, otherwise keep frozen
         if (this.bspHelperCamera) {
             if (!this.bspHelperActive) {
-                // Helper is inactive: copy main camera properties for culling
                 this.bspHelperCamera.position.copy(this.camera.position);
                 this.bspHelperCamera.rotation.copy(this.camera.rotation);
                 this.bspHelperCamera.updateMatrixWorld(true);
@@ -2126,42 +2082,31 @@ class RenderManager {
                     this.bspHelperCameraHelper.visible = false;
                 }
             } else {
-                // Helper is active: keep frozen, make helper visible
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = true;
                 }
             }
-            // Update helper visual indicator
             if (this.bspHelperCameraHelper) {
                 this.bspHelperCameraHelper.update();
             }
         }
 
 
-        // NEW: Update BSP section visibility based on camera position (UE2-style culling)
-        // Use helper camera position only when active (frozen), otherwise use main camera
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const bspCullingPosition = bspCullingCamera.position;
 
-        // Pass 1: Visibility updates
-        // UE2: DistanceFogEnd IS the far clip plane — no padding needed
         const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
         const fogSphere = new Sphere(bspCullingPosition, fogFar);
 
-        // Build culling frustum from camera (Z-buffer far stays at DEFAULT_FAR for depth precision)
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
 
         // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
-        // Override the frustum's far plane at fogFar for visibility culling only
-        // This is separate from camera.far (depth buffer) — no Z-fighting artifacts
-        // THREE.js frustum plane indices: 0=right, 1=left, 2=bottom, 3=top, 4=far, 5=near
         {
             tmpCamDir.set(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
             tmpFarPoint.copy(bspCullingPosition).addScaledVector(tmpCamDir, fogFar);
             this.frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
         }
 
-        // static meshes clip at the same distance as fog/terrain, no padding (isRangeIgnored is the real per-actor exemption)
         // TODO: Clip static meshes against [ClippingRange] StaticMesh instead of fog.
         const STATIC_MESH_CLIPPING_RANGE = 1;
         const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
@@ -2180,7 +2125,6 @@ class RenderManager {
                 const isCameraInSector = activeSector === sector;
                 const wasVisible = sector.visible;
 
-                // fog-range z-culling, never the active sector
                 if (!isCameraInSector) {
                     if (!fogSphere.intersectsBox(sector.worldBounds)) {
                         sector.visible = false;
@@ -2216,10 +2160,8 @@ class RenderManager {
         this.updatePawnVisibility();
         this.updatePawnLighting();
 
-        // Pass 2: Object & Material updates (active sector only — skip distant sectors)
         this.scene.traverseVisible(child => {
             if ((child as any).isUpdatable) {
-                // Find the nearest sector for objects that need lighting updates
                 let sector: SectorObject | null = null;
                 let parent = child.parent;
                 while (parent) {
@@ -2230,10 +2172,7 @@ class RenderManager {
                     parent = parent.parent;
                 }
 
-                // Skip lighting updates for objects in non-active (distant) sectors,
-                // except objects that were never lit at all (freshly streamed sectors)
                 if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
-                    // emitters outside the camera's sector still simulate, just throttled to OFFSCREEN_EMITTER_HZ
                     if ((child as any).particlePool) {
                         const wasOffscreen = !!(child as any).isOffscreenThrottled;
                         const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
@@ -2243,8 +2182,6 @@ class RenderManager {
                             (child as any).update(currentTime);
                             freezeEmitterParticles(child);
                         } else if (!wasOffscreen) {
-                            // A budgeted-out first maintenance tick must still stop the
-                            // emitter's previous visible state from being submitted.
                             freezeEmitterParticles(child);
                         }
 
@@ -2253,13 +2190,11 @@ class RenderManager {
                     return;
                 }
 
-                // within the active sector, reuse zone-object.ts's BSP visibility (Pass 1 fills visibleEmitterUuids) instead of a standalone frustum test
                 if ((child as any).particlePool) {
                     const emitterUuid = (child as any).emitterActorUuid;
                     const isVisible = (child as any).isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
 
                     if (!isVisible) {
-                        // throttle instead of freezing outright so particle state doesn't go stale and pop back in once visible
                         const wasOffscreen = !!(child as any).isOffscreenThrottled;
                         const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
                         if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
@@ -2344,11 +2279,8 @@ class RenderManager {
         const env = this.environment;
         if (!env) return;
 
-        // base sky color from timeenv, blended with L2FogInfo later
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
-        // fog defaults from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u)
-        // range scale factor 2048, derived from trace: 2.5 * 2048 = 5120
         const presetIndex = parseInt(String(this.envConfig.fogPreset).split(" ")[0]);
         const range = env.getEnv().fog.ranges[presetIndex - 1]; // 0-based array
 
@@ -2366,18 +2298,15 @@ class RenderManager {
             }
         }
 
-        let targetFogColor = env.getHazeColor(tmpColorByte_2); // Default to Haze
+        let targetFogColor = env.getHazeColor(tmpColorByte_2);
 
         // targetFogStart = 1;
         // targetFogEnd = 10
 
-        // zone overrides
         const sector = this.getSector(this.camera.position);
-        // base haze gradient from EnvLight (via indexHaze), L2FogInfo blending modifies it in range
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
 
-        // Initialize with default baseline colors from Env.int
         const targetCloudColors: ColorByte[] = [
             env.getCloudColor(0, new ColorByte()),
             env.getCloudColor(1, new ColorByte()),
@@ -2405,16 +2334,12 @@ class RenderManager {
                 }
             }
 
-            // Sky color accumulators
             let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;
-            // Haze/Cloud accumulators
             let accHazeR = 0, accHazeG = 0, accHazeB = 0, totalHazeWeight = 0;
             let accCloudR = [0, 0, 0], accCloudG = [0, 0, 0], accCloudB = [0, 0, 0], totalCloudWeight = [0, 0, 0];
 
-            // Fog accumulators (Standard spatial weight)
             let accStart = 0, accEnd = 0, accR = 0, accG = 0, accB = 0, totalFogWeight = 0;
 
-            // Haze Array accumulators (for vertical gradient)
             let accHArrR: number[] = [], accHArrG: number[] = [], accHArrB: number[] = [];
 
             let totalHArrWeight = 0;
@@ -2422,7 +2347,6 @@ class RenderManager {
             const presetIndex = this.envConfig.fogPreset;
             const timeOfDay = env.getTimeOfDay();
 
-            // Collect fogInfos from current sector and 8 neighbor sectors to handle cross-sector ranges
             const fogInfosAll: any[] = [];
             const sectorSize = 256 * 128;
             const currentX = Math.floor(this.camera.position.x / sectorSize) + 20;
@@ -2450,7 +2374,6 @@ class RenderManager {
             let maxHArrLen = 0;
             const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
 
-            // closest active fog wins
             fogInfos.forEach(fogInfo => {
                 if (fogInfo.zoneMask && !(fogInfo.zoneMask & cameraZoneMask)) {
                     return;
@@ -2501,7 +2424,6 @@ class RenderManager {
                     interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, new ColorByte(), 2)
                 ];
 
-                // EnvInfo ranges are kilounits (x2048), FogInfo zone ranges are already units
                 accStart += range.A * weight;
                 accEnd += range.B * weight;
                 accR += fogColor.r * weight;
@@ -2509,7 +2431,6 @@ class RenderManager {
                 accB += fogColor.b * weight;
                 totalFogWeight += weight;
 
-                // alpha 0 in assets means fallback to 255 (fully opaque)
                 const skyAlpha = skyColor.a === 0 ? 255 : skyColor.a;
                 const skyWeight = weight * (skyAlpha / 255);
                 accSkyR += skyColor.r * skyWeight;
@@ -2545,8 +2466,6 @@ class RenderManager {
                 }
             });
 
-            // Calculate Sky Visibility (Suppressed by bClearToFogColor)
-            // If zones with bClearToFogColor are active, sky visibility should drop
             skyVisibility = 1.0;
             activeInfos.forEach(({ fogInfo, weight }) => {
                 if ((fogInfo as any).useFogColorClear) {
@@ -2555,7 +2474,6 @@ class RenderManager {
             });
 
             if (this.activeFogId) {
-                // If a zone fog is active, it completely overrides the global fog palette
                 targetFogStart = accStart / totalFogWeight;
                 targetFogEnd = accEnd / totalFogWeight;
                 targetFogColor.set(
@@ -2564,8 +2482,6 @@ class RenderManager {
                     accB / totalFogWeight,
                     255
                 );
-            } else {
-                // No active zone fog - already has default values from Env.int
             }
 
             if (totalSkyWeight > 0 && this.activeFogId) {
@@ -2577,13 +2493,10 @@ class RenderManager {
                 );
             }
 
-            // Calculate final Cloud Colors (Blended result of Baseline + Regional Overrides)
             targetCloudColors.forEach((tc, idx) => {
                 const baseCloud = env.getCloudColor(idx, new ColorByte());
                 tc.copy(baseCloud);
                 if (this.activeFogId && totalCloudWeight[idx] > 0) {
-                    // Engine logic: Whichever wins provides the complete palette for that component
-                    // If the active fog has an override for this index, it completely overrides baseline
                     const r = accCloudR[idx] / totalCloudWeight[idx];
                     const g = accCloudG[idx] / totalCloudWeight[idx];
                     const b = accCloudB[idx] / totalCloudWeight[idx];
@@ -2592,7 +2505,6 @@ class RenderManager {
             });
 
             if (totalHArrWeight > 0) {
-                // high weight prioritizes regional color, reduces global bleed
                 const haW = totalHArrWeight >= 0.95 ? 1.0 : Math.min(totalHArrWeight, 1.0);
                 for (let i = 0; i < blendedHazeColors.length; i++) {
                     const baseColor = blendedHazeColors[i];
@@ -2607,7 +2519,6 @@ class RenderManager {
                 }
             }
 
-            // Restore Haze Color Blending (for modulatedHazeBase/tmpColorByte_4)
             if (totalHazeWeight > 0) {
                 const hW = totalHazeWeight >= 0.95 ? 1.0 : Math.min(totalHazeWeight, 1.0);
                 tmpColorByte_4.set(
@@ -2616,10 +2527,7 @@ class RenderManager {
                     MathUtils.lerp(255, accHazeB / totalHazeWeight, hW),
                     255
                 );
-            } else {
-                // Default to White (Identity) so base haze colors are visible
-                tmpColorByte_4.set(255, 255, 255, 255);
-            }
+            } else tmpColorByte_4.set(255, 255, 255, 255);
         }
 
         const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
@@ -2643,24 +2551,16 @@ class RenderManager {
             skyVisibility = 0;
         }
 
-        // Initialize with default Sky Color as fallback
         const targetClearColor = targetSkyColor.clone();
 
-        // If useFogColorClear is active for the current weighted zone state, 
-        // we should clear to the fog color instead.
-        // We use the skyVisibility (which is derived from bClearToFogColor weights)
-        // to blend between Sky Color and Fog Color for a smooth transition.
-        if (skyVisibility < 1.0) {
-            // Linear blend: 1.0 Visibility = Pure Sky, 0.0 Visibility = Pure Fog
+        if (skyVisibility < 1.0)
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
-        }
 
         this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
 
         const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
         this.renderer.setClearColor(clearColorThree);
 
-        // Update Scene Fog (Always use targetFogColor for 3D fogging)
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
         if (!this.scene.fog || !(this.scene.fog as any).isFog) {
             this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
@@ -2734,9 +2634,6 @@ class RenderManager {
             if (this.dirKeys.down) forwardVelocity -= 1;
 
             dirForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion).multiplyScalar(forwardVelocity);
-            // Negated: the final image is mirrored horizontally (see ue2-conventions.ts),
-            // so strafing along the camera's true local +X would otherwise visibly
-            // move the view in the opposite screen direction.
             dirRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion).multiplyScalar(-sidewaysVelocity);
 
             cameraVelocity.addVectors(dirForward, dirRight).setLength(camSpeed);
@@ -2892,8 +2789,6 @@ class RenderManager {
                 if (!placed) break;
             }
 
-            // Update listener position from camera - AudioParam writes cross to the
-            // audio thread, skip them while the camera is still
             if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
                 this._lastListenerPos.copy(camPos);
                 this._lastListenerQuat.copy(this.camera.quaternion);
@@ -2932,27 +2827,22 @@ class RenderManager {
 
         this.renderer.clearDepth();
 
-        // Check for sector change and recreate visualizer if needed
         const currentSector = this.getSector(this.camera.position);
         if (currentSector) {
             const sectorIndex = currentSector.index;
             if (this.currentSectorIndex === null ||
                 !sectorIndex.equals(this.currentSectorIndex)) {
-                // Sector changed - recreate visualizer
                 const wasEnabled = this.visualizer.isEnabled();
                 const currentMode = this.visualizer.getMode();
 
-                // Remove old visualizer
                 this.visualizer.destroy();
                 this.scene.remove(this.visualizer.getGroup());
                 this.scene.remove(this.visualizer.getFogGroup());
                 this.scene.remove(this.visualizer.getEmitterLabelGroup());
 
-                // Create new visualizer
                 (this as any).visualizer = new Visualizer(this.scene);
                 this.wireEmitterVisibilityHandlers();
 
-                // Restore state
                 this.visualizer.setMode(currentMode);
                 if (wasEnabled && !this.visualizer.isEnabled()) {
                     this.visualizer.toggle();
@@ -2962,19 +2852,11 @@ class RenderManager {
 
                 this.currentSectorIndex = sectorIndex.clone();
             }
-        } else {
-            // No sector - clear tracking
-            if (this.currentSectorIndex !== null) {
-                this.currentSectorIndex = null;
-            }
-        }
+        } else if (this.currentSectorIndex !== null) this.currentSectorIndex = null;
 
-        // Update visualizer based on camera position (use bspHelperCamera if active)
-        // Only visualize the current sector
         if (currentSector) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
 
-            // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
             if (currentSector.index) {
                 const sectorXMap = new Map<number, SectorObject>();
@@ -3222,7 +3104,6 @@ class RenderManager {
         sector.updateMatrixWorld(true);
         freezeStaticSubtree(sector);
 
-        // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);
         if (currentSector && this.visualizer.isEnabled()) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
@@ -3230,7 +3111,6 @@ class RenderManager {
                 ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                 : this.frustum;
 
-            // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
             if (currentSector.index) {
                 const sectorXMap = new Map<number, SectorObject>();
@@ -3398,11 +3278,6 @@ class RenderManager {
         this.queueSectorWarmup(sector, sector.staticMeshGroup, true);
     }
 
-    /**
-     * Inverse of addSector: unregisters the sector, removes it from the scene and
-     * re-stitches the remaining terrains. GPU resources are NOT freed - the sector can
-     * be re-added as is; call disposeSector once it is certain not to return.
-     */
     public removeSector(sector: SectorObject) {
         this.pawnLightingStates = new WeakMap();
 
@@ -3460,33 +3335,23 @@ class RenderManager {
         releaseSectorResources(sector);
     }
 
-    /**
-     * Toggle BSP helper camera for debugging visibility culling.
-     * Press F1 to toggle between active/inactive states:
-     * - Inactive (default): Helper camera follows main camera, helper invisible
-     * - Active: Helper camera frozen at last position, helper visible for debugging
-     */
     public toggleBSPHelperCamera() {
         if (!this.bspHelperCamera) {
-            // Create helper camera if it doesn't exist
             this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
             this.bspHelperCamera.position.copy(this.camera.position);
             this.bspHelperCamera.rotation.copy(this.camera.rotation);
             this.bspHelperCamera.updateMatrixWorld(true);
 
-            // Create visual helper to see where the camera is
             this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
             this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
-            this.bspHelperCameraHelper.visible = false; // Hidden by default (inactive state)
+            this.bspHelperCameraHelper.visible = false;
             this.scene.add(this.bspHelperCameraHelper);
 
             this.bspHelperActive = false;
         } else {
-            // Toggle active/inactive state
             this.bspHelperActive = !this.bspHelperActive;
 
             if (this.bspHelperActive) {
-                // Freeze at current position and show helper
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = true;
                 }

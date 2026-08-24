@@ -142,7 +142,6 @@ abstract class UStaticMeshActor extends UAActor {
         const baseModel = level.getModel();
         const localToWorld = this.localToWorld();
 
-        // Calculate bounding box for leaves (needed for export and lighting)
         const predictedBox = mesh.getRenderBoundingBox(this).transformBy(localToWorld);
 
         this.instance?.loadSelf().setActor(this);

@@ -230,9 +230,13 @@ class DecodeLibraryBuilder {
             if (!actor) continue;
 
             if ((actor as any).isPhysicsVolume) {
-                const volumeInfo = (actor.loadSelf() as UPhysicsVolume).getDecodeInfo(this.library);
+                const volume = actor.loadSelf() as UPhysicsVolume;
+                const volumeInfo = volume.getDecodeInfo(this.library);
 
-                if (volumeInfo) this.library.waterVolumes.push(volumeInfo);
+                if (volumeInfo) {
+                    this.setScriptClass(volume, volumeInfo);
+                    this.library.waterVolumes.push(volumeInfo);
+                }
                 continue;
             }
 

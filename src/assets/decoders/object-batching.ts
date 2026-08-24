@@ -1,12 +1,9 @@
-import {
-    BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D,
-    Material, MeshBasicMaterial, NormalBlending
-} from "three";
+import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import Terrain from "@client/objects/terrain";
 import CollidingMesh from "@client/objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
-import { MeshLight } from "@client/objects/lit-actor";
+import { MeshLight_T } from "@client/objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { StaticMeshBatchManifest_T, BatchElement_T } from "./batch-data";
 import type { CollisionTriangleIndex_T } from "@client/objects/objects";
@@ -44,7 +41,7 @@ function createBatchObject(
     name: string,
     mergedGeometry: BufferGeometry,
     materials: Material | Material[],
-    mergedLightInfo: MeshLight | null,
+    mergedLightInfo: MeshLight_T | null,
     mergedColliderIndices: Uint32Array | null,
     collisionIndex: CollisionTriangleIndex_T | null,
     actors: GD.IStaticMeshActorDecodeInfo[],
@@ -96,7 +93,7 @@ function createBatchObject(
     return mergedObject;
 }
 
-export function decodeStaticMeshActorLight(_library: GD.DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight | null {
+export function decodeStaticMeshActorLight(_library: GD.DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight_T | null {
     if (!info) return null;
 
     const matrix = new Matrix4().fromArray(info.matrix);
@@ -178,7 +175,7 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
                 || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
             // The merged light matrix has always been identity (see mergeBatchGeometriesData)
-            const lightInfo: MeshLight | null = batch.lights
+            const lightInfo: MeshLight_T | null = batch.lights
                 ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment }
                 : null;
 
@@ -206,7 +203,6 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             (sector as any).staticMeshMap.set(batch.uuid, batchObject);
 
         } catch (e) {
-            /* leafActors already reference the batch entry - the actors cannot be recovered individually */
             console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
         }
 
@@ -403,7 +399,6 @@ export function batchTerrainSectors(
             mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
         }
 
-        // Use a standard Mesh instead of Terrain for the batch to avoid recursive updates
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
         batchedTerrain.name = `${group.name}_Batch`;
 

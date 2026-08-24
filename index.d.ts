@@ -731,7 +731,6 @@ declare global {
                     nodes: IMusicVolumeBspNode[];
                 }
 
-                // Add IZoneFogInfo for L2FogInfo object
                 export interface IL2FogInfoDecodeInfo extends IBaseObjectDecodeInfo {
                     type: "L2FogInfo",
                     affectRange: { A: number, B: number },
@@ -758,7 +757,6 @@ declare global {
                     zoneInfo: IBaseZoneDecodeInfo
                 }
 
-                // NEW: BSP Section (material + lightmap combination)
                 export interface IBSPSectionDecodeInfo_T {
                     uuid: string,
                     sectionName: string;

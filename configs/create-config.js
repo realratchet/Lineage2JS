@@ -30,7 +30,6 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         const dirAssets = "assets-c4/";
         const plugins = [];
 
-        /* the worker compilation reuses the artifacts the client compilation produces */
         if (!isWorker) {
             const fileList = {
                 comment: "This file is auto-generated, any changes will be lost.",
@@ -78,9 +77,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         const output = {
             filename: "[name].bundle.js",
             path: dirOutput ? dirOutput : path.resolve(__dirname, "../bin"),
-            /* client and worker are separate Compiler instances sharing bin/ - a chunk name
-               reachable from both (e.g. modules/unreal, now also modules/decode-engine's own
-               inner chunks) would otherwise collide on disk between the two compilations */
+            // Client and worker compilers share bin/.
             chunkFilename: isWorker ? "worker.[name].chunk.js" : "[name].chunk.js"
         };
 
@@ -178,14 +175,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             }
         };
 
-        /* only one compilation may define the dev server - the worker rides along */
         if (!isWorker) {
             config.devServer = {
                 port: 8080,
                 allowedHosts: "all",
                 hot: false,
-                /* LIVE_RELOAD=0 is for automated sweeps only - a mid-sweep
-                   rebuild would restart the sweep page and corrupt its report */
                 liveReload: process.env.LIVE_RELOAD !== "0",
                 static: {
                     directory: path.resolve(__dirname, "../", dirAssets),
@@ -194,7 +188,6 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
 
-                    /* the ?sectorTest sweep posts one JSON result per sector here */
                     const reportFile = path.join(__dirname, "../sector-test-report.jsonl");
 
                     devServer.app.post("/sector-test/report", require("express").json({ limit: "4mb" }), (req, res) => {
@@ -231,14 +224,12 @@ const resolve = {
     }
 };
 
-/* renderer bundle - must stay free of ue2 asset code (that all lives in the worker bundle) */
 module.exports.createConfigBundle = createModuleConfig({
     name: "client",
     resolve,
     entry: "../src/index.ts"
 });
 
-/* decode worker bundle - owns the entire ue2 asset pipeline */
 module.exports.createConfigWorker = createModuleConfig({
     name: "decode-worker",
     resolve,

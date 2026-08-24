@@ -1,6 +1,6 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
-import LitActorMesh, { MeshLight } from "@client/objects/lit-actor";
+import LitActorMesh, { MeshLight_T } from "@client/objects/lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "@client/physics/triangle-index";
 
@@ -30,7 +30,7 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     protected analyticalPrimitive: CollisionPrimitive_T = null;
     protected readonly basedActors = new Set<ICollidable>();
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: GD.IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: GD.IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
         super(props);
 
         (this as any).isStaticMeshActor = true;
