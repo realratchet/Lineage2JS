@@ -1,4 +1,4 @@
-import ParticleMaterial from "@client/materials/particle-material/particle-material";
+import ParticleMaterial, { AnimatedParticleMaterial } from "@client/materials/particle-material/particle-material";
 import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
 
@@ -127,7 +127,8 @@ class BeamEmitter extends BaseEmitter {
         geometry.setIndex(new BufferAttribute(indices, 1));
         geometry.boundingSphere = null;
 
-        const mesh = new BeamMesh(geometry, new ParticleMaterial(this.material));
+        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(this.material) : new ParticleMaterial(this.material);
+        const mesh = new BeamMesh(geometry, material);
 
         mesh.emitter = this;
         mesh.frustumCulled = false;
@@ -313,7 +314,7 @@ class BeamEmitter extends BaseEmitter {
 
 const tmpRight = new Vector3(), tmpUp = new Vector3(), tmpPrev = new Vector3(), tmpPoint = new Vector3(), tmpNoise = new Vector3(), tmpView = new Vector3();
 
-class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial> {
+class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
     public emitter: BeamEmitter = null;
 
     onBeforeRender = (_renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {

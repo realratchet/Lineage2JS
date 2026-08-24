@@ -109,6 +109,15 @@ async function handleMessage(msg: MainToWorkerMessage) {
             }
             break;
         }
+        case "listNpcs": {
+            try {
+                post({ type: "npcsListed", requestId: msg.requestId, npcs: await engine.listNpcs() });
+            } catch (e) {
+                console.error("[decode-worker] failed to list NPCs:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "decodeSkeletalMesh": {
             try {
                 const buffer = await engine.decodeSkeletalMeshBinary(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations);

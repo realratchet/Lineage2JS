@@ -513,6 +513,7 @@ const REQUIRED_SETTINGS = [
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
     "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
+    "initialDelayRange",
     "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
     "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",

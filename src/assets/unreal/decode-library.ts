@@ -40,6 +40,7 @@ class DecodeLibrary {
     public readonly scriptFunctions: Record<string, GD.IScriptFunctionDecodeInfo> = {};
     public readonly scriptStates: Record<string, GD.IScriptStateDecodeInfo> = {};
     public readonly effectTemplates: Record<string, GD.IBaseObjectDecodeInfo> = {};
+    public readonly actorTemplates: Record<string, GD.ISkinnedMeshObjectDecodeInfo> = {};
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public isSkyLevel = false;
     public readonly skyLevel: {

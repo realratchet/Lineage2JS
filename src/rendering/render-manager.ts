@@ -396,6 +396,11 @@ class RenderManager {
     protected readonly waitingMovableObjects = new Map<MovableObject, number>();
     protected readonly rotatingObjects = new Set<RotatingObject>();
     protected readonly simulatedPawns = new Set<SimulatedPawn_T>();
+    protected readonly deferredPawnReleases = new Set<BaseActor>();
+    protected readonly transientEffects = new Set<Object3D>();
+    protected isUpdatingMixer = false;
+    protected spawnedNpc: BaseActor = null;
+    protected npcSpawnRequest = 0;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
     protected simCharGroups: GD.ICharacterGroup[] = null;
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
@@ -1573,6 +1578,47 @@ class RenderManager {
         folder.open();
     }
 
+    public addNpcControls(): void {
+        const state = {
+            selector: "Baium",
+            spawn: async () => {
+                const request = ++this.npcSpawnRequest;
+
+                if (this.spawnedNpc) {
+                    this.removePawn(this.spawnedNpc);
+                    this.spawnedNpc = null;
+                }
+
+                const npc = await this.spawnNpc(state.selector);
+
+                if (request !== this.npcSpawnRequest) {
+                    this.removePawn(npc);
+                    return;
+                }
+
+                this.spawnedNpc = npc;
+            },
+            kill: () => {
+                ++this.npcSpawnRequest;
+
+                const npc = this.spawnedNpc;
+
+                if (!npc) return;
+
+                npc.playDeathAnimation(() => {
+                    this.removePawn(npc);
+                    if (this.spawnedNpc === npc) this.spawnedNpc = null;
+                });
+            }
+        };
+        const folder = gui.addFolder("NPC");
+
+        folder.add(state, "selector").name("Name / ID");
+        folder.add(state, "spawn").name("Spawn");
+        folder.add(state, "kill").name("Kill");
+        folder.open();
+    }
+
     public addClippingRangeControls(): void {
         const clippingRange = this.assetManager.userConfig.clippingRange;
 
@@ -1707,17 +1753,114 @@ class RenderManager {
         this.needsUpdate = true;
     }
 
+    public addTransientEffect(effect: Object3D, owner: BaseActor = null): void {
+        this.scene.add(effect);
+        this.transientEffects.add(effect);
+
+        const spawnSound = (effect as any).spawnSound as (GD.IEmitterSpawnSoundDecodeInfo & { dataUri: string }) | null;
+
+        if (spawnSound) {
+            effect.getWorldPosition(tmpPawnWorldPos);
+            this.audioManager.playOneShotSound(spawnSound.dataUri, tmpPawnWorldPos, spawnSound.volume / 255, 1, spawnSound.radius, spawnSound.radius * 100);
+        }
+
+        if (owner) owner.gainScriptChild(effect);
+        this.needsUpdate = true;
+    }
+
+    public removeTransientEffect(effect: Object3D): void {
+        const base = (effect as any).scriptBase as BaseActor;
+        const owner = (effect as any).scriptOwner as BaseActor;
+
+        if (base) base.detachBoneObject(effect);
+        if (owner) owner.loseScriptChild(effect);
+
+        effect.removeFromParent();
+        this.transientEffects.delete(effect);
+
+        effect.traverse(child => {
+            const mesh = child as any;
+
+            if (!mesh.isMesh) return;
+
+            const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
+
+            for (const material of materials) material.dispose();
+            if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
+        });
+
+        this.needsUpdate = true;
+    }
+
+    protected maintainTransientEffects(): void {
+        for (const effect of this.transientEffects) {
+            let root = effect;
+
+            while (root.parent) root = root.parent;
+
+            if (root === this.scene && !this.isTransientEffectFinished(effect)) continue;
+
+            this.removeTransientEffect(effect);
+        }
+
+        if (this.transientEffects.size > 0) this.needsUpdate = true;
+    }
+
+    protected isTransientEffectFinished(effect: Object3D): boolean {
+        let hasEmitter = false;
+        let isFinished = true;
+
+        effect.traverse(child => {
+            const emitter = child as any;
+
+            if (!emitter.particlePool) return;
+
+            hasEmitter = true;
+            if (!emitter.isFinished()) isFinished = false;
+        });
+
+        return hasEmitter && isFinished;
+    }
+
+    public removePawn(pawn: BaseActor): void {
+        let found: SimulatedPawn_T = null;
+
+        for (const entry of this.simulatedPawns)
+            if (entry.pawn === pawn) {
+                found = entry;
+                break;
+            }
+
+        if (!found) return;
+
+        this.unregisterCollider(pawn);
+        pawn.removeFromParent();
+        this.simulatedPawns.delete(found);
+
+        if (this.isUpdatingMixer) this.deferredPawnReleases.add(pawn);
+        else pawn.release();
+
+        this.needsUpdate = true;
+    }
+
+    protected releaseDeferredPawns(): void {
+        for (const pawn of this.deferredPawnReleases) pawn.release();
+
+        this.deferredPawnReleases.clear();
+    }
+
     public spawnNpc(selector: string | number, position: Vector3 = null): Promise<BaseActor> {
         return this.assetManager.spawnNpc(this, selector, position);
+    }
+
+    public listNpcs(): Promise<GD.INpcDefinition[]> {
+        return this.assetManager.listNpcs();
     }
 
     protected maintainSimulatedPawns(currentTime: number): void {
         for (const entry of this.simulatedPawns) {
             if (currentTime >= entry.expires) {
-                this.unregisterCollider(entry.pawn);
-                entry.pawn.release();
-                this.scene.remove(entry.pawn);
-                this.simulatedPawns.delete(entry);
+                this.removePawn(entry.pawn);
                 continue;
             }
 
@@ -2544,7 +2687,15 @@ class RenderManager {
         this.processSectorWarmups();
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;
-        this.mixer.update(deltaTime / 1000);
+
+        this.isUpdatingMixer = true;
+        try {
+            this.mixer.update(deltaTime / 1000);
+        } finally {
+            this.isUpdatingMixer = false;
+            this.releaseDeferredPawns();
+        }
+
         this.waterHitEffect.update(this.arrLoadedSectors, deltaTime);
 
         const timeScale = this.environment.getTimeScale();
@@ -2613,6 +2764,7 @@ class RenderManager {
 
         this.emitterSimDue = this.nextPhysicsTick <= currentTime;
         this.maintainSimulatedPawns(currentTime);
+        this.maintainTransientEffects();
         this.updateMovableObjects(currentTime);
         this.updateRotatingObjects(deltaTime);
 

@@ -92,6 +92,10 @@ const BLINK_CENTERLINE_CUTOFF = 0.07;
 const BLINK_CLOSE_TIME = 0.08;
 const BLINK_HOLD_TIME = 0.06;
 const BLINK_OPEN_TIME = 0.12;
+// APawn::SpawnEnterEvent (0x8b47e0): rise moves 5/9 of its full offset per second.
+const ENTER_RISE_RATE = 5 / 9;
+// APawn::SpawnEnterEvent (0x8b490a): AEmitter::SetSizeScale(CollisionRadius * 0.1).
+const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 
 type AnimationNotifyHandler_T = (actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo) => void;
 
@@ -114,6 +118,20 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
     cacheOnceAnimations.set(clip, once);
 
     return once;
+}
+
+function setScriptObjectProperty(object: Object3D, field: string, value: ScriptValue_T): void {
+    const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
+
+    if (!properties) return;
+
+    for (const key of properties.keys())
+        if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
+            properties.set(key, value);
+            return;
+        }
+
+    properties.set(field, value);
 }
 
 type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
@@ -173,6 +191,8 @@ class BaseActor extends Object3D implements ICollidable {
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
     protected animationNotifyHandler: AnimationNotifyHandler_T = null;
+    protected deathAnimationFinishedHandler: ((actor: BaseActor) => void) = null;
+    protected isDying = false;
     protected isAnimationsInit = false;
     protected hairStepTime = 0;
     protected readonly hairChains: HairChainState_T[] = [];
@@ -196,6 +216,11 @@ class BaseActor extends Object3D implements ICollidable {
     protected scriptVM: UnScriptVM = null;
     protected scriptObjectFactory: ScriptObjectFactory_T = null;
     protected hasBegunPlay = false;
+    protected isScriptTicking = false;
+    protected isScriptDestroyed = false;
+    protected enterRiseTargetZ: number = null;
+    protected enterRiseVelocity = 0;
+    protected readonly scriptDeathController: ScriptHost_T = { scriptClassId: "Engine.Controller", scriptProperties: new Map([["bDead", true]]) };
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -212,6 +237,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.scriptProperties = new Map();
         this.scriptObjectFactory = objectFactory;
         this.scriptVM.initializeHost(this);
+        this.isScriptTicking = this.scriptVM.hasScriptFunction(classId, "Tick") && this.scriptVM.findFunction(classId, "Tick").program.entries.length > 2;
     }
 
     public beginPlay(): void {
@@ -236,13 +262,18 @@ class BaseActor extends Object3D implements ICollidable {
             case "physics": return ["none", "walking", "falling", "swimming", "flying"].indexOf(this.physicsMode);
         }
 
+        return this.getStoredUnrealScriptProperty(id);
+    }
+
+    protected getStoredUnrealScriptProperty(id: string): ScriptValue_T {
+        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
         const properties = this.scriptProperties;
 
         if (!properties) return null;
         if (properties.has(id)) return properties.get(id);
 
         for (const [key, value] of properties)
-            if (key.toLowerCase() === name) return value;
+            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) return value;
 
         return null;
     }
@@ -271,7 +302,7 @@ class BaseActor extends Object3D implements ICollidable {
         if (!this.scriptProperties) throw new Error(`${this.type} has no UnrealScript property storage.`);
 
         for (const key of this.scriptProperties.keys())
-            if (key.toLowerCase() === field.toLowerCase()) {
+            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
                 this.scriptProperties.set(key, value);
                 return;
             }
@@ -324,7 +355,59 @@ class BaseActor extends Object3D implements ICollidable {
         if (call.index === 278 || name === "spawn") {
             if (!this.scriptObjectFactory) throw new Error(`${this.type} cannot spawn script object '${call.args[0]}'.`);
 
-            return this.scriptObjectFactory(call.args[0] as string);
+            const object = this.scriptObjectFactory(call.args[0] as string);
+
+            if ((object as any).isObject3D) {
+                const actor = object as unknown as Object3D;
+                const location = call.args[3];
+                const rotation = call.args[4];
+
+                if (Array.isArray(location)) actor.position.fromArray(location as GD.Vector3Arr);
+                else if (context.isObject3D) context.getWorldPosition(actor.position);
+                else this.getWorldPosition(actor.position);
+
+                if (Array.isArray(rotation)) {
+                    const [pitch, yaw, roll] = rotation as GD.Vector3Arr;
+
+                    tmpRotator.set(pitch, yaw, roll).toQuaternion(actor.quaternion);
+                }
+
+                const owner = call.args[1] as any;
+
+                this.renderManager.addTransientEffect(actor, owner && owner.isActor ? owner : null);
+            }
+
+            return object;
+        }
+
+        if (call.index === 279 || name === "destroy" || name === "ndestroy") {
+            if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' cannot be destroyed as an actor.`);
+
+            this.renderManager.removeTransientEffect(context as Object3D);
+            return true;
+        }
+
+        if (call.index === 3970 || name === "setphysics") {
+            if (typeof context.setUnrealScriptProperty === "function") context.setUnrealScriptProperty("Physics", call.args[0]);
+            else if (context.scriptProperties instanceof Map) context.scriptProperties.set("Physics", call.args[0]);
+            else throw new Error(`'${context.scriptClassId}' has no physics mode.`);
+
+            return undefined;
+        }
+
+        if (call.index === 298 || name === "setbase") {
+            const base = call.args[0] as any;
+
+            if (typeof context.setBase === "function") context.setBase(base);
+            else {
+                if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' cannot be based.`);
+                if (base && !base.isObject3D) throw new Error(`'${context.scriptClassId}' cannot use '${base}' as a base.`);
+
+                (base || this.renderManager.scene).attach(context);
+                if (context.scriptProperties instanceof Map) context.scriptProperties.set("Base", base);
+            }
+
+            return undefined;
         }
 
         switch (name) {
@@ -332,6 +415,16 @@ class BaseActor extends Object3D implements ICollidable {
                 if (typeof context.attachObjectToBone !== "function") throw new Error(`'${context.scriptClassId}' cannot attach an object to a bone.`);
 
                 return context.attachObjectToBone(call.args[0] as unknown as Object3D, call.args[1] as string);
+            }
+            case "attachtobonewithindex": {
+                if (typeof context.attachObjectToBone !== "function") throw new Error(`'${context.scriptClassId}' cannot attach an object to a bone.`);
+
+                return context.attachObjectToBone(call.args[0] as unknown as Object3D, Number(call.args[1]));
+            }
+            case "detachfrombone": {
+                if (typeof context.detachBoneObject !== "function") throw new Error(`'${context.scriptClassId}' cannot detach an object from a bone.`);
+
+                return context.detachBoneObject(call.args[0] as unknown as Object3D);
             }
             case "setrelativelocation": {
                 if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' has no relative location.`);
@@ -396,6 +489,11 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public updatePhysics(currentTime: number, deltaTime: number) {
+        if (this.enterRiseTargetZ !== null) {
+            this.updateEnterRise(deltaTime);
+            return;
+        }
+
         const isInteractive = this.isInteractive();
 
         this.collisionProfile.collideActors = isInteractive;
@@ -419,6 +517,7 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public updatePresentation(currentTime: number, deltaTime: number) {
+        if (this.hasBegunPlay && this.isScriptTicking) this.scriptVM.call(this, "Tick", [deltaTime]);
         this.updateAnimationNotifies();
         this.updateHair(currentTime * 0.001, deltaTime);
         this.updateBlink(currentTime * 0.001);
@@ -459,6 +558,19 @@ class BaseActor extends Object3D implements ICollidable {
     public update(_renderManager: RenderManager, currentTime: number, deltaTime: number) {
         this.updatePhysics(currentTime, deltaTime);
         this.updatePresentation(currentTime, deltaTime);
+    }
+
+    protected updateEnterRise(deltaTime: number): void {
+        const targetZ = this.enterRiseTargetZ;
+        const nextZ = this.position.z + this.enterRiseVelocity * deltaTime;
+
+        if ((this.enterRiseVelocity >= 0 && nextZ >= targetZ) || (this.enterRiseVelocity < 0 && nextZ <= targetZ)) {
+            this.position.z = targetZ;
+            this.enterRiseTargetZ = null;
+            this.enterRiseVelocity = 0;
+        } else this.position.z = nextZ;
+
+        if (this.rigidbody) this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + this.collisionHeight));
     }
 
     // UE ignores a blocking actor you spawned inside of until you are no longer intersecting it
@@ -1237,6 +1349,9 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     protected checkAnimationState() {
+        if (this.isDying) return;
+        if (this.animationNotifyAction && this.animationNotifyAction.loop === LoopOnce) return;
+
         const isMoving = this.velocity.lengthSq() > 0;
         const state: ValidStateNames_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : "idle";
 
@@ -1271,10 +1386,47 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number): boolean {
+        const oldBase = (object as any).scriptBase as BaseActor;
+
+        if (oldBase && oldBase !== this) oldBase.detachBoneObject(object);
+
         for (const mesh of this.meshes) {
             const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
 
-            if (skeleton && skeleton.attachObject(object, boneNameOrIndex)) return true;
+            if (!skeleton || !skeleton.attachObject(object, boneNameOrIndex)) continue;
+
+            const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
+            let relativeLocation: ScriptValue_T = null;
+            let relativeRotation: ScriptValue_T = null;
+
+            if (properties)
+                for (const [key, value] of properties) {
+                    const name = key.slice(key.lastIndexOf(".") + 1).toLowerCase();
+
+                    if (name === "relativelocation") relativeLocation = value;
+                    else if (name === "relativerotation") relativeRotation = value;
+                }
+
+            if (relativeLocation !== null && !Array.isArray(relativeLocation)) throw new Error(`'${(object as any).scriptClassId}' has invalid RelativeLocation.`);
+            if (relativeRotation !== null && !Array.isArray(relativeRotation)) throw new Error(`'${(object as any).scriptClassId}' has invalid RelativeRotation.`);
+
+            if (relativeLocation === null) object.position.set(0, 0, 0);
+            else object.position.fromArray(relativeLocation as GD.Vector3Arr);
+
+            if (relativeRotation === null) object.quaternion.identity();
+            else {
+                const [pitch, yaw, roll] = relativeRotation as GD.Vector3Arr;
+
+                tmpRotator.set(pitch, yaw, roll).toQuaternion(object.quaternion);
+            }
+
+            (object as any).scriptBase = this;
+            setScriptObjectProperty(object, "Base", this);
+
+            if (oldBase !== this && this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "Attach"))
+                this.scriptVM.call(this, "Attach", [object as unknown as ScriptHost_T]);
+
+            return true;
         }
 
         return false;
@@ -1284,10 +1436,41 @@ class BaseActor extends Object3D implements ICollidable {
         for (const mesh of this.meshes) {
             const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
 
-            if (skeleton && skeleton.detachObject(object)) return true;
+            if (!skeleton || !skeleton.detachObject(object)) continue;
+
+            (object as any).scriptBase = null;
+            setScriptObjectProperty(object, "Base", null);
+
+            if (this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "Detach"))
+                this.scriptVM.call(this, "Detach", [object as unknown as ScriptHost_T]);
+
+            return true;
         }
 
         return false;
+    }
+
+    public gainScriptChild(object: Object3D): void {
+        const owner = (object as any).scriptOwner as BaseActor;
+
+        if (owner === this) return;
+        if (owner) owner.loseScriptChild(object);
+
+        (object as any).scriptOwner = this;
+        setScriptObjectProperty(object, "Owner", this);
+
+        if (this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "GainedChild"))
+            this.scriptVM.call(this, "GainedChild", [object as unknown as ScriptHost_T]);
+    }
+
+    public loseScriptChild(object: Object3D): void {
+        if ((object as any).scriptOwner !== this) return;
+
+        (object as any).scriptOwner = null;
+        setScriptObjectProperty(object, "Owner", null);
+
+        if (this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "LostChild"))
+            this.scriptVM.call(this, "LostChild", [object as unknown as ScriptHost_T]);
     }
 
     public getRenderSphere(): Sphere {
@@ -1516,7 +1699,20 @@ class BaseActor extends Object3D implements ICollidable {
 
     // materials and textures stay - material-decoder hands those out of name-keyed shared caches
     public release() {
+        if (this.isScriptDestroyed) return;
+
+        this.isScriptDestroyed = true;
+
+        if (this.scriptVM && this.getUnrealScriptProperty("Controller") === this.scriptDeathController)
+            this.setUnrealScriptProperty("Controller", null);
+
+        if (this.scriptVM && this.hasBegunPlay && this.scriptVM.hasScriptFunction(this.scriptClassId, "Destroyed"))
+            this.scriptVM.call(this, "Destroyed");
+
         this.stopAnimations();
+        this.deathAnimationFinishedHandler = null;
+        this.isDying = false;
+        this.isScriptTicking = false;
         this.disposeBlinkFaces();
 
         for (const mesh of this.meshes) {
@@ -1545,16 +1741,74 @@ class BaseActor extends Object3D implements ICollidable {
     public setSwimmingAnimation(animationName: string) { this.setBasicActorAnimation("swimming", animationName); }
     public setSwimmingIdleAnimation(animationName: string) { this.setBasicActorAnimation("swimmingIdle", animationName); }
 
+    public setDeathAnimationFromScript() {
+        if (!this.scriptVM) throw new Error(`${this.type} has no UnrealScript runtime.`);
+
+        const oldWeaponType = Number(this.getUnrealScriptProperty("CurWeaponType"));
+        let invalidAnimationName: string = null;
+
+        for (let weaponType = 0; weaponType < 8; weaponType++) {
+            this.setUnrealScriptProperty("CurWeaponType", weaponType);
+
+            const animationName = this.scriptVM.call(this, "GetDeathAnimName");
+
+            if (typeof animationName !== "string") throw new Error(`${this.type} has invalid death animation '${animationName}'.`);
+            if (animationName.toLowerCase() === "none") continue;
+
+            const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+
+            if (!resolvedName) {
+                invalidAnimationName = animationName;
+                continue;
+            }
+
+            this.setDeathAnimation(resolvedName);
+            return;
+        }
+
+        this.setUnrealScriptProperty("CurWeaponType", oldWeaponType);
+
+        if (invalidAnimationName) throw new Error(`'${invalidAnimationName}' is not available.`);
+    }
+
     public initAnimations() {
         this.isAnimationsInit = true;
         this.playAnimation(this.basicActorAnimations.idle, IDLE_TWEEN_TIME);
     }
 
     public spawnEnterEvent(event: GD.INpcEnterEvent, soundUri: string = null) {
-        if (event.effect) throw new Error(`NPC enter effect '${event.effect}' is not implemented.`);
-        if (event.isRise) throw new Error("Rising NPC enter events are not implemented.");
+        if (event.effect && event.effect.toLowerCase() !== "none") {
+            if (!this.scriptObjectFactory) throw new Error(`${this.type} cannot spawn enter effect '${event.effect}'.`);
 
-        if (event.animation) this.playAnimation(event.animation, MOVEMENT_TWEEN_TIME, 1, false, true);
+            const effect = this.scriptObjectFactory(event.effect);
+
+            if (!(effect as any).isObject3D) throw new Error(`NPC enter effect '${event.effect}' is not an actor.`);
+
+            const actor = effect as unknown as Object3D;
+            const collisionRadius = Number(this.getStoredUnrealScriptProperty("CollisionRadius"));
+
+            if (!Number.isFinite(collisionRadius) || collisionRadius <= 0) throw new Error(`${this.type} has invalid CollisionRadius '${collisionRadius}'.`);
+
+            this.getWorldPosition(actor.position);
+            actor.traverse(child => {
+                const emitter = child as any;
+
+                if (typeof emitter.setSizeScale === "function") emitter.setSizeScale(collisionRadius * ENTER_EFFECT_RADIUS_SCALE);
+            });
+            this.renderManager.addTransientEffect(actor);
+        }
+
+        if (event.isRise) {
+            const targetZ = this.position.z;
+
+            if (event.isRise === 1) this.position.z -= this.collisionHeight * 2;
+            else if (event.isRise === 2) this.position.z += this.collisionHeight * 2;
+
+            this.enterRiseTargetZ = targetZ;
+            this.enterRiseVelocity = (targetZ - this.position.z) * ENTER_RISE_RATE;
+        }
+
+        if (event.animation && event.animation.toLowerCase() !== "none") this.playAnimation(event.animation, MOVEMENT_TWEEN_TIME, 1, false, true);
 
         if (event.sound && event.sound.toLowerCase() !== "none") {
             if (!soundUri) throw new Error(`NPC enter sound '${event.sound}' has no decoded audio.`);
@@ -1569,6 +1823,17 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.animationNotifyTime = 0;
 
+        if (this.isDying) {
+            action.stop();
+            this.animationNotifyAction = null;
+
+            const handler = this.deathAnimationFinishedHandler;
+
+            this.deathAnimationFinishedHandler = null;
+            if (handler) handler(this);
+            return;
+        }
+
         if (this.scriptVM) {
             this.scriptVM.call(this, "AnimEnd", [0]);
 
@@ -1577,6 +1842,29 @@ class BaseActor extends Object3D implements ICollidable {
 
         action.stop();
         this.animationNotifyAction = null;
+    }
+
+    public playDeathAnimation(onFinished: (actor: BaseActor) => void) {
+        if (this.isDying) return;
+
+        this.isDying = true;
+        this.deathAnimationFinishedHandler = onFinished;
+        this.actorState.state = "dying";
+        this.stopMoving();
+
+        if (this.scriptVM) {
+            this.setUnrealScriptProperty("Controller", this.scriptDeathController);
+
+            if (this.scriptVM.hasScriptFunction(this.scriptClassId, "NotifyDie")) this.scriptVM.call(this, "NotifyDie");
+        }
+
+        this.playAnimation(this.basicActorAnimations.dying, MOVEMENT_TWEEN_TIME, 1, false, true);
+    }
+
+    public isPlayingOneShotAnimation(animationName: string): boolean {
+        const action = this.animationNotifyAction;
+
+        return !!action && action.isRunning() && action.loop === LoopOnce && action.getClip().name.toLowerCase() === animationName.toLowerCase();
     }
 
     public playAnimation(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false) {
@@ -1591,6 +1879,7 @@ class BaseActor extends Object3D implements ICollidable {
         const clip = loop ? sourceClip : getOnceAnimation(sourceClip);
         const mixer = this.renderManager.mixer;
         let notifyAction: AnimationAction = null;
+        let didBegin = false;
 
         for (const mesh of this.meshes) {
             if ((mesh as any).isBoneAttachment) continue; // rides the bone it hangs off, its own skeleton is untouched by this clip
@@ -1607,7 +1896,10 @@ class BaseActor extends Object3D implements ICollidable {
             nextAct.clampWhenFinished = !loop;
 
             if (currAct === nextAct) {
-                if (restart || !nextAct.isRunning()) nextAct.reset().play();
+                if (restart || !nextAct.isRunning()) {
+                    nextAct.reset().play();
+                    didBegin = true;
+                }
                 continue;
             }
 
@@ -1622,12 +1914,16 @@ class BaseActor extends Object3D implements ICollidable {
             } else if (currAct) currAct.stop();
 
             nextAct.play();
+            didBegin = true;
         }
 
         if (this.animationNotifyAction !== notifyAction) {
             this.animationNotifyAction = notifyAction;
             this.animationNotifyTime = notifyAction ? notifyAction.time : 0;
         }
+
+        if (didBegin && this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "AnimBegin"))
+            this.scriptVM.call(this, "AnimBegin", [resolvedName]);
     }
 
     public goTo(position: Vector3) {

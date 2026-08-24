@@ -2,6 +2,7 @@ import { randInt } from "three/src/math/MathUtils";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini
+const AL_SOURCE_RADIUS_FALLBACK = 10; // ALAudioSubsystem::PlaySound uses 10 when Radius is zero.
 
 type AmbientInfo_T = {
     dataUri: string,
@@ -562,6 +563,8 @@ class AudioManager {
         const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
         const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
         const z = sourcePosition.z === undefined ? sourcePosition[2] : sourcePosition.z;
+        const sourceRadius = refDistance === 0 ? AL_SOURCE_RADIUS_FALLBACK : refDistance;
+        const sourceMaxDistance = maxDistance === 0 ? sourceRadius * 100 : maxDistance;
 
         await this.ensureUnlocked();
 
@@ -581,8 +584,8 @@ class AudioManager {
         const panner = this.audioContext.createPanner();
         panner.panningModel = "equalpower";
         panner.distanceModel = "inverse";
-        panner.refDistance = refDistance;
-        panner.maxDistance = maxDistance;
+        panner.refDistance = sourceRadius;
+        panner.maxDistance = sourceMaxDistance;
         panner.rolloffFactor = ROLLOFF;
         panner.positionX.value = x;
         panner.positionY.value = y;

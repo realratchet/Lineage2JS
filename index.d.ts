@@ -188,7 +188,7 @@ declare global {
                     sound: string;
                     soundVolume: number;
                     soundRadius: number;
-                    isRise: boolean;
+                    isRise: number;
                     spawnType: number;
                     effect: string;
                     animation: string;
@@ -363,6 +363,18 @@ declare global {
                     bounds?: IBoxDecodeInfo,
                     zoneMask?: bigint,
                     isRangeIgnored?: boolean
+                }
+
+                export interface IEmitterSpawnSoundDecodeInfo {
+                    soundName: string;
+                    volume: number;
+                    radius: number;
+                }
+
+                export interface IEmitterActorDecodeInfo extends IBaseObjectDecodeInfo {
+                    type: "Emitter";
+                    spawnSound?: IEmitterSpawnSoundDecodeInfo;
+                    rotating?: IRotatingDecodeInfo;
                 }
 
                 export interface IStaticMeshActorDecodeInfo extends IBaseObjectDecodeInfo {

@@ -5,11 +5,17 @@ import UAActor from "./un-aactor";
 import FBox from "./un-box";
 import FVector from "./un-vector";
 
-type EmitterDecodeResult_T = { object: GD.IBaseObjectDecodeInfo, leafIndices: number[], zoneUuid: string };
+type EmitterDecodeResult_T = { object: GD.IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
 abstract class UEmitter extends UAActor {
     declare protected emitters: FObjectArray<UObject>;
     protected subEmitterFilter: string[] | null = null;
+
+    declare protected spawnSound: GA.USound;
+    declare protected soundRadius: number;
+    declare protected soundVolume: number;
+    declare protected isRotatingEmitter: boolean;
+    declare protected rotPerSecond: GA.FRotator;
 
     // protected _autoDestroy: any;
     // protected _autoReset: any;
@@ -18,13 +24,8 @@ abstract class UEmitter extends UAActor {
     // protected _timeTillResetRange: any;
     // protected _autoReplay: any;
     // protected _speedRate: any;
-    // protected _bRotEmitter: any;
-    // protected _rotPerSecond: any;
     // protected _fixedBoundingBox: any;
     // protected _fixedBoundingBoxExpand: any;
-    // protected _spawnSound: any;
-    // protected _soundRadius: any;
-    // protected _soundVolume: any;
     // protected _initialized: any;
     // protected _boundingBox: any;
     // protected _emitterRadius: any;
@@ -69,13 +70,13 @@ abstract class UEmitter extends UAActor {
             // "TimeTillResetRange": "_timeTillResetRange",
             // "AutoReplay": "_autoReplay",
             // "SpeedRate": "_speedRate",
-            // "bRotEmitter": "_bRotEmitter",
-            // "RotPerSecond": "_rotPerSecond",
+            "bRotEmitter": "isRotatingEmitter",
+            "RotPerSecond": "rotPerSecond",
             // "FixedBoundingBox": "_fixedBoundingBox",
             // "FixedBoundingBoxExpand": "_fixedBoundingBoxExpand",
-            // "SpawnSound": "_spawnSound",
-            // "SoundRadius": "_soundRadius",
-            // "SoundVolume": "_soundVolume",
+            "SpawnSound": "spawnSound",
+            "SoundRadius": "soundRadius",
+            "SoundVolume": "soundVolume",
             // "Initialized": "_initialized",
             // "BoundingBox": "_boundingBox",
             // "EmitterRadius": "_emitterRadius",
@@ -154,8 +155,29 @@ abstract class UEmitter extends UAActor {
         return emittersInfo;
     }
 
-    public getTemplateDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseObjectDecodeInfo {
+    protected getSpawnSoundDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IEmitterSpawnSoundDecodeInfo | null {
+        if (!this.spawnSound) return null;
+
+        const sound = this.spawnSound.loadSelf();
+        const soundName = sound.objectName ?? sound.uuid;
+
+        if (!builder.pullSound(sound)) throw new Error(`Emitter '${this.objectName}' spawn sound '${soundName}' has no audio data.`);
+
+        return { soundName, volume: this.soundVolume, radius: this.soundRadius };
+    }
+
+    protected getRotatingDecodeInfo(): GD.IRotatingDecodeInfo | null {
+        if (!this.isRotatingEmitter) return null;
+        if (!this.rotPerSecond) throw new Error(`Emitter '${this.objectName}' has bRotEmitter but no RotPerSecond.`);
+
         return {
+            rotator: this.rotation.toArray() as GD.Vector3Arr,
+            rate: this.rotPerSecond.toArray() as GD.Vector3Arr
+        };
+    }
+
+    public getTemplateDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IEmitterActorDecodeInfo {
+        const info: GD.IEmitterActorDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
@@ -165,6 +187,14 @@ abstract class UEmitter extends UAActor {
             children: this.getEmitterDecodeInfos(builder),
             isRangeIgnored: !!this.isRangeIgnored
         };
+
+        const spawnSound = this.getSpawnSoundDecodeInfo(builder);
+        const rotating = this.getRotatingDecodeInfo();
+
+        if (spawnSound) info.spawnSound = spawnSound;
+        if (rotating) info.rotating = rotating;
+
+        return info;
     }
 
     public getDecodeInfo(builder: GD.DecodeLibraryBuilder): EmitterDecodeResult_T {
@@ -177,7 +207,7 @@ abstract class UEmitter extends UAActor {
         const zone = this.getZone();
         const _position = this.location.getElements();
 
-        const actorInfo: GD.IBaseObjectDecodeInfo = {
+        const actorInfo: GD.IEmitterActorDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
@@ -188,6 +218,12 @@ abstract class UEmitter extends UAActor {
             isRangeIgnored: !!this.isRangeIgnored,
             moveEvent: this.l2MoveEvent
         };
+
+        const spawnSound = this.getSpawnSoundDecodeInfo(builder);
+        const rotating = this.getRotatingDecodeInfo();
+
+        if (spawnSound) actorInfo.spawnSound = spawnSound;
+        if (rotating) actorInfo.rotating = rotating;
 
         // UParticleEmitter::UpdateParticles (UnParticleEmitter.cpp) rebuilds BoundingBox
         // every tick from live particles - can't replicate at decode time, so register

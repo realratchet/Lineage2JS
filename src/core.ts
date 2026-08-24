@@ -9,7 +9,7 @@ import runSectorPrecache from "@client/sector-precache";
 
 
 
-async function startCore() {
+async function startCore(interactive: boolean = true): Promise<RenderManager | null> {
     // await ensureWasmInitialized();
 
     if ("storage" in navigator)
@@ -25,7 +25,7 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 7 // bump when decode logic changes, invalidates all previously cached assets
+            version: 12 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
@@ -90,13 +90,13 @@ async function startCore() {
 
     if (new URLSearchParams(location.search).has("precacheSectors")) {
         await runSectorPrecache(loadSettings);
-        return;
+        return null;
     }
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const assetList = await (await fetch("asset-list.json")).json();
-    const assetManager = new AssetManager(loadSettings, assetList.supported);
+    const assetManager = new AssetManager(loadSettings, assetList);
     const renderManager = new RenderManager(viewport, assetManager);
 
     (global as any).renderManager = renderManager;
@@ -107,13 +107,14 @@ async function startCore() {
 
     await assetManager.initialize(renderManager);
 
-    renderManager.spawnNpc("Baium");
+    if (interactive) {
+        renderManager.addClippingRangeControls();
+        renderManager.addDisplayGammaControls();
+        renderManager.addNpcControls();
+        await renderManager.addCharacterControls();
 
-    renderManager.addClippingRangeControls();
-    renderManager.addDisplayGammaControls();
-    await renderManager.addCharacterControls();
-
-    void precacheCharacters(assetManager);
+        void precacheCharacters(assetManager);
+    }
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
@@ -376,6 +377,8 @@ async function startCore() {
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
     renderManager.startRendering();
+
+    return renderManager;
 }
 
 async function precacheCharacters(assetManager: AssetManager) {

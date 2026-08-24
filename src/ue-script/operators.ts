@@ -15,6 +15,7 @@ function op_mul_num_num                 /* *  */(a: number, b: number) { return 
 function op_div_num_num                 /* /  */(a: number, b: number) { return a / b; }
 function op_add_num_num                 /* +  */(a: number, b: number) { return a + b; }
 function op_sub_num_num                 /* -  */(a: number, b: number) { return a - b; }
+function pre_op_sub_num                 /* -  */(a: number) { return -a; }
 function op_inc_num                     /* ++ */(a: number) { return a + 1; }
 function op_dec_num                     /* -- */(a: number) { return a - 1; }
 function op_inv_num                     /* ~  */(a: number) { return ~a; }
@@ -85,6 +86,21 @@ function fn_not_implemented(...args: any[]) { throw new Error(`Called non-implem
 function VSize(a: FVector) { return a.length(); }
 function Normal(a: FVector) { return a.normalized(); }
 function VRand() { return FVector.make(Math.random(), Math.random(), Math.random()); }
+
+function Vector2Rotator(v: GD.Vector3Arr): GD.Vector3Arr {
+    const yaw = Math.round(Math.atan2(v[1], v[0]) * 32768 / Math.PI);
+    const pitch = Math.round(Math.atan2(v[2], Math.hypot(v[0], v[1])) * 32768 / Math.PI);
+
+    return [pitch, yaw, 0];
+}
+
+function Rotator2Vector(r: GD.Vector3Arr): GD.Vector3Arr {
+    const pitch = r[0] * Math.PI / 32768;
+    const yaw = r[1] * Math.PI / 32768;
+    const cosPitch = Math.cos(pitch);
+
+    return [cosPitch * Math.cos(yaw), cosPitch * Math.sin(yaw), Math.sin(pitch)];
+}
 
 function Log(s: string, tag?: string) { console.log(`[UEScript] ${tag ? `{${tag}} ` : ""}${s}`); }
 function Warn(s: string) { console.warn(`[UEScript] ${s}`); }
@@ -169,7 +185,7 @@ function registerNativeFuncs(registry: UNativeRegistry) {
     native(251, clamp_num);
 
     // float operators
-    native(169, op_sub_num_num);
+    native(169, pre_op_sub_num);
     native(170, op_pow_num_num);
     native(171, op_mul_num_num);
     native(172, op_div_num_num);
@@ -252,8 +268,8 @@ function registerNativeFuncs(registry: UNativeRegistry) {
     native("OrthoRotation", function rot_OrthoRotation() { fn_not_implemented() }); //      static final function rotator OrthoRotation( vector X, vector Y, vector Z );
     native("Normalize", function rot_Normalize() { fn_not_implemented() }); //      static final function rotator Normalize( rotator Rot );
     native("op_ClockwiseFrom_int_int", fn_not_implemented); //static final operator(24) bool ClockwiseFrom( int A, int B );
-    native("Vector2Rotator", function rot_Vector2Rotator() { fn_not_implemented() }); //      static final function rotator Vector2Rotator( vector V );
-    native("Rotator2Vector", function rot_Rotator2Vector() { fn_not_implemented() }); //      static final function vector Rotator2Vector( rotator R );
+    native("Vector2Rotator", Vector2Rotator); //      static final function rotator Vector2Rotator( vector V );
+    native("Rotator2Vector", Rotator2Vector); //      static final function vector Rotator2Vector( rotator R );
 
 
     // String operators.
@@ -319,7 +335,7 @@ function registerNativeFuncs(registry: UNativeRegistry) {
     native("GetPropertyText", function GetPropertyText() { fn_not_implemented() }); //    final function string GetPropertyText( string PropName );
     native("SetPropertyText", function SetPropertyText() { fn_not_implemented() }); // final function SetPropertyText( string PropName, string PropValue );
     native("GetEnum", function GetEnum() { fn_not_implemented() }); // static final function name GetEnum( object E, int i );
-    native("DynamicLoadObject", function DynamicLoadObject() { fn_not_implemented() }); // static final function object DynamicLoadObject( string ObjectName, class ObjectClass, optional bool MayFail );
+    native("DynamicLoadObject", function DynamicLoadObject(objectName: string) { return objectName; }); // static final function object DynamicLoadObject( string ObjectName, class ObjectClass, optional bool MayFail );
     native("FindObject", function FindObject() { fn_not_implemented() }); // static final function object FindObject( string ObjectName, class ObjectClass );
 
     // Configuration.

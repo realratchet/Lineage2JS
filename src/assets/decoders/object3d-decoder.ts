@@ -18,6 +18,7 @@ import LocalSpaceSkeleton from "@client/objects/local-space-skeleton";
 import BSPCollider from "@client/objects/bsp-collider";
 import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
 import UnScriptVM from "@client/ue-script/vm";
+import Rotator from "@client/utils/rotator";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
@@ -101,8 +102,56 @@ function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibra
 }
 
 
-function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDecodeInfo) {
-    const object = decodeSimpleObject(library, Object3D, info);
+type EmitterSpawnSound_T = GD.IEmitterSpawnSoundDecodeInfo & { dataUri: string };
+
+class EmitterActor extends Object3D {
+    public spawnSound: EmitterSpawnSound_T = null;
+    public readonly emitterRotation = new Quaternion();
+
+    protected emitterRotator: Rotator = null;
+    protected readonly inverseInitialRotation = new Quaternion();
+    protected ratePitch: number = 0;
+    protected rateYaw: number = 0;
+    protected rateRoll: number = 0;
+    protected rotationTime: number;
+
+    public setRotating(info: GD.IRotatingDecodeInfo): void {
+        this.emitterRotator = new Rotator(...info.rotator);
+        this.emitterRotator.toQuaternion(this.inverseInitialRotation).invert();
+        [this.ratePitch, this.rateYaw, this.rateRoll] = info.rate;
+    }
+
+    public updateEmitterRotation(currentTime: number): void {
+        if (!this.emitterRotator) return;
+        if (this.rotationTime === currentTime) return;
+
+        if (this.rotationTime === undefined) {
+            this.rotationTime = currentTime;
+            return;
+        }
+
+        const dt = (currentTime - this.rotationTime) / 1000;
+
+        this.emitterRotator.pitch += this.ratePitch * dt;
+        this.emitterRotator.yaw += this.rateYaw * dt;
+        this.emitterRotator.roll += this.rateRoll * dt;
+        this.emitterRotator.toQuaternion(this.emitterRotation).premultiply(this.inverseInitialRotation);
+        this.rotationTime = currentTime;
+    }
+}
+
+function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IEmitterActorDecodeInfo) {
+    const object = decodeSimpleObject(library, EmitterActor, info);
+
+    if (info.spawnSound) {
+        const sound = library.soundBlobCache.get(info.spawnSound.soundName);
+
+        if (!sound?.uri) throw new Error(`Emitter '${info.name}' spawn sound '${info.spawnSound.soundName}' has no audio URI.`);
+
+        object.spawnSound = { ...info.spawnSound, dataUri: sound.uri };
+    }
+
+    if (info.rotating) object.setRotating(info.rotating);
 
     // object.add(new AxesHelper(100));
 
@@ -111,9 +160,15 @@ function decodeEmitterObject(library: GD.DecodeLibrary, info: GD.IBaseObjectDeco
     // library.leafActors (and this wrapper's bounds/zoneMask) are keyed by info.uuid,
     // not each sub-emitter's own uuid - propagate it down so render-manager's Pass 2
     // can look up BSP visibility for the actual particlePool-bearing children
-    for (const child of object.children)
-        if (info.bounds) (child as any).emitterActorUuid = info.uuid;
-        else (child as any).isActorAttachedEmitter = true;
+    for (let i = 0; i < object.children.length; i++) {
+        const child = object.children[i] as any;
+
+        // AEmitter::Render (0x8a2b60) renders Emitters(i) in ascending array order.
+        child.setRenderOrder(i);
+
+        if (info.bounds) child.emitterActorUuid = info.uuid;
+        else child.isActorAttachedEmitter = true;
+    }
 
     return object;
 }
@@ -824,6 +879,7 @@ function decodeEmitterConfig(info: GD.IEmitterDecodeInfo) {
         acceleration: info.acceleration,
         lifetime: info.lifetime,
         maxParticles: info.maxParticles,
+        drawScale: info.drawScale,
         rotationOffset: info.rotationOffset,
         initial: {
             particlesPerSecond: info.initial.particlesPerSecond,
@@ -946,7 +1002,7 @@ function decodeObject3D(library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanc
         case "Group":
         case "Level":
         case "TerrainInfo": return decodeTerrainInfo(library, info as GD.IBaseObjectDecodeInfo);
-        case "Emitter": return decodeEmitterObject(library, info as GD.IBaseObjectDecodeInfo);
+        case "Emitter": return decodeEmitterObject(library, info as GD.IEmitterActorDecodeInfo);
         case "StaticMeshActor": return decodeStaticMeshActor(library, info as GD.IStaticMeshActorDecodeInfo);
         // case "Light": return decodeLight(library, info as GD.ILightDecodeInfo);
         case "TerrainSegment": return decodeTerrainSegment(library, info as GD.IStaticMeshObjectDecodeInfo);

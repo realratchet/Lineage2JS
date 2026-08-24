@@ -11,7 +11,7 @@ import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeS
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
 import { getUserConfig } from "@unreal/conf-files/un-conf-system";
-import { Matrix4, Vector3 } from "three";
+import { AnimationClip, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
 import UnScriptVM from "@client/ue-script/vm";
 import LineagePlayerController from "@client/objects/lineage-player-controller";
@@ -19,6 +19,8 @@ import LineagePlayerController from "@client/objects/lineage-player-controller";
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
 const tmpPawnSoundPosition = new Vector3();
+const tmpNpcFloorStart = new Vector3();
+const npcFloorDirection = new Vector3(0, 0, -1);
 const npcSpawnOffset = new Vector3(-600, -600, 0);
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
@@ -29,6 +31,7 @@ const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
 const STATIC_MESH_BUILD_FRAME_MS = 2;
 const BIND_POSE_EPSILON = 1e-3;
+const NPC_SPAWN_FLOOR_DISTANCE = 2000;
 const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
 const UNDERWATER_EFFECTS = ["LineageEffect.e_u061_cam", "LineageEffect.e_u061_beam"];
 const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
@@ -37,6 +40,7 @@ const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
 function findScriptField(library: GD.DecodeLibrary, classId: string, name: string): GD.IScriptFieldDecodeInfo {
     const lowerName = name.toLowerCase();
@@ -106,7 +110,7 @@ function applyScriptLocalization(library: GD.DecodeLibrary, classId: string, pro
         const inherited = findScriptDefault(library, classId, field.name);
 
         if (!Array.isArray(inherited)) throw new Error(`Localized UnrealScript property '${field.id}' is not an array.`);
-        if (property.index >= field.arrayDimensions) throw new Error(`Localized UnrealScript property '${field.id}' index '${property.index}' is out of bounds.`);
+        if (property.index >= field.arrayDimensions) continue;
 
         const values = Array.isArray(cls.defaults[field.name]) ? (cls.defaults[field.name] as GD.ScriptPropertyValue_T[]).slice() : inherited.slice();
 
@@ -204,6 +208,7 @@ class AssetManager {
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
     protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
+    protected readonly localizationFiles = new Map<string, string>();
     protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
     public userConfig: GA.IUserConfig = null;
     protected warriorConfig: UConfigWarrior = null;
@@ -223,17 +228,20 @@ class AssetManager {
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
 
-    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>) {
+    public constructor(loadSettings: GD.LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
         this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
         this.maxConcurrentDecodes = Math.max(this.decodeWorkerPoolSize, 1);
 
         /* level packages are <x>_<y>.unr - keep the sector ids for map-edge validity checks */
-        for (const path of Object.keys(assetList)) {
+        for (const path of Object.keys(assetList.supported)) {
             if (!path.endsWith(".unr")) continue;
 
             this.levelSectors.add(path.slice(path.lastIndexOf("/") + 1, -".unr".length));
         }
+
+        for (const path of assetList.unsupported)
+            if (path.toLowerCase().endsWith(".int")) this.localizationFiles.set(path.toLowerCase(), path);
     }
 
     public hasSector(sectorIdx: string): boolean {
@@ -351,7 +359,7 @@ class AssetManager {
         renderManager.needsUpdate = true;
     }
 
-    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null) {
+    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
         const [library, localization] = await Promise.all([this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId), localizationPromise]);
 
@@ -362,6 +370,12 @@ class AssetManager {
         const animations = (meshes[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
 
         if (!animations) throw new Error(`'${library.name}' animations failed to decode.`);
+
+        if (Object.keys(animations).length === 0) {
+            animations[idleAnimation] = new AnimationClip(idleAnimation, 0, []);
+
+            if (enterAnimation && enterAnimation.toLowerCase() !== "none") animations[enterAnimation] = new AnimationClip(enterAnimation, 0, []);
+        }
 
         const idle = findNpcIdleAnimation(animations, idleAnimation);
 
@@ -387,10 +401,31 @@ class AssetManager {
             actor.setScriptRuntime(new UnScriptVM(library), classId, effectClassId => {
                 const info = library.effectTemplates[effectClassId] || library.effectTemplates[effectClassId.toLowerCase()];
 
-                if (!info) throw new Error(`Effect template '${effectClassId}' is not in '${library.name}'.`);
+                if (!info) {
+                    const actorInfo = library.actorTemplates[effectClassId] || library.actorTemplates[effectClassId.toLowerCase()];
 
-                return decodeObject3D(library, info) as any;
+                    if (!actorInfo) throw new Error(`Script object template '${effectClassId}' is not in '${library.name}'.`);
+
+                    const object = decodeObject3D(library, actorInfo) as any;
+
+                    object.scriptClassId = actorInfo.scriptClassId;
+                    return object;
+                }
+
+                const effect = decodeObject3D(library, info) as any;
+
+                effect.scriptProperties.set("Emitters", effect.children);
+
+                effect.children.forEach((emitter: any) => {
+                    emitter.scriptClassId = "Engine.ParticleEmitter";
+                    emitter.isActorAttachedEmitter = true;
+                });
+
+                return effect;
             });
+            actor.setUnrealScriptProperty("bActorShadows", false); // RenderManager owns the shared pawn projector pass.
+
+            if (npcId !== null) actor.setDeathAnimationFromScript();
         }
 
         renderManager.needsUpdate = true;
@@ -405,10 +440,14 @@ class AssetManager {
 
         const packageName = scriptClassPath.slice(0, separator).toLowerCase();
         const className = scriptClassPath.slice(separator + 1);
+        const path = this.localizationFiles.get(`system/${packageName}.int`);
+
+        if (!path) return [];
+
         let config = this.scriptLocalizations.get(packageName);
 
         if (!config) {
-            config = await new UConfigLocalization(`assets/system/${packageName}.int`).decode();
+            config = await new UConfigLocalization(`assets/${path}`).decode();
             await config.load();
             this.scriptLocalizations.set(packageName, config);
         }
@@ -429,12 +468,39 @@ class AssetManager {
 
         if (!position) actor.position.add(npcSpawnOffset);
 
-        const library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id);
-        renderManager.addPawn(actor);
+        let library: GD.DecodeLibrary;
 
-        if (npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent, getNpcEnterSoundUri(library, npc.enterEvent));
+        try {
+            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null);
+        } catch (e) {
+            throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
+        }
+
+        if (!position) {
+            tmpNpcFloorStart.copy(actor.position);
+            tmpNpcFloorStart.z += NPC_SPAWN_FLOOR_DISTANCE * 0.5;
+
+            const floor = renderManager.collisionWorld.rayCheck(tmpNpcFloorStart, npcFloorDirection, NPC_SPAWN_FLOOR_DISTANCE, undefined, undefined, false);
+
+            if (!floor) throw new Error(`NPC '${npc.id}' has no floor below its spawn position.`);
+
+            actor.position.copy(floor.location);
+        }
+
+        try {
+            renderManager.addPawn(actor);
+
+            if (npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent, getNpcEnterSoundUri(library, npc.enterEvent));
+        } catch (e) {
+            renderManager.removePawn(actor);
+            throw e;
+        }
 
         return actor;
+    }
+
+    public listNpcs(): Promise<GD.INpcDefinition[]> {
+        return this.decodeWorker.listNpcs();
     }
 
     protected getClassName(charIndex: number): string {
@@ -712,7 +778,8 @@ function findNpcIdleAnimation(animations: Record<string, THREE.AnimationClip>, d
     const match = declared.toLowerCase();
     const name = names.find(name => name.toLowerCase() === match)
         || names.find(name => /^wait(?:_|$)/i.test(name))
-        || names.find(name => /^spwait/i.test(name));
+        || names.find(name => /^spwait/i.test(name))
+        || names[0];
 
     if (!name) throw new Error(`NPC has no '${declared}' animation.`);
 

@@ -166,13 +166,12 @@ class SpriteParticleBatch {
             }
 
             const particleLimit = Math.min(emitter.maxActiveParticles, emitter.activeParticles);
-            const scaleFactor = emitter.scale.x;
             for (let i = 0; i < particleLimit; i++) {
                 const settings = emitter.particles[i];
                 if (!(settings.flags & 1)) continue;
 
-                const scaleX = settings.scale.x * scaleFactor;
-                const scaleY = settings.scale.y * scaleFactor;
+                const scaleX = settings.scale.x;
+                const scaleY = settings.scale.y;
                 if (scaleX === 0 && scaleY === 0) continue;
 
                 anchor.copy(settings.position).applyMatrix4(mesh.matrixWorld);

@@ -35,11 +35,7 @@ class UConfigLocalization extends BaseConfigFile {
     }
 
     public getProperties(className: string): LocalizationProperty_T[] {
-        const properties = this.sections.get(className.toLowerCase());
-
-        if (!properties) throw new Error(`'${this.path}' has no '${className}' class.`);
-
-        return properties;
+        return this.sections.get(className.toLowerCase()) || [];
     }
 }
 

@@ -18,6 +18,7 @@ const tmpNonParallel = new Vector3();
 const tmpProjTemp = new Vector3();
 const tmpRealProj = new Vector3();
 const tmpViewDir = new Vector3();
+const tmpViewLocation = new Vector3();
 const tmpOrigRight = new Vector3();
 const tmpOrigUp = new Vector3();
 const tmpSpinScaled = new Vector3();
@@ -140,7 +141,9 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
                 projTemp.crossVectors(realProj, direction).normalize();
             } else {
                 // ProjTemp = Direction ^ (Particle->Location - ViewLocation);
-                const viewDir = tmpViewDir.subVectors(particle.position, camera.position);
+                camera.getWorldPosition(tmpViewLocation);
+                this.parent.parent.worldToLocal(tmpViewLocation);
+                const viewDir = tmpViewDir.subVectors(particle.position, tmpViewLocation);
                 projTemp.crossVectors(viewDir, direction).normalize();
             }
 

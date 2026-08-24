@@ -482,7 +482,9 @@ class DecodeEngine {
     protected async fetchScriptClass(path: string): Promise<[C.APackage, C.UClass]> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Script"), { neverUnload: true });
-        const cls = pkg.fetchObjectByType<C.UClass>("Class", objectName);
+        const lowerName = objectName.toLowerCase();
+        const actualName = (pkg.exports.find(entry => (entry.objectName as string).toLowerCase() === lowerName)?.objectName as string) || objectName;
+        const cls = pkg.fetchObjectByType<C.UClass>("Class", actualName);
 
         if (!cls) throw new Error(`Script class '${path}' not found.`);
 
@@ -553,6 +555,30 @@ class DecodeEngine {
         for (const path of paths) await this.pullEffectTemplate(library, builder, path);
     }
 
+    protected async pullScriptActorTemplates(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> {
+        const paths = new Set<string>();
+        const programs = [...Object.values(library.scriptFunctions), ...Object.values(library.scriptStates), ...Object.values(library.scriptClasses)];
+
+        for (const program of programs)
+            for (const entry of program.program.entries)
+                if (entry.type === "objectRef" && typeof entry.value === "string" && /^LineageNpc\./i.test(entry.value)) paths.add(entry.value);
+
+        for (const path of paths) {
+            const [, cls] = await this.fetchScriptClass(path);
+            const properties = dumpObjectScriptProperties(cls);
+            const meshPath = properties.Mesh;
+
+            if (typeof meshPath !== "string" || meshPath.toLowerCase() === "none") continue;
+
+            const info = Object.assign({}, builder.pullSkeletalMesh(await this.fetchSkeletalMesh(meshPath), false));
+
+            info.scriptClassId = cls.name;
+            info.scriptProperties = properties;
+            library.actorTemplates[path] = info;
+            library.actorTemplates[cls.name] = info;
+        }
+    }
+
     protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string, pullScript: boolean = false): Promise<void> {
         const [pkg, cls] = await this.fetchScriptClass(path);
         const emitter = pkg.newObject<GA.UEmitter>(cls);
@@ -618,7 +644,7 @@ class DecodeEngine {
                 throw new Error(`NPC mesh '${npc.mesh}' failed to decode: ${(e as Error).message}`);
             }
 
-            info.animationSet = `${bundleName}_${meshPath}`;
+            if (Object.keys(info.animations).length > 0) info.animationSet = `${bundleName}_${meshPath}`;
             meshIndices.set(meshPath, library.pawnActors.length);
             library.pawnActors.push(info);
         }
@@ -738,6 +764,10 @@ class DecodeEngine {
         copyAnimationSounds(library, bundle, sourceInfo.animationNotifies);
         copyScriptClass(library, bundle, entry.scriptClassId);
         await this.pullScriptEffectTemplates(library, builder);
+        await this.pullScriptActorTemplates(library, builder);
+
+        if (npc.enterEvent?.effect && npc.enterEvent.effect.toLowerCase() !== "none")
+            await this.pullEffectTemplate(library, builder, npc.enterEvent.effect);
 
         if (npc.enterEvent?.sound && npc.enterEvent.sound.toLowerCase() !== "none")
             library.sounds[npc.enterEvent.sound] = await this.pullSoundPath(builder, npc.enterEvent.sound);
@@ -780,6 +810,7 @@ class DecodeEngine {
             meshInfo.scriptClassId = cls.name;
             builder.pullScriptClasses([cls]);
             await this.pullScriptEffectTemplates(library, builder);
+            await this.pullScriptActorTemplates(library, builder);
         }
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
@@ -1154,12 +1185,25 @@ class DecodeEngine {
 
         if (name.length === 0) throw new Error("NPC name cannot be empty.");
 
+        if (/^\d+$/.test(name)) {
+            const id = Number(name);
+            const npc = definitions.find(npc => npc.id === id);
+
+            if (!npc) throw new Error(`NPC ID '${selector}' does not exist.`);
+
+            return npc;
+        }
+
         const matches = definitions.filter(npc => npc.name.trim().toLowerCase() === name);
 
         if (matches.length === 0) throw new Error(`NPC name '${selector}' does not exist.`);
         if (matches.length > 1) console.warn(`NPC name '${selector}' matches IDs ${matches.map(npc => npc.id).join(", ")}; spawning ID ${matches[0].id}.`);
 
         return matches[0];
+    }
+
+    public listNpcs(): Promise<GD.INpcDefinition[]> {
+        return this.decodeNpcDefinitions();
     }
 
     protected async decodeNpcDefinitions(): Promise<GD.INpcDefinition[]> {
@@ -1175,7 +1219,7 @@ class DecodeEngine {
             sound: row.skill_sound as string,
             soundVolume: row.sound_vol as number,
             soundRadius: row.sound_rad as number,
-            isRise: !!row.isrise,
+            isRise: row.isrise as number,
             spawnType: row.spawn_type as number,
             effect: row.effect_name as string,
             animation: row.anim_name as string

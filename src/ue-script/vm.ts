@@ -44,6 +44,8 @@ const CPF_Parm = 0x00000080;
 const CPF_OutParm = 0x00000100;
 const CPF_ReturnParm = 0x00000400;
 const FUNC_Native = 0x00000400;
+const assignmentNatives = new Set([133, 134, 135, 136, 137, 138, 139, 140, 159, 160, 161, 162, 163, 164, 165, 166, 182, 183, 184, 185, 221, 222, 223, 224, 290, 291, 297, 318, 319]);
+const postAssignmentNatives = new Set([139, 140, 165, 166]);
 
 function getFieldName(id: string): string {
     const index = id.lastIndexOf(".");
@@ -135,6 +137,22 @@ function getArrayStructMemberIndex(id: string): number {
         case "rotator": return ["pitch", "yaw", "roll"].indexOf(member);
         case "color": return ["r", "g", "b", "a"].indexOf(member);
         default: return -1;
+    }
+}
+
+function createDefaultArrayStruct(id: string): ScriptValue_T {
+    const path = id.split(".");
+    const struct = path[path.length - 2].toLowerCase();
+
+    switch (struct) {
+        case "vector": return [0, 0, 0];
+        case "vector2d": return [0, 0];
+        case "plane":
+        case "quat":
+        case "quaternion":
+        case "color": return [0, 0, 0, 0];
+        case "rotator": return [0, 0, 0];
+        default: throw new Error(`UnrealScript struct '${id}' has no value`);
     }
 }
 
@@ -240,6 +258,26 @@ class ScriptExecutor {
             }
             case ExprToken_T.BoolVariable:
                 return this.evalLValue();
+            case ExprToken_T.ClassContext:
+            case ExprToken_T.Context: {
+                const contextValue = this.evalToken();
+
+                this.readOffset();
+                this.next();
+
+                if (contextValue === null || contextValue === undefined)
+                    throw new Error(`UnrealScript '${this.frame.fn.id}' cannot write through a null context at '${entry.virtualOffset}'`);
+
+                const previous = this.frame.context;
+
+                this.frame.context = asHost(contextValue);
+
+                try {
+                    return this.evalLValue();
+                } finally {
+                    this.frame.context = previous;
+                }
+            }
             case ExprToken_T.ArrayElement:
             case ExprToken_T.DynArrayElement: {
                 const index = Number(this.evalToken());
@@ -271,12 +309,12 @@ class ScriptExecutor {
 
                 return {
                     get: () => {
-                        const value = parent.get();
+                        const value = parent.get() ?? createDefaultArrayStruct(id);
 
                         return (value as any)[getStructMemberKey(value, id)] as ScriptValue_T;
                     },
                     set: value => {
-                        const struct = parent.get();
+                        const struct = parent.get() ?? createDefaultArrayStruct(id);
                         const key = getStructMemberKey(struct, id);
                         const copy = Array.isArray(struct) ? struct.slice() : { ...struct as any };
 
@@ -325,6 +363,17 @@ class ScriptExecutor {
 
     protected evalNative(entry: GD.IScriptBytecodeEntryDecodeInfo): ScriptValue_T {
         const index = entry.value as number;
+
+        if (assignmentNatives.has(index)) {
+            const slot = this.evalLValue();
+            const previous = slot.get();
+            const args = this.readArguments();
+            const value = this.vm.invokeNative(this.frame.self, this.frame.context, index, entry.tokenName || `Native${index}`, [previous, ...args]);
+
+            slot.set(value);
+            return postAssignmentNatives.has(index) ? previous : value;
+        }
+
         const args = this.readArguments();
 
         return this.vm.invokeNative(this.frame.self, this.frame.context, index, entry.tokenName || `Native${index}`, args);
@@ -587,7 +636,7 @@ class UnScriptVM {
         }
     }
 
-    public findFunction(classId: string, name: string): GD.IScriptFunctionDecodeInfo {
+    protected findFunctionOptional(classId: string, name: string): GD.IScriptFunctionDecodeInfo | null {
         const lowerName = name.toLowerCase();
         let cls = this.library.scriptClasses[classId];
 
@@ -600,7 +649,21 @@ class UnScriptVM {
             cls = this.library.scriptClasses[cls.superClassId];
         }
 
+        return null;
+    }
+
+    public findFunction(classId: string, name: string): GD.IScriptFunctionDecodeInfo {
+        const fn = this.findFunctionOptional(classId, name);
+
+        if (fn) return fn;
+
         throw new Error(`UnrealScript function '${classId}.${name}' is not in the decode library`);
+    }
+
+    public hasScriptFunction(classId: string, name: string): boolean {
+        const fn = this.findFunctionOptional(classId, name);
+
+        return !!fn && fn.nativeIndex === 0 && !(fn.flags & FUNC_Native);
     }
 
     public resolveObject(context: ScriptHost_T, id: string): ScriptValue_T {
@@ -622,6 +685,7 @@ class UnScriptVM {
             return context.callUnrealNative!({ index, name, args, self, context });
 
         if (UNativeRegistry.hasNativeFunc(index)) return UNativeRegistry.getNativeFunc(index)(...args) as ScriptValue_T;
+        if (UNativeRegistry.hasNativeFunc(name)) return UNativeRegistry.getNativeFunc(name)(...args) as ScriptValue_T;
         const handler = context.callUnrealNative || self.callUnrealNative;
 
         if (!handler) throw new Error(`UnrealScript native '${name}' (${index}) is not registered for '${context.scriptClassId}'`);
