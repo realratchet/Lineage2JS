@@ -1786,7 +1786,6 @@ class BaseActor extends Object3D implements ICollidable {
             if (this.animationNotifyAction !== action) return;
         }
 
-        action.stop();
         this.animationNotifyAction = null;
     }
 
