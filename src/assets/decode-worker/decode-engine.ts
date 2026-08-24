@@ -21,6 +21,7 @@ type CharacterBundle_T = {
     animationSet: string;
     animations: Record<string, GD.IKeyframeDecodeInfo_T[]>;
     animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]>;
+    skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>;
     meshes: Record<string, string>;
     materials: Record<string, string>;
 };
@@ -173,6 +174,37 @@ function splitObjectPath(path: string): [string, string] {
     const index = path.indexOf(".");
 
     return [path.slice(0, index), path.slice(index + 1)];
+}
+
+function getSkinNotifyIndices(skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>): Set<number> {
+    const indices = new Set<number>();
+
+    function addTimeline(timeline: GD.ISkinNotifyEntryDecodeInfo[]): void {
+        for (const entry of timeline) {
+            if (entry.skinIndex < 0) throw new Error(`Invalid skin notify index '${entry.skinIndex}'.`);
+            indices.add(entry.skinIndex);
+        }
+    }
+
+    for (const info of Object.values(skinNotifies)) {
+        if (info.mode === "grouped") {
+            for (const group of info.groups) addTimeline(group.timeline);
+        } else addTimeline(info.timeline);
+    }
+
+    indices.add(0);
+
+    return indices;
+}
+
+function getSkinMaterialPath(path: string, index: number): string {
+    if (index === 0) return path;
+
+    const [packageName, objectName] = splitObjectPath(path);
+
+    if (!/_f$/i.test(objectName)) throw new Error(`Skin notify base material '${path}' does not end in '_f'.`);
+
+    return `${packageName}.${objectName}${String.fromCharCode(48 + index)}`;
 }
 
 function getCharacterRow(rows: Record<string, any>[], charIndex: number): Record<string, any> {
@@ -459,6 +491,20 @@ class DecodeEngine {
         if (!entry) throw new Error(`Material '${objectName}' not found in '${packageName}'.`);
 
         return pkg.fetchObject<GA.UMaterial>(entry.index + 1);
+    }
+
+    protected async pullCharacterSkinMaterials(builder: DecodeLibraryBuilder, skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>, basePath: string, baseMaterial: string): Promise<Record<number, string>> {
+        const materials: Record<number, string> = { 0: baseMaterial };
+
+        for (const index of getSkinNotifyIndices(skinNotifies)) {
+            if (index === 0) continue;
+
+            const path = getSkinMaterialPath(basePath, index);
+
+            materials[index] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
+        }
+
+        return materials;
     }
 
     protected async fetchScriptClass(path: string): Promise<[C.APackage, C.UClass]> {
@@ -845,6 +891,10 @@ class DecodeEngine {
             meshInfo.animations = i === 0 && includeAnimations ? meshInfo.animations : {};
             meshInfo.animationNotifies = i === 0 && includeAnimations ? meshInfo.animationNotifies : {};
 
+            if (i === 0)
+                meshInfo.skinMaterials = await this.pullCharacterSkinMaterials(builder, meshInfo.skinNotifies, texturePaths[i], textureUuid);
+            else meshInfo.skinNotifies = {};
+
             if (i === 0) meshInfo.animationSet = characterBundleCacheName(charIndex, library.name.replace(/_m\d+_f$/, ""));
 
             library.pawnActors.push(meshInfo);
@@ -912,7 +962,21 @@ class DecodeEngine {
             info.animations = i === 0 && includeAnimations ? manifest.animations : {};
             info.animationNotifies = i === 0 && includeAnimations ? manifest.animationNotifies : {};
 
-            if (i === 0) info.animationSet = manifest.animationSet;
+            if (i === 0) {
+                info.animationSet = manifest.animationSet;
+                info.skinNotifies = manifest.skinNotifies;
+                info.skinMaterials = {};
+
+                for (const index of getSkinNotifyIndices(manifest.skinNotifies)) {
+                    const path = getSkinMaterialPath(texturePaths[i], index);
+                    const uuid = manifest.materials[path];
+
+                    if (!uuid) throw new Error(`Character skin material '${path}' not found in '${cacheName}'.`);
+
+                    info.skinMaterials[index] = uuid;
+                    copyCharacterMaterial(library, bundle, uuid);
+                }
+            } else info.skinNotifies = {};
 
             library.pawnActors.push(info);
         }
@@ -946,7 +1010,7 @@ class DecodeEngine {
 
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as GD.LoadSettings_T);
-        const manifest: CharacterBundle_T = { name, animationSet: cacheName, animations: {}, animationNotifies: {}, meshes: {}, materials: {} };
+        const manifest: CharacterBundle_T = { name, animationSet: cacheName, animations: {}, animationNotifies: {}, skinNotifies: {}, meshes: {}, materials: {} };
         const faceMesh = row.face_mesh[0] as string;
 
         library.name = name;
@@ -958,13 +1022,19 @@ class DecodeEngine {
             if (path === faceMesh) {
                 manifest.animations = info.animations;
                 manifest.animationNotifies = info.animationNotifies;
+                manifest.skinNotifies = info.skinNotifies;
             }
 
             info.animations = {};
             info.animationNotifies = {};
+            info.skinNotifies = {};
             manifest.meshes[path] = info.uuid;
             library.pawnActors.push(info);
         }
+
+        for (const path of row.face_tex as string[])
+            for (const index of getSkinNotifyIndices(manifest.skinNotifies))
+                texturePaths.add(getSkinMaterialPath(path, index));
 
         for (const path of texturePaths)
             manifest.materials[path] = builder.pullMaterial(await this.fetchCharacterMaterial(path));

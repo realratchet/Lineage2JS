@@ -769,7 +769,7 @@ function decodeBones(library: GD.DecodeLibrary, infos: GD.IBoneDecodeInfo[]): Bo
     return bones;
 }
 
-function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], notifications: GD.IAnimationNotifyDecodeInfo[]) {
+function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], notifications: GD.IAnimationNotifyDecodeInfo[], skinNotify: GD.ISkinNotifyDecodeInfo) {
     const tracks = info.map(info => {
         let KeyframeTrackConstructor: typeof KeyframeTrack;
 
@@ -784,6 +784,7 @@ function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyfram
     const clip = new AnimationClip(name, -1, tracks);
 
     (clip as any).animationNotifies = notifications;
+    (clip as any).skinNotify = skinNotify;
 
     return clip;
 }
@@ -796,7 +797,7 @@ function decodeAnimations(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObject
         throw new Error(`Animation set '${info.animationSet}' has not been decoded.`);
 
     const animations = Object.keys(info.animations).reduce((acc, k) => {
-        acc[k] = decodeAnimation(library, k, info.animations[k], info.animationNotifies[k] || []);
+        acc[k] = decodeAnimation(library, k, info.animations[k], info.animationNotifies[k] || [], info.skinNotifies[k]);
 
         return acc;
     }, {} as Record<string, AnimationClip>);
@@ -804,6 +805,15 @@ function decodeAnimations(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObject
     if (info.animationSet) cacheAnimationSets.set(info.animationSet, animations);
 
     return animations;
+}
+
+function prepareSkinnedMaterials(materials: THREE.Material | THREE.Material[], extendedBoneInfluences: boolean): void {
+    const arrMaterials = Array.isArray(materials) ? materials : [materials];
+
+    for (const material of arrMaterials) {
+        if (extendedBoneInfluences) (material as any).setExtendedBoneInfluences?.();
+        (material as any).setActorLit?.();
+    }
 }
 
 function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjectDecodeInfo) {
@@ -832,15 +842,7 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     mesh.ambientGlow = info.ambient?.glow ?? 0;
     mesh.isUnlit = info.ambient?.isUnlit ?? false;
 
-    if (Array.isArray(materials)) {
-        for (const material of materials) {
-            if (extendedBoneInfluences) (material as any).setExtendedBoneInfluences?.();
-            (material as any).setActorLit?.();
-        }
-    } else {
-        if (extendedBoneInfluences) (materials as any).setExtendedBoneInfluences?.();
-        (materials as any).setActorLit?.();
-    }
+    prepareSkinnedMaterials(materials, extendedBoneInfluences);
 
     mesh.position.fromArray(info.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);
@@ -855,9 +857,22 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     mesh.bindMode = "detached"; // the skeleton already brings its bones into mesh space
 
     const animations = decodeAnimations(library, info);
+    const skinMaterials: Record<number, THREE.Material> = {};
+
+    if (info.skinMaterials) {
+        for (const [key, uuid] of Object.entries(info.skinMaterials)) {
+            const material = decodeMaterial(library, library.materials[uuid]);
+
+            if (Array.isArray(material)) throw new Error(`Skin material '${uuid}' decoded as a material group.`);
+
+            prepareSkinnedMaterials(material, extendedBoneInfluences);
+            skinMaterials[parseInt(key, 10)] = material;
+        }
+    }
 
     (mesh as any).meshAnimations = animations; // .animations is taken by three's own AnimationClip[] slot
     (mesh as any).animationNotifies = info.animationNotifies;
+    (mesh as any).skinMaterials = skinMaterials;
 
     applySimpleProperties(library, mesh, info);
 

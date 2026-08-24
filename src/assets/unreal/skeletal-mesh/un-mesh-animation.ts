@@ -143,7 +143,7 @@ class FSkinNotifyGroup {
 
 class FSkinNotify {
     public fixedTimeline = new FArray(FSkinNotifyEntry);
-    public mode: number;
+    public mode: SkinNotifyMode_T;
     public groupedTimeline = new FArray(FSkinNotifyGroup);
     public randomIntervalMin: number;
     public randomIntervalMax: number;
@@ -241,6 +241,37 @@ abstract class UMeshAnimation extends UObject {
         return notifications;
     }
 
+    public getSequenceSkinNotify(sequence: FAnimSequence): GD.ISkinNotifyDecodeInfo {
+        const info = sequence.skinNotify;
+        const frameCount = sequence.frameCount;
+
+        switch (info.mode ?? SkinNotifyMode_T.Fixed) {
+            case SkinNotifyMode_T.Fixed: return {
+                mode: "fixed", frameCount,
+                timeline: info.fixedTimeline.map(entry => ({ time: entry.time, skinIndex: entry.skinIndex }))
+            };
+            case SkinNotifyMode_T.Grouped: return {
+                mode: "grouped", frameCount,
+                groups: info.groupedTimeline.map(group => ({
+                    startFrame: group.startFrame,
+                    timeline: group.timeline.map(entry => ({
+                        time: entry.time,
+                        skinIndex: entry.skinIndex
+                    }))
+                }))
+            };
+            case SkinNotifyMode_T.Random: return {
+                mode: "random", frameCount,
+                intervalMin: info.randomIntervalMin,
+                intervalMax: info.randomIntervalMax,
+                timeline: info.randomTimeline.map(entry => ({
+                    time: entry.time, skinIndex: entry.skinIndex
+                }))
+            };
+            default: throw new Error(`Unknown skin notify mode '${info.mode}' in animation '${sequence.name}'.`);
+        }
+    }
+
     public doLoad(pkg: C.APackage, exp: C.UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
@@ -285,5 +316,11 @@ abstract class UMeshAnimation extends UObject {
     }
 }
 
+enum SkinNotifyMode_T {
+    Fixed,
+    Grouped,
+    Random
+}
+
 export default UMeshAnimation;
-export { UMeshAnimation };
+export { UMeshAnimation, type SkinNotifyMode_T };

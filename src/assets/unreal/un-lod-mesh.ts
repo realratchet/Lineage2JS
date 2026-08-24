@@ -55,9 +55,9 @@ abstract class ULodMesh extends UMesh {
     protected meshOrigin: FVector;
     protected meshRotOrigin: FRotator;
     protected faceLevel = new FPrimitiveArray(BufferValue.uint16);
-    protected faces = new FArray(FMeshFace);
+    protected lodFaces = new FArray(FMeshFace);
     protected collapseWedgeThus = new FPrimitiveArray(BufferValue.uint16);
-    protected wedges: FArray<FMeshWedge> = new FArray(FMeshWedge);
+    protected lodWedges: FArray<FMeshWedge> = new FArray(FMeshWedge);
     protected meshMaterials: FArray<FMeshMaterial> = new FArray(FMeshMaterial);
     protected meshScaleMax: number;
     protected lodHysteresis: number;
@@ -94,9 +94,9 @@ abstract class ULodMesh extends UMesh {
         }
 
         this.faceLevel.load(pkg);
-        this.faces.load(pkg);
+        this.lodFaces.load(pkg);
         this.collapseWedgeThus.load(pkg);
-        this.wedges.load(pkg);
+        this.lodWedges.load(pkg);
         this.meshMaterials.load(pkg);
 
         this.meshScaleMax = pkg.read("float");

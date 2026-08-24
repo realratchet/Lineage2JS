@@ -424,6 +424,7 @@ abstract class USkeletalMesh extends ULodMesh {
 
         const animations: Record<string, GD.IKeyframeDecodeInfo_T[]> = {};
         const animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]> = {};
+        const skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo> = {};
 
         const boneCount = this.refSkeleton.length;
         const boneMap = new Array(boneCount);
@@ -452,6 +453,8 @@ abstract class USkeletalMesh extends ULodMesh {
 
                 if (decodeAnimationNotifies)
                     animationNotifies[animName] = this.animation.getSequenceNotifies(builder, sequence);
+
+                skinNotifies[animName] = this.animation.getSequenceSkinNotify(sequence);
 
                 if (!decodeAnimations) continue;
 
@@ -541,6 +544,7 @@ abstract class USkeletalMesh extends ULodMesh {
                 skeleton,
                 animations,
                 animationNotifies,
+                skinNotifies,
                 meshScale: this.meshScale.getElements(),
                 meshOrigin: this.meshOrigin.getElements(),
                 meshRotOrigin: this.meshRotOrigin.toArray(),

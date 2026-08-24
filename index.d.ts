@@ -463,6 +463,8 @@ declare global {
                     skeleton: IBoneDecodeInfo[];
                     animations: Record<string, IKeyframeDecodeInfo_T[]>;
                     animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>;
+                    skinNotifies: Record<string, ISkinNotifyDecodeInfo>;
+                    skinMaterials?: Record<number, string>;
                     animationSet?: string;
                     meshScale: Vector3Arr;
                     meshOrigin: Vector3Arr;
@@ -474,6 +476,36 @@ declare global {
                         isUnlit: boolean
                     };
                 }
+
+                export interface ISkinNotifyEntryDecodeInfo {
+                    time: number;
+                    skinIndex: number;
+                }
+
+                export interface IFixedSkinNotifyDecodeInfo {
+                    mode: "fixed";
+                    frameCount: number;
+                    timeline: ISkinNotifyEntryDecodeInfo[];
+                }
+
+                export interface IGroupedSkinNotifyDecodeInfo {
+                    mode: "grouped";
+                    frameCount: number;
+                    groups: {
+                        startFrame: number;
+                        timeline: ISkinNotifyEntryDecodeInfo[];
+                    }[];
+                }
+
+                export interface IRandomSkinNotifyDecodeInfo {
+                    mode: "random";
+                    frameCount: number;
+                    intervalMin: number;
+                    intervalMax: number;
+                    timeline: ISkinNotifyEntryDecodeInfo[];
+                }
+
+                export type ISkinNotifyDecodeInfo = IFixedSkinNotifyDecodeInfo | IGroupedSkinNotifyDecodeInfo | IRandomSkinNotifyDecodeInfo;
 
                 export interface IAnimationNotifyDecodeInfo {
                     time: number;

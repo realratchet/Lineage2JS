@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, Bone, Box3, LoopOnce, LoopRepeat, Mesh, Object3D, Quaternion, Sphere, Vector3 } from "three";
+import { AnimationAction, AnimationClip, Bone, Box3, LoopOnce, LoopRepeat, Material, Mesh, Object3D, Quaternion, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
@@ -83,15 +83,6 @@ const HAIR_STEP = 1 / 60; // Local fixed step; retail DynamicHairGetFrame 0x94f0
 const HAIR_SPRING = 32;
 const HAIR_DAMPING = 8;
 const HAIR_MAX_ANGLE = 0.24;
-const BLINK_U_MIN = 0.1;
-const BLINK_U_MAX = 0.47;
-const BLINK_V_MIN = 0.18;
-const BLINK_V_MAX = 0.33;
-const BLINK_CREASE_V = 0.265;
-const BLINK_CENTERLINE_CUTOFF = 0.07;
-const BLINK_CLOSE_TIME = 0.08;
-const BLINK_HOLD_TIME = 0.06;
-const BLINK_OPEN_TIME = 0.12;
 // APawn::SpawnEnterEvent (0x8b47e0): rise moves 5/9 of its full offset per second.
 const ENTER_RISE_RATE = 5 / 9;
 // APawn::SpawnEnterEvent (0x8b490a): AEmitter::SetSizeScale(CollisionRadius * 0.1).
@@ -115,6 +106,7 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
     }
 
     (once as any).animationNotifies = (clip as any).animationNotifies;
+    (once as any).skinNotify = (clip as any).skinNotify;
     cacheOnceAnimations.set(clip, once);
 
     return once;
@@ -196,10 +188,10 @@ class BaseActor extends Object3D implements ICollidable {
     protected isAnimationsInit = false;
     protected hairStepTime = 0;
     protected readonly hairChains: HairChainState_T[] = [];
-    protected blinkStartTime = -Infinity;
-    protected blinkNextTime = 0;
-    protected blinkIndex = 0;
-    protected readonly blinkFaces: BlinkFaceState_T[] = [];
+    protected skinNotifyCycleElapsed = 0;
+    protected skinNotifyCycleDuration = 0;
+    protected skinNotifyIndex = -1;
+    protected readonly skinNotifyFaces: SkinNotifyFaceState_T[] = [];
     protected readonly ignoredActors = new Set<ICollidable>();
     protected readonly visitedBases = new Set<ICollidable>();
     protected readonly collisionQuery: CollisionQuery_T = { location: null, delta: null, extent: null, sourceIsPlayer: false };
@@ -520,7 +512,7 @@ class BaseActor extends Object3D implements ICollidable {
         if (this.hasBegunPlay && this.isScriptTicking) this.scriptVM.call(this, "Tick", [deltaTime]);
         this.updateAnimationNotifies();
         this.updateHair(currentTime * 0.001, deltaTime);
-        this.updateBlink(currentTime * 0.001);
+        this.updateSkinNotify(deltaTime);
     }
 
     protected updateAnimationNotifies() {
@@ -1483,7 +1475,8 @@ class BaseActor extends Object3D implements ICollidable {
 
     public setMeshes(meshes: Mesh[]) {
         this.stopAnimations();
-        this.disposeBlinkFaces();
+        this.skinNotifyFaces.length = 0;
+        this.skinNotifyIndex = -1;
 
         for (const mesh of this.meshes)
             this.remove(mesh);
@@ -1500,10 +1493,14 @@ class BaseActor extends Object3D implements ICollidable {
             if (mesh.geometry.boundingSphere) this.renderSphereLocal.union(tmpRenderSphere.copy(mesh.geometry.boundingSphere).applyMatrix4(mesh.matrix));
 
             this.add(mesh);
+
+            const skinMaterials = (mesh as any).skinMaterials as Record<number, Material>;
+
+            if (skinMaterials && Object.keys(skinMaterials).length > 0)
+                this.skinNotifyFaces.push({ mesh, materials: skinMaterials });
         }
 
         this.initHair();
-        this.initBlink();
         this.renderManager.invalidatePawnLighting(this);
     }
 
@@ -1559,121 +1556,68 @@ class BaseActor extends Object3D implements ICollidable {
         }
     }
 
-    protected initBlink() {
-        this.blinkStartTime = -Infinity;
-        this.blinkIndex = 0;
-        this.blinkNextTime = 0;
+    protected updateSkinNotify(deltaTime: number) {
+        const action = this.animationNotifyAction;
 
-        for (const mesh of this.meshes) {
-            if (!/(?:^|_)f$/i.test(mesh.name)) continue;
+        if (!action) return;
 
-            const sourcePosition = mesh.geometry.getAttribute("position");
-            const uv = mesh.geometry.getAttribute("uv");
+        const clip = action.getClip();
+        const info = (clip as any).skinNotify as GD.ISkinNotifyDecodeInfo;
 
-            if (!sourcePosition || !uv) throw new Error(`Face mesh '${mesh.name}' has no position or UV data.`);
+        if (!info) return;
 
-            mesh.geometry = mesh.geometry.clone();
-            mesh.geometry.setAttribute("position", sourcePosition.clone());
+        const currentFrame = clip.duration > 0 ? Math.max(0, action.time / clip.duration * info.frameCount) : 0;
+        let skinIndex = 0;
 
-            const position = mesh.geometry.getAttribute("position");
-            const arrPosition = position.array as Float32Array;
-            const arrUv = uv.array as Float32Array;
-            const candidates: number[] = [];
-            let maxX = 0;
+        switch (info.mode) {
+            case "fixed":
+                skinIndex = selectSkinNotifyIndex(info.timeline, currentFrame);
+                break;
+            case "grouped": {
+                let group: GD.IGroupedSkinNotifyDecodeInfo["groups"][number] = null;
 
-            for (let i = 0; i < position.count; i++)
-                maxX = Math.max(maxX, Math.abs(arrPosition[i * 3]));
+                for (const next of info.groups) {
+                    if (next.startFrame > currentFrame) break;
+                    group = next;
+                }
 
-            // All 14 playable C4 face meshes map both eyes into this shared half-face UV island.
-            for (let i = 0; i < position.count; i++) {
-                const x = arrPosition[i * 3];
-                const u = arrUv[i * 2];
-                const v = arrUv[i * 2 + 1];
+                if (!group || clip.duration <= 0) break;
 
-                if (u < BLINK_U_MIN || u > BLINK_U_MAX || v < BLINK_V_MIN || v > BLINK_V_MAX) continue;
-                if (Math.abs(x) <= maxX * BLINK_CENTERLINE_CUTOFF) continue;
+                const channelAnimRate = action.getEffectiveTimeScale() / clip.duration;
 
-                candidates.push(i);
+                if (channelAnimRate !== 0)
+                    skinIndex = selectSkinNotifyIndex(group.timeline, (currentFrame - group.startFrame) / (info.frameCount * channelAnimRate));
+                break;
             }
+            case "random":
+                this.skinNotifyCycleElapsed += deltaTime;
 
-            if (candidates.length < 4) throw new Error(`Face mesh '${mesh.name}' has no eyelid topology.`);
+                if (this.skinNotifyCycleDuration === 0)
+                    this.skinNotifyCycleDuration = randomSkinNotifyDuration(info);
 
-            let meanV = 0;
-            let meanZ = 0;
+                while (this.skinNotifyCycleElapsed >= this.skinNotifyCycleDuration) {
+                    this.skinNotifyCycleElapsed -= this.skinNotifyCycleDuration;
+                    this.skinNotifyCycleDuration = randomSkinNotifyDuration(info);
+                }
 
-            for (const index of candidates) {
-                meanV += arrUv[index * 2 + 1];
-                meanZ += arrPosition[index * 3 + 2];
-            }
-
-            meanV /= candidates.length;
-            meanZ /= candidates.length;
-
-            let covariance = 0;
-            let variance = 0;
-
-            for (const index of candidates) {
-                const dv = arrUv[index * 2 + 1] - meanV;
-
-                covariance += dv * (arrPosition[index * 3 + 2] - meanZ);
-                variance += dv * dv;
-            }
-
-            if (variance === 0) throw new Error(`Face mesh '${mesh.name}' eyelid UVs have no vertical range.`);
-
-            const creaseZ = meanZ + covariance / variance * (BLINK_CREASE_V - meanV);
-            const indices = new Uint16Array(candidates);
-            const openZ = new Float32Array(indices.length);
-
-            for (let i = 0, len = indices.length; i < len; i++)
-                openZ[i] = arrPosition[indices[i] * 3 + 2];
-
-            this.blinkFaces.push({ mesh, position, indices, openZ, creaseZ });
-        }
-    }
-
-    protected updateBlink(currentTime: number) {
-        if (this.blinkFaces.length === 0) return;
-
-        if (this.blinkNextTime === 0)
-            this.blinkNextTime = currentTime + 1.5 + hashName(this.blinkFaces[0].mesh.name) % 1500 / 1000;
-
-        if (currentTime >= this.blinkNextTime) {
-            this.blinkStartTime = currentTime;
-            this.blinkIndex++;
-            this.blinkNextTime = currentTime + 2.7 + hashName(`${this.blinkFaces[0].mesh.name}:${this.blinkIndex}`) % 2800 / 1000;
+                skinIndex = selectSkinNotifyIndex(info.timeline, this.skinNotifyCycleElapsed);
+                break;
+            default: throw new Error(`Unknown skin notify mode '${(info as any).mode}'.`);
         }
 
-        const elapsed = currentTime - this.blinkStartTime;
-        let amount = 0;
+        if (skinIndex === this.skinNotifyIndex) return;
 
-        if (elapsed < BLINK_CLOSE_TIME)
-            amount = elapsed / BLINK_CLOSE_TIME;
-        else if (elapsed < BLINK_CLOSE_TIME + BLINK_HOLD_TIME)
-            amount = 1;
-        else if (elapsed < BLINK_CLOSE_TIME + BLINK_HOLD_TIME + BLINK_OPEN_TIME)
-            amount = 1 - (elapsed - BLINK_CLOSE_TIME - BLINK_HOLD_TIME) / BLINK_OPEN_TIME;
+        for (const face of this.skinNotifyFaces) {
+            const material = face.materials[skinIndex];
 
-        amount = Math.max(0, Math.min(1, amount));
+            if (!material) throw new Error(`Face mesh '${face.mesh.name}' has no skin material '${skinIndex}'.`);
 
-        for (const face of this.blinkFaces) {
-            const arrPosition = face.position.array as Float32Array;
-
-            for (let i = 0, len = face.indices.length; i < len; i++) {
-                const offset = face.indices[i] * 3 + 2;
-
-                arrPosition[offset] = face.openZ[i] + (face.creaseZ - face.openZ[i]) * amount;
-            }
-
-            face.position.needsUpdate = true;
+            face.mesh.material = material;
         }
-    }
 
-    protected disposeBlinkFaces() {
-        for (const face of this.blinkFaces)
-            face.mesh.geometry.dispose();
+        if (this.skinNotifyFaces.length > 0) this.renderManager.invalidatePawnLighting(this);
 
-        this.blinkFaces.length = 0;
+        this.skinNotifyIndex = skinIndex;
     }
 
     public setAnimations(animations: Record<string, AnimationClip>) {
@@ -1713,7 +1657,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.deathAnimationFinishedHandler = null;
         this.isDying = false;
         this.isScriptTicking = false;
-        this.disposeBlinkFaces();
+        this.skinNotifyFaces.length = 0;
 
         for (const mesh of this.meshes) {
             this.renderManager.mixer.uncacheRoot(mesh);
@@ -2089,13 +2033,29 @@ type HairChainState_T = {
     phase: number;
 };
 
-type BlinkFaceState_T = {
+type SkinNotifyFaceState_T = {
     mesh: Mesh;
-    position: THREE.BufferAttribute;
-    indices: Uint16Array;
-    openZ: Float32Array;
-    creaseZ: number;
+    materials: Record<number, Material>;
 };
+
+function selectSkinNotifyIndex(timeline: GD.ISkinNotifyEntryDecodeInfo[], time: number): number {
+    let skinIndex = 0;
+
+    for (const entry of timeline) {
+        if (entry.time > time) break;
+        skinIndex = entry.skinIndex;
+    }
+
+    return skinIndex;
+}
+
+function randomSkinNotifyDuration(info: GD.IRandomSkinNotifyDecodeInfo): number {
+    const duration = info.intervalMin + Math.random() * (info.intervalMax - info.intervalMin);
+
+    if (duration <= 0) throw new Error(`Invalid skin notify interval '${info.intervalMin}-${info.intervalMax}'.`);
+
+    return duration;
+}
 
 function hashName(name: string): number {
     let hash = 2166136261;
