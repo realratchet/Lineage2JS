@@ -48,7 +48,7 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected collisionModelId: number;
     declare protected collisionModel: GA.UModel;
 
-    declare protected unkInt_Dx1: number; // maybe boolean
+    declare protected pad03: number;
 
     declare protected internalVersion: number;
     declare protected kPhysicsProps: number;
@@ -203,7 +203,7 @@ abstract class UStaticMesh extends UPrimitive {
         if (12 < verLicense) this.isStaticMeshLodBlend = pkg.read("int32") !== 0;
         if (13 < verLicense) {
             this.isMadeTwoSideMesh = pkg.read("int32") !== 0;
-            this.unkInt_Dx1 = pkg.read("int32"); // likely boolean?
+            this.pad03 = pkg.read("int32");
         }
 
         if (14 < verLicense) this.isUsingBillboard = pkg.read("int32") !== 0;

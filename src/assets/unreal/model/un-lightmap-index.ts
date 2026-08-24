@@ -1,16 +1,21 @@
 import FMatrix from "@client/assets/unreal/un-matrix";
 import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import FVector from "../un-vector";
 
 
-class FSubStructure implements C.IConstructable {
+class FLightBitmap implements C.IConstructable {
     public lightIndex: number;
     public lightExp: C.UExport;
     public bitmap = new FPrimitiveArray(BufferValue.uint8);
 
-    public unkIntArr0: DataView;
-    public unkInt0: number;
-    public unkIntArr1: DataView;
+    public sizeX: number;
+    public sizeY: number;
+    public stride: number;
+    public minX: number;
+    public minY: number;
+    public maxX: number;
+    public maxY: number;
 
     public load(pkg: C.APackage): this {
         this.lightIndex = pkg.read("compat32");
@@ -18,9 +23,13 @@ class FSubStructure implements C.IConstructable {
 
         this.bitmap = this.bitmap.load(pkg);
 
-        this.unkIntArr0 = pkg.read(2 * 4); // two ints
-        this.unkInt0 = pkg.read("int32");
-        this.unkIntArr1 = pkg.read(4 * 4); // four ints
+        this.sizeX = pkg.read("int32");
+        this.sizeY = pkg.read("int32");
+        this.stride = pkg.read("int32");
+        this.minX = pkg.read("int32");
+        this.minY = pkg.read("int32");
+        this.maxX = pkg.read("int32");
+        this.maxY = pkg.read("int32");
 
         return this;
     }
@@ -30,7 +39,7 @@ class FSubStructure implements C.IConstructable {
 class FLightmapIndex implements C.IConstructable {
     public iLightmapTexture: number;
     public surfaceIndex: number;
-    public unkIndex0: number;
+    public zoneIndex: number;
     public offsetX: number;
     public offsetY: number;
     public sizeX: number;
@@ -40,11 +49,12 @@ class FLightmapIndex implements C.IConstructable {
     public unkFloatGroup0: number[];
 
     public levelId: number;
-    public unkSubstructure = new FArray(FSubStructure);
-    public unkInt0: number;
+    public bitmaps = new FArray(FLightBitmap);
+    public revision: number;
 
-    public unkArrAsFloats: Array<number> = new Array(9);
-    public unkArrAsInts: Array<number> = new Array(9);
+    public lightmapBase: FVector;
+    public lightmapX: FVector;
+    public lightmapY: FVector;
 
     public load(pkg: C.APackage): this {
         // pkg.addDependencies(
@@ -56,7 +66,7 @@ class FLightmapIndex implements C.IConstructable {
 
         this.iLightmapTexture = pkg.read("compat32");
         this.surfaceIndex = pkg.read("compat32");
-        this.unkIndex0 = pkg.read("compat32");
+        this.zoneIndex = pkg.read("compat32");
         this.offsetX = pkg.read("compat32");
         this.offsetY = pkg.read("compat32");
         this.sizeX = pkg.read("compat32");
@@ -66,16 +76,13 @@ class FLightmapIndex implements C.IConstructable {
 
         this.uvMatrix.load(pkg);
 
-        const unkArray = pkg.read(9 * 4);
+        this.lightmapBase = FVector.make().load(pkg);
+        this.lightmapX = FVector.make().load(pkg);
+        this.lightmapY = FVector.make().load(pkg);
 
-        for (let i = 0; i < 9; i++) {
-            this.unkArrAsFloats[i] = unkArray.getFloat32(i * 4, true);
-            this.unkArrAsInts[i] = unkArray.getInt32(i * 4, true);
-        }
-
-        this.unkSubstructure.load(pkg); // these might be individual lights?
+        this.bitmaps.load(pkg);
         this.levelId = pkg.read("compat32");
-        this.unkInt0 = pkg.read("int32");
+        this.revision = pkg.read("int32");
 
         return this;
     }

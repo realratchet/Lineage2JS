@@ -5,46 +5,42 @@ import UMesh from "./un-mesh";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 
-class FUnknownStruct1 implements C.IConstructable {
-    public a: number;
-    public b: number;
-    public c: number;
-    public d: number;
+class FMeshFace implements C.IConstructable {
+    public wedgeIndices: [number, number, number] = new Array(3) as [number, number, number];
+    public meshMaterialIndex: number;
 
     public load(pkg: GA.UPackage): this {
-
-
-        this.a = pkg.read("uint16");
-        this.b = pkg.read("uint16");
-        this.c = pkg.read("uint16");
-        this.d = pkg.read("uint16");
+        this.wedgeIndices[0] = pkg.read("uint16");
+        this.wedgeIndices[1] = pkg.read("uint16");
+        this.wedgeIndices[2] = pkg.read("uint16");
+        this.meshMaterialIndex = pkg.read("uint16");
 
         return this;
     }
 
 }
 
-class FUnknownStruct2 implements C.IConstructable {
-    public unkInt16: number;
-    public unkInt32_0: number;
-    public unkInt32_1: number;
+class FMeshWedge implements C.IConstructable {
+    public vertexIndex: number;
+    public texU: number;
+    public texV: number;
 
     public load(pkg: C.APackage): this {
-        this.unkInt16 = pkg.read("uint16");
-        this.unkInt32_0 = pkg.read("uint32");
-        this.unkInt32_1 = pkg.read("uint32");
+        this.vertexIndex = pkg.read("uint16");
+        this.texU = pkg.read("float");
+        this.texV = pkg.read("float");
 
         return this;
     }
 }
 
-class FUnknownStruct3 implements C.IConstructable {
-    public unkInt32_0: number;
-    public unkInt32_1: number;
+class FMeshMaterial implements C.IConstructable {
+    public polyFlags: number;
+    public materialIndex: number;
 
     public load(pkg: C.APackage): this {
-        this.unkInt32_0 = pkg.read("uint32");
-        this.unkInt32_1 = pkg.read("uint32");
+        this.polyFlags = pkg.read("uint32");
+        this.materialIndex = pkg.read("int32");
 
         return this;
     }
@@ -53,20 +49,25 @@ class FUnknownStruct3 implements C.IConstructable {
 abstract class ULodMesh extends UMesh {
     protected version: number;
     protected vertexCount: number;
-    protected unkArr0 = new FPrimitiveArray(BufferValue.uint32);
+    protected verts = new FPrimitiveArray(BufferValue.uint32);
 
     protected meshScale: FVector;
     protected meshOrigin: FVector;
     protected meshRotOrigin: FRotator;
-    protected unkArr2 = new FPrimitiveArray(BufferValue.uint16);
-    protected unkArr3 = new FArray(FUnknownStruct1);
-    protected unkArr4 = new FPrimitiveArray(BufferValue.uint16);
-    protected unkArr5: FArray<FUnknownStruct2> = new FArray(FUnknownStruct2);
-    protected unkArr6: FArray<FUnknownStruct3> = new FArray(FUnknownStruct3);
-    protected unkArr7: number[];
+    protected faceLevel = new FPrimitiveArray(BufferValue.uint16);
+    protected faces = new FArray(FMeshFace);
+    protected collapseWedgeThus = new FPrimitiveArray(BufferValue.uint16);
+    protected wedges: FArray<FMeshWedge> = new FArray(FMeshWedge);
+    protected meshMaterials: FArray<FMeshMaterial> = new FArray(FMeshMaterial);
+    protected meshScaleMax: number;
+    protected lodHysteresis: number;
+    protected lodStrength: number;
+    protected lodMinVerts: number;
+    protected lodMorph: number;
+    protected lodZDisplace: number;
     protected hasImpostor: boolean;
     protected skinTesselationFactor: number;
-    protected unkVar2: number;
+    protected authenticationKey: number;
     protected impostor = new MeshImpostor();
     protected lodMeshMaterials = new FObjectArray<GA.UMaterial>();
 
@@ -76,7 +77,7 @@ abstract class ULodMesh extends UMesh {
         this.version = pkg.read("uint32");
         this.vertexCount = pkg.read("uint32");
 
-        this.unkArr0.load(pkg);
+        this.verts.load(pkg);
 
         if (this.version < 2) {
             debugger;
@@ -92,13 +93,18 @@ abstract class ULodMesh extends UMesh {
             debugger;
         }
 
-        this.unkArr2.load(pkg);
-        this.unkArr3.load(pkg);
-        this.unkArr4.load(pkg);
-        this.unkArr5.load(pkg);
-        this.unkArr6.load(pkg);
+        this.faceLevel.load(pkg);
+        this.faces.load(pkg);
+        this.collapseWedgeThus.load(pkg);
+        this.wedges.load(pkg);
+        this.meshMaterials.load(pkg);
 
-        this.unkArr7 = new Array(6).fill(1).map(() => pkg.read("float"));
+        this.meshScaleMax = pkg.read("float");
+        this.lodHysteresis = pkg.read("float");
+        this.lodStrength = pkg.read("float");
+        this.lodMinVerts = pkg.read("int32");
+        this.lodMorph = pkg.read("float");
+        this.lodZDisplace = pkg.read("float");
 
         if (this.version >= 3) {
             const maybeHasImpostor = pkg.read("uint32");
@@ -116,7 +122,7 @@ abstract class ULodMesh extends UMesh {
         }
 
         if (this.version >= 5) {
-            this.unkVar2 = pkg.read("uint32");
+            this.authenticationKey = pkg.read("uint32");
         }
     }
 }

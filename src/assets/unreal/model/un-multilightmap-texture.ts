@@ -11,7 +11,7 @@ class FStaticLightmapTexture implements C.IConstructable {
     public format: ETextureFormat;
     public width: number;
     public height: number;
-    public unkInt0: number;
+    public revision: number;
 
     public readonly uuid = generateUUID();
 
@@ -22,7 +22,7 @@ class FStaticLightmapTexture implements C.IConstructable {
         this.format = pkg.read("uint8");
         this.width = pkg.read("int32");
         this.height = pkg.read("int32");
-        this.unkInt0 = pkg.read("int32");
+        this.revision = pkg.read("int32");
 
         return this;
     }
@@ -83,7 +83,7 @@ class FLightmapTexture implements C.IConstructable {
 
     public iLightmaps = new FPrimitiveArray(BufferValue.int32);
     public internalTime: number[];
-    public unkInt0: number;
+    public revision: number;
     public staticLightmap = new FStaticLightmapTexture();
 
     public load(pkg: C.APackage): this {
@@ -93,7 +93,7 @@ class FLightmapTexture implements C.IConstructable {
         this.iLightmaps = this.iLightmaps.load(pkg);
 
         this.internalTime = new Array(2).fill(1).map(_ => pkg.read("int32"));
-        this.unkInt0 = pkg.read("int32")
+        this.revision = pkg.read("int32")
 
         this.staticLightmap.load(pkg);
 

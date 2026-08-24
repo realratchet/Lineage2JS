@@ -44,13 +44,13 @@ class FAnimQuaternion {
 
 class FNamedBone {
     public boneName: string;
-    public unkVar0: number;
-    public unkVar1: number;
+    public flags: number;
+    public parentIndex: number;
 
     public load(pkg: C.APackage): this {
         this.boneName = pkg.nameTable[pkg.read("compat32")].name as string;
-        this.unkVar0 = pkg.read("uint32");
-        this.unkVar1 = pkg.read("uint32");
+        this.flags = pkg.read("uint32");
+        this.parentIndex = pkg.read("uint32");
 
         return this;
     }
@@ -117,51 +117,51 @@ class FMeshAnimNotify {
     }
 }
 
-class FLineageUnk2 {
-    public unkVar0: number;
-    public unkVar1: number;
+class FSkinNotifyEntry {
+    public time: number;
+    public skinIndex: number;
 
     public load(pkg: C.APackage): this {
-        this.unkVar0 = pkg.read("uint32");
-        this.unkVar1 = pkg.read("uint32");
+        this.time = pkg.read("float");
+        this.skinIndex = pkg.read("int32");
 
         return this;
     }
 }
 
-class FLineageUnk3 {
-    public unkVar0: number;
-    public unkArr0 = new FArray(FLineageUnk2)
+class FSkinNotifyGroup {
+    public startFrame: number;
+    public timeline = new FArray(FSkinNotifyEntry);
 
     public load(pkg: C.APackage): this {
-        this.unkVar0 = pkg.read("uint32");
-        this.unkArr0.load(pkg);
+        this.startFrame = pkg.read("float");
+        this.timeline.load(pkg);
 
         return this;
     }
 }
 
-class FLineageUnk4 {
-    public unkArr0 = new FArray(FLineageUnk2);
-    public unkVar0: number;
-    public unkArr1 = new FArray(FLineageUnk3);
-    public unkVar1: number;
-    public unkVar2: number;
-    public unkArr2 = new FArray(FLineageUnk2);
+class FSkinNotify {
+    public fixedTimeline = new FArray(FSkinNotifyEntry);
+    public mode: number;
+    public groupedTimeline = new FArray(FSkinNotifyGroup);
+    public randomIntervalMin: number;
+    public randomIntervalMax: number;
+    public randomTimeline = new FArray(FSkinNotifyEntry);
 
     public load(pkg: C.APackage): this {
         // const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verLicense === 0x1A) {
-            this.unkArr0.load(pkg);
+            this.fixedTimeline.load(pkg);
         } else if (verLicense >= 0x1B) {
-            this.unkVar0 = pkg.read("uint8");
-            this.unkArr0.load(pkg);
-            this.unkArr1.load(pkg);
-            this.unkVar1 = pkg.read("uint32");
-            this.unkVar2 = pkg.read("uint32");
-            this.unkArr2.load(pkg);
+            this.mode = pkg.read("uint8");
+            this.fixedTimeline.load(pkg);
+            this.groupedTimeline.load(pkg);
+            this.randomIntervalMin = pkg.read("float");
+            this.randomIntervalMax = pkg.read("float");
+            this.randomTimeline.load(pkg);
         }
 
         return this;
@@ -169,6 +169,7 @@ class FLineageUnk4 {
 }
 
 class FAnimSequence {
+    public bookmark: number;
     public unkVar0: number;
     public name: string;
     public groupNames: string[];
@@ -181,14 +182,14 @@ class FAnimSequence {
     public unkVar2: number;
     public unkVar4: number;
     public unkVar5: number;
-    public unkVar6 = new FLineageUnk4();
+    public skinNotify = new FSkinNotify();
 
     public load(pkg: C.APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verArchive >= 115)
-            this.unkVar0 = pkg.read("float");
+            this.bookmark = pkg.read("float");
         else {
             debugger;
         }
@@ -211,7 +212,7 @@ class FAnimSequence {
 
             if (verLicense >= 0x14) this.unkVar4 = pkg.read("uint32");
             if (verLicense >= 0x19) this.unkVar5 = pkg.read("uint32");
-            if (verLicense >= 0x1A) this.unkVar6.load(pkg);
+            if (verLicense >= 0x1A) this.skinNotify.load(pkg);
         }
 
         return this;

@@ -139,7 +139,7 @@ class FSkelMeshSection {
     public maxWedgeIndex: number;
     public numStreamIndices: number;
     public boneIndex: number;
-    public fE: number;
+    public shaderIndex: number;
     public firstFace: number;
     public numFaces: number;
 
@@ -154,7 +154,7 @@ class FSkelMeshSection {
         this.numStreamIndices = pkg.read("int16");
 
         this.boneIndex = pkg.read("int16");
-        this.fE = pkg.read("int16");
+        this.shaderIndex = pkg.read("int16");
         this.firstFace = pkg.read("int16");
         this.numFaces = pkg.read("int16");
 
@@ -181,14 +181,14 @@ class FAnimMeshVertex {
 
 class FSkinVertexStream {
     public revision: number;
-    public unkVar0: number;
-    public unkVar1: number;
+    public isPartial: boolean;
+    public isStreamCallback: boolean;
     public vertices = new FArray(FAnimMeshVertex);
 
     public load(pkg: C.APackage): this {
         this.revision = pkg.read("uint32");
-        this.unkVar0 = pkg.read("uint32");
-        this.unkVar1 = pkg.read("uint32");
+        this.isPartial = pkg.read("uint32") !== 0;
+        this.isStreamCallback = pkg.read("uint32") !== 0;
         this.vertices.load(pkg);
 
         return this;
@@ -225,8 +225,8 @@ class FStaticModelLOD {
     public lodHysteresis: number;
     public numSharedVertices: number;
     public lodMaxInfluences: number;
-    public unkVar0: number;
-    public unkVar1: number;
+    public maxInfluences: number;
+    public isUniqueSubset: boolean;
 
     public load(pkg: C.APackage): this {
         this.skinningData.load(pkg);
@@ -247,8 +247,8 @@ class FStaticModelLOD {
         this.lodHysteresis = pkg.read("float");
         this.numSharedVertices = pkg.read("uint32");
         this.lodMaxInfluences = pkg.read("uint32");
-        this.unkVar0 = pkg.read("uint32");
-        this.unkVar1 = pkg.read("uint32");
+        this.maxInfluences = pkg.read("uint32");
+        this.isUniqueSubset = pkg.read("uint32") !== 0;
 
 
         const useNewWedges = pkg.read("uint32");
@@ -320,13 +320,13 @@ abstract class USkeletalMesh extends ULodMesh {
     protected attachBoneNames: string[];
     protected attachCoords = new FArray(FMeshCoords);
     protected lodModels = new FArray(FStaticModelLOD);
-    protected sk_unkIndex1: number;
+    protected defaultRefMesh: number;
     protected points = new FArrayLazy(FMeshVector);
     protected wedges = new FArrayLazy(FMeshWedge);
     protected faces = new FArrayLazy(FTriangle);
     protected vertexInfluences = new FArrayLazy(FVertexInfluence);
     protected collapseWedge = new FPrimitiveArrayLazy(BufferValue.uint16);
-    protected sk_unkArr10 = new FPrimitiveArrayLazy(BufferValue.uint16);
+    protected rawFaceLevel = new FPrimitiveArrayLazy(BufferValue.uint16);
     protected sk_unkVar1: number;
     protected sk_unkArr11 = new FPrimitiveArray(BufferValue.uint32);
     protected sk_unkVar2: number;
@@ -354,9 +354,9 @@ abstract class USkeletalMesh extends ULodMesh {
 
         if (this.version >= 2) {
             this.lodModels.load(pkg);
-            this.sk_unkIndex1 = pkg.read("compat32");
+            this.defaultRefMesh = pkg.read("compat32");
 
-            if (this.sk_unkIndex1 !== 0)
+            if (this.defaultRefMesh !== 0)
                 debugger;
 
             this.points.load(pkg);
@@ -364,7 +364,7 @@ abstract class USkeletalMesh extends ULodMesh {
             this.faces.load(pkg);
             this.vertexInfluences.load(pkg);
             this.collapseWedge.load(pkg);
-            this.sk_unkArr10.load(pkg);
+            this.rawFaceLevel.load(pkg);
 
             if (verArchive >= 118 && verLicense >= 3)
                 this.sk_unkVar1 = pkg.read("uint32");
