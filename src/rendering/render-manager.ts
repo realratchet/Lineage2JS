@@ -19,7 +19,7 @@ import WaterHitEffect from "./water-hit-effect";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
-import AudioManager from "@client/rendering/audio-manager";
+import AudioManager from "@client/audio/audio-manager";
 import * as dat from "dat.gui";
 import type AssetManager from "@client/assets/asset-manager";
 import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
@@ -34,6 +34,8 @@ import type DynamicLight from "@client/objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
 import Landmark from "./landmark";
 import type { ZoneObject, SectorObject } from "@client/objects/zone-object";
+import { IEngineComponent } from "@client/game/components";
+import type GameManager from "@client/game/game-manager";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -342,7 +344,7 @@ function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
     return true;
 }
 
-class RenderManager {
+class RenderManager implements IEngineComponent<GameManager> {
     public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement;
     public getDomElement() { return this.renderer.domElement; }
@@ -359,7 +361,6 @@ class RenderManager {
     public readonly skyRenderer = new SkyRenderer();
     public readonly underWaterEffect = new UnderWaterEffect();
 
-    protected assetManager: AssetManager;
     protected uGlowPass: UGlowPass;
     protected mainRenderTarget: WebGLRenderTarget;
     protected displayGammaPass: DisplayGammaPass;
@@ -431,7 +432,7 @@ class RenderManager {
 
     public readonly player = new Player(this);
     protected readonly waterHitEffect = new WaterHitEffect(this.player, this);
-    protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.assetManager.createLandmarkEffect(classPath));
+    protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.manGame.getComponent("asset").createLandmarkEffect(classPath));
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
@@ -461,9 +462,12 @@ class RenderManager {
         moverPosition: 0
     };
 
-    public constructor(viewport: HTMLViewportElement, assetManager: AssetManager) {
+    protected manGame: GameManager;
+    public setParent(parent: GameManager): this { this.manGame = parent; return this; }
+    public getParent(): GameManager { return this.manGame; }
+
+    public constructor(viewport: HTMLViewportElement) {
         this.viewport = viewport;
-        this.assetManager = assetManager;
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
@@ -1448,8 +1452,8 @@ class RenderManager {
     }
 
     public async addCharacterControls(): Promise<void> {
-        const renderManager = this;
-        const groups = await this.assetManager.getCharGroups();
+        const this_ = this, manAsset = this.manGame.getComponent("asset");
+        const groups = await manAsset.getCharGroups();
         const state = { group: this.characterGroup, face: this.characterFace, hair: this.characterHair, hairColour: this.characterHairColour, chest: this.characterArmor.chest, legs: this.characterArmor.legs, gloves: this.characterArmor.gloves, boots: this.characterArmor.boots };
         const groupOptions: Record<string, number> = {};
         const folder = gui.addFolder("Character");
@@ -1463,24 +1467,24 @@ class RenderManager {
         let armorControls: dat.GUIController[] = [];
 
         function applyCharacter(): Promise<void> {
-            return renderManager.assetManager.loadCharacter(renderManager, renderManager.characterGroup, renderManager.characterFace, renderManager.characterHair, renderManager.characterHairColour, renderManager.characterArmor);
+            return manAsset.loadCharacter(this_, this_.characterGroup, this_.characterFace, this_.characterHair, this_.characterHairColour, this_.characterArmor);
         }
 
         function buildArmorControls(): void {
-            const group = groups[renderManager.characterGroup];
+            const group = groups[this_.characterGroup];
 
             for (const control of armorControls) folder.remove(control);
             armorControls = [];
 
-            for (const slot of Object.keys(renderManager.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
+            for (const slot of Object.keys(this_.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
                 const options: Record<string, number> = { None: 0 };
 
                 for (const item of group.armor[slot])
                     options[item.label] = item.id;
 
-                state[slot] = renderManager.characterArmor[slot];
+                state[slot] = this_.characterArmor[slot];
                 armorControls.push(folder.add(state, slot, options).name(slot[0].toUpperCase() + slot.slice(1)).onChange(async v => {
-                    renderManager.characterArmor[slot] = Number(v);
+                    this_.characterArmor[slot] = Number(v);
                     await applyCharacter();
                 }));
             }
@@ -1488,36 +1492,36 @@ class RenderManager {
 
         // a style only ships some of the colours, so the colour options get rebuilt whenever the style changes
         function buildColourControl(): void {
-            const colours = groups[renderManager.characterGroup].hairColours[renderManager.characterHair];
+            const colours = groups[this_.characterGroup].hairColours[this_.characterHair];
 
             if (hairColourControl) folder.remove(hairColourControl);
 
-            state.hairColour = renderManager.characterHairColour = colours.includes(renderManager.characterHairColour) ? renderManager.characterHairColour : colours[0];
+            state.hairColour = this_.characterHairColour = colours.includes(this_.characterHairColour) ? this_.characterHairColour : colours[0];
 
             hairColourControl = folder.add(state, "hairColour", colours).name("Hair Color").onChange(async v => {
-                renderManager.characterHairColour = Number(v);
+                this_.characterHairColour = Number(v);
                 await applyCharacter();
             });
         }
 
         function buildVariantControls(): void {
-            const group = groups[renderManager.characterGroup];
+            const group = groups[this_.characterGroup];
 
             if (faceControl) folder.remove(faceControl);
             if (hairControl) folder.remove(hairControl);
 
-            state.face = renderManager.characterFace = Math.min(renderManager.characterFace, group.faceVariants - 1);
-            state.hair = renderManager.characterHair = group.hairStyles.includes(renderManager.characterHair) ? renderManager.characterHair : group.hairStyles[0];
+            state.face = this_.characterFace = Math.min(this_.characterFace, group.faceVariants - 1);
+            state.hair = this_.characterHair = group.hairStyles.includes(this_.characterHair) ? this_.characterHair : group.hairStyles[0];
 
             const faceOptions = Array.from({ length: group.faceVariants }, (_, i) => i);
 
             faceControl = folder.add(state, "face", faceOptions).name("Face").onChange(async v => {
-                renderManager.characterFace = Number(v);
+                this_.characterFace = Number(v);
                 await applyCharacter();
             });
 
             hairControl = folder.add(state, "hair", group.hairStyles).name("Hair").onChange(async v => {
-                renderManager.characterHair = Number(v);
+                this_.characterHair = Number(v);
                 buildColourControl();
                 await applyCharacter();
             });
@@ -1587,7 +1591,8 @@ class RenderManager {
     }
 
     public addClippingRangeControls(): void {
-        const clippingRange = this.assetManager.userConfig.clippingRange;
+        const manAsset = this.manGame.getComponent("asset");
+        const clippingRange = manAsset.userConfig.clippingRange;
 
         guiFolders.quality.add(clippingRange, "actor", 1, 12, 0.5)
             .name("Emitter Range")
@@ -1601,7 +1606,8 @@ class RenderManager {
     }
 
     public addDisplayGammaControls(): void {
-        const display = this.assetManager.userConfig.display;
+        const manAsset = this.manGame.getComponent("asset");
+        const display = manAsset.userConfig.display;
         display.gamma = 0;
 
         const steps = GAMMA_STEPS.reduce((acc, g) => (acc[g.toFixed(1)] = g, acc), { "off": 0 } as Record<string, number>);
@@ -1658,8 +1664,8 @@ class RenderManager {
     }
 
     public async simulatePawns(count: number = SIMULATED_PAWN_COUNT) {
-        const renderManager = this;
-        const groups = this.simCharGroups || (this.simCharGroups = await this.assetManager.getCharGroups());
+        const this_ = this, manAsset = this.manGame.getComponent("asset");;
+        const groups = this.simCharGroups || (this.simCharGroups = await manAsset.getCharGroups());
         const arrWorkers: Promise<void>[] = [];
         let next = 0;
 
@@ -1671,7 +1677,7 @@ class RenderManager {
                 const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
                 const colours = group.hairColours[hair];
                 const armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
-                const pawn = new Player(renderManager);
+                const pawn = new Player(this_);
 
                 for (const slot of Object.keys(armor) as (keyof GD.ICharacterArmorSelection)[]) {
                     const items = group.armor[slot];
@@ -1681,21 +1687,21 @@ class RenderManager {
 
                 pawn.name = `SimPawn${index}`;
 
-                await renderManager.assetManager.loadCharacter(renderManager, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
+                await manAsset.loadCharacter(this_, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
 
-                renderManager.scene.add(pawn);
-                pawn.position.copy(renderManager.controls.orbit.target);
+                this_.scene.add(pawn);
+                pawn.position.copy(this_.controls.orbit.target);
                 pawn.updateMatrixWorld(true);
-                renderManager.registerCollider(pawn);
+                this_.registerCollider(pawn);
 
                 arrMoverPawns.length = 0;
-                arrMoverPawns.push(renderManager.player);
+                arrMoverPawns.push(this_.player);
 
-                for (const entry of renderManager.simulatedPawns) arrMoverPawns.push(entry.pawn);
+                for (const entry of this_.simulatedPawns) arrMoverPawns.push(entry.pawn);
 
                 pawn.ignoreOverlappingActors(arrMoverPawns);
-                renderManager.simulatedPawns.add({ pawn, expires: performance.now() + SIMULATED_PAWN_LIFETIME, nextTurn: 0 });
-                renderManager.needsUpdate = true;
+                this_.simulatedPawns.add({ pawn, expires: performance.now() + SIMULATED_PAWN_LIFETIME, nextTurn: 0 });
+                this_.needsUpdate = true;
             }
         }
 
@@ -1817,11 +1823,11 @@ class RenderManager {
     }
 
     public spawnNpc(selector: string | number, position: Vector3 = null): Promise<BaseActor> {
-        return this.assetManager.spawnNpc(this, selector, position);
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position);
     }
 
     public listNpcs(): Promise<GD.INpcDefinition[]> {
-        return this.assetManager.listNpcs();
+        return this.manGame.getComponent("asset").listNpcs();
     }
 
     protected maintainSimulatedPawns(currentTime: number): void {
@@ -2111,8 +2117,8 @@ class RenderManager {
         const STATIC_MESH_CLIPPING_RANGE = 1;
         const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
         const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
-
-        const emitterCullDist = this.assetManager.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
+        const assetMan = this.manGame.getComponent("asset");
+        const emitterCullDist = assetMan.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
         const emitterCullDistSq = emitterCullDist * emitterCullDist;
 
         const activeSector = this.getSector(bspCullingPosition);
@@ -2583,7 +2589,7 @@ class RenderManager {
     protected _preRender(currentTime: number, deltaTime: number) {
         this.updateScreenFade(currentTime);
 
-        this.assetManager.tick(this);
+        this.manGame.getComponent("asset").tick(this);
         this.processSectorWarmups();
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;

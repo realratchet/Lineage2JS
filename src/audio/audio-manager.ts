@@ -1,3 +1,5 @@
+import { IEngineComponent } from "@client/game/components";
+import type GameManager from "@client/game/game-manager";
 import { randInt } from "three/src/math/MathUtils";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
@@ -23,7 +25,7 @@ type AmbientChannel_T = {
     info: AmbientInfo_T
 };
 
-class AudioManager {
+class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
     protected audioContext: AudioContext;
     protected masterGain: GainNode;
@@ -50,6 +52,10 @@ class AudioManager {
     protected isUnderwater = false;
 
     protected currentPlayId = 0;
+
+    protected gameManager: GameManager;
+    public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
+    public getParent(): GameManager { return this.gameManager; }
 
     public constructor() {
         this.audioContext = new AudioContext();
@@ -184,7 +190,7 @@ class AudioManager {
         if (this.currentPlayId !== playId) return;
 
         const wasPlaying = !!this.currentSource || (this.fadeEndTime !== undefined && time < this.fadeEndTime);
-        
+
         await this.stopMusicInternal(false, time);
 
         this.currentIndex = index;
@@ -224,7 +230,7 @@ class AudioManager {
         if (this.currentSource) {
             const source = this.currentSource;
             const gain = this.currentGain;
-            
+
             source.onended = null;
             this.currentSource = undefined;
             this.currentGain = undefined;
@@ -232,25 +238,25 @@ class AudioManager {
             if (gain) {
                 const now = this.audioContext.currentTime;
                 this.fadeEndTime = currentTime + 500;
-                
+
                 // Force an anchor point for the ramp
                 gain.gain.setValueAtTime(gain.gain.value, now);
                 gain.gain.linearRampToValueAtTime(0, now + 0.5);
-                
+
                 try {
                     source.stop(now + 0.5);
                 } catch (e) {
                     console.warn("[Music] Failed to schedule source stop", e);
-                    try { source.stop(); } catch {}
+                    try { source.stop(); } catch { }
                 }
 
                 setTimeout(() => {
-                    try { source.disconnect(); } catch {}
-                    try { gain.disconnect(); } catch {}
+                    try { source.disconnect(); } catch { }
+                    try { gain.disconnect(); } catch { }
                 }, 1000);
             } else {
-                try { source.stop(); } catch {}
-                try { source.disconnect(); } catch {}
+                try { source.stop(); } catch { }
+                try { source.disconnect(); } catch { }
             }
         }
     }
@@ -292,7 +298,7 @@ class AudioManager {
     protected playBuffer(buffer: AudioBuffer, _startTime: number) {
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
-        
+
         const gain = this.audioContext.createGain();
         gain.connect(this.musicGainNode);
         source.connect(gain);

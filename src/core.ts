@@ -4,6 +4,7 @@ import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBas
 
 import AssetManager from "@client/assets/asset-manager";
 import runSectorPrecache from "@client/sector-precache";
+import GameManager from "@client/game/game-manager";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -96,8 +97,8 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const assetList = await (await fetch("asset-list.json")).json();
-    const assetManager = new AssetManager(loadSettings, assetList);
-    const renderManager = new RenderManager(viewport, assetManager);
+    const engine = await GameManager.initialize(viewport, assetList, loadSettings);
+    const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render");
 
     (global as any).renderManager = renderManager;
 
@@ -120,7 +121,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
 
-    
+
 
     // const classess = [];
 
@@ -160,7 +161,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     // debugger;
 
 
-    
+
     // pkgEngine.loadNativeClasses();
 
 
@@ -301,9 +302,9 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     // await assetManager.setAlwaysLoaded(renderManager, assetLoader.getPackage("20_22", "Level")); // dion
 
 
-    
 
-    
+
+
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  
 
     // assetLoader.free(assetLoader.getPackage("20_21", "Level"));
@@ -367,7 +368,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
 
     // Load global sky level
 
-    
+
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 

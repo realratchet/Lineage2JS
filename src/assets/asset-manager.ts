@@ -14,6 +14,8 @@ import { AnimationClip, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
 import UnScriptVM from "@client/ue-script/vm";
 import LineagePlayerController from "@client/objects/lineage-player-controller";
+import { IEngineComponent } from "@client/game/components";
+import type { GameManager } from "@client/game/game-manager"
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
@@ -39,7 +41,7 @@ const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
-type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
+export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
 function findScriptField(library: GD.DecodeLibrary, classId: string, name: string): GD.IScriptFieldDecodeInfo {
     const lowerName = name.toLowerCase();
@@ -190,7 +192,7 @@ function setPawnAnimationNotifies(renderManager: RenderManager, library: GD.Deco
     });
 }
 
-class AssetManager {
+class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
     protected loadSettings: GD.LoadSettings_T;
     protected glCapabilities: WebGLCapabilities
@@ -216,6 +218,10 @@ class AssetManager {
 
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
+
+    protected gameManager: GameManager;
+    public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
+    public getParent(): GameManager { return this.gameManager; }
 
     public constructor(loadSettings: GD.LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
