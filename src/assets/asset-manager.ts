@@ -195,7 +195,8 @@ function setPawnAnimationNotifies(renderManager: RenderManager, library: GD.Deco
 class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
     protected loadSettings: GD.LoadSettings_T;
-    protected glCapabilities: WebGLCapabilities
+    protected glCapabilities: WebGLCapabilities;
+    protected hasS3TC: boolean;
     protected decodeWorker: DecodeWorkerClient = null;
     protected isWorkerReady = false;
     protected failedSectors = new Map<string, number>();
@@ -242,13 +243,14 @@ class AssetManager implements IEngineComponent<GameManager> {
         return this.levelSectors.has(sectorIdx.toLowerCase());
     }
 
-    public async initialize(renderManager: RenderManager): Promise<void> {
-        this.glCapabilities = renderManager.renderer.capabilities;
-
+    public async onInit(): Promise<this> {
+        const manRender = this.getParent().getComponent("render");
         const textureMode = (this.loadSettings as any).textures ?? "auto";
-        const hasS3TC = !!renderManager.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
 
-        this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && hasS3TC);
+        this.glCapabilities = manRender.renderer.capabilities;
+        this.hasS3TC = manRender.renderer.extensions.get("WEBGL_compressed_texture_s3tc")
+        this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && this.hasS3TC);
+
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
         this.userConfig = await getUserConfig();
@@ -287,20 +289,22 @@ class AssetManager implements IEngineComponent<GameManager> {
 
         this.effectLibrary = effectLibrary;
 
-        this.applyCharacter(renderManager, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
+        this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
-        renderManager.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
+        manRender.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
 
         const underwaterSoundName = effectLibrary.sounds[underwaterLoopSound];
         const underwaterSound = effectLibrary.soundBlobCache.get(underwaterSoundName);
 
         if (!underwaterSound?.uri) throw new Error(`Underwater loop sound '${underwaterLoopSound}' failed to decode.`);
 
-        renderManager.audioManager.setUnderwaterLoopSound(underwaterSound.uri);
+        manRender.audioManager.setUnderwaterLoopSound(underwaterSound.uri);
 
-        renderManager.setEnv(decodeEnv(envInfo));
-        renderManager.setSky(decodePackage(skyLibrary));
-        renderManager.audioManager.setMusicInfo(musicInfo);
+        manRender.setEnv(decodeEnv(envInfo));
+        manRender.setSky(decodePackage(skyLibrary));
+        manRender.audioManager.setMusicInfo(musicInfo);
+
+        return this;
     }
 
     public createLandmarkEffect(classPath: string): THREE.Object3D {

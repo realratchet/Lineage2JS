@@ -16,7 +16,6 @@ class GameManager implements IEngineComponent<GameManager> {
     protected readonly animationFrameCallback: FrameRequestCallback;
 
     protected constructor() {
-
         this.animationFrameCallback = this.onHandleAnimationFrame.bind(this);
     }
 
@@ -28,15 +27,22 @@ class GameManager implements IEngineComponent<GameManager> {
         game.manAudio = new AudioManager();
         game.manPhysics = new PhysicsManager();
 
-        game.attach(game.manAsset);
         game.attach(game.manPhysics);
         game.attach(game.manRender);
         game.attach(game.manAudio);
+        game.attach(game.manAsset);
 
-        return game;
+        return await game.onInit();
     }
 
-    public startTicking(currentTime: number): this {
+    public async onInit(): Promise<this> {
+        for (const comp of this.components)
+            await comp.onInit?.();
+
+        return this;
+    }
+
+    public startTicking(currentTime: number): void {
         this.lastTick = currentTime;
 
         for (const comp of this.components)
@@ -44,8 +50,6 @@ class GameManager implements IEngineComponent<GameManager> {
 
         // ladies and gentlement, start your engines
         this.onHandleAnimationFrame(this.lastTick);
-
-        return this;
     }
 
     protected attach<T extends IEngineComponent<any>>(comp: T): T {

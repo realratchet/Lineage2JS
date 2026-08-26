@@ -106,8 +106,6 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
-    await assetManager.initialize(renderManager);
-
     if (interactive) {
         renderManager.addClippingRangeControls();
         renderManager.addDisplayGammaControls();
