@@ -4,9 +4,9 @@ import type { SectorObject } from "@client/objects/zone-object";
 import type RenderManager from "@client/rendering/render-manager";
 import decodeObject3D from "@client/assets/decoders/object3d-decoder";
 
-const SIZE_SCALE = 1 / 9;
-
 class WaterHitEffect {
+    protected static readonly SIZE_SCALE = 1 / 9;
+
     protected readonly owner: BaseActor;
     protected readonly renderManager: RenderManager;
 
@@ -27,7 +27,7 @@ class WaterHitEffect {
         sector.scriptVM.initializeHost(effect as any);
 
         effect.position.copy(position);
-        effect.scale.multiplyScalar(this.owner.getCollisionRadius() * SIZE_SCALE);
+        effect.scale.multiplyScalar(this.owner.getCollisionRadius() * WaterHitEffect.SIZE_SCALE);
         if (speed > 0) effect.quaternion.copy(this.owner.quaternion);
 
         this.renderManager.addTransientEffect(effect);

@@ -15,33 +15,6 @@ import type UnderWaterEffect from "@client/rendering/under-water-effect";
 import type { ICollidable } from "@client/objects/objects";
 import type { SectorObject } from "@client/objects/zone-object";
 
-const PLAYER_PHYSICS_HZ = 60;
-const SIMULATED_PAWN_PHYSICS_HZ = 30;
-const PLAYER_PHYSICS_INTERVAL_MS = 1000 / PLAYER_PHYSICS_HZ;
-const SIMULATED_PAWN_PHYSICS_INTERVAL_MS = 1000 / SIMULATED_PAWN_PHYSICS_HZ;
-const MAX_PHYSICS_TICKS = 8;
-
-const SIMULATED_PAWN_COUNT = 10;
-const SIMULATED_PAWN_LIFETIME = 15000;
-const SIMULATED_PAWN_TURN_INTERVAL = 1000;
-const SIMULATED_PAWN_CONCURRENCY = 3;
-
-// Off-screen emitters keep a maintenance cadence instead of freezing.
-const OFFSCREEN_EMITTER_HZ = 2;
-const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
-// Lineage II MinDesiredFrameRate is 35; aggressive LOD starts five FPS lower.
-const MIN_DESIRED_FRAME_RATE = 35;
-const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
-const DROP_DETAIL_FRAME_TIME_MS = 1000 / MIN_DESIRED_FRAME_RATE;
-const AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / AGGRESSIVE_LOD_FRAME_RATE;
-const MAX_OFFSCREEN_EMITTER_UPDATES = 32;
-const DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES = 8;
-const UNDERWATER_SUN_BEAM_DEPTH = 2000;
-const UNDERWATER_SUN_BEAM_TRACE_START = 200;
-const UNDERWATER_SAMPLE_DISTANCE_SQ = 40000;
-const WATER_HIT_SURFACE_HEIGHT = 20;
-const WATER_HIT_MIN_SURFACE_HEIGHT = 0.85;
-
 const tmpSimDirection = new Vector3();
 const tmpWaterSurfaceEnd = new Vector3();
 const tmpWaterFloorStart = new Vector3();
@@ -53,75 +26,21 @@ const tmpSunBeamSample = new Vector2();
 const arrMoverPawns: BaseActor[] = [];
 const arrWaitingMovers: [MovableObject, number][] = [];
 const arrActiveMovers: MovableObject[] = [];
-const frozenUpdateMatrixWorld = function () { };
 
 type SimulatedPawnState_T = { expires: number, nextTurn: number };
 
-function getCollisionBackend(): CollisionBackend_T {
-    const backend = new URLSearchParams(location.search).get("collisionBackend") || "ue";
-
-    if (backend !== "ue" && backend !== "rapier" && backend !== "compare") throw new Error(`Unknown collision backend '${backend}'.`);
-
-    return backend;
-}
-
-function freezeEmitterParticles(emitter: any): void {
-    for (const particle of emitter.particlePool) {
-        particle.visible = false;
-        particle.updateMatrixWorld = frozenUpdateMatrixWorld;
-    }
-
-    if (emitter.instancedMesh) emitter.instancedMesh.visible = false;
-}
-
-function getEmitterPhase(emitter: any): number {
-    if (emitter.detailPhase !== undefined) return emitter.detailPhase;
-
-    let hash = 2166136261;
-    for (let i = 0; i < emitter.uuid.length; i++) {
-        hash ^= emitter.uuid.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
-    }
-
-    return emitter.detailPhase = hash >>> 0;
-}
-
-function shouldUpdateOffscreenEmitter(emitter: any, currentTime: number): boolean {
-    if (!emitter.isOffscreenThrottled) {
-        emitter.isOffscreenThrottled = true;
-        emitter.offscreenSince = currentTime;
-        emitter.nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS + getEmitterPhase(emitter) % OFFSCREEN_EMITTER_INTERVAL_MS;
-        return true;
-    }
-
-    const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
-    if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
-        return false;
-
-    if (currentTime < emitter.nextOffscreenUpdate) return false;
-
-    const missedIntervals = Math.floor((currentTime - emitter.nextOffscreenUpdate) / OFFSCREEN_EMITTER_INTERVAL_MS) + 1;
-    emitter.nextOffscreenUpdate += missedIntervals * OFFSCREEN_EMITTER_INTERVAL_MS;
-
-    return true;
-}
-
-function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean): boolean {
-    if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
-
-    const phase = getEmitterPhase(emitter) + detailFrame;
-    // UE2 drop-detail retains roughly 65% of the normal xEmitter budget.
-    return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
-}
-
-function isHierarchyVisible(object: Object3D): boolean {
-    for (let current: Object3D = object; current; current = current.parent)
-        if (!current.visible) return false;
-
-    return true;
-}
-
 class PhysicsManager implements IEngineComponent<GameManager> {
+    protected static readonly PLAYER_PHYSICS_HZ = 60;
+    protected static readonly PHYSICS_HZ = 30;
+    protected static readonly PLAYER_PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PLAYER_PHYSICS_HZ;
+    protected static readonly PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PHYSICS_HZ;
+    protected static readonly MAX_PHYSICS_TICKS = 8;
+    protected static readonly UNDERWATER_SUN_BEAM_DEPTH = 2000;
+    protected static readonly UNDERWATER_SUN_BEAM_TRACE_START = 200;
+    protected static readonly UNDERWATER_SAMPLE_DISTANCE_SQ = 40000;
+    protected static readonly WATER_HIT_SURFACE_HEIGHT = 20;
+    protected static readonly WATER_HIT_MIN_SURFACE_HEIGHT = 0.85;
+
     protected manGame: GameManager;
     protected waterHitEffect: WaterHitEffect;
 
@@ -130,9 +49,8 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     protected simCharGroups: GD.ICharacterGroup[] = null;
 
     protected readonly physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
-    protected readonly collisionWorld = new CollisionWorld(this.physicsWorld, getCollisionBackend());
+    protected readonly collisionWorld = new CollisionWorld(this.physicsWorld, PhysicsManager.getCollisionBackend());
     protected readonly collidables = new Set<ICollidable>();
-    protected readonly emitters = new Set<any>();
     protected readonly movableObjects = new Set<MovableObject>();
     protected readonly activeMovableObjects = new Set<MovableObject>();
     protected readonly waitingMovableObjects = new Map<MovableObject, number>();
@@ -141,7 +59,6 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly underWaterPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastUnderWaterSamplingLocation = new Vector3(Infinity, Infinity, Infinity);
-    protected activeSector: SectorObject = null;
     protected underWaterVolume: GD.IWaterVolumeDecodeInfo = null;
     protected hasUnderWaterSample = false;
     protected wasUnderWaterDay = false;
@@ -150,12 +67,17 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     protected waterHitElapsed = 0;
     protected waterHitInterval = 0;
     protected moverPosition = 0;
-    protected emitterDetailFrame = 0;
-    protected dropDetail = false;
-    protected aggressiveLod = false;
 
     protected nextPlayerPhysicsTick: number;
     protected nextPhysicsTick: number;
+
+    protected static getCollisionBackend(): CollisionBackend_T {
+        const backend = new URLSearchParams(location.search).get("collisionBackend") || "ue";
+
+        if (backend !== "ue" && backend !== "rapier" && backend !== "compare") throw new Error(`Unknown collision backend '${backend}'.`);
+
+        return backend;
+    }
 
     public setParent(parent: GameManager): this {
         this.manGame = parent;
@@ -169,55 +91,54 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     public getParent(): GameManager { return this.manGame; }
 
     public startTicking(currentTime: number): void {
-        this.physicsWorld.timestep = 1 / 30;
+        this.physicsWorld.timestep = 1 / PhysicsManager.PHYSICS_HZ;
         this.physicsWorld.step();
 
-        this.nextPlayerPhysicsTick = currentTime + PLAYER_PHYSICS_INTERVAL_MS;
-        this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
+        this.nextPlayerPhysicsTick = currentTime + PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS;
+        this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
         const manRender = this.manGame.getComponent("render");
 
         this.simPawns.maintainSimulatedPawns(manRender, currentTime);
-        this.dropDetail = deltaTime > DROP_DETAIL_FRAME_TIME_MS;
-        this.aggressiveLod = deltaTime > AGGRESSIVE_LOD_FRAME_TIME_MS;
+        this.simEmitters.setFrameTime(deltaTime);
 
         let playerPhysicsTicks = 0;
 
-        while (this.nextPlayerPhysicsTick <= currentTime && playerPhysicsTicks++ < MAX_PHYSICS_TICKS) {
-            manRender.player.updatePhysics(this.nextPlayerPhysicsTick, 1 / PLAYER_PHYSICS_HZ);
-            this.nextPlayerPhysicsTick += PLAYER_PHYSICS_INTERVAL_MS;
+        while (this.nextPlayerPhysicsTick <= currentTime && playerPhysicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
+            manRender.player.updatePhysics(this.nextPlayerPhysicsTick, 1 / PhysicsManager.PLAYER_PHYSICS_HZ);
+            this.nextPlayerPhysicsTick += PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS;
         }
 
         if (this.nextPlayerPhysicsTick <= currentTime)
-            this.nextPlayerPhysicsTick = currentTime + PLAYER_PHYSICS_INTERVAL_MS;
+            this.nextPlayerPhysicsTick = currentTime + PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS;
 
         // nothing reads the rapier world under the analytical backend
         const stepsRapier = this.collisionWorld.usesRapier();
         let physicsTicks = 0;
 
-        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < MAX_PHYSICS_TICKS) {
+        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
             this.updateMovableObjects(this.nextPhysicsTick);
-            this.updateRotatingObjects(1000 / SIMULATED_PAWN_PHYSICS_HZ);
-            this.simPawns.tickSimulatedPawns(this.nextPhysicsTick);
-            this.updateWaterHitEffect(manRender.player, manRender.getLoadedSectors(), SIMULATED_PAWN_PHYSICS_INTERVAL_MS);
+            this.updateRotatingObjects(PhysicsManager.PHYSICS_INTERVAL_MS);
+            this.simPawns.tickSimulatedPawns(this.nextPhysicsTick, 1 / PhysicsManager.PHYSICS_HZ);
+            this.updateWaterHitEffect(manRender.player, manRender.getLoadedSectors(), PhysicsManager.PHYSICS_INTERVAL_MS);
             this.updateUnderWaterSunBeam(manRender.underWaterEffect);
-            this.tickEmitters(this.nextPhysicsTick);
+            this.simEmitters.tick(this.nextPhysicsTick);
             if (stepsRapier) this.physicsWorld.step();
-            this.nextPhysicsTick += SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
+            this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
         }
 
         if (this.nextPhysicsTick <= currentTime)
-            this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
+            this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
 
-        if (physicsTicks > 0 && (this.emitters.size > 0 || this.rotatingObjects.size > 0 || this.activeMovableObjects.size > 0))
+        if (physicsTicks > 0 && (this.simEmitters.size > 0 || this.rotatingObjects.size > 0 || this.activeMovableObjects.size > 0))
             manRender.needsUpdate = true;
     }
 
     public getSimulatedPawns(): ReadonlySet<BaseActor> { return this.simPawns.getPawns(); }
 
-    public setActiveSector(sector: SectorObject): void { this.activeSector = sector; }
+    public setActiveSector(sector: SectorObject): void { this.simEmitters.setActiveSector(sector); }
     public setTriggerPosition(position: Vector3): void { this.triggerPosition.copy(position); }
     public setUnderWaterState(position: Vector3, isDay: boolean): void { this.underWaterPosition.copy(position); this.isUnderWaterDay = isDay; }
 
@@ -229,27 +150,8 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     }
 
     // emitters live under sector.zones, not staticMeshGroup - always walk the whole sector
-    public setEmitterWarmupGate(root: Object3D, allowed: boolean): void {
-        root.traverse(child => {
-            if ((child as any).particlePool) (child as any).warmupGate = allowed;
-        });
-    }
-
-    public isEmitterEffectFinished(effect: Object3D): boolean {
-        let hasEmitter = false;
-        let isFinished = true;
-
-        effect.traverse(child => {
-            const emitter = child as any;
-
-            if (!emitter.particlePool) return;
-
-            hasEmitter = true;
-            if (!emitter.isFinished()) isFinished = false;
-        });
-
-        return hasEmitter && isFinished;
-    }
+    public setEmitterWarmupGate(root: Object3D, allowed: boolean): void { EmitterSimulation.setWarmupGate(root, allowed); }
+    public isEmitterEffectFinished(effect: Object3D): boolean { return EmitterSimulation.isEffectFinished(effect); }
 
     public addPawn(pawn: BaseActor, expires: number = Infinity, nextTurn: number = Infinity): void {
         const manRender = this.manGame.getComponent("render");
@@ -273,7 +175,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         return true;
     }
 
-    public async simulatePawns(count: number = SIMULATED_PAWN_COUNT): Promise<void> {
+    public async simulatePawns(count: number = PawnSimulation.DEFAULT_COUNT): Promise<void> {
         const this_ = this, manAsset = this.manGame.getComponent("asset"), manRender = this.manGame.getComponent("render");
         const groups = this.simCharGroups || (this.simCharGroups = await manAsset.getCharGroups());
         const arrWorkers: Promise<void>[] = [];
@@ -302,12 +204,12 @@ class PhysicsManager implements IEngineComponent<GameManager> {
                 manRender.scene.add(pawn);
                 pawn.position.copy(manRender.controls.orbit.target);
                 pawn.updateMatrixWorld(true);
-                this_.addPawn(pawn, performance.now() + SIMULATED_PAWN_LIFETIME, 0);
+                this_.addPawn(pawn, performance.now() + PawnSimulation.LIFETIME, 0);
                 manRender.needsUpdate = true;
             }
         }
 
-        for (let i = 0; i < SIMULATED_PAWN_CONCURRENCY; i++) arrWorkers.push(worker());
+        for (let i = 0; i < PawnSimulation.CONCURRENCY; i++) arrWorkers.push(worker());
 
         await Promise.all(arrWorkers);
     }
@@ -338,7 +240,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
 
         tmpWaterHitStart.copy(owner.position);
         tmpWaterHitEnd.copy(tmpWaterHitStart);
-        tmpWaterHitEnd.z += height * 2 + WATER_HIT_SURFACE_HEIGHT;
+        tmpWaterHitEnd.z += height * 2 + PhysicsManager.WATER_HIT_SURFACE_HEIGHT;
 
         let selectedSector: SectorObject = null;
         let selectedVolume: GD.IWaterVolumeDecodeInfo = null;
@@ -353,9 +255,9 @@ class PhysicsManager implements IEngineComponent<GameManager> {
                 if (!startsInside || encompassesVolume(tmpWaterHitEnd, volume.bsp)) continue;
 
                 const time = findVolumeTransition(tmpWaterHitStart, tmpWaterHitEnd, volume.bsp, true);
-                const surfaceHeight = time * (height * 2 + WATER_HIT_SURFACE_HEIGHT);
+                const surfaceHeight = time * (height * 2 + PhysicsManager.WATER_HIT_SURFACE_HEIGHT);
 
-                if (surfaceHeight < height * (1 + WATER_HIT_MIN_SURFACE_HEIGHT)) continue;
+                if (surfaceHeight < height * (1 + PhysicsManager.WATER_HIT_MIN_SURFACE_HEIGHT)) continue;
                 if (!selectedVolume || volume.priority >= selectedVolume.priority) {
                     selectedSector = sector;
                     selectedVolume = volume;
@@ -371,7 +273,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         }
 
         const speed = owner.getSpeed();
-        const effectName = this.getWaterHitEffectName(selectedSector, selectedVolume, speed > 0);
+        const effectName = PhysicsManager.getWaterHitEffectName(selectedSector, selectedVolume, speed > 0);
 
         if (!effectName) return;
 
@@ -386,7 +288,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         this.waterHitInterval = this.waterHitEffect.spawn(selectedSector, effectName, tmpWaterHitPosition, speed);
     }
 
-    protected getWaterHitEffectName(sector: SectorObject, volume: GD.IWaterVolumeDecodeInfo, isMoving: boolean): string | null {
+    protected static getWaterHitEffectName(sector: SectorObject, volume: GD.IWaterVolumeDecodeInfo, isMoving: boolean): string | null {
         if (!volume.scriptClassId) throw new Error(`Water volume '${volume.name}' has no UnrealScript class.`);
 
         let waitHitEffect: GD.ScriptPropertyValue_T = null;
@@ -407,19 +309,19 @@ class PhysicsManager implements IEngineComponent<GameManager> {
 
     protected sampleUnderWaterSunBeam(position: Vector3, volume: GD.IWaterVolumeDecodeInfo, target: Vector2): boolean {
         tmpWaterSurfaceEnd.copy(position);
-        tmpWaterSurfaceEnd.z += UNDERWATER_SUN_BEAM_DEPTH;
+        tmpWaterSurfaceEnd.z += PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH;
 
         const surfaceTime = findVolumeTransition(position, tmpWaterSurfaceEnd, volume.bsp, true);
 
         if (surfaceTime <= 0 || surfaceTime >= 1) return false;
 
-        const surfaceZ = position.z + UNDERWATER_SUN_BEAM_DEPTH * surfaceTime;
+        const surfaceZ = position.z + PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH * surfaceTime;
 
-        tmpWaterFloorStart.set(position.x, position.y, surfaceZ - UNDERWATER_SUN_BEAM_TRACE_START);
+        tmpWaterFloorStart.set(position.x, position.y, surfaceZ - PhysicsManager.UNDERWATER_SUN_BEAM_TRACE_START);
 
-        const floorHit = this.rayCheck(tmpWaterFloorStart, tmpDown, UNDERWATER_SUN_BEAM_DEPTH - UNDERWATER_SUN_BEAM_TRACE_START, undefined, undefined, false);
+        const floorHit = this.rayCheck(tmpWaterFloorStart, tmpDown, PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH - PhysicsManager.UNDERWATER_SUN_BEAM_TRACE_START, undefined, undefined, false);
 
-        if (!floorHit || floorHit.distance <= 0 || floorHit.distance >= UNDERWATER_SUN_BEAM_DEPTH - UNDERWATER_SUN_BEAM_TRACE_START) return false;
+        if (!floorHit || floorHit.distance <= 0 || floorHit.distance >= PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH - PhysicsManager.UNDERWATER_SUN_BEAM_TRACE_START) return false;
 
         target.set(surfaceZ, surfaceZ - floorHit.location.z);
 
@@ -443,7 +345,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         this.wasUnderWaterDay = true;
         this.underWaterVolume = volume;
 
-        if (this.hasUnderWaterSample && this.lastUnderWaterSamplingLocation.distanceToSquared(this.underWaterPosition) <= UNDERWATER_SAMPLE_DISTANCE_SQ) return;
+        if (this.hasUnderWaterSample && this.lastUnderWaterSamplingLocation.distanceToSquared(this.underWaterPosition) <= PhysicsManager.UNDERWATER_SAMPLE_DISTANCE_SQ) return;
 
         this.lastUnderWaterSamplingLocation.copy(this.underWaterPosition);
         this.hasUnderWaterSample = true;
@@ -462,7 +364,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.registerCollider(terrain);
 
-            if ((object as any).particlePool) this.emitters.add(object);
+            if ((object as any).particlePool) this.simEmitters.add(object);
             if ((object as any).isRotatingObject) this.rotatingObjects.add(object as unknown as RotatingObject);
             if ((object as any).isMovableObject) {
                 const mover = object as unknown as MovableObject;
@@ -492,7 +394,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.unregisterCollider(terrain);
 
-            this.emitters.delete(object);
+            this.simEmitters.remove(object);
             this.rotatingObjects.delete(object as unknown as RotatingObject);
             this.movableObjects.delete(object as unknown as MovableObject);
             this.activeMovableObjects.delete(object as unknown as MovableObject);
@@ -565,19 +467,70 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     protected updateRotatingObjects(deltaTime: number): void {
         this.rotatingObjects.forEach(object => object.updateRotation(deltaTime));
     }
+}
 
-    protected tickEmitters(currentTime: number): void {
-        this.emitterDetailFrame = (this.emitterDetailFrame + 1) % 6;
+class EmitterSimulation {
+    protected static readonly OFFSCREEN_HZ = 2;
+    protected static readonly OFFSCREEN_INTERVAL_MS = 1000 / EmitterSimulation.OFFSCREEN_HZ;
+    protected static readonly MIN_DESIRED_FRAME_RATE = 35;
+    protected static readonly AGGRESSIVE_LOD_FRAME_RATE = EmitterSimulation.MIN_DESIRED_FRAME_RATE - 5;
+    protected static readonly DROP_DETAIL_FRAME_TIME_MS = 1000 / EmitterSimulation.MIN_DESIRED_FRAME_RATE;
+    protected static readonly AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / EmitterSimulation.AGGRESSIVE_LOD_FRAME_RATE;
+    protected static readonly MAX_OFFSCREEN_UPDATES = 32;
+    protected static readonly DROP_DETAIL_OFFSCREEN_UPDATES = 8;
+    protected static readonly FROZEN_UPDATE_MATRIX_WORLD = function () { };
 
-        const offscreenEmitterUpdateLimit = this.aggressiveLod
+    protected readonly emitters = new Set<any>();
+    protected activeSector: SectorObject = null;
+    protected detailFrame = 0;
+    protected dropDetail = false;
+    protected aggressiveLod = false;
+
+    public get size(): number { return this.emitters.size; }
+
+    public add(emitter: Object3D): void { this.emitters.add(emitter); }
+    public remove(emitter: Object3D): void { this.emitters.delete(emitter); }
+    public setActiveSector(sector: SectorObject): void { this.activeSector = sector; }
+
+    public setFrameTime(deltaTime: number): void {
+        this.dropDetail = deltaTime > EmitterSimulation.DROP_DETAIL_FRAME_TIME_MS;
+        this.aggressiveLod = deltaTime > EmitterSimulation.AGGRESSIVE_LOD_FRAME_TIME_MS;
+    }
+
+    public static setWarmupGate(root: Object3D, allowed: boolean): void {
+        root.traverse(child => {
+            if ((child as any).particlePool) (child as any).warmupGate = allowed;
+        });
+    }
+
+    public static isEffectFinished(effect: Object3D): boolean {
+        let hasEmitter = false;
+        let isFinished = true;
+
+        effect.traverse(child => {
+            const emitter = child as any;
+
+            if (!emitter.particlePool) return;
+
+            hasEmitter = true;
+            if (!emitter.isFinished()) isFinished = false;
+        });
+
+        return hasEmitter && isFinished;
+    }
+
+    public tick(currentTime: number): void {
+        this.detailFrame = (this.detailFrame + 1) % 6;
+
+        const offscreenUpdateLimit = this.aggressiveLod
             ? 0
             : this.dropDetail
-                ? DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES
-                : MAX_OFFSCREEN_EMITTER_UPDATES;
-        let offscreenEmitterUpdates = 0;
+                ? EmitterSimulation.DROP_DETAIL_OFFSCREEN_UPDATES
+                : EmitterSimulation.MAX_OFFSCREEN_UPDATES;
+        let offscreenUpdates = 0;
 
         for (const emitter of this.emitters) {
-            if (!isHierarchyVisible(emitter)) continue;
+            if (!EmitterSimulation.isHierarchyVisible(emitter)) continue;
 
             let sector: SectorObject = null;
             let parent = emitter.parent;
@@ -597,20 +550,20 @@ class PhysicsManager implements IEngineComponent<GameManager> {
 
             if (isOffscreen) {
                 const wasOffscreen = !!emitter.isOffscreenThrottled;
-                const isMaintenanceDue = shouldUpdateOffscreenEmitter(emitter, currentTime);
+                const isMaintenanceDue = EmitterSimulation.shouldUpdateOffscreen(emitter, currentTime);
 
-                if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
-                    offscreenEmitterUpdates++;
+                if (offscreenUpdates < offscreenUpdateLimit && isMaintenanceDue) {
+                    offscreenUpdates++;
                     emitter.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
                     emitter.update(currentTime);
-                    freezeEmitterParticles(emitter);
-                } else if (!wasOffscreen) freezeEmitterParticles(emitter);
+                    EmitterSimulation.freezeParticles(emitter);
+                } else if (!wasOffscreen) EmitterSimulation.freezeParticles(emitter);
 
-                emitter.updateMatrixWorld = frozenUpdateMatrixWorld;
+                emitter.updateMatrixWorld = EmitterSimulation.FROZEN_UPDATE_MATRIX_WORLD;
                 continue;
             }
 
-            const shouldUpdate = shouldUpdateVisibleEmitter(emitter, this.emitterDetailFrame, this.dropDetail, this.aggressiveLod);
+            const shouldUpdate = EmitterSimulation.shouldUpdateVisible(emitter, this.detailFrame, this.dropDetail, this.aggressiveLod);
 
             emitter.isOffscreenThrottled = false;
             emitter.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
@@ -618,16 +571,71 @@ class PhysicsManager implements IEngineComponent<GameManager> {
             if (shouldUpdate) emitter.update(currentTime);
         }
     }
-}
 
-export default PhysicsManager;
-export { PhysicsManager };
+    protected static freezeParticles(emitter: any): void {
+        for (const particle of emitter.particlePool) {
+            particle.visible = false;
+            particle.updateMatrixWorld = EmitterSimulation.FROZEN_UPDATE_MATRIX_WORLD;
+        }
 
-class EmitterSimulation {
+        if (emitter.instancedMesh) emitter.instancedMesh.visible = false;
+    }
 
+    protected static getPhase(emitter: any): number {
+        if (emitter.detailPhase !== undefined) return emitter.detailPhase;
+
+        let hash = 2166136261;
+        for (let i = 0; i < emitter.uuid.length; i++) {
+            hash ^= emitter.uuid.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+
+        return emitter.detailPhase = hash >>> 0;
+    }
+
+    protected static shouldUpdateOffscreen(emitter: any, currentTime: number): boolean {
+        if (!emitter.isOffscreenThrottled) {
+            emitter.isOffscreenThrottled = true;
+            emitter.offscreenSince = currentTime;
+            emitter.nextOffscreenUpdate = currentTime + EmitterSimulation.OFFSCREEN_INTERVAL_MS + EmitterSimulation.getPhase(emitter) % EmitterSimulation.OFFSCREEN_INTERVAL_MS;
+            return true;
+        }
+
+        const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
+        if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
+            return false;
+
+        if (currentTime < emitter.nextOffscreenUpdate) return false;
+
+        const missedIntervals = Math.floor((currentTime - emitter.nextOffscreenUpdate) / EmitterSimulation.OFFSCREEN_INTERVAL_MS) + 1;
+        emitter.nextOffscreenUpdate += missedIntervals * EmitterSimulation.OFFSCREEN_INTERVAL_MS;
+
+        return true;
+    }
+
+    protected static shouldUpdateVisible(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean): boolean {
+        if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
+
+        const phase = EmitterSimulation.getPhase(emitter) + detailFrame;
+
+        // UE2 drop-detail retains roughly 65% of the normal xEmitter budget.
+        return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
+    }
+
+    protected static isHierarchyVisible(object: Object3D): boolean {
+        for (let current: Object3D = object; current; current = current.parent)
+            if (!current.visible) return false;
+
+        return true;
+    }
 }
 
 class PawnSimulation {
+    public static readonly DEFAULT_COUNT = 10;
+    public static readonly LIFETIME = 15000;
+    public static readonly CONCURRENCY = 3;
+    protected static readonly TURN_INTERVAL = 1000;
+
     protected readonly pawns = new Set<BaseActor>();
     protected readonly states = new Map<BaseActor, SimulatedPawnState_T>();
 
@@ -657,7 +665,7 @@ class PawnSimulation {
 
             if (currentTime < state.nextTurn) continue;
 
-            state.nextTurn = currentTime + SIMULATED_PAWN_TURN_INTERVAL;
+            state.nextTurn = currentTime + PawnSimulation.TURN_INTERVAL;
 
             const angle = Math.random() * Math.PI * 2;
 
@@ -667,8 +675,11 @@ class PawnSimulation {
         if (this.pawns.size > 0) manRender.needsUpdate = true;
     }
 
-    public tickSimulatedPawns(currentTime: number): void {
+    public tickSimulatedPawns(currentTime: number, deltaTime: number): void {
         for (const pawn of this.pawns)
-            pawn.updatePhysics(currentTime, 1 / SIMULATED_PAWN_PHYSICS_HZ);
+            pawn.updatePhysics(currentTime, deltaTime);
     }
 }
+
+export default PhysicsManager;
+export { PhysicsManager };
