@@ -317,7 +317,8 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected isPrimaryMouseDown = false;
     protected hasMouseDragged = false;
     protected readonly mouseDownPosition = new Vector2();
-    protected lastRender: number = 0;
+    protected isRendering = false;
+    protected isRenderingFrame = false;
     protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
     protected readonly _lastListenerQuat = new Quaternion(0, 0, 0, 0);
     protected pixelRatio: number = global.devicePixelRatio;
@@ -1117,24 +1118,6 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    protected onHandleRender(currentTime: number): void {
-        const deltaTime = currentTime - this.lastRender;
-        const isFrameDirty = this.isPersistentRendering || this.needsUpdate;
-
-        if (isFrameDirty) {
-            stats.begin();
-            this._preRender(currentTime, deltaTime);
-            this._doRender(currentTime, deltaTime);
-            this._postRender(currentTime, deltaTime);
-            stats.end();
-            this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
-        }
-
-        this.lastRender = currentTime;
-
-        requestAnimationFrame(this.onHandleRender.bind(this));
-    }
-
     public enableZoneCulling = true;
 
     public screenFadeBlink(info: GD.IAnimationScreenFadeNotifyDecodeInfo): void {
@@ -1153,8 +1136,6 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public addViewShake(actor: BaseActor, info: GD.IAnimationViewShakeNotifyDecodeInfo): void {
-        if (!this.followPlayer) return;
-
         const direction = new Vector3().fromArray(info.shakeVector);
 
         if (direction.lengthSq() === 0) direction.set(Math.random(), Math.random(), 0);
@@ -1212,11 +1193,6 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected applyViewShake(_currentTime: number): boolean {
-        if (!this.followPlayer) {
-            this.viewShakeStates.length = 0;
-            return false;
-        }
-
         if (this.viewShakeStates.length === 0) return false;
 
         tmpViewShakePosition.copy(this.camera.position);
@@ -2278,7 +2254,12 @@ class RenderManager implements IEngineComponent<GameManager> {
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
     }
 
-    protected _preRender(currentTime: number, deltaTime: number) {
+    public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
+        this.isRenderingFrame = this.isRendering && (this.isPersistentRendering || this.needsUpdate);
+
+        if (!this.isRenderingFrame) return;
+
+        stats.begin();
         this.updateScreenFade(currentTime);
 
         this.manGame.getComponent("asset").tick(this);
@@ -2476,8 +2457,10 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.clear();
     }
 
-    protected _doRender(_currentTime: number, _deltaTime: number) {
-        const viewShakeActive = this.applyViewShake(_currentTime);
+    public onEngineTick(currentTime: number, _deltaTime: number): void {
+        if (!this.isRenderingFrame) return;
+
+        const viewShakeActive = this.applyViewShake(currentTime);
 
         // // Redirect to Main Target for Bloom
         // i think bloom pass is only enabled when shader rendering used which is off by default
@@ -2603,7 +2586,7 @@ class RenderManager implements IEngineComponent<GameManager> {
             } else if (this.visualizer.getMode() === VisualizerMode.Audio) {
                 const musicState = this.audioManager.getMusicState();
                 const ambientSounds = this.audioManager.getAmbientSounds();
-                this.visualizer.updateAudioHUD(musicState, ambientSounds, _currentTime, this.camera.position);
+                this.visualizer.updateAudioHUD(musicState, ambientSounds, currentTime, this.camera.position);
             } else if (this.visualizer.getMode() === VisualizerMode.Emitters) {
                 this.visualizer.updateEmitters(this.collectEmitterDebugInfo());
             }
@@ -2626,18 +2609,21 @@ class RenderManager implements IEngineComponent<GameManager> {
         if (viewShakeActive) this.restoreViewShake();
     }
 
-    protected _postRender(_currentTime: number, _deltaTime: number) { }
+    public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
+        if (!this.isRenderingFrame) return;
 
-    public startRendering() {
-        const currentTime = performance.now();
+        stats.end();
+        this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
+        this.isRenderingFrame = false;
+    }
 
+    public startTicking(_currentTime: number): void {
         this.scene.updateMatrixWorld(true);
         this.physicsManager.registerSimulationObjects(this.scene);
         this.updateColliderOverlay();
-        this.lastRender = currentTime;
         this.stitchTerrains();
-
-        this.onHandleRender(currentTime);
+        this.isRendering = true;
+        this.needsUpdate = true;
     }
 
     protected setCollidersVisible(visible: boolean) {

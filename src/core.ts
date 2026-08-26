@@ -377,7 +377,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     // renderManager.enableZoneCulling = false;
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
-    renderManager.startRendering();
+    engine.startTicking(performance.now());
 
     return renderManager;
 }

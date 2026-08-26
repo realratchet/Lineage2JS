@@ -297,7 +297,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         const runSlot = { get: () => runHitEffect, set: (value: GD.ScriptPropertyValue_T) => runHitEffect = value };
         const fn = sector.scriptVM.findFunction(volume.scriptClassId, "GetHitEffectName");
 
-        sector.scriptVM.invoke(volume, fn, [waitSlot, runSlot]);
+        sector.scriptVM.invoke(volume as any, fn, [waitSlot, runSlot]);
 
         const effectName = isMoving ? runHitEffect : waitHitEffect;
 

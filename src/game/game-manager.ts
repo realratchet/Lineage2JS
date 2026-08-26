@@ -13,20 +13,27 @@ class GameManager implements IEngineComponent<GameManager> {
     protected components: IEngineComponent<any>[] = [];
 
     protected lastTick: number = 0;
+    protected readonly animationFrameCallback: FrameRequestCallback;
 
     protected constructor() {
 
+        this.animationFrameCallback = this.onHandleAnimationFrame.bind(this);
     }
 
     public static async initialize(viewport: HTMLViewportElement, assets: AssetList_T, loadSettings: GD.LoadSettings_T): Promise<GameManager> {
         const game = new GameManager();
 
-        game.manAsset = game.attach(new AssetManager(loadSettings, assets));
-        game.manRender = game.attach(new RenderManager(viewport));
-        game.manAudio = game.attach(new AudioManager());
-        game.manPhysics = game.attach(new PhysicsManager());
+        game.manAsset = new AssetManager(loadSettings, assets);
+        game.manRender = new RenderManager(viewport);
+        game.manAudio = new AudioManager();
+        game.manPhysics = new PhysicsManager();
 
-        return game.startTicking(performance.now());
+        game.attach(game.manAsset);
+        game.attach(game.manPhysics);
+        game.attach(game.manRender);
+        game.attach(game.manAudio);
+
+        return game;
     }
 
     public startTicking(currentTime: number): this {
@@ -67,7 +74,7 @@ class GameManager implements IEngineComponent<GameManager> {
     public onEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onEngineTick?.(currentTime, deltaTime); }
     public onAfterEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onAfterEngineTick?.(currentTime, deltaTime); }
 
-    protected onHandleAnimationFrame(currentTime: number) {
+    protected onHandleAnimationFrame(currentTime: number): void {
         const deltaTime = currentTime - this.lastTick;
 
         this.onBeforeEngineTick(currentTime, deltaTime);
@@ -76,7 +83,7 @@ class GameManager implements IEngineComponent<GameManager> {
 
         this.lastTick = currentTime;
 
-        requestAnimationFrame(this.onHandleAnimationFrame.bind(this)); return this;
+        requestAnimationFrame(this.animationFrameCallback);
     }
 }
 
