@@ -471,7 +471,7 @@ class AssetManager implements IEngineComponent<GameManager> {
             tmpNpcFloorStart.copy(actor.position);
             tmpNpcFloorStart.z += NPC_SPAWN_FLOOR_DISTANCE * 0.5;
 
-            const floor = renderManager.collisionWorld.rayCheck(tmpNpcFloorStart, npcFloorDirection, NPC_SPAWN_FLOOR_DISTANCE, undefined, undefined, false);
+            const floor = this.gameManager.getComponent("physics").rayCheck(tmpNpcFloorStart, npcFloorDirection, NPC_SPAWN_FLOOR_DISTANCE, undefined, undefined, false);
 
             if (!floor) throw new Error(`NPC '${npc.id}' has no floor below its spawn position.`);
 
@@ -549,7 +549,7 @@ class AssetManager implements IEngineComponent<GameManager> {
 
                 const sector = decodeSectorCore(decodeLibrary);
                 renderManager.addSector(sector);
-                renderManager.gateParticleWarmup(sector, false);
+                this.gameManager.getComponent("physics").setEmitterWarmupGate(sector, false);
 
                 this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, decodeJob: null });
                 this.failedSectors.delete(sectorIdx);

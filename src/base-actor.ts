@@ -3,6 +3,7 @@ import RAPIER from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T, CollisionQuery_T } from "./physics/collision-world";
+import type PhysicsManager from "./physics/physics-manager";
 import { findVolumeTransition } from "./physics/volume-bsp";
 import LocalSpaceSkeleton from "./objects/local-space-skeleton";
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T, isScriptSlot } from "./ue-script/vm";
@@ -176,6 +177,7 @@ class BaseActor extends Object3D implements ICollidable {
     protected readonly baseQuaternion = new Quaternion();
     protected readonly baseRelativePosition = new Vector3();
     protected renderManager: RenderManager;
+    protected manPhysics: PhysicsManager = null;
     protected meshes: Mesh[] = [];
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
     protected prevAnimations = new WeakMap<Mesh, AnimationAction>();
@@ -222,6 +224,8 @@ class BaseActor extends Object3D implements ICollidable {
         this.renderManager = renderManager;
         this.up.copy(tmpUp);
     }
+
+    protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.renderManager.getParent().getComponent("physics")); }
 
     public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
         this.scriptVM = vm;
@@ -492,7 +496,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         if (!this.rigidbody || !isInteractive) return;
 
-        this.renderManager.collisionWorld.updateDynamicEntries(currentTime);
+        this.physicsManager.updateDynamicEntries(currentTime);
 
         let remainingTime = Math.min(deltaTime, 0.4);
         let iteration = 0;
@@ -886,7 +890,7 @@ class BaseActor extends Object3D implements ICollidable {
         query.ignoreBases = false;
         query.zeroExtent = false;
 
-        return this.renderManager.collisionWorld.singleLineCheck(query);
+        return this.physicsManager.singleLineCheck(query);
     }
 
     // APawn::CheckForLedges 0x8ca7f0; StopAtLedge is false and WantsLedgeCheck had zero hits over 5111 ticks.
@@ -1268,7 +1272,7 @@ class BaseActor extends Object3D implements ICollidable {
         query.ignoreBases = true;
         query.zeroExtent = false;
 
-        const hit = this.renderManager.collisionWorld.moveActor(query);
+        const hit = this.physicsManager.moveActor(query);
 
         position.copy(bodyPosition).addScaledVector(tmpUp, -this.collisionHeight);
 
@@ -1291,7 +1295,7 @@ class BaseActor extends Object3D implements ICollidable {
         query.ignoreBases = false;
         query.zeroExtent = false;
 
-        return this.renderManager.collisionWorld.singleLineCheck(query);
+        return this.physicsManager.singleLineCheck(query);
     }
 
     protected findFloor(position: Vector3, movement: Vector3): CheckResult_T | null {
@@ -1313,7 +1317,7 @@ class BaseActor extends Object3D implements ICollidable {
         query.ignoreBases = false;
         query.zeroExtent = false;
 
-        hit = this.renderManager.collisionWorld.singleLineCheck(query);
+        hit = this.physicsManager.singleLineCheck(query);
 
         return hit && hit.normal.z >= MIN_FLOOR_Z ? hit : null;
     }

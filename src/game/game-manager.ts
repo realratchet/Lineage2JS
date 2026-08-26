@@ -26,12 +26,17 @@ class GameManager implements IEngineComponent<GameManager> {
         game.manAudio = game.attach(new AudioManager());
         game.manPhysics = game.attach(new PhysicsManager());
 
-        return game.startTicking();
+        return game.startTicking(performance.now());
     }
 
-    protected startTicking(): this {
+    public startTicking(currentTime: number): this {
+        this.lastTick = currentTime;
+
+        for (const comp of this.components)
+            comp.startTicking?.(this.lastTick);
+
         // ladies and gentlement, start your engines
-        this.onHandleAnimationFrame(this.lastTick = performance.now());
+        this.onHandleAnimationFrame(this.lastTick);
 
         return this;
     }

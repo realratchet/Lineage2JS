@@ -7,7 +7,6 @@ import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-co
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
 import type BaseActor from "@client/base-actor";
-import RAPIER from "@dimforge/rapier3d";
 import type { ICollidable } from "@client/objects/objects";
 import Stats from "./stats";
 import Visualizer, { VisualizerMode, EmitterDebugInfo } from "./visualizer";
@@ -15,7 +14,6 @@ import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
 import UnderWaterEffect from "./under-water-effect";
-import WaterHitEffect from "./water-hit-effect";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
@@ -23,11 +21,10 @@ import AudioManager from "@client/audio/audio-manager";
 import * as dat from "dat.gui";
 import type AssetManager from "@client/assets/asset-manager";
 import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
-import MovableObject from "@client/objects/movable-object";
-import RotatingObject from "@client/objects/rotating-object";
+import type MovableObject from "@client/objects/movable-object";
 import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
-import CollisionWorld, { CollisionBackend_T } from "@client/physics/collision-world";
+import type PhysicsManager from "@client/physics/physics-manager";
 import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
 import ShadowProjector from "@client/objects/shadow-projector";
 import type DynamicLight from "@client/objects/dynamic-light";
@@ -56,14 +53,6 @@ const stats = new (Stats as any)(0);
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom);
 
-function getCollisionBackend(): CollisionBackend_T {
-    const backend = new URLSearchParams(location.search).get("collisionBackend") || "ue";
-
-    if (backend !== "ue" && backend !== "rapier" && backend !== "compare") throw new Error(`Unknown collision backend '${backend}'.`);
-
-    return backend;
-}
-
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
@@ -81,26 +70,14 @@ const tmpViewShakePosition = new Vector3();
 const tmpViewShakeQuaternion = new Quaternion();
 const tmpViewShakeDirection = new Vector3();
 const tmpPickBounds = new Box3();
-const tmpSimDirection = new Vector3();
-const arrMoverPawns: BaseActor[] = [];
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
 const arrMouseIntersections: THREE.Intersection[] = [];
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
-// Off-screen emitters keep a maintenance cadence instead of freezing.
-const OFFSCREEN_EMITTER_HZ = 2;
-const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
-// Lineage II MinDesiredFrameRate is 35; aggressive LOD starts five FPS lower.
-const MIN_DESIRED_FRAME_RATE = 35;
-const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
 // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
 const CLIPPING_RANGE_SCALE = 2048;
-const DROP_DETAIL_FRAME_TIME_MS = 1000 / MIN_DESIRED_FRAME_RATE;
-const AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / AGGRESSIVE_LOD_FRAME_RATE;
-const MAX_OFFSCREEN_EMITTER_UPDATES = 32;
-const DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES = 8;
 const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
@@ -124,18 +101,8 @@ type ViewShakeState_T = {
     repeats: number;
     countLimit: number;
 };
-const SIMULATED_PAWN_COUNT = 10;
-const SIMULATED_PAWN_LIFETIME = 15000;
-const SIMULATED_PAWN_TURN_INTERVAL = 1000;
-const SIMULATED_PAWN_CONCURRENCY = 3;
-const PLAYER_PHYSICS_HZ = 60;
-const SIMULATED_PAWN_PHYSICS_HZ = 30;
-const PLAYER_PHYSICS_INTERVAL_MS = 1000 / PLAYER_PHYSICS_HZ;
-const SIMULATED_PAWN_PHYSICS_INTERVAL_MS = 1000 / SIMULATED_PAWN_PHYSICS_HZ;
-const MAX_PHYSICS_TICKS = 8;
 const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 
-type SimulatedPawn_T = { pawn: BaseActor, expires: number, nextTurn: number };
 type PawnLightingState_T = {
     position: Vector3,
     lightingPosition: Vector3,
@@ -241,60 +208,6 @@ function freezeStaticSubtree(node: THREE.Object3D): boolean {
     return allChildrenFrozen;
 }
 
-// traverseVisible cannot thaw an emitter hidden at its root.
-function freezeEmitterParticles(emitter: any) {
-    for (const p of emitter.particlePool) {
-        p.visible = false;
-        p.updateMatrixWorld = frozenUpdateMatrixWorld;
-    }
-
-    if (emitter.instancedMesh) {
-        emitter.instancedMesh.visible = false;
-    }
-}
-
-function getEmitterPhase(emitter: any) {
-    if (emitter.detailPhase !== undefined) return emitter.detailPhase;
-
-    let hash = 2166136261;
-    for (let i = 0; i < emitter.uuid.length; i++) {
-        hash ^= emitter.uuid.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
-    }
-
-    return emitter.detailPhase = hash >>> 0;
-}
-
-function shouldUpdateOffscreenEmitter(emitter: any, currentTime: number) {
-    if (!emitter.isOffscreenThrottled) {
-        emitter.isOffscreenThrottled = true;
-        emitter.offscreenSince = currentTime;
-        emitter.nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS + getEmitterPhase(emitter) % OFFSCREEN_EMITTER_INTERVAL_MS;
-        return true;
-    }
-
-    const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
-    if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
-        return false;
-
-    if (currentTime < emitter.nextOffscreenUpdate) return false;
-
-    const missedIntervals = Math.floor((currentTime - emitter.nextOffscreenUpdate) / OFFSCREEN_EMITTER_INTERVAL_MS) + 1;
-    emitter.nextOffscreenUpdate += missedIntervals * OFFSCREEN_EMITTER_INTERVAL_MS;
-
-    return true;
-}
-
-function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean, simDue: boolean) {
-    if (!simDue && emitter.instancedMesh?.visible && !emitter.isOffscreenThrottled) return false;
-
-    if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
-
-    const phase = getEmitterPhase(emitter) + detailFrame;
-    // UE2 drop-detail retains roughly 65% of the normal xEmitter budget.
-    return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
-}
-
 function checkViewShake(state: ViewShakeState_T): void {
     const crossed = state.target > 0 ? state.phase >= state.target : state.phase <= state.target;
 
@@ -376,23 +289,12 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
-    protected emitterDetailFrame = 0;
-    protected emitterSimDue = true;
-    protected dropDetail = false;
-    protected aggressiveLod = false;
-    protected readonly movableObjects = new Set<MovableObject>();
-    protected readonly activeMovableObjects = new Set<MovableObject>();
-    protected readonly waitingMovableObjects = new Map<MovableObject, number>();
-    protected readonly rotatingObjects = new Set<RotatingObject>();
-    protected readonly simulatedPawns = new Set<SimulatedPawn_T>();
     protected readonly deferredPawnReleases = new Set<BaseActor>();
     protected readonly transientEffects = new Set<Object3D>();
     protected isUpdatingMixer = false;
     protected spawnedNpc: BaseActor = null;
     protected npcSpawnRequest = 0;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
-    protected simCharGroups: GD.ICharacterGroup[] = null;
-    protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected lastRenderOrderSector: SectorObject | null = null;
 
     protected environment: L2Environment;
@@ -429,9 +331,9 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected screenBlackOutDuration = 0;
     protected screenFadeInDuration = 0;
     protected screenFadeColorAlpha = 1;
+    protected manPhysics: PhysicsManager = null;
 
     public readonly player = new Player(this);
-    protected readonly waterHitEffect = new WaterHitEffect(this.player, this);
     protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.manGame.getComponent("asset").createLandmarkEffect(classPath));
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
@@ -446,8 +348,8 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
 
-    public readonly physicsWorld: RAPIER.World;
-    public readonly collisionWorld: CollisionWorld;
+    protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
+    protected get simulatedPawns(): ReadonlySet<BaseActor> { return this.physicsManager.getSimulatedPawns(); }
 
     protected activeSector = 0;
     protected sectorBounds = new Array<THREE.Box3>();
@@ -512,9 +414,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         guiFolders.world.add(this.envConfig, "moverPosition", 0, 1, 0.01)
             .name("Door Position")
             .onChange(v => {
-                this.activeMovableObjects.clear();
-                this.waitingMovableObjects.clear();
-                this.movableObjects.forEach(mover => mover.setPosition(v));
+                this.physicsManager.setMoverPosition(v);
                 this.needsUpdate = true;
             });
 
@@ -553,10 +453,6 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         this.visualizer = new Visualizer(this.scene);
         this.wireEmitterVisibilityHandlers();
-
-        this.physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
-        this.collisionWorld = new CollisionWorld(this.physicsWorld, getCollisionBackend());
-
 
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
@@ -1101,7 +997,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         }
 
         const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
-        const physicsIntersection = pickDistance > 0 ? this.collisionWorld.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
+        const physicsIntersection = pickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
 
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);
@@ -1452,7 +1348,7 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public async addCharacterControls(): Promise<void> {
-        const this_ = this, manAsset = this.manGame.getComponent("asset");
+        const this_ = this, manAsset = this.manGame.getComponent("asset"), manPhys = this.manGame.getComponent("physics");
         const groups = await manAsset.getCharGroups();
         const state = { group: this.characterGroup, face: this.characterFace, hair: this.characterHair, hairColour: this.characterHairColour, chest: this.characterArmor.chest, legs: this.characterArmor.legs, gloves: this.characterArmor.gloves, boots: this.characterArmor.boots };
         const groupOptions: Record<string, number> = {};
@@ -1543,7 +1439,7 @@ class RenderManager implements IEngineComponent<GameManager> {
             this.needsUpdate = true
 
         });
-        folder.add({ simulate: () => this.simulatePawns() }, "simulate").name("Simulate Pawns");
+        folder.add({ simulate: () => manPhys.simulatePawns() }, "simulate").name("Simulate Pawns");
 
         buildVariantControls();
         folder.open();
@@ -1631,97 +1527,10 @@ class RenderManager implements IEngineComponent<GameManager> {
         );
     }
 
-    protected scheduleMovableObject(mover: MovableObject, nextUpdate: number): void {
-        this.activeMovableObjects.delete(mover);
-        this.waitingMovableObjects.delete(mover);
-
-        if (nextUpdate === 0) this.activeMovableObjects.add(mover);
-        else if (nextUpdate > 0) this.waitingMovableObjects.set(mover, nextUpdate);
-    }
-
-    protected updateMovableObjects(currentTime: number): void {
-        arrMoverPawns.length = 0;
-        arrMoverPawns.push(this.player);
-        for (const entry of this.simulatedPawns) arrMoverPawns.push(entry.pawn);
-
-        if (!this.lastMoverTriggerPosition.equals(this.camera.position)) {
-            this.lastMoverTriggerPosition.copy(this.camera.position);
-
-            this.movableObjects.forEach(mover => {
-                const nextUpdate = mover.tryTrigger(currentTime, this.camera.position);
-
-                if (nextUpdate !== null) this.scheduleMovableObject(mover, nextUpdate);
-            });
-        }
-
-        for (const [mover, wakeTime] of Array.from(this.waitingMovableObjects)) {
-            if (currentTime >= wakeTime)
-                this.scheduleMovableObject(mover, mover.updateMover(currentTime, arrMoverPawns));
-        }
-
-        for (const mover of Array.from(this.activeMovableObjects))
-            this.scheduleMovableObject(mover, mover.updateMover(currentTime, arrMoverPawns));
-    }
-
-    public async simulatePawns(count: number = SIMULATED_PAWN_COUNT) {
-        const this_ = this, manAsset = this.manGame.getComponent("asset");;
-        const groups = this.simCharGroups || (this.simCharGroups = await manAsset.getCharGroups());
-        const arrWorkers: Promise<void>[] = [];
-        let next = 0;
-
-        // Ten character decodes at once starve the fucking worker pool.
-        async function worker(): Promise<void> {
-            while (next < count) {
-                const index = next++;
-                const group = groups[Math.floor(Math.random() * groups.length)];
-                const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
-                const colours = group.hairColours[hair];
-                const armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
-                const pawn = new Player(this_);
-
-                for (const slot of Object.keys(armor) as (keyof GD.ICharacterArmorSelection)[]) {
-                    const items = group.armor[slot];
-
-                    armor[slot] = items.length > 0 && Math.random() < 0.75 ? items[Math.floor(Math.random() * items.length)].id : 0;
-                }
-
-                pawn.name = `SimPawn${index}`;
-
-                await manAsset.loadCharacter(this_, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
-
-                this_.scene.add(pawn);
-                pawn.position.copy(this_.controls.orbit.target);
-                pawn.updateMatrixWorld(true);
-                this_.registerCollider(pawn);
-
-                arrMoverPawns.length = 0;
-                arrMoverPawns.push(this_.player);
-
-                for (const entry of this_.simulatedPawns) arrMoverPawns.push(entry.pawn);
-
-                pawn.ignoreOverlappingActors(arrMoverPawns);
-                this_.simulatedPawns.add({ pawn, expires: performance.now() + SIMULATED_PAWN_LIFETIME, nextTurn: 0 });
-                this_.needsUpdate = true;
-            }
-        }
-
-        for (let i = 0; i < SIMULATED_PAWN_CONCURRENCY; i++) arrWorkers.push(worker());
-
-        await Promise.all(arrWorkers);
-    }
-
     public addPawn(pawn: BaseActor): void {
         this.scene.add(pawn);
         pawn.updateMatrixWorld(true);
-        this.registerCollider(pawn);
-
-        arrMoverPawns.length = 0;
-        arrMoverPawns.push(this.player);
-
-        for (const entry of this.simulatedPawns) arrMoverPawns.push(entry.pawn);
-
-        pawn.ignoreOverlappingActors(arrMoverPawns);
-        this.simulatedPawns.add({ pawn, expires: Infinity, nextTurn: Infinity });
+        this.physicsManager.addPawn(pawn);
         pawn.beginPlay();
         this.needsUpdate = true;
     }
@@ -1729,6 +1538,7 @@ class RenderManager implements IEngineComponent<GameManager> {
     public addTransientEffect(effect: Object3D, owner: BaseActor = null): void {
         this.scene.add(effect);
         this.transientEffects.add(effect);
+        this.physicsManager.registerSimulationObjects(effect);
 
         const spawnSound = (effect as any).spawnSound as (GD.IEmitterSpawnSoundDecodeInfo & { dataUri: string }) | null;
 
@@ -1748,6 +1558,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         if (base) base.detachBoneObject(effect);
         if (owner) owner.loseScriptChild(effect);
 
+        this.physicsManager.unregisterSimulationObjects(effect);
         effect.removeFromParent();
         this.transientEffects.delete(effect);
 
@@ -1771,7 +1582,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
             while (root.parent) root = root.parent;
 
-            if (root === this.scene && !this.isTransientEffectFinished(effect)) continue;
+            if (root === this.scene && !this.physicsManager.isEmitterEffectFinished(effect)) continue;
 
             this.removeTransientEffect(effect);
         }
@@ -1779,36 +1590,10 @@ class RenderManager implements IEngineComponent<GameManager> {
         if (this.transientEffects.size > 0) this.needsUpdate = true;
     }
 
-    protected isTransientEffectFinished(effect: Object3D): boolean {
-        let hasEmitter = false;
-        let isFinished = true;
-
-        effect.traverse(child => {
-            const emitter = child as any;
-
-            if (!emitter.particlePool) return;
-
-            hasEmitter = true;
-            if (!emitter.isFinished()) isFinished = false;
-        });
-
-        return hasEmitter && isFinished;
-    }
-
     public removePawn(pawn: BaseActor): void {
-        let found: SimulatedPawn_T = null;
+        if (!this.physicsManager.removePawn(pawn)) return;
 
-        for (const entry of this.simulatedPawns)
-            if (entry.pawn === pawn) {
-                found = entry;
-                break;
-            }
-
-        if (!found) return;
-
-        this.unregisterCollider(pawn);
         pawn.removeFromParent();
-        this.simulatedPawns.delete(found);
 
         if (this.isUpdatingMixer) this.deferredPawnReleases.add(pawn);
         else pawn.release();
@@ -1830,37 +1615,9 @@ class RenderManager implements IEngineComponent<GameManager> {
         return this.manGame.getComponent("asset").listNpcs();
     }
 
-    protected maintainSimulatedPawns(currentTime: number): void {
-        for (const entry of this.simulatedPawns) {
-            if (currentTime >= entry.expires) {
-                this.removePawn(entry.pawn);
-                continue;
-            }
-
-            if (currentTime < entry.nextTurn) continue;
-
-            entry.nextTurn = currentTime + SIMULATED_PAWN_TURN_INTERVAL;
-
-            const angle = Math.random() * Math.PI * 2;
-
-            entry.pawn.moveInDirection(tmpSimDirection.set(Math.cos(angle), Math.sin(angle), 0));
-        }
-
-        if (this.simulatedPawns.size > 0) this.needsUpdate = true;
-    }
-
-    protected tickSimulatedPawns(currentTime: number): void {
-        for (const entry of this.simulatedPawns)
-            entry.pawn.updatePhysics(currentTime, 1 / SIMULATED_PAWN_PHYSICS_HZ);
-    }
-
     protected updateSimulatedPawnPresentation(currentTime: number, deltaTime: number): void {
-        for (const entry of this.simulatedPawns)
-            entry.pawn.updatePresentation(currentTime, deltaTime / 1000);
-    }
-
-    protected updateRotatingObjects(deltaTime: number): void {
-        this.rotatingObjects.forEach(object => object.updateRotation(deltaTime));
+        for (const pawn of this.simulatedPawns)
+            pawn.updatePresentation(currentTime, deltaTime / 1000);
     }
 
     protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
@@ -1878,8 +1635,8 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected updatePawnVisibility(): void {
         this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(this.player.getRenderSphere());
 
-        for (const entry of this.simulatedPawns)
-            entry.pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(entry.pawn.getRenderSphere());
+        for (const pawn of this.simulatedPawns)
+            pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(pawn.getRenderSphere());
 
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
@@ -1905,10 +1662,10 @@ class RenderManager implements IEngineComponent<GameManager> {
                     if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
 
         this.updateActorLighting(this.player, sunAmbient);
-        if (this.emitterSimDue) this.updatePawnShadow();
+        this.updatePawnShadow();
 
-        for (const entry of this.simulatedPawns)
-            this.updateActorLighting(entry.pawn, sunAmbient);
+        for (const pawn of this.simulatedPawns)
+            this.updateActorLighting(pawn, sunAmbient);
     }
 
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
@@ -1938,7 +1695,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         arrShadowCasters.length = 0;
         arrShadowCasters.push(this.player);
 
-        for (const entry of this.simulatedPawns) arrShadowCasters.push(entry.pawn);
+        for (const pawn of this.simulatedPawns) arrShadowCasters.push(pawn);
 
         if (sector) for (const pawn of sector.pawns.children) arrShadowCasters.push(pawn);
 
@@ -2045,19 +1802,9 @@ class RenderManager implements IEngineComponent<GameManager> {
         state.ambientB = sunAmbient.b;
     }
 
-    protected _updateObjects(currentTime: number, deltaTime: number) {
+    protected _updateObjects(currentTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
-        this.dropDetail = deltaTime > DROP_DETAIL_FRAME_TIME_MS;
-        this.aggressiveLod = deltaTime > AGGRESSIVE_LOD_FRAME_TIME_MS;
-        this.emitterDetailFrame = (this.emitterDetailFrame + 1) % 6;
-
-        const offscreenEmitterUpdateLimit = this.aggressiveLod
-            ? 0
-            : this.dropDetail
-                ? DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES
-                : MAX_OFFSCREEN_EMITTER_UPDATES;
-        let offscreenEmitterUpdates = 0;
 
         GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
 
@@ -2123,6 +1870,8 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         const activeSector = this.getSector(bspCullingPosition);
 
+        this.physicsManager.setActiveSector(activeSector);
+        this.physicsManager.setTriggerPosition(this.camera.position);
         this.updateSectorRenderOrder(activeSector);
 
         this.scene.traverse((object: THREE.Object3D) => {
@@ -2178,69 +1927,14 @@ class RenderManager implements IEngineComponent<GameManager> {
                     parent = parent.parent;
                 }
 
-                if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
-                    if ((child as any).particlePool) {
-                        const wasOffscreen = !!(child as any).isOffscreenThrottled;
-                        const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
-                        if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
-                            offscreenEmitterUpdates++;
-                            (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-                            (child as any).update(currentTime);
-                            freezeEmitterParticles(child);
-                        } else if (!wasOffscreen) {
-                            freezeEmitterParticles(child);
-                        }
-
-                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
-                    }
-                    return;
-                }
-
                 if ((child as any).particlePool) {
+                    if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
+
                     const emitterUuid = (child as any).emitterActorUuid;
                     const isVisible = (child as any).isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
 
-                    if (!isVisible) {
-                        const wasOffscreen = !!(child as any).isOffscreenThrottled;
-                        const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
-                        if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
-                            offscreenEmitterUpdates++;
-                            (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-                            (child as any).update(currentTime);
-                            freezeEmitterParticles(child);
-                        } else if (!wasOffscreen) {
-                            freezeEmitterParticles(child);
-                        }
+                    if (!isVisible) return;
 
-                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld; // between ticks, already hidden by the last tick's freeze
-                        return;
-                    }
-
-                    const shouldUpdate = shouldUpdateVisibleEmitter(
-                        child,
-                        this.emitterDetailFrame,
-                        this.dropDetail,
-                        this.aggressiveLod,
-                        this.emitterSimDue
-                    );
-                    (child as any).isOffscreenThrottled = false;
-                    (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-
-                    if (!shouldUpdate) {
-                        const mesh = (child as any).instancedMesh;
-                        if (mesh?.visible && mesh.isWorldBatchCandidate)
-                            this.visibleWorldBatchEmitters.push(child);
-                        return;
-                    }
-                }
-
-                if (sector && 'computeLighting' in child) {
-                    (child as any).update(sector, this.environment);
-                } else {
-                    (child as any).update(currentTime);
-                }
-
-                if ((child as any).particlePool) {
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
@@ -2251,7 +1945,9 @@ class RenderManager implements IEngineComponent<GameManager> {
                             this.audioManager.playOneShotSound(sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
                         pendingSounds.length = 0;
                     }
-                }
+                } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
+                else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment);
+                else (child as any).update(currentTime);
             }
 
             if ((child as THREE.Mesh).isMesh) {
@@ -2582,10 +2278,6 @@ class RenderManager implements IEngineComponent<GameManager> {
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
     }
 
-
-    protected nextPlayerPhysicsTick: number;
-    protected nextPhysicsTick: number;
-
     protected _preRender(currentTime: number, deltaTime: number) {
         this.updateScreenFade(currentTime);
 
@@ -2601,8 +2293,6 @@ class RenderManager implements IEngineComponent<GameManager> {
             this.isUpdatingMixer = false;
             this.releaseDeferredPawns();
         }
-
-        this.waterHitEffect.update(this.arrLoadedSectors, deltaTime);
 
         const timeScale = this.environment.getTimeScale();
 
@@ -2622,7 +2312,8 @@ class RenderManager implements IEngineComponent<GameManager> {
         const timeOfDay = this.environment.getTimeOfDay();
 
         // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
-        this.underWaterEffect.update(this.camera, timeOfDay >= 6 && timeOfDay <= 24, this.collisionWorld);
+        this.physicsManager.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
+        this.underWaterEffect.updatePresentation(this.camera);
 
         if (!this.isOrbitControls) {
             let forwardVelocity = 0, sidewaysVelocity = 0;
@@ -2665,34 +2356,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
-        this.emitterSimDue = this.nextPhysicsTick <= currentTime;
-        this.maintainSimulatedPawns(currentTime);
         this.maintainTransientEffects();
-        this.updateMovableObjects(currentTime);
-        this.updateRotatingObjects(deltaTime);
-
-        let playerPhysicsTicks = 0;
-
-        while (this.nextPlayerPhysicsTick <= currentTime && playerPhysicsTicks++ < MAX_PHYSICS_TICKS) {
-            this.player.updatePhysics(this.nextPlayerPhysicsTick, 1 / PLAYER_PHYSICS_HZ);
-            this.nextPlayerPhysicsTick += PLAYER_PHYSICS_INTERVAL_MS;
-        }
-
-        if (this.nextPlayerPhysicsTick <= currentTime)
-            this.nextPlayerPhysicsTick = currentTime + PLAYER_PHYSICS_INTERVAL_MS;
-
-        // nothing reads the rapier world under the analytical backend
-        const stepsRapier = this.collisionWorld.usesRapier();
-        let physicsTicks = 0;
-
-        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < MAX_PHYSICS_TICKS) {
-            this.tickSimulatedPawns(this.nextPhysicsTick);
-            if (stepsRapier) this.physicsWorld.step();
-            this.nextPhysicsTick += SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
-        }
-
-        if (this.nextPhysicsTick <= currentTime)
-            this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
 
         this.player.updatePresentation(currentTime, deltaTime / 1000);
         this.landmark.update();
@@ -2711,7 +2375,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         this.audioManager.update(currentTime);
 
-        this._updateObjects(currentTime, deltaTime);
+        this._updateObjects(currentTime);
 
         const activeSector = this.getSector(this.camera.position);
         const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };
@@ -2968,89 +2632,25 @@ class RenderManager implements IEngineComponent<GameManager> {
         const currentTime = performance.now();
 
         this.scene.updateMatrixWorld(true);
-        this.collectColliders();
-        this.physicsWorld.timestep = 1 / 30;
-        this.physicsWorld.step();
+        this.physicsManager.registerSimulationObjects(this.scene);
+        this.updateColliderOverlay();
         this.lastRender = currentTime;
-        this.nextPlayerPhysicsTick = currentTime + PLAYER_PHYSICS_INTERVAL_MS;
-        this.nextPhysicsTick = currentTime + SIMULATED_PAWN_PHYSICS_INTERVAL_MS;
         this.stitchTerrains();
 
         this.onHandleRender(currentTime);
-    }
-
-    protected readonly collidables = new Set<ICollidable>();
-
-    protected collectColliders() {
-        this.registerColliders(this.scene);
     }
 
     protected setCollidersVisible(visible: boolean) {
         this.showColliders = visible;
         this.colliderOverlay.visible = visible;
 
-        if (visible) this.colliderOverlay.rebuild(this.collectPhysicsColliders());
+        this.updateColliderOverlay();
 
         this.needsUpdate = true;
     }
 
-    protected collectPhysicsColliders(): RAPIER.Collider[] {
-        const colliders: RAPIER.Collider[] = [];
-
-        this.physicsWorld.colliders.forEach(collider => colliders.push(collider));
-
-        return colliders;
-    }
-
-    protected registerColliders(root: Object3D) {
-        root.updateMatrixWorld(true);
-        root.traverse((object: ICollidable) => {
-            if ((object as any).isTerrainBatch)
-                for (const terrain of (object as any).sectors) this.registerCollider(terrain);
-
-            this.registerCollider(object);
-        });
-
-        if (this.showColliders) this.colliderOverlay.rebuild(this.collectPhysicsColliders());
-    }
-
-    protected registerCollider(object: ICollidable) {
-        if (!object.isCollidable || this.collidables.has(object)) return;
-
-        const collider = object.createCollider(this.physicsWorld);
-        const colliders = object.getColliders ? object.getColliders() : [collider];
-
-        this.collidables.add(object);
-        this.collisionWorld.register(object, colliders);
-    }
-
-    protected unregisterColliders(root: Object3D) {
-        root.traverse((object: ICollidable) => {
-            if ((object as any).isTerrainBatch)
-                for (const terrain of (object as any).sectors) this.unregisterCollider(terrain);
-
-            this.unregisterCollider(object);
-        });
-
-        if (this.showColliders) this.colliderOverlay.rebuild(this.collectPhysicsColliders());
-    }
-
-    protected unregisterCollider(object: ICollidable) {
-        if (!this.collidables.has(object)) return;
-
-        const collider = object.getCollider();
-        const colliders = object.getColliders ? object.getColliders() : [collider];
-        const rigidbody = object.getRigidbody();
-
-        this.collidables.delete(object);
-        this.collisionWorld.unregister(colliders);
-
-        if (rigidbody) this.physicsWorld.removeRigidBody(rigidbody);
-        else for (const collider of colliders)
-            if (collider) this.physicsWorld.removeCollider(collider, false);
-
-        // removed handles are dead; createCollider must not hand the cached set back on re-stream
-        if (object.releaseCollider) object.releaseCollider();
+    protected updateColliderOverlay(): void {
+        if (this.showColliders) this.colliderOverlay.rebuild(this.physicsManager.getColliders());
     }
 
     public setSky(sector: SectorObject) {
@@ -3075,34 +2675,20 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
-
-        sector.traverse(child => {
-            if ((child as any).isRotatingObject) {
-                this.rotatingObjects.add(child as RotatingObject);
-                return;
-            }
-
-            if (!(child as any).isMovableObject) return;
-
-            const mover = child as MovableObject;
-
-            this.movableObjects.add(mover);
-            mover.setPosition(this.envConfig.moverPosition);
-        });
-        this.lastMoverTriggerPosition.set(Infinity, Infinity, Infinity);
         this.lastRenderOrderSector = null;
 
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);
 
         this.objectGroup.add(sector);
-        this.registerColliders(sector);
+        this.physicsManager.registerSimulationObjects(sector);
+        this.updateColliderOverlay();
         this.stitchTerrains();
 
         setLightingGate(sector, false);
 
         if (sector.staticMeshGroup) {
-            setEmitterWarmupGate(sector, false);
+            this.physicsManager.setEmitterWarmupGate(sector, false);
         }
 
         this.queueSectorWarmup(sector, sector, !!sector.staticMeshGroup);
@@ -3205,7 +2791,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         job.fallbackMaterials.forEach(material => material.dispose());
 
         if (job.releaseEmitters)
-            setEmitterWarmupGate(job.sector, true);
+            this.physicsManager.setEmitterWarmupGate(job.sector, true);
 
         (job.sector as any).visibilityCacheInitialized = false;
     }
@@ -3219,7 +2805,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         }
 
         setLightingGate(root, true);
-        if (releaseEmitters) setEmitterWarmupGate(sector, true);
+        if (releaseEmitters) this.physicsManager.setEmitterWarmupGate(sector, true);
     }
 
     // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
@@ -3251,33 +2837,15 @@ class RenderManager implements IEngineComponent<GameManager> {
         }
     }
 
-    // called before staticMeshGroup exists, so addSector's own gating can't cover this
-    public gateParticleWarmup(sector: SectorObject, allowed: boolean) {
-        setEmitterWarmupGate(sector, allowed);
-    }
-
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
         retainSectorResources(sector, sector.staticMeshGroup);
 
-        sector.staticMeshGroup.traverse(child => {
-            if ((child as any).isRotatingObject) {
-                this.rotatingObjects.add(child as RotatingObject);
-                return;
-            }
-
-            if (!(child as any).isMovableObject) return;
-
-            const mover = child as MovableObject;
-
-            this.movableObjects.add(mover);
-            mover.setPosition(this.envConfig.moverPosition);
-        });
-
         sector.worldBounds.setFromObject(sector);
 
         sector.staticMeshGroup.updateMatrixWorld(true);
-        this.registerColliders(sector.staticMeshGroup);
+        this.physicsManager.registerSimulationObjects(sector.staticMeshGroup);
+        this.updateColliderOverlay();
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
 
         setLightingGate(sector.staticMeshGroup, false);
@@ -3297,22 +2865,8 @@ class RenderManager implements IEngineComponent<GameManager> {
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
-        sector.traverse(child => {
-            if ((child as any).isRotatingObject) {
-                this.rotatingObjects.delete(child as RotatingObject);
-                return;
-            }
-
-            if (!(child as any).isMovableObject) return;
-
-            const mover = child as MovableObject;
-
-            this.movableObjects.delete(mover);
-            this.activeMovableObjects.delete(mover);
-            this.waitingMovableObjects.delete(mover);
-        });
-
-        this.unregisterColliders(sector);
+        this.physicsManager.unregisterSimulationObjects(sector);
+        this.updateColliderOverlay();
         this.objectGroup.remove(sector);
         this.stitchTerrains();
 
@@ -3400,11 +2954,9 @@ class RenderManager implements IEngineComponent<GameManager> {
         (window as any).terrainDebug = result;
 
         // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
-        for (const terrain of result.modified) {
-            this.unregisterCollider(terrain);
-            terrain.refreshCollisionGeometry();
-            this.registerCollider(terrain);
-        }
+        for (const terrain of result.modified) this.physicsManager.refreshCollider(terrain);
+
+        this.updateColliderOverlay();
     }
 }
 
@@ -3586,13 +3138,6 @@ function restoreSectorMaterials(job: SectorWarmup_T): void {
 
     job.materialQueue.length = 0;
     job.fallbackMaterials.forEach(material => material.dispose());
-}
-
-// emitters live under sector.zones, not staticMeshGroup - always walk the whole sector
-function setEmitterWarmupGate(sector: SectorObject, allowed: boolean) {
-    sector.traverse(child => {
-        if ((child as any).particlePool) (child as any).warmupGate = allowed;
-    });
 }
 
 // merged Terrain sectors aren't in the scene graph anymore, so isTerrainBatch's .sectors needs gating directly

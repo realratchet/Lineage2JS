@@ -77,7 +77,7 @@ type DrawStyle_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModul
 abstract class BaseEmitter extends Object3D {
     protected readonly isUpdatable = true;
 
-    public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+    public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
     public readonly pendingSounds: PendingEmitterSound_T[] = []; // spawning-sound requests queued by spawnParticle(), drained by RenderManager each frame
 
     protected fadingSettings: FadeSettings_T;

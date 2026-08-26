@@ -3,29 +3,16 @@ import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import ColorByte from "@client/utils/color-byte";
 import type BaseEmitter from "@client/objects/emitters/base-emitter";
 import Rotator from "@client/utils/rotator";
-import type CollisionWorld from "@client/physics/collision-world";
-import { findVolumeTransition } from "@client/physics/volume-bsp";
 
-const SAMPLE_DISTANCE_SQ = 40000;
-const SUN_BEAM_DEPTH = 2000;
-const SUN_BEAM_TRACE_START = 200;
-
-const tmpSamplingLocation = new Vector3();
-const tmpSurfaceTraceEnd = new Vector3();
-const tmpFloorTraceStart = new Vector3();
-const tmpDown = new Vector3(0, 0, -1);
 const tmpRotator = new Rotator();
 
 class UnderWaterEffect extends Object3D {
     protected floatingSolid: Object3D = null;
     protected sunBeam: Object3D = null;
     protected sunBeamEmitter: BaseEmitter = null;
-    protected readonly lastSamplingLocation = new Vector3();
     protected readonly cellophaneMaterial: MeshBasicMaterial;
     protected readonly cellophaneQuad: FullScreenQuad;
     protected volume: GD.IWaterVolumeDecodeInfo = null;
-    protected hasSampled = false;
-    protected isDay = false;
 
     public constructor() {
 
@@ -57,8 +44,6 @@ class UnderWaterEffect extends Object3D {
     }
 
     public setVolume(volume: GD.IWaterVolumeDecodeInfo | null, envCellophane: ColorByte): void {
-        if (this.volume !== volume) this.hasSampled = false;
-
         this.volume = volume;
         this.visible = !!volume;
 
@@ -70,51 +55,18 @@ class UnderWaterEffect extends Object3D {
         this.cellophaneMaterial.opacity = color[3] / 255;
     }
 
-    public update(camera: PerspectiveCamera, isDay: boolean, collisionWorld: CollisionWorld): void {
+    public updatePresentation(camera: PerspectiveCamera): void {
         if (!this.visible || !this.floatingSolid || !this.sunBeam) return;
 
         this.floatingSolid.position.copy(camera.position);
-        tmpSamplingLocation.copy(camera.position);
+    }
 
-        if (!isDay) {
-            this.isDay = false;
-            this.hasSampled = false;
-            this.sunBeam.visible = false;
-            return;
-        }
+    public getVolume(): GD.IWaterVolumeDecodeInfo | null { return this.volume; }
+    public hasSunBeamEffects(): boolean { return !!this.floatingSolid && !!this.sunBeam; }
+    public setSunBeamVisible(visible: boolean): void { this.sunBeam.visible = visible; }
 
-        if (!this.isDay) this.hasSampled = false;
-        this.isDay = true;
-
-        if (this.hasSampled && this.lastSamplingLocation.distanceToSquared(tmpSamplingLocation) <= SAMPLE_DISTANCE_SQ) return;
-
-        this.lastSamplingLocation.copy(tmpSamplingLocation);
-        this.hasSampled = true;
-
-        tmpSurfaceTraceEnd.copy(tmpSamplingLocation);
-        tmpSurfaceTraceEnd.z += SUN_BEAM_DEPTH;
-
-        const surfaceTime = findVolumeTransition(tmpSamplingLocation, tmpSurfaceTraceEnd, this.volume.bsp, true);
-
-        if (surfaceTime <= 0 || surfaceTime >= 1) {
-            this.sunBeam.visible = false;
-            return;
-        }
-
-        const surfaceZ = tmpSamplingLocation.z + SUN_BEAM_DEPTH * surfaceTime;
-
-        this.sunBeam.position.set(tmpSamplingLocation.x, tmpSamplingLocation.y, surfaceZ);
-        tmpFloorTraceStart.set(tmpSamplingLocation.x, tmpSamplingLocation.y, surfaceZ - SUN_BEAM_TRACE_START);
-
-        const floorHit = collisionWorld.rayCheck(tmpFloorTraceStart, tmpDown, SUN_BEAM_DEPTH - SUN_BEAM_TRACE_START, undefined, undefined, false);
-
-        if (!floorHit || floorHit.distance <= 0 || floorHit.distance >= SUN_BEAM_DEPTH - SUN_BEAM_TRACE_START) {
-            this.sunBeam.visible = false;
-            return;
-        }
-
-        const depth = surfaceZ - floorHit.location.z;
-
+    public setSunBeamSample(position: Vector3, surfaceZ: number, depth: number): void {
+        this.sunBeam.position.set(position.x, position.y, surfaceZ);
         this.sunBeam.visible = true;
         this.sunBeamEmitter.setStartLocationRangeXZ(depth * 0.2, -depth);
     }
