@@ -1,11 +1,13 @@
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
 import type { L2Environment } from "@client/rendering/l2-env";
-import { Box3, Mesh, Vector3 } from "three";
+import { Box3, Vector3 } from "three";
 import type { CollisionPrimitive_T, ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { ColorByte } from "@client/utils/color-byte";
 import buildTriangleIndex from "@client/physics/triangle-index";
+import { GameMesh } from "@client/game/components";
+import { ColliderComponent } from "@client/physics/physics-component";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -14,7 +16,7 @@ const tmpNormal = new Vector3();
 const cbAmbient = new ColorByte();
 const cbLight = new ColorByte();
 
-class Terrain extends Mesh implements ICollidable {
+class Terrain extends GameMesh implements ICollidable {
     public readonly isCollidable = true;
 
     protected rigidbodyDesc: RigidBodyDesc;
@@ -67,6 +69,8 @@ class Terrain extends Mesh implements ICollidable {
         this.lightingInfo = lightingInfo;
 
         if (fieldInfo) this.setTerrainField(fieldInfo);
+
+        this.addComponent(new ColliderComponent());
     }
 
     public setTerrainField({ bounds, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {

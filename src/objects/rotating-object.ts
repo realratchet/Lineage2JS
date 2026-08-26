@@ -2,6 +2,7 @@ import { RigidBodyDesc } from "@dimforge/rapier3d";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import Rotator from "../utils/rotator";
+import { RotatingComponent } from "@client/physics/physics-component";
 
 class RotatingObject extends CollidingMesh {
     public readonly isRotatingObject: boolean = true;
@@ -16,6 +17,7 @@ class RotatingObject extends CollidingMesh {
 
         this.rotator = new Rotator(...props.rotating.rotator);
         [this.ratePitch, this.rateYaw, this.rateRoll] = props.rotating.rate;
+        this.addComponent(new RotatingComponent());
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {

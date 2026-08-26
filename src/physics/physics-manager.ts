@@ -1,31 +1,18 @@
 import RAPIER from "@dimforge/rapier3d";
-import { Object3D, Vector2, Vector3 } from "three";
-import { IEngineComponent } from "@client/game/components";
+import { Object3D, Vector3 } from "three";
+import { IEngineComponent, IObject } from "@client/game/components";
 import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T } from "@client/physics/collision-world";
-import { encompassesVolume, findVolumeTransition } from "@client/physics/volume-bsp";
 import Player from "@client/player";
-import WaterHitEffect from "@client/rendering/water-hit-effect";
+import { ColliderComponent, IPhysicsComponent } from "@client/physics/physics-component";
 
 import type BaseActor from "@client/base-actor";
 import type GameManager from "@client/game/game-manager";
-import type MovableObject from "@client/objects/movable-object";
-import type RotatingObject from "@client/objects/rotating-object";
 import type RenderManager from "@client/rendering/render-manager";
-import type UnderWaterEffect from "@client/rendering/under-water-effect";
 import type { ICollidable } from "@client/objects/objects";
 import type { SectorObject } from "@client/objects/zone-object";
 
 const tmpSimDirection = new Vector3();
-const tmpWaterSurfaceEnd = new Vector3();
-const tmpWaterFloorStart = new Vector3();
-const tmpWaterHitStart = new Vector3();
-const tmpWaterHitEnd = new Vector3();
-const tmpWaterHitPosition = new Vector3();
-const tmpDown = new Vector3(0, 0, -1);
-const tmpSunBeamSample = new Vector2();
 const arrMoverPawns: BaseActor[] = [];
-const arrWaitingMovers: [MovableObject, number][] = [];
-const arrActiveMovers: MovableObject[] = [];
 
 type SimulatedPawnState_T = { expires: number, nextTurn: number };
 
@@ -35,14 +22,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     protected static readonly PLAYER_PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PLAYER_PHYSICS_HZ;
     protected static readonly PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PHYSICS_HZ;
     protected static readonly MAX_PHYSICS_TICKS = 8;
-    protected static readonly UNDERWATER_SUN_BEAM_DEPTH = 2000;
-    protected static readonly UNDERWATER_SUN_BEAM_TRACE_START = 200;
-    protected static readonly UNDERWATER_SAMPLE_DISTANCE_SQ = 40000;
-    protected static readonly WATER_HIT_SURFACE_HEIGHT = 20;
-    protected static readonly WATER_HIT_MIN_SURFACE_HEIGHT = 0.85;
-
     protected manGame: GameManager;
-    protected waterHitEffect: WaterHitEffect;
 
     protected readonly simPawns = new PawnSimulation(); // for en-masse pawn phys sim
     protected readonly simEmitters = new EmitterSimulation();
@@ -50,24 +30,9 @@ class PhysicsManager implements IEngineComponent<GameManager> {
 
     protected readonly physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
     protected readonly collisionWorld = new CollisionWorld(this.physicsWorld, PhysicsManager.getCollisionBackend());
-    protected readonly collidables = new Set<ICollidable>();
-    protected readonly movableObjects = new Set<MovableObject>();
-    protected readonly activeMovableObjects = new Set<MovableObject>();
-    protected readonly waitingMovableObjects = new Map<MovableObject, number>();
-    protected readonly rotatingObjects = new Set<RotatingObject>();
+    protected readonly physicsComponents = new Set<IPhysicsComponent<any>>();
     protected readonly triggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
-    protected readonly underWaterPosition = new Vector3(Infinity, Infinity, Infinity);
-    protected readonly lastUnderWaterSamplingLocation = new Vector3(Infinity, Infinity, Infinity);
-    protected underWaterVolume: GD.IWaterVolumeDecodeInfo = null;
-    protected hasUnderWaterSample = false;
-    protected wasUnderWaterDay = false;
-    protected isUnderWaterDay = false;
-    protected waterHitEffectName: string = null;
-    protected waterHitElapsed = 0;
-    protected waterHitInterval = 0;
-    protected moverPosition = 0;
-
     protected nextPlayerPhysicsTick: number;
     protected nextPhysicsTick: number;
 
@@ -81,10 +46,6 @@ class PhysicsManager implements IEngineComponent<GameManager> {
 
     public setParent(parent: GameManager): this {
         this.manGame = parent;
-
-        const manRender = parent.getComponent("render");
-
-        this.waterHitEffect = new WaterHitEffect(manRender.player, manRender);
 
         return this;
     }
@@ -117,13 +78,11 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         // nothing reads the rapier world under the analytical backend
         const stepsRapier = this.collisionWorld.usesRapier();
         let physicsTicks = 0;
+        let updatedPhysicsComponent = false;
 
         while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
-            this.updateMovableObjects(this.nextPhysicsTick);
-            this.updateRotatingObjects(PhysicsManager.PHYSICS_INTERVAL_MS);
+            updatedPhysicsComponent = this.updatePhysicsComponents(this.nextPhysicsTick, PhysicsManager.PHYSICS_INTERVAL_MS) || updatedPhysicsComponent;
             this.simPawns.tickSimulatedPawns(this.nextPhysicsTick, 1 / PhysicsManager.PHYSICS_HZ);
-            this.updateWaterHitEffect(manRender.player, manRender.getLoadedSectors(), PhysicsManager.PHYSICS_INTERVAL_MS);
-            this.updateUnderWaterSunBeam(manRender.underWaterEffect);
             this.simEmitters.tick(this.nextPhysicsTick);
             if (stepsRapier) this.physicsWorld.step();
             this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
@@ -132,7 +91,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         if (this.nextPhysicsTick <= currentTime)
             this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
 
-        if (physicsTicks > 0 && (this.simEmitters.size > 0 || this.rotatingObjects.size > 0 || this.activeMovableObjects.size > 0))
+        if (physicsTicks > 0 && (this.simEmitters.size > 0 || updatedPhysicsComponent))
             manRender.needsUpdate = true;
     }
 
@@ -140,14 +99,6 @@ class PhysicsManager implements IEngineComponent<GameManager> {
 
     public setActiveSector(sector: SectorObject): void { this.simEmitters.setActiveSector(sector); }
     public setTriggerPosition(position: Vector3): void { this.triggerPosition.copy(position); }
-    public setUnderWaterState(position: Vector3, isDay: boolean): void { this.underWaterPosition.copy(position); this.isUnderWaterDay = isDay; }
-
-    public setMoverPosition(position: number): void {
-        this.moverPosition = position;
-        this.activeMovableObjects.clear();
-        this.waitingMovableObjects.clear();
-        this.movableObjects.forEach(mover => mover.setPosition(position));
-    }
 
     // emitters live under sector.zones, not staticMeshGroup - always walk the whole sector
     public setEmitterWarmupGate(root: Object3D, allowed: boolean): void { EmitterSimulation.setWarmupGate(root, allowed); }
@@ -229,194 +180,51 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         return this.collisionWorld.rayCheck(origin, direction, maxDistance, sourceCollider, sourceBody, sourceIsPlayer);
     }
 
-    protected updateWaterHitEffect(owner: BaseActor, sectors: readonly SectorObject[], deltaTime: number): void {
-        if (!owner.isSwimmingMovement()) {
-            this.waterHitEffectName = null;
-            this.waterHitElapsed = 0;
-            return;
-        }
-
-        const height = owner.getCollisionHeight();
-
-        tmpWaterHitStart.copy(owner.position);
-        tmpWaterHitEnd.copy(tmpWaterHitStart);
-        tmpWaterHitEnd.z += height * 2 + PhysicsManager.WATER_HIT_SURFACE_HEIGHT;
-
-        let selectedSector: SectorObject = null;
-        let selectedVolume: GD.IWaterVolumeDecodeInfo = null;
-        let selectedTime = 0;
-
-        for (const sector of sectors) {
-            if (!sector.waterVolumes) continue;
-
-            for (const volume of sector.waterVolumes) {
-                const startsInside = encompassesVolume(tmpWaterHitStart, volume.bsp);
-
-                if (!startsInside || encompassesVolume(tmpWaterHitEnd, volume.bsp)) continue;
-
-                const time = findVolumeTransition(tmpWaterHitStart, tmpWaterHitEnd, volume.bsp, true);
-                const surfaceHeight = time * (height * 2 + PhysicsManager.WATER_HIT_SURFACE_HEIGHT);
-
-                if (surfaceHeight < height * (1 + PhysicsManager.WATER_HIT_MIN_SURFACE_HEIGHT)) continue;
-                if (!selectedVolume || volume.priority >= selectedVolume.priority) {
-                    selectedSector = sector;
-                    selectedVolume = volume;
-                    selectedTime = time;
-                }
-            }
-        }
-
-        if (!selectedVolume) {
-            this.waterHitEffectName = null;
-            this.waterHitElapsed = 0;
-            return;
-        }
-
-        const speed = owner.getSpeed();
-        const effectName = PhysicsManager.getWaterHitEffectName(selectedSector, selectedVolume, speed > 0);
-
-        if (!effectName) return;
-
-        this.waterHitElapsed += deltaTime / 1000;
-
-        if (effectName === this.waterHitEffectName && this.waterHitElapsed < this.waterHitInterval) return;
-
-        this.waterHitEffectName = effectName;
-        this.waterHitElapsed = 0;
-
-        tmpWaterHitPosition.lerpVectors(tmpWaterHitStart, tmpWaterHitEnd, selectedTime);
-        this.waterHitInterval = this.waterHitEffect.spawn(selectedSector, effectName, tmpWaterHitPosition, speed);
-    }
-
-    protected static getWaterHitEffectName(sector: SectorObject, volume: GD.IWaterVolumeDecodeInfo, isMoving: boolean): string | null {
-        if (!volume.scriptClassId) throw new Error(`Water volume '${volume.name}' has no UnrealScript class.`);
-
-        let waitHitEffect: GD.ScriptPropertyValue_T = null;
-        let runHitEffect: GD.ScriptPropertyValue_T = null;
-        const waitSlot = { get: () => waitHitEffect, set: (value: GD.ScriptPropertyValue_T) => waitHitEffect = value };
-        const runSlot = { get: () => runHitEffect, set: (value: GD.ScriptPropertyValue_T) => runHitEffect = value };
-        const fn = sector.scriptVM.findFunction(volume.scriptClassId, "GetHitEffectName");
-
-        sector.scriptVM.invoke(volume as any, fn, [waitSlot, runSlot]);
-
-        const effectName = isMoving ? runHitEffect : waitHitEffect;
-
-        if (effectName === null) return null;
-        if (typeof effectName !== "string") throw new Error(`'${volume.scriptClassId}.GetHitEffectName' returned a non-name value.`);
-
-        return effectName;
-    }
-
-    protected sampleUnderWaterSunBeam(position: Vector3, volume: GD.IWaterVolumeDecodeInfo, target: Vector2): boolean {
-        tmpWaterSurfaceEnd.copy(position);
-        tmpWaterSurfaceEnd.z += PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH;
-
-        const surfaceTime = findVolumeTransition(position, tmpWaterSurfaceEnd, volume.bsp, true);
-
-        if (surfaceTime <= 0 || surfaceTime >= 1) return false;
-
-        const surfaceZ = position.z + PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH * surfaceTime;
-
-        tmpWaterFloorStart.set(position.x, position.y, surfaceZ - PhysicsManager.UNDERWATER_SUN_BEAM_TRACE_START);
-
-        const floorHit = this.rayCheck(tmpWaterFloorStart, tmpDown, PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH - PhysicsManager.UNDERWATER_SUN_BEAM_TRACE_START, undefined, undefined, false);
-
-        if (!floorHit || floorHit.distance <= 0 || floorHit.distance >= PhysicsManager.UNDERWATER_SUN_BEAM_DEPTH - PhysicsManager.UNDERWATER_SUN_BEAM_TRACE_START) return false;
-
-        target.set(surfaceZ, surfaceZ - floorHit.location.z);
-
-        return true;
-    }
-
-    protected updateUnderWaterSunBeam(effect: UnderWaterEffect): void {
-        const volume = effect.getVolume();
-
-        if (!effect.visible || !effect.hasSunBeamEffects()) return;
-
-        if (!this.isUnderWaterDay) {
-            this.wasUnderWaterDay = false;
-            this.hasUnderWaterSample = false;
-            effect.setSunBeamVisible(false);
-            return;
-        }
-
-        if (!this.wasUnderWaterDay || this.underWaterVolume !== volume) this.hasUnderWaterSample = false;
-
-        this.wasUnderWaterDay = true;
-        this.underWaterVolume = volume;
-
-        if (this.hasUnderWaterSample && this.lastUnderWaterSamplingLocation.distanceToSquared(this.underWaterPosition) <= PhysicsManager.UNDERWATER_SAMPLE_DISTANCE_SQ) return;
-
-        this.lastUnderWaterSamplingLocation.copy(this.underWaterPosition);
-        this.hasUnderWaterSample = true;
-
-        if (!volume || !this.sampleUnderWaterSunBeam(this.underWaterPosition, volume, tmpSunBeamSample)) {
-            effect.setSunBeamVisible(false);
-            return;
-        }
-
-        effect.setSunBeamSample(this.underWaterPosition, tmpSunBeamSample.x, tmpSunBeamSample.y);
-    }
-
     public registerSimulationObjects(root: Object3D): void {
         root.updateMatrixWorld(true);
-        root.traverse((object: ICollidable) => {
+        root.traverse(object => {
             if ((object as any).isTerrainBatch)
-                for (const terrain of (object as any).sectors) this.registerCollider(terrain);
+                for (const terrain of (object as any).sectors) this.registerObjectComponents(terrain);
 
             if ((object as any).particlePool) this.simEmitters.add(object);
-            if ((object as any).isRotatingObject) this.rotatingObjects.add(object as unknown as RotatingObject);
-            if ((object as any).isMovableObject) {
-                const mover = object as unknown as MovableObject;
-
-                this.movableObjects.add(mover);
-                mover.setPosition(this.moverPosition);
-            }
-
-            this.registerCollider(object);
+            this.registerObjectComponents(object);
         });
 
         this.lastMoverTriggerPosition.set(Infinity, Infinity, Infinity);
     }
 
     public registerCollider(object: ICollidable): void {
-        if (!object.isCollidable || this.collidables.has(object)) return;
+        if (!object.isCollidable) return;
 
         const collider = object.createCollider(this.physicsWorld);
         const colliders = object.getColliders ? object.getColliders() : [collider];
 
-        this.collidables.add(object);
         this.collisionWorld.register(object, colliders);
     }
 
     public unregisterSimulationObjects(root: Object3D): void {
-        root.traverse((object: ICollidable) => {
+        root.traverse(object => {
             if ((object as any).isTerrainBatch)
-                for (const terrain of (object as any).sectors) this.unregisterCollider(terrain);
+                for (const terrain of (object as any).sectors) this.unregisterObjectComponents(terrain);
 
             this.simEmitters.remove(object);
-            this.rotatingObjects.delete(object as unknown as RotatingObject);
-            this.movableObjects.delete(object as unknown as MovableObject);
-            this.activeMovableObjects.delete(object as unknown as MovableObject);
-            this.waitingMovableObjects.delete(object as unknown as MovableObject);
-            this.unregisterCollider(object);
+            this.unregisterObjectComponents(object);
         });
     }
 
-    public refreshCollider(object: ICollidable & { refreshCollisionGeometry(): void }): void {
-        this.unregisterCollider(object);
-        object.refreshCollisionGeometry();
-        this.registerCollider(object);
+    public refreshCollider(object: ICollidable & IObject & { refreshCollisionGeometry(): void }): void {
+        const component = object.findComponent<ColliderComponent>("collider");
+
+        if (!component) throw new Error(`Collidable '${object.name}' has no collider component.`);
+
+        component.refresh(object);
     }
 
     public unregisterCollider(object: ICollidable): void {
-        if (!this.collidables.has(object)) return;
-
         const collider = object.getCollider();
         const colliders = object.getColliders ? object.getColliders() : [collider];
         const rigidbody = object.getRigidbody();
 
-        this.collidables.delete(object);
         this.collisionWorld.unregister(colliders);
 
         if (rigidbody) this.physicsWorld.removeRigidBody(rigidbody);
@@ -427,45 +235,57 @@ class PhysicsManager implements IEngineComponent<GameManager> {
         if (object.releaseCollider) object.releaseCollider();
     }
 
-    protected scheduleMovableObject(mover: MovableObject, nextUpdate: number): void {
-        this.activeMovableObjects.delete(mover);
-        this.waitingMovableObjects.delete(mover);
+    protected registerObjectComponents(object: Object3D): void {
+        if (!(object as any).isGameObject) return;
 
-        if (nextUpdate === 0) this.activeMovableObjects.add(mover);
-        else if (nextUpdate > 0) this.waitingMovableObjects.set(mover, nextUpdate);
+        const components = (object as unknown as IObject).getComponents<IPhysicsComponent<any>>();
+
+        for (const component of components)
+            if (component.isPhysicsComponent) this.registerPhysicsComponent(component);
     }
 
-    protected updateMovableObjects(currentTime: number): void {
+    protected unregisterObjectComponents(object: Object3D): void {
+        if (!(object as any).isGameObject) return;
+
+        const components = (object as unknown as IObject).getComponents<IPhysicsComponent<any>>();
+
+        for (const component of components)
+            if (component.isPhysicsComponent) this.unregisterPhysicsComponent(component);
+    }
+
+    public registerPhysicsComponent(component: IPhysicsComponent<any>): void {
+        if (component.isPhysicsAdded(this)) return;
+
+        component.onPhysicsAdded(this);
+
+        if (component.onTriggerPosition || component.onPhysicsTick)
+            this.physicsComponents.add(component);
+    }
+
+    public unregisterPhysicsComponent(component: IPhysicsComponent<any>): void {
+        if (!component.isPhysicsAdded(this)) return;
+
+        this.physicsComponents.delete(component);
+        component.onPhysicsRemoved(this);
+    }
+
+    protected updatePhysicsComponents(currentTime: number, deltaTime: number): boolean {
         const manRender = this.manGame.getComponent("render");
+        const triggerChanged = !this.lastMoverTriggerPosition.equals(this.triggerPosition);
+        let didUpdate = false;
 
         arrMoverPawns.length = 0;
         arrMoverPawns.push(manRender.player);
         for (const actor of this.simPawns.getPawns()) arrMoverPawns.push(actor);
 
-        if (!this.lastMoverTriggerPosition.equals(this.triggerPosition)) {
-            this.lastMoverTriggerPosition.copy(this.triggerPosition);
+        if (triggerChanged) this.lastMoverTriggerPosition.copy(this.triggerPosition);
 
-            this.movableObjects.forEach(mover => {
-                const nextUpdate = mover.tryTrigger(currentTime, this.triggerPosition);
-
-                if (nextUpdate !== null) this.scheduleMovableObject(mover, nextUpdate);
-            });
+        for (const component of this.physicsComponents) {
+            if (triggerChanged) component.onTriggerPosition?.(currentTime, this.triggerPosition);
+            if (component.onPhysicsTick?.(currentTime, deltaTime, arrMoverPawns)) didUpdate = true;
         }
 
-        arrWaitingMovers.length = 0;
-        for (const entry of this.waitingMovableObjects) arrWaitingMovers.push(entry);
-        for (const [mover, wakeTime] of arrWaitingMovers)
-            if (currentTime >= wakeTime)
-                this.scheduleMovableObject(mover, mover.updateMover(currentTime, arrMoverPawns));
-
-        arrActiveMovers.length = 0;
-        for (const mover of this.activeMovableObjects) arrActiveMovers.push(mover);
-        for (const mover of arrActiveMovers)
-            this.scheduleMovableObject(mover, mover.updateMover(currentTime, arrMoverPawns));
-    }
-
-    protected updateRotatingObjects(deltaTime: number): void {
-        this.rotatingObjects.forEach(object => object.updateRotation(deltaTime));
+        return didUpdate;
     }
 }
 

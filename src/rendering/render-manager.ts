@@ -33,6 +33,7 @@ import Landmark from "./landmark";
 import type { ZoneObject, SectorObject } from "@client/objects/zone-object";
 import { IEngineComponent } from "@client/game/components";
 import type GameManager from "@client/game/game-manager";
+import type WaterEffectsComponent from "@client/physics/water-effects-component";
 
 const gui = new dat.GUI({ autoPlace: false, width: 300 });
 Object.assign(gui.domElement.style, {
@@ -361,12 +362,21 @@ class RenderManager implements IEngineComponent<GameManager> {
 
     public envConfig = {
         showLevel: true,
-        fogPreset: "4",
-        moverPosition: 0
+        fogPreset: "4"
     };
 
     protected manGame: GameManager;
-    public setParent(parent: GameManager): this { this.manGame = parent; return this; }
+    public setParent(parent: GameManager): this {
+        this.manGame = parent;
+
+        const manUI = parent.getComponent("ui");
+
+        guiFolders.world.add(manUI, "moverPosition", 0, 1, 0.01)
+            .name("Door Position")
+            .onChange(() => this.needsUpdate = true);
+
+        return this;
+    }
     public getParent(): GameManager { return this.manGame; }
 
     public constructor(viewport: HTMLViewportElement) {
@@ -411,13 +421,6 @@ class RenderManager implements IEngineComponent<GameManager> {
         guiFolders.world.add(this, "showColliders")
             .name("Show Colliders")
             .onChange(v => this.setCollidersVisible(v));
-
-        guiFolders.world.add(this.envConfig, "moverPosition", 0, 1, 0.01)
-            .name("Door Position")
-            .onChange(v => {
-                this.physicsManager.setMoverPosition(v);
-                this.needsUpdate = true;
-            });
 
         const skyFolder = gui.addFolder("Sky Layers");
         skyFolder.add(this.skyRenderer.config, "celestials").name("Celestials");
@@ -2293,7 +2296,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         const timeOfDay = this.environment.getTimeOfDay();
 
         // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
-        this.physicsManager.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
+        this.player.getComponent<WaterEffectsComponent>("waterEffects").setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
         this.underWaterEffect.updatePresentation(this.camera);
 
         if (!this.isOrbitControls) {

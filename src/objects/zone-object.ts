@@ -6,6 +6,7 @@ import type { TerrainDecoration } from "@client/objects/terrain-decoration";
 import { encompassesVolume } from "@client/physics/volume-bsp";
 
 import { ColorByte } from "@client/utils/color-byte";
+import type UnScriptVM from "@client/ue-script/vm";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
@@ -185,7 +186,7 @@ class SectorObject extends Object3D {
     public readonly isSectorObject = true;
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
-    public scriptVM: import("@client/ue-script/vm").default;
+    public scriptVM: UnScriptVM;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
     public readonly pawns = new Object3D(); // players/mobs - scene-graph home only, visibility resolved live (RenderManager.updatePawnVisibility)

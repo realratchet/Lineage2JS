@@ -1,10 +1,11 @@
 
 import DynamicLight from "@client/objects/dynamic-light";
 import { SectorObject } from "@client/objects/zone-object";
-import { BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
+import { BufferAttribute, Matrix4, Vector3 } from "three";
 import type { L2Environment } from "@client/rendering/l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
+import { GameMesh } from "@client/game/components";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -37,7 +38,7 @@ function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart:
 
 type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, instance?: DynamicLight };
 
-class LitActorMesh extends Mesh {
+class LitActorMesh extends GameMesh {
     public readonly isUpdatable: boolean = true;
 
     protected lightInfo?: MeshLight_T;

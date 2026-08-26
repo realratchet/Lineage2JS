@@ -3,6 +3,7 @@ import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, Co
 import LitActorMesh, { MeshLight_T } from "@client/objects/lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "@client/physics/triangle-index";
+import { ColliderComponent } from "@client/physics/physics-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -42,6 +43,8 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
         if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)
             this.makeCollider(props.colliderIndices, props.geometry.getAttribute("position").array as Float32Array);
         else this.isCollidable = false;
+
+        this.addComponent(new ColliderComponent());
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {

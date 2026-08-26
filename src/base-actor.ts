@@ -8,6 +8,9 @@ import { findVolumeTransition } from "./physics/volume-bsp";
 import LocalSpaceSkeleton from "./objects/local-space-skeleton";
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T, isScriptSlot } from "./ue-script/vm";
 import Rotator from "./utils/rotator";
+import { GameObject } from "./game/components";
+import { ColliderComponent } from "./physics/physics-component";
+import { COMPONENT_EVENT_NOT_HANDLED, ScriptComponent } from "./game/script-component";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
@@ -129,7 +132,7 @@ function setScriptObjectProperty(object: Object3D, field: string, value: ScriptV
 
 type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
 
-class BaseActor extends Object3D implements ICollidable {
+class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
@@ -208,6 +211,7 @@ class BaseActor extends Object3D implements ICollidable {
         swimmingIdle: null
     };
     protected scriptVM: UnScriptVM = null;
+    protected scriptComponent: ScriptComponent<BaseActor> = null;
     protected scriptObjectFactory: ScriptObjectFactory_T = null;
     protected hasBegunPlay = false;
     protected isScriptTicking = false;
@@ -223,6 +227,7 @@ class BaseActor extends Object3D implements ICollidable {
 
         this.renderManager = renderManager;
         this.up.copy(tmpUp);
+        this.addComponent(new ColliderComponent());
     }
 
     protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.renderManager.getParent().getComponent("physics")); }
@@ -232,6 +237,7 @@ class BaseActor extends Object3D implements ICollidable {
         this.scriptClassId = classId;
         this.scriptProperties = new Map();
         this.scriptObjectFactory = objectFactory;
+        this.scriptComponent = this.addComponent(new ScriptComponent(vm));
         this.scriptVM.initializeHost(this);
         this.isScriptTicking = this.scriptVM.hasScriptFunction(classId, "Tick") && this.scriptVM.findFunction(classId, "Tick").program.entries.length > 2;
     }
@@ -240,7 +246,7 @@ class BaseActor extends Object3D implements ICollidable {
         if (this.hasBegunPlay || !this.scriptVM) return;
 
         this.hasBegunPlay = true;
-        this.scriptVM.call(this, "PostBeginPlay");
+        this.scriptComponent.call("PostBeginPlay");
     }
 
     public resolveUnrealObject(id: string): string { return id; }
@@ -307,6 +313,10 @@ class BaseActor extends Object3D implements ICollidable {
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        const componentResult = this.scriptComponent ? this.scriptComponent.dispatchNative(call) : COMPONENT_EVENT_NOT_HANDLED;
+
+        if (componentResult !== COMPONENT_EVENT_NOT_HANDLED) return componentResult;
+
         const context = call.context as any;
         const name = call.name.toLowerCase();
 
@@ -1420,7 +1430,7 @@ class BaseActor extends Object3D implements ICollidable {
             setScriptObjectProperty(object, "Base", this);
 
             if (oldBase !== this && this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "Attach"))
-                this.scriptVM.call(this, "Attach", [object as unknown as ScriptHost_T]);
+                this.scriptComponent.call("Attach", [object as unknown as ScriptHost_T]);
 
             return true;
         }
@@ -1438,7 +1448,7 @@ class BaseActor extends Object3D implements ICollidable {
             setScriptObjectProperty(object, "Base", null);
 
             if (this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "Detach"))
-                this.scriptVM.call(this, "Detach", [object as unknown as ScriptHost_T]);
+                this.scriptComponent.call("Detach", [object as unknown as ScriptHost_T]);
 
             return true;
         }
@@ -1456,7 +1466,7 @@ class BaseActor extends Object3D implements ICollidable {
         setScriptObjectProperty(object, "Owner", this);
 
         if (this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "GainedChild"))
-            this.scriptVM.call(this, "GainedChild", [object as unknown as ScriptHost_T]);
+            this.scriptComponent.call("GainedChild", [object as unknown as ScriptHost_T]);
     }
 
     public loseScriptChild(object: Object3D): void {
@@ -1466,7 +1476,7 @@ class BaseActor extends Object3D implements ICollidable {
         setScriptObjectProperty(object, "Owner", null);
 
         if (this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "LostChild"))
-            this.scriptVM.call(this, "LostChild", [object as unknown as ScriptHost_T]);
+            this.scriptComponent.call("LostChild", [object as unknown as ScriptHost_T]);
     }
 
     public getRenderSphere(): Sphere {
@@ -1655,7 +1665,7 @@ class BaseActor extends Object3D implements ICollidable {
             this.setUnrealScriptProperty("Controller", null);
 
         if (this.scriptVM && this.hasBegunPlay && this.scriptVM.hasScriptFunction(this.scriptClassId, "Destroyed"))
-            this.scriptVM.call(this, "Destroyed");
+            this.scriptComponent.call("Destroyed");
 
         this.stopAnimations();
         this.deathAnimationFinishedHandler = null;
@@ -1699,7 +1709,7 @@ class BaseActor extends Object3D implements ICollidable {
             for (let weaponType = 0; weaponType < 8; weaponType++) {
                 this.setUnrealScriptProperty("CurWeaponType", weaponType);
 
-                const animationName = this.scriptVM.call(this, "GetDeathAnimName");
+                const animationName = this.scriptComponent.call("GetDeathAnimName");
 
                 if (typeof animationName !== "string") throw new Error(`${this.type} has invalid death animation '${animationName}'.`);
                 if (animationName.toLowerCase() === "none") continue;
@@ -1785,7 +1795,7 @@ class BaseActor extends Object3D implements ICollidable {
         }
 
         if (this.scriptVM) {
-            this.scriptVM.call(this, "AnimEnd", [0]);
+            this.scriptComponent.call("AnimEnd", [0]);
 
             if (this.animationNotifyAction !== action) return;
         }
@@ -1804,7 +1814,7 @@ class BaseActor extends Object3D implements ICollidable {
         if (this.scriptVM) {
             this.setUnrealScriptProperty("Controller", this.scriptDeathController);
 
-            if (this.scriptVM.hasScriptFunction(this.scriptClassId, "NotifyDie")) this.scriptVM.call(this, "NotifyDie");
+            if (this.scriptVM.hasScriptFunction(this.scriptClassId, "NotifyDie")) this.scriptComponent.call("NotifyDie");
         }
 
         this.playAnimation(this.basicActorAnimations.dying, MOVEMENT_TWEEN_TIME, 1, false, true);
@@ -1872,7 +1882,7 @@ class BaseActor extends Object3D implements ICollidable {
         }
 
         if (didBegin && this.scriptVM && this.scriptVM.hasScriptFunction(this.scriptClassId, "AnimBegin"))
-            this.scriptVM.call(this, "AnimBegin", [resolvedName]);
+            this.scriptComponent.call("AnimBegin", [resolvedName]);
     }
 
     public goTo(position: Vector3) {

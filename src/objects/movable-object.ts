@@ -4,6 +4,7 @@ import type BaseActor from "@client/base-actor";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { pointPrimitive } from "@client/physics/collision-primitive";
+import { MoverComponent } from "@client/physics/physics-component";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
 
@@ -38,6 +39,8 @@ class MovableObject extends CollidingMesh {
         this.keyNum = props.mover.keyNum;
 
         if (this.keyNum > 0) this.state = "open";
+
+        this.addComponent(new MoverComponent());
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {

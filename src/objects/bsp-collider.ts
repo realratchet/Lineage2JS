@@ -1,6 +1,8 @@
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { Box3, Object3D, Quaternion, Vector3 } from "three";
+import { Box3, Quaternion, Vector3 } from "three";
 import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
+import { GameObject } from "@client/game/components";
+import { ColliderComponent } from "@client/physics/physics-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -13,7 +15,7 @@ type HullPlane_T = { normal: Vector3, constant: number };
 type BSPColliderDesc_T = { desc: ColliderDesc, nodeIndex: number };
 type HullGeometry_T = { vertices: Float32Array, indices: Uint32Array };
 
-class BSPCollider extends Object3D implements ICollidable {
+class BSPCollider extends GameObject implements ICollidable {
     declare public readonly isCollidable: boolean;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
@@ -70,6 +72,7 @@ class BSPCollider extends Object3D implements ICollidable {
         }
 
         this.analyticalPrimitive = { kind: "bsp", hulls: this.analyticalHulls, index: buildHullIndex(this.analyticalHulls), bounds: this.analyticalBounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
+        this.addComponent(new ColliderComponent());
     }
 
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {

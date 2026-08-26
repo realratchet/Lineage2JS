@@ -3,12 +3,14 @@ import AudioManager from "@client/audio/audio-manager";
 import { IEngineComponent } from "@client/game/components";
 import PhysicsManager from "@client/physics/physics-manager";
 import RenderManager from "@client/rendering/render-manager";
+import UIManager from "@client/game/ui-manager";
 
 class GameManager implements IEngineComponent<GameManager> {
     protected manAsset: AssetManager;
     protected manRender: RenderManager;
     protected manAudio: AudioManager;
     protected manPhysics: PhysicsManager;
+    protected manUI: UIManager;
 
     protected components: IEngineComponent<any>[] = [];
 
@@ -26,7 +28,9 @@ class GameManager implements IEngineComponent<GameManager> {
         game.manRender = new RenderManager(viewport);
         game.manAudio = new AudioManager();
         game.manPhysics = new PhysicsManager();
+        game.manUI = new UIManager();
 
+        game.attach(game.manUI);
         game.attach(game.manPhysics);
         game.attach(game.manRender);
         game.attach(game.manAudio);
@@ -61,12 +65,14 @@ class GameManager implements IEngineComponent<GameManager> {
     public getComponent(component: "render"): RenderManager;
     public getComponent(component: "audio"): AudioManager;
     public getComponent(component: "physics"): PhysicsManager;
+    public getComponent(component: "ui"): UIManager;
     public getComponent(component: unknown): unknown {
         switch (component) {
             case "asset": return this.manAsset;
             case "render": return this.manRender;
             case "audio": return this.manAudio;
             case "physics": return this.manPhysics;
+            case "ui": return this.manUI;
             default: throw new Error(`Unknown component: ${component}`);
         }
     }

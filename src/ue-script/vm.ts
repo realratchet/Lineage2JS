@@ -655,9 +655,10 @@ class UnScriptVM {
     public findFunction(classId: string, name: string): GD.IScriptFunctionDecodeInfo {
         const fn = this.findFunctionOptional(classId, name);
 
-        if (fn) return fn;
+        if (!fn)
+            throw new Error(`UnrealScript function '${classId}.${name}' is not in the decode library`);
 
-        throw new Error(`UnrealScript function '${classId}.${name}' is not in the decode library`);
+        return fn;
     }
 
     public hasScriptFunction(classId: string, name: string): boolean {
@@ -675,7 +676,8 @@ class UnScriptVM {
     public gotoLabel(context: ScriptHost_T, name: string): ScriptValue_T {
         const gotoLabel = (context as any).gotoUnrealLabel;
 
-        if (typeof gotoLabel !== "function") throw new Error(`UnrealScript host '${context.scriptClassId}' cannot goto label '${name}'`);
+        if (typeof gotoLabel !== "function")
+            throw new Error(`UnrealScript host '${context.scriptClassId}' cannot goto label '${name}'`);
 
         return gotoLabel.call(context, name);
     }
@@ -686,9 +688,11 @@ class UnScriptVM {
 
         if (UNativeRegistry.hasNativeFunc(index)) return UNativeRegistry.getNativeFunc(index)(...args) as ScriptValue_T;
         if (UNativeRegistry.hasNativeFunc(name)) return UNativeRegistry.getNativeFunc(name)(...args) as ScriptValue_T;
+
         const handler = context.callUnrealNative || self.callUnrealNative;
 
-        if (!handler) throw new Error(`UnrealScript native '${name}' (${index}) is not registered for '${context.scriptClassId}'`);
+        if (!handler)
+            throw new Error(`UnrealScript native '${name}' (${index}) is not registered for '${context.scriptClassId}'`);
 
         return handler.call(handler === context.callUnrealNative ? context : self, { index, name, args, self, context });
     }
