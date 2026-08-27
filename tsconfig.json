@@ -10,7 +10,7 @@
             "@client/*": [
                 "./src/*"
             ],
-            "@unreal/*": [
+            "@l2js/engine/*": [
                 "./src/assets/unreal/*"
             ],
             "@l2js/core/*": [

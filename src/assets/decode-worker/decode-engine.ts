@@ -1,7 +1,7 @@
 import AssetLoader from "@client/assets/asset-loader";
-import UConfigEnv from "@unreal/conf-files/un-conf-env";
-import UDataFile from "@unreal/datafile/un-datafile";
-import * as SchemasC4 from "@unreal/datafile/schema/schema-types";
+import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
+import UDataFile from "@l2js/engine/datafile/un-datafile";
+import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "@client/assets/decoders/batch-data";
 import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
@@ -13,7 +13,7 @@ import type { PrecacheResult_T } from "./decode-protocol";
 import DecodeLibrary from "@client/assets/unreal/decode-library";
 import DecodeLibraryBuilder from "@client/assets/unreal/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
-import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@unreal/conf-files/un-conf-audio";
+import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {

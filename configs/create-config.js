@@ -219,7 +219,7 @@ const resolve = {
     extensions: [".tsx", ".ts", ".js"],
     alias: {
         "@client": path.resolve(__dirname, "../src"),
-        "@unreal": path.resolve(__dirname, "../src/assets/unreal"),
+        "@l2js/engine": path.resolve(__dirname, "../src/assets/unreal"),
         "@l2js/core": "@l2js/core/src"
     }
 };

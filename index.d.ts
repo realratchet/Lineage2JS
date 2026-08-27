@@ -11,37 +11,37 @@ declare global {
             }
 
             namespace Assets {
-                export type UPackage = import("@unreal/un-package").UPackage;
-                export type UNativePackage = import("@unreal/un-package").UNativePackage;
-                export type UCorePackage = import("@unreal/un-package").UCorePackage;
-                export type UEnginePackage = import("@unreal/un-package").UEnginePackage;
+                export type UPackage = import("@l2js/engine/un-package").UPackage;
+                export type UNativePackage = import("@l2js/engine/un-package").UNativePackage;
+                export type UCorePackage = import("@l2js/engine/un-package").UCorePackage;
+                export type UEnginePackage = import("@l2js/engine/un-package").UEnginePackage;
 
-                export type ULevel = import("@unreal/un-level").ULevel;
-                export type ULevelInfo = import("@unreal/un-level-info").ULevelInfo;
+                export type ULevel = import("@l2js/engine/un-level").ULevel;
+                export type ULevelInfo = import("@l2js/engine/un-level-info").ULevelInfo;
 
-                export type UModel = import("@unreal/model/un-model").UModel;
-                export type UTerrainLayer = import("@unreal/un-terrain-layer").UTerrainLayer;
-                export type UTerrainSector = import("@unreal/un-terrain-sector").UTerrainSector;
+                export type UModel = import("@l2js/engine/model/un-model").UModel;
+                export type UTerrainLayer = import("@l2js/engine/un-terrain-layer").UTerrainLayer;
+                export type UTerrainSector = import("@l2js/engine/un-terrain-sector").UTerrainSector;
 
-                export type FLeaf = import("@unreal/un-leaf").FLeaf;
+                export type FLeaf = import("@l2js/engine/un-leaf").FLeaf;
 
-                export type FVector = import("@unreal/un-vector").FVector;
-                export type FCoords = import("@unreal/un-coords").FCoords;
-                export type FRotator = import("@unreal/un-rotator").FRotator;
-                export type FQuaternion = import("@unreal/un-quaternion").FQuaternion;
-                export type FPlane = import("@unreal/un-plane").FPlane;
-                export type FBox = import("@unreal/un-box").FBox;
-                export type FMatrix = import("@unreal/un-matrix").FMatrix;
-                export type FColor = import("@unreal/un-color").FColor;
-                export type FScale = import("@unreal/un-scale").FScale;
-                export type FRange = import("@unreal/un-range").FRange;
-                export type FRangeVector = import("@unreal/un-range").FRangeVector;
+                export type FVector = import("@l2js/engine/un-vector").FVector;
+                export type FCoords = import("@l2js/engine/un-coords").FCoords;
+                export type FRotator = import("@l2js/engine/un-rotator").FRotator;
+                export type FQuaternion = import("@l2js/engine/un-quaternion").FQuaternion;
+                export type FPlane = import("@l2js/engine/un-plane").FPlane;
+                export type FBox = import("@l2js/engine/un-box").FBox;
+                export type FMatrix = import("@l2js/engine/un-matrix").FMatrix;
+                export type FColor = import("@l2js/engine/un-color").FColor;
+                export type FScale = import("@l2js/engine/un-scale").FScale;
+                export type FRange = import("@l2js/engine/un-range").FRange;
+                export type FRangeVector = import("@l2js/engine/un-range").FRangeVector;
 
-                export type UPlatte = import("@unreal/un-palette").UPlatte;
-                export type UTexture = ExtendsUObject<import("@unreal/un-texture").UTexture>;
+                export type UPlatte = import("@l2js/engine/un-palette").UPlatte;
+                export type UTexture = ExtendsUObject<import("@l2js/engine/un-texture").UTexture>;
 
-                export type UTextureModifyInfo = import("@unreal/un-texture-modify-info").UTextureModifyInfo;
-                export type FStaticLightmapTexture = import("@unreal/model/un-multilightmap-texture").FStaticLightmapTexture;
+                export type UTextureModifyInfo = import("@l2js/engine/un-texture-modify-info").UTextureModifyInfo;
+                export type FStaticLightmapTexture = import("@l2js/engine/model/un-multilightmap-texture").FStaticLightmapTexture;
 
                 export type NativeClientTypes_T =
                     | C.NativeTypes_T
@@ -79,29 +79,29 @@ declare global {
                     | "AnimNotify_ViewShake"
                     | "AnimNotify_BoneScale";
 
-                export type USound = import("@unreal/un-sound").USound;
-                export type UAmbientSoundObject = import("@unreal/un-ambient-sound").UAmbientSoundObject;
-                export type UMusicVolume = import("@unreal/un-music-volume").UMusicVolume;
+                export type USound = import("@l2js/engine/un-sound").USound;
+                export type UAmbientSoundObject = import("@l2js/engine/un-ambient-sound").UAmbientSoundObject;
+                export type UMusicVolume = import("@l2js/engine/un-music-volume").UMusicVolume;
 
-                export type UNSun = import("@unreal/un-nsun").UNSun;
-                export type UNMoon = import("@unreal/un-nmoon").UNMoon;
+                export type UNSun = import("@l2js/engine/un-nsun").UNSun;
+                export type UNMoon = import("@l2js/engine/un-nmoon").UNMoon;
 
-                export type UPolys = import("@unreal/un-polys").UPolys;
-                export type PolyFlags_T = import("@unreal/un-polys").PolyFlags_T;
+                export type UPolys = import("@l2js/engine/un-polys").UPolys;
+                export type PolyFlags_T = import("@l2js/engine/un-polys").PolyFlags_T;
 
-                export type UBrush = import("@unreal/un-brush").UBrush;
+                export type UBrush = import("@l2js/engine/un-brush").UBrush;
 
-                export type UMaterial = import("@unreal/un-material").UMaterial;
-                export type UShader = import("@unreal/un-material").UShader;
+                export type UMaterial = import("@l2js/engine/un-material").UMaterial;
+                export type UShader = import("@l2js/engine/un-material").UShader;
 
-                export type AActor = import("@unreal/un-aactor").UAActor;
+                export type AActor = import("@l2js/engine/un-aactor").UAActor;
 
-                export type AInfo = import("@unreal/un-info").AInfo;
-                export type UL2FogInfo = import("@unreal/un-fog-info").UL2FogInfo;
-                export type FZoneInfo = import("@unreal/un-zone-info").FZoneInfo;
-                export type ATerrainInfo = import("@unreal/un-terrain-info").ATerrainInfo;
+                export type AInfo = import("@l2js/engine/un-info").AInfo;
+                export type UL2FogInfo = import("@l2js/engine/un-fog-info").UL2FogInfo;
+                export type FZoneInfo = import("@l2js/engine/un-zone-info").FZoneInfo;
+                export type ATerrainInfo = import("@l2js/engine/un-terrain-info").ATerrainInfo;
 
-                export type UEmitter = import("@unreal/un-emitter").UEmitter;
+                export type UEmitter = import("@l2js/engine/un-emitter").UEmitter;
 
                 export interface IUserConfig {
                     clippingRange: IClippingRangeConfig;
@@ -126,35 +126,35 @@ declare global {
                     pawnMax: number;
                 }
 
-                export type UStaticMesh = import("@unreal/static-mesh/un-static-mesh").UStaticMesh;
-                export type UStaticMeshActor = import("@unreal/static-mesh/un-static-mesh-actor").UStaticMeshActor;
-                export type UStaticMeshInstance = import("@unreal/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
-                export type UStaticMeshMaterial = import("@unreal/un-material").UStaticMeshMaterial;
+                export type UStaticMesh = import("@l2js/engine/static-mesh/un-static-mesh").UStaticMesh;
+                export type UStaticMeshActor = import("@l2js/engine/static-mesh/un-static-mesh-actor").UStaticMeshActor;
+                export type UStaticMeshInstance = import("@l2js/engine/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
+                export type UStaticMeshMaterial = import("@l2js/engine/un-material").UStaticMeshMaterial;
 
-                export type USkeletalMesh = import("@unreal/skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
-                export type UPawn = import("@unreal/un-pawn").UPawn;
-                export type UMeshAnimation = import("@unreal/skeletal-mesh/un-mesh-animation").UMeshAnimation;
+                export type USkeletalMesh = import("@l2js/engine/skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
+                export type UPawn = import("@l2js/engine/un-pawn").UPawn;
+                export type UMeshAnimation = import("@l2js/engine/skeletal-mesh/un-mesh-animation").UMeshAnimation;
 
-                export type FTIntMap = import("@unreal/un-tint-map").FTIntMap;
-                export type UDecoLayer = import("@unreal/un-deco-layer").UDecoLayer;
+                export type FTIntMap = import("@l2js/engine/un-tint-map").FTIntMap;
+                export type UDecoLayer = import("@l2js/engine/un-deco-layer").UDecoLayer;
 
-                export type UPointRegion = import("@unreal/un-point-region").UPointRegion;
+                export type UPointRegion = import("@l2js/engine/un-point-region").UPointRegion;
 
-                export type UPhysicsVolume = import("@unreal/un-physics-volume").UPhysicsVolume;
+                export type UPhysicsVolume = import("@l2js/engine/un-physics-volume").UPhysicsVolume;
 
                 export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
 
-                export type ULight = import("@unreal/un-light").ULight;
-                export type LightEffect_T = import("@unreal/un-light").LightEffect_T;
-                export type LightType_T = import("@unreal/un-light").LightType_T;
-                export type UNMovableSunLight = import("@unreal/un-movable-sunlight").UNMovableSunLight;
+                export type ULight = import("@l2js/engine/un-light").ULight;
+                export type LightEffect_T = import("@l2js/engine/un-light").LightEffect_T;
+                export type LightType_T = import("@l2js/engine/un-light").LightType_T;
+                export type UNMovableSunLight = import("@l2js/engine/un-movable-sunlight").UNMovableSunLight;
 
-                export type FNTimeColor = import("@unreal/un-l2env").FNTimeColor;
-                export type FNTimeHSV = import("@unreal/un-l2env").FNTimeHSV;
-                export type FNTimeScale = import("@unreal/un-l2env").FNTimeScale;
-                export type UL2NEnvLight = import("@unreal/un-l2env").UL2NEnvLight;
-                export type UL2NTimeLight = import("@unreal/un-l2env").UL2NTimeLight;
-                export type EEnvCycle = import("@unreal/un-l2env").EEnvCycle;
+                export type FNTimeColor = import("@l2js/engine/un-l2env").FNTimeColor;
+                export type FNTimeHSV = import("@l2js/engine/un-l2env").FNTimeHSV;
+                export type FNTimeScale = import("@l2js/engine/un-l2env").FNTimeScale;
+                export type UL2NEnvLight = import("@l2js/engine/un-l2env").UL2NEnvLight;
+                export type UL2NTimeLight = import("@l2js/engine/un-l2env").UL2NTimeLight;
+                export type EEnvCycle = import("@l2js/engine/un-l2env").EEnvCycle;
             }
 
             namespace Decoding {
@@ -171,8 +171,8 @@ declare global {
                 export type EulerArr = [...Vector3Arr, EulerOrder];
                 export type ArrGeometryGroup = [number, number, number];
 
-                export type DecodeLibrary = import("@unreal/decode-library").DecodeLibrary;
-                export type DecodeLibraryBuilder = import("@unreal/decode-library-builder").DecodeLibraryBuilder;
+                export type DecodeLibrary = import("@l2js/engine/decode-library").DecodeLibrary;
+                export type DecodeLibraryBuilder = import("@l2js/engine/decode-library-builder").DecodeLibraryBuilder;
                 export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
                 export interface INpcDefinition {

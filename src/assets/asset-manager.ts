@@ -9,7 +9,7 @@ import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
 import decodeEnv from "@client/assets/decoders/env-decoder";
 import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
-import { getUserConfig } from "@unreal/conf-files/un-conf-system";
+import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
 import { AnimationClip, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "@client/objects/zone-object";
 import UnScriptVM from "@client/ue-script/vm";

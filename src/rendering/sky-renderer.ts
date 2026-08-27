@@ -3,7 +3,7 @@ import L2Environment from "./l2-env";
 import { ColorByte } from "@client/utils/color-byte";
 import { SectorObject } from "@client/objects/zone-object";
 import EnvInfo from "@client/rendering/env-info";
-import { EEnvCycle } from "@unreal/env-consts";
+import { EEnvCycle } from "@l2js/engine/env-consts";
 
 const DEG2RAD = Math.PI / 180;
 const HALF_PI = Math.PI / 2;

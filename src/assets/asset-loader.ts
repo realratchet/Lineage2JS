@@ -68,12 +68,12 @@ import { AAssetLoader, APackage } from "@l2js/core";
 //     // // private packageByName = new Map<string, UPackage>();
 
 //     // static async Instantiate(assetList: IAssetListInfo) {
-//     //     const Library = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
+//     //     const Library = await import(/* webpackChunkName: "modules/unreal" */ "@l2js/engine/un-package");
 
 //     //     return new AssetLoader(assetList, Library);
 //     // }
 
-//     // private constructor(assetList: IAssetListInfo, { UPackage, UNativePackage }: typeof import("@unreal/un-package")) {
+//     // private constructor(assetList: IAssetListInfo, { UPackage, UNativePackage }: typeof import("@l2js/engine/un-package")) {
 //     //     this.packages.set("native", new Map([["U", new UNativePackage(this)]]))
 
 //     //     for (let [path, downloadPath] of Object.entries(assetList)) {
@@ -203,7 +203,7 @@ class AssetLoader extends AAssetLoader<C.APackage, GA.UCorePackage, GA.UEnginePa
     protected pkgRefCounts = new Map<string, number>();
 
     static async Instantiate(assetList: C.IAssetListInfo) {
-        const Library = await import(/* webpackChunkName: "modules/unreal" */ "@unreal/un-package");
+        const Library = await import(/* webpackChunkName: "modules/unreal" */ "@l2js/engine/un-package");
 
         return new AssetLoader().init(assetList, Library);
     }
