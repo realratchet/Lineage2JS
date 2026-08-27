@@ -1,6 +1,7 @@
-import { Object3D, Scene, Vector3 } from "three";
+import { Object3D, Vector3 } from "three";
 import { ObjectComponent } from "../../game/components";
 import type Player from "../../player";
+import type RenderManager from "../render-manager";
 
 const ACTIVE_EFFECT = "LineageEffect.e_u093_a";
 const COMPLETION_EFFECT = "LineageEffect.e_u093_b";
@@ -12,7 +13,7 @@ const tmpNormal = new Vector3();
 type EffectFactory_T = (classPath: string) => Object3D;
 
 class LandmarkComponent extends ObjectComponent<Player> {
-    protected readonly scene: Scene;
+    protected readonly renderManager: RenderManager;
     protected readonly createEffect: EffectFactory_T;
     protected readonly retiringEffects = new Set<Object3D>();
     protected activeEffect: Object3D = null;
@@ -21,10 +22,10 @@ class LandmarkComponent extends ObjectComponent<Player> {
 
     public readonly componentName = "landmark";
 
-    public constructor(scene: Scene, createEffect: EffectFactory_T) {
+    public constructor(renderManager: RenderManager, createEffect: EffectFactory_T) {
         super();
 
-        this.scene = scene;
+        this.renderManager = renderManager;
         this.createEffect = createEffect;
     }
 
@@ -40,19 +41,15 @@ class LandmarkComponent extends ObjectComponent<Player> {
         effect.quaternion.setFromUnitVectors(axisUp, tmpNormal.copy(normal).normalize());
 
         this.hasOwnerMoved = false;
-        this.scene.add(effect);
+        this.renderManager.addTransientEffect(effect);
     }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {
-        if (this.completionEffect && this.isEffectFinished(this.completionEffect)) {
-            this.removeEffect(this.completionEffect);
-            this.completionEffect = null;
-        }
+        if (this.completionEffect && !this.completionEffect.parent) this.completionEffect = null;
 
         for (const effect of this.retiringEffects) {
-            if (!this.isEffectFinished(effect)) continue;
+            if (effect.parent) continue;
 
-            this.removeEffect(effect);
             this.retiringEffects.delete(effect);
         }
 
@@ -70,7 +67,7 @@ class LandmarkComponent extends ObjectComponent<Player> {
             if (this.completionEffect) this.removeEffect(this.completionEffect);
 
             this.completionEffect = effect;
-            this.scene.add(effect);
+            this.renderManager.addTransientEffect(effect);
             return;
         }
 
@@ -110,39 +107,12 @@ class LandmarkComponent extends ObjectComponent<Player> {
         });
     }
 
-    protected isEffectFinished(effect: Object3D): boolean {
-        let hasEmitter = false;
-        let isFinished = true;
-
-        effect.traverse(child => {
-            const emitter = child as any;
-
-            if (!emitter.particlePool) return;
-
-            hasEmitter = true;
-            if (!emitter.isFinished()) isFinished = false;
-        });
-
-        return hasEmitter && isFinished;
-    }
-
     protected removeEffect(effect: Object3D): void {
-        if (!effect) return;
+        if (!effect || !effect.parent) return;
 
-        effect.removeFromParent();
-        effect.traverse(child => {
-            const mesh = child as any;
-
-            if (!mesh.isMesh) return;
-
-            const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
-
-            for (const material of materials) material.dispose();
-            if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
-        });
+        this.renderManager.removeTransientEffect(effect);
     }
 }
 
 export default LandmarkComponent;
 export { LandmarkComponent };
-

@@ -17,7 +17,7 @@ class Player extends BaseActor {
 
         this.movementComponent.setPhysicsTickRate(60);
         this.addComponent(new WaterEffectsComponent());
-        this.addComponent(new LandmarkComponent(renderManager.scene, classPath => renderManager.getParent().getComponent("asset").createLandmarkEffect(classPath)));
+        this.addComponent(new LandmarkComponent(renderManager, classPath => renderManager.getParent().getComponent("asset").createLandmarkEffect(classPath)));
     }
 
     public setMeshes(meshes: Mesh[]) {
