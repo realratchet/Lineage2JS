@@ -1,4 +1,4 @@
-import UVolume from "@client/assets/unreal/un-volume";
+import UVolume from "./un-volume";
 
 abstract class UMusicVolume extends UVolume {
     declare protected musicId: number;

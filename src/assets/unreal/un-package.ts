@@ -45,24 +45,24 @@ import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
 import FCoords from "./un-coords";
-import FQuaternion from "@client/assets/unreal/un-quaternion";
-import UStaticMeshInstance from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
-import UStaticMesh from "@client/assets/unreal/static-mesh/un-static-mesh";
+import FQuaternion from "./un-quaternion";
+import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
+import UStaticMesh from "./static-mesh/un-static-mesh";
 import { addClassDependency, addPackageDependendency } from "@l2js/core/src/unreal/un-package";
-import ULevelSummary from "@client/assets/unreal/un-level-summary";
-import USound from "@client/assets/unreal/un-sound";
-import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
-import UMover from "@client/assets/unreal/un-mover";
-import * as NEnv from "@client/assets/unreal/un-l2env";
+import ULevelSummary from "./un-level-summary";
+import USound from "./un-sound";
+import UAmbientSoundObject from "./un-ambient-sound";
+import UMover from "./un-mover";
+import * as NEnv from "./un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
-import UMovableStaticMeshActor, { FL2RotatorTime } from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
-import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
-import { fetchAssetHandle } from "@client/assets/asset-handle";
-import UPawn from "@client/assets/unreal/un-pawn";
-import USkeletalMesh from "@client/assets/unreal/skeletal-mesh/un-skeletal-mesh";
-import USkeletalMeshInstance from "@client/assets/unreal/un-skeletal-mesh-instance";
-import UMeshAnimation from "@client/assets/unreal/skeletal-mesh/un-mesh-animation";
-import * as AnimNotify from "@client/assets/unreal/skeletal-mesh/un-anim-notify";
+import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movable-static-mesh-actor";
+import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
+import { fetchAssetHandle } from "../asset-handle";
+import UPawn from "./un-pawn";
+import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
+import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
+import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
+import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
 
 type CoreStructs_T =
     | "Vector"

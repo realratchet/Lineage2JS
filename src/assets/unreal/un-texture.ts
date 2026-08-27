@@ -3,7 +3,7 @@ import decompressDDS from "../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import getTypedArrayConstructor from "../../utils/typed-arrray-constructor";
 import UMaterial from "./un-material";
 import FArray from "@l2js/core/src/unreal/un-array";
 

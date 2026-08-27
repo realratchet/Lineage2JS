@@ -1,7 +1,7 @@
 import { EEnvCycle } from "./env-consts";
-import FPlane from "@client/assets/unreal/un-plane";
-import hsvToRgb from "@client/utils/hsv-to-rgb";
-import GMath from "@client/assets/unreal/un-gmath";
+import FPlane from "./un-plane";
+import hsvToRgb from "../../utils/hsv-to-rgb";
+import GMath from "./un-gmath";
 import { APackage, UExport, UObject } from "@l2js/core";
 import FArray from "@l2js/core/src/unreal/un-array";
 

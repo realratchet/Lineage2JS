@@ -1,4 +1,4 @@
-import { SizedContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { SizedContainerType } from "./dat-container";
 
 const SCHEMA_HAIRACCESSORYLOCGRP_DAT: ISchemaValue[] = [
     { type: "utf16", name: "name" }

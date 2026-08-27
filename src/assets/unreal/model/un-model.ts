@@ -10,10 +10,10 @@ import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
-import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import getTypedArrayConstructor from "../../../utils/typed-arrray-constructor";
 import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
-import FBox from "@client/assets/unreal/un-box";
+import FBox from "../un-box";
 import { DoubleSide } from "three";
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.

@@ -1,4 +1,4 @@
-import DecodeLibrary from "@client/assets/unreal/decode-library";
+import DecodeLibrary from "@l2js/engine/decode-library";
 import type { WorkerToMainMessage_T, PrecacheResult_T } from "./decode-protocol";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";

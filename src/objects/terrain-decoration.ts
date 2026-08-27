@@ -1,4 +1,4 @@
-import Terrain from "@client/objects/terrain";
+import Terrain from "./terrain";
 import { Box3, BufferGeometry, Camera, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Material, Scene, StaticDrawUsage, Vector3, WebGLRenderer } from "three";
 
 const tmpVec = new Vector3();

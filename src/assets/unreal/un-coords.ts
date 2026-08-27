@@ -1,8 +1,8 @@
-import GMath from "@client/assets/unreal/un-gmath";
-import FMatrix from "@client/assets/unreal/un-matrix";
-import FRotator from "@client/assets/unreal/un-rotator";
-import FScale from "@client/assets/unreal/un-scale";
-import FVector from "@client/assets/unreal/un-vector";
+import GMath from "./un-gmath";
+import FMatrix from "./un-matrix";
+import FRotator from "./un-rotator";
+import FScale from "./un-scale";
+import FVector from "./un-vector";
 import { UObject } from "@l2js/core";
 
 abstract class FCoords extends UObject {

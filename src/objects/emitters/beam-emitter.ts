@@ -1,4 +1,4 @@
-import ParticleMaterial, { AnimatedParticleMaterial } from "@client/materials/particle-material/particle-material";
+import ParticleMaterial, { AnimatedParticleMaterial } from "../../materials/particle-material/particle-material";
 import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
 

@@ -1,5 +1,5 @@
 import { Box3, Matrix3, Matrix4, Vector3 } from "three";
-import type { CollisionHull_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "@client/objects/objects";
+import type { CollisionHull_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "../objects/objects";
 
 const tmpA = new Vector3();
 const tmpB = new Vector3();

@@ -1,7 +1,7 @@
 // import FVector from "./un-vector";
 // import FRotator from "./un-rotator";
-import GMath from "@client/assets/unreal/un-gmath";
-import FMatrix from "@client/assets/unreal/un-matrix";
+import GMath from "./un-gmath";
+import FMatrix from "./un-matrix";
 import UObject, { APackage, UExport } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 

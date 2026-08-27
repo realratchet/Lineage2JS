@@ -1,8 +1,8 @@
 import { MeshBasicMaterial, Object3D, PerspectiveCamera, Vector3, WebGLRenderer } from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
-import ColorByte from "@client/utils/color-byte";
-import type BaseEmitter from "@client/objects/emitters/base-emitter";
-import Rotator from "@client/utils/rotator";
+import ColorByte from "../utils/color-byte";
+import type BaseEmitter from "../objects/emitters/base-emitter";
+import Rotator from "../utils/rotator";
 
 const tmpRotator = new Rotator();
 

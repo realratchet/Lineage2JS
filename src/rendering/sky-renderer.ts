@@ -1,8 +1,8 @@
 import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color, OneMinusSrcAlphaFactor } from "three";
 import L2Environment from "./l2-env";
-import { ColorByte } from "@client/utils/color-byte";
-import { SectorObject } from "@client/objects/zone-object";
-import EnvInfo from "@client/rendering/env-info";
+import { ColorByte } from "../utils/color-byte";
+import { SectorObject } from "../objects/zone-object";
+import EnvInfo from "./env-info";
 import { EEnvCycle } from "@l2js/engine/env-consts";
 
 const DEG2RAD = Math.PI / 180;

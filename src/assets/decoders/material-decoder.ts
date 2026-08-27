@@ -1,9 +1,9 @@
-import MeshStaticMaterial from "@client/materials/mesh-static-material/mesh-static-material";
+import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
 import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
-import MeshTerrainMaterial from "@client/materials/mesh-terrain-material/mesh-terrain-material";
-import DecodeLibrary from "../unreal/decode-library";
-import { buildTransformStage } from "@client/materials/mesh-static-material/transform-stage";
+import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
+import DecodeLibrary from "@l2js/engine/decode-library";
+import { buildTransformStage } from "../../materials/mesh-static-material/transform-stage";
 
 const cacheTextures = new WeakMap<GD.ITextureDecodeInfo, GD.MapData_T>();
 type WeakCacheEntry_T<T extends object> = { deref(): T | undefined };

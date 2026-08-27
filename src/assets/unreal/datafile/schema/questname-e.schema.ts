@@ -1,4 +1,4 @@
-import { SizedContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { SizedContainerType } from "./dat-container";
 
 const SCHEMA_QUESTNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag_?" },

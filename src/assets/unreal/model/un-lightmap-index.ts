@@ -1,4 +1,4 @@
-import FMatrix from "@client/assets/unreal/un-matrix";
+import FMatrix from "../un-matrix";
 import { BufferValue } from "@l2js/core";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";

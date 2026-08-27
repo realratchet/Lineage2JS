@@ -2,7 +2,7 @@ import { RigidBodyDesc } from "@dimforge/rapier3d";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import Rotator from "../utils/rotator";
-import { RotatingComponent } from "@client/physics/components/physics-component";
+import { RotatingComponent } from "../physics/components/physics-component";
 
 class RotatingObject extends CollidingMesh {
     public readonly isRotatingObject: boolean = true;

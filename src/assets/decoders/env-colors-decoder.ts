@@ -1,4 +1,4 @@
-import EnvColor, { TimeColor, TimeHSV, TimeScale } from "@client/rendering/env-color";
+import EnvColor, { TimeColor, TimeHSV, TimeScale } from "../../rendering/env-color";
 
 
 function decodeEnvColor(envColor: GD.IL2NEnvLightDecodeInfo): EnvColor {

@@ -1,5 +1,5 @@
-import startCore from "@client/core";
-import type BaseActor from "@client/base-actor";
+import startCore from "./core";
+import type BaseActor from "./base-actor";
 import { Vector3 } from "three";
 
 const NPC_TIMEOUT_MS = 240_000;

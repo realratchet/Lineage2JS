@@ -1,13 +1,13 @@
-import DynamicLight from "@client/objects/dynamic-light";
-import type { L2Environment } from "@client/rendering/l2-env";
+import DynamicLight from "./dynamic-light";
+import type { L2Environment } from "../rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
-import type { Terrain } from "@client/objects/terrain";
-import type { TerrainDecoration } from "@client/objects/terrain-decoration";
-import { encompassesVolume } from "@client/physics/volume-bsp";
-import { GameObject } from "@client/game/components";
+import type { Terrain } from "./terrain";
+import type { TerrainDecoration } from "./terrain-decoration";
+import { encompassesVolume } from "../physics/volume-bsp";
+import { GameObject } from "../game/components";
 
-import { ColorByte } from "@client/utils/color-byte";
-import type UnScriptVM from "@client/ue-script/vm";
+import { ColorByte } from "../utils/color-byte";
+import type UnScriptVM from "../ue-script/vm";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();

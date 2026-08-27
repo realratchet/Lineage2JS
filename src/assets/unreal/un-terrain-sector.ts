@@ -1,10 +1,10 @@
 import UObject from "@l2js/core";
 import FBox from "./un-box";
 import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import getTypedArrayConstructor from "../../utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import FVector from "@client/assets/unreal/un-vector";
-import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
+import FVector from "./un-vector";
+import { ETerrainRenderMethod_T } from "./un-terrain-info";
 
 type TerrainSegmentDecodeResult_T = { object: GD.ITerrainSegmentDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialTerrainSegmentDecodeInfo };
 

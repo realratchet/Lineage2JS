@@ -1,7 +1,7 @@
-import { IEngineComponent } from "@client/game/components";
-import type GameManager from "@client/game/game-manager";
+import { IEngineComponent } from "../game/components";
+import type GameManager from "../game/game-manager";
 import { randInt } from "three/src/math/MathUtils";
-import type AmbientSoundComponent from "@client/audio/components/ambient-sound-component";
+import type AmbientSoundComponent from "./components/ambient-sound-component";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini

@@ -1,8 +1,8 @@
 import { Vector3 } from "three";
-import type BaseActor from "@client/base-actor";
-import type { SectorObject } from "@client/objects/zone-object";
-import type RenderManager from "@client/rendering/render-manager";
-import decodeObject3D from "@client/assets/decoders/object3d-decoder";
+import type BaseActor from "../base-actor";
+import type { SectorObject } from "../objects/zone-object";
+import type RenderManager from "./render-manager";
+import decodeObject3D from "../assets/decoders/object3d-decoder";
 
 class WaterHitEffect {
     protected static readonly SIZE_SCALE = 1 / 9;

@@ -1,4 +1,4 @@
-import { saturationToBrightness } from "@client/utils/hsv-to-rgb";
+import { saturationToBrightness } from "../../utils/hsv-to-rgb";
 import ULight from "./un-light";
 
 abstract class UNMovableSunLight extends ULight {

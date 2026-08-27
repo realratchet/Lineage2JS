@@ -1,11 +1,11 @@
-import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
-import { decodePackage } from "@client/assets/decoders/object3d-decoder";
-import decodeEnv from "@client/assets/decoders/env-decoder";
-import L2Environment from "@client/rendering/l2-env";
-import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
-import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
+import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
+import { decodePackage } from "./assets/decoders/object3d-decoder";
+import decodeEnv from "./assets/decoders/env-decoder";
+import L2Environment from "./rendering/l2-env";
+import GLOBAL_UNIFORMS from "./materials/global-uniforms";
+import InstancedSpriteBatcher from "./objects/emitters/instanced-sprite-batcher";
 import { Box3, Color, Frustum, Matrix4, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
-import type { SectorObject } from "@client/objects/zone-object";
+import type { SectorObject } from "./objects/zone-object";
 
 // Automated sector sweep (?sectorTest): decodes every level sector through the decode
 // worker, instantiates it, then renders + simulates a few frames (shader compilation,

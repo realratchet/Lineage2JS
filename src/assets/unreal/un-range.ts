@@ -1,4 +1,4 @@
-import FVector from "@client/assets/unreal/un-vector";
+import FVector from "./un-vector";
 import UObject from "@l2js/core";
 
 abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {

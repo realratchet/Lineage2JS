@@ -1,6 +1,6 @@
-import DynamicLight from "@client/objects/dynamic-light";
+import DynamicLight from "./dynamic-light";
 import { BufferGeometry, Material, SkinnedMesh } from "three";
-import { ColorByte } from "@client/utils/color-byte";
+import { ColorByte } from "../utils/color-byte";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];

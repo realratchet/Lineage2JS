@@ -1,11 +1,11 @@
 
-import DynamicLight from "@client/objects/dynamic-light";
-import { SectorObject } from "@client/objects/zone-object";
+import DynamicLight from "./dynamic-light";
+import { SectorObject } from "./zone-object";
 import { BufferAttribute, Matrix4, Vector3 } from "three";
-import type { L2Environment } from "@client/rendering/l2-env";
-import { ColorByte } from "@client/utils/color-byte";
-import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
-import { GameMesh } from "@client/game/components";
+import type { L2Environment } from "../rendering/l2-env";
+import { ColorByte } from "../utils/color-byte";
+import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
+import { GameMesh } from "../game/components";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();

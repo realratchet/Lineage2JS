@@ -1,6 +1,6 @@
-import FBox from "@client/assets/unreal/un-box";
-import FPlane from "@client/assets/unreal/un-plane";
-import FVector from "@client/assets/unreal/un-vector";
+import FBox from "./un-box";
+import FPlane from "./un-plane";
+import FVector from "./un-vector";
 import UObject from "@l2js/core";
 
 abstract class UPrimitive extends UObject {

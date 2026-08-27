@@ -1,6 +1,6 @@
 import { Object3D, Scene, Vector3 } from "three";
-import { ObjectComponent } from "@client/game/components";
-import type Player from "@client/player";
+import { ObjectComponent } from "../../game/components";
+import type Player from "../../player";
 
 const ACTIVE_EFFECT = "LineageEffect.e_u093_a";
 const COMPLETION_EFFECT = "LineageEffect.e_u093_b";

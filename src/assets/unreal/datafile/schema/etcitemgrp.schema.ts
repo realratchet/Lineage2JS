@@ -1,4 +1,4 @@
-import { SizedContainerType, UTF16PairContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { SizedContainerType, UTF16PairContainerType } from "./dat-container";
 
 const SCHEMA_ETCITEMGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },

@@ -1,7 +1,7 @@
-import { PhysicsComponent } from "@client/physics/components/physics-component";
-import type { IObject } from "@client/game/components";
-import type BaseActor from "@client/base-actor";
-import type RenderManager from "@client/rendering/render-manager";
+import { PhysicsComponent } from "../../physics/components/physics-component";
+import type { IObject } from "../../game/components";
+import type BaseActor from "../../base-actor";
+import type RenderManager from "../render-manager";
 
 class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Object3D> {
     public readonly componentName = "effectLifetime";

@@ -1,16 +1,16 @@
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Vector3 } from "three";
-import { IEngineComponent, IObject } from "@client/game/components";
-import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T } from "@client/physics/collision-world";
-import Player from "@client/player";
-import { ColliderComponent, IPhysicsComponent } from "@client/physics/components/physics-component";
-import NpcSimulationComponent from "@client/physics/components/npc-simulation-component";
-import PawnMovementComponent from "@client/physics/components/pawn-movement-component";
+import { IEngineComponent, IObject } from "../game/components";
+import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T } from "./collision-world";
+import Player from "../player";
+import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
+import NpcSimulationComponent from "./components/npc-simulation-component";
+import PawnMovementComponent from "./components/pawn-movement-component";
 
-import type BaseActor from "@client/base-actor";
-import type GameManager from "@client/game/game-manager";
-import type { ICollidable } from "@client/objects/objects";
-import type { SectorObject } from "@client/objects/zone-object";
+import type BaseActor from "../base-actor";
+import type GameManager from "../game/game-manager";
+import type { ICollidable } from "../objects/objects";
+import type { SectorObject } from "../objects/zone-object";
 
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();

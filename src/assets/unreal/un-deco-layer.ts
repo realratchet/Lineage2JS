@@ -1,5 +1,5 @@
 import UObject from "@l2js/core";
-import FVector from "@client/assets/unreal/un-vector";
+import FVector from "./un-vector";
 
 type DecoRandom_T = { seed: number };
 

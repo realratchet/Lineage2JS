@@ -1,5 +1,5 @@
 import { BufferValue } from "@l2js/core";
-import { NumberContainerType, UTF16ContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { NumberContainerType, UTF16ContainerType } from "./dat-container";
 
 const SCHEMA_NPCGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },

@@ -1,5 +1,5 @@
 import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
+import getTypedArrayConstructor from "../../../utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
 import FArray, { FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/unreal/un-array";
 import ULodMesh from "../un-lod-mesh";

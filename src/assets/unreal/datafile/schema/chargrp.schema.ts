@@ -1,4 +1,4 @@
-import { UTF16SizedContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { UTF16SizedContainerType } from "./dat-container";
 
 const CHARGRP_RECORD_COUNT = 15; // L2FileEdit C4/chargrp.ddf RECCNT.
 

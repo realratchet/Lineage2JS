@@ -211,16 +211,16 @@ interface FileSystemSyncAccessHandle {
 
 
 // type Seek_T = "current" | "set";
-// type FNumber<T> = typeof import("./unreal/un-number").FNumber;
+// type FNumber<T> = typeof import("@l2js/engine/un-number").FNumber;
 // type FNumberExt<T> = new (...params: any) => FNumber<T>;
 
 // interface IConstructable {
-//     load(pkg: import("../assets/unreal/un-package").UPackage, tag?: import("./unreal/un-property-tag").PropertyTag): this;
+//     load(pkg: import("@l2js/engine/un-package").UPackage, tag?: import("@l2js/engine/un-property-tag").PropertyTag): this;
 // }
 
 // type ValidConstructables_T<T> =
-//     | typeof import("./unreal/un-constructable").FConstructable
-//     | typeof import("./unreal/un-object").UObject
+//     | typeof import("@l2js/engine/un-constructable").FConstructable
+//     | typeof import("@l2js/engine/un-object").UObject
 //     | FNumberExt<T>;
 
 // type IAssetListInfo = Record<string, string>;

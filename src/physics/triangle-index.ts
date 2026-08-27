@@ -1,4 +1,4 @@
-import type { CollisionTriangleIndex_T } from "@client/objects/objects";
+import type { CollisionTriangleIndex_T } from "../objects/objects";
 
 function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array): CollisionTriangleIndex_T {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

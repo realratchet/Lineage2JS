@@ -1,5 +1,5 @@
 import { ClampToEdgeWrapping, Color, LinearFilter, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, OrthographicCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, Vector2, Vector3, WebGLRenderTarget } from "three";
-import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
+import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
 const SHADOW_RANGE = PROJECTOR_CLIPPING_RANGE * 2048;

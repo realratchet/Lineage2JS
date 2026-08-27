@@ -1,10 +1,10 @@
 import * as dat from "dat.gui";
-import { IEngineComponent } from "@client/game/components";
-import Stats from "@client/rendering/stats";
-import { GAMMA_STEPS } from "@client/rendering/display-gamma";
-import type BaseActor from "@client/base-actor";
-import type GameManager from "@client/game/game-manager";
-import type RenderManager from "@client/rendering/render-manager";
+import { IEngineComponent } from "./components";
+import Stats from "../rendering/stats";
+import { GAMMA_STEPS } from "../rendering/display-gamma";
+import type BaseActor from "../base-actor";
+import type GameManager from "./game-manager";
+import type RenderManager from "../rendering/render-manager";
 
 class UIManager implements IEngineComponent<GameManager> {
     public moverPosition = 0;

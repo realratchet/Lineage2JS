@@ -1,11 +1,11 @@
 import { Vector3 } from "three";
-import { IComponent, IObject, ObjectComponent } from "@client/game/components";
-import type BaseActor from "@client/base-actor";
-import type { ICollidable } from "@client/objects/objects";
-import type MovableObject from "@client/objects/movable-object";
-import type RotatingObject from "@client/objects/rotating-object";
-import type PhysicsManager from "@client/physics/physics-manager";
-import type UIManager from "@client/game/ui-manager";
+import { IComponent, IObject, ObjectComponent } from "../../game/components";
+import type BaseActor from "../../base-actor";
+import type { ICollidable } from "../../objects/objects";
+import type MovableObject from "../../objects/movable-object";
+import type RotatingObject from "../../objects/rotating-object";
+import type PhysicsManager from "../physics-manager";
+import type UIManager from "../../game/ui-manager";
 
 interface IPhysicsComponent<TParent extends IObject = IObject> extends IComponent<TParent> {
     readonly isPhysicsComponent: boolean;

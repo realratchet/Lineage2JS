@@ -1,4 +1,4 @@
-import MeshEmitterMaterial from "@client/materials/mesh-emitter-material/mesh-emitter-material";
+import MeshEmitterMaterial from "../../materials/mesh-emitter-material/mesh-emitter-material";
 import { DoubleSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
 

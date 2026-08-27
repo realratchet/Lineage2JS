@@ -2,18 +2,18 @@ import { APackage, BufferValue, } from "@l2js/core";
 import AInfo from "./un-info";
 import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-import FBox from "@client/assets/unreal/un-box";
-import FCoords from "@client/assets/unreal/un-coords";
-import FColor from "@client/assets/unreal/un-color";
-import UTexture from "@client/assets/unreal/un-texture";
-import ETextureFormat from "@client/assets/unreal/un-tex-format";
-import GMath from "@client/assets/unreal/un-gmath";
-import FRotator from "@client/assets/unreal/un-rotator";
-import FVector from "@client/assets/unreal/un-vector";
-import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
+import FBox from "./un-box";
+import FCoords from "./un-coords";
+import FColor from "./un-color";
+import UTexture from "./un-texture";
+import ETextureFormat from "./un-tex-format";
+import GMath from "./un-gmath";
+import FRotator from "./un-rotator";
+import FVector from "./un-vector";
+import { TextureMapAxis_T } from "./un-terrain-layer";
 import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
-import FPlane from "@client/assets/unreal/un-plane";
-import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@client/assets/decoders/dxt-decode";
+import FPlane from "./un-plane";
+import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "../decoders/dxt-decode";
 
 type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
 

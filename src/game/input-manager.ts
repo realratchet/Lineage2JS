@@ -1,11 +1,11 @@
 import { Box3, Raycaster, Vector2, Vector3 } from "three";
-import { IEngineComponent } from "@client/game/components";
-import { ZUpOrbitControls } from "@client/rendering/camera/controllers/zup-orbit-controls";
-import { ZUpPointerLockControls } from "@client/rendering/camera/controllers/zup-pointer-lock-controls";
-import type GameManager from "@client/game/game-manager";
-import type RenderManager from "@client/rendering/render-manager";
-import type PhysicsManager from "@client/physics/physics-manager";
-import type { ICollidable } from "@client/objects/objects";
+import { IEngineComponent } from "./components";
+import { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-controls";
+import { ZUpPointerLockControls } from "../rendering/camera/controllers/zup-pointer-lock-controls";
+import type GameManager from "./game-manager";
+import type RenderManager from "../rendering/render-manager";
+import type PhysicsManager from "../physics/physics-manager";
+import type { ICollidable } from "../objects/objects";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
 const tmpScreenPosition = new Vector2();

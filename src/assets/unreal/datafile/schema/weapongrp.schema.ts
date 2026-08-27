@@ -1,4 +1,4 @@
-import { ConditionalType, SizedContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { ConditionalType, SizedContainerType } from "./dat-container";
 
 const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },

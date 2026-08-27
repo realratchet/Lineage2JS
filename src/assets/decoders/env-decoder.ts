@@ -1,6 +1,6 @@
-import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
-import EnvInfo from "@client/rendering/env-info";
-import ColorByte from "@client/utils/color-byte";
+import decodeEnvColor from "./env-colors-decoder";
+import EnvInfo from "../../rendering/env-info";
+import ColorByte from "../../utils/color-byte";
 import { Vector2 } from "three";
 
 function decodeEnv(props: GD.IL2NEnvDecodeInfo): EnvInfo {

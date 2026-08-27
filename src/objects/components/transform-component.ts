@@ -1,13 +1,13 @@
 import { Object3D, Quaternion, Vector3 } from "three";
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "@client/game/components";
-import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "@client/game/script-component";
-import { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
-import Rotator from "@client/utils/rotator";
-import LocalSpaceSkeleton from "@client/objects/local-space-skeleton";
-import type AnimationComponent from "@client/objects/animation-component";
-import type BaseActor from "@client/base-actor";
-import type RenderManager from "@client/rendering/render-manager";
-import type { ICollidable } from "@client/objects/objects";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
+import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
+import { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import Rotator from "../../utils/rotator";
+import LocalSpaceSkeleton from "../local-space-skeleton";
+import type AnimationComponent from "../animation-component";
+import type BaseActor from "../../base-actor";
+import type RenderManager from "../../rendering/render-manager";
+import type { ICollidable } from "../objects";
 
 const tmpRotator = new Rotator();
 const tmpBasePosition = new Vector3();

@@ -1,7 +1,7 @@
-import FCoords from "@client/assets/unreal/un-coords";
-import GMath from "@client/assets/unreal/un-gmath";
-import FPlane from "@client/assets/unreal/un-plane";
-import FVector from "@client/assets/unreal/un-vector";
+import FCoords from "./un-coords";
+import GMath from "./un-gmath";
+import FPlane from "./un-plane";
+import FVector from "./un-vector";
 import UObject from "@l2js/core";
 
 const eps = 1e-8;

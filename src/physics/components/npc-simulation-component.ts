@@ -1,6 +1,6 @@
 import { Vector3 } from "three";
-import { PhysicsComponent } from "@client/physics/components/physics-component";
-import type BaseActor from "@client/base-actor";
+import { PhysicsComponent } from "./physics-component";
+import type BaseActor from "../../base-actor";
 
 const tmpDirection = new Vector3();
 

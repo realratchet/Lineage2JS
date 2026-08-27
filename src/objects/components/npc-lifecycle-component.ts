@@ -1,11 +1,11 @@
 import { AnimationAction } from "three";
-import { ObjectComponent } from "@client/game/components";
-import { NPC_ENTER_EVENT } from "@client/audio/components/sound-component";
-import type AnimationComponent from "@client/objects/animation-component";
-import type PawnMovementComponent from "@client/physics/components/pawn-movement-component";
-import type { ScriptComponent } from "@client/game/script-component";
-import type BaseActor from "@client/base-actor";
-import type { ScriptHost_T } from "@client/ue-script/vm";
+import { ObjectComponent } from "../../game/components";
+import { NPC_ENTER_EVENT } from "../../audio/components/sound-component";
+import type AnimationComponent from "../animation-component";
+import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
+import type { ScriptComponent } from "../../game/script-component";
+import type BaseActor from "../../base-actor";
+import type { ScriptHost_T } from "../../ue-script/vm";
 
 class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "npcLifecycle";

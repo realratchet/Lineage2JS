@@ -1,6 +1,6 @@
-import { ObjectComponent } from "@client/game/components";
-import type AudioManager from "@client/audio/audio-manager";
-import type { SectorObject } from "@client/objects/zone-object";
+import { ObjectComponent } from "../../game/components";
+import type AudioManager from "../audio-manager";
+import type { SectorObject } from "../../objects/zone-object";
 
 class AmbientSoundComponent extends ObjectComponent<SectorObject> {
     public readonly componentName = "ambientSound";

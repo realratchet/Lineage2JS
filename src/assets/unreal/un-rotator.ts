@@ -1,4 +1,4 @@
-import GMath from "@client/assets/unreal/un-gmath";
+import GMath from "./un-gmath";
 import { UObject } from "@l2js/core";
 
 

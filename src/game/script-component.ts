@@ -1,5 +1,5 @@
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, IObject, ObjectComponent } from "@client/game/components";
-import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, IObject, ObjectComponent } from "./components";
+import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 
 const SCRIPT_CALL_EVENT = "scriptCall";
 const SCRIPT_NATIVE_EVENT = "scriptNative";

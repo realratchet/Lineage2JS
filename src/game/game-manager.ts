@@ -1,10 +1,10 @@
-import AssetManager, { AssetList_T } from "@client/assets/asset-manager";
-import AudioManager from "@client/audio/audio-manager";
-import { IEngineComponent } from "@client/game/components";
-import PhysicsManager from "@client/physics/physics-manager";
-import RenderManager from "@client/rendering/render-manager";
-import UIManager from "@client/game/ui-manager";
-import InputManager from "@client/game/input-manager";
+import AssetManager, { AssetList_T } from "../assets/asset-manager";
+import AudioManager from "../audio/audio-manager";
+import { IEngineComponent } from "./components";
+import PhysicsManager from "../physics/physics-manager";
+import RenderManager from "../rendering/render-manager";
+import UIManager from "./ui-manager";
+import InputManager from "./input-manager";
 
 class GameManager implements IEngineComponent<GameManager> {
     protected manAsset: AssetManager;

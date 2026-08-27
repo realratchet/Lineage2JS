@@ -1,4 +1,4 @@
-import FVector from "@client/assets/unreal/un-vector";
+import FVector from "./un-vector";
 import UObject from "@l2js/core";
 
 abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4Arr> {

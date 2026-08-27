@@ -1,4 +1,4 @@
-import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
+import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
 
 type PrecacheView_T = {
     progress: HTMLProgressElement,

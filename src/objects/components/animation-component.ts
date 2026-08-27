@@ -1,11 +1,11 @@
 import { AnimationAction, AnimationClip, LoopOnce, LoopRepeat, Mesh, Vector3 } from "three";
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "@client/game/components";
-import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "@client/game/script-component";
-import { ANIMATION_NOTIFY_EVENT } from "@client/audio/components/sound-component";
-import { isScriptSlot, ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
-import type { PawnMovementState_T } from "@client/physics/components/pawn-movement-component";
-import type BaseActor from "@client/base-actor";
-import type RenderManager from "@client/rendering/render-manager";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
+import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
+import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
+import { isScriptSlot, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import type { PawnMovementState_T } from "../../physics/components/pawn-movement-component";
+import type BaseActor from "../../base-actor";
+import type RenderManager from "../../rendering/render-manager";
 
 const MESHES_CHANGED_EVENT = "meshesChanged";
 const MOVEMENT_TWEEN_TIME = 0.1;

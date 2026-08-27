@@ -1,5 +1,5 @@
-import ParticleMaterial from "@client/materials/particle-material/particle-material";
-import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
+import ParticleMaterial from "../../materials/particle-material/particle-material";
+import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
 import BaseEmitter from "./base-emitter";

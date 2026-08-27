@@ -1,17 +1,17 @@
-import AssetLoader from "@client/assets/asset-loader";
+import AssetLoader from "../asset-loader";
 import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
 import UDataFile from "@l2js/engine/datafile/un-datafile";
 import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
-import { buildStaticMeshBatchData } from "@client/assets/decoders/batch-data";
-import { convertDDSMaterialsToRGBA } from "@client/assets/decoders/dxt-decode";
+import { buildStaticMeshBatchData } from "../decoders/batch-data";
+import { convertDDSMaterialsToRGBA } from "../decoders/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary } from "./library-serializer";
-import { dumpObjectScriptProperties } from "@client/assets/unreal/script-dump-loader";
+import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
 import type { PrecacheResult_T } from "./decode-protocol";
-import DecodeLibrary from "@client/assets/unreal/decode-library";
-import DecodeLibraryBuilder from "@client/assets/unreal/decode-library-builder";
+import DecodeLibrary from "@l2js/engine/decode-library";
+import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
 

@@ -1,6 +1,6 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
-import buildTriangleIndex from "@client/physics/triangle-index";
+import buildTriangleIndex from "../../physics/triangle-index";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),

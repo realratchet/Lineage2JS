@@ -1,4 +1,4 @@
-import FColor from "@client/assets/unreal/un-color";
+import FColor from "./un-color";
 import UObject from "@l2js/core";
 import FArray from "@l2js/core/src/unreal/un-array";
 

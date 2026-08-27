@@ -1,6 +1,6 @@
 import RAPIER from "@dimforge/rapier3d";
 import { Box3, Quaternion, Vector3 } from "three";
-import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "@client/objects/objects";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../objects/objects";
 import { pointPrimitive, queryPrimitive, sweptBounds, sweptIntersectsBox } from "./collision-primitive";
 
 const tmpBodyPosition = new Vector3();

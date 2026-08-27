@@ -1,15 +1,15 @@
 import RAPIER from "@dimforge/rapier3d";
 import { Box3, Euler, LoopOnce, Object3D, Quaternion, Sphere, Vector3 } from "three";
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T } from "@client/game/components";
-import { SCRIPT_NATIVE_EVENT } from "@client/game/script-component";
-import { PhysicsComponent } from "@client/physics/components/physics-component";
-import { findVolumeTransition } from "@client/physics/volume-bsp";
-import type BaseActor from "@client/base-actor";
-import type RenderManager from "@client/rendering/render-manager";
-import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "@client/objects/objects";
-import type { CheckResult_T, CollisionQuery_T } from "@client/physics/collision-world";
-import type { ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
-import type TransformComponent from "@client/objects/components/transform-component";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T } from "../../game/components";
+import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
+import { PhysicsComponent } from "./physics-component";
+import { findVolumeTransition } from "../volume-bsp";
+import type BaseActor from "../../base-actor";
+import type RenderManager from "../../rendering/render-manager";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../../objects/objects";
+import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import type TransformComponent from "../../objects/components/transform-component";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();

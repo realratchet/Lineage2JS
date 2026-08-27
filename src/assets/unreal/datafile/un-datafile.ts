@@ -1,5 +1,5 @@
-import fetchAssetHandle from "@client/assets/asset-handle";
-import { ASCFType } from "@client/assets/unreal/datafile/schema/dat-container";
+import fetchAssetHandle from "../../asset-handle";
+import { ASCFType } from "./schema/dat-container";
 import { UEncodedFile, BufferValue } from "@l2js/core";
 
 class UDataFile extends UEncodedFile {

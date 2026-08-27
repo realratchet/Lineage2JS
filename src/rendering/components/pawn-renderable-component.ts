@@ -1,8 +1,8 @@
 import { Mesh, Sphere } from "three";
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "@client/game/components";
-import { MESHES_CHANGED_EVENT } from "@client/objects/components/animation-component";
-import type BaseActor from "@client/base-actor";
-import type RenderManager from "@client/rendering/render-manager";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
+import { MESHES_CHANGED_EVENT } from "../../objects/components/animation-component";
+import type BaseActor from "../../base-actor";
+import type RenderManager from "../render-manager";
 
 const tmpSphere = new Sphere();
 

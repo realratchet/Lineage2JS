@@ -1,5 +1,5 @@
 import AInfo from "./un-info";
-import FColor from "@client/assets/unreal/un-color";
+import FColor from "./un-color";
 
 abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly isFogZone: boolean;

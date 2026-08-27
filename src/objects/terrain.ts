@@ -1,13 +1,13 @@
-import DynamicLight from "@client/objects/dynamic-light";
-import { SectorObject } from "@client/objects/zone-object";
-import type { L2Environment } from "@client/rendering/l2-env";
+import DynamicLight from "./dynamic-light";
+import { SectorObject } from "./zone-object";
+import type { L2Environment } from "../rendering/l2-env";
 import { Box3, Vector3 } from "three";
 import type { CollisionPrimitive_T, ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { ColorByte } from "@client/utils/color-byte";
-import buildTriangleIndex from "@client/physics/triangle-index";
-import { GameMesh } from "@client/game/components";
-import { ColliderComponent } from "@client/physics/components/physics-component";
+import { ColorByte } from "../utils/color-byte";
+import buildTriangleIndex from "../physics/triangle-index";
+import { GameMesh } from "../game/components";
+import { ColliderComponent } from "../physics/components/physics-component";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();

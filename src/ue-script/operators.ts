@@ -1,5 +1,5 @@
 import { MathUtils } from "three";
-import FVector from "../assets/unreal/un-vector";
+import FVector from "@l2js/engine/un-vector";
 
 type UNativeRegistry_T = typeof import("./native-registry").UNativeRegistry;
 

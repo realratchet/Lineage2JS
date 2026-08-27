@@ -1,8 +1,8 @@
-import EnvColor, { TimeColor, TimeHSV, TimeScale } from "@client/rendering/env-color";
+import EnvColor, { TimeColor, TimeHSV, TimeScale } from "./env-color";
 import { Color, MathUtils } from "three";
-import hsvToRgb from "@client/utils/hsv-to-rgb";
-import { ColorByte } from "@client/utils/color-byte";
-import EnvInfo from "@client/rendering/env-info";
+import hsvToRgb from "../utils/hsv-to-rgb";
+import { ColorByte } from "../utils/color-byte";
+import EnvInfo from "./env-info";
 
 // const tmpColor_1 = new Color();
 // const tmpColor_2 = new Color();

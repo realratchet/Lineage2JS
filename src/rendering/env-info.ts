@@ -1,5 +1,5 @@
-import EnvColor from "@client/rendering/env-color"
-import ColorByte from "@client/utils/color-byte";
+import EnvColor from "./env-color"
+import ColorByte from "../utils/color-byte";
 import { Vector2 } from "three";
 
 type EnvSetup = {

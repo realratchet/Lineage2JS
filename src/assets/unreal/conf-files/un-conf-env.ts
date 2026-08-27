@@ -1,6 +1,6 @@
-import { EEnvCycle } from "@client/assets/unreal/env-consts";
+import { EEnvCycle } from "../env-consts";
 import BaseConfigFile from "./un-base-config";
-import UConfigTimeEnv from "@client/assets/unreal/conf-files/un-conf-timeenv";
+import UConfigTimeEnv from "./un-conf-timeenv";
 import { consumeNextValue, consumeTuple, findSection } from "./conf-parser";
 
 class EnvSetup {

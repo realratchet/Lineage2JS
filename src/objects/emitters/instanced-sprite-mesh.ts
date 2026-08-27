@@ -1,6 +1,6 @@
 import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ZeroFactor } from "three";
 import * as THREE from "three";
-import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
+import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 
 // shared per-vertex quad data - only instance attributes differ per emitter
 const baseGeometry = new PlaneGeometry(2, 2);

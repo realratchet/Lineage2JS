@@ -1,4 +1,4 @@
-import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
+import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 
 class LineagePlayerController implements ScriptHost_T {
     public readonly scriptClassId: string;

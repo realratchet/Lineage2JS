@@ -1,4 +1,4 @@
-import { UTF16ContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { UTF16ContainerType } from "./dat-container";
 
 const SCHEMA_MUSICINFO_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },

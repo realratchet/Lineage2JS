@@ -1,8 +1,8 @@
 import { Mesh, Vector3 } from "three";
 import BaseActor from "./base-actor";
-import WaterEffectsComponent from "@client/physics/components/water-effects-component";
-import type RenderManager from "@client/rendering/render-manager";
-import LandmarkComponent from "@client/rendering/components/landmark-component";
+import WaterEffectsComponent from "./physics/components/water-effects-component";
+import type RenderManager from "./rendering/render-manager";
+import LandmarkComponent from "./rendering/components/landmark-component";
 
 const tmpCameraTarget = new Vector3();
 

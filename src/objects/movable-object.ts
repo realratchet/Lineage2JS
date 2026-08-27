@@ -1,10 +1,10 @@
 import { RigidBodyDesc } from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
-import type BaseActor from "@client/base-actor";
+import type BaseActor from "../base-actor";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
-import { pointPrimitive } from "@client/physics/collision-primitive";
-import { MoverComponent } from "@client/physics/components/physics-component";
+import { pointPrimitive } from "../physics/collision-primitive";
+import { MoverComponent } from "../physics/components/physics-component";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
 

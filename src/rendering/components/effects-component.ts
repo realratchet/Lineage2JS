@@ -1,11 +1,11 @@
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "@client/game/components";
-import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "@client/audio/components/sound-component";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
+import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "../../audio/components/sound-component";
 import type { Object3D } from "three";
-import type BaseActor from "@client/base-actor";
-import type RenderManager from "@client/rendering/render-manager";
-import type { ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
-import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "@client/game/script-component";
-import Rotator from "@client/utils/rotator";
+import type BaseActor from "../../base-actor";
+import type RenderManager from "../render-manager";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
+import Rotator from "../../utils/rotator";
 
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();

@@ -1,9 +1,9 @@
 import RenderManager from "./rendering/render-manager";
 import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
-import AssetManager from "@client/assets/asset-manager";
-import runSectorPrecache from "@client/sector-precache";
-import GameManager from "@client/game/game-manager";
+import AssetManager from "./assets/asset-manager";
+import runSectorPrecache from "./sector-precache";
+import GameManager from "./game/game-manager";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 

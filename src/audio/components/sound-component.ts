@@ -1,9 +1,9 @@
 import { Vector3 } from "three";
-import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "@client/game/components";
-import { SCRIPT_NATIVE_EVENT } from "@client/game/script-component";
-import type AudioManager from "@client/audio/audio-manager";
-import type BaseActor from "@client/base-actor";
-import type { ScriptNativeCall_T, ScriptValue_T } from "@client/ue-script/vm";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
+import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
+import type AudioManager from "../audio-manager";
+import type BaseActor from "../../base-actor";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 
 const ANIMATION_NOTIFY_EVENT = "animationNotify";
 const NPC_ENTER_EVENT = "npcEnter";

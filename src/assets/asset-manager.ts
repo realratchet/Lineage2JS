@@ -1,29 +1,29 @@
-import RenderManager from "@client/rendering/render-manager";
-import BaseActor from "@client/base-actor";
-import UConfigWarrior from "@client/assets/unreal/conf-files/un-conf-warrior";
-import UConfigLocalization, { LocalizationProperty_T } from "@client/assets/unreal/conf-files/un-conf-localization";
+import RenderManager from "../rendering/render-manager";
+import BaseActor from "../base-actor";
+import UConfigWarrior from "@l2js/engine/conf-files/un-conf-warrior";
+import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
 import { UnProperties } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
-import decodeEnv from "@client/assets/decoders/env-decoder";
-import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
+import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
+import decodeEnv from "./decoders/env-decoder";
+import DecodeWorkerClient from "./decode-worker/decode-worker-client";
 import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
 import { AnimationClip, Matrix4, Vector3 } from "three";
-import type { SectorObject } from "@client/objects/zone-object";
-import UnScriptVM from "@client/ue-script/vm";
-import LineagePlayerController from "@client/objects/lineage-player-controller";
-import { IEngineComponent } from "@client/game/components";
-import type { GameManager } from "@client/game/game-manager"
-import SoundComponent from "@client/audio/components/sound-component";
-import EffectsComponent from "@client/rendering/components/effects-component";
-import AnimationComponent from "@client/objects/components/animation-component";
-import TransformComponent from "@client/objects/components/transform-component";
-import HairSimulationComponent from "@client/objects/components/hair-simulation-component";
-import SkinNotifyComponent from "@client/objects/components/skin-notify-component";
-import NpcLifecycleComponent from "@client/objects/components/npc-lifecycle-component";
-import PawnRenderableComponent from "@client/rendering/components/pawn-renderable-component";
+import type { SectorObject } from "../objects/zone-object";
+import UnScriptVM from "../ue-script/vm";
+import LineagePlayerController from "../objects/lineage-player-controller";
+import { IEngineComponent } from "../game/components";
+import type { GameManager } from "../game/game-manager"
+import SoundComponent from "../audio/components/sound-component";
+import EffectsComponent from "../rendering/components/effects-component";
+import AnimationComponent from "../objects/components/animation-component";
+import TransformComponent from "../objects/components/transform-component";
+import HairSimulationComponent from "../objects/components/hair-simulation-component";
+import SkinNotifyComponent from "../objects/components/skin-notify-component";
+import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
+import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();

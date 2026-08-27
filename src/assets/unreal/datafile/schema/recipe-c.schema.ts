@@ -1,4 +1,4 @@
-import { MaterialContainerType } from "@client/assets/unreal/datafile/schema/dat-container";
+import { MaterialContainerType } from "./dat-container";
 
 const SCHEMA_RECIPE_C_DAT: ISchemaValue[] = [
     { type: "ASCF", name: "name" },

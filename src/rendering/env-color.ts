@@ -1,4 +1,4 @@
-import { ColorHSV } from "@client/objects/dynamic-light";
+import { ColorHSV } from "../objects/dynamic-light";
 
 type EnvColorInfo = {
     sky: TimeColor[];

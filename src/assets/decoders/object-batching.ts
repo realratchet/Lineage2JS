@@ -1,12 +1,12 @@
 import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
-import Terrain from "@client/objects/terrain";
-import CollidingMesh from "@client/objects/colliding-mesh";
+import Terrain from "../../objects/terrain";
+import CollidingMesh from "../../objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
-import { MeshLight_T } from "@client/objects/lit-actor";
+import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { StaticMeshBatchManifest_T, BatchElement_T } from "./batch-data";
-import type { CollisionTriangleIndex_T } from "@client/objects/objects";
+import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };

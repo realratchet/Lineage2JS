@@ -1,6 +1,6 @@
 import UObject from "@l2js/core";
 import AInfo from "./un-info";
-import FVector from "@client/assets/unreal/un-vector";
+import FVector from "./un-vector";
 
 abstract class UL2FogInfo extends AInfo {
     declare protected readonly affectRange: GA.FRange;

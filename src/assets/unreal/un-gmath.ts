@@ -1,6 +1,6 @@
-import FCoords from "@client/assets/unreal/un-coords";
-import FScale, { ESheerAxis_T } from "@client/assets/unreal/un-scale";
-import FVector from "@client/assets/unreal/un-vector";
+import FCoords from "./un-coords";
+import FScale, { ESheerAxis_T } from "./un-scale";
+import FVector from "./un-vector";
 
 
 

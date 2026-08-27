@@ -1,8 +1,8 @@
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { Box3, Quaternion, Vector3 } from "three";
 import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
-import { GameObject } from "@client/game/components";
-import { ColliderComponent } from "@client/physics/components/physics-component";
+import { GameObject } from "../game/components";
+import { ColliderComponent } from "../physics/components/physics-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
