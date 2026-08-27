@@ -4,6 +4,7 @@ import { IEngineComponent } from "@client/game/components";
 import PhysicsManager from "@client/physics/physics-manager";
 import RenderManager from "@client/rendering/render-manager";
 import UIManager from "@client/game/ui-manager";
+import InputManager from "@client/game/input-manager";
 
 class GameManager implements IEngineComponent<GameManager> {
     protected manAsset: AssetManager;
@@ -11,6 +12,7 @@ class GameManager implements IEngineComponent<GameManager> {
     protected manAudio: AudioManager;
     protected manPhysics: PhysicsManager;
     protected manUI: UIManager;
+    protected manInput: InputManager;
 
     protected components: IEngineComponent<any>[] = [];
 
@@ -29,12 +31,14 @@ class GameManager implements IEngineComponent<GameManager> {
         game.manAudio = new AudioManager();
         game.manPhysics = new PhysicsManager();
         game.manUI = new UIManager();
+        game.manInput = new InputManager();
 
-        game.attach(game.manUI);
         game.attach(game.manPhysics);
         game.attach(game.manRender);
+        game.attach(game.manInput);
         game.attach(game.manAudio);
         game.attach(game.manAsset);
+        game.attach(game.manUI);
 
         return await game.onInit();
     }
@@ -66,6 +70,7 @@ class GameManager implements IEngineComponent<GameManager> {
     public getComponent(component: "audio"): AudioManager;
     public getComponent(component: "physics"): PhysicsManager;
     public getComponent(component: "ui"): UIManager;
+    public getComponent(component: "input"): InputManager;
     public getComponent(component: unknown): unknown {
         switch (component) {
             case "asset": return this.manAsset;
@@ -73,6 +78,7 @@ class GameManager implements IEngineComponent<GameManager> {
             case "audio": return this.manAudio;
             case "physics": return this.manPhysics;
             case "ui": return this.manUI;
+            case "input": return this.manInput;
             default: throw new Error(`Unknown component: ${component}`);
         }
     }

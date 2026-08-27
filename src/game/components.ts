@@ -21,10 +21,13 @@ interface IObject {
     findComponent<T extends IComponent<any>>(componentName: string): T | null;
     getComponents<T extends IComponent<any>>(componentName?: string): T[];
     dispatchComponentEvent<T = unknown>(type: string, data?: unknown, source?: IComponent<any>): ComponentEventResult_T<T>;
+    updateComponents(currentTime: number, deltaTime: number): void;
+    detachComponents(): void;
 }
 
 interface IComponent<TParent extends IObject = IObject> {
     readonly componentName: string;
+    readonly updateOrder?: number;
     setParent(parent: TParent | null): this;
     getParent(): TParent;
     isAttached(): boolean;
@@ -34,12 +37,14 @@ interface IComponent<TParent extends IObject = IObject> {
     dispatchEvent<T = unknown>(type: string, data?: unknown): ComponentEventResult_T<T>;
     onAttach?(): void;
     onDetach?(): void;
+    onUpdate?(currentTime: number, deltaTime: number): void;
     onEvent?(type: string, data: unknown): ComponentEventResult_T<unknown>;
 }
 
 class ComponentCollection<TParent extends IObject> {
     protected readonly parent: TParent;
     protected readonly components: IComponent<any>[] = [];
+    protected readonly updateComponents: IComponent<any>[] = [];
 
     public constructor(parent: TParent) {
         this.parent = parent;
@@ -50,6 +55,13 @@ class ComponentCollection<TParent extends IObject> {
         if (component.isAttached()) throw new Error(`Component '${component.componentName}' is already attached.`);
 
         this.components.push(component);
+        if (component.onUpdate) {
+            const updateOrder = component.updateOrder || 0;
+            let index = this.updateComponents.length;
+
+            while (index > 0 && (this.updateComponents[index - 1].updateOrder || 0) > updateOrder) index--;
+            this.updateComponents.splice(index, 0, component);
+        }
         component.setParent(this.parent);
         component.onAttach?.();
 
@@ -63,6 +75,8 @@ class ComponentCollection<TParent extends IObject> {
 
         component.onDetach?.();
         this.components.splice(index, 1);
+        const updateIndex = this.updateComponents.indexOf(component);
+        if (updateIndex >= 0) this.updateComponents.splice(updateIndex, 1);
         component.setParent(null);
 
         return true;
@@ -102,6 +116,22 @@ class ComponentCollection<TParent extends IObject> {
 
         return result;
     }
+
+    public update(currentTime: number, deltaTime: number): void {
+        for (const component of this.updateComponents) component.onUpdate(currentTime, deltaTime);
+    }
+
+    public clear(): void {
+        for (let i = this.components.length - 1; i >= 0; i--) {
+            const component = this.components[i];
+
+            component.onDetach?.();
+            component.setParent(null);
+        }
+
+        this.components.length = 0;
+        this.updateComponents.length = 0;
+    }
 }
 
 abstract class ObjectComponent<TParent extends IObject = IObject> implements IComponent<TParent> {
@@ -131,6 +161,8 @@ class GameObject extends Object3D implements IObject {
     public findComponent<T extends IComponent<any>>(componentName: string): T | null { return this.componentCollection.find<T>(componentName); }
     public getComponents<T extends IComponent<any>>(componentName?: string): T[] { return this.componentCollection.getAll<T>(componentName); }
     public dispatchComponentEvent<T = unknown>(type: string, data?: unknown, source: IComponent<any> = null): ComponentEventResult_T<T> { return this.componentCollection.dispatch<T>(type, data, source); }
+    public updateComponents(currentTime: number, deltaTime: number): void { this.componentCollection.update(currentTime, deltaTime); }
+    public detachComponents(): void { this.componentCollection.clear(); }
 }
 
 class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial extends Material | Material[] = Material | Material[]> extends Mesh<TGeometry, TMaterial> implements IObject {
@@ -143,6 +175,8 @@ class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial exte
     public findComponent<T extends IComponent<any>>(componentName: string): T | null { return this.componentCollection.find<T>(componentName); }
     public getComponents<T extends IComponent<any>>(componentName?: string): T[] { return this.componentCollection.getAll<T>(componentName); }
     public dispatchComponentEvent<T = unknown>(type: string, data?: unknown, source: IComponent<any> = null): ComponentEventResult_T<T> { return this.componentCollection.dispatch<T>(type, data, source); }
+    public updateComponents(currentTime: number, deltaTime: number): void { this.componentCollection.update(currentTime, deltaTime); }
+    public detachComponents(): void { this.componentCollection.clear(); }
 }
 
 export { COMPONENT_EVENT_NOT_HANDLED, GameMesh, GameObject, ObjectComponent };

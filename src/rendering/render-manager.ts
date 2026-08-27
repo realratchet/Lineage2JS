@@ -1,58 +1,37 @@
 import "./ue2-conventions";
 import "../materials/shader-chunks/register-chunks";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import { ZUpOrbitControls } from "./camera/controllers/zup-orbit-controls";
-import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
 import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
 import Player from "@client/player";
 import type BaseActor from "@client/base-actor";
-import type { ICollidable } from "@client/objects/objects";
-import Stats from "./stats";
 import Visualizer, { VisualizerMode, EmitterDebugInfo } from "./visualizer";
 import EnvColor from "@client/rendering/env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
 import SkyRenderer from "./sky-renderer";
-import UnderWaterEffect from "./under-water-effect";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "@client/utils/color-byte";
 import EnvInfo from "@client/rendering/env-info";
 import AudioManager from "@client/audio/audio-manager";
-import * as dat from "dat.gui";
 import type AssetManager from "@client/assets/asset-manager";
 import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "@client/objects/movable-object";
-import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
+import DisplayGammaPass from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "@client/physics/physics-manager";
 import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
 import ShadowProjector from "@client/objects/shadow-projector";
 import type DynamicLight from "@client/objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "@client/materials/mesh-static-material/mesh-static-material";
-import Landmark from "./landmark";
 import type { ZoneObject, SectorObject } from "@client/objects/zone-object";
-import { IEngineComponent } from "@client/game/components";
+import { IEngineComponent, IObject } from "@client/game/components";
 import type GameManager from "@client/game/game-manager";
-import type WaterEffectsComponent from "@client/physics/water-effects-component";
-
-const gui = new dat.GUI({ autoPlace: false, width: 300 });
-Object.assign(gui.domElement.style, {
-    position: "fixed",
-    top: "0px",
-    right: "0px",
-    zIndex: "10000"
-});
-document.body.appendChild(gui.domElement);
-const guiFolders = {
-    world: gui.addFolder("World"),
-    quality: gui.addFolder("Quality")
-};
-guiFolders.world.open();
-
-const stats = new (Stats as any)(0);
-
-stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild(stats.dom);
+import type UIManager from "@client/game/ui-manager";
+import type InputManager from "@client/game/input-manager";
+import type WaterEffectsComponent from "@client/physics/components/water-effects-component";
+import EffectLifetimeComponent from "@client/rendering/components/effect-lifetime-component";
+import PawnRenderableComponent from "@client/rendering/components/pawn-renderable-component";
+import AmbientSoundComponent from "@client/audio/components/ambient-sound-component";
 
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
@@ -64,22 +43,16 @@ const arrLightingObjects: THREE.Object3D[] = [];
 const tmpShadowDirection = new Vector3(0, 0, -1);
 const arrShadowCasters: THREE.Object3D[] = [];
 const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
-const tmpOrbitFollowTarget = new Vector3();
-const tmpOrbitFollowDelta = new Vector3();
-const tmpMouseIntersection = new Vector3();
 const tmpViewShakePosition = new Vector3();
 const tmpViewShakeQuaternion = new Quaternion();
 const tmpViewShakeDirection = new Vector3();
-const tmpPickBounds = new Box3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
-const arrMouseIntersections: THREE.Intersection[] = [];
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
 // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
 const CLIPPING_RANGE_SCALE = 2048;
-const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte();
@@ -89,7 +62,6 @@ const tmpColorByte_5 = new ColorByte();
 const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
-const CLICK_MAX_MOVEMENT_SQ = 16;
 
 type ViewShakeState_T = {
     type: GD.IAnimationViewShakeNotifyDecodeInfo["shakeType"];
@@ -129,36 +101,6 @@ type SectorWarmup_T = {
     fallbackMaterials: Set<THREE.Material>,
     releaseEmitters: boolean
 };
-
-function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
-    const object = intersection.object as any;
-
-    if (!object.isBatch || !intersection.face || !object.perActorAmbient || !object.batchElements) return null;
-
-    const vertexIndex = intersection.face.a;
-
-    for (let actorIndex = 0; actorIndex < object.perActorAmbient.length; actorIndex++) {
-        const actor = object.perActorAmbient[actorIndex];
-
-        if (vertexIndex >= actor.startVertex && vertexIndex < actor.startVertex + actor.count) {
-            const actorUuid = object.batchActorUuids[actorIndex];
-            const actorName = actorUuid.slice(actorUuid.indexOf("_") + 1, actorUuid.lastIndexOf("_"));
-
-            return { actorIndex, actorName, actorUuid };
-        }
-    }
-
-    return null;
-}
-
-function isLandmarkSurface(actor: ICollidable | null): boolean {
-    if (!actor) return false;
-    if ((actor as any).isTerrain || (actor as any).isStaticMeshActor) return true;
-
-    const primitive = actor.getCollisionPrimitive ? actor.getCollisionPrimitive() : null;
-
-    return !!primitive && primitive.kind === "bsp";
-}
 
 const frozenUpdateMatrixWorld = function () { };
 
@@ -266,14 +208,10 @@ class RenderManager implements IEngineComponent<GameManager> {
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
-    public readonly controls: { orbit: ZUpOrbitControls, fps: ZUpPointerLockControls } = { orbit: null, fps: null };
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
-    public readonly raycaster = new Raycaster();
-    public speedCameraFPS = 5;
     public readonly mixer = new AnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
-    public readonly underWaterEffect = new UnderWaterEffect();
 
     protected uGlowPass: UGlowPass;
     protected mainRenderTarget: WebGLRenderTarget;
@@ -290,18 +228,15 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
-    protected readonly deferredPawnReleases = new Set<BaseActor>();
-    protected readonly transientEffects = new Set<Object3D>();
+    protected readonly deferredMixerOperations: (() => void)[] = [];
+    protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected isUpdatingMixer = false;
-    protected spawnedNpc: BaseActor = null;
-    protected npcSpawnRequest = 0;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
     protected lastRenderOrderSector: SectorObject | null = null;
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
 
-    protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly arrLoadedSectors: SectorObject[] = [];
 
@@ -313,11 +248,6 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected readonly pendingShaderChecks: any[] = [];
     protected readonly seenPrograms = new WeakSet<object>();
     protected parallelShaderCompileExt: any = undefined; // resolved lazily, null if unsupported
-    protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
-    protected isOrbitControls = true;
-    protected isPrimaryMouseDown = false;
-    protected hasMouseDragged = false;
-    protected readonly mouseDownPosition = new Vector2();
     protected isRendering = false;
     protected isRenderingFrame = false;
     protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
@@ -334,46 +264,30 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected screenFadeInDuration = 0;
     protected screenFadeColorAlpha = 1;
     protected manPhysics: PhysicsManager = null;
+    protected manUI: UIManager = null;
+    protected manInput: InputManager = null;
 
     public readonly player = new Player(this);
-    protected readonly landmark = new Landmark(this.player, this.scene, classPath => this.manGame.getComponent("asset").createLandmarkEffect(classPath));
+    public readonly waterEffects = this.player.getComponent<WaterEffectsComponent>("waterEffects");
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
-    protected characterGroup = 1;
-    protected characterFace = 0;
-    protected characterHair = 0;
-    protected characterHairColour = 0;
-    protected followPlayer = false;
-    protected characterArmor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
 
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
 
     protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
-    protected get simulatedPawns(): ReadonlySet<BaseActor> { return this.physicsManager.getSimulatedPawns(); }
-
-    protected activeSector = 0;
+    protected get inputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
     public readonly audioManager: AudioManager = new AudioManager();
     protected activeMusicId: number = -1;
 
-    public envConfig = {
-        showLevel: true,
-        fogPreset: "4"
-    };
-
     protected manGame: GameManager;
     public setParent(parent: GameManager): this {
         this.manGame = parent;
-
-        const manUI = parent.getComponent("ui");
-
-        guiFolders.world.add(manUI, "moverPosition", 0, 1, 0.01)
-            .name("Door Position")
-            .onChange(() => this.needsUpdate = true);
+        this.manUI = parent.getComponent("ui");
 
         return this;
     }
@@ -404,41 +318,10 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0);
 
-        guiFolders.quality.add(this.envConfig, "fogPreset", {
-            "1 (2k-8k)": "1",
-            "2 (3k-10k)": "2",
-            "3 (4k-12k)": "3",
-            "4 (5k-14k)": "4",
-            "5 (8k-20k)": "5"
-        }).name("Fog Range");
-
-        guiFolders.world.add(this.envConfig, "showLevel")
-            .name("Show Level")
-            .onChange(v => {
-                this.objectGroup.visible = v;
-            });
-
-        guiFolders.world.add(this, "showColliders")
-            .name("Show Colliders")
-            .onChange(v => this.setCollidersVisible(v));
-
-        const skyFolder = gui.addFolder("Sky Layers");
-        skyFolder.add(this.skyRenderer.config, "celestials").name("Celestials");
-        skyFolder.add(this.skyRenderer.config, "haze1").name("Haze");
-        skyFolder.add(this.skyRenderer.config, "starsClouds").name("Stars/Clouds");
-        // skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
-
-        const audioFolder = gui.addFolder("Audio");
-        audioFolder.add(this.audioManager, "musicVolume", 0, 1, 0.01).name("Music Volume");
-        audioFolder.add(this.audioManager, "ambientVolume", 0, 1, 0.01).name("Ambient Volume");
-        audioFolder.open();
-
         this.renderer.autoClear = false;
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
         this.camera.up.set(0, 0, 1);
-        this.controls.orbit = new ZUpOrbitControls(this.camera, this.renderer.domElement);
-        this.controls.fps = new ZUpPointerLockControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxGeometry()));
@@ -446,7 +329,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
         this.scene.add(this.colliderOverlay);
-        this.scene.add(this.underWaterEffect);
+        this.scene.add(this.waterEffects.underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
         this.mixer.addEventListener("finished", (event: any) => {
             let object = event.action.getRoot() as Object3D;
@@ -611,7 +494,6 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         // player
         this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
-        this.controls.orbit.target.set(-87086.51708877791, 239936.94718888338, -3685.930229617832);
 
         // // audio regression
         // this.camera.position.set(19254.357244041046, 145494.0525086215, -3056.262971968217);
@@ -621,8 +503,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         // this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
         // this.controls.orbit.target.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
 
-        this.camera.lookAt(this.controls.orbit.target);
-        this.controls.orbit.update();
+        this.camera.lookAt(-87086.51708877791, 239936.94718888338, -3685.930229617832);
 
         viewport.appendChild(this.renderer.domElement);
 
@@ -634,19 +515,6 @@ class RenderManager implements IEngineComponent<GameManager> {
             zIndex: "9999"
         });
         viewport.appendChild(this.screenFadeElement);
-
-        viewport.addEventListener("mousedown", this.onHandleMouseDown.bind(this));
-        viewport.addEventListener("mousemove", this.onHandleMouseMove.bind(this));
-        viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));
-        window.addEventListener("keydown", this.onHandleKeyDown.bind(this));
-        window.addEventListener("keyup", this.onHandleKeyUp.bind(this));
-        this.controls.fps.addEventListener("lock", this.onPointerControlsLocked.bind(this));
-        this.controls.fps.addEventListener("unlock", this.onPointerControlsUnlocked.bind(this));
-
-        if (!this.isOrbitControls) {
-            this.controls.orbit.enabled = false;
-            this.controls.fps.lock();
-        }
 
         this.scene.add(this.player);
         this.player.name = "Player";
@@ -660,48 +528,12 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public setEnv(env: EnvInfo): this {
-        const environment = this.environment = new L2Environment(env);
-        const self = this;
-
-        const timeState = {
-            get time() { return environment.getTimeOfDay(); },
-            set time(v) {
-                environment.setTimeOfDay(v);
-                self.needsUpdate = true;
-            },
-            get timeScale() { return environment.getTimeScale(); },
-            set timeScale(v) {
-                environment.setTimeScale(v);
-                self.needsUpdate = true;
-            }
-        };
-
-        guiFolders.world.add(timeState, "time", 0, 24, 0.01)
-            .name("Time")
-            .listen();
-        guiFolders.world.add(timeState, "timeScale", 0, 100, 0.01)
-            .name("Time Scale");
-
-        const envSignsSkyState = {
-            get signsSky() { return environment.getActiveEnv(); },
-            set signsSky(v) {
-                environment.setActiveEnv(Number(v) as 0 | 1 | 2);
-                self.needsUpdate = true;
-            }
-        };
-
-        guiFolders.world.add(envSignsSkyState, "signsSky", { "Normal": 0, "Dusk": 1, "Dawn": 2 })
-            .name("Signs Sky");
+        this.environment = new L2Environment(env);
 
         return this;
     }
 
-    public debugPrintCamera() {
-        console.log([
-            `this.camera.position.set(${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z});`,
-            `this.controls.orbit.target.set(${this.controls.orbit.target.x}, ${this.controls.orbit.target.y}, ${this.controls.orbit.target.z});`
-        ].join("\n"));
-    }
+    public getEnvironment(): L2Environment { return this.environment; }
 
     public takeScreenshot() {
         this.renderer.domElement.toBlob((blob) => {
@@ -711,346 +543,75 @@ class RenderManager implements IEngineComponent<GameManager> {
         }, "image/jpeg", 0.98);
     }
 
-    public onPointerControlsLocked() {
-        this.isOrbitControls = false;
-        this.controls.orbit.enabled = false;
-
-        Object.keys(this.dirKeys).forEach((k: "up" | "left" | "right" | "down" | "shift") => this.dirKeys[k] = false);
-
+    public toggleFrustumCulling(): void {
+        this.frustumCullingEnabled = !this.frustumCullingEnabled;
+        console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
     }
 
-    public onPointerControlsUnlocked() {
-        this.isOrbitControls = true;
-        this.controls.orbit.enabled = true;
-        this.controls.fps.getDirection(this.controls.orbit.target).multiplyScalar(100).add(this.camera.position);
-        this.controls.orbit.update();
-        Object.keys(this.dirKeys).forEach((k: "up" | "left" | "right" | "down" | "shift") => this.dirKeys[k] = false);
+    public toggleVisualizer(): void {
+        this.visualizer.toggle();
+        this.refreshVisualizer();
     }
 
-    public toScreenSpaceCoords(point: Vector2) {
-        const bounds = this.renderer.domElement.getBoundingClientRect();
-
-        return new Vector2(
-            (point.x - bounds.left) / bounds.width * 2 - 1,
-            1 - (point.y - bounds.top) / bounds.height * 2
-        );
+    public nextVisualizerMode(): void {
+        this.visualizer.nextMode();
+        this.refreshVisualizer();
     }
 
-    public onHandleKeyDown(event: KeyboardEvent) {
-        if (document.activeElement?.tagName === "INPUT")
-            return;
+    public nextVisualizerLeafDetail(): void {
+        this.visualizer.nextLeafDetail();
+        this.refreshVisualizer(true);
+    }
 
-        if (event.key === "F1" || event.code === "F1") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.toggleBSPHelperCamera();
-            return;
+    protected refreshVisualizer(leavesOnly: boolean = false): void {
+        const currentSector = this.getSector(this.camera.position);
+
+        if (!currentSector || !this.visualizer.isEnabled()) return;
+        if (leavesOnly && this.visualizer.getMode() !== VisualizerMode.Leaves) return;
+
+        const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+        const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
+            ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+            : this.frustum;
+        const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+
+        if (currentSector.index) {
+            const sectorXMap = new Map<number, SectorObject>();
+
+            sectorXMap.set(currentSector.index.y, currentSector);
+            currentSectorMap.set(currentSector.index.x, sectorXMap);
         }
 
-        if (event.key === "F2" || event.code === "F2") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.frustumCullingEnabled = !this.frustumCullingEnabled;
-            console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
-            return;
-        }
-
-        if (event.key === "F3" || event.code === "F3") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.visualizer.toggle();
-            const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.isEnabled()) {
-                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                    : this.frustum;
-
-                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
-                if (currentSector.index) {
-                    const sectorXMap = new Map<number, SectorObject>();
-                    sectorXMap.set(currentSector.index.y, currentSector);
-                    currentSectorMap.set(currentSector.index.x, sectorXMap);
-                }
-
-                if (this.visualizer.getMode() === VisualizerMode.Portals) {
-                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
-                    this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
-                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
-
-                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
+        if (leavesOnly) this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+        else {
+            switch (this.visualizer.getMode()) {
+                case VisualizerMode.Portals: this.visualizer.updatePortals(currentSectorMap, cameraPos); break;
+                case VisualizerMode.Zones: this.visualizer.updateZones(currentSectorMap, cameraPos); break;
+                case VisualizerMode.Leaves: this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled); break;
+                case VisualizerMode.Fogs: this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined); break;
             }
-            return;
+
+            if (this.visualizer.getMode() !== VisualizerMode.Fogs) this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
         }
 
-        if (event.key === "F4" || event.code === "F4") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.visualizer.nextMode();
-            const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.isEnabled()) {
-                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                    : this.frustum;
-
-                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
-                if (currentSector.index) {
-                    const sectorXMap = new Map<number, SectorObject>();
-                    sectorXMap.set(currentSector.index.y, currentSector);
-                    currentSectorMap.set(currentSector.index.x, sectorXMap);
-                }
-
-                if (this.visualizer.getMode() === VisualizerMode.Portals) {
-                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
-                    this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
-                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
-
-                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
-            }
-            return;
-        }
-
-        if (event.key === "F5" || event.code === "F5") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.visualizer.nextLeafDetail();
-
-            const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.getMode() === VisualizerMode.Leaves && this.visualizer.isEnabled()) {
-                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                    : this.frustum;
-
-                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
-                if (currentSector.index) {
-                    const sectorXMap = new Map<number, SectorObject>();
-                    sectorXMap.set(currentSector.index.y, currentSector);
-                    currentSectorMap.set(currentSector.index.x, sectorXMap);
-                }
-
-                this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-            }
-            return;
-        }
-
-        switch (event.key.toLowerCase()) {
-            case "1":
-                this.cancelMusic();
-                this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-                this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
-                this.controls.orbit.update();
-                break;
-            case "2":
-                this.cancelMusic();
-                this.camera.position.set(17046.05501814811, 117471.20102308583, -12013.89353241769);
-                this.controls.orbit.target.set(17083.7099694609, 117384.69022352276, -11980.75765759009);
-                this.controls.orbit.update();
-                break;
-            case "3":
-                this.cancelMusic();
-                this.camera.position.set(15242.674545699758, 110436.41811293362, -12078.741557239728);
-                this.controls.orbit.target.set(15174.047463755987, 110487.88810239462, -12027.349302874225);
-                this.controls.orbit.update();
-                break;
-            case "4":
-                this.cancelMusic();
-                this.camera.position.set(12918.803737500606, 109998.28664096774, -11769.26992456535);
-                this.controls.orbit.target.set(12961.940094338941, 110631.6332572824, -11789.664021556502);
-                this.controls.orbit.update();
-                break;
-            case "5":
-                this.cancelMusic();
-                this.camera.position.set(23756.20212599347, 116491.99214326135, -8869.681711370744);
-                this.controls.orbit.target.set(23753.308437823456, 116591.94542046914, -8868.697361740096);
-                this.controls.orbit.update();
-                break;
-            case "6":
-                this.cancelMusic();
-                this.camera.position.set(17436.46445202629, 109469.23150265992, -6351.127037466889);
-                this.controls.orbit.target.set(18965.828211115713, 106770.89206042158, -6064.126549127763);
-                this.controls.orbit.update();
-                break;
-            case "+": this.nextSector(); break;
-            case "-": this.prevSector(); break;
-            case "w": if (!this.isOrbitControls) this.dirKeys.up = true; break;
-            case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
-            case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
-            case "s": if (!this.isOrbitControls) this.dirKeys.down = true; break;
-            case "shift": if (!this.isOrbitControls) {
-                this.shiftTimeDown = Date.now();
-                this.dirKeys.shift = true;
-            } break;
-            case "t": this.player.teleportTo(this.camera.position); break;
-
-        }
+        this.needsUpdate = true;
     }
 
-    protected cancelMusic() {
+    public cancelMusic(): void {
         this.activeMusicId = null;
         this.audioManager.cancelMusic();
     }
 
-    protected setSector(index: number) {
-        const sector = this.sectorBounds[index];
+    public getSectorBounds(): readonly Box3[] { return this.sectorBounds; }
 
-        this.cancelMusic();
-        this.camera.position.copy(sector.max);
-        this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
-        this.controls.orbit.update();
-
-        this.activeSector = index;
+    public updateCameraMatrices(): void {
+        this.camera.updateMatrixWorld();
+        this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
     }
 
-    protected nextSector() {
-        if (this.sectorBounds.length <= 0) return;
 
-        this.setSector((this.activeSector + 1) % this.sectorBounds.length);
-    }
-
-    protected prevSector() {
-        if (this.sectorBounds.length <= 0) return;
-
-        this.setSector(this.activeSector === 0 ? (this.sectorBounds.length - 1) : (this.activeSector - 1))
-    }
-
-    public onHandleKeyUp(event: KeyboardEvent) {
-        switch (event.key.toLowerCase()) {
-            case "c":
-                if (this.isOrbitControls) this.controls.fps.lock();
-                else this.controls.fps.unlock();
-                break;
-            case "w": if (!this.isOrbitControls) this.dirKeys.up = false; break;
-            case "a": if (!this.isOrbitControls) this.dirKeys.left = false; break;
-            case "d": if (!this.isOrbitControls) this.dirKeys.right = false; break;
-            case "s": if (!this.isOrbitControls) this.dirKeys.down = false; break;
-            case "shift": if (!this.isOrbitControls) this.dirKeys.shift = false; break;
-        }
-    }
-
-    protected movePlayerTo(position: Vector3) {
-        this.landmark.deleteLandmark(true);
-        this.player.goTo(position);
-    }
-
-    public onHandleMouseDown(event: MouseEvent) {
-        if (event.button !== 0 || !this.isOrbitControls) return;
-
-        this.isPrimaryMouseDown = true;
-        this.hasMouseDragged = false;
-        this.mouseDownPosition.set(event.clientX, event.clientY);
-    }
-
-    public onHandleMouseMove(event: MouseEvent) {
-        if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
-
-        const dx = event.clientX - this.mouseDownPosition.x;
-        const dy = event.clientY - this.mouseDownPosition.y;
-
-        if (dx * dx + dy * dy > CLICK_MAX_MOVEMENT_SQ) this.hasMouseDragged = true;
-    }
-
-    public onHandleMouseUp(event: MouseEvent) {
-        if (event.button !== 0) return;
-
-        const dx = event.clientX - this.mouseDownPosition.x;
-        const dy = event.clientY - this.mouseDownPosition.y;
-        const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
-
-        this.isPrimaryMouseDown = false;
-
-        if (!isClick || !this.isOrbitControls) return;
-
-        const position = new Vector2(event.clientX, event.clientY);
-        const ssPosition = this.toScreenSpaceCoords(position);
-
-        this.raycaster.setFromCamera(ssPosition, this.camera);
-
-        arrMouseIntersections.length = 0;
-        this.raycaster.intersectObject(this.scene, true, arrMouseIntersections);
-
-        if (arrMouseIntersections.length > 0) {
-            const intersection = arrMouseIntersections[0];
-            const actor = getBatchIntersectionActor(intersection);
-
-            if (actor) {
-                console.log(actor.actorName, {
-                    batch: intersection.object.name,
-                    element: actor.actorIndex,
-                    distance: intersection.distance,
-                    point: intersection.point,
-                    faceIndex: intersection.faceIndex,
-                    uuid: actor.actorUuid
-                });
-            } else console.log(intersection.object.name, intersection);
-        }
-
-        const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
-        const physicsIntersection = pickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, this.player.getCollider(), this.player.getRigidbody()) : null;
-
-        if (physicsIntersection) {
-            tmpMouseIntersection.copy(physicsIntersection.location);
-            this.movePlayerTo(tmpMouseIntersection);
-            if (isLandmarkSurface(physicsIntersection.actor)) this.landmark.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
-            // console.log(physicsIntersection.actor, physicsIntersection);
-        } else if (pickDistance > 0) {
-            // UInteraction::ScreenToWorld (0x855ee0) deprojects to a direction, not a hit location
-            this.movePlayerTo(tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin));
-        }
-
-        this.pickBSPNode(physicsIntersection ? physicsIntersection.distance : pickDistance);
-    }
-
-    // camera.far is the depth-buffer far, not a world distance; clip the pick to loaded sectors
-    protected getPickDistance(origin: Vector3, direction: Vector3): number {
-        if (this.sectorBounds.length === 0) return this.camera.far;
-
-        tmpPickBounds.makeEmpty();
-
-        for (const bounds of this.sectorBounds) tmpPickBounds.union(bounds);
-
-        let near = 0, far = this.camera.far;
-
-        for (let axis = 0; axis < 3; axis++) {
-            const delta = direction.getComponent(axis);
-            const start = origin.getComponent(axis);
-            const min = tmpPickBounds.min.getComponent(axis);
-            const max = tmpPickBounds.max.getComponent(axis);
-
-            if (Math.abs(delta) < 1e-12) {
-                if (start < min || start > max) return 0;
-                continue;
-            }
-
-            let a = (min - start) / delta, b = (max - start) / delta;
-
-            if (a > b) [a, b] = [b, a];
-
-            near = Math.max(near, a);
-            far = Math.min(far, b);
-
-            if (near > far) return 0;
-        }
-
-        return far;
-    }
-
-    protected pickBSPNode(maxDistance: number) {
+    public pickBSPNode(raycaster: THREE.Raycaster, maxDistance: number) {
         arrBSPGroups.length = 0;
         arrBSPIntersections.length = 0;
 
@@ -1060,11 +621,11 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         if (arrBSPGroups.length === 0) return;
 
-        const prevFar = this.raycaster.far;
+        const prevFar = raycaster.far;
 
-        this.raycaster.far = maxDistance;
-        this.raycaster.intersectObjects(arrBSPGroups, true, arrBSPIntersections);
-        this.raycaster.far = prevFar;
+        raycaster.far = maxDistance;
+        raycaster.intersectObjects(arrBSPGroups, true, arrBSPIntersections);
+        raycaster.far = prevFar;
 
         if (arrBSPIntersections.length === 0) return;
 
@@ -1326,177 +887,28 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    public async addCharacterControls(): Promise<void> {
-        const this_ = this, manAsset = this.manGame.getComponent("asset"), manPhys = this.manGame.getComponent("physics");
-        const groups = await manAsset.getCharGroups();
-        const state = { group: this.characterGroup, face: this.characterFace, hair: this.characterHair, hairColour: this.characterHairColour, chest: this.characterArmor.chest, legs: this.characterArmor.legs, gloves: this.characterArmor.gloves, boots: this.characterArmor.boots };
-        const groupOptions: Record<string, number> = {};
-        const folder = gui.addFolder("Character");
+    public setLevelVisible(visible: boolean): void { this.objectGroup.visible = visible; }
 
-        for (const group of groups)
-            groupOptions[group.name] = group.index;
-
-        let faceControl: dat.GUIController = null;
-        let hairControl: dat.GUIController = null;
-        let hairColourControl: dat.GUIController = null;
-        let armorControls: dat.GUIController[] = [];
-
-        function applyCharacter(): Promise<void> {
-            return manAsset.loadCharacter(this_, this_.characterGroup, this_.characterFace, this_.characterHair, this_.characterHairColour, this_.characterArmor);
-        }
-
-        function buildArmorControls(): void {
-            const group = groups[this_.characterGroup];
-
-            for (const control of armorControls) folder.remove(control);
-            armorControls = [];
-
-            for (const slot of Object.keys(this_.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
-                const options: Record<string, number> = { None: 0 };
-
-                for (const item of group.armor[slot])
-                    options[item.label] = item.id;
-
-                state[slot] = this_.characterArmor[slot];
-                armorControls.push(folder.add(state, slot, options).name(slot[0].toUpperCase() + slot.slice(1)).onChange(async v => {
-                    this_.characterArmor[slot] = Number(v);
-                    await applyCharacter();
-                }));
-            }
-        }
-
-        // a style only ships some of the colours, so the colour options get rebuilt whenever the style changes
-        function buildColourControl(): void {
-            const colours = groups[this_.characterGroup].hairColours[this_.characterHair];
-
-            if (hairColourControl) folder.remove(hairColourControl);
-
-            state.hairColour = this_.characterHairColour = colours.includes(this_.characterHairColour) ? this_.characterHairColour : colours[0];
-
-            hairColourControl = folder.add(state, "hairColour", colours).name("Hair Color").onChange(async v => {
-                this_.characterHairColour = Number(v);
-                await applyCharacter();
-            });
-        }
-
-        function buildVariantControls(): void {
-            const group = groups[this_.characterGroup];
-
-            if (faceControl) folder.remove(faceControl);
-            if (hairControl) folder.remove(hairControl);
-
-            state.face = this_.characterFace = Math.min(this_.characterFace, group.faceVariants - 1);
-            state.hair = this_.characterHair = group.hairStyles.includes(this_.characterHair) ? this_.characterHair : group.hairStyles[0];
-
-            const faceOptions = Array.from({ length: group.faceVariants }, (_, i) => i);
-
-            faceControl = folder.add(state, "face", faceOptions).name("Face").onChange(async v => {
-                this_.characterFace = Number(v);
-                await applyCharacter();
-            });
-
-            hairControl = folder.add(state, "hair", group.hairStyles).name("Hair").onChange(async v => {
-                this_.characterHair = Number(v);
-                buildColourControl();
-                await applyCharacter();
-            });
-
-            buildColourControl();
-            buildArmorControls();
-        }
-
-        folder.add(state, "group", groupOptions).name("Character").onChange(async v => {
-            this.characterGroup = Number(v);
-            this.characterArmor = { chest: 0, legs: 0, gloves: 0, boots: 0 };
-            buildVariantControls();
-            await applyCharacter();
-        });
-
-        folder.add(this, "followPlayer").name("Follow Player").onChange(() => {
-            this.controls.orbit?.setNativeLikeControls(this.followPlayer);
-            if (!this.followPlayer) this.viewShakeStates.length = 0;
-            this.needsUpdate = true
-
-        });
-        folder.add({ simulate: () => manPhys.simulatePawns() }, "simulate").name("Simulate Pawns");
-
-        buildVariantControls();
-        folder.open();
+    public onFollowPlayerChanged(follow: boolean): void {
+        if (!follow) this.viewShakeStates.length = 0;
+        this.needsUpdate = true;
     }
 
-    public addNpcControls(): void {
-        const state = {
-            selector: "Baium",
-            spawn: async () => {
-                const request = ++this.npcSpawnRequest;
+    public invalidateSectorVisibility(): void {
+        for (const column of this.sectors.values())
+            for (const sector of column.values())
+                (sector as any).visibilityCacheInitialized = false;
 
-                if (this.spawnedNpc) {
-                    this.removePawn(this.spawnedNpc);
-                    this.spawnedNpc = null;
-                }
-
-                const npc = await this.spawnNpc(state.selector);
-
-                if (request !== this.npcSpawnRequest) {
-                    this.removePawn(npc);
-                    return;
-                }
-
-                this.spawnedNpc = npc;
-            },
-            kill: () => {
-                ++this.npcSpawnRequest;
-
-                const npc = this.spawnedNpc;
-
-                if (!npc) return;
-
-                npc.playDeathAnimation(() => {
-                    this.removePawn(npc);
-                    if (this.spawnedNpc === npc) this.spawnedNpc = null;
-                });
-            }
-        };
-        const folder = gui.addFolder("NPC");
-
-        folder.add(state, "selector").name("Name / ID");
-        folder.add(state, "spawn").name("Spawn");
-        folder.add(state, "kill").name("Kill");
-        folder.open();
+        this.needsUpdate = true;
     }
 
-    public addClippingRangeControls(): void {
-        const manAsset = this.manGame.getComponent("asset");
-        const clippingRange = manAsset.userConfig.clippingRange;
+    public setDisplayGamma(display: any, value: unknown): void {
+        display.gamma = parseFloat(value as any);
+        this.displayGammaEnabled = display.gamma !== 0;
 
-        guiFolders.quality.add(clippingRange, "actor", 1, 12, 0.5)
-            .name("Emitter Range")
-            .onChange(() => {
-                for (const column of this.sectors.values())
-                    for (const sector of column.values())
-                        (sector as any).visibilityCacheInitialized = false;
+        if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
 
-                this.needsUpdate = true;
-            });
-    }
-
-    public addDisplayGammaControls(): void {
-        const manAsset = this.manGame.getComponent("asset");
-        const display = manAsset.userConfig.display;
-        display.gamma = 0;
-
-        const steps = GAMMA_STEPS.reduce((acc, g) => (acc[g.toFixed(1)] = g, acc), { "off": 0 } as Record<string, number>);
-
-        guiFolders.quality.add(display, "gamma", steps)
-            .name("Gamma")
-            .onChange(v => {
-                display.gamma = parseFloat(v as any);
-                this.displayGammaEnabled = display.gamma !== 0;
-
-                if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
-
-                this.needsUpdate = true;
-            });
+        this.needsUpdate = true;
     }
 
     protected wireEmitterVisibilityHandlers(): void {
@@ -1515,8 +927,13 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public addTransientEffect(effect: Object3D, owner: BaseActor = null): void {
+        if (!(effect as any).isGameObject) throw new Error(`Transient effect '${effect.name}' is not a game object.`);
+
+        const object = effect as Object3D & IObject;
+
+        if (!object.findComponent("effectLifetime")) object.addComponent(new EffectLifetimeComponent(this));
+
         this.scene.add(effect);
-        this.transientEffects.add(effect);
         this.physicsManager.registerSimulationObjects(effect);
 
         const spawnSound = (effect as any).spawnSound as (GD.IEmitterSpawnSoundDecodeInfo & { dataUri: string }) | null;
@@ -1539,7 +956,6 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         this.physicsManager.unregisterSimulationObjects(effect);
         effect.removeFromParent();
-        this.transientEffects.delete(effect);
 
         effect.traverse(child => {
             const mesh = child as any;
@@ -1552,21 +968,9 @@ class RenderManager implements IEngineComponent<GameManager> {
             if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
         });
 
+        (effect as Object3D & IObject).detachComponents();
+
         this.needsUpdate = true;
-    }
-
-    protected maintainTransientEffects(): void {
-        for (const effect of this.transientEffects) {
-            let root = effect;
-
-            while (root.parent) root = root.parent;
-
-            if (root === this.scene && !this.physicsManager.isEmitterEffectFinished(effect)) continue;
-
-            this.removeTransientEffect(effect);
-        }
-
-        if (this.transientEffects.size > 0) this.needsUpdate = true;
     }
 
     public removePawn(pawn: BaseActor): void {
@@ -1574,16 +978,16 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         pawn.removeFromParent();
 
-        if (this.isUpdatingMixer) this.deferredPawnReleases.add(pawn);
+        if (this.isUpdatingMixer) this.deferredMixerOperations.push(() => pawn.release());
         else pawn.release();
 
         this.needsUpdate = true;
     }
 
-    protected releaseDeferredPawns(): void {
-        for (const pawn of this.deferredPawnReleases) pawn.release();
+    protected runDeferredMixerOperations(): void {
+        for (const operation of this.deferredMixerOperations) operation();
 
-        this.deferredPawnReleases.clear();
+        this.deferredMixerOperations.length = 0;
     }
 
     public spawnNpc(selector: string | number, position: Vector3 = null): Promise<BaseActor> {
@@ -1594,9 +998,12 @@ class RenderManager implements IEngineComponent<GameManager> {
         return this.manGame.getComponent("asset").listNpcs();
     }
 
-    protected updateSimulatedPawnPresentation(currentTime: number, deltaTime: number): void {
-        for (const pawn of this.simulatedPawns)
-            pawn.updatePresentation(currentTime, deltaTime / 1000);
+    public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
+    public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
+
+    protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
+        for (const component of this.pawnRenderables)
+            component.getParent().updatePresentation(currentTime, deltaTime / 1000);
     }
 
     protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
@@ -1612,10 +1019,11 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected updatePawnVisibility(): void {
-        this.player.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(this.player.getRenderSphere());
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent();
 
-        for (const pawn of this.simulatedPawns)
-            pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(pawn.getRenderSphere());
+            pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(component.getRenderSphere());
+        }
 
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
@@ -1640,11 +1048,10 @@ class RenderManager implements IEngineComponent<GameManager> {
                 for (const pawn of sector.pawns.children)
                     if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
 
-        this.updateActorLighting(this.player, sunAmbient);
         this.updatePawnShadow();
 
-        for (const pawn of this.simulatedPawns)
-            this.updateActorLighting(pawn, sunAmbient);
+        for (const component of this.pawnRenderables)
+            this.updateActorLighting(component.getParent(), sunAmbient);
     }
 
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
@@ -1672,9 +1079,7 @@ class RenderManager implements IEngineComponent<GameManager> {
             tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
 
         arrShadowCasters.length = 0;
-        arrShadowCasters.push(this.player);
-
-        for (const pawn of this.simulatedPawns) arrShadowCasters.push(pawn);
+        for (const component of this.pawnRenderables) arrShadowCasters.push(component.getParent());
 
         if (sector) for (const pawn of sector.pawns.children) arrShadowCasters.push(pawn);
 
@@ -1962,7 +1367,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
-        const presetIndex = parseInt(String(this.envConfig.fogPreset).split(" ")[0]);
+        const presetIndex = parseInt(String(this.manUI.fogPreset).split(" ")[0]);
         const range = env.getEnv().fog.ranges[presetIndex - 1]; // 0-based array
 
         let targetFogStart = 2000;
@@ -2025,7 +1430,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
             let totalHArrWeight = 0;
 
-            const presetIndex = this.envConfig.fogPreset;
+            const presetIndex = this.manUI.fogPreset;
             const timeOfDay = env.getTimeOfDay();
 
             const fogInfosAll: any[] = [];
@@ -2213,7 +1618,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
 
-        this.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+        this.waterEffects.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
         this.audioManager.setUnderwater(!!waterVolume);
 
         if (waterVolume) {
@@ -2262,7 +1667,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         if (!this.isRenderingFrame) return;
 
-        stats.begin();
+        this.manUI.beginFrame();
         this.updateScreenFade(currentTime);
 
         this.manGame.getComponent("asset").tick(this);
@@ -2275,7 +1680,7 @@ class RenderManager implements IEngineComponent<GameManager> {
             this.mixer.update(deltaTime / 1000);
         } finally {
             this.isUpdatingMixer = false;
-            this.releaseDeferredPawns();
+            this.runDeferredMixerOperations();
         }
 
         const timeScale = this.environment.getTimeScale();
@@ -2296,31 +1701,10 @@ class RenderManager implements IEngineComponent<GameManager> {
         const timeOfDay = this.environment.getTimeOfDay();
 
         // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
-        this.player.getComponent<WaterEffectsComponent>("waterEffects").setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
-        this.underWaterEffect.updatePresentation(this.camera);
+        this.waterEffects.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
+        this.waterEffects.underWaterEffect.updatePresentation(this.camera);
 
-        if (!this.isOrbitControls) {
-            let forwardVelocity = 0, sidewaysVelocity = 0;
-            const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? (
-                Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2))
-            ) : 1);
-
-            // if (this.dirKeys.shift)
-            //     console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
-
-            if (this.dirKeys.left) sidewaysVelocity -= 1;
-            if (this.dirKeys.right) sidewaysVelocity += 1;
-
-            if (this.dirKeys.up) forwardVelocity += 1;
-            if (this.dirKeys.down) forwardVelocity -= 1;
-
-            dirForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion).multiplyScalar(forwardVelocity);
-            dirRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion).multiplyScalar(-sidewaysVelocity);
-
-            cameraVelocity.addVectors(dirForward, dirRight).setLength(camSpeed);
-
-            this.camera.position.add(cameraVelocity);
-        }
+        this.inputManager.updateCamera();
 
         // const sector = this.scene.children[1].children[0].children[0] as any;
 
@@ -2340,22 +1724,9 @@ class RenderManager implements IEngineComponent<GameManager> {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
-        this.maintainTransientEffects();
+        this.updatePawnPresentation(currentTime, deltaTime);
 
-        this.player.updatePresentation(currentTime, deltaTime / 1000);
-        this.landmark.update();
-        this.updateSimulatedPawnPresentation(currentTime, deltaTime);
-
-        if (this.isOrbitControls && this.followPlayer) {
-            this.player.getCameraTargetPosition(tmpOrbitFollowTarget);
-            tmpOrbitFollowDelta.copy(tmpOrbitFollowTarget).sub(this.controls.orbit.target);
-            this.camera.position.add(tmpOrbitFollowDelta);
-            this.controls.orbit.target.copy(tmpOrbitFollowTarget);
-            this.controls.orbit.update();
-            this.camera.updateMatrixWorld();
-            this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
-            this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
-        }
+        this.inputManager.updateFollowPlayer();
 
         this.audioManager.update(currentTime);
 
@@ -2377,71 +1748,13 @@ class RenderManager implements IEngineComponent<GameManager> {
             }
         }
 
-        // Ambient sound spatial update, after UALAudioSubsystem::Update in the retail alaudio.dll
         {
             const camPos = this.camera.position;
-            const timeOfDay = this.environment.getTimeOfDay(); // 0-24 hours
+            const timeOfDay = this.environment.getTimeOfDay();
             const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
             const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
-            const activeIds = this.audioManager.activeAmbientSoundIds;
-            const audibleSounds = new Map<string, number>();
-            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, sector: SectorObject, priority: number }[] = [];
 
-            for (const [, sectorYMap] of this.sectors) {
-                for (const [, sector] of sectorYMap) {
-                    if (!sector.ambientSounds) continue;
-                    for (const snd of sector.ambientSounds) {
-                        if (snd.soundType === "day" && !isDaytime) continue;
-                        if (snd.soundType === "night" && isDaytime) continue;
-                        if (snd.soundType === "water" && !isSubmerged) continue;
-
-                        const dx = snd.position[0] - camPos.x;
-                        const dy = snd.position[1] - camPos.y;
-                        const dz = snd.position[2] - camPos.z;
-                        const distSq = dx * dx + dy * dy + dz * dz;
-                        const maxDistSq = snd.maxDistance * snd.maxDistance;
-
-                        if (distSq > maxDistSq) continue;
-
-                        // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
-                        const priority = snd.volume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
-
-                        audibleSounds.set(snd.uuid, priority);
-
-                        if (activeIds.has(snd.uuid)) continue;
-                        if (!snd.looping && !this.audioManager.rollAmbientTrigger(snd.uuid, sector.getSoundUri(snd.soundName), snd.randomChance, currentTime)) continue;
-
-                        candidates.push({ uuid: snd.uuid, snd, sector, priority });
-                    }
-                }
-            }
-
-            // A playing ambient is never dropped for merely ranking below the newcomers
-            for (const id of activeIds) {
-                const priority = audibleSounds.get(id);
-
-                if (priority === undefined) this.audioManager.stopAmbientSound(id);
-                else this.audioManager.setAmbientPriority(id, priority);
-            }
-
-            candidates.sort((a, b) => b.priority - a.priority);
-
-            for (const { uuid, snd, sector, priority } of candidates) {
-                const placed = this.audioManager.playAmbientSound(
-                    uuid,
-                    snd.soundName,
-                    sector.getSoundUri(snd.soundName),
-                    snd.position,
-                    snd.volume,
-                    snd.pitch,
-                    snd.refDistance,
-                    snd.maxDistance,
-                    snd.looping,
-                    priority
-                );
-
-                if (!placed) break;
-            }
+            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isDaytime, isSubmerged);
 
             if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
                 this._lastListenerPos.copy(camPos);
@@ -2600,7 +1913,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         // Render World
         this.renderer.render(this.scene, this.camera);
 
-        this.underWaterEffect.renderCellophane(this.renderer);
+        this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
 
         // // Apply Native Bloom (Sun/Glow) -> Screen
         // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);
@@ -2615,7 +1928,7 @@ class RenderManager implements IEngineComponent<GameManager> {
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
 
-        stats.end();
+        this.manUI.endFrame();
         this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
         this.isRenderingFrame = false;
     }
@@ -2629,7 +1942,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    protected setCollidersVisible(visible: boolean) {
+    public setCollidersVisible(visible: boolean): void {
         this.showColliders = visible;
         this.colliderOverlay.visible = visible;
 
@@ -2661,6 +1974,10 @@ class RenderManager implements IEngineComponent<GameManager> {
             column.set(sector.index.y, sector);
             this.arrLoadedSectors.push(sector);
         }
+
+        if (sector.ambientSounds && sector.getComponents("ambientSound").length === 0)
+            for (const info of sector.ambientSounds)
+                sector.addComponent(new AmbientSoundComponent(this.audioManager, info, sector.getSoundUri(info.soundName)));
 
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
@@ -2853,6 +2170,8 @@ class RenderManager implements IEngineComponent<GameManager> {
 
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
+
+        for (const component of sector.getComponents<AmbientSoundComponent>("ambientSound")) sector.removeComponent(component);
 
         this.physicsManager.unregisterSimulationObjects(sector);
         this.updateColliderOverlay();

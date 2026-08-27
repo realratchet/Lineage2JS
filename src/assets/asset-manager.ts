@@ -16,10 +16,17 @@ import UnScriptVM from "@client/ue-script/vm";
 import LineagePlayerController from "@client/objects/lineage-player-controller";
 import { IEngineComponent } from "@client/game/components";
 import type { GameManager } from "@client/game/game-manager"
+import SoundComponent from "@client/audio/components/sound-component";
+import EffectsComponent from "@client/rendering/components/effects-component";
+import AnimationComponent from "@client/objects/components/animation-component";
+import TransformComponent from "@client/objects/components/transform-component";
+import HairSimulationComponent from "@client/objects/components/hair-simulation-component";
+import SkinNotifyComponent from "@client/objects/components/skin-notify-component";
+import NpcLifecycleComponent from "@client/objects/components/npc-lifecycle-component";
+import PawnRenderableComponent from "@client/rendering/components/pawn-renderable-component";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
-const tmpPawnSoundPosition = new Vector3();
 const tmpNpcFloorStart = new Vector3();
 const npcFloorDirection = new Vector3(0, 0, -1);
 const npcSpawnOffset = new Vector3(-600, -600, 0);
@@ -120,76 +127,17 @@ function applyScriptLocalization(library: GD.DecodeLibrary, classId: string, pro
     }
 }
 
-function playPawnAnimationSound(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor, notify: GD.IAnimationNotifyDecodeInfo): void {
-    const object = notify.object;
+function setPawnComponents(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor): void {
+    const sound = actor.findComponent<SoundComponent>("sound") || actor.addComponent(new SoundComponent(renderManager.audioManager));
 
-    if (!object || object.type !== "sound") return;
-
-    const info = object;
-
-    if (Math.random() * 100 >= info.random) return;
-
-    let soundName = object.sound;
-
-    if (!soundName) {
-        const sounds = actor.isSwimmingMovement()
-            ? actor.isWalkingMovement() ? info.waterWalkSounds : info.waterRunSounds
-            : actor.isWalkingMovement() ? info.defaultWalkSounds : info.defaultRunSounds;
-
-        if (sounds.length === 0) return;
-
-        soundName = sounds[Math.floor(Math.random() * sounds.length)];
-    }
-
-    const sound = library.soundBlobCache.get(soundName);
-
-    if (!sound?.uri) throw new Error(`Pawn '${actor.name}' has no decoded sound '${soundName}'.`);
-
-    actor.getWorldPosition(tmpPawnSoundPosition);
-    renderManager.audioManager.playOneShotSound(sound.uri, tmpPawnSoundPosition, info.volume / 255, 1, info.radius, info.radius * 100);
-}
-
-function playPawnSwimSound(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor, info: GD.IAnimationSwimSoundNotifyDecodeInfo): void {
-    if (!actor.isSwimmingMovement()) return;
-
-    const soundSet = actor.isUnderwaterMovement() ? info.underwater : info.surface;
-
-    if (!soundSet) throw new Error(`Swim sound notify '${info.objectName}' has no audio profile.`);
-    if (Math.random() * 100 >= soundSet.random) return;
-
-    const soundName = soundSet.sounds[Math.floor(Math.random() * soundSet.sounds.length)];
-    const sound = library.soundBlobCache.get(soundName);
-
-    if (!sound?.uri) throw new Error(`Pawn '${actor.name}' has no decoded swim sound '${soundName}'.`);
-
-    actor.getWorldPosition(tmpPawnSoundPosition);
-    renderManager.audioManager.playOneShotSound(sound.uri, tmpPawnSoundPosition, soundSet.volume / 255, 1, soundSet.radius, soundSet.radius * 100);
-}
-
-function getNpcEnterSoundUri(library: GD.DecodeLibrary, event: GD.INpcEnterEvent): string {
-    if (!event.sound || event.sound.toLowerCase() === "none") return null;
-
-    const soundName = library.sounds[event.sound];
-    const sound = library.soundBlobCache.get(soundName);
-
-    if (!sound?.uri) throw new Error(`NPC enter sound '${event.sound}' failed to decode.`);
-
-    return sound.uri;
-}
-
-function setPawnAnimationNotifies(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor): void {
-    actor.setAnimationNotifyHandler((actor, notify) => {
-        const object = notify.object;
-
-        if (!object) return;
-
-        switch (object.type) {
-            case "sound": playPawnAnimationSound(renderManager, library, actor, notify); break;
-            case "swimSound": playPawnSwimSound(renderManager, library, actor, object); break;
-            case "screenFade": renderManager.screenFadeBlink(object); break;
-            case "viewShake": renderManager.addViewShake(actor, object); break;
-        }
-    });
+    sound.setLibrary(library);
+    if (!actor.findComponent("effects")) actor.addComponent(new EffectsComponent(renderManager));
+    if (!actor.findComponent("animation")) actor.addComponent(new AnimationComponent(renderManager));
+    if (!actor.findComponent("hairSimulation")) actor.addComponent(new HairSimulationComponent());
+    if (!actor.findComponent("skinNotify")) actor.addComponent(new SkinNotifyComponent(renderManager));
+    if (!actor.findComponent("transform")) actor.addComponent(new TransformComponent(renderManager));
+    if (!actor.findComponent("npcLifecycle")) actor.addComponent(new NpcLifecycleComponent());
+    if (!actor.findComponent("pawnRenderable")) actor.addComponent(new PawnRenderableComponent(renderManager));
 }
 
 class AssetManager implements IEngineComponent<GameManager> {
@@ -291,7 +239,7 @@ class AssetManager implements IEngineComponent<GameManager> {
 
         this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
-        manRender.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
+        manRender.waterEffects.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
 
         const underwaterSoundName = effectLibrary.sounds[underwaterLoopSound];
         const underwaterSound = effectLibrary.soundBlobCache.get(underwaterSoundName);
@@ -336,6 +284,7 @@ class AssetManager implements IEngineComponent<GameManager> {
 
         const declared = this.warriorConfig.getAnimations(this.getClassName(charIndex));
 
+        setPawnComponents(renderManager, characterLibrary, player);
         player.setAnimations(animations);
         player.setIdleAnimation(findAnimation(animations, declared.wait));
         player.setWalkingAnimation(findAnimation(animations, declared.walk));
@@ -346,7 +295,6 @@ class AssetManager implements IEngineComponent<GameManager> {
         player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
         player.setMeshes(bodyparts);
         player.initAnimations();
-        setPawnAnimationNotifies(renderManager, characterLibrary, player);
     }
 
     public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection, actor?: BaseActor) {
@@ -374,6 +322,7 @@ class AssetManager implements IEngineComponent<GameManager> {
 
         const idle = findNpcIdleAnimation(animations, idleAnimation);
 
+        setPawnComponents(renderManager, library, actor);
         actor.setAnimations(animations);
         actor.setIdleAnimation(idle);
         actor.setWalkingAnimation(findNpcMovementAnimation(animations, "walk", idle));
@@ -383,8 +332,6 @@ class AssetManager implements IEngineComponent<GameManager> {
         actor.setSwimmingAnimation(idle);
         actor.setSwimmingIdleAnimation(idle);
         actor.setMeshes(meshes);
-        actor.initAnimations();
-        setPawnAnimationNotifies(renderManager, library, actor);
 
         if (scriptClassPath) {
             const classId = library.pawnActors[0].scriptClassId;
@@ -422,6 +369,8 @@ class AssetManager implements IEngineComponent<GameManager> {
 
             if (npcId !== null) actor.setDeathAnimationFromScript();
         }
+
+        actor.initAnimations();
 
         renderManager.needsUpdate = true;
 
@@ -463,10 +412,8 @@ class AssetManager implements IEngineComponent<GameManager> {
 
         if (!position) actor.position.add(npcSpawnOffset);
 
-        let library: GD.DecodeLibrary;
-
         try {
-            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null);
+            await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null);
         } catch (e) {
             throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
         }
@@ -485,7 +432,7 @@ class AssetManager implements IEngineComponent<GameManager> {
         try {
             renderManager.addPawn(actor);
 
-            if (npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent, getNpcEnterSoundUri(library, npc.enterEvent));
+            if (npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
         } catch (e) {
             renderManager.removePawn(actor);
             throw e;

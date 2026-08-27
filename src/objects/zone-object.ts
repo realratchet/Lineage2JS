@@ -4,6 +4,7 @@ import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion,
 import type { Terrain } from "@client/objects/terrain";
 import type { TerrainDecoration } from "@client/objects/terrain-decoration";
 import { encompassesVolume } from "@client/physics/volume-bsp";
+import { GameObject } from "@client/game/components";
 
 import { ColorByte } from "@client/utils/color-byte";
 import type UnScriptVM from "@client/ue-script/vm";
@@ -182,7 +183,7 @@ export type LightInfo_T = {
     cone: number
 }
 
-class SectorObject extends Object3D {
+class SectorObject extends GameObject {
     public readonly isSectorObject = true;
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)

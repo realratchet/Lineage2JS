@@ -1,4 +1,3 @@
-import * as dat from "dat.gui";
 import RenderManager from "./rendering/render-manager";
 import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
@@ -98,7 +97,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     const viewport = document.querySelector("viewport") as HTMLViewportElement;
     const assetList = await (await fetch("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
-    const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render");
+    const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");
 
     (global as any).renderManager = renderManager;
 
@@ -107,10 +106,10 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
     if (interactive) {
-        renderManager.addClippingRangeControls();
-        renderManager.addDisplayGammaControls();
-        renderManager.addNpcControls();
-        await renderManager.addCharacterControls();
+        uiManager.addClippingRangeControls();
+        uiManager.addDisplayGammaControls();
+        uiManager.addNpcControls();
+        await uiManager.addCharacterControls();
 
         void precacheCharacters(assetManager);
     }

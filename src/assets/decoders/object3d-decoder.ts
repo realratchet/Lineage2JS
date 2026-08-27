@@ -18,6 +18,7 @@ import BSPCollider from "@client/objects/bsp-collider";
 import LitSkinnedMesh from "@client/objects/lit-skinned-mesh";
 import UnScriptVM from "@client/ue-script/vm";
 import Rotator from "@client/utils/rotator";
+import { GameObject } from "@client/game/components";
 
 const cacheGeometries = new WeakMap<GD.IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
@@ -103,7 +104,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: GD.DecodeLibra
 
 type EmitterSpawnSound_T = GD.IEmitterSpawnSoundDecodeInfo & { dataUri: string };
 
-class EmitterActor extends Object3D {
+class EmitterActor extends GameObject {
     public spawnSound: EmitterSpawnSound_T = null;
     public readonly emitterRotation = new Quaternion();
 

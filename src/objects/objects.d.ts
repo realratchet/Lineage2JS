@@ -45,49 +45,59 @@ export type CollisionTriangleIndex_T = {
     queryTag: number;
 };
 
-export type CollisionPrimitive_T = {
-    kind: "bsp";
-    hulls: CollisionHull_T[];
-    index: CollisionBspIndex_T;
-    bounds: THREE.Box3;
-    supportsZeroExtent: boolean;
-    supportsNonZeroExtent: boolean;
-    supportsPointCheck: boolean;
-} | {
-    kind: "staticMesh";
-    vertices: Float32Array;
-    indices: Uint32Array;
-    collisionNodes: Int32Array;
-    collisionBounds: Float32Array;
-    index?: CollisionTriangleIndex_T;
-    simpleCollisionHulls?: CollisionHull_T[];
-    useSimpleLineCollision?: boolean;
-    useSimpleBoxCollision?: boolean;
-    matrixWorld: THREE.Matrix4;
-    bounds: THREE.Box3;
-    supportsZeroExtent: boolean;
-    supportsNonZeroExtent: boolean;
-    supportsPointCheck: boolean;
-} | {
-    kind: "terrain";
-    vertices: Float32Array;
-    indices: Uint32Array;
-    index: CollisionTriangleIndex_T;
-    matrixWorld: THREE.Matrix4;
-    bounds: THREE.Box3;
-    supportsZeroExtent: boolean;
-    supportsNonZeroExtent: boolean;
-    supportsPointCheck: boolean;
-} | {
-    kind: "cylinder";
-    center: THREE.Vector3;
-    radius: number;
-    halfHeight: number;
-    bounds: THREE.Box3;
-    supportsZeroExtent: boolean;
-    supportsNonZeroExtent: boolean;
-    supportsPointCheck: boolean;
-};
+
+
+type CollisionPrimitiveUnion_T =
+    | {
+        kind: "bsp";
+        hulls: CollisionHull_T[];
+        index: CollisionBspIndex_T;
+        bounds: THREE.Box3;
+        supportsZeroExtent: boolean;
+        supportsNonZeroExtent: boolean;
+        supportsPointCheck: boolean;
+    }
+    | {
+        kind: "staticMesh";
+        vertices: Float32Array;
+        indices: Uint32Array;
+        collisionNodes: Int32Array;
+        collisionBounds: Float32Array;
+        index?: CollisionTriangleIndex_T;
+        simpleCollisionHulls?: CollisionHull_T[];
+        useSimpleLineCollision?: boolean;
+        useSimpleBoxCollision?: boolean;
+        matrixWorld: THREE.Matrix4;
+        bounds: THREE.Box3;
+        supportsZeroExtent: boolean;
+        supportsNonZeroExtent: boolean;
+        supportsPointCheck: boolean;
+    }
+    | {
+        kind: "terrain";
+        vertices: Float32Array;
+        indices: Uint32Array;
+        index: CollisionTriangleIndex_T;
+        matrixWorld: THREE.Matrix4;
+        bounds: THREE.Box3;
+        supportsZeroExtent: boolean;
+        supportsNonZeroExtent: boolean;
+        supportsPointCheck: boolean;
+    }
+    | {
+        kind: "cylinder";
+        center: THREE.Vector3;
+        radius: number;
+        halfHeight: number;
+        bounds: THREE.Box3;
+        supportsZeroExtent: boolean;
+        supportsNonZeroExtent: boolean;
+        supportsPointCheck: boolean;
+    };
+
+export type CollisionPrimitiveKind = CollisionPrimitiveUnion_T["kind"];
+
+export type CollisionPrimitive_T<T extends CollisionPrimitiveKind = CollisionPrimitiveKind> = Extract<CollisionPrimitiveUnion_T, { kind: T }>;
 
 export type ActorCollisionProfile_T = {
     collideActors: boolean;

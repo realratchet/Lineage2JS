@@ -3,7 +3,7 @@ import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, Co
 import LitActorMesh, { MeshLight_T } from "@client/objects/lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "@client/physics/triangle-index";
-import { ColliderComponent } from "@client/physics/physics-component";
+import { ColliderComponent } from "@client/physics/components/physics-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();

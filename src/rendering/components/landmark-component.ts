@@ -1,4 +1,5 @@
 import { Object3D, Scene, Vector3 } from "three";
+import { ObjectComponent } from "@client/game/components";
 import type Player from "@client/player";
 
 const ACTIVE_EFFECT = "LineageEffect.e_u093_a";
@@ -10,8 +11,7 @@ const tmpNormal = new Vector3();
 
 type EffectFactory_T = (classPath: string) => Object3D;
 
-class Landmark {
-    protected readonly owner: Player;
+class LandmarkComponent extends ObjectComponent<Player> {
     protected readonly scene: Scene;
     protected readonly createEffect: EffectFactory_T;
     protected readonly retiringEffects = new Set<Object3D>();
@@ -19,9 +19,11 @@ class Landmark {
     protected completionEffect: Object3D = null;
     protected hasOwnerMoved = false;
 
-    public constructor(owner: Player, scene: Scene, createEffect: EffectFactory_T) {
+    public readonly componentName = "landmark";
 
-        this.owner = owner;
+    public constructor(scene: Scene, createEffect: EffectFactory_T) {
+        super();
+
         this.scene = scene;
         this.createEffect = createEffect;
     }
@@ -41,7 +43,7 @@ class Landmark {
         this.scene.add(effect);
     }
 
-    public update(): void {
+    public onUpdate(_currentTime: number, _deltaTime: number): void {
         if (this.completionEffect && this.isEffectFinished(this.completionEffect)) {
             this.removeEffect(this.completionEffect);
             this.completionEffect = null;
@@ -56,7 +58,7 @@ class Landmark {
 
         if (!this.activeEffect) return;
 
-        if (this.owner.position.distanceToSquared(this.activeEffect.position) < COMPLETION_DISTANCE_SQ) {
+        if (this.getParent().position.distanceToSquared(this.activeEffect.position) < COMPLETION_DISTANCE_SQ) {
             const effect = this.createEffect(COMPLETION_EFFECT);
 
             effect.position.copy(this.activeEffect.position);
@@ -72,9 +74,9 @@ class Landmark {
             return;
         }
 
-        if (!this.owner.isIdle()) this.hasOwnerMoved = true;
+        if (!this.getParent().isIdle()) this.hasOwnerMoved = true;
 
-        if (!this.owner.isLocomoting() || this.hasOwnerMoved && this.owner.isIdle())
+        if (!this.getParent().isLocomoting() || this.hasOwnerMoved && this.getParent().isIdle())
             this.deleteLandmark(false);
     }
 
@@ -141,5 +143,6 @@ class Landmark {
     }
 }
 
-export default Landmark;
-export { Landmark };
+export default LandmarkComponent;
+export { LandmarkComponent };
+

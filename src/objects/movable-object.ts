@@ -4,7 +4,7 @@ import type BaseActor from "@client/base-actor";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { pointPrimitive } from "@client/physics/collision-primitive";
-import { MoverComponent } from "@client/physics/physics-component";
+import { MoverComponent } from "@client/physics/components/physics-component";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
 

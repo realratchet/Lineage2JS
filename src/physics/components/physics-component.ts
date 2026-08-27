@@ -12,6 +12,7 @@ interface IPhysicsComponent<TParent extends IObject = IObject> extends IComponen
     isPhysicsAdded(manager: PhysicsManager): boolean;
     onPhysicsAdded(manager: PhysicsManager): void;
     onPhysicsRemoved(manager: PhysicsManager): void;
+    getPhysicsTickRate?(): number;
     onPhysicsTick?(currentTime: number, deltaTime: number, actors: BaseActor[]): boolean;
     onTriggerPosition?(currentTime: number, position: Vector3): void;
 }

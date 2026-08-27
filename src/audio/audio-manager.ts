@@ -1,6 +1,7 @@
 import { IEngineComponent } from "@client/game/components";
 import type GameManager from "@client/game/game-manager";
 import { randInt } from "three/src/math/MathUtils";
+import type AmbientSoundComponent from "@client/audio/components/ambient-sound-component";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini
@@ -24,6 +25,8 @@ type AmbientChannel_T = {
     priority: number,
     info: AmbientInfo_T
 };
+
+type AmbientCandidate_T = { component: AmbientSoundComponent, priority: number };
 
 class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
@@ -401,9 +404,72 @@ class AudioManager implements IEngineComponent<GameManager> {
     }
 
     protected readonly activeAmbientSounds = new Map<string, AmbientChannel_T>();
+    protected readonly ambientSounds = new Set<AmbientSoundComponent>();
+    protected readonly ambientCandidates: AmbientCandidate_T[] = [];
+    protected readonly audibleAmbientSounds = new Map<string, number>();
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
+
+    public registerAmbientSound(component: AmbientSoundComponent): void { this.ambientSounds.add(component); }
+
+    public unregisterAmbientSound(component: AmbientSoundComponent): void {
+        this.ambientSounds.delete(component);
+        this.stopAmbientSound(component.info.uuid);
+        this.ambientSlotAnchors.delete(component.info.uuid);
+    }
+
+    public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isDaytime: boolean, isSubmerged: boolean): void {
+        const candidates = this.ambientCandidates;
+        const audibleSounds = this.audibleAmbientSounds;
+
+        candidates.length = 0;
+        audibleSounds.clear();
+
+        for (const component of this.ambientSounds) {
+            const info = component.info;
+
+            if (info.soundType === "day" && !isDaytime) continue;
+            if (info.soundType === "night" && isDaytime) continue;
+            if (info.soundType === "water" && !isSubmerged) continue;
+
+            const dx = info.position[0] - px;
+            const dy = info.position[1] - py;
+            const dz = info.position[2] - pz;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            const maxDistSq = info.maxDistance * info.maxDistance;
+
+            if (distSq > maxDistSq) continue;
+
+            // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
+            const priority = info.volume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
+
+            audibleSounds.set(info.uuid, priority);
+
+            if (this.activeAmbientSounds.has(info.uuid)) continue;
+            if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.dataUri, info.randomChance, currentTime)) continue;
+
+            candidates.push({ component, priority });
+        }
+
+        // A playing ambient is never dropped for merely ranking below the newcomers
+        for (const [id, entry] of this.activeAmbientSounds) {
+            const priority = audibleSounds.get(id);
+
+            if (priority === undefined) this.stopAmbientSound(id);
+            else entry.priority = priority;
+        }
+
+        candidates.sort((a, b) => b.priority - a.priority);
+
+        for (const candidate of candidates) {
+            const component = candidate.component;
+            const info = component.info;
+            const placed = this.playAmbientSound(info.uuid, info.soundName, component.dataUri, info.position, info.volume, info.pitch, info.refDistance, info.maxDistance, info.looping, candidate.priority);
+
+            if (!placed) break;
+        }
+    }
 
     // alaudio.dll 0x1000cb5f: a non-looping ambient is rerolled once per Sound->Duration slot counted from AmbientSoundStartTime, and enters the candidate list when appRand()%100 < AmbientRandom
     public rollAmbientTrigger(id: string, dataUri: string, randomChance: number, currentTime: number): boolean {
@@ -562,7 +628,7 @@ class AudioManager implements IEngineComponent<GameManager> {
         source.start(0);
     }
 
-    public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number) {
+    public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true) {
         const sourcePosition = position as any;
         const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
         const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
@@ -585,16 +651,6 @@ class AudioManager implements IEngineComponent<GameManager> {
             }
         }
 
-        const panner = this.audioContext.createPanner();
-        panner.panningModel = "equalpower";
-        panner.distanceModel = "inverse";
-        panner.refDistance = sourceRadius;
-        panner.maxDistance = sourceMaxDistance;
-        panner.rolloffFactor = ROLLOFF;
-        panner.positionX.value = x;
-        panner.positionY.value = y;
-        panner.positionZ.value = z;
-
         const gain = this.audioContext.createGain();
         gain.gain.value = volume;
 
@@ -603,13 +659,27 @@ class AudioManager implements IEngineComponent<GameManager> {
         source.playbackRate.value = pitch;
 
         source.connect(gain);
-        gain.connect(panner);
-        panner.connect(this.effectsGainNode);
+
+        let panner: PannerNode = null;
+
+        if (attenuate) {
+            panner = this.audioContext.createPanner();
+            panner.panningModel = "equalpower";
+            panner.distanceModel = "inverse";
+            panner.refDistance = sourceRadius;
+            panner.maxDistance = sourceMaxDistance;
+            panner.rolloffFactor = ROLLOFF;
+            panner.positionX.value = x;
+            panner.positionY.value = y;
+            panner.positionZ.value = z;
+            gain.connect(panner);
+            panner.connect(this.effectsGainNode);
+        } else gain.connect(this.effectsGainNode);
 
         source.onended = () => {
             source.disconnect();
             gain.disconnect();
-            panner.disconnect();
+            if (panner) panner.disconnect();
         };
 
         source.start(0);
@@ -680,9 +750,6 @@ class AudioManager implements IEngineComponent<GameManager> {
         return results;
     }
 
-    public get activeAmbientSoundIds(): Set<string> {
-        return new Set(this.activeAmbientSounds.keys());
-    }
 }
 
 export default AudioManager;

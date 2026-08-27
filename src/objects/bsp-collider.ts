@@ -2,7 +2,7 @@ import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { Box3, Quaternion, Vector3 } from "three";
 import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import { GameObject } from "@client/game/components";
-import { ColliderComponent } from "@client/physics/physics-component";
+import { ColliderComponent } from "@client/physics/components/physics-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -21,7 +21,7 @@ class BSPCollider extends GameObject implements ICollidable {
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
     protected readonly analyticalHulls: CollisionHull_T[] = [];
     protected readonly analyticalBounds = new Box3();
-    protected readonly analyticalPrimitive: CollisionPrimitive_T;
+    protected readonly analyticalPrimitive: CollisionPrimitive_T<"bsp">;
     protected readonly colliders: RAPIER.Collider[] = [];
     protected rigidbody: RAPIER.RigidBody = null;
 

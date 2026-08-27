@@ -1,12 +1,13 @@
 import { Vector2, Vector3 } from "three";
-import { IObject } from "@client/game/components";
-import { PhysicsComponent } from "@client/physics/physics-component";
-import { encompassesVolume, findVolumeTransition } from "@client/physics/volume-bsp";
-import WaterHitEffect from "@client/rendering/water-hit-effect";
-import type PhysicsManager from "@client/physics/physics-manager";
-import type Player from "@client/player";
-import type RenderManager from "@client/rendering/render-manager";
-import type { SectorObject } from "@client/objects/zone-object";
+import { IObject } from "../../game/components";
+import { PhysicsComponent } from "./physics-component";
+import { encompassesVolume, findVolumeTransition } from "../volume-bsp";
+import UnderWaterEffect from "../../rendering/under-water-effect";
+import WaterHitEffect from "../../rendering/water-hit-effect";
+import type PhysicsManager from "../../physics/physics-manager";
+import type Player from "../../player";
+import type RenderManager from "../../rendering/render-manager";
+import type { SectorObject } from "../../objects/zone-object";
 
 const tmpWaterSurfaceEnd = new Vector3();
 const tmpWaterFloorStart = new Vector3();
@@ -24,6 +25,7 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     protected static readonly WATER_HIT_MIN_SURFACE_HEIGHT = 0.85;
 
     public readonly componentName = "waterEffects";
+    public readonly underWaterEffect = new UnderWaterEffect();
 
     protected renderManager: RenderManager = null;
     protected waterHitEffect: WaterHitEffect = null;
@@ -165,7 +167,7 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     }
 
     protected updateUnderWaterSunBeam(): void {
-        const effect = this.renderManager.underWaterEffect;
+        const effect = this.underWaterEffect;
         const volume = effect.getVolume();
 
         if (!effect.visible || !effect.hasSunBeamEffects()) return;
