@@ -1,9 +1,9 @@
 import { FMipmap } from "./un-mipmap";
-import decompressDDS from "../dds/dds-decode";
+import decompressDDS from "./dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "../../utils/typed-arrray-constructor";
+import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import UMaterial from "./un-material";
 import FArray from "@l2js/core/src/unreal/un-array";
 
@@ -303,8 +303,8 @@ abstract class UTexture extends UMaterial {
             buffer: decodedBuffer,
             width,
             height,
-            wrapS: this.wrapS,
-            wrapT: this.wrapT,
+            wrapS: this.wrapS === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
+            wrapT: this.wrapT === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
             useMipmaps: mipCount > 0,
             twoSided: this.isTwoSided,
             isMasked: this.isMasked,

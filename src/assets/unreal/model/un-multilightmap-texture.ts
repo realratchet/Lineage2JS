@@ -1,6 +1,6 @@
 import { generateUUID } from "three/src/math/MathUtils";
 import { BufferValue, UObject } from "@l2js/core";
-import decompressDDS from "../../dds/dds-decode";
+import decompressDDS from "../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
 import FArray, { FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 

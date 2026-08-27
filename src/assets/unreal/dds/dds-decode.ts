@@ -1,5 +1,5 @@
 import DDSHeader from "./dds-header";
-import { PixelFormatInfo, ETexturePixelFormat } from "@l2js/engine/un-tex-format";
+import { PixelFormatInfo, ETexturePixelFormat } from "../un-tex-format";
 
 function decodeDDS(format: ETexturePixelFormat, mipCount: number, texWidth: number, texHeight: number, data: Uint8Array): ArrayBuffer {
     const header = new DDSHeader();

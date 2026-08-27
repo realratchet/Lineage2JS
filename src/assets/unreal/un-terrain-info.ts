@@ -13,7 +13,7 @@ import FVector from "./un-vector";
 import { TextureMapAxis_T } from "./un-terrain-layer";
 import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
 import FPlane from "./un-plane";
-import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "../decoders/dxt-decode";
+import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dds/dxt-decode";
 
 type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
 

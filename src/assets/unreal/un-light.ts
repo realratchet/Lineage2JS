@@ -1,4 +1,4 @@
-import hsvToRgb, { saturationToBrightness } from "../../utils/hsv-to-rgb";
+import hsvToRgb, { saturationToBrightness } from "./utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
 import UAActor from "./un-aactor";
 import FVector from "./un-vector";

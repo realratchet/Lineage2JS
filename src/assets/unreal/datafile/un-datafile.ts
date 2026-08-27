@@ -1,4 +1,4 @@
-import fetchAssetHandle from "../../asset-handle";
+import fetchAssetHandle from "../asset-handle";
 import { ASCFType } from "./schema/dat-container";
 import { UEncodedFile, BufferValue } from "@l2js/core";
 

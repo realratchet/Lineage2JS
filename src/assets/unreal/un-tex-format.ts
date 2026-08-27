@@ -1,4 +1,4 @@
-import DDSConstants from "../dds/dds-constants";
+import DDSConstants from "./dds/dds-constants";
 
 enum ETextureFormat {
     TEXF_P8,

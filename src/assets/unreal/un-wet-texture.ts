@@ -1,6 +1,6 @@
 import { UObject } from "@l2js/core";
 import UTexture from "./un-texture";
-import { convertDDSTextureInfo } from "../decoders/dxt-decode";
+import { convertDDSTextureInfo } from "./dds/dxt-decode";
 
 // WetTexture: a WaterTexture whose simulated water field displaces SourceTexture
 // horizontally each tick. The simulation itself runs client side

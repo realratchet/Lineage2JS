@@ -1040,11 +1040,13 @@ declare global {
                 }
 
 
+                export type TextureClampMode_T = "wrap" | "clamp";
+
                 export interface ITextureDecodeInfo extends IBaseMaterialDecodeInfo {
                     materialType: "texture",
                     textureType: DecodableTexture_T,
                     buffer: ArrayBuffer,
-                    wrapS?: number, wrapT?: number,
+                    wrapS?: TextureClampMode_T, wrapT?: TextureClampMode_T,
                     width: number, height: number,
                     twoSided?: boolean,
                     isMasked?: boolean,

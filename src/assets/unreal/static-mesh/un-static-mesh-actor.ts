@@ -3,7 +3,7 @@ import { UObject } from "@l2js/core";
 import FVector from "../un-vector";
 import FBox from "../un-box";
 import FColor from "../un-color";
-import cyrb53 from "../../../utils/hash-cyrb";
+import cyrb53 from "../utils/hash-cyrb";
 
 type StaticMeshActorDecodeResult_T = { object: GD.IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
 

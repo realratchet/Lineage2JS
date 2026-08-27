@@ -1,7 +1,7 @@
 import UObject from "@l2js/core";
 import FBox from "./un-box";
 import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "../../utils/typed-arrray-constructor";
+import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "./un-vector";
 import { ETerrainRenderMethod_T } from "./un-terrain-info";

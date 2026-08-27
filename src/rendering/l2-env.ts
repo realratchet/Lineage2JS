@@ -1,6 +1,6 @@
 import EnvColor, { TimeColor, TimeHSV, TimeScale } from "./env-color";
 import { Color, MathUtils } from "three";
-import hsvToRgb from "../utils/hsv-to-rgb";
+import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
 

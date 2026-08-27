@@ -3,7 +3,7 @@ import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
 import UDataFile from "@l2js/engine/datafile/un-datafile";
 import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "../decoders/batch-data";
-import { convertDDSMaterialsToRGBA } from "../decoders/dxt-decode";
+import { convertDDSMaterialsToRGBA } from "@l2js/engine/dds/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";

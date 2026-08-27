@@ -1,50 +1,11 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
 import buildTriangleIndex from "../../physics/triangle-index";
+import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T } from "@l2js/engine/static-mesh-batch";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),
 // object-batching.ts instantiates CollidingMesh objects from the manifest on the main thread
-
-type BatchElementGroup_T = {
-    start: number;
-    count: number;
-    materialIndex: number;
-}
-
-type BatchElement_T = {
-    uuid: string;
-    boundsMin: number[];
-    boundsMax: number[];
-    groups: BatchElementGroup_T[];
-    zoneMask: bigint;
-    isRangeIgnored: boolean;
-    leaves: number[] | null; // bsp leaves holding the actor, for per-element pvs culling
-}
-
-type BatchLightEntry_T = {
-    light: string;
-    flags: Uint8Array;
-    vertexRangeStart?: number;
-    vertexRangeEnd?: number;
-}
-
-type StaticMeshBatchInfo_T = {
-    uuid: string;
-    name: string;
-    geometry: string; // key into library.geometries
-    materials: string;
-    actors: GD.IStaticMeshActorDecodeInfo[];
-    colliderIndices: Uint32Array | null;
-    lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
-    perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[];
-    batchElements: BatchElement_T[];
-}
-
-type StaticMeshBatchManifest_T = {
-    batches: StaticMeshBatchInfo_T[];
-    unbatchable: GD.IStaticMeshActorDecodeInfo[];
-}
 
 type ColorTypedArray_T = Float32Array | Uint8Array | Uint8ClampedArray;
 
@@ -643,4 +604,3 @@ function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchMan
 
 export default buildStaticMeshBatchData;
 export { buildStaticMeshBatchData };
-export type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T };

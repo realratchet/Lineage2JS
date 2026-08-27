@@ -1,7 +1,7 @@
 import { SectorObject } from "./zone-object";
 import type { L2Environment } from "../rendering/l2-env";
 import { Color, Object3D, Vector3 } from "three";
-import hsvToRgb from "../utils/hsv-to-rgb";
+import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import ColorByte from "../utils/color-byte";
 
 const tmpVec3_1 = new Vector3();

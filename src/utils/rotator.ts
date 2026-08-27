@@ -1,5 +1,5 @@
 import { Quaternion } from "three";
-import { getRotatorQuaternionElements } from "@l2js/engine/un-rotator";
+import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 
 class Rotator {
     public pitch: number;

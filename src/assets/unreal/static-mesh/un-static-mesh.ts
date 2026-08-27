@@ -9,8 +9,8 @@ import { BufferValue, UObject } from "@l2js/core";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
-import getTypedArrayConstructor from "../../../utils/typed-arrray-constructor";
-import StringSet from "../../../utils/string-set";
+import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
+import StringSet from "../utils/string-set";
 import FArray, { FArrayLazy } from "@l2js/core/src/unreal/un-array";
 
 type StaticMeshDecodeResult_T = { object: GD.IStaticMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, materials: [string, GD.IBaseMaterialDecodeInfo][], colorMaterials: string[] };

@@ -57,7 +57,7 @@ import * as NEnv from "./un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
-import { fetchAssetHandle } from "../asset-handle";
+import { fetchAssetHandle } from "./asset-handle";
 import UPawn from "./un-pawn";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";

@@ -1,4 +1,4 @@
-import fetchAssetHandle from "../../asset-handle";
+import fetchAssetHandle from "../asset-handle";
 import { UEncodedFile } from "@l2js/core";
 
 let decoder: TextDecoder = null;

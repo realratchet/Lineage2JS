@@ -1,3 +1,5 @@
+import type { StaticMeshBatchManifest_T } from "./static-mesh-batch";
+
 class DecodeLibrary {
     public name: string = "Untitled";
     public brightness: number = 1.0;
@@ -53,7 +55,7 @@ class DecodeLibrary {
         staticMeshes: boolean
     } = { terrain: true, staticMeshes: true };
 
-    public staticMeshBatches?: import("../decoders/batch-data").StaticMeshBatchManifest_T; // precomputed batch manifest (decode worker or lazy sync build); merged geometries live in `geometries`
+    public staticMeshBatches?: StaticMeshBatchManifest_T; // precomputed batch manifest (decode worker or lazy sync build); merged geometries live in `geometries`
 
     public failed: any[] = [];
     public readonly exportedActors = new Set<string>(); // UUIDs of actors that passed geographic filtering
