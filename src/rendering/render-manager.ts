@@ -32,6 +32,7 @@ import type WaterEffectsComponent from "../physics/components/water-effects-comp
 import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
+import type HairSimulationComponent from "../objects/components/hair-simulation-component";
 
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
@@ -230,6 +231,7 @@ class RenderManager implements IEngineComponent<GameManager> {
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
+    protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
     protected lastRenderOrderSector: SectorObject | null = null;
@@ -534,6 +536,15 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getEnvironment(): L2Environment { return this.environment; }
+
+    public debugPrintCamera(): void {
+        const camera = this.camera, controls = this.inputManager.controls;
+
+        console.log([
+            `this.camera.position.set(${camera.position.toArray().join(",")});`,
+            `this.controls.orbit.target.set(${controls.orbit.target.toArray().join(",")});`
+        ].join("\n"));
+    }
 
     public takeScreenshot() {
         this.renderer.domElement.toBlob((blob) => {
@@ -1000,6 +1011,8 @@ class RenderManager implements IEngineComponent<GameManager> {
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
     public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
+    public registerHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.add(component); }
+    public unregisterHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.delete(component); }
 
     protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
         for (const component of this.pawnRenderables)
@@ -1675,6 +1688,8 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;
 
+        for (const simulation of this.hairSimulations) simulation.restorePose();
+
         this.isUpdatingMixer = true;
         try {
             this.mixer.update(deltaTime / 1000);
@@ -1682,6 +1697,8 @@ class RenderManager implements IEngineComponent<GameManager> {
             this.isUpdatingMixer = false;
             this.runDeferredMixerOperations();
         }
+
+        for (const simulation of this.hairSimulations) simulation.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
 

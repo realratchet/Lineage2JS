@@ -1,107 +1,78 @@
-import { Bone, Mesh, Quaternion, Vector3 } from "three";
+import { Mesh, SkinnedMesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { MESHES_CHANGED_EVENT } from "./animation-component";
-import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
+import PawnMovementComponent, { PAWN_TELEPORTED_EVENT } from "../../physics/components/pawn-movement-component";
+import DynamicHairSimulation from "../dynamic-hair-simulation";
 import type BaseActor from "../../base-actor";
-
-const HAIR_STEP = 1 / 60; // Local fixed step; retail DynamicHairGetFrame 0x94f010 only supplies bone coordinates.
-const HAIR_SPRING = 32;
-const HAIR_DAMPING = 8;
-const HAIR_MAX_ANGLE = 0.24;
-const tmpVelocity = new Vector3();
-const tmpRotationX = new Quaternion();
-const tmpRotationY = new Quaternion();
-const tmpAxisX = new Vector3(1, 0, 0);
-const tmpAxisY = new Vector3(0, 1, 0);
-const tmpUp = new Vector3(0, 0, 1);
+import type RenderManager from "../../rendering/render-manager";
+import type LitSkinnedMesh from "../lit-skinned-mesh";
 
 class HairSimulationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "hairSimulation";
-    protected stepTime = 0;
-    protected readonly chains: HairChainState_T[] = [];
+    protected readonly renderManager: RenderManager;
+    protected readonly simulations: DynamicHairSimulation[] = [];
+    protected movementComponent: PawnMovementComponent = null;
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<void> {
-        if (type !== MESHES_CHANGED_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
+    public constructor(renderManager: RenderManager) {
+        super();
 
-        this.setMeshes(data as Mesh[]);
+        this.renderManager = renderManager;
     }
 
-    public onUpdate(currentTime: number, deltaTime: number): void {
-        if (this.chains.length === 0) return;
+    public onAttach(): void {
+        this.movementComponent = this.getComponent<PawnMovementComponent>("pawnMovement");
+        this.renderManager.registerHairSimulation(this);
+    }
 
-        const parent = this.getParent();
-        const movement = this.getComponent<PawnMovementComponent>("pawnMovement");
+    public onDetach(): void {
+        this.restorePose();
+        this.renderManager.unregisterHairSimulation(this);
+        this.simulations.length = 0;
+    }
 
-        this.stepTime += Math.min(deltaTime, 0.2);
-        tmpVelocity.copy(movement.getVelocity()).applyAxisAngle(tmpUp, -parent.rotation.z);
-        currentTime *= 0.001;
-
-        while (this.stepTime >= HAIR_STEP) {
-            for (const chain of this.chains) {
-                const targetX = clampHairAngle(-tmpVelocity.x * 0.002 + Math.sin(currentTime * 1.7 + chain.phase) * 0.035);
-                const targetY = clampHairAngle(-tmpVelocity.y * 0.002 + Math.sin(currentTime * 1.3 + chain.phase * 0.7) * 0.025);
-
-                chain.velocityX += ((targetX - chain.angleX) * HAIR_SPRING - chain.velocityX * HAIR_DAMPING) * HAIR_STEP;
-                chain.velocityY += ((targetY - chain.angleY) * HAIR_SPRING - chain.velocityY * HAIR_DAMPING) * HAIR_STEP;
-                chain.angleX += chain.velocityX * HAIR_STEP;
-                chain.angleY += chain.velocityY * HAIR_STEP;
-            }
-
-            this.stepTime -= HAIR_STEP;
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<void> {
+        if (type === MESHES_CHANGED_EVENT) {
+            this.setMeshes(data as Mesh[]);
+            return;
         }
 
-        for (const chain of this.chains)
-            for (let i = 0, len = chain.bones.length; i < len; i++) {
-                const strength = (i + 1) / chain.bones.length;
+        if (type === PAWN_TELEPORTED_EVENT) {
+            for (const simulation of this.simulations) simulation.reset();
+            return;
+        }
 
-                tmpRotationX.setFromAxisAngle(tmpAxisX, chain.angleX * strength);
-                tmpRotationY.setFromAxisAngle(tmpAxisY, chain.angleY * strength);
-                chain.bones[i].quaternion.copy(chain.rest[i]).multiply(tmpRotationX).multiply(tmpRotationY);
-            }
+        return COMPONENT_EVENT_NOT_HANDLED;
+    }
+
+    public restorePose(): void {
+        for (const simulation of this.simulations) simulation.restorePose();
+    }
+
+    public update(deltaTime: number): void {
+        const action = this.getParent().getAnimationAction();
+        const animationName = action ? action.getClip().name : null;
+        const isMoving = this.movementComponent.getVelocity().lengthSq() > 0;
+
+        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, isMoving);
     }
 
     protected setMeshes(meshes: Mesh[]): void {
-        this.chains.length = 0;
-        this.stepTime = 0;
+        this.restorePose();
+        this.simulations.length = 0;
 
-        for (const mesh of meshes) {
-            const skeleton = (mesh as any).skeleton as THREE.Skeleton;
+        const parts = meshes.filter(mesh => (mesh as any).isSkinnedMesh) as SkinnedMesh[];
 
-            if (!skeleton) continue;
-            if (!/(?:^|_)(?:ah|bh)$/i.test(mesh.name)) continue;
+        for (const part of parts) {
+            const info = (part as LitSkinnedMesh).dynamicHairInfo;
 
-            const bones = skeleton.bones.filter(bone => /^hair/i.test(bone.name));
+            if (!info) continue;
 
-            if (bones.length === 0) continue;
+            const simulation = new DynamicHairSimulation(part, info);
 
-            this.chains.push({ bones, rest: bones.map(bone => bone.quaternion.clone()), angleX: 0, angleY: 0, velocityX: 0, velocityY: 0, phase: hashName(mesh.name) / 0xffffffff * Math.PI * 2 });
+            simulation.initialize(parts);
+            this.simulations.push(simulation);
         }
     }
-}
-
-type HairChainState_T = {
-    bones: Bone[];
-    rest: Quaternion[];
-    angleX: number;
-    angleY: number;
-    velocityX: number;
-    velocityY: number;
-    phase: number;
-};
-
-function hashName(name: string): number {
-    let hash = 2166136261;
-
-    for (let i = 0, len = name.length; i < len; i++) {
-        hash ^= name.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
-    }
-
-    return hash >>> 0;
-}
-
-function clampHairAngle(value: number): number {
-    return Math.max(-HAIR_MAX_ANGLE, Math.min(HAIR_MAX_ANGLE, value));
 }
 
 export default HairSimulationComponent;

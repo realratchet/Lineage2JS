@@ -144,15 +144,6 @@ class InputManager implements IEngineComponent<GameManager> {
         renderManager.updateCameraMatrices();
     }
 
-    public debugPrintCamera(): void {
-        const camera = this.renderManager.camera;
-
-        console.log([
-            `this.camera.position.set(${camera.position.x}, ${camera.position.y}, ${camera.position.z});`,
-            `this.controls.orbit.target.set(${this.controls.orbit.target.x}, ${this.controls.orbit.target.y}, ${this.controls.orbit.target.z});`
-        ].join("\n"));
-    }
-
     protected clearDirectionKeys(): void {
         this.dirKeys.left = false;
         this.dirKeys.right = false;

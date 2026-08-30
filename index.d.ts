@@ -456,6 +456,45 @@ declare global {
                     maxAngle: number
                 }
 
+                export interface IDynamicHairCollisionPlaneDecodeInfo {
+                    bone: string;
+                    distance: number;
+                }
+
+                export interface IDynamicHairCollisionSphereDecodeInfo {
+                    bone: string;
+                    offset: Vector3Arr;
+                    radius: number;
+                }
+
+                export interface IDynamicHairActionDecodeInfo {
+                    name: string;
+                    initial: boolean;
+                    initialOffset: Vector3Arr;
+                }
+
+                export interface IDynamicHairConfigDecodeInfo {
+                    section: string;
+                    structuralStiffness: number;
+                    structuralDamping: number;
+                    shearStiffness: number;
+                    shearDamping: number;
+                    gravity: Vector3Arr;
+                    velocityDamping: number;
+                    collisionResponse: number;
+                    safeFactor: number;
+                    drawCollisionObject: boolean;
+                    planes: IDynamicHairCollisionPlaneDecodeInfo[];
+                    spheres: IDynamicHairCollisionSphereDecodeInfo[];
+                    actions: IDynamicHairActionDecodeInfo[];
+                    sphereIndices: number[];
+                }
+
+                export interface IDynamicHairDecodeInfo {
+                    type: number;
+                    config: IDynamicHairConfigDecodeInfo;
+                }
+
                 export interface ISkinnedMeshObjectDecodeInfo extends IBaseObjectDecodeInfo {
                     type: "SkinnedMesh";
                     geometry: string;
@@ -470,6 +509,8 @@ declare global {
                     meshOrigin: Vector3Arr;
                     meshRotOrigin: Vector3Arr;
                     meshRotOriginQuaternion: QuaternionArr;
+                    boneSimulationType: number;
+                    dynamicHair?: IDynamicHairDecodeInfo;
                     scaledGlow?: number;
                     ambient?: {
                         glow: number,

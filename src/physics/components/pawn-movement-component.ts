@@ -74,6 +74,7 @@ const DEFAULT_VOLUME_TERMINAL_VELOCITY = 2500; // Engine.u PhysicsVolume default
 const WATERLINE_DEPTH = 13; // Retail APawn::findWaterLine 0x8d2959.
 // APawn::SpawnEnterEvent (0x8b47e0): rise moves 5/9 of its full offset per second.
 const ENTER_RISE_RATE = 5 / 9;
+const PAWN_TELEPORTED_EVENT = "pawnTeleported";
 
 class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public readonly componentName = "pawnMovement";
@@ -1105,6 +1106,7 @@ class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
         this.actorState.desired.swimToDepth = false;
+        this.dispatchEvent(PAWN_TELEPORTED_EVENT);
 
         if (this.rigidbody)
             this.rigidbody.setTranslation(tmpBodyPosition.set(position.x, position.y, position.z + this.collisionHeight), true);
@@ -1207,5 +1209,5 @@ function twoWallAdjust(desiredDir: Vector3, delta: Vector3, hitNormal: Vector3, 
 }
 
 export default PawnMovementComponent;
-export { PawnMovementComponent };
+export { PAWN_TELEPORTED_EVENT, PawnMovementComponent };
 export type { PawnMovementState_T };

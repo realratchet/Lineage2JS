@@ -14,6 +14,7 @@ import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
+import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {
@@ -30,6 +31,8 @@ type CharacterPartPaths_T = [string, string];
 type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null };
 type NpcBundleManifest_T = { actors: Record<number, NpcBundleEntry_T> };
 type CachedBundle_T = { library: DecodeLibrary, seekable?: DecodeCache.SeekableLibrary_T };
+
+const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
 
 function characterBundleCacheName(charIndex: number, name: string): string {
     return `character_${charIndex}_${name}`.replace(/[^\w.-]/g, "_");
@@ -304,6 +307,7 @@ class DecodeEngine {
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
     protected cacheSwimSoundConfig: SwimSoundConfig_T = null;
+    protected cacheHairConfig: UConfigHair = null;
 
     protected async sweepCache(settings: GD.LoadSettings_T): Promise<void> {
         if (this.hasSweptCache) return;
@@ -900,6 +904,8 @@ class DecodeEngine {
             library.pawnActors.push(meshInfo);
         }
 
+        await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
+
         if (library.pawnActors.length > 0) await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
@@ -981,11 +987,39 @@ class DecodeEngine {
             library.pawnActors.push(info);
         }
 
+        await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
+
         if (cached.seekable) await DecodeCache.hydrateLibraryFile(cached.seekable, library);
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
         return library;
+    }
+
+    protected async applyCharacterHairConfig(infos: GD.ISkinnedMeshObjectDecodeInfo[], meshPaths: string[]): Promise<void> {
+        if (!infos.some(info => dynamicHairTypes.has(info.boneSimulationType))) return;
+
+        const bodyPath = meshPaths.find(path => /_u$/i.test(splitObjectPath(path)[1]));
+
+        if (!bodyPath) throw new Error(`Character assembly has dynamic hair but no upper-body mesh.`);
+
+        if (!this.cacheHairConfig) {
+            const config = await new UConfigHair("assets/system/Hair.int").decode();
+
+            this.cacheHairConfig = config.load();
+        }
+
+        const bodyName = splitObjectPath(bodyPath)[1];
+
+        for (let i = 0, len = infos.length; i < len; i++) {
+            const info = infos[i];
+
+            if (!dynamicHairTypes.has(info.boneSimulationType)) continue;
+
+            const hairName = splitObjectPath(meshPaths[i])[1];
+
+            info.dynamicHair = { type: info.boneSimulationType, config: this.cacheHairConfig.getDecodeInfo(hairName, bodyName) };
+        }
     }
 
     protected async buildCharacterBundle(settings: GD.LoadSettings_T, charIndex: number): Promise<DecodeLibrary> {

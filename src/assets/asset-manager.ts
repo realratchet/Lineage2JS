@@ -133,7 +133,7 @@ function setPawnComponents(renderManager: RenderManager, library: GD.DecodeLibra
     sound.setLibrary(library);
     if (!actor.findComponent("effects")) actor.addComponent(new EffectsComponent(renderManager));
     if (!actor.findComponent("animation")) actor.addComponent(new AnimationComponent(renderManager));
-    if (!actor.findComponent("hairSimulation")) actor.addComponent(new HairSimulationComponent());
+    if (!actor.findComponent("hairSimulation")) actor.addComponent(new HairSimulationComponent(renderManager));
     if (!actor.findComponent("skinNotify")) actor.addComponent(new SkinNotifyComponent(renderManager));
     if (!actor.findComponent("transform")) actor.addComponent(new TransformComponent(renderManager));
     if (!actor.findComponent("npcLifecycle")) actor.addComponent(new NpcLifecycleComponent());

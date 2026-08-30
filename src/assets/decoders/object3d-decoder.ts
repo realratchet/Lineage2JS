@@ -843,6 +843,8 @@ function decodeSkinnedMesh(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObjec
     mesh.ambientGlow = info.ambient?.glow ?? 0;
     mesh.isUnlit = info.ambient?.isUnlit ?? false;
 
+    if (info.dynamicHair) mesh.dynamicHairInfo = info.dynamicHair;
+
     prepareSkinnedMaterials(materials, extendedBoneInfluences);
 
     mesh.position.fromArray(info.meshOrigin);

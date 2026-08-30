@@ -327,7 +327,7 @@ abstract class USkeletalMesh extends ULodMesh {
     protected vertexInfluences = new FArrayLazy(FVertexInfluence);
     protected collapseWedge = new FPrimitiveArrayLazy(BufferValue.uint16);
     protected rawFaceLevel = new FPrimitiveArrayLazy(BufferValue.uint16);
-    protected sk_unkVar1: number;
+    protected boneSimulationType: number;
     protected sk_unkArr11 = new FPrimitiveArray(BufferValue.uint32);
     protected sk_unkVar2: number;
 
@@ -367,7 +367,7 @@ abstract class USkeletalMesh extends ULodMesh {
             this.rawFaceLevel.load(pkg);
 
             if (verArchive >= 118 && verLicense >= 3)
-                this.sk_unkVar1 = pkg.read("uint32");
+                this.boneSimulationType = pkg.read("uint32");
 
             if (verArchive >= 123 && verLicense >= 18) {
                 this.sk_unkArr11.load(pkg);
@@ -548,7 +548,8 @@ abstract class USkeletalMesh extends ULodMesh {
                 meshScale: this.meshScale.getElements(),
                 meshOrigin: this.meshOrigin.getElements(),
                 meshRotOrigin: this.meshRotOrigin.toArray(),
-                meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements()
+                meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements(),
+                boneSimulationType: this.boneSimulationType || 0
             } as GD.ISkinnedMeshObjectDecodeInfo,
             geometry: geometryInfo,
             material: materialInfo

@@ -12,6 +12,7 @@ class LitSkinnedMesh extends SkinnedMesh {
     public scaledGlow: number = 1;
     public ambientGlow: number = 0;
     public isUnlit: boolean = false;
+    public dynamicHairInfo: GD.IDynamicHairDecodeInfo = null;
 
     public constructor(geometry: BufferGeometry, material: Material | Material[]) {
         super(geometry, material);
