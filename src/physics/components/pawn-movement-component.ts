@@ -1055,6 +1055,8 @@ class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public isIdle(): boolean { return this.actorState.state === "idle"; }
+    public isDying(): boolean { return this.actorState.state === "dying"; }
+    public isRunning(): boolean { return this.actorState.state === "running"; }
     public isLocomoting(): boolean { return this.actorState.locomotion; }
     public isWalkingMovement(): boolean { return this.isWalking; }
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }

@@ -49,11 +49,21 @@ class HairSimulationComponent extends ObjectComponent<BaseActor> {
     }
 
     public update(deltaTime: number): void {
-        const action = this.getParent().getAnimationAction();
-        const animationName = action ? action.getClip().name : null;
+        const parent = this.getParent();
+        const action = parent.getAnimationAction();
+        const clip = action ? action.getClip() : null;
+        const animationName = clip ? clip.name : null;
+        const animationFrame = action && clip.duration > 0 ? action.time / clip.duration : 0;
+        const lowerName = animationName ? animationName.toLowerCase() : "";
+        const weaponType = Number(parent.getUnrealScriptProperty("CurWeaponType")) || 0;
+        const attackEffectFrame = clip ? Number((clip as any).attackEffectFrame) || 0 : 0;
+        const attackEndEffectFrame = clip ? Number((clip as any).attackEndEffectFrame) || 0 : 0;
         const isMoving = this.movementComponent.getVelocity().lengthSq() > 0;
+        const isDying = this.movementComponent.isDying();
+        const isBowRunning = weaponType === 5 && this.movementComponent.isRunning();
+        const isSpecialAttack = lowerName.startsWith("spatk01_") || lowerName.startsWith("spatk02_");
 
-        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, isMoving);
+        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, animationFrame, 0, attackEffectFrame, attackEndEffectFrame, isMoving, isDying, isBowRunning, isSpecialAttack);
     }
 
     protected setMeshes(meshes: Mesh[]): void {

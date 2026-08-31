@@ -1,7 +1,7 @@
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
-import UConfigWarrior from "@l2js/engine/conf-files/un-conf-warrior";
-import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import type { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
+import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
 import { UnProperties } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
@@ -9,7 +9,6 @@ import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
 import decodeEnv from "./decoders/env-decoder";
 import DecodeWorkerClient from "./decode-worker/decode-worker-client";
-import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
 import { AnimationClip, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM from "../ue-script/vm";
@@ -153,11 +152,9 @@ class AssetManager implements IEngineComponent<GameManager> {
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
     protected readonly levelSectors = new Set<string>();
-    protected readonly localizationFiles = new Map<string, string>();
     protected preferCompressedTextures = false;
     public userConfig: GA.IUserConfig = null;
-    protected warriorConfig: UConfigWarrior = null;
-    protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
+    protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
     protected charGroups: GD.ICharacterGroup[] = null;
     protected effectLibrary: GD.DecodeLibrary = null;
     protected readonly decodeWorkerPoolSize: number;
@@ -183,8 +180,6 @@ class AssetManager implements IEngineComponent<GameManager> {
             this.levelSectors.add(path.slice(path.lastIndexOf("/") + 1, -".unr".length));
         }
 
-        for (const path of assetList.unsupported)
-            if (path.toLowerCase().endsWith(".int")) this.localizationFiles.set(path.toLowerCase(), path);
     }
 
     public hasSector(sectorIdx: string): boolean {
@@ -201,16 +196,15 @@ class AssetManager implements IEngineComponent<GameManager> {
 
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
-        this.userConfig = await getUserConfig();
-
         this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
-        const warriorConfig = await new UConfigWarrior("assets/system/lineagewarrior.int").decode();
+        const [clientConfig, charGroups] = await Promise.all([this.decodeWorker.getClientConfig(), this.decodeWorker.getCharGroups()]);
 
-        this.warriorConfig = await warriorConfig.load();
-        this.charGroups = await this.decodeWorker.getCharGroups();
+        this.userConfig = clientConfig.userConfig;
+        this.warriorAnimations = clientConfig.warriorAnimations;
+        this.charGroups = charGroups;
 
         const envInfo = await this.decodeWorker.decodeEnv();
         const musicInfo = await this.decodeWorker.getMusicInfo();
@@ -282,7 +276,10 @@ class AssetManager implements IEngineComponent<GameManager> {
         shareSkeletons(bodyparts);
         attachLooseBoneChains(bodyparts);
 
-        const declared = this.warriorConfig.getAnimations(this.getClassName(charIndex));
+        const className = this.getClassName(charIndex).toLowerCase();
+        const declared = this.warriorAnimations[className];
+
+        if (!declared) throw new Error(`'assets/system/lineagewarrior.int' has no '${className}' class.`);
 
         setPawnComponents(renderManager, characterLibrary, player);
         player.setAnimations(animations);
@@ -378,25 +375,7 @@ class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected async getScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
-        const separator = scriptClassPath.indexOf(".");
-
-        if (separator < 1 || separator === scriptClassPath.length - 1) throw new Error(`Invalid UnrealScript class path '${scriptClassPath}'.`);
-
-        const packageName = scriptClassPath.slice(0, separator).toLowerCase();
-        const className = scriptClassPath.slice(separator + 1);
-        const path = this.localizationFiles.get(`system/${packageName}.int`);
-
-        if (!path) return [];
-
-        let config = this.scriptLocalizations.get(packageName);
-
-        if (!config) {
-            config = await new UConfigLocalization(`assets/${path}`).decode();
-            await config.load();
-            this.scriptLocalizations.set(packageName, config);
-        }
-
-        return config.getProperties(className);
+        return this.decodeWorker.getScriptLocalization(scriptClassPath);
     }
 
     public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null): Promise<BaseActor> {

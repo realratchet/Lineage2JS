@@ -1,3 +1,6 @@
+import type { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
+import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+
 type InitMessage_T = {
     type: "init";
 }
@@ -109,7 +112,18 @@ type MusicInfoMessage_T = {
     requestId: number;
 }
 
-type MainToWorkerMessage_T = InitMessage_T | DecodeMessage_T | PrecacheMessage_T | FreeMessage_T | DecodeEnvMessage_T | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | DecodeEffectTemplatesMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | ListNpcsMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage_T;
+type ClientConfigMessage_T = {
+    type: "clientConfig";
+    requestId: number;
+}
+
+type ScriptLocalizationMessage_T = {
+    type: "scriptLocalization";
+    requestId: number;
+    scriptClassPath: string;
+}
+
+type MainToWorkerMessage_T = InitMessage_T | DecodeMessage_T | PrecacheMessage_T | FreeMessage_T | DecodeEnvMessage_T | DecodeCharacterMessage_T | DecodeSkeletalMeshMessage_T | DecodeEffectTemplatesMessage_T | CharGroupsMessage_T | ResolveNpcMessage_T | ListNpcsMessage_T | PrecacheCharactersMessage_T | MusicInfoMessage_T | ClientConfigMessage_T | ScriptLocalizationMessage_T;
 
 type ReadyMessage_T = {
     type: "ready";
@@ -153,6 +167,23 @@ type MusicInfoDecodedMessage_T = {
     music: Record<number, string[]>; // music id -> package paths
 }
 
-type WorkerToMainMessage_T = ReadyMessage_T | InitErrorMessage_T | DecodedMessage_T | PrecachedMessage_T | DecodeErrorMessage_T | EnvDecodedMessage_T | CharGroupsDecodedMessage_T | NpcResolvedMessage_T | NpcsListedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage_T;
+type ClientConfig_T = {
+    userConfig: GA.IUserConfig;
+    warriorAnimations: Record<string, WarriorAnimations_T>;
+}
 
-export type { MainToWorkerMessage_T, WorkerToMainMessage_T, InitMessage_T, DecodeMessage_T, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage_T, DecodeEnvMessage_T, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, DecodeEffectTemplatesMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, ListNpcsMessage_T, NpcResolvedMessage_T, NpcsListedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage_T, ReadyMessage_T, InitErrorMessage_T, DecodedMessage_T, DecodeErrorMessage_T, EnvDecodedMessage_T, MusicInfoDecodedMessage_T };
+type ClientConfigDecodedMessage_T = {
+    type: "clientConfigDecoded";
+    requestId: number;
+    config: ClientConfig_T;
+}
+
+type ScriptLocalizationDecodedMessage_T = {
+    type: "scriptLocalizationDecoded";
+    requestId: number;
+    properties: LocalizationProperty_T[];
+}
+
+type WorkerToMainMessage_T = ReadyMessage_T | InitErrorMessage_T | DecodedMessage_T | PrecachedMessage_T | DecodeErrorMessage_T | EnvDecodedMessage_T | CharGroupsDecodedMessage_T | NpcResolvedMessage_T | NpcsListedMessage_T | CharactersPrecachedMessage_T | MusicInfoDecodedMessage_T | ClientConfigDecodedMessage_T | ScriptLocalizationDecodedMessage_T;
+
+export type { MainToWorkerMessage_T, WorkerToMainMessage_T, InitMessage_T, DecodeMessage_T, PrecacheMessage_T, PrecacheResult_T, PrecachedMessage_T, FreeMessage_T, DecodeEnvMessage_T, DecodeCharacterMessage_T, DecodeSkeletalMeshMessage_T, DecodeEffectTemplatesMessage_T, CharGroupsMessage_T, CharGroupsDecodedMessage_T, ResolveNpcMessage_T, ListNpcsMessage_T, NpcResolvedMessage_T, NpcsListedMessage_T, PrecacheCharactersMessage_T, CharactersPrecachedMessage_T, MusicInfoMessage_T, ClientConfigMessage_T, ScriptLocalizationMessage_T, ReadyMessage_T, InitErrorMessage_T, DecodedMessage_T, DecodeErrorMessage_T, EnvDecodedMessage_T, MusicInfoDecodedMessage_T, ClientConfig_T, ClientConfigDecodedMessage_T, ScriptLocalizationDecodedMessage_T };

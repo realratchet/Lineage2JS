@@ -106,7 +106,8 @@ function parseSection(section: string, lines: string[]): GD.IDynamicHairConfigDe
         actions[i] = {
             name: take(values, section, `ActionName${index}`),
             initial: takeBoolean(values, section, `ActionInitFlag${index}`),
-            initialOffset: takeVector(values, section, `ActionInitOffset${index}`)
+            initialOffset: takeVector(values, section, `ActionInitOffset${index}`),
+            sphereIndices: []
         };
     }
 
@@ -121,9 +122,11 @@ function parseSection(section: string, lines: string[]): GD.IDynamicHairConfigDe
         sphereIndices[i] = index;
     }
 
+    for (const action of actions) action.sphereIndices = sphereIndices.slice();
+
     if (values.size > 0) throw new Error(`'[${section}]' has unconsumed key '${values.keys().next().value}'.`);
 
-    return { section, structuralStiffness, structuralDamping, shearStiffness, shearDamping, gravity, velocityDamping, collisionResponse, safeFactor, drawCollisionObject, planes, spheres, actions, sphereIndices };
+    return { section, structuralStiffness, structuralDamping, shearStiffness, shearDamping, gravity, velocityDamping, collisionResponse, safeFactor, drawCollisionObject, planes, spheres, actions };
 }
 
 class UConfigHair extends BaseConfigFile {
@@ -181,4 +184,3 @@ class UConfigHair extends BaseConfigFile {
 
 export default UConfigHair;
 export { UConfigHair };
-

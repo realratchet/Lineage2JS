@@ -471,6 +471,7 @@ declare global {
                     name: string;
                     initial: boolean;
                     initialOffset: Vector3Arr;
+                    sphereIndices: number[];
                 }
 
                 export interface IDynamicHairConfigDecodeInfo {
@@ -487,7 +488,11 @@ declare global {
                     planes: IDynamicHairCollisionPlaneDecodeInfo[];
                     spheres: IDynamicHairCollisionSphereDecodeInfo[];
                     actions: IDynamicHairActionDecodeInfo[];
-                    sphereIndices: number[];
+                }
+
+                export interface IAnimationSequenceDecodeInfo {
+                    attackEffectFrame: number;
+                    attackEndEffectFrame: number;
                 }
 
                 export interface IDynamicHairDecodeInfo {
@@ -501,6 +506,7 @@ declare global {
                     materials?: string;
                     skeleton: IBoneDecodeInfo[];
                     animations: Record<string, IKeyframeDecodeInfo_T[]>;
+                    animationSequences: Record<string, IAnimationSequenceDecodeInfo>;
                     animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>;
                     skinNotifies: Record<string, ISkinNotifyDecodeInfo>;
                     skinMaterials?: Record<number, string>;

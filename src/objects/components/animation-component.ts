@@ -29,6 +29,8 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
 
     (once as any).animationNotifies = (clip as any).animationNotifies;
     (once as any).skinNotify = (clip as any).skinNotify;
+    (once as any).attackEffectFrame = (clip as any).attackEffectFrame;
+    (once as any).attackEndEffectFrame = (clip as any).attackEndEffectFrame;
     cacheOnceAnimations.set(clip, once);
 
     return once;

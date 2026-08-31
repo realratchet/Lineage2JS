@@ -15,12 +15,16 @@ import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
+import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
+import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {
     name: string;
     animationSet: string;
     animations: Record<string, GD.IKeyframeDecodeInfo_T[]>;
+    animationSequences: Record<string, GD.IAnimationSequenceDecodeInfo>;
     animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]>;
     skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>;
     meshes: Record<string, string>;
@@ -308,6 +312,8 @@ class DecodeEngine {
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
     protected cacheSwimSoundConfig: SwimSoundConfig_T = null;
     protected cacheHairConfig: UConfigHair = null;
+    protected readonly localizationFiles = new Map<string, string>();
+    protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
 
     protected async sweepCache(settings: GD.LoadSettings_T): Promise<void> {
         if (this.hasSweptCache) return;
@@ -319,6 +325,9 @@ class DecodeEngine {
     public async initialize(): Promise<void> {
         const assetList = await (await fetch("asset-list.json")).json();
 
+        for (const path of assetList.unsupported)
+            if (path.toLowerCase().endsWith(".int")) this.localizationFiles.set(path.toLowerCase(), path);
+
         this.assetLoader = await AssetLoader.Instantiate(assetList.supported);
 
         await this.assetLoader.using(this.assetLoader.getNativePackage(), { neverUnload: true });
@@ -326,6 +335,42 @@ class DecodeEngine {
         await this.assetLoader.using(this.assetLoader.getEnginePackage(), { neverUnload: true });
 
         pkgCore.loadNativeClasses();
+    }
+
+    public async decodeClientConfig(): Promise<{ userConfig: GA.IUserConfig, warriorAnimations: Record<string, WarriorAnimations_T> }> {
+        const [userConfig, warriorFile] = await Promise.all([
+            getUserConfig(),
+            new UConfigWarrior("assets/system/lineagewarrior.int").decode()
+        ]);
+        const warriorConfig = await warriorFile.load();
+        const warriorAnimations: Record<string, WarriorAnimations_T> = {};
+
+        for (const className of warriorConfig.getClassNames())
+            warriorAnimations[className] = warriorConfig.getAnimations(className);
+
+        return { userConfig, warriorAnimations };
+    }
+
+    public async decodeScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
+        const separator = scriptClassPath.indexOf(".");
+
+        if (separator < 1 || separator === scriptClassPath.length - 1) throw new Error(`Invalid UnrealScript class path '${scriptClassPath}'.`);
+
+        const packageName = scriptClassPath.slice(0, separator).toLowerCase();
+        const className = scriptClassPath.slice(separator + 1);
+        const path = this.localizationFiles.get(`system/${packageName}.int`);
+
+        if (!path) return [];
+
+        let config = this.scriptLocalizations.get(packageName);
+
+        if (!config) {
+            config = await new UConfigLocalization(`assets/${path}`).decode();
+            await config.load();
+            this.scriptLocalizations.set(packageName, config);
+        }
+
+        return config.getProperties(className);
     }
 
     protected collectPackageBuffers(): Set<ArrayBuffer> {
@@ -785,6 +830,7 @@ class DecodeEngine {
             materials: entry.materials,
             scriptClassId: entry.scriptClassId,
             animations: includeAnimations ? sourceInfo.animations : {},
+            animationSequences: includeAnimations ? sourceInfo.animationSequences : {},
             animationNotifies: includeAnimations ? sourceInfo.animationNotifies : {}
         });
         const library = new DecodeLibrary();
@@ -893,6 +939,7 @@ class DecodeEngine {
 
             material.materials = [textureUuid];
             meshInfo.animations = i === 0 && includeAnimations ? meshInfo.animations : {};
+            meshInfo.animationSequences = i === 0 && includeAnimations ? meshInfo.animationSequences : {};
             meshInfo.animationNotifies = i === 0 && includeAnimations ? meshInfo.animationNotifies : {};
 
             if (i === 0)
@@ -966,6 +1013,7 @@ class DecodeEngine {
             copyCharacterMaterial(library, bundle, textureUuid);
 
             info.animations = i === 0 && includeAnimations ? manifest.animations : {};
+            info.animationSequences = i === 0 && includeAnimations ? manifest.animationSequences : {};
             info.animationNotifies = i === 0 && includeAnimations ? manifest.animationNotifies : {};
 
             if (i === 0) {
@@ -1044,7 +1092,7 @@ class DecodeEngine {
 
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as GD.LoadSettings_T);
-        const manifest: CharacterBundle_T = { name, animationSet: cacheName, animations: {}, animationNotifies: {}, skinNotifies: {}, meshes: {}, materials: {} };
+        const manifest: CharacterBundle_T = { name, animationSet: cacheName, animations: {}, animationSequences: {}, animationNotifies: {}, skinNotifies: {}, meshes: {}, materials: {} };
         const faceMesh = row.face_mesh[0] as string;
 
         library.name = name;
@@ -1055,11 +1103,13 @@ class DecodeEngine {
 
             if (path === faceMesh) {
                 manifest.animations = info.animations;
+                manifest.animationSequences = info.animationSequences;
                 manifest.animationNotifies = info.animationNotifies;
                 manifest.skinNotifies = info.skinNotifies;
             }
 
             info.animations = {};
+            info.animationSequences = {};
             info.animationNotifies = {};
             info.skinNotifies = {};
             manifest.meshes[path] = info.uuid;

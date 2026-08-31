@@ -770,7 +770,7 @@ function decodeBones(library: GD.DecodeLibrary, infos: GD.IBoneDecodeInfo[]): Bo
     return bones;
 }
 
-function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], notifications: GD.IAnimationNotifyDecodeInfo[], skinNotify: GD.ISkinNotifyDecodeInfo) {
+function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], sequence: GD.IAnimationSequenceDecodeInfo, notifications: GD.IAnimationNotifyDecodeInfo[], skinNotify: GD.ISkinNotifyDecodeInfo) {
     const tracks = info.map(info => {
         let KeyframeTrackConstructor: typeof KeyframeTrack;
 
@@ -784,6 +784,8 @@ function decodeAnimation(library: GD.DecodeLibrary, name: string, info: IKeyfram
 
     const clip = new AnimationClip(name, -1, tracks);
 
+    (clip as any).attackEffectFrame = sequence.attackEffectFrame;
+    (clip as any).attackEndEffectFrame = sequence.attackEndEffectFrame;
     (clip as any).animationNotifies = notifications;
     (clip as any).skinNotify = skinNotify;
 
@@ -798,7 +800,7 @@ function decodeAnimations(library: GD.DecodeLibrary, info: GD.ISkinnedMeshObject
         throw new Error(`Animation set '${info.animationSet}' has not been decoded.`);
 
     const animations = Object.keys(info.animations).reduce((acc, k) => {
-        acc[k] = decodeAnimation(library, k, info.animations[k], info.animationNotifies[k] || [], info.skinNotifies[k]);
+        acc[k] = decodeAnimation(library, k, info.animations[k], info.animationSequences[k], info.animationNotifies[k] || [], info.skinNotifies[k]);
 
         return acc;
     }, {} as Record<string, AnimationClip>);

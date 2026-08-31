@@ -141,6 +141,24 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "clientConfig": {
+            try {
+                post({ type: "clientConfigDecoded", requestId: msg.requestId, config: await engine.decodeClientConfig() });
+            } catch (e) {
+                console.error("[decode-worker] failed to decode client config:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
+            }
+            break;
+        }
+        case "scriptLocalization": {
+            try {
+                post({ type: "scriptLocalizationDecoded", requestId: msg.requestId, properties: await engine.decodeScriptLocalization(msg.scriptClassPath) });
+            } catch (e) {
+                console.error(`[decode-worker] failed to decode script localization '${msg.scriptClassPath}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
+            }
+            break;
+        }
     }
 }
 

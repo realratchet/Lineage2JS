@@ -423,6 +423,7 @@ abstract class USkeletalMesh extends ULodMesh {
     
 
         const animations: Record<string, GD.IKeyframeDecodeInfo_T[]> = {};
+        const animationSequences: Record<string, GD.IAnimationSequenceDecodeInfo> = {};
         const animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]> = {};
         const skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo> = {};
 
@@ -450,6 +451,11 @@ abstract class USkeletalMesh extends ULodMesh {
             for (let k = 0, animCount = this.animation.sequences.getElemCount(); k < animCount; k++) {
                 const sequence = this.animation.sequences.getElem(k);
                 const animName = sequence.name;
+
+                animationSequences[animName] = {
+                    attackEffectFrame: sequence.frameCount > 0 ? sequence.unkVar0 / sequence.frameCount : 0,
+                    attackEndEffectFrame: sequence.frameCount > 0 ? sequence.unkVar1 / sequence.frameCount : 0
+                };
 
                 if (decodeAnimationNotifies)
                     animationNotifies[animName] = this.animation.getSequenceNotifies(builder, sequence);
@@ -543,6 +549,7 @@ abstract class USkeletalMesh extends ULodMesh {
                 materials: this.uuid,
                 skeleton,
                 animations,
+                animationSequences,
                 animationNotifies,
                 skinNotifies,
                 meshScale: this.meshScale.getElements(),

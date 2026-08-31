@@ -1,5 +1,6 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
-import type { WorkerToMainMessage_T, PrecacheResult_T } from "./decode-protocol";
+import type { WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T } from "./decode-protocol";
+import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
@@ -301,6 +302,26 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "musicInfo" });
     }
 
+    public getClientConfig(): Promise<ClientConfig_T> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeClientConfig();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "clientConfig" });
+    }
+
+    public getScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeScriptLocalization(scriptClassPath);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "scriptLocalization", scriptClassPath });
+    }
+
     protected dispatch(workerIndex: number, message: any): Promise<any> {
         const requestId = this.nextRequestId++;
 
@@ -379,6 +400,20 @@ class DecodeWorkerClient {
                 if (!request) break;
 
                 request.resolve(undefined);
+                break;
+            }
+            case "clientConfigDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.config);
+                break;
+            }
+            case "scriptLocalizationDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.properties);
                 break;
             }
             case "charGroupsDecoded": {
