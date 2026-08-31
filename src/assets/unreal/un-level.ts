@@ -1,6 +1,5 @@
 import FURL from "./un-url";
-import { UObject, BufferValue } from "@l2js/core";
-import { FObjectArray } from "@l2js/core/unreal/un-array";
+import { UObject, BufferValue, type APackage, type UExport, FObjectArray } from "@l2js/core";
 
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
@@ -12,7 +11,7 @@ abstract class ULevelBase extends UObject {
     protected ambientActors: FObjectArray<GA.AActor>;
     protected actors: FObjectArray<GA.AActor>;
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         const verLicense = pkg.header.getLicenseeVersion();
@@ -66,7 +65,7 @@ abstract class ULevel extends ULevelBase {
     public getActors() { return this.actors; }
     public getAmbientActors() { return this.ambientActors; }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         const verArchive = pkg.header.getArchiveFileVersion();

@@ -3,7 +3,7 @@ import FVert from "./un-vert";
 import FBSPNode, { BspNodeFlags_T } from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import { PolyFlags_T } from "../un-polys";
-import { BufferValue } from "@l2js/core";
+import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
@@ -11,7 +11,6 @@ import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
-import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "../un-vector";
 import FBox from "../un-box";
 import { DoubleSide } from "three";
@@ -26,7 +25,7 @@ const PF_WaterSheet = 0x00080000; // L2.water.trace 17626640: uniquely marks shi
 
 const nodeCache = new Array<number>();
 
-class FVectorArray implements C.IConstructable {
+class FVectorArray implements Constructable_T {
     declare protected elementCount: number;
     declare protected data: DataView;
 
@@ -46,7 +45,7 @@ class FVectorArray implements C.IConstructable {
 
     public getElemCount() { return this.elementCount };
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.elementCount = pkg.read("compat32");
         this.data = pkg.read(this.elementCount * this.elementSize);
 
@@ -54,7 +53,7 @@ class FVectorArray implements C.IConstructable {
     }
 }
 
-class FBoxArray implements C.IConstructable {
+class FBoxArray implements Constructable_T {
     declare protected elementCount: number;
     declare protected data: DataView;
 
@@ -82,7 +81,7 @@ class FBoxArray implements C.IConstructable {
 
     public getElemCount() { return this.elementCount };
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.elementCount = pkg.read("compat32");
         this.data = pkg.read(this.elementCount * this.elementSize);
 
@@ -97,12 +96,12 @@ abstract class UModel extends UPrimitive {
 
     declare protected vectors: FVectorArray;
     declare protected points: FVectorArray;
-    declare protected vertices: C.FArray<FVert>;
-    declare protected bspNodes: C.FArray<FBSPNode>;
-    declare protected bspSurfs: C.FArray<FBSPSurf>;
-    declare protected bspSection: C.FArray<FBSPSection>;
-    declare protected lightmaps: C.FArray<FLightmapIndex>;
-    declare protected multiLightmaps: C.FArray<FMultiLightmapTexture>;
+    declare protected vertices: FArray<FVert>;
+    declare protected bspNodes: FArray<FBSPNode>;
+    declare protected bspSurfs: FArray<FBSPSurf>;
+    declare protected bspSection: FArray<FBSPSection>;
+    declare protected lightmaps: FArray<FLightmapIndex>;
+    declare protected multiLightmaps: FArray<FMultiLightmapTexture>;
     declare protected numSharedSides: number;
     declare protected polys: GA.UPolys;
     declare protected zones: FZoneProperties[];
@@ -120,7 +119,7 @@ abstract class UModel extends UPrimitive {
     public getBspNodes() { return this.bspNodes; }
     public getIsRootOutside() { return this.isRootOutside; }
 
-    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
+    protected preLoad(pkg: APackage, exp: UExport): void {
         super.preLoad(pkg, exp);
 
         this.vectors = new FVectorArray();
@@ -139,7 +138,7 @@ abstract class UModel extends UPrimitive {
         this.lights = new FObjectArray();
     }
 
-    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
+    protected doLoad(pkg: APackage, exp: UExport): this {
 
         // const verArchive = pkg.header.getArchiveFileVersion();
         // const verLicense = pkg.header.getLicenseeVersion();

@@ -1,3 +1,4 @@
+import type { FObjectArray } from "@l2js/core";
 import AInfo from "./un-info";
 import FColor from "./un-color";
 
@@ -15,7 +16,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly killZType: number;
     declare public readonly isSoftKillZ: boolean;
 
-    declare public readonly terrains: C.FObjectArray<GA.ATerrainInfo>;
+    declare public readonly terrains: FObjectArray<GA.ATerrainInfo>;
 
     declare public readonly ambientHue: number;
     declare public readonly ambientSaturation: number;

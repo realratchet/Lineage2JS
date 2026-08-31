@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import UObject, { type FPrimitiveArray, type UnserializedProperty_T } from "@l2js/core";
 
 abstract class UBaseMaterial extends UObject {
     // public readonly skipRemaining = true;
@@ -615,7 +615,7 @@ abstract class UTexPanner extends UBaseModifier {
     declare public readonly rate: number;
     declare public readonly z: number;
     declare public readonly matrix: GA.FMatrix;
-    declare public readonly internalTime: C.FPrimitiveArray<"int32">;
+    declare public readonly internalTime: FPrimitiveArray<"int32">;
     declare public readonly direction: GA.FRotator;
 
     public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
@@ -651,7 +651,7 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
     declare protected collisionForShadow: boolean;
     declare protected enableCollision: boolean;
 
-    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+    public static getUnserializedProperties(): UnserializedProperty_T[] {
         return [
             ["EnableCollision", "BoolProperty"],
             ["EnableCollisionforShadow", "BoolProperty"],

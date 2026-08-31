@@ -1,6 +1,6 @@
-import FArray from "@l2js/core/src/unreal/un-array";
+import { type APackage, type Constructable_T, FArray } from "@l2js/core";
 
-class FBSPVertex implements C.IConstructable {
+class FBSPVertex implements Constructable_T {
     public position: GD.Vector3Arr;
     public u: number;
     public v: number;
@@ -8,7 +8,7 @@ class FBSPVertex implements C.IConstructable {
     public v2: number;
     public normal: GD.Vector3Arr | null;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const hasNormal = pkg.header.getArchiveFileVersion() >= 109;
         const data = pkg.read(hasNormal ? 10 * 4 : 7 * 4);
 
@@ -23,7 +23,7 @@ class FBSPVertex implements C.IConstructable {
     }
 }
 
-class FBSPSection implements C.IConstructable {
+class FBSPSection implements Constructable_T {
     public bspVertices = new FArray(FBSPVertex);
     public textureId: number;
     public texture: GA.UTexture;
@@ -33,7 +33,7 @@ class FBSPSection implements C.IConstructable {
     public polyFlags: number;
     public lightmapTextureIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.bspVertices.load(pkg);
         this.revision = pkg.read("int32");
 

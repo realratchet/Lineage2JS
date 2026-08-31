@@ -1,9 +1,10 @@
-class FStaticMeshTriangleSub implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+class FStaticMeshTriangleSub implements Constructable_T {
     declare public uv0: number[];
     declare public uv1: number[];
     declare public uv2: number[];
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.uv0 = new Array(2).fill(1).map(_ => pkg.read("float"));
         this.uv1 = new Array(2).fill(1).map(_ => pkg.read("float"));
         this.uv2 = new Array(2).fill(1).map(_ => pkg.read("float"));
@@ -12,7 +13,7 @@ class FStaticMeshTriangleSub implements C.IConstructable {
     }
 }
 
-class FStaticMeshTriangle implements C.IConstructable {
+class FStaticMeshTriangle implements Constructable_T {
     declare private data: DataView;
 
     declare public uvs: FStaticMeshTriangleSub[];
@@ -41,7 +42,7 @@ class FStaticMeshTriangle implements C.IConstructable {
         ]
     }
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
 
         if (verArchive < 0x6f) {

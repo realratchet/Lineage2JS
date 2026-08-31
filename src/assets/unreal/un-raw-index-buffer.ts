@@ -1,11 +1,10 @@
-import { BufferValue } from "@l2js/core";
-import { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { BufferValue, type APackage, type Constructable_T, type PropertyTag, FPrimitiveArray } from "@l2js/core";
 
-class FRawIndexBuffer implements C.IConstructable {
+class FRawIndexBuffer implements Constructable_T {
     public readonly indices = new FPrimitiveArray(BufferValue.uint16);
     public revision: number;
 
-    public load(pkg: C.APackage, tag?: C.PropertyTag): this {
+    public load(pkg: APackage, tag?: PropertyTag): this {
         this.indices.load(pkg, tag);
 
         this.revision = pkg.read("int32");

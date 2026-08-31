@@ -1,4 +1,5 @@
-class FStaticMeshUVStream implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+class FStaticMeshUVStream implements Constructable_T {
     declare private data: DataView;
     declare private f10: number;
     declare private f1C: number; // most likely revision as it's always the last one in stream
@@ -12,7 +13,7 @@ class FStaticMeshUVStream implements C.IConstructable {
     }
 
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const size = pkg.read("compat32");
 
         this.data = pkg.read(size * 4 * 2);

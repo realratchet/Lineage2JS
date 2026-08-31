@@ -1,20 +1,20 @@
 import FBox from "./un-box";
 import FPlane from "./un-plane";
 import FVector from "./un-vector";
-import UObject from "@l2js/core";
+import UObject, { type APackage, type UExport } from "@l2js/core";
 
 abstract class UPrimitive extends UObject {
     declare protected boundingBox: GA.FBox;
     declare protected boundingSphere: GA.FPlane;
 
-    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
+    protected preLoad(pkg: APackage, exp: UExport): void {
         super.preLoad(pkg, exp);
 
         this.boundingBox = FBox.make();
         this.boundingSphere = FPlane.make();
     }
 
-    protected doLoad(pkg: C.APackage, exp: C.UExport) {
+    protected doLoad(pkg: APackage, exp: UExport) {
         // (UObject.prototype as any).doLoad.call(this, pkg, exp);
         super.doLoad(pkg, exp);
 

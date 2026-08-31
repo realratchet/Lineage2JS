@@ -1,5 +1,5 @@
 import FVector from "./un-vector";
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4Arr> {
     declare public ["constructor"]: typeof FPlane;

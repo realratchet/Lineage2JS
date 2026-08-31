@@ -1,6 +1,6 @@
-import { FStringArray } from "@l2js/core/src/unreal/un-array";
+import { type APackage, type Constructable_T, FStringArray } from "@l2js/core";
 
-class FURL implements C.IConstructable {
+class FURL implements Constructable_T {
     public protocol: string;
     public host: string;
     public map: string;
@@ -9,7 +9,7 @@ class FURL implements C.IConstructable {
     public port: number;
     public isValid: boolean;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.protocol = pkg.read("char");
         this.host = pkg.read("char");
         this.map = pkg.read("char");

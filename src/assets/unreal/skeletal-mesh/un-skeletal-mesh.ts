@@ -1,7 +1,6 @@
-import { BufferValue } from "@l2js/core";
+import { BufferValue, type APackage, type UExport, FArray, FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
-import FArray, { FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/unreal/un-array";
 import ULodMesh from "../un-lod-mesh";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
@@ -15,7 +14,7 @@ class FMeshVector {
     public y: number;
     public z: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.x = pkg.read("float");
         this.y = pkg.read("float");
         this.z = pkg.read("float");
@@ -30,7 +29,7 @@ class FMeshCoords {
     public yAxis = new FMeshVector();
     public zAxis = new FMeshVector();
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.origin.load(pkg);
         this.xAxis.load(pkg);
         this.yAxis.load(pkg);
@@ -44,7 +43,7 @@ class FWeightIndex {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     public startBoneInf: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.boneInfIndices.load(pkg);
         this.startBoneInf = pkg.read("uint32");
 
@@ -56,7 +55,7 @@ class FBoneInfluence {
     public boneWeight: number;
     public boneIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.boneWeight = pkg.read("uint16");
         this.boneIndex = pkg.read("uint16");
 
@@ -70,7 +69,7 @@ class FJointPos {
     public scale: FVector;
     public length: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.rotation = FQuaternion.make().load(pkg);
         this.position = FVector.make().load(pkg);
         this.length = pkg.read("float");
@@ -90,7 +89,7 @@ class FMeshBone {
     public numChildren: number;
     public parentIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const nameIndex = pkg.read("compat32");
         this.boneName = pkg.nameTable[nameIndex].name as string;
 
@@ -112,7 +111,7 @@ class FMeshNorm {
 
     public v: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.v = pkg.read("uint32");
 
         return this;
@@ -123,7 +122,7 @@ class FSkinPoint {
     public point: FVector;
     public normal: FMeshNorm;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
 
         this.point = FVector.make().load(pkg);
         this.normal = new FMeshNorm().load(pkg);
@@ -143,7 +142,7 @@ class FSkelMeshSection {
     public firstFace: number;
     public numFaces: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.materialIndex = pkg.read("int16");
 
         this.minStreamIndex = pkg.read("int16");
@@ -168,7 +167,7 @@ class FAnimMeshVertex {
     public texU: number;
     public texV: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
 
         this.position = FVector.make().load(pkg);
         this.normal = FVector.make().load(pkg);
@@ -185,7 +184,7 @@ class FSkinVertexStream {
     public isStreamCallback: boolean;
     public vertices = new FArray(FAnimMeshVertex);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.revision = pkg.read("uint32");
         this.isPartial = pkg.read("uint32") !== 0;
         this.isStreamCallback = pkg.read("uint32") !== 0;
@@ -199,7 +198,7 @@ class FTriangleLOD {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.indices[0] = pkg.read("uint16");
         this.indices[1] = pkg.read("uint16");
         this.indices[2] = pkg.read("uint16");
@@ -228,7 +227,7 @@ class FStaticModelLOD {
     public maxInfluences: number;
     public isUniqueSubset: boolean;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.skinningData.load(pkg);
         this.skinPoints.load(pkg);
         this.numSoftWedges = pkg.read("int32");
@@ -265,7 +264,7 @@ class FMeshWedge {
     public texU: number;
     public texV: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.iVertex = pkg.read("uint16");
         this.texU = pkg.read("float");
         this.texV = pkg.read("float");
@@ -280,7 +279,7 @@ class FTriangle {
     public materialIndex2: number;
     public smoothingGroups: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.indices[0] = pkg.read("uint16");
         this.indices[1] = pkg.read("uint16");
         this.indices[2] = pkg.read("uint16");
@@ -298,7 +297,7 @@ class FVertexInfluence {
     public iPoint: number;
     public iBone: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.weight = pkg.read("float");
         this.iPoint = pkg.read("uint16");
         this.iBone = pkg.read("uint16");
@@ -331,7 +330,7 @@ abstract class USkeletalMesh extends ULodMesh {
     protected sk_unkArr11 = new FPrimitiveArray(BufferValue.uint32);
     protected sk_unkVar2: number;
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 

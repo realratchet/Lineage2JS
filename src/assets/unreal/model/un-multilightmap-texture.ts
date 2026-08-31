@@ -1,10 +1,9 @@
 import { generateUUID } from "three/src/math/MathUtils";
-import { BufferValue, UObject } from "@l2js/core";
+import { BufferValue, UObject, type APackage, type Constructable_T, type UExport, FArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
 import decompressDDS from "../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
-import FArray, { FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
 
-class FStaticLightmapTexture implements C.IConstructable {
+class FStaticLightmapTexture implements Constructable_T {
     public data = new FPrimitiveArrayLazy(BufferValue.uint8);
     public dataHalfRes = new FPrimitiveArrayLazy(BufferValue.uint8);
 
@@ -15,7 +14,7 @@ class FStaticLightmapTexture implements C.IConstructable {
 
     public readonly uuid = generateUUID();
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.data.load(pkg);
         this.dataHalfRes.load(pkg);
 
@@ -77,16 +76,16 @@ class FStaticLightmapTexture implements C.IConstructable {
     }
 }
 
-class FLightmapTexture implements C.IConstructable {
+class FLightmapTexture implements Constructable_T {
     public levelIndex: number;
-    public levelExp: C.UExport;
+    public levelExp: UExport;
 
     public iLightmaps = new FPrimitiveArray(BufferValue.int32);
     public internalTime: number[];
     public revision: number;
     public staticLightmap = new FStaticLightmapTexture();
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.levelIndex = pkg.read("compat32");
         this.levelExp = pkg.exports[this.levelIndex - 1];
 
@@ -101,11 +100,11 @@ class FLightmapTexture implements C.IConstructable {
     }
 }
 
-class FMultiLightmapTexture implements C.IConstructable {
+class FMultiLightmapTexture implements Constructable_T {
     public textures = new FArray(FLightmapTexture);
     public iLightmaps = new FPrimitiveArray(BufferValue.int32);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.textures.load(pkg);
         this.iLightmaps.load(pkg);
 

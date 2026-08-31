@@ -2,7 +2,7 @@ import FCoords from "./un-coords";
 import GMath from "./un-gmath";
 import FPlane from "./un-plane";
 import FVector from "./un-vector";
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 const eps = 1e-8;
 

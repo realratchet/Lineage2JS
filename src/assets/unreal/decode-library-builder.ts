@@ -1,3 +1,4 @@
+import type { UClass, UObject } from "@l2js/core";
 import DecodeLibrary from "./decode-library";
 import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses } from "./script-dump-loader";
 import type { HeightMapInfo_T } from "./un-terrain-sector";
@@ -211,11 +212,11 @@ class DecodeLibraryBuilder {
         this.pullScriptDumps(level.getActors(), level.getAmbientActors());
     }
 
-    public pullScriptClasses(classes: Iterable<C.UClass>): void {
+    public pullScriptClasses(classes: Iterable<UClass>): void {
         pullScriptClasses(this.library, classes);
     }
 
-    public pullScriptDumps(...actorLists: Iterable<C.UObject>[]): void {
+    public pullScriptDumps(...actorLists: Iterable<UObject>[]): void {
         pullScriptDumps(this.library, ...actorLists);
     }
 
@@ -392,8 +393,8 @@ class DecodeLibraryBuilder {
         zoneInfo.children.push(result.object);
     }
 
-    protected setScriptClass(actor: C.UObject, info: GD.IBaseObjectDecodeInfo): void {
-        const cls = (actor.constructor as any).hostClass as C.UClass;
+    protected setScriptClass(actor: UObject, info: GD.IBaseObjectDecodeInfo): void {
+        const cls = (actor.constructor as any).hostClass as UClass;
 
         if (!cls) return;
 

@@ -1,11 +1,10 @@
 
-import UObject from "@l2js/core";
+import UObject, { FArray, FPrimitiveArray } from "@l2js/core";
 import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
 import FVector from "../un-vector";
 import FColor from "../un-color";
-import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
 
 abstract class UParticleEmitter extends UObject {
     declare protected actor: GA.UEmitter;

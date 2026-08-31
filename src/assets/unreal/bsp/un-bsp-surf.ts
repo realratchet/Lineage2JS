@@ -1,13 +1,12 @@
 import { FPlane } from "../un-plane";
-import { BufferValue } from "@l2js/core";
-import { flagBitsToDict } from "@l2js/core/src/utils/flags";
+import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { PolyFlags_T } from "../un-polys";
 
-class FBSPSurf implements C.IConstructable {
+class FBSPSurf implements Constructable_T {
     public material: GA.UShader;
 
     public flags: number;       // 4 bytes polygon flags.
-    public polyFlags: C.FlagDict<keyof typeof PolyFlags_T>;
+    public polyFlags: FlagDict_T<keyof typeof PolyFlags_T>;
     public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
     public vNormal: number;          // 4 bytes index to polygon normal.
     public vTextureU: number;        // 4 bytes texture U-vector index.
@@ -22,7 +21,7 @@ class FBSPSurf implements C.IConstructable {
 
     public unkInt32: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.plane = FPlane.make();
 
         const materialId = pkg.read("compat32");

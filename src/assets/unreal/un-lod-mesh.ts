@@ -1,11 +1,10 @@
-import { BufferValue } from "@l2js/core";
-import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/unreal/un-array";
+import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
 import FColor from "./un-color";
 import UMesh from "./un-mesh";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 
-class FMeshFace implements C.IConstructable {
+class FMeshFace implements Constructable_T {
     public wedgeIndices: [number, number, number] = new Array(3) as [number, number, number];
     public meshMaterialIndex: number;
 
@@ -20,12 +19,12 @@ class FMeshFace implements C.IConstructable {
 
 }
 
-class FMeshWedge implements C.IConstructable {
+class FMeshWedge implements Constructable_T {
     public vertexIndex: number;
     public texU: number;
     public texV: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.vertexIndex = pkg.read("uint16");
         this.texU = pkg.read("float");
         this.texV = pkg.read("float");
@@ -34,11 +33,11 @@ class FMeshWedge implements C.IConstructable {
     }
 }
 
-class FMeshMaterial implements C.IConstructable {
+class FMeshMaterial implements Constructable_T {
     public polyFlags: number;
     public materialIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.polyFlags = pkg.read("uint32");
         this.materialIndex = pkg.read("int32");
 
@@ -71,7 +70,7 @@ abstract class ULodMesh extends UMesh {
     protected impostor = new MeshImpostor();
     protected lodMeshMaterials = new FObjectArray<GA.UMaterial>();
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         this.version = pkg.read("uint32");
@@ -132,7 +131,7 @@ export { ULodMesh };
 
 
 
-class MeshImpostor implements C.IConstructable {
+class MeshImpostor implements Constructable_T {
     public location: FVector;
     public rotation: FRotator;
     public scale: FVector;
@@ -143,7 +142,7 @@ class MeshImpostor implements C.IConstructable {
     public materialId: number;
     public material: GA.UMaterial;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.materialId = pkg.read("compat32");
 
         this.location = FVector.make().load(pkg);

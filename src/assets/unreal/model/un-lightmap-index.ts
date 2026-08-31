@@ -1,12 +1,11 @@
 import FMatrix from "../un-matrix";
-import { BufferValue } from "@l2js/core";
-import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FPrimitiveArray } from "@l2js/core";
 import FVector from "../un-vector";
 
 
-class FLightBitmap implements C.IConstructable {
+class FLightBitmap implements Constructable_T {
     public lightIndex: number;
-    public lightExp: C.UExport;
+    public lightExp: UExport;
     public bitmap = new FPrimitiveArray(BufferValue.uint8);
 
     public sizeX: number;
@@ -17,7 +16,7 @@ class FLightBitmap implements C.IConstructable {
     public maxX: number;
     public maxY: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.lightIndex = pkg.read("compat32");
         this.lightExp = pkg.exports[this.lightIndex - 1];
 
@@ -36,7 +35,7 @@ class FLightBitmap implements C.IConstructable {
 }
 
 
-class FLightmapIndex implements C.IConstructable {
+class FLightmapIndex implements Constructable_T {
     public iLightmapTexture: number;
     public surfaceIndex: number;
     public zoneIndex: number;
@@ -56,7 +55,7 @@ class FLightmapIndex implements C.IConstructable {
     public lightmapX: FVector;
     public lightmapY: FVector;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         // pkg.addDependencies(
         //     pkg,
         //     ["Struct", "Matrix"],

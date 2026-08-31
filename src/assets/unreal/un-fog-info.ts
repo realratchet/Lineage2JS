@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import UObject, { type FArray } from "@l2js/core";
 import AInfo from "./un-info";
 import FVector from "./un-vector";
 
@@ -9,7 +9,7 @@ abstract class UL2FogInfo extends AInfo {
     declare protected readonly fogRange3: GA.FRange;
     declare protected readonly fogRange4: GA.FRange;
     declare protected readonly fogRange5: GA.FRange;
-    declare protected readonly colors: C.FArray<UL2EnvironmentColorInfo>;
+    declare protected readonly colors: FArray<UL2EnvironmentColorInfo>;
     declare protected readonly cloudTexture: GA.UMaterial;
     declare protected readonly textureDistance: number;
 
@@ -62,8 +62,8 @@ abstract class UL2EnvironmentColorInfo extends UObject {
     declare protected time: number;
     declare protected fogColor: GA.FColor;
     declare protected skyColor: GA.FColor;
-    declare protected cloudColor: C.FArray<GA.FColor>;
-    declare protected hazeringColor: C.FArray<GA.FColor>;
+    declare protected cloudColor: FArray<GA.FColor>;
+    declare protected hazeringColor: FArray<GA.FColor>;
 
     public getDecodeInfo() {
         // if (this.cloudColor.length !== 1 || this.hazeringColor.length !== 1)

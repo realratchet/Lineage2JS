@@ -1,6 +1,5 @@
-import { BufferValue } from "@l2js/core";
+import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { FPlane } from "../un-plane";
-import { flagBitsToDict } from "@l2js/core/src/utils/flags";
 
 // Flags associated with a Bsp node.
 enum BspNodeFlags_T {
@@ -13,7 +12,7 @@ enum BspNodeFlags_T {
     NF_IsBack = 0x80,           // Guaranteed back.
 };
 
-class FBSPNode implements C.IConstructable {
+class FBSPNode implements Constructable_T {
     public plane: GA.FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
     public zoneMask: bigint;                // 8  byte mask for all zones at or below this node (up to 64).
     public iVertPool: number;               // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
@@ -28,7 +27,7 @@ class FBSPNode implements C.IConstructable {
     public readonly iZone: number[] = new Array(2); // 2  byte visibility zone in 1=front, 0=back.
     public numVertices: number;                     // 1  byte number of vertices in node.
     public flags: number;                           // 1  byte node flags.
-    public bspNodeFlags: C.FlagDict<keyof typeof BspNodeFlags_T>;
+    public bspNodeFlags: FlagDict_T<keyof typeof BspNodeFlags_T>;
     public readonly iLeaf: number[] = new Array(2); // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
     public iVertexIndex: number;
@@ -42,7 +41,7 @@ class FBSPNode implements C.IConstructable {
 
     public getChildren() { return [this.iBack, this.iFront, this.iPlane]; }
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
 
         this.plane = FPlane.make();

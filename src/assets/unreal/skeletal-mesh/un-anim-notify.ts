@@ -1,6 +1,6 @@
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
-function requireNotifyProperty<T>(notify: C.UObject, name: string, value: T | undefined): T {
+function requireNotifyProperty<T>(notify: UObject, name: string, value: T | undefined): T {
     if (value === undefined) throw new Error(`Animation notify '${notify.name}' has undefined mapped property '${name}'.`);
 
     return value;
@@ -104,7 +104,7 @@ abstract class UAnimNotifySwimSound extends UAnimNotify {
 }
 abstract class UAnimNotifyDestroyEffect extends UAnimNotify { }
 abstract class UAnimNotifyEffect extends UAnimNotify {
-    declare protected effectClass: C.UObject | null;
+    declare protected effectClass: UObject | null;
     declare protected bone: string;
     declare protected offsetLocation: GA.FVector;
     declare protected offsetRotation: GA.FRotator;

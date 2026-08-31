@@ -1,5 +1,5 @@
 import UNativeRegistry from "./native-registry";
-import { CastToken_T, ExprToken_T } from "@l2js/core/src/unreal/un-script-tokens";
+import { CastToken_T, ExprToken_T } from "@l2js/core";
 
 type ScriptValue_T = GD.ScriptPropertyValue_T | GD.IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
 

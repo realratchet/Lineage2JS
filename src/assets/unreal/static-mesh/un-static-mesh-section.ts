@@ -1,4 +1,5 @@
-class FStaticMeshSection implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+class FStaticMeshSection implements Constructable_T {
     declare public isStrip: boolean;
     declare public firstIndex: number;      // first index
     declare public firstVertex: number;     // first used vertex
@@ -6,7 +7,7 @@ class FStaticMeshSection implements C.IConstructable {
     declare public numTriangles: number;
     declare public numFaces: number;        // number of faces in section
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.isStrip = pkg.read("uint32") !== 0;
         this.firstIndex = pkg.read("uint16");
         this.firstVertex = pkg.read("uint16");

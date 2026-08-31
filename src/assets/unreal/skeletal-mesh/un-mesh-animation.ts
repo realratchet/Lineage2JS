@@ -1,8 +1,7 @@
-import UObject, { BufferValue } from "@l2js/core";
-import FArray, { FIndexArray, FPrimitiveArray } from "@l2js/core/unreal/un-array";
+import UObject, { BufferValue, type APackage, type UExport, FArray, FIndexArray, FPrimitiveArray } from "@l2js/core";
 import UAnimNotify from "./un-anim-notify";
 
-function decodeNotifyObject(builder: GD.DecodeLibraryBuilder, notify: C.UObject): GD.IAnimationNotifyObjectDecodeInfo {
+function decodeNotifyObject(builder: GD.DecodeLibraryBuilder, notify: UObject): GD.IAnimationNotifyObjectDecodeInfo {
     if (!notify) return null;
 
     const info = (notify as UAnimNotify).getDecodeInfo(builder);
@@ -17,7 +16,7 @@ class FAnimVector {
     public y: number;
     public z: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.x = pkg.read("float");
         this.y = pkg.read("float");
         this.z = pkg.read("float");
@@ -32,7 +31,7 @@ class FAnimQuaternion {
     public z: number;
     public w: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.x = pkg.read("float");
         this.y = pkg.read("float");
         this.z = pkg.read("float");
@@ -47,7 +46,7 @@ class FNamedBone {
     public flags: number;
     public parentIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.boneName = pkg.nameTable[pkg.read("compat32")].name as string;
         this.flags = pkg.read("uint32");
         this.parentIndex = pkg.read("uint32");
@@ -62,7 +61,7 @@ class FAnalogTrack {
     public keyPos = new FArray(FAnimVector);
     public keyTime = new FPrimitiveArray(BufferValue.float);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.flags = pkg.read("uint32");
         this.keyQuat.load(pkg);
         this.keyPos.load(pkg);
@@ -81,7 +80,7 @@ class FMotionChunk {
     public animTracks = new FArray(FAnalogTrack)
     public rootTrack = new FAnalogTrack()
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.rootSpeed3d.load(pkg);
         this.trackTime = pkg.read("float");
         this.startBone = pkg.read("uint32");
@@ -99,7 +98,7 @@ class FMeshAnimNotify {
     public name: string;
     public notifyObjectId: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
 
         this.time = pkg.read("float");
@@ -121,7 +120,7 @@ class FSkinNotifyEntry {
     public time: number;
     public skinIndex: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.time = pkg.read("float");
         this.skinIndex = pkg.read("int32");
 
@@ -133,7 +132,7 @@ class FSkinNotifyGroup {
     public startFrame: number;
     public timeline = new FArray(FSkinNotifyEntry);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.startFrame = pkg.read("float");
         this.timeline.load(pkg);
 
@@ -149,7 +148,7 @@ class FSkinNotify {
     public randomIntervalMax: number;
     public randomTimeline = new FArray(FSkinNotifyEntry);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         // const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -184,7 +183,7 @@ class FAnimSequence {
     public unkVar5: number;
     public skinNotify = new FSkinNotify();
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -272,7 +271,7 @@ abstract class UMeshAnimation extends UObject {
         }
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 

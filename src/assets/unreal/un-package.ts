@@ -1,6 +1,5 @@
 import "./un-object-mixin";
-import { ANativePackage, APackage, UObject } from "@l2js/core";
-import type { UObject as UObject_ } from "@l2js/core/src/unreal/un-object";
+import { ANativePackage, APackage, UObject, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UStruct, type UObject as UObject_, addClassDependency, addPackageDependendency } from "@l2js/core";
 import UModel from "./model/un-model";
 import ULevel from "./un-level";
 import FScale from "./un-scale";
@@ -48,7 +47,6 @@ import FCoords from "./un-coords";
 import FQuaternion from "./un-quaternion";
 import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
 import UStaticMesh from "./static-mesh/un-static-mesh";
-import { addClassDependency, addPackageDependendency } from "@l2js/core/src/unreal/un-package";
 import ULevelSummary from "./un-level-summary";
 import USound from "./un-sound";
 import UAmbientSoundObject from "./un-ambient-sound";
@@ -93,12 +91,12 @@ class UPackage extends APackage {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 
-    // public addDependencies(pkg: C.APackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
+    // public addDependencies(pkg: APackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
     //     const pkgCore = pkg.loader.getCorePackage();
     //     const pkgNative = pkg.loader.getNativePackage();
 
     //     for (let [clsType, clsName] of deps) {
-    //         const cls = pkgCore.fetchObjectByType<C.UClass>(clsType, clsName);
+    //         const cls = pkgCore.fetchObjectByType<UClass>(clsType, clsName);
 
     //         if (!cls) throw new Error(`Could not find '${clsName}' of type '${clsType}'`);
 
@@ -113,14 +111,14 @@ class UPackage extends APackage {
             if (exp.export.isFake)
                 return;
 
-            const obj = this.fetchObject<C.UStruct>(exp.index + 1);
+            const obj = this.fetchObject<UStruct>(exp.index + 1);
 
 
             obj.loadSelf().buildClass(native);
         });
 
         //     this.exportGroups["Class"].forEach(exp => {
-        //         const obj = this.fetchObject<C.UClass>(exp.index + 1);
+        //         const obj = this.fetchObject<UClass>(exp.index + 1);
 
         //         obj.loadSelf().buildClass(native);
         //     });
@@ -142,7 +140,7 @@ enum ERunningOS {
 };
 
 
-class UCorePackage extends UPackage implements C.ICorePackage {
+class UCorePackage extends UPackage implements CorePackage_T {
     public readonly isCore = true;
     public readonly isEngine = false;
     public readonly isNative = false;
@@ -202,12 +200,12 @@ class UCorePackage extends UPackage implements C.ICorePackage {
     public static readonly GUnicode = true;
 }
 
-class UEnginePackage extends UPackage implements C.IEnginePackage {
+class UEnginePackage extends UPackage implements EnginePackage_T {
     public readonly isCore = false;
     public readonly isEngine = true;
     public readonly isNative = false;
 
-    protected addClassDependencies(nameTable: C.UName[], nameHash: Map<string, number>, imports: C.UImport[], exports: C.UExport<UObject>[]): void {
+    protected addClassDependencies(nameTable: UName[], nameHash: Map<string, number>, imports: UImport[], exports: UExport<UObject>[]): void {
         addPackageDependendency(nameTable, nameHash, imports, "Native");
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
@@ -311,7 +309,7 @@ class UNativePackage extends ANativePackage {
         return Constructor;
     }
 
-    protected getNonNativeConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: C.NativeTypes_T): new () => T
+    protected getNonNativeConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: NativeTypes_T): new () => T
     protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: GA.NativeClientTypes_T): new () => T {
         let Constructor: any;
 
@@ -474,10 +472,10 @@ class UNativePackage extends ANativePackage {
         this.registerNativeClass("Client", "Object");
     }
 
-    // public readonly nativeClassess = new Map<C.NativeTypes_T, typeof UObject>();
+    // public readonly nativeClassess = new Map<NativeTypes_T, typeof UObject>();
 
 
-    // constructor(loader: C.AAssetLoader) {
+    // constructor(loader: AAssetLoader) {
     //     super(loader, "__native__.u");
     // }
 

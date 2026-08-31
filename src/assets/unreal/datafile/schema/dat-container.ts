@@ -1,16 +1,16 @@
-import { BufferValue } from "@l2js/core";
+import { BufferValue, type UEncodedFile, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";
 
 const decoderASCF = new TextDecoder("windows-1252");
 const decoderUTF16 = new TextDecoder("utf-16");
 
-function readUTF16(pkg: C.UEncodedFile): string {
+function readUTF16(pkg: UEncodedFile): string {
     return pkg.read(new BufferValue(BufferValue.utf16)).value as string;
 }
 
 class ASCFType implements IDatContainerType {
     public isContainerType = true;
 
-    public read(pkg: C.UEncodedFile): string {
+    public read(pkg: UEncodedFile): string {
         const count = pkg.read("compat32");
 
         if (count === 0) return "";
@@ -30,7 +30,7 @@ class ASCFType implements IDatContainerType {
 class UTF16ContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    public read(pkg: C.UEncodedFile): string[] {
+    public read(pkg: UEncodedFile): string[] {
         const count = pkg.read("uint32");
         const elements = new Array<string>(count);
 
@@ -50,7 +50,7 @@ class UTF16SizedContainerType implements IDatContainerType {
         this.size = size;
     }
 
-    public read(pkg: C.UEncodedFile, values: Record<string, any>): string[] {
+    public read(pkg: UEncodedFile, values: Record<string, any>): string[] {
         const count = typeof this.size === "number" ? this.size : values[this.size] as number;
         const elements = new Array<string>(count);
 
@@ -66,11 +66,11 @@ class NumberContainerType implements IDatContainerType {
 
     protected dtype: BufferValue<any>;
 
-    public constructor(dtype: C.ValidTypes_T<any>) {
+    public constructor(dtype: ValidTypes_T<any>) {
         this.dtype = new BufferValue(dtype);
     }
 
-    public read(pkg: C.UEncodedFile): number[] {
+    public read(pkg: UEncodedFile): number[] {
         const count = pkg.read("compat32");
 
         if (count === 0) return [];
@@ -87,15 +87,15 @@ class NumberContainerType implements IDatContainerType {
 class SizedContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    protected dtype: C.ValueTypeNames_T;
+    protected dtype: ValueTypeNames_T;
     protected size: number | string;
 
-    public constructor(dtype: C.ValueTypeNames_T, size: number | string) {
+    public constructor(dtype: ValueTypeNames_T, size: number | string) {
         this.dtype = dtype;
         this.size = size;
     }
 
-    public read(pkg: C.UEncodedFile, values: Record<string, any>): any[] {
+    public read(pkg: UEncodedFile, values: Record<string, any>): any[] {
         const count = typeof this.size === "number" ? this.size : values[this.size] as number;
         const elements = new Array<any>(count);
 
@@ -109,7 +109,7 @@ class SizedContainerType implements IDatContainerType {
 class UTF16PairContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    public read(pkg: C.UEncodedFile): [string[], string[]] {
+    public read(pkg: UEncodedFile): [string[], string[]] {
         const meshCount = pkg.read("int32");
         const meshes = new Array<string>(meshCount);
 
@@ -129,7 +129,7 @@ class UTF16PairContainerType implements IDatContainerType {
 class MaterialContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    public read(pkg: C.UEncodedFile): [number, number][] {
+    public read(pkg: UEncodedFile): [number, number][] {
         const count = pkg.read("int32");
         const materials = new Array<[number, number]>(count);
 
@@ -143,17 +143,17 @@ class MaterialContainerType implements IDatContainerType {
 class ConditionalType implements IDatContainerType {
     public isContainerType = true;
 
-    protected type: C.ValueTypeNames_T | IDatContainerType;
+    protected type: ValueTypeNames_T | IDatContainerType;
     protected field: string;
     protected value: number;
 
-    public constructor(type: C.ValueTypeNames_T | IDatContainerType, field: string, value: number) {
+    public constructor(type: ValueTypeNames_T | IDatContainerType, field: string, value: number) {
         this.type = type;
         this.field = field;
         this.value = value;
     }
 
-    public read(pkg: C.UEncodedFile, values: Record<string, any>): any {
+    public read(pkg: UEncodedFile, values: Record<string, any>): any {
         if (values[this.field] !== this.value) return undefined;
 
         if (this.type === "utf16") return readUTF16(pkg);

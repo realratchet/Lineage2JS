@@ -1,5 +1,5 @@
 import FVector from "./un-vector";
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)

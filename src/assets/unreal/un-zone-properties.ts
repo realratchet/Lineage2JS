@@ -1,13 +1,13 @@
-import { BufferValue } from "@l2js/core";
+import { BufferValue, type APackage, type Constructable_T } from "@l2js/core";
 
-class FZoneProperties implements C.IConstructable {
+class FZoneProperties implements Constructable_T {
     public connectivity: bigint;
     public visibility: bigint;
     public lastRenderTime: number;
     public zoneActorId: number;
     public zoneActor: GA.FZoneInfo;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.zoneActorId = pkg.read("compat32");
         this.connectivity = pkg.read("uint64");
         this.visibility = pkg.read("uint64");

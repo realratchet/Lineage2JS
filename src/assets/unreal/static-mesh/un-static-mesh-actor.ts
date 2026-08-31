@@ -1,5 +1,5 @@
 import UAActor, { EPhysics_T } from "../un-aactor";
-import { UObject } from "@l2js/core";
+import { UObject, type FArray, type FIndexArray } from "@l2js/core";
 import FVector from "../un-vector";
 import FBox from "../un-box";
 import FColor from "../un-color";
@@ -42,7 +42,7 @@ abstract class UStaticMeshActor extends UAActor {
     declare protected instance: GA.UStaticMeshInstance;
 
     declare protected colLocation: FVector;
-    declare protected touching: C.FIndexArray;
+    declare protected touching: FIndexArray;
     declare protected isUpdatingShadow: boolean;
     declare protected stepSound1: GA.USound;
     declare protected stepSound2: GA.USound;
@@ -65,7 +65,7 @@ abstract class UStaticMeshActor extends UAActor {
     declare protected isAgitDefaultStaticMesh: boolean;
     declare protected agitID: number;
     declare protected accessoryIndex: number;
-    declare protected accessoryTypeList: C.FArray<FAccessory>;
+    declare protected accessoryTypeList: FArray<FAccessory>;
 
     declare protected disableSorting: boolean;
     declare protected lodBias: number;

@@ -1,3 +1,4 @@
+import type { ScriptBytecodeEntry_T, UClass, UFunction, UObject, UState, UStruct, UStructProperty } from "@l2js/core";
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
 
@@ -6,7 +7,7 @@ function getOwnerId(id: string): string {
     return id.slice(0, index);
 }
 
-function getObjectId(object: C.UObject): string {
+function getObjectId(object: UObject): string {
     if (!object.name) throw new Error(`Script object '${object.objectName}' has no stable package path`);
 
     return object.name;
@@ -31,7 +32,7 @@ function dumpPropertyValue(value: any): GD.ScriptPropertyValue_T {
     throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
 }
 
-function dumpObjectScriptProperties(object: C.UObject): Record<string, GD.ScriptPropertyValue_T> {
+function dumpObjectScriptProperties(object: UObject): Record<string, GD.ScriptPropertyValue_T> {
     const properties: Record<string, GD.ScriptPropertyValue_T> = {};
 
     for (const name of Map.prototype.keys.call(object.propertyDict))
@@ -40,7 +41,7 @@ function dumpObjectScriptProperties(object: C.UObject): Record<string, GD.Script
     return properties;
 }
 
-function makeStructDefault(field: C.UStructProperty): GD.ScriptPropertyValue_T {
+function makeStructDefault(field: UStructProperty): GD.ScriptPropertyValue_T {
     const struct = field.value.loadSelf();
     const name = struct.friendlyName.toLowerCase();
 
@@ -61,14 +62,14 @@ function makeStructDefault(field: C.UStructProperty): GD.ScriptPropertyValue_T {
         const childValue = child.getDefaultValue();
 
         value[child.propertyName] = childValue === null && child.getTypeName() === "Struct"
-            ? makeStructDefault(child as C.UStructProperty)
+            ? makeStructDefault(child as UStructProperty)
             : dumpPropertyValue(childValue);
     }
 
     return value;
 }
 
-function dumpClassDefaults(cls: C.UClass): Record<string, GD.ScriptPropertyValue_T> {
+function dumpClassDefaults(cls: UClass): Record<string, GD.ScriptPropertyValue_T> {
     const defaults = dumpObjectScriptProperties(cls);
 
     for (const field of cls.childPropFields.values()) {
@@ -80,7 +81,7 @@ function dumpClassDefaults(cls: C.UClass): Record<string, GD.ScriptPropertyValue
         const value = field.getDefaultValue();
 
         defaults[name] = value === null && field.getTypeName() === "Struct"
-            ? makeStructDefault(field as C.UStructProperty)
+            ? makeStructDefault(field as UStructProperty)
             : dumpPropertyValue(value);
     }
 
@@ -97,7 +98,7 @@ function resolveEntryIndex(entriesByOffset: Map<number, number>, virtualSize: nu
     return index;
 }
 
-function dumpBytecodeValue(script: C.UStruct, entry: C.ScriptBytecodeEntry_T, entriesByOffset: Map<number, number>, virtualSize: number): GD.ScriptBytecodeValue_T {
+function dumpBytecodeValue(script: UStruct, entry: ScriptBytecodeEntry_T, entriesByOffset: Map<number, number>, virtualSize: number): GD.ScriptBytecodeValue_T {
     const value = entry.value;
 
     switch (entry.type) {
@@ -130,7 +131,7 @@ function dumpBytecodeValue(script: C.UStruct, entry: C.ScriptBytecodeEntry_T, en
     }
 }
 
-function dumpProgram(script: C.UStruct): GD.IScriptProgramDecodeInfo {
+function dumpProgram(script: UStruct): GD.IScriptProgramDecodeInfo {
     const entries = script.getScriptBytecode().filter(entry => entry.type !== "nativeIndex");
     const entriesByOffset = new Map<number, number>();
     const virtualSize = script.getScriptSize();
@@ -148,7 +149,7 @@ function dumpProgram(script: C.UStruct): GD.IScriptProgramDecodeInfo {
     };
 }
 
-function dumpFields(script: C.UStruct): GD.IScriptFieldDecodeInfo[] {
+function dumpFields(script: UStruct): GD.IScriptFieldDecodeInfo[] {
     return [...script.childPropFields.values()].map(field => {
         field = field.loadSelf();
 
@@ -162,7 +163,7 @@ function dumpFields(script: C.UStruct): GD.IScriptFieldDecodeInfo[] {
     });
 }
 
-function dumpFunction(fn: C.UFunction): GD.IScriptFunctionDecodeInfo {
+function dumpFunction(fn: UFunction): GD.IScriptFunctionDecodeInfo {
     fn = fn.loadSelf();
 
     const id = getObjectId(fn);
@@ -180,7 +181,7 @@ function dumpFunction(fn: C.UFunction): GD.IScriptFunctionDecodeInfo {
     };
 }
 
-function dumpState(state: C.UState): GD.IScriptStateDecodeInfo {
+function dumpState(state: UState): GD.IScriptStateDecodeInfo {
     state = state.loadSelf();
 
     const id = getObjectId(state);
@@ -199,10 +200,10 @@ function dumpState(state: C.UState): GD.IScriptStateDecodeInfo {
     };
 }
 
-function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<C.UClass>): void {
+function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<UClass>): void {
     const seenClasses = new Set<string>();
 
-    function pullFunction(fn: C.UFunction) {
+    function pullFunction(fn: UFunction) {
         const id = getObjectId(fn);
 
         if (id in library.scriptFunctions) return;
@@ -210,7 +211,7 @@ function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<C.UClass
         library.scriptFunctions[id] = dumpFunction(fn);
     }
 
-    function pullState(state: C.UState) {
+    function pullState(state: UState) {
         const id = getObjectId(state);
 
         if (id in library.scriptStates) return;
@@ -222,7 +223,7 @@ function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<C.UClass
         library.scriptStates[id] = dumpState(state);
     }
 
-    function pullClass(cls: C.UClass) {
+    function pullClass(cls: UClass) {
         cls = cls.loadSelf();
 
         const id = getObjectId(cls);
@@ -231,7 +232,7 @@ function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<C.UClass
 
         seenClasses.add(id);
 
-        const superClass = cls.superField as C.UClass;
+        const superClass = cls.superField as UClass;
 
         if (superClass && !superClass.exp?.isFake) pullClass(superClass);
         if (cls.exp?.isFake) return;
@@ -254,14 +255,14 @@ function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<C.UClass
         if (cls) pullClass(cls);
 }
 
-function pullScriptDumps(library: GD.DecodeLibrary, ...actorLists: Iterable<C.UObject>[]): void {
-    const classes = new Set<C.UClass>();
+function pullScriptDumps(library: GD.DecodeLibrary, ...actorLists: Iterable<UObject>[]): void {
+    const classes = new Set<UClass>();
 
     for (const actors of actorLists)
         for (const actor of actors) {
             if (!actor) continue;
 
-            const cls = (actor.constructor as any).hostClass as C.UClass;
+            const cls = (actor.constructor as any).hostClass as UClass;
 
             if (cls) classes.add(cls);
         }

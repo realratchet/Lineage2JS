@@ -1,7 +1,8 @@
+import type { APackage } from "@l2js/core";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 
-function buildDecodeLibrary(pkg: C.APackage, sectorName: string, settings: GD.LoadSettings_T) {
+function buildDecodeLibrary(pkg: APackage, sectorName: string, settings: GD.LoadSettings_T) {
     const decodeLibrary = new DecodeLibrary();
     const builder = new DecodeLibraryBuilder(decodeLibrary, settings);
 

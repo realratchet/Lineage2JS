@@ -1,19 +1,17 @@
-import UObject from "@l2js/core";
+import UObject, { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
 import FBox from "./un-box";
-import { BufferValue } from "@l2js/core";
 import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
-import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 import FVector from "./un-vector";
 import { ETerrainRenderMethod_T } from "./un-terrain-info";
 
 type TerrainSegmentDecodeResult_T = { object: GD.ITerrainSegmentDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialTerrainSegmentDecodeInfo };
 
-class FTerrainLightInfo implements C.IConstructable {
+class FTerrainLightInfo implements Constructable_T {
     public lightIndex: number;
     public light: GA.ULight;
     public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.lightIndex = pkg.read("compat32");
 
         if (this.lightIndex !== 0) this.light = pkg.fetchObject(this.lightIndex);
@@ -50,7 +48,7 @@ abstract class UTerrainSector extends UObject {
     declare public quadsXActual: number;
     declare public quadsYActual: number;
 
-    declare pkg: C.APackage;
+    declare pkg: APackage;
 
     // likely mesh lights?
     declare protected lightInfos: FArray<FTerrainLightInfo>;
@@ -339,7 +337,7 @@ abstract class UTerrainSector extends UObject {
         };
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 

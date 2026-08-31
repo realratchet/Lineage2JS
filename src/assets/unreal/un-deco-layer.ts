@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 import FVector from "./un-vector";
 
 type DecoRandom_T = { seed: number };

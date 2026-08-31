@@ -1,11 +1,12 @@
-class FLeaf implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+class FLeaf implements Constructable_T {
     public iZone: number;
     public iPermeating: number;
     public iVolumetric: number;
     public visibleZones: bigint;
     public musicId?: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.iZone = pkg.read("compat32");
         this.iPermeating = pkg.read("compat32");
         this.iVolumetric = pkg.read("compat32");

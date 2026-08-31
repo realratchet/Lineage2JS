@@ -1,12 +1,11 @@
-import UObject, { BufferValue } from "@l2js/core";
-import { FPrimitiveArrayLazy } from "@l2js/core/src/unreal/un-array";
+import UObject, { BufferValue, type APackage, type UExport, FPrimitiveArrayLazy } from "@l2js/core";
 
 abstract class USound extends UObject {
     protected fileType: string;
     protected likelihood: number;
     protected data = new FPrimitiveArrayLazy(BufferValue.uint8);
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         const nameIndex = pkg.read("compat32");

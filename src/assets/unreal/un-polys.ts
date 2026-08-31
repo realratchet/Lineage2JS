@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 enum PolyFlags_T {
     // Regular in-game flags.

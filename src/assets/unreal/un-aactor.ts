@@ -2,7 +2,7 @@
 // import FRotator from "./un-rotator";
 import GMath from "./un-gmath";
 import FMatrix from "./un-matrix";
-import UObject, { APackage, UExport } from "@l2js/core";
+import UObject, { APackage, UExport, type FObjectArray } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 
 abstract class UAActor extends UObject {
@@ -39,7 +39,7 @@ abstract class UAActor extends UObject {
     declare public readonly forcedRegionTag: string;
     declare public readonly forcedVisibilityZoneTag: string;
 
-    declare public readonly skins: C.FObjectArray<GA.UTexture>;
+    declare public readonly skins: FObjectArray<GA.UTexture>;
     declare public readonly style: ERenderStyle_T;
     declare public readonly isIgnoredRange: boolean;
     declare public readonly isDirectional: boolean;

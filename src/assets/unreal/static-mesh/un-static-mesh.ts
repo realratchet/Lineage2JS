@@ -5,13 +5,12 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
-import { BufferValue, UObject } from "@l2js/core";
+import { BufferValue, UObject, type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
 import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import StringSet from "../utils/string-set";
-import FArray, { FArrayLazy } from "@l2js/core/src/unreal/un-array";
 
 type StaticMeshDecodeResult_T = { object: GD.IStaticMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, materials: [string, GD.IBaseMaterialDecodeInfo][], colorMaterials: string[] };
 
@@ -19,7 +18,7 @@ const triggerDebuggerOnUnsupported = true;
 
 
 abstract class UStaticMesh extends UPrimitive {
-    declare protected materials: C.FArray<GA.UStaticMeshMaterial>;
+    declare protected materials: FArray<GA.UStaticMeshMaterial>;
 
     declare protected sections: FArray<FStaticMeshSection>;
     declare protected vertexStream: FStaticMeshVertexStream;
@@ -58,7 +57,7 @@ abstract class UStaticMesh extends UPrimitive {
     protected UseSimpleBoxCollision: boolean = false;
     public useVertexColor: boolean = false;
 
-    public static getUnserializedProperties(): C.UnserializedProperty_T[] {
+    public static getUnserializedProperties(): UnserializedProperty_T[] {
         return [
             ["Materials", "ArrayProperty", ["Class", "StaticMeshMaterial"]],
             ["bSwayObject", "BoolProperty"],
@@ -95,7 +94,7 @@ abstract class UStaticMesh extends UPrimitive {
         });
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
 
         // debugger;
 

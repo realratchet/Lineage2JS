@@ -2,10 +2,9 @@ import { FMipmap } from "./un-mipmap";
 import decompressDDS from "./dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
-import { BufferValue } from "@l2js/core";
+import { BufferValue, type APackage, type UExport, FArray } from "@l2js/core";
 import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import UMaterial from "./un-material";
-import FArray from "@l2js/core/src/unreal/un-array";
 
 /*
 
@@ -93,7 +92,7 @@ abstract class UTexture extends UMaterial {
         return { width: this.width, height: this.height };
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {    // 2785
+    public doLoad(pkg: APackage, exp: UExport) {    // 2785
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();

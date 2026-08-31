@@ -1,19 +1,17 @@
-import UObject from "@l2js/core";
-import { BufferValue } from "@l2js/core";
+import UObject, { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
-import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 
 
-export class FStaticMeshLightInfo implements C.IConstructable {
+export class FStaticMeshLightInfo implements Constructable_T {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public applied: boolean;
 
     public light: ULight;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.lightIndex = pkg.read("compat32");
         this.vertexFlags.load(pkg);
 
@@ -128,7 +126,7 @@ abstract class UStaticMeshInstance extends UObject {
         };
     }
 
-    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
+    protected doLoad(pkg: APackage, exp: UExport): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 

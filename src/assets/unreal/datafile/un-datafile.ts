@@ -1,6 +1,6 @@
 import fetchAssetHandle from "../asset-handle";
 import { ASCFType } from "./schema/dat-container";
-import { UEncodedFile, BufferValue } from "@l2js/core";
+import { UEncodedFile, BufferValue, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";
 
 class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
@@ -51,7 +51,7 @@ class UDataFile extends UEncodedFile {
     }
 }
 
-function loadSingleValue(readable: UDataFile, type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T | "ASCF", values: Record<string, any>) {
+function loadSingleValue(readable: UDataFile, type: ValidTypes_T<any> | IDatContainerType | ValueTypeNames_T | "ASCF", values: Record<string, any>) {
     if (typeof type === "string") {
         if (type === "ASCF") return new ASCFType().read(readable);
 
@@ -60,7 +60,7 @@ function loadSingleValue(readable: UDataFile, type: C.ValidTypes_T<any> | IDatCo
 
         return value as any;
     } else if (!(type as IDatContainerType).isContainerType) {
-        const schemaValue = readable.read(new BufferValue(type as C.ValidTypes_T<C.ValueTypeNames_T>));
+        const schemaValue = readable.read(new BufferValue(type as ValidTypes_T<ValueTypeNames_T>));
         const value = schemaValue.value;
 
         return value as any;

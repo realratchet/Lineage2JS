@@ -1,9 +1,10 @@
+import type { UEncodedFile, ValidTypes_T, ValueTypeNames_T } from "@l2js/core";
 interface IDatContainerType {
     isContainerType: boolean;
-    read(pkg: C.UEncodedFile, values: Record<string, any>): any;
+    read(pkg: UEncodedFile, values: Record<string, any>): any;
 }
 
 interface ISchemaValue {
-    type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T | "ASCF";
+    type: ValidTypes_T<any> | IDatContainerType | ValueTypeNames_T | "ASCF";
     name: string;
 }

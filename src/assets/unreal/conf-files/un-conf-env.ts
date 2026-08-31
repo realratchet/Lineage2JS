@@ -1,3 +1,4 @@
+import type { ANativePackage, APackage, EnginePackage_T } from "@l2js/core";
 import { EEnvCycle } from "../env-consts";
 import BaseConfigFile from "./un-base-config";
 import UConfigTimeEnv from "./un-conf-timeenv";
@@ -72,7 +73,7 @@ class UConfigEnv extends BaseConfigFile {
     declare protected waterVolume: EnvWaterVolume;
     declare protected glowEffect: EnvGlowEffect;
 
-    public async load(pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage, pkgL2Skies: C.APackage): Promise<this> {
+    public async load(pkgNative: ANativePackage, pkgEngine: EnginePackage_T, pkgL2Skies: APackage): Promise<this> {
         const fileContents = this.decodeConfig();
 
         // Parse [EnvSetup]
@@ -283,7 +284,7 @@ class UConfigEnv extends BaseConfigFile {
         return offset;
     }
 
-    private async _loadTimeEnvs(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): Promise<void> {
+    private async _loadTimeEnvs(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): Promise<void> {
         let readOffset = findSection(fileContents, "EnvSetup");
 
         // Skip till TimeEnvFileNum

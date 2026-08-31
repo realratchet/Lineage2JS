@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 abstract class UTextureModifyInfo extends UObject {
     declare public readonly useModify: boolean;

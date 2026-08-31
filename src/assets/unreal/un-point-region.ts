@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 abstract class UPointRegion extends UObject {
     declare protected readonly zone: GA.FZoneInfo;

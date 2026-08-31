@@ -1,6 +1,5 @@
-import { APackage, BufferValue, } from "@l2js/core";
+import { APackage, BufferValue, type Constructable_T, type UExport, type UObject, FArray, FObjectArray, FPrimitiveArray, PropertyTag } from "@l2js/core";
 import AInfo from "./un-info";
-import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
 import FBox from "./un-box";
 import FCoords from "./un-coords";
@@ -11,7 +10,6 @@ import GMath from "./un-gmath";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 import { TextureMapAxis_T } from "./un-terrain-layer";
-import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
 import FPlane from "./un-plane";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dds/dxt-decode";
 
@@ -45,7 +43,7 @@ enum ETerrainRenderMethod_T {
     RM_AlphaMap = 2
 }
 
-class FTerrainNormalPair implements C.IConstructable {
+class FTerrainNormalPair implements Constructable_T {
     public normal1 = FVector.make();
     public normal2 = FVector.make();
 
@@ -73,21 +71,21 @@ abstract class ATerrainInfo extends AInfo {
     declare public readonly terrainScale: GA.FVector;
     declare public readonly layers: GA.UTerrainLayer[];
 
-    declare protected readonly decoLayers: C.FArray<GA.UDecoLayer>
+    declare protected readonly decoLayers: FArray<GA.UDecoLayer>
     declare protected readonly decoLayerOffset: number;
     declare protected readonly showOnTerrain: number;
-    declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"int32">;
-    declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"int32">;
+    declare public readonly quadVisibilityBitmap: FPrimitiveArray<"int32">;
+    declare public readonly edgeTurnBitmap: FPrimitiveArray<"int32">;
     declare public readonly mapX: number;
     declare public readonly mapY: number;
-    declare public readonly quadVisibilityBitmapOrig: C.FPrimitiveArray<"int32">;
-    declare public readonly edgeTurnBitmapOrig: C.FPrimitiveArray<"int32">;
+    declare public readonly quadVisibilityBitmapOrig: FPrimitiveArray<"int32">;
+    declare public readonly edgeTurnBitmapOrig: FPrimitiveArray<"int32">;
     declare protected readonly generatedSectorCounter: number;
     declare protected readonly numIntMap: number;
     declare protected readonly autoTimeGeneration: boolean;
-    declare protected readonly tIntMap: C.FArray<GA.FTIntMap>;
+    declare protected readonly tIntMap: FArray<GA.FTIntMap>;
     declare protected readonly tickTime: number;
-    declare protected sectors: C.FObjectArray<GA.UTerrainSector>;
+    declare protected sectors: FObjectArray<GA.UTerrainSector>;
     declare protected readonly showOnInvisibleTerrain: boolean;
     declare protected readonly litDirectional: boolean;
     declare protected readonly disregardTerrainLighting: boolean;
@@ -114,7 +112,7 @@ abstract class ATerrainInfo extends AInfo {
 
     declare public vertices: Array<FVector>;
     declare public faceNormals: Array<FTerrainNormalPair>;
-    declare public vertexColors: C.FArray<GA.FColor>;
+    declare public vertexColors: FArray<GA.FColor>;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -345,7 +343,7 @@ abstract class ATerrainInfo extends AInfo {
         return this.renderCombinations.length - 1;
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport<ATerrainInfo>) {
+    public doLoad(pkg: APackage, exp: UExport<ATerrainInfo>) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -666,7 +664,7 @@ abstract class ATerrainInfo extends AInfo {
 
     protected combineLayerWeights() { throw new Error("not yet implemented"); }
 
-    public postLoad(pkg: C.APackage, exp: C.UExport<C.UObject>) {
+    public postLoad(pkg: APackage, exp: UExport<UObject>) {
         super.postLoad(pkg, exp);
 
         let startX = 0, startY = 0;

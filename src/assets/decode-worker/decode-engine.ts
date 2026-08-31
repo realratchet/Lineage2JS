@@ -1,3 +1,4 @@
+import type { APackage, UClass } from "@l2js/core";
 import AssetLoader from "../asset-loader";
 import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
 import UDataFile from "@l2js/engine/datafile/un-datafile";
@@ -556,12 +557,12 @@ class DecodeEngine {
         return materials;
     }
 
-    protected async fetchScriptClass(path: string): Promise<[C.APackage, C.UClass]> {
+    protected async fetchScriptClass(path: string): Promise<[APackage, UClass]> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Script"), { neverUnload: true });
         const lowerName = objectName.toLowerCase();
         const actualName = (pkg.exports.find(entry => (entry.objectName as string).toLowerCase() === lowerName)?.objectName as string) || objectName;
-        const cls = pkg.fetchObjectByType<C.UClass>("Class", actualName);
+        const cls = pkg.fetchObjectByType<UClass>("Class", actualName);
 
         if (!cls) throw new Error(`Script class '${path}' not found.`);
 
@@ -702,7 +703,7 @@ class DecodeEngine {
         const materialIds = new Map<string, string>();
         const textureIds = new Map<string, string>();
         const classIds = new Map<string, string | null>();
-        const classes: C.UClass[] = [];
+        const classes: UClass[] = [];
 
         library.name = bundleName;
 
@@ -733,7 +734,7 @@ class DecodeEngine {
 
             if (classIds.has(classPath)) continue;
 
-            let cls: C.UClass;
+            let cls: UClass;
 
             try {
                 [, cls] = await this.fetchScriptClass(npc.className);

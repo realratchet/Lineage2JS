@@ -1,6 +1,7 @@
+import type { NativeTypes_T, PropertyTypes_T, UObject } from "@l2js/core";
 import * as THREE from "three";
 
-type ExtendsUObject<T> = T & C.UObject;
+type ExtendsUObject<T> = T & UObject;
 
 
 declare global {
@@ -44,7 +45,7 @@ declare global {
                 export type FStaticLightmapTexture = import("@l2js/engine/model/un-multilightmap-texture").FStaticLightmapTexture;
 
                 export type NativeClientTypes_T =
-                    | C.NativeTypes_T
+                    | NativeTypes_T
                     | "NMovableSunLight"
                     | "NSun"
                     | "NMoon"
@@ -220,7 +221,7 @@ declare global {
                 export interface IScriptFieldDecodeInfo {
                     id: string,
                     name: string,
-                    type: C.PropertyTypes_T,
+                    type: PropertyTypes_T,
                     arrayDimensions: number,
                     flags: number
                 }

@@ -1,4 +1,4 @@
-import UObject from "@l2js/core";
+import { UObject } from "@l2js/core";
 
 abstract class ULevelSummary extends UObject { 
     declare public readonly title: string;

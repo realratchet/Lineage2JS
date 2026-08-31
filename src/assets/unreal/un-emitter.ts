@@ -1,5 +1,4 @@
-import { FObjectArray } from "@l2js/core/unreal/un-array";
-import UObject from "@l2js/core";
+import UObject, { FObjectArray } from "@l2js/core";
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
 import FBox from "./un-box";
