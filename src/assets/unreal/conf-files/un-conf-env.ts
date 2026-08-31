@@ -3,6 +3,7 @@ import { EEnvCycle } from "../env-consts";
 import BaseConfigFile from "./un-base-config";
 import UConfigTimeEnv from "./un-conf-timeenv";
 import { consumeNextValue, consumeTuple, findSection } from "./conf-parser";
+import type { UMaterial } from "../un-material";
 
 class EnvSetup {
     public isClock: boolean;
@@ -13,9 +14,9 @@ class EnvSetup {
     public hazeringName: string;
     public cloudNames: string[];
 
-    public skybox: GA.UMaterial;
-    public hazering: GA.UMaterial;
-    public clouds: GA.UMaterial[];
+    public skybox: UMaterial;
+    public hazering: UMaterial;
+    public clouds: UMaterial[];
 
     public shadowTick: number;
     public staticLightingAdjust: number;

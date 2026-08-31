@@ -2,6 +2,7 @@ import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
 import buildTriangleIndex from "../../physics/triangle-index";
 import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T } from "@l2js/engine/static-mesh-batch";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),
@@ -33,7 +34,7 @@ type PreparedActorGeometryData_T = {
 }
 
 function groupActorsForBatching(
-    library: GD.DecodeLibrary,
+    library: DecodeLibrary,
     uniqueActors: Map<string, GD.IBaseObjectOrInstanceDecodeInfo>,
     unbatchable: GD.IStaticMeshActorDecodeInfo[]
 ): Map<string, GD.IStaticMeshActorDecodeInfo[]> {
@@ -68,7 +69,7 @@ function groupActorsForBatching(
 }
 
 function resolveMaterialSlots(
-    library: GD.DecodeLibrary,
+    library: DecodeLibrary,
     materialUuid: string,
     variants: Map<string, string>,
     modifiers: string[] = []
@@ -123,7 +124,7 @@ function prepareActorLights(info?: GD.ILightInstanceDecodeInfo): { scene: BatchL
 }
 
 function prepareActorGeometriesData(
-    library: GD.DecodeLibrary,
+    library: DecodeLibrary,
     actors: GD.IStaticMeshActorDecodeInfo[],
     variants: Map<string, string>
 ): { actorGeometries: PreparedActorGeometryData_T[], materialUuids: string[] } {
@@ -409,7 +410,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
 
 // replaces the batched actors in the BSP leaves with a single whole-batch entry
 function rewriteLeafActors(
-    library: GD.DecodeLibrary,
+    library: DecodeLibrary,
     actors: GD.IStaticMeshActorDecodeInfo[],
     batchUuid: string
 ) {
@@ -461,7 +462,7 @@ function mortonKey(position: number[] | undefined): number {
     return key;
 }
 
-function buildStaticMeshBatchData(library: GD.DecodeLibrary): StaticMeshBatchManifest_T {
+function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManifest_T {
     const manifest: StaticMeshBatchManifest_T = { batches: [], unbatchable: [] };
 
     (library as any).staticMeshBatches = manifest;

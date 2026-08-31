@@ -1,4 +1,4 @@
-import UObject, { type FPrimitiveArray } from "@l2js/core";
+import { UObject, type FPrimitiveArray } from "@l2js/core";
 
 abstract class FTIntMap extends UObject {
     declare public readonly time: number;

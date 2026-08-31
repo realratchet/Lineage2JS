@@ -1,5 +1,6 @@
 import { WebGLRenderTarget, WebGLRenderer, ShaderMaterial, LinearFilter, RGBAFormat } from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
+import type { DisplayConfig_T } from "@l2js/engine/conf-files/un-conf-system";
 
 const GAMMA_STEPS = [1.2, 1.0, 0.8, 0.6, 0.4];
 
@@ -47,7 +48,7 @@ class DisplayGammaPass {
         this.fsQuad = new FullScreenQuad(this.material);
     }
 
-    public setRamp({ brightness, contrast, gamma }: GA.IDisplayConfig) {
+    public setRamp({ brightness, contrast, gamma }: DisplayConfig_T) {
         this.material.uniforms.exponent.value = 1 / gamma;
         this.material.uniforms.scale.value = contrast + 0.5;
         this.material.uniforms.offset.value = (brightness - contrast) * 32768 / 65535;

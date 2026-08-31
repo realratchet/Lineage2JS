@@ -3,6 +3,7 @@ import type BaseActor from "../base-actor";
 import type { SectorObject } from "../objects/zone-object";
 import type RenderManager from "./render-manager";
 import decodeObject3D from "../assets/decoders/object3d-decoder";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 class WaterHitEffect {
     protected static readonly SIZE_SCALE = 1 / 9;
@@ -17,7 +18,7 @@ class WaterHitEffect {
     }
 
     public spawn(sector: SectorObject, effectName: string, position: Vector3, speed: number): number {
-        const library = (sector as any).decodeLibrary as GD.DecodeLibrary;
+        const library = (sector as any).decodeLibrary as DecodeLibrary;
         const info = library.effectTemplates[effectName] || library.effectTemplates[effectName.toLowerCase()];
 
         if (!info) throw new Error(`Water hit effect '${effectName}' is not in '${library.name}'.`);

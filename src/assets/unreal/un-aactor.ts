@@ -2,29 +2,39 @@
 // import FRotator from "./un-rotator";
 import GMath from "./un-gmath";
 import FMatrix from "./un-matrix";
-import UObject, { APackage, UExport, type FObjectArray } from "@l2js/core";
+import { UObject, APackage, UExport, type FObjectArray } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
+import type { UTextureModifyInfo } from "./un-texture-modify-info";
+import type { ULevelInfo } from "./un-level-info";
+import type { UPointRegion } from "./un-point-region";
+import type { UPhysicsVolume } from "./un-physics-volume";
+import type { FVector } from "./un-vector";
+import type { FRotator } from "./un-rotator";
+import type { FColor } from "./un-color";
+import type { FScale } from "./un-scale";
+import type { UTexture } from "./un-texture";
+import type { UModel } from "./model/un-model";
 
 abstract class UAActor extends UObject {
-    declare public readonly texModifyInfo: GA.UTextureModifyInfo;
+    declare public readonly texModifyInfo: UTextureModifyInfo;
     declare public readonly isDynamicActorFilterState: boolean;
-    declare public readonly levelInfo: GA.ULevelInfo;
-    declare public readonly region: GA.UPointRegion;
+    declare public readonly levelInfo: ULevelInfo;
+    declare public readonly region: UPointRegion;
     declare public readonly drawScale: number;
     declare public readonly tag: string;
     declare public readonly l2MoveEvent: string;
     declare public readonly group: string;
     declare public readonly isSunAffected: boolean;
-    declare public readonly physicsVolume: GA.UPhysicsVolume;
-    declare public readonly location: GA.FVector;
-    declare public readonly rotation: GA.FRotator;
-    declare public readonly scale: GA.FVector;
-    declare public readonly swayRotationOrig: GA.FRotator;
+    declare public readonly physicsVolume: UPhysicsVolume;
+    declare public readonly location: FVector;
+    declare public readonly rotation: FRotator;
+    declare public readonly scale: FVector;
+    declare public readonly swayRotationOrig: FRotator;
 
     declare public readonly hasDistanceFog: boolean;
     declare public readonly distanceFogEnd: number;
     declare public readonly distanceFogStart: number;
-    declare public readonly distanceFogColor: GA.FColor;
+    declare public readonly distanceFogColor: FColor;
 
     declare public readonly isHiddenInEditor: boolean;
     declare public readonly isLightChanged: boolean;
@@ -32,23 +42,23 @@ abstract class UAActor extends UObject {
     declare public readonly isPendingDelete: boolean;
     declare public readonly isSelected: boolean;
 
-    declare public readonly mainScale: GA.FScale;
+    declare public readonly mainScale: FScale;
     // protected dummy: boolean;
 
     // protected _mesh: any;
     declare public readonly forcedRegionTag: string;
     declare public readonly forcedVisibilityZoneTag: string;
 
-    declare public readonly skins: FObjectArray<GA.UTexture>;
+    declare public readonly skins: FObjectArray<UTexture>;
     declare public readonly style: ERenderStyle_T;
     declare public readonly isIgnoredRange: boolean;
     declare public readonly isDirectional: boolean;
 
-    declare public readonly postScale: GA.FScale;
+    declare public readonly postScale: FScale;
     declare public readonly polyFlags: number;
-    declare public readonly brush: GA.UModel;
-    declare public readonly prePivot: GA.FVector;
-    declare public readonly postPivot: GA.FVector;
+    declare public readonly brush: UModel;
+    declare public readonly prePivot: FVector;
+    declare public readonly postPivot: FVector;
     declare public readonly isRangeIgnored: boolean;
     declare public readonly isBlockingActors: boolean;
     declare public readonly isBlockingPlayers: boolean;
@@ -68,7 +78,7 @@ abstract class UAActor extends UObject {
     declare public ambientGlow: number;
 
     declare public readonly physics: EPhysics_T;
-    declare public readonly rotationRate: GA.FRotator;
+    declare public readonly rotationRate: FRotator;
     declare public readonly isFixedRotationDir: boolean;
     declare public readonly drawType: EDrawType_T;
     declare public readonly filterState: EFilterState_T;

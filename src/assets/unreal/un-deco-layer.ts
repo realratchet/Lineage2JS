@@ -1,5 +1,11 @@
 import { UObject } from "@l2js/core";
 import FVector from "./un-vector";
+import type { FRange, FRangeVector } from "./un-range";
+import type { UTexture } from "./un-texture";
+import type { UStaticMesh } from "./static-mesh/un-static-mesh";
+import type { ATerrainInfo } from "./un-terrain-info";
+import type { UTerrainSector } from "./un-terrain-sector";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 type DecoRandom_T = { seed: number };
 
@@ -9,11 +15,11 @@ function getSRand(random: DecoRandom_T) {
     return (random.seed & 0x007fffff) / 0x00800000;
 }
 
-function getRangeSRand(range: GA.FRange, random: DecoRandom_T) {
+function getRangeSRand(range: FRange, random: DecoRandom_T) {
     return range.max + (range.min - range.max) * getSRand(random);
 }
 
-function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, location: GA.FVector, normal: GA.FVector, scale: GD.Vector3Arr, randomYaw: boolean, random: DecoRandom_T) {
+function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, location: FVector, normal: FVector, scale: GD.Vector3Arr, randomYaw: boolean, random: DecoRandom_T) {
     const rad = Math.PI / 32768;
     const pitch = Math.atan2(normal.z, Math.sqrt(normal.x * normal.x + normal.y * normal.y)) / rad - 16384;
     const yaw = randomYaw ? Math.floor(65535 * getSRand(random)) : Math.atan2(normal.y, normal.x) / rad;
@@ -40,15 +46,15 @@ function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, 
 
 abstract class UDecoLayer extends UObject {
     declare protected readonly showOnTerrain: number;
-    declare protected readonly scaleMap: GA.UTexture;
-    declare protected readonly densityMap: GA.UTexture;
-    declare protected readonly colorMap: GA.UTexture;
-    declare public readonly staticMesh: GA.UStaticMesh;
-    declare protected readonly scaleMultiplier: GA.FRangeVector;
+    declare protected readonly scaleMap: UTexture;
+    declare protected readonly densityMap: UTexture;
+    declare protected readonly colorMap: UTexture;
+    declare public readonly staticMesh: UStaticMesh;
+    declare protected readonly scaleMultiplier: FRangeVector;
     declare protected readonly ambientSoundType: number[];
     declare protected readonly size: number;
-    declare protected readonly fadeoutRadius: GA.FRange;
-    declare protected readonly densityMultiplier: GA.FRange;
+    declare protected readonly fadeoutRadius: FRange;
+    declare protected readonly densityMultiplier: FRange;
     declare protected readonly maxPerQuad: number;
     declare protected readonly seed: number;
     declare protected readonly alignToTerrain: number;
@@ -82,7 +88,7 @@ abstract class UDecoLayer extends UObject {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, info: GA.ATerrainInfo, sectors: GA.UTerrainSector[], decoLayerOffset: number): GD.ITerrainDecorationDecodeInfo[] {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, info: ATerrainInfo, sectors: UTerrainSector[], decoLayerOffset: number): GD.ITerrainDecorationDecodeInfo[] {
         if (!this.showOnTerrain || !this.staticMesh || !this.densityMap || this.maxPerQuad <= 0) return [];
 
         const library = builder.library;
@@ -112,7 +118,7 @@ abstract class UDecoLayer extends UObject {
 
                         const randX = getSRand(random);
                         const randY = getSRand(random);
-                        let dirX: GA.FVector, dirY: GA.FVector, location: GA.FVector;
+                        let dirX: FVector, dirY: FVector, location: FVector;
 
                         if (randX > randY) {
                             const base = info.vertices[info.getGlobalVertex(globalX + 1, globalY)];

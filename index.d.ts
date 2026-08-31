@@ -1,161 +1,14 @@
-import type { NativeTypes_T, PropertyTypes_T, UObject } from "@l2js/core";
+import type { PropertyTypes_T } from "@l2js/core";
+import type { SupportedBlendingTypes_T } from "@l2js/engine/un-material";
+import type { LightEffect_T, LightType_T } from "@l2js/engine/un-light";
+import type { EEnvCycle } from "@l2js/engine/un-l2env";
 import * as THREE from "three";
-
-type ExtendsUObject<T> = T & UObject;
-
 
 declare global {
     namespace L2JS {
         namespace Client {
             namespace Rendering {
 
-            }
-
-            namespace Assets {
-                export type UPackage = import("@l2js/engine/un-package").UPackage;
-                export type UNativePackage = import("@l2js/engine/un-package").UNativePackage;
-                export type UCorePackage = import("@l2js/engine/un-package").UCorePackage;
-                export type UEnginePackage = import("@l2js/engine/un-package").UEnginePackage;
-
-                export type ULevel = import("@l2js/engine/un-level").ULevel;
-                export type ULevelInfo = import("@l2js/engine/un-level-info").ULevelInfo;
-
-                export type UModel = import("@l2js/engine/model/un-model").UModel;
-                export type UTerrainLayer = import("@l2js/engine/un-terrain-layer").UTerrainLayer;
-                export type UTerrainSector = import("@l2js/engine/un-terrain-sector").UTerrainSector;
-
-                export type FLeaf = import("@l2js/engine/un-leaf").FLeaf;
-
-                export type FVector = import("@l2js/engine/un-vector").FVector;
-                export type FCoords = import("@l2js/engine/un-coords").FCoords;
-                export type FRotator = import("@l2js/engine/un-rotator").FRotator;
-                export type FQuaternion = import("@l2js/engine/un-quaternion").FQuaternion;
-                export type FPlane = import("@l2js/engine/un-plane").FPlane;
-                export type FBox = import("@l2js/engine/un-box").FBox;
-                export type FMatrix = import("@l2js/engine/un-matrix").FMatrix;
-                export type FColor = import("@l2js/engine/un-color").FColor;
-                export type FScale = import("@l2js/engine/un-scale").FScale;
-                export type FRange = import("@l2js/engine/un-range").FRange;
-                export type FRangeVector = import("@l2js/engine/un-range").FRangeVector;
-
-                export type UPlatte = import("@l2js/engine/un-palette").UPlatte;
-                export type UTexture = ExtendsUObject<import("@l2js/engine/un-texture").UTexture>;
-
-                export type UTextureModifyInfo = import("@l2js/engine/un-texture-modify-info").UTextureModifyInfo;
-                export type FStaticLightmapTexture = import("@l2js/engine/model/un-multilightmap-texture").FStaticLightmapTexture;
-
-                export type NativeClientTypes_T =
-                    | NativeTypes_T
-                    | "NMovableSunLight"
-                    | "NSun"
-                    | "NMoon"
-                    | "L2FogInfo"
-                    | "L2SeamlessInfo"
-                    | "L2NTimeLight"
-                    | "L2NEnvLight"
-                    | "SceneManager"
-                    | "MovableStaticMeshActor"
-                    | "Combiner"
-                    | "VertexColor"
-                    | "LineagePlayerController"
-                    | "SkillVisualEffect"
-                    | "SkillAction"
-                    | "SkillAction_LocateEffect"
-                    | "SkillAction_SwordTrail"
-                    | "AnimNotify"
-                    | "AnimNotify_IdleSound"
-                    | "AnimNotify_MatSubAction"
-                    | "AnimNotify_Scripted"
-                    | "AnimNotify_Script"
-                    | "AnimNotify_Sound"
-                    | "AnimNotify_SwimSound"
-                    | "AnimNotify_DestroyEffect"
-                    | "AnimNotify_Effect"
-                    | "AnimNotify_AttackVoice"
-                    | "AnimNotify_Channeling"
-                    | "AnimNotify_AttackPreShot"
-                    | "AnimNotify_AttackShot"
-                    | "AnimNotify_AttackItem"
-                    | "AnimNotify_ScreenFade"
-                    | "AnimNotify_ViewShake"
-                    | "AnimNotify_BoneScale";
-
-                export type USound = import("@l2js/engine/un-sound").USound;
-                export type UAmbientSoundObject = import("@l2js/engine/un-ambient-sound").UAmbientSoundObject;
-                export type UMusicVolume = import("@l2js/engine/un-music-volume").UMusicVolume;
-
-                export type UNSun = import("@l2js/engine/un-nsun").UNSun;
-                export type UNMoon = import("@l2js/engine/un-nmoon").UNMoon;
-
-                export type UPolys = import("@l2js/engine/un-polys").UPolys;
-                export type PolyFlags_T = import("@l2js/engine/un-polys").PolyFlags_T;
-
-                export type UBrush = import("@l2js/engine/un-brush").UBrush;
-
-                export type UMaterial = import("@l2js/engine/un-material").UMaterial;
-                export type UShader = import("@l2js/engine/un-material").UShader;
-
-                export type AActor = import("@l2js/engine/un-aactor").UAActor;
-
-                export type AInfo = import("@l2js/engine/un-info").AInfo;
-                export type UL2FogInfo = import("@l2js/engine/un-fog-info").UL2FogInfo;
-                export type FZoneInfo = import("@l2js/engine/un-zone-info").FZoneInfo;
-                export type ATerrainInfo = import("@l2js/engine/un-terrain-info").ATerrainInfo;
-
-                export type UEmitter = import("@l2js/engine/un-emitter").UEmitter;
-
-                export interface IUserConfig {
-                    clippingRange: IClippingRangeConfig;
-                    display: IDisplayConfig;
-                }
-
-                export interface IDisplayConfig {
-                    brightness: number;
-                    contrast: number;
-                    gamma: number;
-                }
-
-                export interface IClippingRangeConfig {
-                    staticMesh: number;
-                    staticMeshLod: number;
-                    pawn: number;
-                    terrain: number;
-                    actor: number;
-                    projector: number;
-                    antiPortal: number;
-                    pawnMin: number;
-                    pawnMax: number;
-                }
-
-                export type UStaticMesh = import("@l2js/engine/static-mesh/un-static-mesh").UStaticMesh;
-                export type UStaticMeshActor = import("@l2js/engine/static-mesh/un-static-mesh-actor").UStaticMeshActor;
-                export type UStaticMeshInstance = import("@l2js/engine/static-mesh/un-static-mesh-instance").UStaticMeshInstance;
-                export type UStaticMeshMaterial = import("@l2js/engine/un-material").UStaticMeshMaterial;
-
-                export type USkeletalMesh = import("@l2js/engine/skeletal-mesh/un-skeletal-mesh").USkeletalMesh;
-                export type UPawn = import("@l2js/engine/un-pawn").UPawn;
-                export type UMeshAnimation = import("@l2js/engine/skeletal-mesh/un-mesh-animation").UMeshAnimation;
-
-                export type FTIntMap = import("@l2js/engine/un-tint-map").FTIntMap;
-                export type UDecoLayer = import("@l2js/engine/un-deco-layer").UDecoLayer;
-
-                export type UPointRegion = import("@l2js/engine/un-point-region").UPointRegion;
-
-                export type UPhysicsVolume = import("@l2js/engine/un-physics-volume").UPhysicsVolume;
-
-                export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
-
-                export type ULight = import("@l2js/engine/un-light").ULight;
-                export type LightEffect_T = import("@l2js/engine/un-light").LightEffect_T;
-                export type LightType_T = import("@l2js/engine/un-light").LightType_T;
-                export type UNMovableSunLight = import("@l2js/engine/un-movable-sunlight").UNMovableSunLight;
-
-                export type FNTimeColor = import("@l2js/engine/un-l2env").FNTimeColor;
-                export type FNTimeHSV = import("@l2js/engine/un-l2env").FNTimeHSV;
-                export type FNTimeScale = import("@l2js/engine/un-l2env").FNTimeScale;
-                export type UL2NEnvLight = import("@l2js/engine/un-l2env").UL2NEnvLight;
-                export type UL2NTimeLight = import("@l2js/engine/un-l2env").UL2NTimeLight;
-                export type EEnvCycle = import("@l2js/engine/un-l2env").EEnvCycle;
             }
 
             namespace Decoding {
@@ -172,8 +25,6 @@ declare global {
                 export type EulerArr = [...Vector3Arr, EulerOrder];
                 export type ArrGeometryGroup = [number, number, number];
 
-                export type DecodeLibrary = import("@l2js/engine/decode-library").DecodeLibrary;
-                export type DecodeLibraryBuilder = import("@l2js/engine/decode-library-builder").DecodeLibraryBuilder;
                 export type MapData_T = { texture: THREE.Texture, size: THREE.Vector2 };
 
                 export interface INpcDefinition {
@@ -851,7 +702,7 @@ declare global {
                     depthWrite?: boolean,
                     side?: THREE.Side,
                     fog?: boolean,
-                    blendingMode?: GA.SupportedBlendingTypes_T
+                    blendingMode?: SupportedBlendingTypes_T
                 }
 
                 // Material and Geometry Types
@@ -1114,8 +965,8 @@ declare global {
                     hsv: [number, number, number],
                     radius: number,
                     directional: boolean,
-                    lightType: GA.LightType_T,
-                    lightEffect: GA.LightEffect_T,
+                    lightType: LightType_T,
+                    lightEffect: LightEffect_T,
                     cone: number,
                     isSunlightColor: boolean,
                     period: number,
@@ -1182,7 +1033,7 @@ declare global {
                     specularMask: string,
                     selfIllumination: string,
                     selfIlluminationMask: string,
-                    blendingMode: GA.SupportedBlendingTypes_T,
+                    blendingMode: SupportedBlendingTypes_T,
                     depthWrite: boolean,
                     depthTest: boolean,
                     doubleSide: boolean,
@@ -1267,7 +1118,7 @@ declare global {
                 export interface IFinalBlendDecodeInfo extends IBaseMaterialModifierDecodeInfo {
                     modifierType: "finalBlend",
                     material: string,
-                    blendingMode: GA.SupportedBlendingTypes_T,
+                    blendingMode: SupportedBlendingTypes_T,
                     doubleSide: boolean,
                     alphaTest: boolean,
                     alphaRef: number,
@@ -1315,7 +1166,7 @@ declare global {
                     staticLightingAdjust: number,
                     slopeSunAngle: number,
                     subLightNum: number
-                    timeEnv: { [key in GA.EEnvCycle]: IL2NEnvLightDecodeInfo }
+                    timeEnv: { [key in EEnvCycle]: IL2NEnvLightDecodeInfo }
                     skybox: string,
                     hazering: string,
                     clouds: string[],
@@ -1334,7 +1185,7 @@ declare global {
                     }
                 }
                 export interface IL2NEnvLightDecodeInfo {
-                    type: GA.EEnvCycle,
+                    type: EEnvCycle,
                     light: IL2NTimeLightDecodeInfo,
                     color: {
                         sky: { type: "TimeColor", array: INTimeColorDecodeInfo[] },

@@ -1,9 +1,10 @@
 import { UObject } from "@l2js/core";
+import type { FVector } from "./un-vector";
 
 abstract class FScale extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
-    declare public readonly scale: GA.FVector;
+    declare public readonly scale: FVector;
 
     declare public readonly sheerRate: number;
     declare public readonly sheerAxis: ESheerAxis_T;
@@ -16,7 +17,7 @@ abstract class FScale extends UObject {
         });
     }
 
-    public constructor(scale?: GA.FVector, sheerRate?: number, sheerAxis?: ESheerAxis_T) {
+    public constructor(scale?: FVector, sheerRate?: number, sheerAxis?: ESheerAxis_T) {
         super();
 
         this.scale = scale || this.scale;
@@ -37,4 +38,3 @@ enum ESheerAxis_T {
 
 export default FScale;
 export { FScale, ESheerAxis_T };
-

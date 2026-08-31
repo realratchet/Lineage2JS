@@ -1,6 +1,7 @@
 import { UObject } from "@l2js/core";
 import UTexture from "./un-texture";
 import { convertDDSTextureInfo } from "./dds/dxt-decode";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 // WetTexture: a WaterTexture whose simulated water field displaces SourceTexture
 // horizontally each tick. The simulation itself runs client side
@@ -33,7 +34,7 @@ abstract class UADrop extends UObject {
 }
 
 abstract class UWetTexture extends UTexture {
-    declare protected sourceTexture: GA.UTexture;
+    declare protected sourceTexture: UTexture;
     declare protected waveAmp: number;
     declare protected numDrops: number;
     declare protected drops: UADrop[];
@@ -51,7 +52,7 @@ abstract class UWetTexture extends UTexture {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
         const source = this.sourceTexture?.loadSelf();
         const sourceUuid = source ? builder.pullMaterial(source) : null;
         const info = sourceUuid ? builder.library.materials[sourceUuid] : null;

@@ -1,15 +1,17 @@
 import FZoneInfo from "./un-zone-info";
+import type { ULevel } from "./un-level";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class ULevelInfo extends FZoneInfo implements GD.IInfo {
-    declare protected level: GA.ULevel;
+    declare protected level: ULevel;
 
-    public setLevel(level: GA.ULevel) { this.level = level; }
+    public setLevel(level: ULevel) { this.level = level; }
     public getLevel() { return this.level; }
 
     public setSkyZoneInfo(skyZone: any) { this.skyZone = skyZone; }
     public getSkyZoneInfo() { return this.skyZone; }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): GD.IBaseZoneDecodeInfo {
         return {
             type: "Sector",
             uuid: this.uuid,

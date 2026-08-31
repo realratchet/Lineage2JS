@@ -1,6 +1,9 @@
 import type { FObjectArray } from "@l2js/core";
 import AInfo from "./un-info";
 import FColor from "./un-color";
+import type { FVector } from "./un-vector";
+import type { ATerrainInfo } from "./un-terrain-info";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class FZoneInfo extends AInfo implements GD.IInfo {
     declare public readonly isFogZone: boolean;
@@ -10,13 +13,13 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
 
     declare public readonly brightness: number;
     declare public readonly ambientBrightness: number;
-    declare public readonly ambientVector: GA.FVector;
+    declare public readonly ambientVector: FVector;
 
     declare public readonly killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
     declare public readonly killZType: number;
     declare public readonly isSoftKillZ: boolean;
 
-    declare public readonly terrains: FObjectArray<GA.ATerrainInfo>;
+    declare public readonly terrains: FObjectArray<ATerrainInfo>;
 
     declare public readonly ambientHue: number;
     declare public readonly ambientSaturation: number;
@@ -91,7 +94,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
 
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): GD.IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Zone",

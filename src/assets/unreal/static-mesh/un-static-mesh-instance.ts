@@ -1,6 +1,8 @@
-import UObject, { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
+import { UObject, type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
+import type { UStaticMeshActor } from "./un-static-mesh-actor";
+import type { DecodeLibrary } from "../decode-library";
 
 
 
@@ -26,7 +28,7 @@ export class FStaticMeshLightInfo implements Constructable_T {
         return `FStaticMeshLightInfo(light=${this.light.toString()})`;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): any {
+    public getDecodeInfo(library: DecodeLibrary): any {
         return {
             vertexFlags: this.vertexFlags,
             ...(this.light.loadSelf().getDecodeInfo(library))
@@ -41,11 +43,11 @@ abstract class UStaticMeshInstance extends UObject {
 
     declare public unkArrIndex: number[];
 
-    declare protected actor: GA.UStaticMeshActor;
+    declare protected actor: UStaticMeshActor;
 
-    public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
+    public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } {
+    public getDecodeInfo(library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
     

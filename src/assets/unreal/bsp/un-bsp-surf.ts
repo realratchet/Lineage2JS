@@ -1,9 +1,11 @@
 import { FPlane } from "../un-plane";
 import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { PolyFlags_T } from "../un-polys";
+import type { UShader } from "../un-material";
+import type { UBrush } from "../un-brush";
 
 class FBSPSurf implements Constructable_T {
-    public material: GA.UShader;
+    public material: UShader;
 
     public flags: number;       // 4 bytes polygon flags.
     public polyFlags: FlagDict_T<keyof typeof PolyFlags_T>;
@@ -16,7 +18,7 @@ class FBSPSurf implements Constructable_T {
 
     public plane: FPlane;
 
-    public actor: GA.UBrush;            // 4 bytes brush actor owning this Bsp surface.
+    public actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
     public unkInt32: number;
@@ -48,8 +50,8 @@ class FBSPSurf implements Constructable_T {
 
         const offset = pkg.tell();
 
-        this.material = pkg.fetchObject<GA.UShader>(materialId);
-        this.actor = pkg.fetchObject<GA.UBrush>(ownerId);
+        this.material = pkg.fetchObject<UShader>(materialId);
+        this.actor = pkg.fetchObject<UBrush>(ownerId);
 
         pkg.seek(offset, "set");
 

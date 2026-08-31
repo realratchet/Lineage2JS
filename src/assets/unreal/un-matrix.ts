@@ -3,16 +3,18 @@ import GMath from "./un-gmath";
 import FPlane from "./un-plane";
 import FVector from "./un-vector";
 import { UObject } from "@l2js/core";
+import type { FRotator } from "./un-rotator";
+import type { FQuaternion } from "./un-quaternion";
 
 const eps = 1e-8;
 
 abstract class FMatrix extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
-    declare public readonly planeX: GA.FPlane;
-    declare public readonly planeY: GA.FPlane;
-    declare public readonly planeZ: GA.FPlane;
-    declare public readonly planeW: GA.FPlane;
+    declare public readonly planeX: FPlane;
+    declare public readonly planeY: FPlane;
+    declare public readonly planeZ: FPlane;
+    declare public readonly planeW: FPlane;
 
     public constructor() {
         super();
@@ -384,7 +386,7 @@ abstract class FMatrix extends UObject {
         return res;
     }
 
-    public static fromRotator(rot: GA.FRotator) {
+    public static fromRotator(rot: FRotator) {
         const SR = GMath().sin(rot.roll),
             SP = GMath().sin(rot.pitch),
             SY = GMath().sin(rot.yaw),
@@ -417,7 +419,7 @@ abstract class FMatrix extends UObject {
         return M;
     }
 
-    public static fromQuaternion(quat: GA.FQuaternion) {
+    public static fromQuaternion(quat: FQuaternion) {
         const M = FMatrix.make();
 
         const x2 = quat.x + quat.x, y2 = quat.y + quat.y, z2 = quat.z + quat.z;

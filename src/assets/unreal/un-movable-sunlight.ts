@@ -1,5 +1,6 @@
 import { saturationToBrightness } from "./utils/hsv-to-rgb";
 import ULight from "./un-light";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class UNMovableSunLight extends ULight {
     // public lightness: number = 128;
@@ -17,7 +18,7 @@ abstract class UNMovableSunLight extends ULight {
     //     this.readHead = pkg.tell();
     // 
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.ISunLightDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): GD.ISunLightDecodeInfo {
         // no live object refs here, the transfer sanitizer nulls them anyway
         return {
             ...super.getDecodeInfo(library),

@@ -4,6 +4,13 @@ import FVector from "../un-vector";
 import FBox from "../un-box";
 import FColor from "../un-color";
 import cyrb53 from "../utils/hash-cyrb";
+import type { UStaticMesh } from "./un-static-mesh";
+import type { UTexture } from "../un-texture";
+import type { UStaticMeshInstance } from "./un-static-mesh-instance";
+import type { USound } from "../un-sound";
+import type { FLeaf } from "../un-leaf";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
+import type { DecodeLibrary } from "../decode-library";
 
 type StaticMeshActorDecodeResult_T = { object: GD.IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
 
@@ -38,15 +45,15 @@ function hasStaticLightingData(instance: { color: Float32Array | Uint8Array | nu
 
 abstract class UStaticMeshActor extends UAActor {
 
-    declare protected mesh: GA.UStaticMesh | GA.UTexture;
-    declare protected instance: GA.UStaticMeshInstance;
+    declare protected mesh: UStaticMesh | UTexture;
+    declare protected instance: UStaticMeshInstance;
 
     declare protected colLocation: FVector;
     declare protected touching: FIndexArray;
     declare protected isUpdatingShadow: boolean;
-    declare protected stepSound1: GA.USound;
-    declare protected stepSound2: GA.USound;
-    declare protected stepSound3: GA.USound;
+    declare protected stepSound1: USound;
+    declare protected stepSound2: USound;
+    declare protected stepSound3: USound;
     declare protected forcedRegion: number;
 
     declare protected lodViewDuration: number;
@@ -70,7 +77,7 @@ abstract class UStaticMeshActor extends UAActor {
     declare protected disableSorting: boolean;
     declare protected lodBias: number;
 
-    declare protected leaves: GA.FLeaf[];
+    declare protected leaves: FLeaf[];
 
     // protected _agitStatus: any;
     // protected _currAccessoryType: any;
@@ -127,7 +134,7 @@ abstract class UStaticMeshActor extends UAActor {
 
     protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> { return {}; }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): StaticMeshActorDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): StaticMeshActorDecodeResult_T {
         const library = builder.library;
 
         if (!this.mesh) {
@@ -135,7 +142,7 @@ abstract class UStaticMeshActor extends UAActor {
             return null;
         }
 
-        const mesh = this.mesh.loadSelf() as GA.UStaticMesh;
+        const mesh = this.mesh.loadSelf() as UStaticMesh;
         const meshInfo = builder.pullStaticMesh(mesh, null);
 
         const level = this.getLevel();
@@ -161,7 +168,7 @@ abstract class UStaticMeshActor extends UAActor {
             return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
         }
 
-        const leaves: GA.FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox) : [];
+        const leaves: FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox) : [];
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
         // if (attributes.positions.length / 3 === 1587)
@@ -203,7 +210,7 @@ abstract class UStaticMeshActor extends UAActor {
         return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
     }
 
-    protected getActorDecodeResult(library: GD.DecodeLibrary, meshInfo: GD.IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: GA.FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
+    protected getActorDecodeResult(library: DecodeLibrary, meshInfo: GD.IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];

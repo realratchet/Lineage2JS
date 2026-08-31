@@ -1,10 +1,13 @@
 import UVolume from "./un-volume";
+import type { FVector } from "./un-vector";
+import type { FColor } from "./un-color";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class UPhysicsVolume extends UVolume {
     declare public readonly isPhysicsVolume: boolean;
 
-    declare protected zoneVelocity: GA.FVector;
-    declare protected gravity: GA.FVector;
+    declare protected zoneVelocity: FVector;
+    declare protected gravity: FVector;
     declare protected terminalVelocity: number;
     declare protected priority: number;
     declare protected fluidFriction: number;
@@ -12,7 +15,7 @@ abstract class UPhysicsVolume extends UVolume {
     declare protected isL2WaterVolume: boolean;
     declare protected useDistanceFogColor: boolean;
     declare protected useCellophane: boolean;
-    declare protected cellophaneColor: GA.FColor;
+    declare protected cellophaneColor: FColor;
     // protected locationPriority: number;
     // protected locationName: string;
 
@@ -102,7 +105,7 @@ abstract class UPhysicsVolume extends UVolume {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.IWaterVolumeDecodeInfo | null {
+    public getDecodeInfo(library: DecodeLibrary): GD.IWaterVolumeDecodeInfo | null {
         if (!this.isWaterVolume && !this.isL2WaterVolume && this.constructor.friendlyName !== "WaterVolume") return null;
         if (!this.brush) return null;
 

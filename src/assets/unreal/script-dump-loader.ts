@@ -1,4 +1,5 @@
 import type { ScriptBytecodeEntry_T, UClass, UFunction, UObject, UState, UStruct, UStructProperty } from "@l2js/core";
+import type { DecodeLibrary } from "./decode-library";
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
 
@@ -200,7 +201,7 @@ function dumpState(state: UState): GD.IScriptStateDecodeInfo {
     };
 }
 
-function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<UClass>): void {
+function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {
     const seenClasses = new Set<string>();
 
     function pullFunction(fn: UFunction) {
@@ -255,7 +256,7 @@ function pullScriptClasses(library: GD.DecodeLibrary, classes: Iterable<UClass>)
         if (cls) pullClass(cls);
 }
 
-function pullScriptDumps(library: GD.DecodeLibrary, ...actorLists: Iterable<UObject>[]): void {
+function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject>[]): void {
     const classes = new Set<UClass>();
 
     for (const actors of actorLists)

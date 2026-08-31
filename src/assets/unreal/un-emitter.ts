@@ -1,8 +1,11 @@
-import UObject, { FObjectArray } from "@l2js/core";
+import { UObject, FObjectArray } from "@l2js/core";
 import UParticleEmitter from "./emitters/un-particle-emitter";
 import UAActor from "./un-aactor";
 import FBox from "./un-box";
 import FVector from "./un-vector";
+import type { USound } from "./un-sound";
+import type { FRotator } from "./un-rotator";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 type EmitterDecodeResult_T = { object: GD.IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
@@ -10,11 +13,11 @@ abstract class UEmitter extends UAActor {
     declare protected emitters: FObjectArray<UObject>;
     protected subEmitterFilter: string[] | null = null;
 
-    declare protected spawnSound: GA.USound;
+    declare protected spawnSound: USound;
     declare protected soundRadius: number;
     declare protected soundVolume: number;
     declare protected isRotatingEmitter: boolean;
-    declare protected rotPerSecond: GA.FRotator;
+    declare protected rotPerSecond: FRotator;
 
     // protected _autoDestroy: any;
     // protected _autoReset: any;
@@ -133,7 +136,7 @@ abstract class UEmitter extends UAActor {
         return this;
     }
 
-    protected getEmitterDecodeInfos(builder: GD.DecodeLibraryBuilder): GD.EmitterConfig_T[] {
+    protected getEmitterDecodeInfos(builder: DecodeLibraryBuilder): GD.EmitterConfig_T[] {
         const emittersInfo: GD.EmitterConfig_T[] = [];
 
         this.emitters.loadSelf().forEach(emitter => {
@@ -154,7 +157,7 @@ abstract class UEmitter extends UAActor {
         return emittersInfo;
     }
 
-    protected getSpawnSoundDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IEmitterSpawnSoundDecodeInfo | null {
+    protected getSpawnSoundDecodeInfo(builder: DecodeLibraryBuilder): GD.IEmitterSpawnSoundDecodeInfo | null {
         if (!this.spawnSound) return null;
 
         const sound = this.spawnSound.loadSelf();
@@ -175,7 +178,7 @@ abstract class UEmitter extends UAActor {
         };
     }
 
-    public getTemplateDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IEmitterActorDecodeInfo {
+    public getTemplateDecodeInfo(builder: DecodeLibraryBuilder): GD.IEmitterActorDecodeInfo {
         const info: GD.IEmitterActorDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
@@ -196,7 +199,7 @@ abstract class UEmitter extends UAActor {
         return info;
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): EmitterDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): EmitterDecodeResult_T {
         const library = builder.library;
         const emittersInfo = this.getEmitterDecodeInfos(builder);
 

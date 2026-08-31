@@ -2,6 +2,7 @@ import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
 import type { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import type { UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
 import { UnProperties } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
@@ -23,6 +24,7 @@ import HairSimulationComponent from "../objects/components/hair-simulation-compo
 import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
@@ -46,10 +48,10 @@ const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
-type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
 export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
-function findScriptField(library: GD.DecodeLibrary, classId: string, name: string): GD.IScriptFieldDecodeInfo {
+function findScriptField(library: DecodeLibrary, classId: string, name: string): GD.IScriptFieldDecodeInfo {
     const lowerName = name.toLowerCase();
     let cls = library.scriptClasses[classId];
 
@@ -63,7 +65,7 @@ function findScriptField(library: GD.DecodeLibrary, classId: string, name: strin
     throw new Error(`UnrealScript class '${classId}' has no property '${name}'.`);
 }
 
-function findScriptDefault(library: GD.DecodeLibrary, classId: string, name: string): GD.ScriptPropertyValue_T {
+function findScriptDefault(library: DecodeLibrary, classId: string, name: string): GD.ScriptPropertyValue_T {
     const lowerName = name.toLowerCase();
     let cls = library.scriptClasses[classId];
 
@@ -99,7 +101,7 @@ function parseLocalizedValue(field: GD.IScriptFieldDecodeInfo, value: string): G
     }
 }
 
-function applyScriptLocalization(library: GD.DecodeLibrary, classId: string, properties: LocalizationProperty_T[]): void {
+function applyScriptLocalization(library: DecodeLibrary, classId: string, properties: LocalizationProperty_T[]): void {
     const cls = library.scriptClasses[classId];
 
     if (!cls) throw new Error(`UnrealScript class '${classId}' is not in '${library.name}'.`);
@@ -126,7 +128,7 @@ function applyScriptLocalization(library: GD.DecodeLibrary, classId: string, pro
     }
 }
 
-function setPawnComponents(renderManager: RenderManager, library: GD.DecodeLibrary, actor: BaseActor): void {
+function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary, actor: BaseActor): void {
     const sound = actor.findComponent<SoundComponent>("sound") || actor.addComponent(new SoundComponent(renderManager.audioManager));
 
     sound.setLibrary(library);
@@ -153,10 +155,10 @@ class AssetManager implements IEngineComponent<GameManager> {
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
     protected readonly levelSectors = new Set<string>();
     protected preferCompressedTextures = false;
-    public userConfig: GA.IUserConfig = null;
+    public userConfig: UserConfig_T = null;
     protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
     protected charGroups: GD.ICharacterGroup[] = null;
-    protected effectLibrary: GD.DecodeLibrary = null;
+    protected effectLibrary: DecodeLibrary = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number;
     protected readonly lastCameraPosition = new Vector3();
@@ -263,7 +265,7 @@ class AssetManager implements IEngineComponent<GameManager> {
         return decodeObject3D(this.effectLibrary, info);
     }
 
-    protected applyCharacter(renderManager: RenderManager, characterLibrary: GD.DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
+    protected applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
         characterLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (characterLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 

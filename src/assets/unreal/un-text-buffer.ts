@@ -1,4 +1,4 @@
-import UObject, { type APackage, type UExport, BufferValue, FString } from "@l2js/core";
+import { UObject, type APackage, type UExport, BufferValue, FString } from "@l2js/core";
 
 abstract class UTextBuffer extends UObject {
     declare public pos: number;

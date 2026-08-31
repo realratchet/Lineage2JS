@@ -1,4 +1,5 @@
 import UVolume from "./un-volume";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class UMusicVolume extends UVolume {
     declare protected musicId: number;
@@ -13,7 +14,7 @@ abstract class UMusicVolume extends UVolume {
         })
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary) {
+    public getDecodeInfo(library: DecodeLibrary) {
         const region = this.getRegion()?.loadSelf();
         const decodeInfo: GD.IMusicVolumeDecodeInfo = {
             ...super.getDecodeInfo(),

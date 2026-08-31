@@ -11,6 +11,11 @@ import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import StringSet from "../utils/string-set";
+import type { UStaticMeshMaterial } from "../un-material";
+import type { UModel } from "../model/un-model";
+import type { UAActor } from "../un-aactor";
+import type { FBox } from "../un-box";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 type StaticMeshDecodeResult_T = { object: GD.IStaticMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, materials: [string, GD.IBaseMaterialDecodeInfo][], colorMaterials: string[] };
 
@@ -18,7 +23,7 @@ const triggerDebuggerOnUnsupported = true;
 
 
 abstract class UStaticMesh extends UPrimitive {
-    declare protected materials: FArray<GA.UStaticMeshMaterial>;
+    declare protected materials: FArray<UStaticMeshMaterial>;
 
     declare protected sections: FArray<FStaticMeshSection>;
     declare protected vertexStream: FStaticMeshVertexStream;
@@ -45,7 +50,7 @@ abstract class UStaticMesh extends UPrimitive {
     declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
 
     declare protected collisionModelId: number;
-    declare protected collisionModel: GA.UModel;
+    declare protected collisionModel: UModel;
 
     declare protected pad03: number;
 
@@ -126,7 +131,7 @@ abstract class UStaticMesh extends UPrimitive {
         this.wireframeIndexBuffer.load(pkg);
 
         this.collisionModelId = pkg.read("compat32");
-        this.collisionModel = pkg.fetchObject<GA.UModel>(this.collisionModelId);
+        this.collisionModel = pkg.fetchObject<UModel>(this.collisionModelId);
 
         // if (this.collisionModelId !== 0)
         //     debugger;
@@ -238,7 +243,7 @@ abstract class UStaticMesh extends UPrimitive {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, matModifiers?: string[]): StaticMeshDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, matModifiers?: string[]): StaticMeshDecodeResult_T {
         // await this.onDecodeReady();
 
         // debugger;
@@ -412,7 +417,7 @@ abstract class UStaticMesh extends UPrimitive {
         };
 
         // const materials = await Promise.all(this.materials.map((mat: UStaticMeshMaterial) => mat.getDecodeInfo(library)));
-        const materials = this.materials.map((mat: GA.UStaticMeshMaterial) => builder.pullMaterial(mat));
+        const materials = this.materials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat));
 
         materialsInfo.push([this.uuid, { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo]);
 
@@ -465,7 +470,7 @@ abstract class UStaticMesh extends UPrimitive {
         };
     }
 
-    public getRenderBoundingBox(owner?: GA.AActor): GA.FBox {
+    public getRenderBoundingBox(owner?: UAActor): FBox {
         return this.boundingBox;
     }
 }

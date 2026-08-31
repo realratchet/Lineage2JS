@@ -1,7 +1,8 @@
-import UObject, { BufferValue, type APackage, type UExport, FArray, FIndexArray, FPrimitiveArray } from "@l2js/core";
+import { UObject, BufferValue, type APackage, type UExport, FArray, FIndexArray, FPrimitiveArray } from "@l2js/core";
 import UAnimNotify from "./un-anim-notify";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-function decodeNotifyObject(builder: GD.DecodeLibraryBuilder, notify: UObject): GD.IAnimationNotifyObjectDecodeInfo {
+function decodeNotifyObject(builder: DecodeLibraryBuilder, notify: UObject): GD.IAnimationNotifyObjectDecodeInfo {
     if (!notify) return null;
 
     const info = (notify as UAnimNotify).getDecodeInfo(builder);
@@ -224,7 +225,7 @@ abstract class UMeshAnimation extends UObject {
     public moves: FMotionChunk[];
     public sequences: FArray<FAnimSequence>;
 
-    public getSequenceNotifies(builder: GD.DecodeLibraryBuilder, sequence: FAnimSequence): GD.IAnimationNotifyDecodeInfo[] {
+    public getSequenceNotifies(builder: DecodeLibraryBuilder, sequence: FAnimSequence): GD.IAnimationNotifyDecodeInfo[] {
         const count = sequence.notifications.getElemCount();
         const notifications = new Array<GD.IAnimationNotifyDecodeInfo>(count);
 

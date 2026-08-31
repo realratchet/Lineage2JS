@@ -8,6 +8,8 @@ import { GameObject } from "../game/components";
 
 import { ColorByte } from "../utils/color-byte";
 import type UnScriptVM from "../ue-script/vm";
+import type { LightType_T, LightEffect_T } from "@l2js/engine/un-light";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
@@ -178,8 +180,8 @@ export type LightInfo_T = {
     color: Color,
     radius: number,
     isDirectional: boolean,
-    lightType: GA.LightType_T,
-    lightEffect: GA.LightEffect_T,
+    lightType: LightType_T,
+    lightEffect: LightEffect_T,
     cone: number
 }
 
@@ -601,7 +603,7 @@ class SectorObject extends GameObject {
                 }
 
                 // Model->Bounds(Node.iRenderBound), UnRenderVisibility.cpp lines 1800-1819.
-                const library = (this as any).decodeLibrary as GD.DecodeLibrary;
+                const library = (this as any).decodeLibrary as DecodeLibrary;
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
@@ -901,7 +903,7 @@ class SectorObject extends GameObject {
 
         if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) return;
 
-        const library = (this as any).decodeLibrary as GD.DecodeLibrary;
+        const library = (this as any).decodeLibrary as DecodeLibrary;
 
         if (!this.bspGroup && !this.staticMeshGroup) {
             this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled);
@@ -1364,7 +1366,7 @@ class SectorObject extends GameObject {
     }
 
     public updateVisibleStaticMeshActors(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true) {
-        const library = (this as any).decodeLibrary as GD.DecodeLibrary;
+        const library = (this as any).decodeLibrary as DecodeLibrary;
         if (!library || !this.staticMeshGroup || this.staticMeshMap.size === 0) return;
 
         const cameraLeaf = this.findPositionLeaf(cameraPosition);

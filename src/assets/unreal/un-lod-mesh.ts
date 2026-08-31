@@ -3,12 +3,14 @@ import FColor from "./un-color";
 import UMesh from "./un-mesh";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
+import type { UPackage } from "./un-package";
+import type { UMaterial } from "./un-material";
 
 class FMeshFace implements Constructable_T {
     public wedgeIndices: [number, number, number] = new Array(3) as [number, number, number];
     public meshMaterialIndex: number;
 
-    public load(pkg: GA.UPackage): this {
+    public load(pkg: UPackage): this {
         this.wedgeIndices[0] = pkg.read("uint16");
         this.wedgeIndices[1] = pkg.read("uint16");
         this.wedgeIndices[2] = pkg.read("uint16");
@@ -68,7 +70,7 @@ abstract class ULodMesh extends UMesh {
     protected skinTesselationFactor: number;
     protected authenticationKey: number;
     protected impostor = new MeshImpostor();
-    protected lodMeshMaterials = new FObjectArray<GA.UMaterial>();
+    protected lodMeshMaterials = new FObjectArray<UMaterial>();
 
     public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
@@ -140,7 +142,7 @@ class MeshImpostor implements Constructable_T {
     public drawMode: number;
     public lightMode: number;
     public materialId: number;
-    public material: GA.UMaterial;
+    public material: UMaterial;
 
     public load(pkg: APackage): this {
         this.materialId = pkg.read("compat32");
@@ -153,7 +155,7 @@ class MeshImpostor implements Constructable_T {
         this.drawMode = pkg.read("uint32");
         this.lightMode = pkg.read("uint32");
 
-        this.material = pkg.fetchObject<GA.UMaterial>(this.materialId);
+        this.material = pkg.fetchObject<UMaterial>(this.materialId);
 
         return this;
     }

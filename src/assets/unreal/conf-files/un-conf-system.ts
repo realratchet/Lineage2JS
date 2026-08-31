@@ -2,12 +2,35 @@
 import BaseConfigFile from "./un-base-config";
 import { consumeNextValue } from "./conf-parser";
 
+type ClippingRangeConfig_T = {
+    staticMesh: number;
+    staticMeshLod: number;
+    pawn: number;
+    terrain: number;
+    actor: number;
+    projector: number;
+    antiPortal: number;
+    pawnMin: number;
+    pawnMax: number;
+};
+
+type DisplayConfig_T = {
+    brightness: number;
+    contrast: number;
+    gamma: number;
+};
+
+type UserConfig_T = {
+    clippingRange: ClippingRangeConfig_T;
+    display: DisplayConfig_T;
+};
+
 class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
     public readonly definedClippingKeys = new Set<string>();
     public readonly definedDisplayKeys = new Set<string>();
 
-    public clippingRange: GA.IClippingRangeConfig = {
+    public clippingRange: ClippingRangeConfig_T = {
         staticMesh: 4.0,
         staticMeshLod: 5.0,
         pawn: 2.0,
@@ -19,7 +42,7 @@ class UConfigSystem extends BaseConfigFile {
         pawnMax: 3.0
     };
 
-    public display: GA.IDisplayConfig = {
+    public display: DisplayConfig_T = {
         brightness: 0.8,
         contrast: 0.7,
         gamma: 0.8
@@ -91,7 +114,7 @@ class UConfigSystem extends BaseConfigFile {
     }
 }
 
-async function getUserConfig(): Promise<GA.IUserConfig> {
+async function getUserConfig(): Promise<UserConfig_T> {
     const defaults = new UConfigSystem("assets/system/l2.ini");
     const options = new UConfigSystem("assets/system/Option.ini");
 
@@ -109,3 +132,4 @@ async function getUserConfig(): Promise<GA.IUserConfig> {
 
 export default UConfigSystem;
 export { getUserConfig };
+export type { ClippingRangeConfig_T, DisplayConfig_T, UserConfig_T };

@@ -1,4 +1,8 @@
 import { UObject } from "@l2js/core";
+import type { FRotator } from "./un-rotator";
+import type { FMatrix } from "./un-matrix";
+import type { FCoords } from "./un-coords";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3Arr> {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
@@ -33,7 +37,7 @@ abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3
 
     public getElements(): GD.Vector3Arr { return [this.x, this.y, this.z]; }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): GD.Vector3Arr { return this.getElements(); }
+    public getDecodeInfo(_library: DecodeLibrary): GD.Vector3Arr { return this.getElements(); }
 
     public addScalar(scalar: number) {
         return FVector.make(
@@ -154,7 +158,7 @@ abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3
 
     public negate() { return this.multiplyScalar(-1); }
 
-    public applyRotator(rotator: GA.FRotator, negate: boolean): FVector {
+    public applyRotator(rotator: FRotator, negate: boolean): FVector {
         let [qx, qy, qz, qw] = rotator.getQuaternionElements();
 
         if (negate) qx = -qx, qy = -qy, qz = -qz;
@@ -182,7 +186,7 @@ abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3
     }
 
 
-    public applyMatrix4(m: GA.FMatrix) {
+    public applyMatrix4(m: FMatrix) {
         const x = this.x, y = this.y, z = this.z;
         const e = m.getElements4x4();
 
@@ -195,17 +199,17 @@ abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3
         return FVector.make(nx, ny, nz);
     }
 
-    public transformPointBy(coord: GA.FCoords): FVector {
+    public transformPointBy(coord: FCoords): FVector {
         const temp = this.sub(coord.origin);
 
         return FVector.make(temp.dot(coord.xAxis), temp.dot(coord.yAxis), temp.dot(coord.zAxis));
     }
 
-    public transformVectorBy(coord: GA.FCoords): FVector {
+    public transformVectorBy(coord: FCoords): FVector {
         return FVector.make(this.dot(coord.xAxis), this.dot(coord.yAxis), this.dot(coord.zAxis));
     }
 
-    public transformBy(coord: GA.FCoords) {
+    public transformBy(coord: FCoords) {
         const inVector = this;
         const outVector = FVector.make();
 

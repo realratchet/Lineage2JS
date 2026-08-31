@@ -1,5 +1,6 @@
 import FVector from "../un-vector";
 import UParticleEmitter from "./un-particle-emitter"
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 abstract class USpriteEmitter extends UParticleEmitter {
     declare protected projectionNormal: FVector; // Normal vector of the projection plane used when UseDirectionAs is set to PTDU_Normal, PTDU_UpAndNormal or PTDU_RightAndNormal.
@@ -19,7 +20,7 @@ abstract class USpriteEmitter extends UParticleEmitter {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         // debugger;
 
         return Object.assign(super.getDecodeInfo(builder), {

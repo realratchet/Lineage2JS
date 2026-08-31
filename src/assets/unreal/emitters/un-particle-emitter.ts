@@ -1,13 +1,20 @@
 
-import UObject, { FArray, FPrimitiveArray } from "@l2js/core";
+import { UObject, FArray, FPrimitiveArray } from "@l2js/core";
 import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
 import FVector from "../un-vector";
 import FColor from "../un-color";
+import type { UEmitter } from "../un-emitter";
+import type { UStaticMesh } from "../static-mesh/un-static-mesh";
+import type { UAActor } from "../un-aactor";
+import type { UTexture } from "../un-texture";
+import type { USound } from "../un-sound";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
+import type { DecodeLibrary } from "../decode-library";
 
 abstract class UParticleEmitter extends UObject {
-    declare protected actor: GA.UEmitter;
+    declare protected actor: UEmitter;
 
     // Acceleration
     declare protected acceleration: FVector; // Vector which determines the acceleration of the particles in any of the three planes
@@ -73,7 +80,7 @@ abstract class UParticleEmitter extends UObject {
     declare protected meshNormalThresholdRange: FRange;
     declare protected meshScaleRange: FRangeVector; // This determines the size scale of an emitted mesh, similar to DrawScale3D for actors. It takes each axis independantly, so setting a good range can result in a lot of different shapes on the same mesh.
     declare protected meshSpawning: EParticleMeshSpawning_T;
-    declare protected meshSpawningStaticMesh: GA.UStaticMesh; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
+    declare protected meshSpawningStaticMesh: UStaticMesh; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
     declare protected isSpawningTowardsNormal: boolean;
     declare protected isUniformMeshScale: boolean; // If this is true, the settings in meshscalerange are no longer used for each axis independantly. Instead, the mesh will be scaled along all axis using the x values.
     declare protected isUniformVelocityScale: boolean;
@@ -118,7 +125,7 @@ abstract class UParticleEmitter extends UObject {
 
     // Skeletal mesh
     declare protected relativeBoneIndexRange: FRange;
-    declare protected skeletalMeshActor: GA.AActor;
+    declare protected skeletalMeshActor: UAActor;
     declare protected skeletalScale: FVector;
     declare protected useSkeletalLocationAs: ESkelLocationUpdate_T;
 
@@ -142,7 +149,7 @@ abstract class UParticleEmitter extends UObject {
     declare protected subdivEnd: number;
     declare protected subdivisionScale: FPrimitiveArray<"float">;
     declare protected subdivStart: number;
-    declare protected texture: GA.UTexture;
+    declare protected texture: UTexture;
     declare protected texSubdivU: number;
     declare protected texSubdivV: number;
     declare protected isUsingRandomSubdiv: boolean;
@@ -231,7 +238,7 @@ abstract class UParticleEmitter extends UObject {
     declare protected determineVelocityByLocationDifference: boolean;
     declare protected useAbsoluteTimeForSizeScale: boolean;
 
-    public setActor(actor: GA.UEmitter) { this.actor = actor; return this; }
+    public setActor(actor: UEmitter) { this.actor = actor; return this; }
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -416,7 +423,7 @@ abstract class UParticleEmitter extends UObject {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.EmitterConfig_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.EmitterConfig_T {
         const library = builder.library;
 
         if (this._particles && this._particles.length > 0)
@@ -490,7 +497,7 @@ abstract class UParticleEmitter extends UObject {
     // BaseEmitter Object.assign's these onto itself. Structs serialize through their
     // regular getDecodeInfo and BaseEmitter rehydrates the array forms, so no live
     // UObject ever crosses the decode-worker boundary.
-    protected getSettingsSnapshot(library: GD.DecodeLibrary): Record<string, any> {
+    protected getSettingsSnapshot(library: DecodeLibrary): Record<string, any> {
         const snapshot: Record<string, any> = {};
 
         for (const varName of REQUIRED_SETTINGS) {
@@ -527,7 +534,7 @@ const REQUIRED_SETTINGS = [
 
 const CLONE_UNSAFE = Symbol("clone-unsafe");
 
-function toCloneSafeSetting(value: any, library: GD.DecodeLibrary): any {
+function toCloneSafeSetting(value: any, library: DecodeLibrary): any {
     if (value === null || value === undefined) return value;
 
     const t = typeof value;
@@ -566,7 +573,7 @@ abstract class UParticleRevolutionScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, GD.Vector3Arr] {
         return [this.relTime, this.relRevolution?.getElements() || [0, 0, 0]];
     }
 }
@@ -582,7 +589,7 @@ abstract class UParticleTimeScale extends UObject {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
+    public getDecodeInfo(library: DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
 
     public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
 };
@@ -598,13 +605,13 @@ abstract class UParticleVelocityScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, GD.Vector3Arr] {
         return [this.relTime, this.relVelocity?.getElements() || [0, 0, 0]];
     }
 }
 
 abstract class UParticleSound extends UObject {
-    declare public sound: GA.USound;
+    declare public sound: USound;
     declare public radius: FRange;
     declare public pitch: FRange;
     declare public weight: number;
@@ -622,7 +629,7 @@ abstract class UParticleSound extends UObject {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IParticleSoundDecodeInfo | null {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IParticleSoundDecodeInfo | null {
         if (!this.sound) return null;
 
         const library = builder.library;
@@ -686,7 +693,7 @@ abstract class UParticleColorScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector4Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, GD.Vector4Arr] {
         return [this.relTime, this.color?.toArray() as GD.Vector4Arr || [255, 255, 255, 255]];
     }
 }

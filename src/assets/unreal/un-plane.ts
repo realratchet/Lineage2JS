@@ -1,5 +1,6 @@
 import FVector from "./un-vector";
 import { UObject } from "@l2js/core";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4Arr> {
     declare public ["constructor"]: typeof FPlane;
@@ -35,7 +36,7 @@ abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4A
 
     public vector() { return FVector.make(this.x, this.y, this.z); }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): GD.Vector4Arr { return this.getElements(); }
+    public getDecodeInfo(_library: DecodeLibrary): GD.Vector4Arr { return this.getElements(); }
 
     public set(x: number, y: number, z: number, w: number) {
         this.x = x;
@@ -79,7 +80,7 @@ abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4A
         return FPlane.make(this.x * scalar, this.y * scalar, this.z * scalar, this.w * scalar);
     }
 
-    public dot(other: FPlane | GA.FVector) {
+    public dot(other: FPlane | FVector) {
         if (other instanceof FPlane)
             return this.x * other.x + this.y * other.y + this.z * other.z + this.w * other.w;
 

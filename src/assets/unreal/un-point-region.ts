@@ -1,7 +1,8 @@
 import { UObject } from "@l2js/core";
+import type { FZoneInfo } from "./un-zone-info";
 
 abstract class UPointRegion extends UObject {
-    declare protected readonly zone: GA.FZoneInfo;
+    declare protected readonly zone: FZoneInfo;
     declare protected readonly indexLeaf: number;
     declare protected readonly zoneNumber: number;
 

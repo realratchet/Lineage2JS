@@ -13,7 +13,7 @@ enum BspNodeFlags_T {
 };
 
 class FBSPNode implements Constructable_T {
-    public plane: GA.FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
+    public plane: FPlane;                // 16 byte plane the node falls into (X, Y, Z, W).
     public zoneMask: bigint;                // 8  byte mask for all zones at or below this node (up to 64).
     public iVertPool: number;               // 4  byte index of first vertex in vertex pool, =iTerrain if NumVertices==0 and NF_TerrainFront.
     public iSurf: number;                   // 4  byte index to surface information.

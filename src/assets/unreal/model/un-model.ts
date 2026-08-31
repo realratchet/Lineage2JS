@@ -2,18 +2,23 @@ import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
 import FBSPNode, { BspNodeFlags_T } from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
-import { PolyFlags_T } from "../un-polys";
+import { PolyFlags_T, UPolys } from "../un-polys";
 import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
 import FZoneProperties from "../un-zone-properties";
 import FLeaf from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
-import FMultiLightmapTexture from "./un-multilightmap-texture";
+import FMultiLightmapTexture, { FStaticLightmapTexture } from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import FVector from "../un-vector";
 import FBox from "../un-box";
 import { DoubleSide } from "three";
+import type { ULevelInfo } from "../un-level-info";
+import type { FPlane } from "../un-plane";
+import type { FMatrix } from "../un-matrix";
+import type { DecodeLibrary } from "../decode-library";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
@@ -92,7 +97,7 @@ class FBoxArray implements Constructable_T {
 
 
 abstract class UModel extends UPrimitive {
-    protected levelInfo: GA.ULevelInfo
+    protected levelInfo: ULevelInfo
 
     declare protected vectors: FVectorArray;
     declare protected points: FVectorArray;
@@ -103,7 +108,7 @@ abstract class UModel extends UPrimitive {
     declare protected lightmaps: FArray<FLightmapIndex>;
     declare protected multiLightmaps: FArray<FMultiLightmapTexture>;
     declare protected numSharedSides: number;
-    declare protected polys: GA.UPolys;
+    declare protected polys: UPolys;
     declare protected zones: FZoneProperties[];
     declare protected bounds: FBoxArray;
     declare protected leafHulls: FPrimitiveArray<"int32">;
@@ -114,7 +119,7 @@ abstract class UModel extends UPrimitive {
     declare protected lights: FObjectArray;
     declare protected isSky: boolean;
 
-    public setLevelInfo(levelInfo: GA.ULevelInfo) { this.levelInfo = levelInfo; return this; }
+    public setLevelInfo(levelInfo: ULevelInfo) { this.levelInfo = levelInfo; return this; }
     public getLevelInfo() { return this.levelInfo; }
     public getBspNodes() { return this.bspNodes; }
     public getIsRootOutside() { return this.isRootOutside; }
@@ -222,7 +227,7 @@ abstract class UModel extends UPrimitive {
 
     public getZoneActor(iZone: number) { return this.zones[iZone].zoneActor ?? this.levelInfo; }
 
-    public boxLeavesRecursive(iNode: number, origin: GA.FVector, extent: GA.FVector, outLeaves?: number[]): number[] {
+    public boxLeavesRecursive(iNode: number, origin: FVector, extent: FVector, outLeaves?: number[]): number[] {
         outLeaves = outLeaves ?? [];
         nodeCache.length = this.bspNodes.length;
 
@@ -284,7 +289,7 @@ abstract class UModel extends UPrimitive {
         return outLeaves;
     }
 
-    public boxLeaves(box: GA.FBox): GA.FLeaf[] {
+    public boxLeaves(box: FBox): FLeaf[] {
         if (this.bspNodes.length === 0) return [];
 
         const origin = box.getCenter();
@@ -293,7 +298,7 @@ abstract class UModel extends UPrimitive {
         return this.boxLeavesRecursive(0, origin, extent).map(i => this.leaves[i]);
     }
 
-    public boxLeafIndices(box: GA.FBox): number[] {
+    public boxLeafIndices(box: FBox): number[] {
         if (this.bspNodes.length === 0) return [];
 
         const origin = box.getCenter();
@@ -306,7 +311,7 @@ abstract class UModel extends UPrimitive {
         return (node.numVertices > 0) && !(node.flags & (BspNodeFlags_T.NF_IsNew | BspNodeFlags_T.NF_NotCsg));
     }
 
-    public getZoneDecodeInfo(library: GD.DecodeLibrary, uLevelInfo: GA.ULevelInfo): ModelZoneDecodeResult_T {
+    public getZoneDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): ModelZoneDecodeResult_T {
         const result: ModelZoneDecodeResult_T = { bspLeaves: [], bspZones: [], bspZoneIndexMap: {} };
 
         this.leaves.forEach((leaf: FLeaf) => result.bspLeaves.push(leaf.getDecodeInfo()));
@@ -349,7 +354,7 @@ abstract class UModel extends UPrimitive {
         return { planes, hulls };
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, uLevelInfo: GA.ULevelInfo): ModelDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, uLevelInfo: ULevelInfo): ModelDecodeResult_T {
         const library = builder.library;
         const result: ModelDecodeResult_T = Object.assign(this.getZoneDecodeInfo(library, uLevelInfo), {
             bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
@@ -440,7 +445,7 @@ abstract class UModel extends UPrimitive {
             }
 
             const lightmapIndex: FLightmapIndex = node.iLightmapIndex === undefined ? null : this.lightmaps[node.iLightmapIndex];
-            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as GA.FStaticLightmapTexture : null;
+            const lightmap = lightmapIndex ? this.multiLightmaps[lightmapIndex.iLightmapTexture].textures[0].staticLightmap as FStaticLightmapTexture : null;
             const priority: PriorityGroups_T = /*false &&*/ surf.flags & PolyFlags_T.PF_AddLast ? "transparent" : "opaque";
 
 
@@ -636,7 +641,7 @@ abstract class UModel extends UPrimitive {
 export default UModel;
 export { UModel };
 
-function boxPushOut(normal: GA.FVector | GA.FPlane, size: GA.FVector) {
+function boxPushOut(normal: FVector | FPlane, size: FVector) {
     return Math.abs(normal.x * size.x) + Math.abs(normal.y * size.y) + Math.abs(normal.z * size.z);
 }
 
@@ -660,7 +665,7 @@ type LightmapInfo_T = {
     offset: { x: number; y: number; },
     resolution: { width: number; height: number; },
     size: { width: number; height: number; },
-    matrix: GA.FMatrix
+    matrix: FMatrix
 };
 
 // function createOrthonormalBasis(inXAxis: FVector, inYAxis: FVector, inZAxis: FVector) {

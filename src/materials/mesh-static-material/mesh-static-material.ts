@@ -3,6 +3,7 @@ import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
 import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import type { SupportedBlendingTypes_T } from "@l2js/engine/un-material";
 
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
@@ -485,7 +486,7 @@ type MeshStaticMaterialParameters_T = {
     specular: GD.IDecodedParameter,
     specularMask: GD.IDecodedParameter,
     side: THREE.Side,
-    blendingMode: GA.SupportedBlendingTypes_T,
+    blendingMode: SupportedBlendingTypes_T,
     transparent: boolean,
     alphaTest?: number,
     depthWrite: boolean,

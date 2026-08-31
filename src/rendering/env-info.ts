@@ -1,6 +1,7 @@
 import EnvColor from "./env-color"
 import ColorByte from "../utils/color-byte";
 import { Vector2 } from "three";
+import type { EEnvCycle } from "@l2js/engine/un-l2env";
 
 type EnvSetup = {
     isClock: boolean;
@@ -10,7 +11,7 @@ type EnvSetup = {
     staticLightingAdjust: number;
     slopeSunAngle: number;
     subLightNum: number;
-    timeEnv: { [key in GA.EEnvCycle]: EnvColor };
+    timeEnv: { [key in EEnvCycle]: EnvColor };
     skybox: string;
     hazering: string;
     clouds: string[];

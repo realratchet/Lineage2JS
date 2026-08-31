@@ -62,6 +62,42 @@ import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
 import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
 
+type NativeClientTypes_T =
+    | NativeTypes_T
+    | "NMovableSunLight"
+    | "NSun"
+    | "NMoon"
+    | "L2FogInfo"
+    | "L2SeamlessInfo"
+    | "L2NTimeLight"
+    | "L2NEnvLight"
+    | "SceneManager"
+    | "MovableStaticMeshActor"
+    | "Combiner"
+    | "VertexColor"
+    | "LineagePlayerController"
+    | "SkillVisualEffect"
+    | "SkillAction"
+    | "SkillAction_LocateEffect"
+    | "SkillAction_SwordTrail"
+    | "AnimNotify"
+    | "AnimNotify_IdleSound"
+    | "AnimNotify_MatSubAction"
+    | "AnimNotify_Scripted"
+    | "AnimNotify_Script"
+    | "AnimNotify_Sound"
+    | "AnimNotify_SwimSound"
+    | "AnimNotify_DestroyEffect"
+    | "AnimNotify_Effect"
+    | "AnimNotify_AttackVoice"
+    | "AnimNotify_Channeling"
+    | "AnimNotify_AttackPreShot"
+    | "AnimNotify_AttackShot"
+    | "AnimNotify_AttackItem"
+    | "AnimNotify_ScreenFade"
+    | "AnimNotify_ViewShake"
+    | "AnimNotify_BoneScale";
+
 type CoreStructs_T =
     | "Vector"
     | "Plane"
@@ -71,12 +107,12 @@ type CoreStructs_T =
     | "Coords";
 
 type CoreStructsReturnType_T<T extends CoreStructs_T> =
-    | T extends "Vector" ? GA.FVector
-    : T extends "Plane" ? GA.FPlane
-    : T extends "Box" ? GA.FBox
-    : T extends "Matrix" ? GA.FMatrix
-    : T extends "Color" ? GA.FColor
-    : T extends "Coords" ? GA.FCoords
+    | T extends "Vector" ? FVector
+    : T extends "Plane" ? FPlane
+    : T extends "Box" ? FBox
+    : T extends "Matrix" ? FMatrix
+    : T extends "Color" ? FColor
+    : T extends "Coords" ? FCoords
     : never;
 
 
@@ -310,7 +346,7 @@ class UNativePackage extends ANativePackage {
     }
 
     protected getNonNativeConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: NativeTypes_T): new () => T
-    protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: GA.NativeClientTypes_T): new () => T {
+    protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: NativeClientTypes_T): new () => T {
         let Constructor: any;
 
         switch (constructorName) {
@@ -712,6 +748,7 @@ class UNativePackage extends ANativePackage {
 
 export default UPackage;
 export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
+export type { NativeClientTypes_T };
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;

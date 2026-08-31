@@ -1,14 +1,16 @@
-import UObject, { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
+import { UObject, type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
 import FBox from "./un-box";
 import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import FVector from "./un-vector";
-import { ETerrainRenderMethod_T } from "./un-terrain-info";
+import { ETerrainRenderMethod_T, ATerrainInfo } from "./un-terrain-info";
+import type { ULight } from "./un-light";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 type TerrainSegmentDecodeResult_T = { object: GD.ITerrainSegmentDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialTerrainSegmentDecodeInfo };
 
 class FTerrainLightInfo implements Constructable_T {
     public lightIndex: number;
-    public light: GA.ULight;
+    public light: ULight;
     public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
     public load(pkg: APackage): this {
@@ -23,7 +25,7 @@ class FTerrainLightInfo implements Constructable_T {
 }
 
 class FTerrainSectorRenderPass {
-    public info: GA.ATerrainInfo;
+    public info: ATerrainInfo;
     public renderCombinationNum: number;
 
     public indices: number[];
@@ -37,7 +39,7 @@ abstract class UTerrainSector extends UObject {
     declare public boundingBox: FBox;
     declare public offsetX: number;
     declare public offsetY: number;
-    declare public info: GA.ATerrainInfo;
+    declare public info: ATerrainInfo;
     declare protected hasShadows: boolean;
     declare protected shadowCount: number;
 
@@ -64,7 +66,7 @@ abstract class UTerrainSector extends UObject {
         return { offsetX: this.offsetX, offsetY: this.offsetY, quadsX: this.quadsXActual, quadsY: this.quadsYActual };
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, info: ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
         const library = builder.library;
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oy, z: oz } = center;

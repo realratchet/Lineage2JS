@@ -5,6 +5,9 @@ import FColor from "./un-color";
 import { BufferValue, type APackage, type UExport, FArray } from "@l2js/core";
 import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import UMaterial from "./un-material";
+import type { UPlatte } from "./un-palette";
+import type { DecodeLibrary } from "./decode-library";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 /*
 
@@ -21,7 +24,7 @@ enum ETexClampMode {
 }
 
 abstract class UTexture extends UMaterial {
-    declare public readonly palette: GA.UPlatte;
+    declare public readonly palette: UPlatte;
     declare public readonly internalTime: number[];
     declare public readonly format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;
 
@@ -144,7 +147,7 @@ abstract class UTexture extends UMaterial {
         }
     }
 
-    protected decodeTexture(library: GD.DecodeLibrary) {
+    protected decodeTexture(library: DecodeLibrary) {
         const totalMipCount = this.mipmaps.length;
 
         if (totalMipCount === 0) return { materialType: "empty" };
@@ -311,7 +314,7 @@ abstract class UTexture extends UMaterial {
         } as GD.ITextureDecodeInfo;
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
             const sprites: GD.ITextureDecodeInfo[] = [];
 

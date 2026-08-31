@@ -1,5 +1,6 @@
 import type { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import type { UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
 
 type InitMessage_T = {
     type: "init";
@@ -168,7 +169,7 @@ type MusicInfoDecodedMessage_T = {
 }
 
 type ClientConfig_T = {
-    userConfig: GA.IUserConfig;
+    userConfig: UserConfig_T;
     warriorAnimations: Record<string, WarriorAnimations_T>;
 }
 

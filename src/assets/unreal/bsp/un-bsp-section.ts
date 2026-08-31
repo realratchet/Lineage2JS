@@ -1,4 +1,5 @@
 import { type APackage, type Constructable_T, FArray } from "@l2js/core";
+import type { UTexture } from "../un-texture";
 
 class FBSPVertex implements Constructable_T {
     public position: GD.Vector3Arr;
@@ -26,7 +27,7 @@ class FBSPVertex implements Constructable_T {
 class FBSPSection implements Constructable_T {
     public bspVertices = new FArray(FBSPVertex);
     public textureId: number;
-    public texture: GA.UTexture;
+    public texture: UTexture;
 
     public revision: number;
     public numNodes: number;
@@ -43,7 +44,7 @@ class FBSPSection implements Constructable_T {
         this.polyFlags = pkg.read("int32");
         this.lightmapTextureIndex = pkg.read("int32");
 
-        this.texture = pkg.fetchObject<GA.UTexture>(this.textureId);
+        this.texture = pkg.fetchObject<UTexture>(this.textureId);
 
         return this;
     }

@@ -4,6 +4,7 @@ import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
 import type AudioManager from "../audio-manager";
 import type BaseActor from "../../base-actor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 const ANIMATION_NOTIFY_EVENT = "animationNotify";
 const NPC_ENTER_EVENT = "npcEnter";
@@ -12,7 +13,7 @@ const tmpPosition = new Vector3();
 class SoundComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "sound";
     protected readonly audioManager: AudioManager;
-    protected library: GD.DecodeLibrary = null;
+    protected library: DecodeLibrary = null;
 
     public constructor(audioManager: AudioManager) {
         super();
@@ -20,7 +21,7 @@ class SoundComponent extends ObjectComponent<BaseActor> {
         this.audioManager = audioManager;
     }
 
-    public setLibrary(library: GD.DecodeLibrary): this { this.library = library; return this; }
+    public setLibrary(library: DecodeLibrary): this { this.library = library; return this; }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
         switch (type) {

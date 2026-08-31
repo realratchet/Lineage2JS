@@ -44,7 +44,7 @@ class FLightmapIndex implements Constructable_T {
     public sizeX: number;
     public sizeY: number;
 
-    public uvMatrix: GA.FMatrix;
+    public uvMatrix: FMatrix;
     public unkFloatGroup0: number[];
 
     public levelId: number;

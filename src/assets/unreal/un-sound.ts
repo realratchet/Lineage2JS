@@ -1,4 +1,4 @@
-import UObject, { BufferValue, type APackage, type UExport, FPrimitiveArrayLazy } from "@l2js/core";
+import { UObject, BufferValue, type APackage, type UExport, FPrimitiveArrayLazy } from "@l2js/core";
 
 abstract class USound extends UObject {
     protected fileType: string;

@@ -1,7 +1,9 @@
 import UAActor from "./un-aactor"
+import type { USkeletalMesh } from "./skeletal-mesh/un-skeletal-mesh";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 abstract class UPawn extends UAActor {
-    declare protected mesh: GA.USkeletalMesh;
+    declare protected mesh: USkeletalMesh;
     declare protected isUnlit: boolean;
 
     protected getPropertyMap() {
@@ -11,7 +13,7 @@ abstract class UPawn extends UAActor {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.ISkinnedMeshObjectDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.ISkinnedMeshObjectDecodeInfo {
         if (!this.mesh) {
             console.warn(`Pawn '${this.objectName}' has no mesh, skipping`);
             return null;

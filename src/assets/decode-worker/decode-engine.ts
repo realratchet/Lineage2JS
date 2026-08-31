@@ -18,7 +18,11 @@ import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/co
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
-import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
+import { getUserConfig, UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
+import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
+import type { UMaterial } from "@l2js/engine/un-material";
+import type { USound } from "@l2js/engine/un-sound";
+import type { UEmitter } from "@l2js/engine/un-emitter";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {
@@ -338,7 +342,7 @@ class DecodeEngine {
         pkgCore.loadNativeClasses();
     }
 
-    public async decodeClientConfig(): Promise<{ userConfig: GA.IUserConfig, warriorAnimations: Record<string, WarriorAnimations_T> }> {
+    public async decodeClientConfig(): Promise<{ userConfig: UserConfig_T, warriorAnimations: Record<string, WarriorAnimations_T> }> {
         const [userConfig, warriorFile] = await Promise.all([
             getUserConfig(),
             new UConfigWarrior("assets/system/lineagewarrior.int").decode()
@@ -521,7 +525,7 @@ class DecodeEngine {
         return envConfig.getDecodeInfo();
     }
 
-    protected async fetchSkeletalMesh(path: string): Promise<GA.USkeletalMesh> {
+    protected async fetchSkeletalMesh(path: string): Promise<USkeletalMesh> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Animation"), { neverUnload: true });
         const lowerName = objectName.toLowerCase();
@@ -529,10 +533,10 @@ class DecodeEngine {
 
         if (!entry) throw new Error(`Skeletal mesh '${objectName}' not found in '${packageName}'.`);
 
-        return pkg.fetchObject<GA.USkeletalMesh>(entry.index + 1);
+        return pkg.fetchObject<USkeletalMesh>(entry.index + 1);
     }
 
-    protected async fetchCharacterMaterial(path: string): Promise<GA.UMaterial> {
+    protected async fetchCharacterMaterial(path: string): Promise<UMaterial> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Texture"), { neverUnload: true });
         const lowerName = objectName.toLowerCase();
@@ -540,7 +544,7 @@ class DecodeEngine {
 
         if (!entry) throw new Error(`Material '${objectName}' not found in '${packageName}'.`);
 
-        return pkg.fetchObject<GA.UMaterial>(entry.index + 1);
+        return pkg.fetchObject<UMaterial>(entry.index + 1);
     }
 
     protected async pullCharacterSkinMaterials(builder: DecodeLibraryBuilder, skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>, basePath: string, baseMaterial: string): Promise<Record<number, string>> {
@@ -587,7 +591,7 @@ class DecodeEngine {
 
         if (!entry) throw new Error(`Sound '${objectName}' not found in '${packageName}'.`);
 
-        const sound = pkg.fetchObject<GA.USound>(entry.index + 1).loadSelf();
+        const sound = pkg.fetchObject<USound>(entry.index + 1).loadSelf();
         const soundName = sound.objectName ?? sound.uuid;
 
         if (!builder.pullSound(sound)) throw new Error(`Sound '${path}' has no audio data.`);
@@ -659,7 +663,7 @@ class DecodeEngine {
 
     protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string, pullScript: boolean = false): Promise<void> {
         const [pkg, cls] = await this.fetchScriptClass(path);
-        const emitter = pkg.newObject<GA.UEmitter>(cls);
+        const emitter = pkg.newObject<UEmitter>(cls);
 
         emitter.objectName = cls.objectName;
 

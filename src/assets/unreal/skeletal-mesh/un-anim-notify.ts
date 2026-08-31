@@ -1,4 +1,9 @@
 import { UObject } from "@l2js/core";
+import type { USound } from "../un-sound";
+import type { FVector } from "../un-vector";
+import type { FRotator } from "../un-rotator";
+import type { FColor } from "../un-color";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 function requireNotifyProperty<T>(notify: UObject, name: string, value: T | undefined): T {
     if (value === undefined) throw new Error(`Animation notify '${notify.name}' has undefined mapped property '${name}'.`);
@@ -6,7 +11,7 @@ function requireNotifyProperty<T>(notify: UObject, name: string, value: T | unde
     return value;
 }
 
-function pullSound(builder: GD.DecodeLibraryBuilder, value: GA.USound | null): string {
+function pullSound(builder: DecodeLibraryBuilder, value: USound | null): string {
     if (!value) return null;
 
     const sound = value.loadSelf();
@@ -15,7 +20,7 @@ function pullSound(builder: GD.DecodeLibraryBuilder, value: GA.USound | null): s
     return builder.pullSound(sound) ? soundName : null;
 }
 
-function pullSounds(builder: GD.DecodeLibraryBuilder, values: (GA.USound | null)[]): string[] {
+function pullSounds(builder: DecodeLibraryBuilder, values: (USound | null)[]): string[] {
     const names: string[] = [];
 
     for (let i = 0, len = values.length; i < len; i++) {
@@ -38,7 +43,7 @@ enum EViewShakeType_T {
 }
 
 abstract class UAnimNotify extends UObject {
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.IAnimationNotifyObjectDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.IAnimationNotifyObjectDecodeInfo {
         return { type: "native", className: (this.constructor as any).friendlyName, objectName: this.name };
     }
 }
@@ -47,18 +52,18 @@ abstract class UAnimNotifyMatSubAction extends UAnimNotify { }
 abstract class UAnimNotifyScripted extends UAnimNotify { }
 abstract class UAnimNotifyScript extends UAnimNotify { }
 abstract class UAnimNotifySound extends UAnimNotify {
-    declare protected sound: GA.USound | null;
+    declare protected sound: USound | null;
     declare protected volume: number;
     declare protected radius: number;
     declare protected random: number;
-    declare protected defaultWalkSounds: (GA.USound | null)[];
-    declare protected defaultRunSounds: (GA.USound | null)[];
-    declare protected grassWalkSounds: (GA.USound | null)[];
-    declare protected grassRunSounds: (GA.USound | null)[];
-    declare protected waterWalkSounds: (GA.USound | null)[];
-    declare protected waterRunSounds: (GA.USound | null)[];
-    declare protected defaultActorWalkSounds: (GA.USound | null)[];
-    declare protected defaultActorRunSounds: (GA.USound | null)[];
+    declare protected defaultWalkSounds: (USound | null)[];
+    declare protected defaultRunSounds: (USound | null)[];
+    declare protected grassWalkSounds: (USound | null)[];
+    declare protected grassRunSounds: (USound | null)[];
+    declare protected waterWalkSounds: (USound | null)[];
+    declare protected waterRunSounds: (USound | null)[];
+    declare protected defaultActorWalkSounds: (USound | null)[];
+    declare protected defaultActorRunSounds: (USound | null)[];
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -77,7 +82,7 @@ abstract class UAnimNotifySound extends UAnimNotify {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IAnimationSoundNotifyDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IAnimationSoundNotifyDecodeInfo {
         return {
             type: "sound",
             className: "AnimNotify_Sound",
@@ -98,7 +103,7 @@ abstract class UAnimNotifySound extends UAnimNotify {
     }
 }
 abstract class UAnimNotifySwimSound extends UAnimNotify {
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.IAnimationSwimSoundNotifyDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.IAnimationSwimSoundNotifyDecodeInfo {
         return { type: "swimSound", className: "AnimNotify_SwimSound", objectName: this.name, surface: null, underwater: null };
     }
 }
@@ -106,12 +111,12 @@ abstract class UAnimNotifyDestroyEffect extends UAnimNotify { }
 abstract class UAnimNotifyEffect extends UAnimNotify {
     declare protected effectClass: UObject | null;
     declare protected bone: string;
-    declare protected offsetLocation: GA.FVector;
-    declare protected offsetRotation: GA.FRotator;
+    declare protected offsetLocation: FVector;
+    declare protected offsetRotation: FRotator;
     declare protected attach: boolean;
     declare protected tag: string;
     declare protected drawScale: number;
-    declare protected drawScale3D: GA.FVector;
+    declare protected drawScale3D: FVector;
     declare protected trailCamera: boolean;
     declare protected independentRotation: boolean;
     declare protected effectScale: number;
@@ -132,7 +137,7 @@ abstract class UAnimNotifyEffect extends UAnimNotify {
         });
     }
 
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.IAnimationEffectNotifyDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.IAnimationEffectNotifyDecodeInfo {
         const effectClass = requireNotifyProperty(this, "effectClass", this.effectClass);
 
         return {
@@ -160,7 +165,7 @@ abstract class UAnimNotifyAttackShot extends UAnimNotify { }
 abstract class UAnimNotifyAttackItem extends UAnimNotify { }
 abstract class UAnimNotifyScreenFade extends UAnimNotify {
     declare protected fadeOutDuration: number;
-    declare protected fadeOutColor: GA.FColor;
+    declare protected fadeOutColor: FColor;
     declare protected blackOutDuration: number;
     declare protected fadeInDuration: number;
 
@@ -173,7 +178,7 @@ abstract class UAnimNotifyScreenFade extends UAnimNotify {
         });
     }
 
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.IAnimationScreenFadeNotifyDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.IAnimationScreenFadeNotifyDecodeInfo {
         return {
             type: "screenFade",
             className: "AnimNotify_ScreenFade",
@@ -188,7 +193,7 @@ abstract class UAnimNotifyScreenFade extends UAnimNotify {
 abstract class UAnimNotifyViewShake extends UAnimNotify {
     declare protected shakeType: EViewShakeType_T;
     declare protected shakeIntensity: number;
-    declare protected shakeVector: GA.FVector;
+    declare protected shakeVector: FVector;
     declare protected shakeRange: number;
     declare protected shakeCount: number;
 
@@ -202,7 +207,7 @@ abstract class UAnimNotifyViewShake extends UAnimNotify {
         });
     }
 
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.IAnimationViewShakeNotifyDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.IAnimationViewShakeNotifyDecodeInfo {
         const names: GD.IAnimationViewShakeNotifyDecodeInfo["shakeType"][] = ["damage", "vibration", "user", "up", "down", "upDown", "downUp"];
         const type = requireNotifyProperty(this, "shakeType", this.shakeType).valueOf();
         const shakeType = names[type];

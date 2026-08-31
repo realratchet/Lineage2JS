@@ -1,7 +1,9 @@
 import UAActor from "./un-aactor";
+import type { USound } from "./un-sound";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 abstract class UAmbientSoundObject extends UAActor {
-    declare public readonly sound: GA.USound;
+    declare public readonly sound: USound;
     declare public readonly radius: number;
     declare public readonly volume: number;
     declare public readonly pitch: number;
@@ -25,7 +27,7 @@ abstract class UAmbientSoundObject extends UAActor {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         if (!this.sound) return null;
 
         const snd = this.sound.loadSelf();

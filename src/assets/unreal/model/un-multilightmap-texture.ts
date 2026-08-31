@@ -2,6 +2,7 @@ import { generateUUID } from "three/src/math/MathUtils";
 import { BufferValue, UObject, type APackage, type Constructable_T, type UExport, FArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
 import decompressDDS from "../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 class FStaticLightmapTexture implements Constructable_T {
     public data = new FPrimitiveArrayLazy(BufferValue.uint8);
@@ -26,7 +27,7 @@ class FStaticLightmapTexture implements Constructable_T {
         return this;
     }
 
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.ITextureDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.ITextureDecodeInfo {
         const firstMipmap = this.data;
         const mipCount = 1;
 

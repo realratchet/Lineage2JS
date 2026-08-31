@@ -1,5 +1,6 @@
 import UNativeRegistry from "./native-registry";
 import { CastToken_T, ExprToken_T } from "@l2js/core";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 type ScriptValue_T = GD.ScriptPropertyValue_T | GD.IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
 
@@ -568,11 +569,11 @@ class ScriptExecutor {
 }
 
 class UnScriptVM {
-    protected readonly library: GD.DecodeLibrary;
+    protected readonly library: DecodeLibrary;
     protected readonly functionsById = new Map<string, GD.IScriptFunctionDecodeInfo>();
     protected readonly functionsByClass = new Map<string, Map<string, GD.IScriptFunctionDecodeInfo>>();
 
-    public constructor(library: GD.DecodeLibrary) {
+    public constructor(library: DecodeLibrary) {
         this.library = library;
 
         for (const fn of Object.values(library.scriptFunctions)) {

@@ -1,5 +1,6 @@
 import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
 import FRotator from "./un-rotator";
+import type { FVector } from "./un-vector";
 
 enum EMoverGlideType_T {
     MV_MoveByTime,
@@ -24,10 +25,10 @@ abstract class UMover extends UStaticMeshActor {
     declare protected stayOpenTime: number;
     declare protected delayTime: number;
     declare protected triggerOnceOnly: boolean;
-    declare protected keyPos: (GA.FVector | null)[];
-    declare protected keyRot: (GA.FRotator | null)[];
-    declare protected basePos: GA.FVector;
-    declare protected baseRot: GA.FRotator;
+    declare protected keyPos: (FVector | null)[];
+    declare protected keyRot: (FRotator | null)[];
+    declare protected basePos: FVector;
+    declare protected baseRot: FRotator;
     declare protected initialState: string;
     declare protected moverEncroachType: EMoverEncroachType_T;
 

@@ -10,10 +10,10 @@ abstract class FCoords extends UObject {
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
-    declare public origin: GA.FVector;
-    declare public xAxis: GA.FVector;
-    declare public yAxis: GA.FVector;
-    declare public zAxis: GA.FVector;
+    declare public origin: FVector;
+    declare public xAxis: FVector;
+    declare public yAxis: FVector;
+    declare public zAxis: FVector;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -124,7 +124,7 @@ abstract class FCoords extends UObject {
         return _this;
     }
 
-    static fromRotator({ pitch, yaw, roll }: GA.FRotator) {
+    static fromRotator({ pitch, yaw, roll }: FRotator) {
         const tmpCoords = FCoords.make();
         let _this = FCoords.make();
 
@@ -187,7 +187,7 @@ abstract class FCoords extends UObject {
 export default FCoords;
 export { FCoords };
 
-function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
+function multiplyAxis(coords: FCoords, inVector: FVector) {
     const outVector = FVector.make();
 
     const fVar1 = inVector.x;
@@ -207,7 +207,7 @@ function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
     return outVector;
 }
 
-function multiplyOrigin(coord: FCoords, inVector: GA.FVector) {
+function multiplyOrigin(coord: FCoords, inVector: FVector) {
     const outVector = FVector.make();
 
     const fVar7 = inVector.x - (coord.origin).x;

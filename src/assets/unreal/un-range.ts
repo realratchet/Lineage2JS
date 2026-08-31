@@ -1,5 +1,6 @@
 import FVector from "./un-vector";
 import { UObject } from "@l2js/core";
+import type { DecodeLibrary } from "./decode-library";
 
 abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -19,7 +20,7 @@ abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {
         this.max = max;
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): Range_T { return [this.min, this.max]; }
+    public getDecodeInfo(_library: DecodeLibrary): Range_T { return [this.min, this.max]; }
 
 
     public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
@@ -43,7 +44,7 @@ abstract class FRangeVector extends UObject implements GD.IDecodableStruct<Range
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): RangeVector_T {
+    public getDecodeInfo(library: DecodeLibrary): RangeVector_T {
         const [minx, maxx] = this.x.getDecodeInfo(library)
         const [miny, maxy] = this.y.getDecodeInfo(library)
         const [minz, maxz] = this.z.getDecodeInfo(library)

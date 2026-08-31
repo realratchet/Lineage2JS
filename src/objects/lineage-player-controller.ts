@@ -1,11 +1,12 @@
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
+import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 class LineagePlayerController implements ScriptHost_T {
     public readonly scriptClassId: string;
     public readonly scriptProperties = new Map<string, ScriptValue_T>();
     protected readonly scriptVM: UnScriptVM;
 
-    public constructor(library: GD.DecodeLibrary) {
+    public constructor(library: DecodeLibrary) {
         this.scriptClassId = Object.keys(library.scriptClasses).find(id => id.toLowerCase() === "engine.lineageplayercontroller");
 
         if (!this.scriptClassId) throw new Error("UnrealScript class 'Engine.LineagePlayerController' is missing.");

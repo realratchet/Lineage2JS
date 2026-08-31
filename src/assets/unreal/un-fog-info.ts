@@ -1,19 +1,23 @@
-import UObject, { type FArray } from "@l2js/core";
+import { UObject, type FArray } from "@l2js/core";
 import AInfo from "./un-info";
 import FVector from "./un-vector";
+import type { FRange } from "./un-range";
+import type { UMaterial } from "./un-material";
+import type { FColor } from "./un-color";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 abstract class UL2FogInfo extends AInfo {
-    declare protected readonly affectRange: GA.FRange;
-    declare protected readonly fogRange1: GA.FRange;
-    declare protected readonly fogRange2: GA.FRange;
-    declare protected readonly fogRange3: GA.FRange;
-    declare protected readonly fogRange4: GA.FRange;
-    declare protected readonly fogRange5: GA.FRange;
+    declare protected readonly affectRange: FRange;
+    declare protected readonly fogRange1: FRange;
+    declare protected readonly fogRange2: FRange;
+    declare protected readonly fogRange3: FRange;
+    declare protected readonly fogRange4: FRange;
+    declare protected readonly fogRange5: FRange;
     declare protected readonly colors: FArray<UL2EnvironmentColorInfo>;
-    declare protected readonly cloudTexture: GA.UMaterial;
+    declare protected readonly cloudTexture: UMaterial;
     declare protected readonly textureDistance: number;
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const library = builder.library;
         let zoneMask = 0n;
         const level = this.getLevel();
@@ -60,10 +64,10 @@ abstract class UL2FogInfo extends AInfo {
 
 abstract class UL2EnvironmentColorInfo extends UObject {
     declare protected time: number;
-    declare protected fogColor: GA.FColor;
-    declare protected skyColor: GA.FColor;
-    declare protected cloudColor: FArray<GA.FColor>;
-    declare protected hazeringColor: FArray<GA.FColor>;
+    declare protected fogColor: FColor;
+    declare protected skyColor: FColor;
+    declare protected cloudColor: FArray<FColor>;
+    declare protected hazeringColor: FArray<FColor>;
 
     public getDecodeInfo() {
         // if (this.cloudColor.length !== 1 || this.hazeringColor.length !== 1)

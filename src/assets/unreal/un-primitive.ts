@@ -1,11 +1,12 @@
 import FBox from "./un-box";
 import FPlane from "./un-plane";
 import FVector from "./un-vector";
-import UObject, { type APackage, type UExport } from "@l2js/core";
+import { UObject, type APackage, type UExport } from "@l2js/core";
+import type { UAActor } from "./un-aactor";
 
 abstract class UPrimitive extends UObject {
-    declare protected boundingBox: GA.FBox;
-    declare protected boundingSphere: GA.FPlane;
+    declare protected boundingBox: FBox;
+    declare protected boundingSphere: FPlane;
 
     protected preLoad(pkg: APackage, exp: UExport): void {
         super.preLoad(pkg, exp);
@@ -40,7 +41,7 @@ abstract class UPrimitive extends UObject {
         };
     }
 
-    public getRenderBoundingBox(owner?: GA.AActor): FBox {
+    public getRenderBoundingBox(owner?: UAActor): FBox {
         if (owner) {
             const extents = FVector.make(owner.collisionRadius + 1, owner.collisionRadius + 1, owner.collisionHeight + 1);
             const box = FBox.make(extents.negate(), extents, 1);

@@ -1,8 +1,14 @@
-import UObject, { type FPrimitiveArray, type UnserializedProperty_T } from "@l2js/core";
+import { UObject, type FPrimitiveArray, type UnserializedProperty_T } from "@l2js/core";
+import type { FColor } from "./un-color";
+import type { FMatrix } from "./un-matrix";
+import type { FRotator } from "./un-rotator";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+
+type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
 
 abstract class UBaseMaterial extends UObject {
     // public readonly skipRemaining = true;
-    public abstract getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string;
+    public abstract getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string;
 
     // protected _fallbackMaterial: any;
     // protected _useFallback: any;
@@ -155,7 +161,7 @@ abstract class UTexEnvMap extends UBaseModifier {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         return {
             name: this.uuid,
             materialType: "modifier",
@@ -176,7 +182,7 @@ abstract class UCombiner extends UBaseModifier {
     declare protected modulate2X: boolean;
     declare protected modulate4X: boolean;
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         // shader-mesh-static.fs's USE_COMBINER block expects this flattened numbering, not
         // the raw CombineOperation ordinal (D3DMaterialState.cpp line 807-844 is ground truth
         // for the operations; Modulate2X/Modulate4X fold into the CO_Multiply case there)
@@ -246,11 +252,11 @@ abstract class UFinalBlend extends UBaseModifier {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         const map = builder.pullMaterial(this.material);
 
         // D3DMaterialState.cpp ApplyFinalBlend (line 298-352) is the ground truth for the blend factors below
-        let blendingMode: GA.SupportedBlendingTypes_T = "normal";
+        let blendingMode: SupportedBlendingTypes_T = "normal";
         let transparent = false;
         switch (this.frameBufferBlending.valueOf()) {
             case EFrameBufferBlending.FB_Overwrite: blendingMode = "normal"; break;
@@ -332,7 +338,7 @@ abstract class UShader extends UMaterial {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         // if (this.transparent)
         //     debugger;
 
@@ -348,7 +354,7 @@ abstract class UShader extends UMaterial {
         const alphaTest = this.alphaTest / 255;
         const modulateStaticLighting2X = this.modulateStaticLighting2X;
 
-        let blendingMode: GA.SupportedBlendingTypes_T;
+        let blendingMode: SupportedBlendingTypes_T;
 
         switch (this.outputBlending.valueOf()) {
             case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
@@ -389,13 +395,13 @@ abstract class UShader extends UMaterial {
 }
 
 abstract class UFadeColor extends UBaseModifier {
-    declare public readonly color1: GA.FColor;
-    declare public readonly color2: GA.FColor;
+    declare public readonly color1: FColor;
+    declare public readonly color2: FColor;
     declare public readonly period: number;
     declare public readonly phase: number;
     declare public readonly fadeType: EColorFadeType_T;
 
-    public getDecodeInfo(_builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
         const fadeType = this.fadeType === EColorFadeType_T.FC_Sinusoidal ? "sinusoidal" : "linear";
 
@@ -425,11 +431,11 @@ abstract class UFadeColor extends UBaseModifier {
 }
 
 abstract class UColorModifier extends UBaseMaterial {
-    declare protected color: GA.FColor;
+    declare protected color: FColor;
     declare protected doubleSide: boolean;
     declare protected alphaBlend: boolean;
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         return {
             name: this.uuid,
             materialType: "modifier",
@@ -455,14 +461,14 @@ abstract class UColorModifier extends UBaseMaterial {
 }
 
 abstract class UTexRotator extends UBaseModifier {
-    declare public readonly matrix: GA.FMatrix;
+    declare public readonly matrix: FMatrix;
     declare public readonly type: TexRotationType_T;
-    declare public readonly rotation: GA.FRotator;
+    declare public readonly rotation: FRotator;
     declare public readonly offsetU: number;
     declare public readonly offsetV: number;
-    declare public readonly oscillationRate: GA.FRotator;
-    declare public readonly oscillationAmplitude: GA.FRotator;
-    declare public readonly oscillationPhase: GA.FRotator;
+    declare public readonly oscillationRate: FRotator;
+    declare public readonly oscillationAmplitude: FRotator;
+    declare public readonly oscillationPhase: FRotator;
 
     // public async decodeMaterial(): Promise<THREE.Material> { return await this.material?.decodeMaterial() as MeshBasicMaterial; }
 
@@ -487,7 +493,7 @@ abstract class UTexRotator extends UBaseModifier {
     //     };
     // }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         let rotationType: "fixed" | "rotating" | "oscillating" = "fixed";
         switch (this.type.valueOf()) {
             case TexRotationType_T.TR_FixedRotation: rotationType = "fixed"; break;
@@ -531,7 +537,7 @@ abstract class UTexRotator extends UBaseModifier {
 
 
 abstract class UTexOscillator extends UBaseModifier {
-    declare protected matrix: GA.FMatrix;
+    declare protected matrix: FMatrix;
     declare protected rateU: number;
     declare protected rateV: number;
     declare protected phaseU: number;
@@ -559,7 +565,7 @@ abstract class UTexOscillator extends UBaseModifier {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         const mapType = (type: ETexOscillationType_T): "pan" | "stretch" | "stretchRepeat" | "jitter" => {
             switch (type.valueOf()) {
                 case ETexOscillationType_T.OT_Pan: return "pan";
@@ -593,7 +599,7 @@ abstract class UTexOscillator extends UBaseModifier {
 }
 
 abstract class UTexCoordSource extends UBaseModifier {
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         return {
             name: this.uuid,
             materialType: "modifier",
@@ -606,7 +612,7 @@ abstract class UTexCoordSource extends UBaseModifier {
 
 abstract class UVertexColor extends UBaseModifier {
     // vertex color modulation isn't supported - combiners treat a null material as absent
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): string {
         return builder.pullMaterial(this.material);
     }
 }
@@ -614,11 +620,11 @@ abstract class UVertexColor extends UBaseModifier {
 abstract class UTexPanner extends UBaseModifier {
     declare public readonly rate: number;
     declare public readonly z: number;
-    declare public readonly matrix: GA.FMatrix;
+    declare public readonly matrix: FMatrix;
     declare public readonly internalTime: FPrimitiveArray<"int32">;
-    declare public readonly direction: GA.FRotator;
+    declare public readonly direction: FRotator;
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo {
         const D = this.direction.toVector();
         const rateU = (this.rate * D.x);
         const rateV = (this.rate * D.y);
@@ -674,10 +680,11 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
     //     debugger;
     // }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): string {
         return builder.pullMaterial(this.material || this.defaultMaterial);
     }
 }
 
 export default UMaterial;
 export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UVertexColor, UCombiner };
+export type { SupportedBlendingTypes_T };

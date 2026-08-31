@@ -5,6 +5,9 @@ import ULodMesh from "../un-lod-mesh";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
+import type { UMeshAnimation } from "./un-mesh-animation";
+import type { UStaticMeshMaterial } from "../un-material";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 type SkeletalMeshDecodeResult_T = { object: GD.ISkinnedMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialGroupDecodeInfo };
 type SkinIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
@@ -311,7 +314,7 @@ abstract class USkeletalMesh extends ULodMesh {
     protected points2 = new FArray(FMeshVector);
     protected refSkeleton = new FArray(FMeshBone);
     protected animationId: number;
-    protected animation: GA.UMeshAnimation;
+    protected animation: UMeshAnimation;
     protected skeletalDepth: number;
     protected weightIndices = new FArray(FWeightIndex);
     protected boneInluences = new FArray(FBoneInfluence);
@@ -342,7 +345,7 @@ abstract class USkeletalMesh extends ULodMesh {
         this.animationId = pkg.read("compat32");
 
         if (this.animationId !== 0)
-            this.animation = pkg.fetchObject<GA.UMeshAnimation>(this.animationId).loadSelf();
+            this.animation = pkg.fetchObject<UMeshAnimation>(this.animationId).loadSelf();
 
         this.skeletalDepth = pkg.read("uint32");
         this.weightIndices.load(pkg);
@@ -385,7 +388,7 @@ abstract class USkeletalMesh extends ULodMesh {
         console.assert(this.readHead === this.readTail, "Should be zero");
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true, decodeAnimationNotifies: boolean = decodeAnimations): SkeletalMeshDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, decodeAnimations: boolean = true, decodeMaterials: boolean = true, decodeAnimationNotifies: boolean = decodeAnimations): SkeletalMeshDecodeResult_T {
         const section = this;
 
         if (section.points.length > 0) section.points.getElem(0);
@@ -399,7 +402,7 @@ abstract class USkeletalMesh extends ULodMesh {
         const { positions, uvs, bones, weights, bones2, weights2, numInfs } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length, maxBoneInfluences);
         const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
         const skeleton = collectSkeleton(this.refSkeleton);
-        const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: GA.UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
+        const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
 
         const materialInfo = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
         const geometryInfo: GD.IGeometryDecodeInfo = {

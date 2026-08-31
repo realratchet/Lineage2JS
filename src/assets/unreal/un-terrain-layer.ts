@@ -1,4 +1,8 @@
 import { UObject } from "@l2js/core";
+import type { UTexture } from "./un-texture";
+import type { FRotator } from "./un-rotator";
+import type { FMatrix } from "./un-matrix";
+import type { FVector } from "./un-vector";
 
 enum TextureMapAxis_T {
     TEXMAPAXIS_XY = 0,
@@ -8,21 +12,21 @@ enum TextureMapAxis_T {
 };
 
 abstract class UTerrainLayer extends UObject {
-    declare public readonly map: GA.UTexture;
-    declare public readonly alphaMap: GA.UTexture;
+    declare public readonly map: UTexture;
+    declare public readonly alphaMap: UTexture;
     declare public readonly scaleW: number;
     declare public readonly scaleH: number;
     declare public readonly panW: number;
     declare public readonly panH: number;
     declare public readonly mapAxis: TextureMapAxis_T;
     declare public readonly mapRotation: number;
-    declare public readonly layerRotation: GA.FRotator;
-    declare public readonly terrainMatrix: GA.FMatrix;
+    declare public readonly layerRotation: FRotator;
+    declare public readonly terrainMatrix: FMatrix;
     declare public readonly level: number[];
     declare public readonly friction: number;
     declare public readonly restitution: number;
-    declare public readonly weightMap: GA.UTexture;
-    declare public readonly scale: GA.FVector;
+    declare public readonly weightMap: UTexture;
+    declare public readonly scale: FVector;
     declare public readonly toWorld: any;
     declare public readonly toMaskmap: any;
     declare public readonly useAlpha: boolean;

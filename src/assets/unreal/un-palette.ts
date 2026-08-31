@@ -1,8 +1,8 @@
 import FColor from "./un-color";
-import UObject, { type APackage, type UExport, FArray } from "@l2js/core";
+import { UObject, type APackage, type UExport, FArray } from "@l2js/core";
 
 abstract class UPlatte extends UObject {
-    public colors: FArray<GA.FColor>
+    public colors: FArray<FColor>
     // public readonly skipRemaining = true;
 
     public doLoad(pkg: APackage, exp: UExport) {

@@ -1,5 +1,6 @@
 import UStaticMeshActor from "./un-static-mesh-actor";
 import { UObject } from "@l2js/core";
+import type { FRotator } from "../un-rotator";
 
 // per-axis float triple (MovableStaticMeshActor.uc struct L2RotatorTime - PitchTime/RollTime/YawTime)
 abstract class FL2RotatorTime extends UObject {
@@ -28,9 +29,9 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
     declare protected l2AccelRatio: FL2RotatorTime;
     declare protected useL2RotatorMaxRandom: boolean;
     declare protected useL2RotatorRandomStart: boolean;
-    declare protected l2RotatorRate: GA.FRotator;
-    declare protected l2RotatorMax: GA.FRotator;
-    declare protected l2OrgRotator: GA.FRotator;
+    declare protected l2RotatorRate: FRotator;
+    declare protected l2RotatorMax: FRotator;
+    declare protected l2OrgRotator: FRotator;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {

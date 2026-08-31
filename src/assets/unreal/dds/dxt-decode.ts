@@ -1,3 +1,5 @@
+import type { DecodeLibrary } from "../decode-library";
+
 /**
  * Software DXT/S3TC decompression. Kept free of three.js (and DOM) imports so the
  * decode worker can convert "dds" material entries to ready RGBA buffers before
@@ -273,7 +275,7 @@ function convertDDSTextureInfo(info: GD.ITextureDecodeInfo): boolean {
     return true;
 }
 
-function convertDDSMaterialsToRGBA(library: GD.DecodeLibrary) {
+function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
     for (const info of Object.values(library.materials)) {
         if (!info || (info as GD.ITextureDecodeInfo).textureType !== "dds") continue;
 

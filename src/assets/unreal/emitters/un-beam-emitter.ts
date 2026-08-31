@@ -1,19 +1,21 @@
 import UParticleEmitter from "./un-particle-emitter";
+import type { FRange, FRangeVector } from "../un-range";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 // BeamEmitter: the worker only carries the beam parameters across, the point
 // generation and ribbon rendering live client side (objects/emitters/beam-emitter.ts).
 
 abstract class UBeamEmitter extends UParticleEmitter {
-    declare protected beamDistanceRange: GA.FRange;
+    declare protected beamDistanceRange: FRange;
     declare protected beamEndPoints: any[];
     declare protected determineEndPointBy: number;
     declare protected beamTextureUScale: number;
     declare protected beamTextureVScale: number;
     declare protected rotatingSheets: number;
     declare protected triggerEndpoint: boolean;
-    declare protected lowFrequencyNoiseRange: GA.FRangeVector;
+    declare protected lowFrequencyNoiseRange: FRangeVector;
     declare protected lowFrequencyPoints: number;
-    declare protected highFrequencyNoiseRange: GA.FRangeVector;
+    declare protected highFrequencyNoiseRange: FRangeVector;
     declare protected highFrequencyPoints: number;
     declare protected lfScaleFactors: any[];
     declare protected hfScaleFactors: any[];
@@ -22,9 +24,9 @@ abstract class UBeamEmitter extends UParticleEmitter {
     declare protected isUsingHighFrequencyScale: boolean;
     declare protected isUsingLowFrequencyScale: boolean;
     declare protected noiseDeterminesEndPoint: boolean;
-    declare protected dynamicHFNoiseRange: GA.FRangeVector;
-    declare protected dynamicHFNoisePointsRange: GA.FRange;
-    declare protected dynamicTimeBetweenNoiseRange: GA.FRange;
+    declare protected dynamicHFNoiseRange: FRangeVector;
+    declare protected dynamicHFNoisePointsRange: FRange;
+    declare protected dynamicTimeBetweenNoiseRange: FRange;
     declare protected isUsingBranching: boolean;
 
     public getPropertyMap(): Record<string, string> {
@@ -68,7 +70,7 @@ abstract class UBeamEmitter extends UParticleEmitter {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const library = builder.library;
 
         if (this.isUsingBranching)

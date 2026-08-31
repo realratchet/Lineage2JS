@@ -1,6 +1,7 @@
 // import * as _path from "path";
 
 import { AAssetLoader, APackage, type ANativePackage, type AssetListInfo_T, type CorePackageConstructor_T, type EnginePackageConstructor_T, type NativePackageConstructor_T, type PackageConstructor_T } from "@l2js/core";
+import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
 
@@ -198,7 +199,7 @@ import { AAssetLoader, APackage, type ANativePackage, type AssetListInfo_T, type
 // }
 
 
-class AssetLoader extends AAssetLoader<APackage, GA.UCorePackage, GA.UEnginePackage, ANativePackage> {
+class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePackage, ANativePackage> {
 
     protected pkgRefCounts = new Map<string, number>();
 
@@ -212,7 +213,7 @@ class AssetLoader extends AAssetLoader<APackage, GA.UCorePackage, GA.UEnginePack
         return new UNativePackage(this);
     }
 
-    protected createPackage(UPackage: PackageConstructor_T<APackage> | CorePackageConstructor_T<GA.UCorePackage> | EnginePackageConstructor_T<GA.UEnginePackage>, downloadPath: string): APackage {
+    protected createPackage(UPackage: PackageConstructor_T<APackage> | CorePackageConstructor_T<UCorePackage> | EnginePackageConstructor_T<UEnginePackage>, downloadPath: string): APackage {
         return new UPackage(this, `assets/${downloadPath}`);
     }
 

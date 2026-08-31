@@ -9,17 +9,21 @@ import ETextureFormat from "./un-tex-format";
 import GMath from "./un-gmath";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
-import { TextureMapAxis_T } from "./un-terrain-layer";
+import { TextureMapAxis_T, UTerrainLayer } from "./un-terrain-layer";
 import FPlane from "./un-plane";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dds/dxt-decode";
+import type { UDecoLayer } from "./un-deco-layer";
+import type { FTIntMap } from "./un-tint-map";
+import type { UTerrainSector } from "./un-terrain-sector";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
-const cacheTextureRgba = new WeakMap<GA.UTexture, Uint8Array>();
+const cacheTextureRgba = new WeakMap<UTexture, Uint8Array>();
 
-function getTextureRgba(texture: GA.UTexture): Uint8Array {
+function getTextureRgba(texture: UTexture): Uint8Array {
     if (cacheTextureRgba.has(texture)) return cacheTextureRgba.get(texture);
 
     const data = texture.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array;
@@ -67,11 +71,11 @@ class FTerrainRenderCombination {
 }
 
 abstract class ATerrainInfo extends AInfo {
-    declare public readonly terrainMap: GA.UTexture;
-    declare public readonly terrainScale: GA.FVector;
-    declare public readonly layers: GA.UTerrainLayer[];
+    declare public readonly terrainMap: UTexture;
+    declare public readonly terrainScale: FVector;
+    declare public readonly layers: UTerrainLayer[];
 
-    declare protected readonly decoLayers: FArray<GA.UDecoLayer>
+    declare protected readonly decoLayers: FArray<UDecoLayer>
     declare protected readonly decoLayerOffset: number;
     declare protected readonly showOnTerrain: number;
     declare public readonly quadVisibilityBitmap: FPrimitiveArray<"int32">;
@@ -83,9 +87,9 @@ abstract class ATerrainInfo extends AInfo {
     declare protected readonly generatedSectorCounter: number;
     declare protected readonly numIntMap: number;
     declare protected readonly autoTimeGeneration: boolean;
-    declare protected readonly tIntMap: FArray<GA.FTIntMap>;
+    declare protected readonly tIntMap: FArray<FTIntMap>;
     declare protected readonly tickTime: number;
-    declare protected sectors: FObjectArray<GA.UTerrainSector>;
+    declare protected sectors: FObjectArray<UTerrainSector>;
     declare protected readonly showOnInvisibleTerrain: boolean;
     declare protected readonly litDirectional: boolean;
     declare protected readonly disregardTerrainLighting: boolean;
@@ -97,12 +101,12 @@ abstract class ATerrainInfo extends AInfo {
 
     declare protected sectorsX: number;
     declare protected sectorsY: number;
-    declare public toWorld: GA.FCoords;
-    declare protected toHeightMap: GA.FCoords;
+    declare public toWorld: FCoords;
+    declare protected toHeightMap: FCoords;
     declare public heightmapX: number;
     declare public heightmapY: number;
 
-    declare public boundingBox: GA.FBox;
+    declare public boundingBox: FBox;
     // public heightmapMin: number;
     // public heightmapMax: number;
 
@@ -112,7 +116,7 @@ abstract class ATerrainInfo extends AInfo {
 
     declare public vertices: Array<FVector>;
     declare public faceNormals: Array<FTerrainNormalPair>;
-    declare public vertexColors: FArray<GA.FColor>;
+    declare public vertexColors: FArray<FColor>;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -252,7 +256,7 @@ abstract class ATerrainInfo extends AInfo {
     public isInvertedTerrain() { return !!this.inverted; }
 
 
-    public getLayerAlpha(x: number, y: number, layer: number, alphaMap: GA.UTexture) {
+    public getLayerAlpha(x: number, y: number, layer: number, alphaMap: UTexture) {
         const texture = alphaMap
             ? alphaMap
             : (layer === -1 ? this.terrainMap : this.layers[layer].alphaMap);
@@ -298,7 +302,7 @@ abstract class ATerrainInfo extends AInfo {
         }
     }
 
-    public getTextureColor(x: number, y: number, texture: GA.UTexture): GD.Vector3Arr {
+    public getTextureColor(x: number, y: number, texture: UTexture): GD.Vector3Arr {
         texture = texture.loadSelf();
         x = Math.floor(x * texture.width / this.heightmapX);
         y = Math.floor(y * texture.height / this.heightmapY);
@@ -362,7 +366,7 @@ abstract class ATerrainInfo extends AInfo {
         this.vertexColors = new FArray(FColor.class());
 
         {
-            this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();
+            this.sectors = new FObjectArray<UTerrainSector>().load(pkg).loadSelf();
 
             this.readHead = pkg.tell();
 
@@ -686,7 +690,7 @@ abstract class ATerrainInfo extends AInfo {
         // debugger;
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
         const library = builder.library;
         const terrainLayers = this.layers.filter(x => x);
         const layerCount = terrainLayers.length;
