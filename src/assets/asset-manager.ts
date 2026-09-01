@@ -1,7 +1,7 @@
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, DecodeLibrary, IScriptFieldDecodeInfo, ScriptPropertyValue_T, LoadSettings_T, ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine";
-import { UnProperties } from "@l2js/core";
+import { PropertyFlags_T } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
@@ -106,7 +106,7 @@ function applyScriptLocalization(library: DecodeLibrary, classId: string, proper
     for (const property of properties) {
         const field = findScriptField(library, classId, property.name);
 
-        if (!(field.flags & UnProperties.PropertyFlags_T.CPF_Localized)) throw new Error(`UnrealScript property '${field.id}' is not localized.`);
+        if (!(field.flags & PropertyFlags_T.CPF_Localized)) throw new Error(`UnrealScript property '${field.id}' is not localized.`);
 
         if (property.index < 0) {
             cls.defaults[field.name] = parseLocalizedValue(field, property.value);
