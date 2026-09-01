@@ -3,7 +3,7 @@ import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import Rotator from "../utils/rotator";
 import { RotatingComponent } from "../physics/components/physics-component";
-import type { IRotatingDecodeInfo } from "@l2js/engine";
+import type { IRotatingDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 class RotatingObject extends CollidingMesh {
     public readonly isRotatingObject: boolean = true;

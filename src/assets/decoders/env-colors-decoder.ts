@@ -1,5 +1,5 @@
 import EnvColor, { TimeColor, TimeHSV, TimeScale } from "../../rendering/env-color";
-import type { IL2NEnvLightDecodeInfo, INTimeHSVDecodeInfo, INTimeScaleDecodeInfo } from "@l2js/engine";
+import type { IL2NEnvLightDecodeInfo, INTimeHSVDecodeInfo, INTimeScaleDecodeInfo } from "@l2js/engine/contracts/env-time";
 
 
 function decodeEnvColor(envColor: IL2NEnvLightDecodeInfo): EnvColor {

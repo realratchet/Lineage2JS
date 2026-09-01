@@ -5,7 +5,7 @@ import { GAMMA_STEPS } from "../rendering/display-gamma";
 import type BaseActor from "../base-actor";
 import type GameManager from "./game-manager";
 import type RenderManager from "../rendering/render-manager";
-import type { ICharacterArmorSelection } from "@l2js/engine";
+import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 
 class UIManager implements IEngineComponent<GameManager> {
     public moverPosition = 0;

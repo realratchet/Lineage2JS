@@ -6,7 +6,7 @@ import type PawnMovementComponent from "../../physics/components/pawn-movement-c
 import type { ScriptComponent } from "../../game/script-component";
 import type BaseActor from "../../base-actor";
 import type { ScriptHost_T } from "../../ue-script/vm";
-import type { INpcEnterEvent } from "@l2js/engine";
+import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "npcLifecycle";

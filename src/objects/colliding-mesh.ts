@@ -4,7 +4,7 @@ import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
-import type { IStaticMeshCollisionDecodeInfo, IBSPCollisionModelDecodeInfo } from "@l2js/engine";
+import type { IStaticMeshCollisionDecodeInfo, IBSPCollisionModelDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();

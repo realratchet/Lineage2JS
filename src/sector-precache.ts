@@ -1,6 +1,6 @@
 import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
-import type { LoadSettings_T } from "@l2js/engine";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 type PrecacheView_T = {
     progress: HTMLProgressElement,

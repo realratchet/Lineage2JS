@@ -1,6 +1,6 @@
 import RotatingObject from "./rotating-object";
 import { MeshLight_T } from "./lit-actor";
-import type { ISwayingDecodeInfo } from "@l2js/engine";
+import type { ISwayingDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 type AttachedActor_T = { object: THREE.Object3D, relativeLocation: THREE.Vector3, relativeRotation: THREE.Quaternion };
 

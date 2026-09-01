@@ -10,7 +10,8 @@ import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from 
 import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
-import type { IWaterVolumeDecodeInfo, Vector3Arr } from "@l2js/engine";
+import type { Vector3Arr } from "@l2js/engine";
+import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();

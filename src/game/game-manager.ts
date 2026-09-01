@@ -5,7 +5,7 @@ import PhysicsManager from "../physics/physics-manager";
 import RenderManager, { type HTMLViewportElement_T } from "../rendering/render-manager";
 import UIManager from "./ui-manager";
 import InputManager from "./input-manager";
-import type { LoadSettings_T } from "@l2js/engine";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 class GameManager implements IEngineComponent<GameManager> {
     protected manAsset: AssetManager;

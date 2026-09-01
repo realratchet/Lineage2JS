@@ -3,7 +3,7 @@ import VERTEX_SHADER from "./shader/shader-particle-instanced.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle-instanced.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { fixParticleTextureSampling, getPartcileBlendingSettings } from "./particle-material";
-import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine";
+import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine/contracts/emitter";
 
 class InstancedParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;

@@ -12,7 +12,8 @@ import TransformComponent from "./objects/components/transform-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
 import { COMPONENT_EVENT_NOT_HANDLED, ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
-import type { Vector3Arr, INpcEnterEvent } from "@l2js/engine";
+import type { Vector3Arr } from "@l2js/engine";
+import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 const tmpUp = new Vector3(0, 0, 1);
 class BaseActor extends GameObject implements ICollidable {

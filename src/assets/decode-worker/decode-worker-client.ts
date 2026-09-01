@@ -1,6 +1,7 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
 import type { WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T } from "./decode-protocol";
-import type { LocalizationProperty_T, LoadSettings_T, ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine";
+import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";

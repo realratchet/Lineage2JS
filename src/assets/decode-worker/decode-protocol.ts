@@ -1,4 +1,5 @@
-import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T, ICharacterArmorSelection, ICharacterGroup, INpcDefinition } from "@l2js/engine";
+import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ICharacterArmorSelection, ICharacterGroup, INpcDefinition } from "@l2js/engine/contracts/pawn";
 
 type InitMessage_T = {
     type: "init";

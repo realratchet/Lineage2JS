@@ -6,7 +6,7 @@ import GLOBAL_UNIFORMS from "./materials/global-uniforms";
 import InstancedSpriteBatcher from "./objects/emitters/instanced-sprite-batcher";
 import { Box3, Color, Frustum, Matrix4, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import type { SectorObject } from "./objects/zone-object";
-import type { LoadSettings_T } from "@l2js/engine";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 // Automated sector sweep (?sectorTest): decodes every level sector through the decode
 // worker, instantiates it, then renders + simulates a few frames (shader compilation,

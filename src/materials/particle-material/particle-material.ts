@@ -2,7 +2,8 @@ import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, N
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
-import type { IDecodedParameter, ParticleBlendModes_T } from "@l2js/engine";
+import type { ParticleBlendModes_T } from "@l2js/engine/contracts/emitter";
+import type { IDecodedParameter } from "@l2js/engine/contracts/material";
 
 // Billboard quads never need to tile, so always clamp. Mip-disable is opt-in
 // (atlas-cropped textures only) since low mips blend neighboring atlas cells.

@@ -1,7 +1,7 @@
 import startCore from "./core";
 import type BaseActor from "./base-actor";
 import { Vector3 } from "three";
-import type { INpcEnterEvent, INpcDefinition } from "@l2js/engine";
+import type { INpcEnterEvent, INpcDefinition } from "@l2js/engine/contracts/pawn";
 
 const NPC_TIMEOUT_MS = 240_000;
 const RENDER_FRAMES = 3;

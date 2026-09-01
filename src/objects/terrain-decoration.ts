@@ -1,6 +1,6 @@
 import Terrain from "./terrain";
 import { Box3, BufferGeometry, Camera, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Material, Scene, StaticDrawUsage, Vector3, WebGLRenderer } from "three";
-import type { ITerrainDecorationDecodeInfo } from "@l2js/engine";
+import type { ITerrainDecorationDecodeInfo } from "@l2js/engine/contracts/terrain";
 
 const tmpVec = new Vector3();
 

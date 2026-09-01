@@ -62,4 +62,4 @@ class UConfigWarrior extends BaseConfigFile {
 }
 
 export default UConfigWarrior;
-export { UConfigWarrior, WarriorAnimations_T };
+export { UConfigWarrior, type WarriorAnimations_T };

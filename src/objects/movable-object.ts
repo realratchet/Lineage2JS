@@ -5,7 +5,7 @@ import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { pointPrimitive } from "../physics/collision-primitive";
 import { MoverComponent } from "../physics/components/physics-component";
-import type { IMoverDecodeInfo } from "@l2js/engine";
+import type { IMoverDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
 

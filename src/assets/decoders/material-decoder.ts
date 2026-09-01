@@ -2,7 +2,11 @@ import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static
 import _decodeTexture from "./texture-decoder";
 import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
-import type { DecodeLibrary, ITextureDecodeInfo, MapData_T, IBaseMaterialDecodeInfo, IFadeColorDecodeInfo, IDecodedParameter, ITexPannerDecodeInfo, ITexRotatorDecodeInfo, ITexOscillatorDecodeInfo, ITexEnvMapDecodeInfo, IFinalBlendDecodeInfo, ITexCoordSourceDecodeInfo, IColorModifierDecodeInfo, IBaseMaterialModifierDecodeInfo, IAnimatedSpriteDecodeInfo, IDecodedSpriteParameter, IShaderDecodeInfo, ICombinerDecodeInfo, IMaterialGroupDecodeInfo, IMaterialTerrainSegmentDecodeInfo, IMaterialTerrainDecodeInfo, ILightmappedDecodeInfo, ILightAmbientMaterialModifier, ILightDirectionalMaterialModifier, IBaseLightingMaterialModifier, IMaterialModifier, IMaterialInstancedDecodeInfo, ISolidMaterialDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { IBaseMaterialDecodeInfo, IFadeColorDecodeInfo, IDecodedParameter, ITexPannerDecodeInfo, ITexRotatorDecodeInfo, ITexOscillatorDecodeInfo, ITexEnvMapDecodeInfo, IFinalBlendDecodeInfo, ITexCoordSourceDecodeInfo, IColorModifierDecodeInfo, IBaseMaterialModifierDecodeInfo, IDecodedSpriteParameter, IShaderDecodeInfo, ICombinerDecodeInfo, IMaterialGroupDecodeInfo, ILightmappedDecodeInfo, ILightAmbientMaterialModifier, ILightDirectionalMaterialModifier, IBaseLightingMaterialModifier, IMaterialModifier, ISolidMaterialDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
+import type { IMaterialInstancedDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { IMaterialTerrainSegmentDecodeInfo, IMaterialTerrainDecodeInfo } from "@l2js/engine/contracts/terrain";
+import type { ITextureDecodeInfo, MapData_T, IAnimatedSpriteDecodeInfo } from "@l2js/engine/contracts/texture";
 import { buildTransformStage } from "../../materials/mesh-static-material/transform-stage";
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();

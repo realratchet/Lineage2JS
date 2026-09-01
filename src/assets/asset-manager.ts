@@ -1,6 +1,9 @@
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
-import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, DecodeLibrary, IScriptFieldDecodeInfo, ScriptPropertyValue_T, LoadSettings_T, ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { IScriptFieldDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
 import { PropertyFlags_T } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;

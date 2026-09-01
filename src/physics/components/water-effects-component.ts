@@ -8,7 +8,8 @@ import type PhysicsManager from "../../physics/physics-manager";
 import type Player from "../../player";
 import type RenderManager from "../../rendering/render-manager";
 import type { SectorObject } from "../../objects/zone-object";
-import type { IWaterVolumeDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine";
+import type { ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
+import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
 const tmpWaterSurfaceEnd = new Vector3();
 const tmpWaterFloorStart = new Vector3();

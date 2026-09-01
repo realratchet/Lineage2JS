@@ -8,7 +8,7 @@
         // "allowJs": true,
         "paths": {
             "@l2js/engine": [
-                "./src/assets/unreal/index.ts"
+                "./src/assets/unreal/contracts/index.ts"
             ],
             "@l2js/engine/*": [
                 "./src/assets/unreal/*"

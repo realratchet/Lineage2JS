@@ -33,7 +33,9 @@ import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
-import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo, IEmitterSpawnSoundDecodeInfo, INpcDefinition } from "@l2js/engine";
+import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { IEmitterSpawnSoundDecodeInfo } from "@l2js/engine/contracts/emitter";
 
 type HTMLViewportElement_T = HTMLDivElement;
 

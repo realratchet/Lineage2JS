@@ -4,7 +4,7 @@ import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBas
 import AssetManager from "./assets/asset-manager";
 import runSectorPrecache from "./sector-precache";
 import GameManager from "./game/game-manager";
-import type { LoadSettings_T } from "@l2js/engine";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 

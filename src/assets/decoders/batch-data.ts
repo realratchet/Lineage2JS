@@ -1,7 +1,9 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
 import buildTriangleIndex from "../../physics/triangle-index";
-import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, DecodeLibrary, IStaticMeshSwayDecodeInfo, Vector3Arr, IBaseObjectOrInstanceDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialGroupDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo, IGeometryDecodeInfo } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "@l2js/engine";
+import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
+import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),

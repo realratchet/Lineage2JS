@@ -1,7 +1,8 @@
 import type { APackage } from "@l2js/core";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
-import type { ULevel, LoadSettings_T } from "@l2js/engine";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ULevel } from "@l2js/engine/un-level";
 
 function buildDecodeLibrary(pkg: APackage, sectorName: string, settings: LoadSettings_T) {
     const decodeLibrary = new DecodeLibrary();

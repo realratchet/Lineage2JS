@@ -1,5 +1,5 @@
 import { Bone, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from "three";
-import type { IDynamicHairDecodeInfo } from "@l2js/engine";
+import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 
 const tmpMatrix = new Matrix4();
 const tmpParentMatrix = new Matrix4();

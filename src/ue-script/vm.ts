@@ -1,6 +1,7 @@
 import UNativeRegistry from "./native-registry";
 import { CastToken_T, ExprToken_T } from "@l2js/core";
-import type { DecodeLibrary, ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo } from "@l2js/engine";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo } from "@l2js/engine/contracts/script";
 
 type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
 

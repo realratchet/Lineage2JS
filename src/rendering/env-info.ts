@@ -1,7 +1,7 @@
 import EnvColor from "./env-color"
 import ColorByte from "../utils/color-byte";
 import { Vector2 } from "three";
-import type { EEnvCycle } from "@l2js/engine";
+import type { EEnvCycle } from "@l2js/engine/env-consts";
 
 type EnvSetup = {
     isClock: boolean;

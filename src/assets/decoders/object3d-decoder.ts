@@ -20,7 +20,15 @@ import UnScriptVM from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import { GameObject } from "../../game/components";
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
-import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, IEmitterSpawnSoundDecodeInfo, IRotatingDecodeInfo, IEmitterActorDecodeInfo, IEdgesObjectDecodeInfo, IStaticMeshObjectDecodeInfo, IStaticMeshActorDecodeInfo, IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T, ILightDecodeInfo, ISunLightDecodeInfo, IBaseMaterialDecodeInfo, ITextureDecodeInfo, IShaderDecodeInfo, ITerrainSegmentDecodeInfo, ITerrainDecorationDecodeInfo, IBoneDecodeInfo, IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinnedMeshObjectDecodeInfo, IEmitterDecodeInfo, IMeshEmitterDecodeInfo, IParticleMaterialDecodeInfo, ISpriteEmitterDecodeInfo, IBaseObjectOrInstanceDecodeInfo, EmitterConfig_T } from "@l2js/engine";
+import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, ILightDecodeInfo, ISunLightDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
+import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { IEmitterSpawnSoundDecodeInfo, IEmitterActorDecodeInfo, IEmitterDecodeInfo, IMeshEmitterDecodeInfo, ISpriteEmitterDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
+import type { IBaseMaterialDecodeInfo, IShaderDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
+import type { IRotatingDecodeInfo, IEdgesObjectDecodeInfo, IStaticMeshObjectDecodeInfo, IStaticMeshActorDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { IBoneDecodeInfo, IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
+import type { ITerrainSegmentDecodeInfo, ITerrainDecorationDecodeInfo } from "@l2js/engine/contracts/terrain";
+import type { ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
+import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T } from "@l2js/engine/contracts/zone";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();

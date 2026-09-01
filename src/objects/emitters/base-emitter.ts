@@ -3,7 +3,7 @@ import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import type InstancedSpriteMesh from "./instanced-sprite-mesh";
 import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
 import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
-import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine";
+import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 const frozenUpdateMatrixWorld = function () { };
 

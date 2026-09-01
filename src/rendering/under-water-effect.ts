@@ -3,7 +3,7 @@ import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import ColorByte from "../utils/color-byte";
 import type BaseEmitter from "../objects/emitters/base-emitter";
 import Rotator from "../utils/rotator";
-import type { IWaterVolumeDecodeInfo } from "@l2js/engine";
+import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
 const tmpRotator = new Rotator();
 

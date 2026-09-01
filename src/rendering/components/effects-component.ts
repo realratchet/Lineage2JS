@@ -6,7 +6,9 @@ import type RenderManager from "../render-manager";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import Rotator from "../../utils/rotator";
-import type { IAnimationNotifyDecodeInfo, INpcEnterEvent, Vector3Arr } from "@l2js/engine";
+import type { Vector3Arr } from "@l2js/engine";
+import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();

@@ -2,7 +2,7 @@ import MeshEmitterMaterial from "../../materials/mesh-emitter-material/mesh-emit
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import { DoubleSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
-import type { EmitterConfig_T } from "@l2js/engine";
+import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 class MeshEmitter extends BaseEmitter {
     protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];

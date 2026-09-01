@@ -1,5 +1,5 @@
 import type { Vector3 } from "three";
-import type { IMusicVolumeBspNode, IVolumeBspDecodeInfo } from "@l2js/engine";
+import type { IMusicVolumeBspNode, IVolumeBspDecodeInfo } from "@l2js/engine/contracts/volume";
 
 let traceStart: Vector3 = null;
 let traceEnd: Vector3 = null;

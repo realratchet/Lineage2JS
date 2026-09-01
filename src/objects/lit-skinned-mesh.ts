@@ -1,7 +1,7 @@
 import DynamicLight from "./dynamic-light";
 import { BufferGeometry, Material, SkinnedMesh } from "three";
 import { ColorByte } from "../utils/color-byte";
-import type { IDynamicHairDecodeInfo } from "@l2js/engine";
+import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];

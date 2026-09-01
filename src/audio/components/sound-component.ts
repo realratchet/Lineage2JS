@@ -4,7 +4,9 @@ import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
 import type AudioManager from "../audio-manager";
 import type BaseActor from "../../base-actor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
-import type { DecodeLibrary, IAnimationNotifyDecodeInfo, INpcEnterEvent, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { IAnimationNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 const ANIMATION_NOTIFY_EVENT = "animationNotify";
 const NPC_ENTER_EVENT = "npcEnter";

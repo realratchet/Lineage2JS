@@ -4,7 +4,7 @@ import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
 import BaseEmitter from "./base-emitter";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
-import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine";
+import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 const geometry = new PlaneGeometry(2, 2);
 

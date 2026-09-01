@@ -6,7 +6,7 @@ import { isScriptSlot, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script
 import type { PawnMovementState_T } from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
-import type { IAnimationNotifyDecodeInfo } from "@l2js/engine";
+import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 const MESHES_CHANGED_EVENT = "meshesChanged";
 const MOVEMENT_TWEEN_TIME = 0.1;

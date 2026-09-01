@@ -3,7 +3,8 @@ import { Box3, Quaternion, Vector3 } from "three";
 import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import { GameObject } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
-import type { IBSPNodeDecodeInfo_T, IBSPNodeCollisionInfo_T, Vector3Arr } from "@l2js/engine";
+import type { Vector3Arr } from "@l2js/engine";
+import type { IBSPNodeDecodeInfo_T, IBSPNodeCollisionInfo_T } from "@l2js/engine/contracts/zone";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();

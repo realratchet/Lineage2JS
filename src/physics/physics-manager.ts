@@ -11,7 +11,7 @@ import type BaseActor from "../base-actor";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
-import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine";
+import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();

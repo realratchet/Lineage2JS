@@ -5,7 +5,8 @@ import CollidingMesh from "../../objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
-import type { StaticMeshBatchManifest_T, BatchElement_T, DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "@l2js/engine";
+import type { DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
+import type { StaticMeshBatchManifest_T, BatchElement_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
 import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;

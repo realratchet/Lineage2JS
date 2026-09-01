@@ -1,5 +1,5 @@
 import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
-import type { LoadSettings_T } from "@l2js/engine";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";

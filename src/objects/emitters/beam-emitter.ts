@@ -1,7 +1,7 @@
 import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
-import type { EmitterConfig_T } from "@l2js/engine";
+import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 // BeamEmitter: every particle is a beam made of HighFrequencyPoints points along a
 // low frequency noise path, rendered as RotatingSheets camera-facing ribbons

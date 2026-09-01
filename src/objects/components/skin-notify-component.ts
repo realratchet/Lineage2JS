@@ -4,7 +4,7 @@ import { MESHES_CHANGED_EVENT } from "./animation-component";
 import type AnimationComponent from "./animation-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
-import type { ISkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IRandomSkinNotifyDecodeInfo } from "@l2js/engine";
+import type { ISkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IRandomSkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 class SkinNotifyComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "skinNotify";

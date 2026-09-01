@@ -19,7 +19,15 @@ import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
 import { getUserConfig, UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
-import type { USkeletalMesh, UMaterial, USound, UEmitter, IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, ICharacterArmorSelection, INpcDefinition, LoadSettings_T, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo, ISkinnedMeshObjectDecodeInfo, IMaterialGroupDecodeInfo, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine";
+import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
+import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine/contracts/pawn";
+import type { IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
+import type { UEmitter } from "@l2js/engine/un-emitter";
+import type { UMaterial } from "@l2js/engine/un-material";
+import type { USound } from "@l2js/engine/un-sound";
+import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {

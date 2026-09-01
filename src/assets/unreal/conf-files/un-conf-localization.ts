@@ -40,5 +40,4 @@ class UConfigLocalization extends BaseConfigFile {
 }
 
 export default UConfigLocalization;
-export { UConfigLocalization };
-export type { LocalizationProperty_T };
+export { UConfigLocalization, type LocalizationProperty_T };
