@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { SizedContainerType, UTF16PairContainerType } from "./dat-container";
 
 const SCHEMA_ETCITEMGRP_DAT: ISchemaValue[] = [

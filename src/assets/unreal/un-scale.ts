@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import type { FVector } from "./un-vector";
 
 abstract class FScale extends UObject {

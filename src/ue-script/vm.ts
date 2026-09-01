@@ -1,8 +1,8 @@
 import UNativeRegistry from "./native-registry";
 import { CastToken_T, ExprToken_T } from "@l2js/core";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
+import type { DecodeLibrary, ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo } from "@l2js/engine";
 
-type ScriptValue_T = GD.ScriptPropertyValue_T | GD.IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
+type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
 
 type ScriptProperties_T = Map<string, ScriptValue_T> | Record<string, ScriptValue_T>;
 
@@ -19,7 +19,7 @@ type ScriptHost_T = {
     scriptProperties?: ScriptProperties_T,
     getUnrealScriptProperty?(id: string): ScriptValue_T,
     setUnrealScriptProperty?(id: string, value: ScriptValue_T): void,
-    handlesUnrealScriptFunction?(fn: GD.IScriptFunctionDecodeInfo): boolean,
+    handlesUnrealScriptFunction?(fn: IScriptFunctionDecodeInfo): boolean,
     handlesUnrealNative?(index: number, name: string): boolean,
     callUnrealNative?(call: ScriptNativeCall_T): ScriptValue_T
 };
@@ -32,7 +32,7 @@ type ScriptSlot_T = {
 type ScriptArgument_T = ScriptValue_T | ScriptSlot_T;
 
 type ScriptFrame_T = {
-    fn: GD.IScriptFunctionDecodeInfo,
+    fn: IScriptFunctionDecodeInfo,
     self: ScriptHost_T,
     context: ScriptHost_T,
     locals: Map<string, ScriptArgument_T>,
@@ -86,11 +86,11 @@ function findPropertyKey(properties: ScriptProperties_T, id: string): string | n
 
 function cloneScriptValue(value: ScriptValue_T): ScriptValue_T {
     if (!value || typeof value !== "object") return value;
-    if (Array.isArray(value)) return value.map(cloneScriptValue) as GD.ScriptPropertyValue_T[];
+    if (Array.isArray(value)) return value.map(cloneScriptValue) as ScriptPropertyValue_T[];
 
-    const clone: Record<string, GD.ScriptPropertyValue_T> = {};
+    const clone: Record<string, ScriptPropertyValue_T> = {};
 
-    for (const [key, entry] of Object.entries(value)) clone[key] = cloneScriptValue(entry) as GD.ScriptPropertyValue_T;
+    for (const [key, entry] of Object.entries(value)) clone[key] = cloneScriptValue(entry) as ScriptPropertyValue_T;
 
     return clone;
 }
@@ -180,7 +180,7 @@ function getStructMemberKey(value: ScriptValue_T, id: string): string | number {
     throw new Error(`UnrealScript struct member '${id}' is not in its value`);
 }
 
-function isOffset(value: GD.ScriptBytecodeValue_T): value is GD.IScriptBytecodeOffsetDecodeInfo {
+function isOffset(value: ScriptBytecodeValue_T): value is IScriptBytecodeOffsetDecodeInfo {
     return value !== null && typeof value === "object" && !Array.isArray(value) && "entryIndex" in value;
 }
 
@@ -198,7 +198,7 @@ function isScriptSlot(value: ScriptArgument_T): value is ScriptSlot_T {
 class ScriptExecutor {
     protected readonly vm: UnScriptVM;
     protected readonly frame: ScriptFrame_T;
-    protected readonly entries: GD.IScriptBytecodeEntryDecodeInfo[];
+    protected readonly entries: IScriptBytecodeEntryDecodeInfo[];
     protected pc: number = 0;
     protected steps: number = 0;
 
@@ -208,7 +208,7 @@ class ScriptExecutor {
         this.entries = frame.fn.program.entries;
     }
 
-    protected next(): GD.IScriptBytecodeEntryDecodeInfo {
+    protected next(): IScriptBytecodeEntryDecodeInfo {
         const entry = this.entries[this.pc++];
 
         if (!entry) throw new Error(`UnrealScript '${this.frame.fn.id}' read past its program`);
@@ -216,7 +216,7 @@ class ScriptExecutor {
         return entry;
     }
 
-    protected readOffset(): GD.IScriptBytecodeOffsetDecodeInfo {
+    protected readOffset(): IScriptBytecodeOffsetDecodeInfo {
         const entry = this.next();
 
         if (!isOffset(entry.value)) throw new Error(`UnrealScript '${this.frame.fn.id}' expected an offset at '${entry.virtualOffset}'`);
@@ -352,7 +352,7 @@ class ScriptExecutor {
     }
 
     protected evalCall(opcode: number): ScriptValue_T {
-        let fn: GD.IScriptFunctionDecodeInfo;
+        let fn: IScriptFunctionDecodeInfo;
 
         if (opcode === ExprToken_T.FinalFunction) fn = this.vm.getFunction(this.next().value as string);
         else fn = this.vm.findFunction(opcode === ExprToken_T.GlobalFunction ? this.frame.self.scriptClassId : this.frame.context.scriptClassId, this.next().value as string);
@@ -362,7 +362,7 @@ class ScriptExecutor {
         return this.vm.invoke(this.frame.context, fn, args, this.frame.self);
     }
 
-    protected evalNative(entry: GD.IScriptBytecodeEntryDecodeInfo): ScriptValue_T {
+    protected evalNative(entry: IScriptBytecodeEntryDecodeInfo): ScriptValue_T {
         const index = entry.value as number;
 
         if (assignmentNatives.has(index)) {
@@ -380,7 +380,7 @@ class ScriptExecutor {
         return this.vm.invokeNative(this.frame.self, this.frame.context, index, entry.tokenName || `Native${index}`, args);
     }
 
-    protected readArguments(fn: GD.IScriptFunctionDecodeInfo = null): ScriptArgument_T[] {
+    protected readArguments(fn: IScriptFunctionDecodeInfo = null): ScriptArgument_T[] {
         const args = new Array<ScriptArgument_T>();
         const fields = fn ? fn.fields.filter(field => field.flags & CPF_Parm && !(field.flags & CPF_ReturnParm)) : null;
 
@@ -554,7 +554,7 @@ class ScriptExecutor {
         }
     }
 
-    protected evalLValueFromEntry(entry: GD.IScriptBytecodeEntryDecodeInfo): ScriptSlot_T {
+    protected evalLValueFromEntry(entry: IScriptBytecodeEntryDecodeInfo): ScriptSlot_T {
         this.pc--;
 
         return this.evalLValue();
@@ -570,8 +570,8 @@ class ScriptExecutor {
 
 class UnScriptVM {
     protected readonly library: DecodeLibrary;
-    protected readonly functionsById = new Map<string, GD.IScriptFunctionDecodeInfo>();
-    protected readonly functionsByClass = new Map<string, Map<string, GD.IScriptFunctionDecodeInfo>>();
+    protected readonly functionsById = new Map<string, IScriptFunctionDecodeInfo>();
+    protected readonly functionsByClass = new Map<string, Map<string, IScriptFunctionDecodeInfo>>();
 
     public constructor(library: DecodeLibrary) {
         this.library = library;
@@ -587,7 +587,7 @@ class UnScriptVM {
         }
     }
 
-    public getFunction(id: string): GD.IScriptFunctionDecodeInfo {
+    public getFunction(id: string): IScriptFunctionDecodeInfo {
         const fn = this.library.scriptFunctions[id] || this.functionsById.get(id.toLowerCase());
 
         if (!fn) throw new Error(`UnrealScript function '${id}' is not in the decode library`);
@@ -596,7 +596,7 @@ class UnScriptVM {
     }
 
     public initializeHost(host: ScriptHost_T): void {
-        const classes = new Array<GD.IScriptClassDecodeInfo>();
+        const classes = new Array<IScriptClassDecodeInfo>();
         let cls = this.library.scriptClasses[host.scriptClassId];
 
         if (!cls) throw new Error(`UnrealScript class '${host.scriptClassId}' is not in the decode library`);
@@ -637,7 +637,7 @@ class UnScriptVM {
         }
     }
 
-    protected findFunctionOptional(classId: string, name: string): GD.IScriptFunctionDecodeInfo | null {
+    protected findFunctionOptional(classId: string, name: string): IScriptFunctionDecodeInfo | null {
         const lowerName = name.toLowerCase();
         let cls = this.library.scriptClasses[classId];
 
@@ -653,7 +653,7 @@ class UnScriptVM {
         return null;
     }
 
-    public findFunction(classId: string, name: string): GD.IScriptFunctionDecodeInfo {
+    public findFunction(classId: string, name: string): IScriptFunctionDecodeInfo {
         const fn = this.findFunctionOptional(classId, name);
 
         if (!fn)
@@ -698,7 +698,7 @@ class UnScriptVM {
         return handler.call(handler === context.callUnrealNative ? context : self, { index, name, args, self, context });
     }
 
-    public invoke(context: ScriptHost_T, fn: GD.IScriptFunctionDecodeInfo, args: ScriptArgument_T[] = [], self: ScriptHost_T = context): ScriptValue_T {
+    public invoke(context: ScriptHost_T, fn: IScriptFunctionDecodeInfo, args: ScriptArgument_T[] = [], self: ScriptHost_T = context): ScriptValue_T {
         if (fn.nativeIndex !== 0 || fn.flags & FUNC_Native) return this.invokeNative(self, context, fn.nativeIndex, fn.name, args);
         if (context.handlesUnrealScriptFunction && context.handlesUnrealScriptFunction(fn)) return undefined;
 

@@ -5,11 +5,64 @@ import ULodMesh from "../un-lod-mesh";
 import FQuaternion, { FAxis } from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
-import type { UMeshAnimation } from "./un-mesh-animation";
-import type { UStaticMeshMaterial } from "../un-material";
+import type { UMeshAnimation, IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "./un-mesh-animation";
+import type { UStaticMeshMaterial, IMaterialGroupDecodeInfo } from "../un-material";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
+import type { IGeometryDecodeInfo, IBaseObjectDecodeInfo } from "../decode-library";
+import type { ArrGeometryGroup, Vector3Arr, QuaternionArr } from "../library-types";
+import type { IDynamicHairConfigDecodeInfo } from "../conf-files/un-conf-hair";
 
-type SkeletalMeshDecodeResult_T = { object: GD.ISkinnedMeshObjectDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialGroupDecodeInfo };
+type IAnimationSequenceDecodeInfo = {
+    attackEffectFrame: number;
+    attackEndEffectFrame: number;
+};
+
+type IDynamicHairDecodeInfo = {
+    type: number;
+    config: IDynamicHairConfigDecodeInfo;
+};
+
+type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "SkinnedMesh";
+    geometry: string;
+    materials?: string;
+    skeleton: IBoneDecodeInfo[];
+    animations: Record<string, IKeyframeDecodeInfo_T[]>;
+    animationSequences: Record<string, IAnimationSequenceDecodeInfo>;
+    animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>;
+    skinNotifies: Record<string, ISkinNotifyDecodeInfo>;
+    skinMaterials?: Record<number, string>;
+    animationSet?: string;
+    meshScale: Vector3Arr;
+    meshOrigin: Vector3Arr;
+    meshRotOrigin: Vector3Arr;
+    meshRotOriginQuaternion: QuaternionArr;
+    boneSimulationType: number;
+    dynamicHair?: IDynamicHairDecodeInfo;
+    scaledGlow?: number;
+    ambient?: {
+        glow: number,
+        isUnlit: boolean
+    };
+};
+
+type IBoneDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "Bone",
+    name: string,
+    position: Vector3Arr,
+    quaternion: QuaternionArr,
+    scale: Vector3Arr,
+    parent: number
+};
+
+type IKeyframeDecodeInfo_T = {
+    name: string,
+    times: Float32Array,
+    values: Float32Array,
+    type: "Vector" | "Quaternion"
+}
+
+type SkeletalMeshDecodeResult_T = { object: ISkinnedMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, material: IMaterialGroupDecodeInfo };
 type SkinIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 
 class FMeshVector {
@@ -404,8 +457,8 @@ abstract class USkeletalMesh extends ULodMesh {
         const skeleton = collectSkeleton(this.refSkeleton);
         const materials = decodeMaterials ? this.lodMeshMaterials.map((mat: UStaticMeshMaterial) => builder.pullMaterial(mat)) : [];
 
-        const materialInfo = { name: this.uuid, materialType: "group", materials } as GD.IMaterialGroupDecodeInfo;
-        const geometryInfo: GD.IGeometryDecodeInfo = {
+        const materialInfo = { name: this.uuid, materialType: "group", materials } as IMaterialGroupDecodeInfo;
+        const geometryInfo: IGeometryDecodeInfo = {
             attributes: {
                 positions,
                 skinIndex: bones,
@@ -424,10 +477,10 @@ abstract class USkeletalMesh extends ULodMesh {
             console.warn(`Too many bone influences ${numInfs} > ${maxBoneInfluences} for ${this.name}`);
     
 
-        const animations: Record<string, GD.IKeyframeDecodeInfo_T[]> = {};
-        const animationSequences: Record<string, GD.IAnimationSequenceDecodeInfo> = {};
-        const animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]> = {};
-        const skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo> = {};
+        const animations: Record<string, IKeyframeDecodeInfo_T[]> = {};
+        const animationSequences: Record<string, IAnimationSequenceDecodeInfo> = {};
+        const animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]> = {};
+        const skinNotifies: Record<string, ISkinNotifyDecodeInfo> = {};
 
         const boneCount = this.refSkeleton.length;
         const boneMap = new Array(boneCount);
@@ -468,7 +521,7 @@ abstract class USkeletalMesh extends ULodMesh {
 
                 const move = this.animation.moves[k];
                 const framerate = sequence.framerate;
-                const keyframes: GD.IKeyframeDecodeInfo_T[] = [];
+                const keyframes: IKeyframeDecodeInfo_T[] = [];
 
                 // MotionChunk.BoneIndices is never used (UnSkeletalMesh.cpp line 376).
                 for (let i = 0; i < boneCount; i++) {
@@ -559,7 +612,7 @@ abstract class USkeletalMesh extends ULodMesh {
                 meshRotOrigin: this.meshRotOrigin.toArray(),
                 meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements(),
                 boneSimulationType: this.boneSimulationType || 0
-            } as GD.ISkinnedMeshObjectDecodeInfo,
+            } as ISkinnedMeshObjectDecodeInfo,
             geometry: geometryInfo,
             material: materialInfo
         };
@@ -589,7 +642,7 @@ function buildIndices(faces: FTriangle[], materialCount: number) {
     }
 
     const indices = new TypedIndicesArray(indicesByMaterial.flat());
-    const groups: GD.ArrGeometryGroup[] = new Array(materialCount);
+    const groups: ArrGeometryGroup[] = new Array(materialCount);
 
     let firstIndex = 0;
 
@@ -777,7 +830,7 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
     for (let i = 0; i < rigidIndexCount; i++)
         indices[softIndexCount + i] = softCount + rigidBuffer.getElem(i);
 
-    const groups: GD.Vector3Arr[] = [];
+    const groups: Vector3Arr[] = [];
 
     for (let i = 0, len = lod.softSections.length; i < len; i++) {
         const section = lod.softSections[i];
@@ -913,9 +966,9 @@ function normalizeBoneName(name: string) {
     return name.replaceAll(" ", "_").toLowerCase();
 }
 
-function collectSkeleton(refSkeleton: FMeshBone[]): GD.IBoneDecodeInfo[] {
+function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
     const boneCount = refSkeleton.length;
-    const boneInfos = new Array<GD.IBoneDecodeInfo>(boneCount)
+    const boneInfos = new Array<IBoneDecodeInfo>(boneCount)
     const boneCoords = new Array<FBoneCoord>(boneCount);
     // const matrices = [];
 
@@ -938,7 +991,7 @@ function collectSkeleton(refSkeleton: FMeshBone[]): GD.IBoneDecodeInfo[] {
             parent: bone.parentIndex,
             position: [bonePos.x, bonePos.y, bonePos.z],
             quaternion: [boneRot.x, boneRot.y, boneRot.z, boneRot.w]
-        } as GD.IBoneDecodeInfo;
+        } as IBoneDecodeInfo;
 
         boneRot.w = -boneRot.w;
 
@@ -1020,3 +1073,4 @@ class FBoneCoord {
 
 function makeVector(v: { x: number, y: number, z: number }) { return FVector.make(v.x, v.y, v.z); }
 function makeQuaternion(v: { x: number, y: number, z: number, w: number }) { return FQuaternion.make(v.x, v.y, v.z, v.w); }
+export type { IAnimationSequenceDecodeInfo, IDynamicHairDecodeInfo, ISkinnedMeshObjectDecodeInfo, IBoneDecodeInfo, IKeyframeDecodeInfo_T };

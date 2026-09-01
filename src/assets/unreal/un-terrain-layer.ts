@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import type { UTexture } from "./un-texture";
 import type { FRotator } from "./un-rotator";
 import type { FMatrix } from "./un-matrix";

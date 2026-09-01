@@ -1,6 +1,9 @@
 import FVector from "./un-vector";
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import type { FMatrix } from "./un-matrix";
+import type { Vector3Arr } from "./library-types";
+
+type IBoxDecodeInfo = { isValid: boolean, min: Vector3Arr, max: Vector3Arr };
 
 
 abstract class FBox extends UObject {
@@ -95,7 +98,7 @@ abstract class FBox extends UObject {
         return bbox;
     }
 
-    public getDecodeInfo(): GD.IBoxDecodeInfo {
+    public getDecodeInfo(): IBoxDecodeInfo {
         return {
             isValid: !!this.isValid,
             min: this.min.getElements(),
@@ -114,3 +117,4 @@ abstract class FBox extends UObject {
 
 export default FBox;
 export { FBox };
+export type { IBoxDecodeInfo };

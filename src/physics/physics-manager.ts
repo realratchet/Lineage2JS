@@ -11,6 +11,7 @@ import type BaseActor from "../base-actor";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
+import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine";
 
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
@@ -25,7 +26,7 @@ class PhysicsManager implements IEngineComponent<GameManager> {
     protected manGame: GameManager;
 
     protected readonly simEmitters = new EmitterSimulation();
-    protected simCharGroups: GD.ICharacterGroup[] = null;
+    protected simCharGroups: ICharacterGroup[] = null;
 
     protected readonly physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
     protected readonly collisionWorld = new CollisionWorld(this.physicsWorld, PhysicsManager.getCollisionBackend());
@@ -141,10 +142,10 @@ class PhysicsManager implements IEngineComponent<GameManager> {
                 const group = groups[Math.floor(Math.random() * groups.length)];
                 const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
                 const colours = group.hairColours[hair];
-                const armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
+                const armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
                 const pawn = new Player(manRender);
 
-                for (const slot of Object.keys(armor) as (keyof GD.ICharacterArmorSelection)[]) {
+                for (const slot of Object.keys(armor) as (keyof ICharacterArmorSelection)[]) {
                     const items = group.armor[slot];
 
                     armor[slot] = items.length > 0 && Math.random() < 0.75 ? items[Math.floor(Math.random() * items.length)].id : 0;

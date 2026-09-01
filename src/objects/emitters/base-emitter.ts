@@ -2,6 +2,8 @@ import { Box3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import type InstancedSpriteMesh from "./instanced-sprite-mesh";
 import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
+import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
+import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine";
 
 const frozenUpdateMatrixWorld = function () { };
 
@@ -202,7 +204,7 @@ abstract class BaseEmitter extends Object3D {
     protected currentCollisionSoundIndex: number;
     protected collisionSoundIndex: Range_T;
     protected spawnAmount: number;
-    protected sounds: GD.IParticleSoundDecodeInfo[];
+    protected sounds: IParticleSoundDecodeInfo[];
     protected collisionSoundProbability: Range_T;
     protected isUsingSpawnedVelocityScale: boolean;
     protected spawnedVelocityScaleRange: Range3_T;
@@ -282,7 +284,7 @@ abstract class BaseEmitter extends Object3D {
         this.initialSettings.position.min.z = this.initialSettings.position.max.z = z;
     }
 
-    public constructor(config: GD.EmitterConfig_T) {
+    public constructor(config: EmitterConfig_T) {
         super();
 
         this.fadingSettings = {
@@ -436,7 +438,7 @@ abstract class BaseEmitter extends Object3D {
         // debugger;
     }
 
-    protected finishConstruction(config: GD.EmitterConfig_T): void {
+    protected finishConstruction(config: EmitterConfig_T): void {
         this.initSettings(config);
 
         const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
@@ -1547,7 +1549,7 @@ abstract class BaseEmitter extends Object3D {
         return clamp(section, 0, this.texSubdivU * this.texSubdivV - 1);
     }
 
-    protected abstract initSettings(info: GD.EmitterConfig_T): void;
+    protected abstract initSettings(info: EmitterConfig_T): void;
     protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>;
 
     // Default: no instanced path. Subclasses that set isInstancedRendering=true

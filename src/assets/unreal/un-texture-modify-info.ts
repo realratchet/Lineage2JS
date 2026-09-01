@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import type { FColor } from "./un-color";
 
 abstract class UTextureModifyInfo extends UObject {

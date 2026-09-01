@@ -1,8 +1,45 @@
-import { UObject, BufferValue, type APackage, type UExport, FArray, FIndexArray, FPrimitiveArray } from "@l2js/core";
-import UAnimNotify from "./un-anim-notify";
+import { BufferValue, type APackage, type UObject as CoreUObject, type UExport, FArray, FIndexArray, FPrimitiveArray } from "@l2js/core";
+import UObject from "../un-object";
+import UAnimNotify, { type IAnimationNotifyObjectDecodeInfo } from "./un-anim-notify";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-function decodeNotifyObject(builder: DecodeLibraryBuilder, notify: UObject): GD.IAnimationNotifyObjectDecodeInfo {
+type ISkinNotifyEntryDecodeInfo = {
+    time: number;
+    skinIndex: number;
+};
+
+type IFixedSkinNotifyDecodeInfo = {
+    mode: "fixed";
+    frameCount: number;
+    timeline: ISkinNotifyEntryDecodeInfo[];
+};
+
+type IGroupedSkinNotifyDecodeInfo = {
+    mode: "grouped";
+    frameCount: number;
+    groups: {
+        startFrame: number;
+        timeline: ISkinNotifyEntryDecodeInfo[];
+    }[];
+};
+
+type IRandomSkinNotifyDecodeInfo = {
+    mode: "random";
+    frameCount: number;
+    intervalMin: number;
+    intervalMax: number;
+    timeline: ISkinNotifyEntryDecodeInfo[];
+};
+
+type ISkinNotifyDecodeInfo = IFixedSkinNotifyDecodeInfo | IGroupedSkinNotifyDecodeInfo | IRandomSkinNotifyDecodeInfo;
+
+type IAnimationNotifyDecodeInfo = {
+    time: number;
+    name: string;
+    object: IAnimationNotifyObjectDecodeInfo | null;
+};
+
+function decodeNotifyObject(builder: DecodeLibraryBuilder, notify: CoreUObject): IAnimationNotifyObjectDecodeInfo {
     if (!notify) return null;
 
     const info = (notify as UAnimNotify).getDecodeInfo(builder);
@@ -225,9 +262,9 @@ abstract class UMeshAnimation extends UObject {
     public moves: FMotionChunk[];
     public sequences: FArray<FAnimSequence>;
 
-    public getSequenceNotifies(builder: DecodeLibraryBuilder, sequence: FAnimSequence): GD.IAnimationNotifyDecodeInfo[] {
+    public getSequenceNotifies(builder: DecodeLibraryBuilder, sequence: FAnimSequence): IAnimationNotifyDecodeInfo[] {
         const count = sequence.notifications.getElemCount();
-        const notifications = new Array<GD.IAnimationNotifyDecodeInfo>(count);
+        const notifications = new Array<IAnimationNotifyDecodeInfo>(count);
 
         for (let i = 0; i < count; i++) {
             const notify = sequence.notifications.getElem(i);
@@ -241,7 +278,7 @@ abstract class UMeshAnimation extends UObject {
         return notifications;
     }
 
-    public getSequenceSkinNotify(sequence: FAnimSequence): GD.ISkinNotifyDecodeInfo {
+    public getSequenceSkinNotify(sequence: FAnimSequence): ISkinNotifyDecodeInfo {
         const info = sequence.skinNotify;
         const frameCount = sequence.frameCount;
 
@@ -324,3 +361,4 @@ enum SkinNotifyMode_T {
 
 export default UMeshAnimation;
 export { UMeshAnimation, type SkinNotifyMode_T };
+export type { ISkinNotifyEntryDecodeInfo, IFixedSkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, IRandomSkinNotifyDecodeInfo, ISkinNotifyDecodeInfo, IAnimationNotifyDecodeInfo };

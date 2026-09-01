@@ -1,6 +1,54 @@
 import UAActor from "./un-aactor"
-import type { USkeletalMesh } from "./skeletal-mesh/un-skeletal-mesh";
+import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-mesh";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Vector3Arr } from "./library-types";
+
+type INpcDefinition = {
+    id: number;
+    name: string;
+    className: string;
+    mesh: string;
+    textures: string[];
+    enterEvent: INpcEnterEvent | null;
+};
+
+type INpcEnterEvent = {
+    sound: string;
+    soundVolume: number;
+    soundRadius: number;
+    isRise: number;
+    spawnType: number;
+    effect: string;
+    animation: string;
+};
+
+type ICharacterGroup = {
+    index: number,
+    name: string,
+    faceVariants: number,
+    hairStyles: number[],
+    hairColours: Record<number, number[]>,
+    armor: ICharacterArmorOptions
+};
+
+type ICharacterArmorOption = {
+    id: number,
+    label: string
+};
+
+type ICharacterArmorOptions = {
+    chest: ICharacterArmorOption[],
+    legs: ICharacterArmorOption[],
+    gloves: ICharacterArmorOption[],
+    boots: ICharacterArmorOption[]
+};
+
+type ICharacterArmorSelection = {
+    chest: number,
+    legs: number,
+    gloves: number,
+    boots: number
+};
 
 abstract class UPawn extends UAActor {
     declare protected mesh: USkeletalMesh;
@@ -13,7 +61,7 @@ abstract class UPawn extends UAActor {
         });
     }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.ISkinnedMeshObjectDecodeInfo {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): ISkinnedMeshObjectDecodeInfo {
         if (!this.mesh) {
             console.warn(`Pawn '${this.objectName}' has no mesh, skipping`);
             return null;
@@ -23,7 +71,7 @@ abstract class UPawn extends UAActor {
 
         meshInfo.name = this.objectName;
         meshInfo.position = this.location.getElements();
-        meshInfo.scale = this.scale.getElements().map(v => v * this.drawScale) as GD.Vector3Arr;
+        meshInfo.scale = this.scale.getElements().map(v => v * this.drawScale) as Vector3Arr;
         meshInfo.quaternion = this.rotation.getQuaternionElements();
         meshInfo.scaledGlow = this.scaleGlow ?? 1;
         meshInfo.ambient = { glow: this.getAmbientLightingActor().ambientGlow ?? 0, isUnlit: !!this.isUnlit };
@@ -34,3 +82,4 @@ abstract class UPawn extends UAActor {
 
 export default UPawn;
 export { UPawn };
+export type { INpcDefinition, INpcEnterEvent, ICharacterGroup, ICharacterArmorOption, ICharacterArmorOptions, ICharacterArmorSelection };

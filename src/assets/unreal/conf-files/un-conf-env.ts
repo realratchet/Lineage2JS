@@ -4,6 +4,36 @@ import BaseConfigFile from "./un-base-config";
 import UConfigTimeEnv from "./un-conf-timeenv";
 import { consumeNextValue, consumeTuple, findSection } from "./conf-parser";
 import type { UMaterial } from "../un-material";
+import type { Vector2Arr, ColorArr } from "../library-types";
+import type { IL2NEnvLightDecodeInfo } from "../un-l2env";
+
+type ILNEnvSetupDecodeInfo = {
+    isClock: boolean,
+    startTime: number,
+    timeRatio: number,
+    shadowTick: number,
+    staticLightingAdjust: number,
+    slopeSunAngle: number,
+    subLightNum: number
+    timeEnv: { [key in EEnvCycle]: IL2NEnvLightDecodeInfo }
+    skybox: string,
+    hazering: string,
+    clouds: string[],
+};
+
+type IL2NEnvDecodeInfo = {
+    envSetup: ILNEnvSetupDecodeInfo,
+    fog: {
+        ranges: Vector2Arr[];
+        fogSpeed: number;
+    },
+    waterVolume: {
+        fogColor: ColorArr;
+        fogStart: number;
+        fogEnd: number;
+        cellophaneColor: ColorArr;
+    }
+};
 
 class EnvSetup {
     public isClock: boolean;
@@ -25,7 +55,7 @@ class EnvSetup {
 
     public timeEnv: { [key in EEnvCycle]: UConfigTimeEnv };
 
-    public getDecodeInfo(): GD.ILNEnvSetupDecodeInfo {
+    public getDecodeInfo(): ILNEnvSetupDecodeInfo {
         return {
             isClock: this.isClock,
             startTime: this.startTime,
@@ -43,15 +73,15 @@ class EnvSetup {
 };
 
 type EnvFog = {
-    ranges: GD.Vector2Arr[];
+    ranges: Vector2Arr[];
     fogSpeed: number;
 };
 
 type EnvWaterVolume = {
-    fogColor: GD.ColorArr;
+    fogColor: ColorArr;
     fogStart: number;
     fogEnd: number;
-    cellophaneColor: GD.ColorArr;
+    cellophaneColor: ColorArr;
 };
 
 type EnvGlowEffect = {
@@ -108,7 +138,7 @@ class UConfigEnv extends BaseConfigFile {
         return this;
     }
 
-    public getDecodeInfo(): GD.IL2NEnvDecodeInfo {
+    public getDecodeInfo(): IL2NEnvDecodeInfo {
         return {
             envSetup: this.envSetup.getDecodeInfo(),
             fog: this.fog,
@@ -318,3 +348,4 @@ class UConfigEnv extends BaseConfigFile {
 
 export default UConfigEnv;
 export { UConfigEnv };
+export type { ILNEnvSetupDecodeInfo, IL2NEnvDecodeInfo };

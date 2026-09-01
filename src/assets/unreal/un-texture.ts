@@ -4,10 +4,40 @@ import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
 import { BufferValue, type APackage, type UExport, FArray } from "@l2js/core";
 import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
-import UMaterial from "./un-material";
+import UMaterial, { type IBaseMaterialDecodeInfo } from "./un-material";
 import type { UPlatte } from "./un-palette";
 import type { DecodeLibrary } from "./decode-library";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Texture, Vector2 } from "three";
+
+type MapData_T = { texture: Texture, size: Vector2 };
+
+type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
+
+type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
+
+type IAnimatedSpriteDecodeInfo = IBaseMaterialDecodeInfo & {
+    materialType: "sprite",
+    sprites: ITextureDecodeInfo[],
+    framerate: number
+};
+
+type IDataTextureDecodeInfo = ITextureDecodeInfo & {
+    format?: DataTextureFormats_T
+};
+
+type TextureClampMode_T = "wrap" | "clamp";
+
+type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
+    materialType: "texture",
+    textureType: DecodableTexture_T,
+    buffer: ArrayBuffer,
+    wrapS?: TextureClampMode_T, wrapT?: TextureClampMode_T,
+    width: number, height: number,
+    twoSided?: boolean,
+    isMasked?: boolean,
+    isAlphaTexture?: boolean
+};
 
 /*
 
@@ -239,7 +269,7 @@ abstract class UTexture extends UMaterial {
 
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         let decodedBuffer: ArrayBuffer;
-        let textureType: GD.DecodableTexture_T;
+        let textureType: DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -311,12 +341,12 @@ abstract class UTexture extends UMaterial {
             twoSided: this.isTwoSided,
             isMasked: this.isMasked,
             isAlphaTexture: this.isAlphaTexture
-        } as GD.ITextureDecodeInfo;
+        } as ITextureDecodeInfo;
     }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
-            const sprites: GD.ITextureDecodeInfo[] = [];
+            const sprites: ITextureDecodeInfo[] = [];
 
             let tex: UTexture = this;
 
@@ -330,7 +360,7 @@ abstract class UTexture extends UMaterial {
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate
-            } as GD.IAnimatedSpriteDecodeInfo;
+            } as IAnimatedSpriteDecodeInfo;
         }
 
         return this.decodeTexture(builder.library);
@@ -403,3 +433,4 @@ function createPlane(width: number, height: number, widthSegments: number, heigh
         normals: new Float32Array(normals)
     };
 }
+export type { MapData_T, DecodableTexture_T, DataTextureFormats_T, IAnimatedSpriteDecodeInfo, IDataTextureDecodeInfo, TextureClampMode_T, ITextureDecodeInfo };

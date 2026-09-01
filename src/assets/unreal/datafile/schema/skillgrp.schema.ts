@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_SKILLGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "skill_id" },
     { type: "uint32", name: "skill_level" },

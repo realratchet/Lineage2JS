@@ -1,6 +1,4 @@
-import type { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
-import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
-import type { UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
+import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T, ICharacterArmorSelection, ICharacterGroup, INpcDefinition } from "@l2js/engine";
 
 type InitMessage_T = {
     type: "init";
@@ -10,14 +8,14 @@ type DecodeMessage_T = {
     type: "decode";
     requestId: number;
     sectorName: string;
-    settings: GD.LoadSettings_T;
+    settings: LoadSettings_T;
 }
 
 type PrecacheMessage_T = {
     type: "precache";
     requestId: number;
     sectorName: string;
-    settings: GD.LoadSettings_T;
+    settings: LoadSettings_T;
 };
 
 type FreeMessage_T = {
@@ -33,19 +31,19 @@ type DecodeEnvMessage_T = {
 type DecodeCharacterMessage_T = {
     type: "decodeCharacter";
     requestId: number;
-    settings: GD.LoadSettings_T;
+    settings: LoadSettings_T;
     charIndex: number;
     faceVariant: number;
     hairVariant: number;
     hairColour: number;
-    armor: GD.ICharacterArmorSelection;
+    armor: ICharacterArmorSelection;
     includeAnimations: boolean;
 };
 
 type DecodeSkeletalMeshMessage_T = {
     type: "decodeSkeletalMesh";
     requestId: number;
-    settings: GD.LoadSettings_T;
+    settings: LoadSettings_T;
     packageName: string;
     meshName: string;
     scriptClassPath: string;
@@ -57,7 +55,7 @@ type DecodeSkeletalMeshMessage_T = {
 type DecodeEffectTemplatesMessage_T = {
     type: "decodeEffectTemplates";
     requestId: number;
-    settings: GD.LoadSettings_T;
+    settings: LoadSettings_T;
     classPaths: string[];
     soundPaths: string[];
     scriptClassPaths: string[];
@@ -82,7 +80,7 @@ type ListNpcsMessage_T = {
 type PrecacheCharactersMessage_T = {
     type: "precacheCharacters";
     requestId: number;
-    settings: GD.LoadSettings_T;
+    settings: LoadSettings_T;
 };
 
 type CharactersPrecachedMessage_T = {
@@ -93,19 +91,19 @@ type CharactersPrecachedMessage_T = {
 type CharGroupsDecodedMessage_T = {
     type: "charGroupsDecoded";
     requestId: number;
-    groups: GD.ICharacterGroup[];
+    groups: ICharacterGroup[];
 };
 
 type NpcResolvedMessage_T = {
     type: "npcResolved";
     requestId: number;
-    npc: GD.INpcDefinition;
+    npc: INpcDefinition;
 };
 
 type NpcsListedMessage_T = {
     type: "npcsListed";
     requestId: number;
-    npcs: GD.INpcDefinition[];
+    npcs: INpcDefinition[];
 };
 
 type MusicInfoMessage_T = {

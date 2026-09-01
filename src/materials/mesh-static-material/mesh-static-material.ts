@@ -3,7 +3,7 @@ import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
 import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
-import type { SupportedBlendingTypes_T } from "@l2js/engine/un-material";
+import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter, MapData_T } from "@l2js/engine";
 
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
@@ -14,7 +14,7 @@ type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpe
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
-    parameters: GD.IDecodedParameter,
+    parameters: IDecodedParameter,
     uniforms: Record<string, Uniform>,
     defines: Record<string, any>
 }
@@ -47,10 +47,10 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
     Object.assign(defines, parameters.defines);
 
     if (parameters.isUsingMap) {
-        if ((parameters as GD.IDecodedSpriteParameter).isSprite) {
+        if ((parameters as IDecodedSpriteParameter).isSprite) {
             sprites[name] = {
-                framerate: (parameters as GD.IDecodedSpriteParameter).framerate,
-                sprites: (parameters as GD.IDecodedSpriteParameter).sprites,
+                framerate: (parameters as IDecodedSpriteParameter).framerate,
+                sprites: (parameters as IDecodedSpriteParameter).sprites,
             } as SpriteParam_T;
         }
 
@@ -141,7 +141,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             }
         ]));
 
-        function apply(name: SupportedShaderParams_T, parameters: GD.IDecodedParameter) {
+        function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
             if (!parameters) return;
 
             applyParameters({
@@ -332,7 +332,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         if (this.transparent) this.defines["NO_SHADOW_RECEIVE"] = "";
     }
 
-    public setLightmap(lightmap: GD.MapData_T) {
+    public setLightmap(lightmap: MapData_T) {
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -481,10 +481,10 @@ type AmbientLighting_T = BaseLighting_T;
 type DirectionalAmbientLighting_T = BaseLighting_T & { direction: THREE.Vector3 };
 
 type MeshStaticMaterialParameters_T = {
-    diffuse: GD.IDecodedParameter,
-    opacity: GD.IDecodedParameter,
-    specular: GD.IDecodedParameter,
-    specularMask: GD.IDecodedParameter,
+    diffuse: IDecodedParameter,
+    opacity: IDecodedParameter,
+    specular: IDecodedParameter,
+    specularMask: IDecodedParameter,
     side: THREE.Side,
     blendingMode: SupportedBlendingTypes_T,
     transparent: boolean,
@@ -497,8 +497,8 @@ type MeshStaticMaterialParameters_T = {
     selfIllumination?: boolean,
     combiner?: {
         combineMode: number,
-        material1: GD.IDecodedParameter,
-        material2: GD.IDecodedParameter,
+        material1: IDecodedParameter,
+        material2: IDecodedParameter,
         invertMask: boolean,
         alphaFrom1: boolean,
         alphaFrom2: boolean

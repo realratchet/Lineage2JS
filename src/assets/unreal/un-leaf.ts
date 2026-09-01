@@ -1,4 +1,12 @@
 import type { APackage, Constructable_T } from "@l2js/core";
+
+type IBSPLeafDecodeInfo_T = {
+    zone: number,
+    permiating: number,
+    volumetric: number,
+    visibleZones: bigint,
+    musicId?: number
+};
 class FLeaf implements Constructable_T {
     public iZone: number;
     public iPermeating: number;
@@ -15,7 +23,7 @@ class FLeaf implements Constructable_T {
         return this;
     }
 
-    public getDecodeInfo(): GD.IBSPLeafDecodeInfo_T {
+    public getDecodeInfo(): IBSPLeafDecodeInfo_T {
         return {
             zone: this.iZone,
             permiating: this.iPermeating,
@@ -28,3 +36,4 @@ class FLeaf implements Constructable_T {
 
 export default FLeaf;
 export { FLeaf };
+export type { IBSPLeafDecodeInfo_T };

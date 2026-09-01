@@ -1,5 +1,6 @@
 import FColor from "./un-color";
-import { UObject, type APackage, type UExport, FArray } from "@l2js/core";
+import { type APackage, type UExport, FArray } from "@l2js/core";
+import UObject from "./un-object";
 
 abstract class UPlatte extends UObject {
     public colors: FArray<FColor>

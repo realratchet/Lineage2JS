@@ -1,7 +1,8 @@
 import EnvColor, { TimeColor, TimeHSV, TimeScale } from "../../rendering/env-color";
+import type { IL2NEnvLightDecodeInfo, INTimeHSVDecodeInfo, INTimeScaleDecodeInfo } from "@l2js/engine";
 
 
-function decodeEnvColor(envColor: GD.IL2NEnvLightDecodeInfo): EnvColor {
+function decodeEnvColor(envColor: IL2NEnvLightDecodeInfo): EnvColor {
     const type = envColor.type;
     const decodedColor = decodeInfo(envColor.color);
     const decodedAmbient = decodeInfo(envColor.ambient);
@@ -20,11 +21,11 @@ function decodeTimeColor(array: [number, number, number, number, number][]) {
     return array.map(args => new TimeColor(args[0], args[1], args[2], args[3], args[4] ?? 255));
 }
 
-function decodeTimeHSV(array: GD.INTimeHSVDecodeInfo[]) {
+function decodeTimeHSV(array: INTimeHSVDecodeInfo[]) {
     return array.map(args => new TimeHSV(...args));
 }
 
-function decodeTimeScale(array: GD.INTimeScaleDecodeInfo[]) {
+function decodeTimeScale(array: INTimeScaleDecodeInfo[]) {
     return array.map(args => new TimeScale(...args));
 }
 

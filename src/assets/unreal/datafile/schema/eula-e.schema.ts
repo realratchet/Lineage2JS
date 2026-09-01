@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const EULA_E_RECORD_COUNT = 1;
 
 const SCHEMA_EULA_E_DAT: ISchemaValue[] = [

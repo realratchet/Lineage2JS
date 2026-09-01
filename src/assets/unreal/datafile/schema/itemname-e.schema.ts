@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_ITEMNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "utf16", name: "name" },

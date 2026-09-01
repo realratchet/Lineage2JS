@@ -1,9 +1,10 @@
-import RenderManager from "./rendering/render-manager";
+import RenderManager, { type HTMLViewportElement_T } from "./rendering/render-manager";
 import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
 import AssetManager from "./assets/asset-manager";
 import runSectorPrecache from "./sector-precache";
 import GameManager from "./game/game-manager";
+import type { LoadSettings_T } from "@l2js/engine";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -17,7 +18,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
 
     const startTime = performance.now();
 
-    const loadSettings: GD.LoadSettings_T = {
+    const loadSettings: LoadSettings_T = {
         helpersZoneBounds: false,
         batching: {
             terrain: true,
@@ -94,7 +95,7 @@ async function startCore(interactive: boolean = true): Promise<RenderManager | n
     }
 
     // debugger;
-    const viewport = document.querySelector("viewport") as HTMLViewportElement;
+    const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
     const assetList = await (await fetch("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");

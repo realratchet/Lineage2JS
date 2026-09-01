@@ -6,6 +6,7 @@ import { isScriptSlot, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script
 import type { PawnMovementState_T } from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
+import type { IAnimationNotifyDecodeInfo } from "@l2js/engine";
 
 const MESHES_CHANGED_EVENT = "meshesChanged";
 const MOVEMENT_TWEEN_TIME = 0.1;
@@ -75,7 +76,7 @@ class AnimationComponent extends ObjectComponent<BaseActor> {
         if (time === oldTime) return;
 
         const duration = action.getClip().duration;
-        const notifications = (action.getClip() as any).animationNotifies as GD.IAnimationNotifyDecodeInfo[];
+        const notifications = (action.getClip() as any).animationNotifies as IAnimationNotifyDecodeInfo[];
 
         if (!notifications || notifications.length === 0 || duration <= 0) return;
 

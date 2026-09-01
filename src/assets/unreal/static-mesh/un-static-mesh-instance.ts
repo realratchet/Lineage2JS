@@ -1,8 +1,30 @@
-import { UObject, type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
+import { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
+import UObject from "../un-object";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
 import type { UStaticMeshActor } from "./un-static-mesh-actor";
 import type { DecodeLibrary } from "../decode-library";
+import type { Matrix4Arr } from "../library-types";
+import type { IStaticMeshObjectDecodeInfo } from "./un-static-mesh";
+
+type ILightInstanceDecodeInfo = {
+    matrix: Matrix4Arr,
+    flags: ArrayBuffer,
+    scene: [string, number, number][],
+    environment: [string, number, number][]
+};
+
+type IStaticMeshInstanceDecodeInfo = {
+    uuid?: string,
+    name?: string,
+    type: "StaticMeshInstance",
+    mesh: IStaticMeshObjectDecodeInfo,
+    swayPhase?: number,
+    lights?: ILightInstanceDecodeInfo,
+    attributes?: {
+        colors?: Float32Array | Uint8Array
+    }
+};
 
 
 
@@ -47,7 +69,7 @@ abstract class UStaticMeshInstance extends UObject {
 
     public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
 
-    public getDecodeInfo(library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } {
+    public getDecodeInfo(library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
     
@@ -65,7 +87,7 @@ abstract class UStaticMeshInstance extends UObject {
         // let finishIndex: number;
         // // let startTime: number, finishTime: number;
 
-        // let lightingColor: GD.ColorArr;
+        // let lightingColor: ColorArr;
 
         // for (let i = 0, len = this.environmentLights.length; i < len; i++) {
         //     const timeForIndex = indexToTime(i, len);
@@ -159,3 +181,4 @@ abstract class UStaticMeshInstance extends UObject {
 
 export default UStaticMeshInstance;
 export { UStaticMeshInstance };
+export type { ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo };

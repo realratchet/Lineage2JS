@@ -1,8 +1,16 @@
 import FBox from "./un-box";
 import FPlane from "./un-plane";
 import FVector from "./un-vector";
-import { UObject, type APackage, type UExport } from "@l2js/core";
+import { type APackage, type UExport } from "@l2js/core";
+import UObject from "./un-object";
 import type { UAActor } from "./un-aactor";
+import type { Vector3Arr } from "./library-types";
+import type { ISphereDecodeInfo } from "./un-sphere";
+
+type IBoundsDecodeInfo = {
+    sphere?: ISphereDecodeInfo,
+    box: { min: Vector3Arr, max: Vector3Arr } | null
+};
 
 abstract class UPrimitive extends UObject {
     declare protected boundingBox: FBox;
@@ -28,7 +36,7 @@ abstract class UPrimitive extends UObject {
         this.readHead = pkg.tell();
     }
 
-    public decodeBoundsInfo(): GD.IBoundsDecodeInfo {
+    public decodeBoundsInfo(): IBoundsDecodeInfo {
         return {
             sphere: {
                 center: [this.boundingSphere.x, this.boundingSphere.y, this.boundingSphere.z],
@@ -55,3 +63,4 @@ abstract class UPrimitive extends UObject {
 
 export default UPrimitive;
 export { UPrimitive };
+export type { IBoundsDecodeInfo };

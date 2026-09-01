@@ -1,8 +1,22 @@
 import hsvToRgb, { saturationToBrightness } from "./utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
-import UAActor from "./un-aactor";
+import UAActor, { type IEdgesObjectDecodeInfo } from "./un-aactor";
 import FVector from "./un-vector";
-import type { DecodeLibrary } from "./decode-library";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
+
+type ILightDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "Light",
+    dynamic: boolean,
+    hsv: [number, number, number],
+    radius: number,
+    directional: boolean,
+    lightType: LightType_T,
+    lightEffect: LightEffect_T,
+    cone: number,
+    isSunlightColor: boolean,
+    period: number,
+    phase: number
+};
 
 
 abstract class ULight extends UAActor {
@@ -81,7 +95,7 @@ abstract class ULight extends UAActor {
             geometry: lineGeometryUuid,
             color,
             ignoreDepth
-        } as GD.IEdgesObjectDecodeInfo;
+        } as IEdgesObjectDecodeInfo;
 
         const geometryInfo = {
             indices: new Uint8Array([0, 1]),
@@ -132,7 +146,7 @@ abstract class ULight extends UAActor {
         return [x * brightness, y * brightness, z * brightness];
     }
 
-    public getDecodeInfo(library: DecodeLibrary): GD.ILightDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
         // debugger;
 
         return {
@@ -305,3 +319,4 @@ const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
 
 //     return out;
 // })();
+export type { ILightDecodeInfo };

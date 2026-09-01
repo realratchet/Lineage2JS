@@ -1,6 +1,23 @@
 import UAActor from "./un-aactor";
 import type { USound } from "./un-sound";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Vector3Arr } from "./library-types";
+import type { IAudioDecodeInfo } from "./decode-library";
+
+type AmbientSoundTypes_T = "always" | "day" | "night" | "water";
+
+type IAmbientSoundObjectDecodeInfo = IAudioDecodeInfo & {
+    type: "AmbientSoundObject",
+    position: Vector3Arr,
+    refDistance: number,
+    maxDistance: number,
+    volume: number,
+    pitch: number,
+    soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
+    looping: boolean,
+    soundType: AmbientSoundTypes_T,
+    randomChance: number,
+};
 
 abstract class UAmbientSoundObject extends UAActor {
     declare public readonly sound: USound;
@@ -50,7 +67,7 @@ abstract class UAmbientSoundObject extends UAActor {
         const pitch = this.pitch / 64;
         const randomChance = this.randomAmbient;
 
-        const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
+        const decodeInfo: IAmbientSoundObjectDecodeInfo = {
             uuid: this.uuid,
             name: this.objectName,
             type: "AmbientSoundObject",
@@ -76,7 +93,7 @@ enum ASType1_T {
     AST1_Water
 }
 
-const AS_TYPE_NAMES: Record<ASType1_T, GD.AmbientSoundTypes_T> = {
+const AS_TYPE_NAMES: Record<ASType1_T, AmbientSoundTypes_T> = {
     [ASType1_T.AST1_Always]: "always",
     [ASType1_T.AST1_Day]: "day",
     [ASType1_T.AST1_Night]: "night",
@@ -85,3 +102,4 @@ const AS_TYPE_NAMES: Record<ASType1_T, GD.AmbientSoundTypes_T> = {
 
 export default UAmbientSoundObject;
 export { UAmbientSoundObject, ASType1_T };
+export type { AmbientSoundTypes_T, IAmbientSoundObjectDecodeInfo };

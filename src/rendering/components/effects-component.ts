@@ -6,6 +6,7 @@ import type RenderManager from "../render-manager";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import Rotator from "../../utils/rotator";
+import type { IAnimationNotifyDecodeInfo, INpcEnterEvent, Vector3Arr } from "@l2js/engine";
 
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();
@@ -22,14 +23,14 @@ class EffectsComponent extends ObjectComponent<BaseActor> {
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
         switch (type) {
-            case ANIMATION_NOTIFY_EVENT: return this.onAnimationNotify(data as GD.IAnimationNotifyDecodeInfo);
-            case NPC_ENTER_EVENT: return this.onNpcEnter(data as GD.INpcEnterEvent);
+            case ANIMATION_NOTIFY_EVENT: return this.onAnimationNotify(data as IAnimationNotifyDecodeInfo);
+            case NPC_ENTER_EVENT: return this.onNpcEnter(data as INpcEnterEvent);
             case SCRIPT_NATIVE_EVENT: return this.onScriptNative(data as ScriptNativeCall_T);
             default: return COMPONENT_EVENT_NOT_HANDLED;
         }
     }
 
-    protected onAnimationNotify(notify: GD.IAnimationNotifyDecodeInfo): ComponentEventResult_T<ScriptValue_T> {
+    protected onAnimationNotify(notify: IAnimationNotifyDecodeInfo): ComponentEventResult_T<ScriptValue_T> {
         const info = notify.object;
 
         if (!info) return COMPONENT_EVENT_NOT_HANDLED;
@@ -41,7 +42,7 @@ class EffectsComponent extends ObjectComponent<BaseActor> {
         }
     }
 
-    protected onNpcEnter(event: GD.INpcEnterEvent): ComponentEventResult_T<ScriptValue_T> {
+    protected onNpcEnter(event: INpcEnterEvent): ComponentEventResult_T<ScriptValue_T> {
         if (!event.effect || event.effect.toLowerCase() === "none") return COMPONENT_EVENT_NOT_HANDLED;
 
         const parent = this.getParent();
@@ -75,12 +76,12 @@ class EffectsComponent extends ObjectComponent<BaseActor> {
                 const location = call.args[3];
                 const rotation = call.args[4];
 
-                if (Array.isArray(location)) actor.position.fromArray(location as GD.Vector3Arr);
+                if (Array.isArray(location)) actor.position.fromArray(location as Vector3Arr);
                 else if (context.isObject3D) context.getWorldPosition(actor.position);
                 else this.getParent().getWorldPosition(actor.position);
 
                 if (Array.isArray(rotation)) {
-                    const [pitch, yaw, roll] = rotation as GD.Vector3Arr;
+                    const [pitch, yaw, roll] = rotation as Vector3Arr;
 
                     tmpRotator.set(pitch, yaw, roll).toQuaternion(actor.quaternion);
                 }

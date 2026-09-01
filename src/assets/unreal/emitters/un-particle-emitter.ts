@@ -1,5 +1,6 @@
 
-import { UObject, FArray, FPrimitiveArray } from "@l2js/core";
+import { FArray, FPrimitiveArray } from "@l2js/core";
+import UObject from "../un-object";
 import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
@@ -11,7 +12,118 @@ import type { UAActor } from "../un-aactor";
 import type { UTexture } from "../un-texture";
 import type { USound } from "../un-sound";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
-import type { DecodeLibrary } from "../decode-library";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "../decode-library";
+import type { Vector4Arr, Vector3Arr, QuaternionArr, ColorArr } from "../library-types";
+
+type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
+    acceleration: Vector3Arr,
+    lifetime: [number, number],
+    maxParticles: number,
+    initial: {
+        particlesPerSecond: number,
+        scale: { min: Vector3Arr, max: Vector3Arr },
+        velocity: { min: Vector3Arr, max: Vector3Arr },
+        position: { min: Vector3Arr, max: Vector3Arr },
+        offset?: Vector3Arr,
+        angularVelocity: { min: Vector3Arr, max: Vector3Arr }
+    },
+    particlesPerSecond: number,
+    blendingMode: ParticleBlendModes_T,
+    opacity: number,
+    drawScale?: number,
+    changesOverLifetime: {
+        scale: { values: [number, number][], repeats: number }
+    },
+    fadeIn: Fade_T,
+    fadeOut: Fade_T,
+    colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+    angularVelocity?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionCenterOffsetRange?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionsPerSecondRange?: { min: Vector3Arr, max: Vector3Arr },
+    initialTimeRange: [number, number],
+    startMassRange: [number, number],
+    sphereRadiusRange?: [number, number],
+    startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
+    addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
+    velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+    warmupTime?: number,
+    warmupTicksPerSecond?: number,
+    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
+};
+
+type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
+
+type EmitterConfig_T = {
+    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter",
+    name?: string,
+    blendingMode: ParticleBlendModes_T,
+    uniformScale?: boolean,
+    maxParticles: number,
+    drawScale?: number,
+    rotationOffset?: QuaternionArr,
+    opacity: number,
+    lifetime: [number, number],
+    acceleration: Vector3Arr,
+    maxAbsVelocity?: Vector3Arr,
+    particlesPerSecond: number,
+    fadeIn: Fade_T
+    fadeOut: Fade_T,
+    warmupTime?: number,
+    warmupTicksPerSecond?: number,
+    colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+    angularVelocity?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionCenterOffsetRange?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionsPerSecondRange?: { min: Vector3Arr, max: Vector3Arr },
+    initialTimeRange: [number, number],
+    startMassRange: [number, number],
+    sphereRadiusRange?: [number, number],
+    startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
+    addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
+    velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+    forcedMaxParticles?: boolean,
+    sounds?: IParticleSoundDecodeInfo[],
+    initial: {
+        particlesPerSecond: number,
+        angularVelocity: { min: Vector3Arr, max: Vector3Arr },
+        velocity: { min: Vector3Arr, max: Vector3Arr },
+        position: { min: Vector3Arr, max: Vector3Arr },
+        offset?: Vector3Arr,
+        scale: { min: Vector3Arr, max: Vector3Arr },
+    },
+    changesOverLifetime: {
+        scale: {
+            values: [number, number][],
+            repeats: number
+        },
+        color?: {
+            values: [number, Vector4Arr][],
+            repeats: number
+        },
+        velocity?: {
+            values: [number, Vector3Arr][],
+            repeats: number
+        },
+        revolution?: {
+            values: [number, Vector3Arr][],
+            repeats: number
+        }
+    },
+    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
+};
+
+type Fade_T = {
+    time: number,
+    color: ColorArr
+};
+
+type IParticleSoundDecodeInfo = {
+    soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
+    radius: [number, number],
+    pitch: [number, number],
+    volume: [number, number],
+    probability: [number, number],
+    weight: number
+};
 
 abstract class UParticleEmitter extends UObject {
     declare protected actor: UEmitter;
@@ -423,7 +535,7 @@ abstract class UParticleEmitter extends UObject {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.EmitterConfig_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): EmitterConfig_T {
         const library = builder.library;
 
         if (this._particles && this._particles.length > 0)
@@ -444,8 +556,8 @@ abstract class UParticleEmitter extends UObject {
             rotationOffset: this.rotationOffset?.getQuaternionElements() || [0, 0, 0, 1],
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
-            fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
-            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
+            fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as Vector4Arr } : null,
+            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as Vector4Arr } : null,
             uniformScale: this.isUniformScale,
             acceleration: this.acceleration?.getElements(),
             warmupTime: this.relativeWarmupTime,
@@ -489,7 +601,7 @@ abstract class UParticleEmitter extends UObject {
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
-            sounds: (this.sounds?.map(s => s.getDecodeInfo(builder)).filter(s => s) as GD.IParticleSoundDecodeInfo[]) ?? [],
+            sounds: (this.sounds?.map(s => s.getDecodeInfo(builder)).filter(s => s) as IParticleSoundDecodeInfo[]) ?? [],
             settings: this.getSettingsSnapshot(library)
         };
     }
@@ -573,7 +685,7 @@ abstract class UParticleRevolutionScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: DecodeLibrary): [number, GD.Vector3Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, Vector3Arr] {
         return [this.relTime, this.relRevolution?.getElements() || [0, 0, 0]];
     }
 }
@@ -605,7 +717,7 @@ abstract class UParticleVelocityScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: DecodeLibrary): [number, GD.Vector3Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, Vector3Arr] {
         return [this.relTime, this.relVelocity?.getElements() || [0, 0, 0]];
     }
 }
@@ -629,7 +741,7 @@ abstract class UParticleSound extends UObject {
         });
     }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IParticleSoundDecodeInfo | null {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IParticleSoundDecodeInfo | null {
         if (!this.sound) return null;
 
         const library = builder.library;
@@ -693,8 +805,8 @@ abstract class UParticleColorScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: DecodeLibrary): [number, GD.Vector4Arr] {
-        return [this.relTime, this.color?.toArray() as GD.Vector4Arr || [255, 255, 255, 255]];
+    public getDecodeInfo(_library: DecodeLibrary): [number, Vector4Arr] {
+        return [this.relTime, this.color?.toArray() as Vector4Arr || [255, 255, 255, 255]];
     }
 }
 
@@ -772,7 +884,7 @@ const blendingNames = {
     [EParticleDrawStyle_T.PTDS_AlphaModulate_MightNotFogCorrectly]: "alphaModulate",
     [EParticleDrawStyle_T.PTDS_Darken]: "darken",
     [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
-} as Record<EParticleDrawStyle_T, GD.ParticleBlendModes_T>;
+} as Record<EParticleDrawStyle_T, ParticleBlendModes_T>;
 
 // enum-backed REQUIRED_SETTINGS, resolved to the member's own camelCase name
 const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
@@ -823,3 +935,4 @@ const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
         [EParticleCollisionSound_T.PTSC_Random]: "random"
     }
 };
+export type { IEmitterDecodeInfo, ParticleBlendModes_T, EmitterConfig_T, Fade_T, IParticleSoundDecodeInfo };

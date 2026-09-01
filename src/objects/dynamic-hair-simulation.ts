@@ -1,4 +1,5 @@
 import { Bone, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from "three";
+import type { IDynamicHairDecodeInfo } from "@l2js/engine";
 
 const tmpMatrix = new Matrix4();
 const tmpParentMatrix = new Matrix4();
@@ -126,7 +127,7 @@ function makeParticles(count: number): Particle_T[] {
 
 class DynamicHairSimulation {
     public readonly mesh: SkinnedMesh;
-    public readonly info: GD.IDynamicHairDecodeInfo;
+    public readonly info: IDynamicHairDecodeInfo;
 
     protected topology: Topology_T = null;
     protected bones: Bone[] = null;
@@ -164,7 +165,7 @@ class DynamicHairSimulation {
     protected needsReset = true;
     protected needsActionReset = false;
 
-    public constructor(mesh: SkinnedMesh, info: GD.IDynamicHairDecodeInfo) {
+    public constructor(mesh: SkinnedMesh, info: IDynamicHairDecodeInfo) {
         this.mesh = mesh;
         this.info = info;
     }

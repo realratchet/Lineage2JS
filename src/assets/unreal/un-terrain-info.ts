@@ -1,10 +1,11 @@
-import { APackage, BufferValue, type Constructable_T, type UExport, type UObject, FArray, FObjectArray, FPrimitiveArray, PropertyTag } from "@l2js/core";
+import { APackage, BufferValue, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray, PropertyTag } from "@l2js/core";
+import type { UObject } from "./un-object";
 import AInfo from "./un-info";
 
 import FBox from "./un-box";
 import FCoords from "./un-coords";
 import FColor from "./un-color";
-import UTexture from "./un-texture";
+import UTexture, { type ITextureDecodeInfo } from "./un-texture";
 import ETextureFormat from "./un-tex-format";
 import GMath from "./un-gmath";
 import FRotator from "./un-rotator";
@@ -16,8 +17,16 @@ import type { UDecoLayer } from "./un-deco-layer";
 import type { FTIntMap } from "./un-tint-map";
 import type { UTerrainSector } from "./un-terrain-sector";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
+import type { Vector3Arr } from "./library-types";
+import type { IBaseMaterialDecodeInfo } from "./un-material";
 
-type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
+type IMaterialTerrainDecodeInfo = IBaseMaterialDecodeInfo & {
+    materialType: "terrain";
+    layers: { map: string, alphaMap: string }[]
+};
+
+type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: IBaseObjectDecodeInfo[] }, material: IMaterialTerrainDecodeInfo, zoneUuid: string };
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
@@ -302,7 +311,7 @@ abstract class ATerrainInfo extends AInfo {
         }
     }
 
-    public getTextureColor(x: number, y: number, texture: UTexture): GD.Vector3Arr {
+    public getTextureColor(x: number, y: number, texture: UTexture): Vector3Arr {
         texture = texture.loadSelf();
         x = Math.floor(x * texture.width / this.heightmapX);
         y = Math.floor(y * texture.height / this.heightmapY);
@@ -699,7 +708,7 @@ abstract class ATerrainInfo extends AInfo {
         this.calcLayerTexCoords();
 
         const terrainUuid = builder.pullMaterial(this.terrainMap);
-        const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
+        const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
         const edgeTurnBitmap = this.edgeTurnBitmap.getTypedArray();
         const heightmapData = { info: iTerrainMap, data: terrainData, edgeTurns: edgeTurnBitmap };
@@ -741,10 +750,10 @@ abstract class ATerrainInfo extends AInfo {
             name: this.uuid,
             materialType: "terrain",
             layers
-        } as GD.IMaterialTerrainDecodeInfo;
+        } as IMaterialTerrainDecodeInfo;
 
         const sectors = this.sectors.map(sector => sector.loadSelf());
-        const children: GD.IBaseObjectDecodeInfo[] = sectors.map(sector => builder.pullTerrainSector(sector, this, heightmapData));
+        const children: IBaseObjectDecodeInfo[] = sectors.map(sector => builder.pullTerrainSector(sector, this, heightmapData));
 
         this.decoLayers?.forEach(layer => {
             if (!layer) return;
@@ -753,7 +762,7 @@ abstract class ATerrainInfo extends AInfo {
             children.push(...decorations);
         });
 
-        const decodeInfo: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] } = {
+        const decodeInfo: IBaseObjectDecodeInfo & { children: IBaseObjectDecodeInfo[] } = {
             uuid: this.uuid,
             type: "TerrainInfo",
             name: this.objectName,
@@ -769,3 +778,4 @@ abstract class ATerrainInfo extends AInfo {
 
 export default ATerrainInfo;
 export { ATerrainInfo, ETerrainRenderMethod_T };
+export type { IMaterialTerrainDecodeInfo };

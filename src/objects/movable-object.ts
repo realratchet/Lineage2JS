@@ -5,6 +5,7 @@ import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { pointPrimitive } from "../physics/collision-primitive";
 import { MoverComponent } from "../physics/components/physics-component";
+import type { IMoverDecodeInfo } from "@l2js/engine";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
 
@@ -22,7 +23,7 @@ const tmpExtent = new Vector3();
 class MovableObject extends CollidingMesh {
     public readonly isMovableObject: boolean = true;
 
-    protected readonly mover: GD.IMoverDecodeInfo;
+    protected readonly mover: IMoverDecodeInfo;
     protected readonly keyPositions: Vector3[];
     protected readonly keyQuaternions: Quaternion[];
     protected state: MoverState_T = "closed";
@@ -30,7 +31,7 @@ class MovableObject extends CollidingMesh {
     protected stateStart: number = 0;
     protected transformAlpha: number = 0;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: GD.IMoverDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: IMoverDecodeInfo }) {
         super(props);
 
         this.mover = props.mover;

@@ -1,14 +1,15 @@
 import { ObjectComponent } from "../../game/components";
 import type AudioManager from "../audio-manager";
 import type { SectorObject } from "../../objects/zone-object";
+import type { IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 
 class AmbientSoundComponent extends ObjectComponent<SectorObject> {
     public readonly componentName = "ambientSound";
-    public readonly info: GD.IAmbientSoundObjectDecodeInfo;
+    public readonly info: IAmbientSoundObjectDecodeInfo;
     public readonly dataUri: string;
     protected readonly audioManager: AudioManager;
 
-    public constructor(audioManager: AudioManager, info: GD.IAmbientSoundObjectDecodeInfo, dataUri: string) {
+    public constructor(audioManager: AudioManager, info: IAmbientSoundObjectDecodeInfo, dataUri: string) {
         super();
 
         this.audioManager = audioManager;

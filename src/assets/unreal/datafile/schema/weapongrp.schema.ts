@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { ConditionalType, SizedContainerType } from "./dat-container";
 
 const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [

@@ -1,5 +1,71 @@
-import type { ScriptBytecodeEntry_T, UClass, UFunction, UObject, UState, UStruct, UStructProperty } from "@l2js/core";
+import type { ScriptBytecodeEntry_T, UClass, UFunction, UObject, UState, UStruct, UStructProperty, PropertyTypes_T } from "@l2js/core";
 import type { DecodeLibrary } from "./decode-library";
+import type { Vector3Arr } from "./library-types";
+
+type ScriptBytecodeValue_T = number | string | null | Vector3Arr | IScriptBytecodeOffsetDecodeInfo | IScriptBytecodeLabelDecodeInfo;
+
+type IScriptBytecodeOffsetDecodeInfo = {
+    virtualOffset: number,
+    entryIndex: number
+};
+
+type IScriptBytecodeLabelDecodeInfo = IScriptBytecodeOffsetDecodeInfo & {
+    name: string,
+};
+
+type IScriptBytecodeEntryDecodeInfo = {
+    virtualOffset: number,
+    type: string,
+    value: ScriptBytecodeValue_T,
+    tokenName?: string
+};
+
+type IScriptProgramDecodeInfo = {
+    virtualSize: number,
+    entries: IScriptBytecodeEntryDecodeInfo[]
+};
+
+type IScriptFieldDecodeInfo = {
+    id: string,
+    name: string,
+    type: PropertyTypes_T,
+    arrayDimensions: number,
+    flags: number
+};
+
+type IScriptFunctionDecodeInfo = {
+    id: string,
+    owner: string,
+    name: string,
+    nativeIndex: number,
+    operatorPrecedence: number,
+    flags: number,
+    replicationOffset: number,
+    fields: IScriptFieldDecodeInfo[],
+    program: IScriptProgramDecodeInfo
+};
+
+type IScriptStateDecodeInfo = {
+    id: string,
+    owner: string,
+    name: string,
+    flags: number,
+    probeMask: bigint,
+    ignoreMask: bigint,
+    labelTableVirtualOffset: number,
+    fields: IScriptFieldDecodeInfo[],
+    functionIds: string[],
+    program: IScriptProgramDecodeInfo
+};
+
+type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
+    superClassId: string | null,
+    classFlags: number,
+    stateIds: string[],
+    defaults: Record<string, ScriptPropertyValue_T>
+};
+
+type ScriptPropertyValue_T = number | boolean | string | null | ScriptPropertyValue_T[] | { [key: string]: ScriptPropertyValue_T };
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
 
@@ -14,7 +80,7 @@ function getObjectId(object: UObject): string {
     return object.name;
 }
 
-function dumpPropertyValue(value: any): GD.ScriptPropertyValue_T {
+function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     if (value === null || value === undefined) return null;
     if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") return value;
     if (Array.isArray(value)) return [...value].map(dumpPropertyValue);
@@ -22,7 +88,7 @@ function dumpPropertyValue(value: any): GD.ScriptPropertyValue_T {
     if (typeof value.toArray === "function") return value.toArray().map(dumpPropertyValue);
     if (value.constructor?.plainStructFields) {
         const propertyMap = value.constructor._propertyMapCache || value.getPropertyMap();
-        const result: Record<string, GD.ScriptPropertyValue_T> = {};
+        const result: Record<string, ScriptPropertyValue_T> = {};
 
         for (const [name, field] of Object.entries(propertyMap)) result[name] = dumpPropertyValue(value[field as string]);
 
@@ -33,8 +99,8 @@ function dumpPropertyValue(value: any): GD.ScriptPropertyValue_T {
     throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
 }
 
-function dumpObjectScriptProperties(object: UObject): Record<string, GD.ScriptPropertyValue_T> {
-    const properties: Record<string, GD.ScriptPropertyValue_T> = {};
+function dumpObjectScriptProperties(object: UObject): Record<string, ScriptPropertyValue_T> {
+    const properties: Record<string, ScriptPropertyValue_T> = {};
 
     for (const name of Map.prototype.keys.call(object.propertyDict))
         properties[name] = dumpPropertyValue(object.propertyDict.get(name));
@@ -42,7 +108,7 @@ function dumpObjectScriptProperties(object: UObject): Record<string, GD.ScriptPr
     return properties;
 }
 
-function makeStructDefault(field: UStructProperty): GD.ScriptPropertyValue_T {
+function makeStructDefault(field: UStructProperty): ScriptPropertyValue_T {
     const struct = field.value.loadSelf();
     const name = struct.friendlyName.toLowerCase();
 
@@ -55,7 +121,7 @@ function makeStructDefault(field: UStructProperty): GD.ScriptPropertyValue_T {
         case "quaternion": return [0, 0, 0, 0];
     }
 
-    const value: Record<string, GD.ScriptPropertyValue_T> = {};
+    const value: Record<string, ScriptPropertyValue_T> = {};
 
     for (const child of struct.childPropFields.values()) {
         child.loadSelf();
@@ -70,7 +136,7 @@ function makeStructDefault(field: UStructProperty): GD.ScriptPropertyValue_T {
     return value;
 }
 
-function dumpClassDefaults(cls: UClass): Record<string, GD.ScriptPropertyValue_T> {
+function dumpClassDefaults(cls: UClass): Record<string, ScriptPropertyValue_T> {
     const defaults = dumpObjectScriptProperties(cls);
 
     for (const field of cls.childPropFields.values()) {
@@ -99,7 +165,7 @@ function resolveEntryIndex(entriesByOffset: Map<number, number>, virtualSize: nu
     return index;
 }
 
-function dumpBytecodeValue(script: UStruct, entry: ScriptBytecodeEntry_T, entriesByOffset: Map<number, number>, virtualSize: number): GD.ScriptBytecodeValue_T {
+function dumpBytecodeValue(script: UStruct, entry: ScriptBytecodeEntry_T, entriesByOffset: Map<number, number>, virtualSize: number): ScriptBytecodeValue_T {
     const value = entry.value;
 
     switch (entry.type) {
@@ -132,7 +198,7 @@ function dumpBytecodeValue(script: UStruct, entry: ScriptBytecodeEntry_T, entrie
     }
 }
 
-function dumpProgram(script: UStruct): GD.IScriptProgramDecodeInfo {
+function dumpProgram(script: UStruct): IScriptProgramDecodeInfo {
     const entries = script.getScriptBytecode().filter(entry => entry.type !== "nativeIndex");
     const entriesByOffset = new Map<number, number>();
     const virtualSize = script.getScriptSize();
@@ -150,7 +216,7 @@ function dumpProgram(script: UStruct): GD.IScriptProgramDecodeInfo {
     };
 }
 
-function dumpFields(script: UStruct): GD.IScriptFieldDecodeInfo[] {
+function dumpFields(script: UStruct): IScriptFieldDecodeInfo[] {
     return [...script.childPropFields.values()].map(field => {
         field = field.loadSelf();
 
@@ -164,7 +230,7 @@ function dumpFields(script: UStruct): GD.IScriptFieldDecodeInfo[] {
     });
 }
 
-function dumpFunction(fn: UFunction): GD.IScriptFunctionDecodeInfo {
+function dumpFunction(fn: UFunction): IScriptFunctionDecodeInfo {
     fn = fn.loadSelf();
 
     const id = getObjectId(fn);
@@ -182,7 +248,7 @@ function dumpFunction(fn: UFunction): GD.IScriptFunctionDecodeInfo {
     };
 }
 
-function dumpState(state: UState): GD.IScriptStateDecodeInfo {
+function dumpState(state: UState): IScriptStateDecodeInfo {
     state = state.loadSelf();
 
     const id = getObjectId(state);
@@ -273,3 +339,4 @@ function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject
 
 export default pullScriptDumps;
 export { pullScriptDumps, pullScriptClasses, dumpObjectScriptProperties };
+export type { ScriptBytecodeValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptBytecodeLabelDecodeInfo, IScriptBytecodeEntryDecodeInfo, IScriptProgramDecodeInfo, IScriptFieldDecodeInfo, IScriptFunctionDecodeInfo, IScriptStateDecodeInfo, IScriptClassDecodeInfo, ScriptPropertyValue_T };

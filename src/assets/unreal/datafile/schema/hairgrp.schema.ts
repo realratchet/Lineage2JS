@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const HAIRGRP_RECORD_COUNT = 15;
 const SCHEMA_HAIRGRP_DAT: ISchemaValue[] = [];
 

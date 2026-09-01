@@ -1,6 +1,7 @@
-import ParticleMaterial, { AnimatedParticleMaterial } from "../../materials/particle-material/particle-material";
+import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
+import type { EmitterConfig_T } from "@l2js/engine";
 
 // BeamEmitter: every particle is a beam made of HighFrequencyPoints points along a
 // low frequency noise path, rendered as RotatingSheets camera-facing ribbons
@@ -32,7 +33,7 @@ type BeamSettings_T = {
     dynamicTimeBetweenNoiseRange: [number, number]
 };
 
-type BeamEmitterConfig_T = GD.EmitterConfig_T & { material: ParticleMaterialInitSettings_T, beam: BeamSettings_T };
+type BeamEmitterConfig_T = EmitterConfig_T & { material: ParticleMaterialInitSettings_T, beam: BeamSettings_T };
 
 // EBeamEndPointType values
 const PTEP_Velocity = 0, PTEP_Distance = 1, PTEP_Offset = 2, PTEP_Actor = 3, PTEP_TraceOffset = 4, PTEP_OffsetAsAbsolute = 5;

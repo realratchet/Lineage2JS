@@ -1,5 +1,6 @@
 import { MathUtils } from "three";
 import FVector from "@l2js/engine/un-vector";
+import type { Vector3Arr } from "@l2js/engine";
 
 type UNativeRegistry_T = typeof import("./native-registry").UNativeRegistry;
 
@@ -87,14 +88,14 @@ function VSize(a: FVector) { return a.length(); }
 function Normal(a: FVector) { return a.normalized(); }
 function VRand() { return FVector.make(Math.random(), Math.random(), Math.random()); }
 
-function Vector2Rotator(v: GD.Vector3Arr): GD.Vector3Arr {
+function Vector2Rotator(v: Vector3Arr): Vector3Arr {
     const yaw = Math.round(Math.atan2(v[1], v[0]) * 32768 / Math.PI);
     const pitch = Math.round(Math.atan2(v[2], Math.hypot(v[0], v[1])) * 32768 / Math.PI);
 
     return [pitch, yaw, 0];
 }
 
-function Rotator2Vector(r: GD.Vector3Arr): GD.Vector3Arr {
+function Rotator2Vector(r: Vector3Arr): Vector3Arr {
     const pitch = r[0] * Math.PI / 32768;
     const yaw = r[1] * Math.PI / 32768;
     const cosPitch = Math.cos(pitch);

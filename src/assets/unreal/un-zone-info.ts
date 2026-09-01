@@ -3,9 +3,45 @@ import AInfo from "./un-info";
 import FColor from "./un-color";
 import type { FVector } from "./un-vector";
 import type { ATerrainInfo } from "./un-terrain-info";
-import type { DecodeLibrary } from "./decode-library";
+import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo } from "./decode-library";
+import type { ColorArr, Vector2Arr, Vector3Arr } from "./library-types";
+import type { IBoxDecodeInfo } from "./un-box";
 
-abstract class FZoneInfo extends AInfo implements GD.IInfo {
+type IInfo = { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; };
+
+type IZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Zone" };
+
+type ISkyZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Sky" };
+
+type ISectorDecodeInfo = IBaseZoneDecodeInfo & { type: "Sector" };
+
+type IZoneFogInfo = {
+    start: number,
+    end: number,
+    color: ColorArr
+};
+
+type IBaseZoneDecodeInfo = {
+    type: "Sector" | "Zone" | "Sky",
+    uuid: string,
+    name?: string,
+    bounds: IBoxDecodeInfo,
+    children: IBaseObjectOrInstanceDecodeInfo[],
+    fog?: IZoneFogInfo,
+    isFogZone?: boolean,
+    isSunAffected?: boolean,
+    position?: Vector3Arr,
+    affectRange?: Vector2Arr,
+    fogRange1?: Vector2Arr,
+    fogRange2?: Vector2Arr,
+    fogRange3?: Vector2Arr,
+    fogRange4?: Vector2Arr,
+    fogRange5?: Vector2Arr,
+    ambient?: number[],
+    colors?: any[]
+};
+
+abstract class FZoneInfo extends AInfo implements IInfo {
     declare public readonly isFogZone: boolean;
     declare public readonly hasTerrain: boolean;
 
@@ -94,7 +130,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
 
     // }
 
-    public getDecodeInfo(library: DecodeLibrary): GD.IBaseZoneDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Zone",
@@ -108,7 +144,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
             fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
                 start: this.distanceFogStart,
                 end: this.distanceFogEnd,
-                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as GD.ColorArr
+                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
             }
         };
     }
@@ -116,3 +152,4 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
 
 export default FZoneInfo;
 export { FZoneInfo };
+export type { IInfo, IZoneDecodeInfo, ISkyZoneDecodeInfo, ISectorDecodeInfo, IZoneFogInfo, IBaseZoneDecodeInfo };

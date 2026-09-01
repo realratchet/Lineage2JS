@@ -12,6 +12,7 @@ import TransformComponent from "./objects/components/transform-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
 import { COMPONENT_EVENT_NOT_HANDLED, ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
+import type { Vector3Arr, INpcEnterEvent } from "@l2js/engine";
 
 const tmpUp = new Vector3(0, 0, 1);
 class BaseActor extends GameObject implements ICollidable {
@@ -82,9 +83,9 @@ class BaseActor extends GameObject implements ICollidable {
         const field = id.slice(id.lastIndexOf(".") + 1);
 
         switch (field.toLowerCase()) {
-            case "location": this.position.fromArray(value as GD.Vector3Arr); return;
-            case "velocity": this.movementComponent.setVelocity(value as GD.Vector3Arr); return;
-            case "acceleration": this.movementComponent.setAcceleration(value as GD.Vector3Arr); return;
+            case "location": this.position.fromArray(value as Vector3Arr); return;
+            case "velocity": this.movementComponent.setVelocity(value as Vector3Arr); return;
+            case "acceleration": this.movementComponent.setAcceleration(value as Vector3Arr); return;
             case "collisionradius": this.movementComponent.setCollisionSize(Number(value), this.movementComponent.getCollisionHeight()); return;
             case "collisionheight": this.movementComponent.setCollisionSize(this.movementComponent.getCollisionRadius(), Number(value)); return;
             case "biswalking": this.movementComponent.setWalking(!!value); return;
@@ -169,7 +170,7 @@ class BaseActor extends GameObject implements ICollidable {
     public setDeathAnimationFromScript(): void { this.animationComponent.setDeathAnimationFromScript(); }
     public initAnimations(): void { this.animationComponent.init(); }
 
-    public spawnEnterEvent(event: GD.INpcEnterEvent): void {
+    public spawnEnterEvent(event: INpcEnterEvent): void {
         this.getComponent<NpcLifecycleComponent>("npcLifecycle").spawnEnter(event);
     }
 

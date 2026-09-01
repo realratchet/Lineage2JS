@@ -1,15 +1,16 @@
 import type { Vector3 } from "three";
+import type { IMusicVolumeBspNode, IVolumeBspDecodeInfo } from "@l2js/engine";
 
 let traceStart: Vector3 = null;
 let traceEnd: Vector3 = null;
 let traceStartsInside = false;
 let traceTime = 1;
 
-function childOutside(node: GD.IMusicVolumeBspNode, front: boolean, outside: boolean): boolean {
+function childOutside(node: IMusicVolumeBspNode, front: boolean, outside: boolean): boolean {
     return front ? outside || node.isCsg : outside && !node.isCsg;
 }
 
-function encompassesVolume(position: Vector3, bsp: GD.IVolumeBspDecodeInfo): boolean {
+function encompassesVolume(position: Vector3, bsp: IVolumeBspDecodeInfo): boolean {
     let outside = bsp.isRootOutside;
     const nodes = bsp.nodes;
 
@@ -29,7 +30,7 @@ function encompassesVolume(position: Vector3, bsp: GD.IVolumeBspDecodeInfo): boo
     return !outside;
 }
 
-function planeDistance(node: GD.IMusicVolumeBspNode, time: number): number {
+function planeDistance(node: IMusicVolumeBspNode, time: number): number {
     const plane = node.plane;
     const x = traceStart.x + (traceEnd.x - traceStart.x) * time;
     const y = traceStart.y + (traceEnd.y - traceStart.y) * time;
@@ -38,7 +39,7 @@ function planeDistance(node: GD.IMusicVolumeBspNode, time: number): number {
     return plane[0] * x + plane[1] * y + plane[2] * z - plane[3];
 }
 
-function traceNode(nodes: GD.IMusicVolumeBspNode[], iNode: number, startTime: number, endTime: number, outside: boolean): boolean {
+function traceNode(nodes: IMusicVolumeBspNode[], iNode: number, startTime: number, endTime: number, outside: boolean): boolean {
     if (iNode === -1) {
         if ((!outside) !== traceStartsInside) {
             traceTime = startTime;
@@ -67,7 +68,7 @@ function traceNode(nodes: GD.IMusicVolumeBspNode[], iNode: number, startTime: nu
     return traceNode(nodes, secondNode, middleTime, endTime, childOutside(node, !frontFirst, outside));
 }
 
-function findVolumeTransition(start: Vector3, end: Vector3, bsp: GD.IVolumeBspDecodeInfo, startsInside: boolean = encompassesVolume(start, bsp)): number {
+function findVolumeTransition(start: Vector3, end: Vector3, bsp: IVolumeBspDecodeInfo, startsInside: boolean = encompassesVolume(start, bsp)): number {
     if (bsp.nodes.length === 0) return 1;
 
     traceStart = start;

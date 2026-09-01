@@ -1,8 +1,6 @@
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
-import type { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
-import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
-import type { UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
+import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, DecodeLibrary, IScriptFieldDecodeInfo, ScriptPropertyValue_T, LoadSettings_T, ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine";
 import { UnProperties } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
@@ -24,7 +22,6 @@ import HairSimulationComponent from "../objects/components/hair-simulation-compo
 import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
@@ -51,7 +48,7 @@ const tmpCameraMovement = new Vector3();
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
 export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
-function findScriptField(library: DecodeLibrary, classId: string, name: string): GD.IScriptFieldDecodeInfo {
+function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo {
     const lowerName = name.toLowerCase();
     let cls = library.scriptClasses[classId];
 
@@ -65,7 +62,7 @@ function findScriptField(library: DecodeLibrary, classId: string, name: string):
     throw new Error(`UnrealScript class '${classId}' has no property '${name}'.`);
 }
 
-function findScriptDefault(library: DecodeLibrary, classId: string, name: string): GD.ScriptPropertyValue_T {
+function findScriptDefault(library: DecodeLibrary, classId: string, name: string): ScriptPropertyValue_T {
     const lowerName = name.toLowerCase();
     let cls = library.scriptClasses[classId];
 
@@ -79,7 +76,7 @@ function findScriptDefault(library: DecodeLibrary, classId: string, name: string
     throw new Error(`UnrealScript class '${classId}' has no default for '${name}'.`);
 }
 
-function parseLocalizedValue(field: GD.IScriptFieldDecodeInfo, value: string): GD.ScriptPropertyValue_T {
+function parseLocalizedValue(field: IScriptFieldDecodeInfo, value: string): ScriptPropertyValue_T {
     switch (field.type.toLowerCase()) {
         case "name":
         case "str":
@@ -121,7 +118,7 @@ function applyScriptLocalization(library: DecodeLibrary, classId: string, proper
         if (!Array.isArray(inherited)) throw new Error(`Localized UnrealScript property '${field.id}' is not an array.`);
         if (property.index >= field.arrayDimensions) continue;
 
-        const values = Array.isArray(cls.defaults[field.name]) ? (cls.defaults[field.name] as GD.ScriptPropertyValue_T[]).slice() : inherited.slice();
+        const values = Array.isArray(cls.defaults[field.name]) ? (cls.defaults[field.name] as ScriptPropertyValue_T[]).slice() : inherited.slice();
 
         values[property.index] = parseLocalizedValue(field, property.value);
         cls.defaults[field.name] = values;
@@ -143,7 +140,7 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
 
 class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
-    protected loadSettings: GD.LoadSettings_T;
+    protected loadSettings: LoadSettings_T;
     protected glCapabilities: WebGLCapabilities;
     protected hasS3TC: boolean;
     protected decodeWorker: DecodeWorkerClient = null;
@@ -157,7 +154,7 @@ class AssetManager implements IEngineComponent<GameManager> {
     protected preferCompressedTextures = false;
     public userConfig: UserConfig_T = null;
     protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
-    protected charGroups: GD.ICharacterGroup[] = null;
+    protected charGroups: ICharacterGroup[] = null;
     protected effectLibrary: DecodeLibrary = null;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number;
@@ -171,7 +168,7 @@ class AssetManager implements IEngineComponent<GameManager> {
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
     public getParent(): GameManager { return this.gameManager; }
 
-    public constructor(loadSettings: GD.LoadSettings_T, assetList: AssetList_T) {
+    public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
         this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
         this.maxConcurrentDecodes = Math.max(this.decodeWorkerPoolSize, 1);
@@ -296,7 +293,7 @@ class AssetManager implements IEngineComponent<GameManager> {
         player.initAnimations();
     }
 
-    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection, actor?: BaseActor) {
+    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, actor?: BaseActor) {
         this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor), actor, charIndex);
         renderManager.needsUpdate = true;
     }
@@ -422,7 +419,7 @@ class AssetManager implements IEngineComponent<GameManager> {
         return actor;
     }
 
-    public listNpcs(): Promise<GD.INpcDefinition[]> {
+    public listNpcs(): Promise<INpcDefinition[]> {
         return this.decodeWorker.listNpcs();
     }
 
@@ -438,7 +435,7 @@ class AssetManager implements IEngineComponent<GameManager> {
         return this.decodeWorker.precacheCharacters(this.loadSettings);
     }
 
-    public getCharGroups(): Promise<GD.ICharacterGroup[]> {
+    public getCharGroups(): Promise<ICharacterGroup[]> {
         return this.decodeWorker.getCharGroups();
     }
 

@@ -1,18 +1,42 @@
-import UAActor, { EPhysics_T } from "../un-aactor";
-import { UObject, type FArray, type FIndexArray } from "@l2js/core";
+import UAActor, { EPhysics_T, type IRotatingDecodeInfo, type IActorCollisionDecodeInfo } from "../un-aactor";
+import { type FArray, type FIndexArray } from "@l2js/core";
+import UObject from "../un-object";
 import FVector from "../un-vector";
-import FBox from "../un-box";
+import FBox, { type IBoxDecodeInfo } from "../un-box";
 import FColor from "../un-color";
 import cyrb53 from "../utils/hash-cyrb";
-import type { UStaticMesh } from "./un-static-mesh";
+import type { UStaticMesh, IStaticMeshObjectDecodeInfo } from "./un-static-mesh";
 import type { UTexture } from "../un-texture";
-import type { UStaticMeshInstance } from "./un-static-mesh-instance";
+import type { UStaticMeshInstance, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "./un-static-mesh-instance";
 import type { USound } from "../un-sound";
 import type { FLeaf } from "../un-leaf";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
-import type { DecodeLibrary } from "../decode-library";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "../decode-library";
+import type { Vector3Arr } from "../library-types";
+import type { ISwayingDecodeInfo } from "./un-movable-static-mesh-actor";
+import type { IMoverDecodeInfo } from "../un-mover";
 
-type StaticMeshActorDecodeResult_T = { object: GD.IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
+type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
+    actorName: string;
+    type: "StaticMeshActor",
+    instance: IStaticMeshInstanceDecodeInfo,
+    bounds: IBoxDecodeInfo,
+    scaledGlow: number,
+    isSunAffected?: boolean,
+    dontBatch?: boolean,
+    mover?: IMoverDecodeInfo,
+    rotating?: IRotatingDecodeInfo,
+    swaying?: ISwayingDecodeInfo,
+    collision: IActorCollisionDecodeInfo,
+    ambient: {
+        glow: number,
+        vector: Vector3Arr,
+        isUnlit: boolean,
+        hardwareLighting?: boolean
+    }
+};
+
+type StaticMeshActorDecodeResult_T = { object: IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
 
 abstract class FAccessory extends UObject {
     // public unkBytes: Uint8Array;
@@ -28,7 +52,7 @@ function getSwayPhase(uuid: string): number {
     return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
 }
 
-function hasStaticLightingData(instance: { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } | null): boolean {
+function hasStaticLightingData(instance: { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } | null): boolean {
     if (!instance) return false;
 
     if (instance.color)
@@ -132,7 +156,7 @@ abstract class UStaticMeshActor extends UAActor {
         });
     }
 
-    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> { return {}; }
+    protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> { return {}; }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder): StaticMeshActorDecodeResult_T {
         const library = builder.library;
@@ -210,7 +234,7 @@ abstract class UStaticMeshActor extends UAActor {
         return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
     }
 
-    protected getActorDecodeResult(library: DecodeLibrary, meshInfo: GD.IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: GD.ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
+    protected getActorDecodeResult(library: DecodeLibrary, meshInfo: IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
@@ -242,7 +266,7 @@ abstract class UStaticMeshActor extends UAActor {
         // physicsRotation only runs when bRotateToDesired or bFixedRotationDir is set (UnPhysic.cpp:401);
         // fixed-dir spin is `result += deltaRate` per axis, 65536 units per revolution (fixedTurn, UnPhysic.cpp:460)
         const rotating = this.physics === EPhysics_T.PHYS_Rotating && this.isFixedRotationDir && this.rotationRate && (this.rotationRate.pitch !== 0 || this.rotationRate.yaw !== 0 || this.rotationRate.roll !== 0)
-            ? { rotator: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll], rate: [this.rotationRate.pitch, this.rotationRate.yaw, this.rotationRate.roll] } as GD.IRotatingDecodeInfo
+            ? { rotator: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll], rate: [this.rotationRate.pitch, this.rotationRate.yaw, this.rotationRate.roll] } as IRotatingDecodeInfo
             : undefined;
 
         const actorInfo = {
@@ -266,7 +290,7 @@ abstract class UStaticMeshActor extends UAActor {
                 swayPhase: getSwayPhase(this.uuid),
                 attributes: { colors: instanceColors },
                 lights
-            } as GD.IStaticMeshInstanceDecodeInfo,
+            } as IStaticMeshInstanceDecodeInfo,
             bounds: {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
@@ -284,7 +308,7 @@ abstract class UStaticMeshActor extends UAActor {
                 collisionHeight: this.collisionHeight
             },
             ...this.getActorDecodeInfo()
-        } as GD.IStaticMeshActorDecodeInfo;
+        } as IStaticMeshActorDecodeInfo;
 
         const extent = predictedBox.getExtents();
         const margin = extent.multiplyScalar(0.05);
@@ -329,3 +353,4 @@ abstract class UStaticMeshActor extends UAActor {
 
 export default UStaticMeshActor;
 export { UStaticMeshActor };
+export type { IStaticMeshActorDecodeInfo };

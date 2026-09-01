@@ -3,6 +3,7 @@ import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGForm
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
+import type { MapData_T, IDecodedParameter } from "@l2js/engine";
 
 class MeshTerrainMaterial extends ShaderMaterial {
     // @ts-ignore
@@ -124,6 +125,6 @@ export default MeshTerrainMaterial;
 export { MeshTerrainMaterial };
 
 type MeshTerrainMaterialParameters = {
-    uvs: GD.MapData_T,
-    layers: { map: GD.IDecodedParameter, alphaMap: GD.IDecodedParameter }[]
+    uvs: MapData_T,
+    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter }[]
 };

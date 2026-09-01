@@ -1,10 +1,11 @@
-import { UObject } from "@l2js/core";
+import UObject, { type IDecodableStruct } from "./un-object";
 import type { FRotator } from "./un-rotator";
 import type { FMatrix } from "./un-matrix";
 import type { FCoords } from "./un-coords";
 import type { DecodeLibrary } from "./decode-library";
+import type { Vector3Arr } from "./library-types";
 
-abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3Arr> {
+abstract class FVector extends UObject implements IDecodableStruct<Vector3Arr> {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -35,9 +36,9 @@ abstract class FVector extends UObject implements GD.IDecodableStruct<GD.Vector3
         return this;
     }
 
-    public getElements(): GD.Vector3Arr { return [this.x, this.y, this.z]; }
+    public getElements(): Vector3Arr { return [this.x, this.y, this.z]; }
 
-    public getDecodeInfo(_library: DecodeLibrary): GD.Vector3Arr { return this.getElements(); }
+    public getDecodeInfo(_library: DecodeLibrary): Vector3Arr { return this.getElements(); }
 
     public addScalar(scalar: number) {
         return FVector.make(

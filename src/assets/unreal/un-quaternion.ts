@@ -1,5 +1,6 @@
 import FVector from "./un-vector";
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
+import type { QuaternionArr } from "./library-types";
 
 abstract class FQuaternion extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -28,7 +29,7 @@ abstract class FQuaternion extends UObject {
     }
 
 
-    public toQuatElements(): GD.QuaternionArr { return [this.x, this.y, this.z, this.w]; }
+    public toQuatElements(): QuaternionArr { return [this.x, this.y, this.z, this.w]; }
 
     public conjugate() { return FQuaternion.make(-this.x, -this.y, -this.z, this.w); }
 

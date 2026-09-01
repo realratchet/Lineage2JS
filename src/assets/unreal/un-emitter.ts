@@ -1,13 +1,28 @@
-import { UObject, FObjectArray } from "@l2js/core";
-import UParticleEmitter from "./emitters/un-particle-emitter";
-import UAActor from "./un-aactor";
+import { FObjectArray } from "@l2js/core";
+import UObject from "./un-object";
+import UParticleEmitter, { type EmitterConfig_T } from "./emitters/un-particle-emitter";
+import UAActor, { type IRotatingDecodeInfo } from "./un-aactor";
 import FBox from "./un-box";
 import FVector from "./un-vector";
 import type { USound } from "./un-sound";
 import type { FRotator } from "./un-rotator";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Vector3Arr } from "./library-types";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-type EmitterDecodeResult_T = { object: GD.IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
+type IEmitterSpawnSoundDecodeInfo = {
+    soundName: string;
+    volume: number;
+    radius: number;
+};
+
+type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "Emitter";
+    spawnSound?: IEmitterSpawnSoundDecodeInfo;
+    rotating?: IRotatingDecodeInfo;
+};
+
+type EmitterDecodeResult_T = { object: IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
 abstract class UEmitter extends UAActor {
     declare protected emitters: FObjectArray<UObject>;
@@ -136,8 +151,8 @@ abstract class UEmitter extends UAActor {
         return this;
     }
 
-    protected getEmitterDecodeInfos(builder: DecodeLibraryBuilder): GD.EmitterConfig_T[] {
-        const emittersInfo: GD.EmitterConfig_T[] = [];
+    protected getEmitterDecodeInfos(builder: DecodeLibraryBuilder): EmitterConfig_T[] {
+        const emittersInfo: EmitterConfig_T[] = [];
 
         this.emitters.loadSelf().forEach(emitter => {
             if (!emitter) return;
@@ -157,7 +172,7 @@ abstract class UEmitter extends UAActor {
         return emittersInfo;
     }
 
-    protected getSpawnSoundDecodeInfo(builder: DecodeLibraryBuilder): GD.IEmitterSpawnSoundDecodeInfo | null {
+    protected getSpawnSoundDecodeInfo(builder: DecodeLibraryBuilder): IEmitterSpawnSoundDecodeInfo | null {
         if (!this.spawnSound) return null;
 
         const sound = this.spawnSound.loadSelf();
@@ -168,18 +183,18 @@ abstract class UEmitter extends UAActor {
         return { soundName, volume: this.soundVolume, radius: this.soundRadius };
     }
 
-    protected getRotatingDecodeInfo(): GD.IRotatingDecodeInfo | null {
+    protected getRotatingDecodeInfo(): IRotatingDecodeInfo | null {
         if (!this.isRotatingEmitter) return null;
         if (!this.rotPerSecond) throw new Error(`Emitter '${this.objectName}' has bRotEmitter but no RotPerSecond.`);
 
         return {
-            rotator: this.rotation.toArray() as GD.Vector3Arr,
-            rate: this.rotPerSecond.toArray() as GD.Vector3Arr
+            rotator: this.rotation.toArray() as Vector3Arr,
+            rate: this.rotPerSecond.toArray() as Vector3Arr
         };
     }
 
-    public getTemplateDecodeInfo(builder: DecodeLibraryBuilder): GD.IEmitterActorDecodeInfo {
-        const info: GD.IEmitterActorDecodeInfo = {
+    public getTemplateDecodeInfo(builder: DecodeLibraryBuilder): IEmitterActorDecodeInfo {
+        const info: IEmitterActorDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
@@ -209,7 +224,7 @@ abstract class UEmitter extends UAActor {
         const zone = this.getZone();
         const _position = this.location.getElements();
 
-        const actorInfo: GD.IEmitterActorDecodeInfo = {
+        const actorInfo: IEmitterActorDecodeInfo = {
             uuid: this.uuid,
             type: "Emitter",
             name: this.objectName,
@@ -266,3 +281,4 @@ function isParticleEmitter(emitter: UObject): emitter is UParticleEmitter {
 
 export default UEmitter;
 export { UEmitter };
+export type { IEmitterSpawnSoundDecodeInfo, IEmitterActorDecodeInfo };

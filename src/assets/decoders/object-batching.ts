@@ -5,9 +5,8 @@ import CollidingMesh from "../../objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
 import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
-import type { StaticMeshBatchManifest_T, BatchElement_T } from "@l2js/engine/static-mesh-batch";
+import type { StaticMeshBatchManifest_T, BatchElement_T, DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "@l2js/engine";
 import type { CollisionTriangleIndex_T } from "../../objects/objects";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };
@@ -15,8 +14,8 @@ type StaticMeshBatchJob_T = {
     library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry,
-    decodeObject3D: (library: DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo) => Object3D,
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
+    decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D,
     manifest: StaticMeshBatchManifest_T,
     batchIndex: number,
     actorIndex: number,
@@ -25,7 +24,7 @@ type StaticMeshBatchJob_T = {
 
 const INDEX_COPY_CHUNK_BYTES = 256 * 1024;
 
-export function makeSwayAttribute(vertexCount: number, info: GD.IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
+export function makeSwayAttribute(vertexCount: number, info: IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
     const sway = new Float32Array(vertexCount * 4);
 
     for (let i = 0; i < vertexCount; i++) {
@@ -45,7 +44,7 @@ function createBatchObject(
     mergedLightInfo: MeshLight_T | null,
     mergedColliderIndices: Uint32Array | null,
     collisionIndex: CollisionTriangleIndex_T | null,
-    actors: GD.IStaticMeshActorDecodeInfo[],
+    actors: IStaticMeshActorDecodeInfo[],
     perActorAmbient: any[],
     batchElements: BatchElement_T[]
 ): CollidingMesh {
@@ -94,7 +93,7 @@ function createBatchObject(
     return mergedObject;
 }
 
-export function decodeStaticMeshActorLight(_library: DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight_T | null {
+export function decodeStaticMeshActorLight(_library: DecodeLibrary, info?: ILightInstanceDecodeInfo): MeshLight_T | null {
     if (!info) return null;
 
     const matrix = new Matrix4().fromArray(info.matrix);
@@ -112,8 +111,8 @@ export function decodeStaticMeshActorLight(_library: DecodeLibrary, info?: GD.IL
 
 export function decodeStaticMeshInstance(
     library: DecodeLibrary,
-    info: GD.IStaticMeshInstanceDecodeInfo,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry
+    info: IStaticMeshInstanceDecodeInfo,
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry
 ) {
     const geometryUuid = info.mesh.geometry;
     const geometryInfo = library.geometries[geometryUuid];
@@ -144,8 +143,8 @@ function createStaticMeshBatchJob(
     library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry,
-    decodeObject3D: (library: DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo) => Object3D
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
+    decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D
 ): StaticMeshBatchJob_T {
     const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
 
@@ -258,8 +257,8 @@ export function batchStaticMeshActors(
     library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry,
-    decodeObject3D: (library: DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo) => Object3D
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
+    decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D
 ) {
     const job = createStaticMeshBatchJob(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
 

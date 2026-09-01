@@ -1,11 +1,12 @@
 import { Quaternion } from "three";
 import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
+import type { QuaternionArr } from "@l2js/engine";
 
 class Rotator {
     public pitch: number;
     public yaw: number;
     public roll: number;
-    protected readonly quaternionElements: GD.QuaternionArr = [0, 0, 0, 1];
+    protected readonly quaternionElements: QuaternionArr = [0, 0, 0, 1];
 
     public constructor(pitch: number = 0, yaw: number = 0, roll: number = 0) {
         this.pitch = pitch;

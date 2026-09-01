@@ -33,6 +33,9 @@ import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
+import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo, IEmitterSpawnSoundDecodeInfo, INpcDefinition } from "@l2js/engine";
+
+type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
@@ -65,7 +68,7 @@ const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
 type ViewShakeState_T = {
-    type: GD.IAnimationViewShakeNotifyDecodeInfo["shakeType"];
+    type: IAnimationViewShakeNotifyDecodeInfo["shakeType"];
     direction: Vector3;
     remainingTime: number;
     target: number;
@@ -203,7 +206,7 @@ function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
 
 class RenderManager implements IEngineComponent<GameManager> {
     public readonly renderer: THREE.WebGLRenderer;
-    public readonly viewport: HTMLViewportElement;
+    public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
     public readonly scene = new Scene();
@@ -295,7 +298,7 @@ class RenderManager implements IEngineComponent<GameManager> {
     }
     public getParent(): GameManager { return this.manGame; }
 
-    public constructor(viewport: HTMLViewportElement) {
+    public constructor(viewport: HTMLViewportElement_T) {
         this.viewport = viewport;
         this.renderer = new WebGLRenderer({
             antialias: true,
@@ -695,7 +698,7 @@ class RenderManager implements IEngineComponent<GameManager> {
 
     public enableZoneCulling = true;
 
-    public screenFadeBlink(info: GD.IAnimationScreenFadeNotifyDecodeInfo): void {
+    public screenFadeBlink(info: IAnimationScreenFadeNotifyDecodeInfo): void {
         // UGameEngine::ScreenFadeBlink (L2.exe 0x825650) rejects a blink while either fade state is active.
         if (this.screenFadeStartedAt >= 0) return;
 
@@ -710,7 +713,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    public addViewShake(actor: BaseActor, info: GD.IAnimationViewShakeNotifyDecodeInfo): void {
+    public addViewShake(actor: BaseActor, info: IAnimationViewShakeNotifyDecodeInfo): void {
         const direction = new Vector3().fromArray(info.shakeVector);
 
         if (direction.lengthSq() === 0) direction.set(Math.random(), Math.random(), 0);
@@ -947,7 +950,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         this.scene.add(effect);
         this.physicsManager.registerSimulationObjects(effect);
 
-        const spawnSound = (effect as any).spawnSound as (GD.IEmitterSpawnSoundDecodeInfo & { dataUri: string }) | null;
+        const spawnSound = (effect as any).spawnSound as (IEmitterSpawnSoundDecodeInfo & { dataUri: string }) | null;
 
         if (spawnSound) {
             effect.getWorldPosition(tmpPawnWorldPos);
@@ -1005,7 +1008,7 @@ class RenderManager implements IEngineComponent<GameManager> {
         return this.manGame.getComponent("asset").spawnNpc(this, selector, position);
     }
 
-    public listNpcs(): Promise<GD.INpcDefinition[]> {
+    public listNpcs(): Promise<INpcDefinition[]> {
         return this.manGame.getComponent("asset").listNpcs();
     }
 
@@ -2491,3 +2494,4 @@ function reportShaderErrors(gl: WebGL2RenderingContext, program: any) {
 
 export default RenderManager;
 export { RenderManager };
+export type { HTMLViewportElement_T };

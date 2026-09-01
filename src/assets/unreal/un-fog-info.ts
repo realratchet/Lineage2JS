@@ -1,10 +1,25 @@
-import { UObject, type FArray } from "@l2js/core";
+import { type FArray } from "@l2js/core";
+import UObject from "./un-object";
 import AInfo from "./un-info";
 import FVector from "./un-vector";
 import type { FRange } from "./un-range";
 import type { UMaterial } from "./un-material";
 import type { FColor } from "./un-color";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
+
+type IL2FogInfoDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "L2FogInfo",
+    affectRange: { A: number, B: number },
+    fogRange1: { A: number, B: number },
+    fogRange2: { A: number, B: number },
+    fogRange3: { A: number, B: number },
+    fogRange4: { A: number, B: number },
+    fogRange5: { A: number, B: number },
+    colors: any[],
+    cloudTexture: any,
+    zoneMask: bigint
+};
 
 abstract class UL2FogInfo extends AInfo {
     declare protected readonly affectRange: FRange;
@@ -95,3 +110,4 @@ abstract class UL2EnvironmentColorInfo extends UObject {
 
 export default UL2FogInfo;
 export { UL2FogInfo, UL2EnvironmentColorInfo };
+export type { IL2FogInfoDecodeInfo };

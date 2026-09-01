@@ -1,3 +1,5 @@
+
+import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 type BatchElementGroup_T = {
     start: number;
     count: number;
@@ -26,7 +28,7 @@ type StaticMeshBatchInfo_T = {
     name: string;
     geometry: string; // key into library.geometries
     materials: string;
-    actors: GD.IStaticMeshActorDecodeInfo[];
+    actors: IStaticMeshActorDecodeInfo[];
     colliderIndices: Uint32Array | null;
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
     perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[];
@@ -35,7 +37,7 @@ type StaticMeshBatchInfo_T = {
 
 type StaticMeshBatchManifest_T = {
     batches: StaticMeshBatchInfo_T[];
-    unbatchable: GD.IStaticMeshActorDecodeInfo[];
+    unbatchable: IStaticMeshActorDecodeInfo[];
 }
 
 export type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T };

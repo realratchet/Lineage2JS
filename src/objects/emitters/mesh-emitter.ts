@@ -1,6 +1,8 @@
 import MeshEmitterMaterial from "../../materials/mesh-emitter-material/mesh-emitter-material";
+import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import { DoubleSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
+import type { EmitterConfig_T } from "@l2js/engine";
 
 class MeshEmitter extends BaseEmitter {
     protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
@@ -52,7 +54,7 @@ class ParticleMesh extends Mesh {
     }
 }
 
-type MeshEmitterConfig_T = GD.EmitterConfig_T & {
+type MeshEmitterConfig_T = EmitterConfig_T & {
     geometry: THREE.BufferGeometry,
     materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[]
 };

@@ -1,4 +1,5 @@
 import type { DecodeLibrary } from "../decode-library";
+import type { ITextureDecodeInfo, IDataTextureDecodeInfo } from "../un-texture";
 
 /**
  * Software DXT/S3TC decompression. Kept free of three.js (and DOM) imports so the
@@ -247,7 +248,7 @@ function dxt5ToRgba(width: number, height: number, input: Uint8Array): Uint8Arra
  * (pixel-identical output). Unsupported FourCCs keep the "dds" type and fall back
  * to the main-thread DDSLoader path in decodeDDS.
  */
-function convertDDSTextureInfo(info: GD.ITextureDecodeInfo): boolean {
+function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
     if (info.textureType !== "dds") return false;
 
     const header = new Int32Array(info.buffer, 0, 31);
@@ -264,7 +265,7 @@ function convertDDSTextureInfo(info: GD.ITextureDecodeInfo): boolean {
 
     if (!rgba) return false;
 
-    const dataInfo = info as GD.IDataTextureDecodeInfo;
+    const dataInfo = info as IDataTextureDecodeInfo;
 
     dataInfo.textureType = "rgba";
     dataInfo.buffer = rgba.buffer;
@@ -277,10 +278,10 @@ function convertDDSTextureInfo(info: GD.ITextureDecodeInfo): boolean {
 
 function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
     for (const info of Object.values(library.materials)) {
-        if (!info || (info as GD.ITextureDecodeInfo).textureType !== "dds") continue;
+        if (!info || (info as ITextureDecodeInfo).textureType !== "dds") continue;
 
         try {
-            convertDDSTextureInfo(info as GD.ITextureDecodeInfo);
+            convertDDSTextureInfo(info as ITextureDecodeInfo);
         } catch (e) {
             console.warn(`[DXT] Failed to convert texture '${(info as any).name}' to RGBA:`, e);
         }

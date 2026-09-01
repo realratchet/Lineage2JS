@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import type { FZoneInfo } from "./un-zone-info";
 
 abstract class UPointRegion extends UObject {

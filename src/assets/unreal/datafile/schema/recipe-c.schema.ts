@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { MaterialContainerType } from "./dat-container";
 
 const SCHEMA_RECIPE_C_DAT: ISchemaValue[] = [

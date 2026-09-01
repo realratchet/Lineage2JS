@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_ZONENAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "nbr" },
     { type: "uint32", name: "zone_color_id" },

@@ -1,11 +1,25 @@
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import FVector from "./un-vector";
 import type { FRange, FRangeVector } from "./un-range";
 import type { UTexture } from "./un-texture";
-import type { UStaticMesh } from "./static-mesh/un-static-mesh";
+import type { UStaticMesh, IStaticMeshObjectDecodeInfo } from "./static-mesh/un-static-mesh";
 import type { ATerrainInfo } from "./un-terrain-info";
 import type { UTerrainSector } from "./un-terrain-sector";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Vector3Arr } from "./library-types";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
+
+type ITerrainDecorationDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "TerrainDecoration",
+    terrainSegment: string,
+    mesh: IStaticMeshObjectDecodeInfo,
+    matrices: Float32Array,
+    colors: Uint8Array,
+    terrainVertexIndices?: Uint16Array,
+    fadeoutRadius: [number, number],
+    drawOrder: number,
+    forceRender: boolean
+};
 
 type DecoRandom_T = { seed: number };
 
@@ -19,7 +33,7 @@ function getRangeSRand(range: FRange, random: DecoRandom_T) {
     return range.max + (range.min - range.max) * getSRand(random);
 }
 
-function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, location: FVector, normal: FVector, scale: GD.Vector3Arr, randomYaw: boolean, random: DecoRandom_T) {
+function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, location: FVector, normal: FVector, scale: Vector3Arr, randomYaw: boolean, random: DecoRandom_T) {
     const rad = Math.PI / 32768;
     const pitch = Math.atan2(normal.z, Math.sqrt(normal.x * normal.x + normal.y * normal.y)) / rad - 16384;
     const yaw = randomYaw ? Math.floor(65535 * getSRand(random)) : Math.atan2(normal.y, normal.x) / rad;
@@ -88,7 +102,7 @@ abstract class UDecoLayer extends UObject {
         });
     }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder, info: ATerrainInfo, sectors: UTerrainSector[], decoLayerOffset: number): GD.ITerrainDecorationDecodeInfo[] {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, info: ATerrainInfo, sectors: UTerrainSector[], decoLayerOffset: number): ITerrainDecorationDecodeInfo[] {
         if (!this.showOnTerrain || !this.staticMesh || !this.densityMap || this.maxPerQuad <= 0) return [];
 
         const library = builder.library;
@@ -96,7 +110,7 @@ abstract class UDecoLayer extends UObject {
         const scaleRange = this.scaleMultiplier.getDecodeInfo(library);
         const fadeoutRadius = this.fadeoutRadius.getDecodeInfo(library);
         const inverted = info.isInvertedTerrain();
-        const result: GD.ITerrainDecorationDecodeInfo[] = [];
+        const result: ITerrainDecorationDecodeInfo[] = [];
 
         sectors.forEach((sector, sectorIndex) => {
             const { offsetX, offsetY, quadsX, quadsY } = sector.getDecorationInfo();
@@ -139,7 +153,7 @@ abstract class UDecoLayer extends UObject {
 
                         location = location.add(normal.multiplyScalar(decoLayerOffset));
 
-                        const scale: GD.Vector3Arr = [
+                        const scale: Vector3Arr = [
                             scaleRange.max[0] + (scaleRange.min[0] - scaleRange.max[0]) * getSRand(random),
                             scaleRange.max[1] + (scaleRange.min[1] - scaleRange.max[1]) * getSRand(random),
                             scaleRange.max[2] + (scaleRange.min[2] - scaleRange.max[2]) * getSRand(random)
@@ -156,7 +170,7 @@ abstract class UDecoLayer extends UObject {
                         matrices.length += 16;
                         setDecorationMatrix(matrices, matrixOffset, location, normal, scale, !!this.randomYaw, random);
 
-                        const color = this.colorMap ? info.getTextureColor(globalX, globalY, this.colorMap) : [1, 1, 1] as GD.Vector3Arr;
+                        const color = this.colorMap ? info.getTextureColor(globalX, globalY, this.colorMap) : [1, 1, 1] as Vector3Arr;
                         const baseColor = this.disregardTerrainLighting ? 127 : 255;
                         colors.push(Math.floor(baseColor * color[0]), Math.floor(baseColor * color[1]), Math.floor(baseColor * color[2]));
                         if (!this.disregardTerrainLighting) terrainVertexIndices.push(y * 17 + x);
@@ -187,3 +201,4 @@ abstract class UDecoLayer extends UObject {
 
 export default UDecoLayer;
 export { UDecoLayer };
+export type { ITerrainDecorationDecodeInfo };

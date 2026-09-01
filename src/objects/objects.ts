@@ -1,7 +1,7 @@
 import type * as RAPIER from "@dimforge/rapier3d";
 import type * as THREE from "three";
 
-export interface ICollidable extends THREE.Object3D<THREE.Event> {
+export type ICollidable = THREE.Object3D<THREE.Event> & {
     readonly isCollidable: boolean;
 
     createCollider(physicsWorld: RAPIER.World): RAPIER.Collider;
@@ -15,7 +15,7 @@ export interface ICollidable extends THREE.Object3D<THREE.Event> {
     getBasedActors?(): ReadonlySet<ICollidable>;
     addBasedActor?(actor: ICollidable): void;
     removeBasedActor?(actor: ICollidable): void;
-}
+};
 
 export type CollisionHull_T = {
     planes: [number, number, number, number, number][];

@@ -1,6 +1,7 @@
 import startCore from "./core";
 import type BaseActor from "./base-actor";
 import { Vector3 } from "three";
+import type { INpcEnterEvent, INpcDefinition } from "@l2js/engine";
 
 const NPC_TIMEOUT_MS = 240_000;
 const RENDER_FRAMES = 3;
@@ -24,7 +25,7 @@ type NpcReport_T = {
     stack?: string;
     errors?: string[];
     warnings?: string[];
-    enterEvent?: GD.INpcEnterEvent;
+    enterEvent?: INpcEnterEvent;
     ms?: number;
     done?: boolean;
     note?: string;
@@ -85,7 +86,7 @@ async function waitForEnterAnimation(pawn: BaseActor, animationName: string): Pr
     }
 }
 
-function getPriority(npc: GD.INpcDefinition): number {
+function getPriority(npc: INpcDefinition): number {
     const name = npc.name.trim().toLowerCase();
     const index = NPC_PRIORITY_NAMES.findIndex(priority => name.includes(priority));
 

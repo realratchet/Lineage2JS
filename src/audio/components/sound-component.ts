@@ -4,7 +4,7 @@ import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
 import type AudioManager from "../audio-manager";
 import type BaseActor from "../../base-actor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
+import type { DecodeLibrary, IAnimationNotifyDecodeInfo, INpcEnterEvent, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine";
 
 const ANIMATION_NOTIFY_EVENT = "animationNotify";
 const NPC_ENTER_EVENT = "npcEnter";
@@ -25,14 +25,14 @@ class SoundComponent extends ObjectComponent<BaseActor> {
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
         switch (type) {
-            case ANIMATION_NOTIFY_EVENT: return this.onAnimationNotify(data as GD.IAnimationNotifyDecodeInfo);
-            case NPC_ENTER_EVENT: return this.onNpcEnter(data as GD.INpcEnterEvent);
+            case ANIMATION_NOTIFY_EVENT: return this.onAnimationNotify(data as IAnimationNotifyDecodeInfo);
+            case NPC_ENTER_EVENT: return this.onNpcEnter(data as INpcEnterEvent);
             case SCRIPT_NATIVE_EVENT: return this.onScriptNative(data as ScriptNativeCall_T);
             default: return COMPONENT_EVENT_NOT_HANDLED;
         }
     }
 
-    protected onAnimationNotify(notify: GD.IAnimationNotifyDecodeInfo): ComponentEventResult_T<void> {
+    protected onAnimationNotify(notify: IAnimationNotifyDecodeInfo): ComponentEventResult_T<void> {
         const info = notify.object;
 
         if (!info) return COMPONENT_EVENT_NOT_HANDLED;
@@ -44,7 +44,7 @@ class SoundComponent extends ObjectComponent<BaseActor> {
         }
     }
 
-    protected playAnimationSound(info: GD.IAnimationSoundNotifyDecodeInfo): void {
+    protected playAnimationSound(info: IAnimationSoundNotifyDecodeInfo): void {
         const actor = this.getParent();
 
         if (Math.random() * 100 >= info.random) return;
@@ -64,7 +64,7 @@ class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Pawn '${actor.name}'`);
     }
 
-    protected playSwimSound(info: GD.IAnimationSwimSoundNotifyDecodeInfo): void {
+    protected playSwimSound(info: IAnimationSwimSoundNotifyDecodeInfo): void {
         const actor = this.getParent();
 
         if (!actor.isSwimmingMovement()) return;
@@ -79,7 +79,7 @@ class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, soundSet.volume / 255, 1, soundSet.radius, soundSet.radius * 100, true, `Pawn '${actor.name}' swim`);
     }
 
-    protected onNpcEnter(event: GD.INpcEnterEvent): ComponentEventResult_T<void> {
+    protected onNpcEnter(event: INpcEnterEvent): ComponentEventResult_T<void> {
         if (!event.sound || event.sound.toLowerCase() === "none") return COMPONENT_EVENT_NOT_HANDLED;
         if (!this.library) throw new Error(`NPC enter sound '${event.sound}' has no decode library.`);
 

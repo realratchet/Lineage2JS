@@ -1,5 +1,5 @@
 import { APackage, UExport } from "@l2js/core";
-import FZoneInfo from "./un-zone-info";
+import FZoneInfo, { type IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { DecodeLibrary } from "./decode-library";
 
 abstract class USkyZoneInfo extends FZoneInfo/* implements IInfo*/ {
@@ -9,7 +9,7 @@ abstract class USkyZoneInfo extends FZoneInfo/* implements IInfo*/ {
         return super.postLoad(pkg, _exp);
     }
 
-    public getDecodeInfo(library: DecodeLibrary): GD.IBaseZoneDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo {
         const info = super.getDecodeInfo(library);
         info.type = "Sky";
         return info;

@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_SERVERNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "server_id" },
     { type: "uint32", name: "tag_?" },

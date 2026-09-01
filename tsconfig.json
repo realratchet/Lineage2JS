@@ -7,6 +7,9 @@
         "module": "ESNext",
         // "allowJs": true,
         "paths": {
+            "@l2js/engine": [
+                "./src/assets/unreal/index.ts"
+            ],
             "@l2js/engine/*": [
                 "./src/assets/unreal/*"
             ]

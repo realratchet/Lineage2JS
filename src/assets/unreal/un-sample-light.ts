@@ -7,7 +7,7 @@ function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampN
     return null;
 }
 
-function sampleLightIntensity(light: GD.ILightRenderInfo, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
+function sampleLightIntensity(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
     let lightEffect: LightEffect_T; // char
     let fVar2: number; // float
     let fVar3: number; // float10

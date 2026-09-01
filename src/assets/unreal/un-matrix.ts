@@ -2,7 +2,7 @@ import FCoords from "./un-coords";
 import GMath from "./un-gmath";
 import FPlane from "./un-plane";
 import FVector from "./un-vector";
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import type { FRotator } from "./un-rotator";
 import type { FQuaternion } from "./un-quaternion";
 

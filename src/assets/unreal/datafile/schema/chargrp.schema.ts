@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { UTF16SizedContainerType } from "./dat-container";
 
 const CHARGRP_RECORD_COUNT = 15; // L2FileEdit C4/chargrp.ddf RECCNT.

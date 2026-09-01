@@ -5,6 +5,7 @@ import { GAMMA_STEPS } from "../rendering/display-gamma";
 import type BaseActor from "../base-actor";
 import type GameManager from "./game-manager";
 import type RenderManager from "../rendering/render-manager";
+import type { ICharacterArmorSelection } from "@l2js/engine";
 
 class UIManager implements IEngineComponent<GameManager> {
     public moverPosition = 0;
@@ -22,7 +23,7 @@ class UIManager implements IEngineComponent<GameManager> {
     protected characterFace = 0;
     protected characterHair = 0;
     protected characterHairColour = 0;
-    protected characterArmor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
+    protected characterArmor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
     protected spawnedNpc: BaseActor = null;
     protected npcSpawnRequest = 0;
 
@@ -143,7 +144,7 @@ class UIManager implements IEngineComponent<GameManager> {
             for (const control of armorControls) folder.remove(control);
             armorControls = [];
 
-            for (const slot of Object.keys(this_.characterArmor) as (keyof GD.ICharacterArmorSelection)[]) {
+            for (const slot of Object.keys(this_.characterArmor) as (keyof ICharacterArmorSelection)[]) {
                 const options: Record<string, number> = { None: 0 };
 
                 for (const item of group.armor[slot])

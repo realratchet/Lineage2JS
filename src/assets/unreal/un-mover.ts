@@ -1,6 +1,22 @@
-import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UStaticMeshActor, { type IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 import FRotator from "./un-rotator";
 import type { FVector } from "./un-vector";
+import type { Vector3Arr, QuaternionArr } from "./library-types";
+
+type IMoverDecodeInfo = {
+    initialState: string,
+    keyNum: number,
+    keyPositions: Vector3Arr[],
+    keyQuaternions: QuaternionArr[],
+    moveTime: number,
+    stayOpenTime: number,
+    delayTime: number,
+    collisionRadius: number,
+    collisionHeight: number,
+    isGliding: boolean,
+    triggerOnceOnly: boolean,
+    moverEncroachType: "stop" | "return" | "crush" | "ignore"
+};
 
 enum EMoverGlideType_T {
     MV_MoveByTime,
@@ -50,9 +66,9 @@ abstract class UMover extends UStaticMeshActor {
         });
     }
 
-    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> {
-        const keyPositions: GD.Vector3Arr[] = [];
-        const keyQuaternions: GD.QuaternionArr[] = [];
+    protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> {
+        const keyPositions: Vector3Arr[] = [];
+        const keyQuaternions: QuaternionArr[] = [];
 
         for (let i = 0; i < this.numKeys; i++) {
             const keyPos = this.keyPos[i];
@@ -91,7 +107,7 @@ abstract class UMover extends UStaticMeshActor {
     }
 }
 
-function getMoverEncroachType(value: EMoverEncroachType_T): GD.IMoverDecodeInfo["moverEncroachType"] {
+function getMoverEncroachType(value: EMoverEncroachType_T): IMoverDecodeInfo["moverEncroachType"] {
     switch (value) {
         case EMoverEncroachType_T.ME_StopWhenEncroach: return "stop";
         case EMoverEncroachType_T.ME_ReturnWhenEncroach: return "return";
@@ -103,3 +119,4 @@ function getMoverEncroachType(value: EMoverEncroachType_T): GD.IMoverDecodeInfo[
 
 export default UMover;
 export { UMover, EMoverEncroachType_T, EMoverGlideType_T };
+export type { IMoverDecodeInfo };

@@ -2,9 +2,10 @@ import AssetManager, { AssetList_T } from "../assets/asset-manager";
 import AudioManager from "../audio/audio-manager";
 import { IEngineComponent } from "./components";
 import PhysicsManager from "../physics/physics-manager";
-import RenderManager from "../rendering/render-manager";
+import RenderManager, { type HTMLViewportElement_T } from "../rendering/render-manager";
 import UIManager from "./ui-manager";
 import InputManager from "./input-manager";
+import type { LoadSettings_T } from "@l2js/engine";
 
 class GameManager implements IEngineComponent<GameManager> {
     protected manAsset: AssetManager;
@@ -23,7 +24,7 @@ class GameManager implements IEngineComponent<GameManager> {
         this.animationFrameCallback = this.onHandleAnimationFrame.bind(this);
     }
 
-    public static async initialize(viewport: HTMLViewportElement, assets: AssetList_T, loadSettings: GD.LoadSettings_T): Promise<GameManager> {
+    public static async initialize(viewport: HTMLViewportElement_T, assets: AssetList_T, loadSettings: LoadSettings_T): Promise<GameManager> {
         const game = new GameManager();
 
         game.manAsset = new AssetManager(loadSettings, assets);

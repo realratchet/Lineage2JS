@@ -1,7 +1,26 @@
-import UVolume from "./un-volume";
+import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
 import type { FVector } from "./un-vector";
 import type { FColor } from "./un-color";
-import type { DecodeLibrary } from "./decode-library";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
+import type { Vector3Arr, ColorArr } from "./library-types";
+
+type IWaterVolumeDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "WaterVolume",
+    priority: number,
+    fluidFriction: number,
+    gravity: Vector3Arr,
+    terminalVelocity: number,
+    zoneVelocity: Vector3Arr,
+    fog: {
+        color: ColorArr,
+        start: number,
+        end: number
+    } | null,
+    cellophane: ColorArr | null,
+    waitHitEffect: string | null,
+    runHitEffect: string | null,
+    bsp: IVolumeBspDecodeInfo
+};
 
 abstract class UPhysicsVolume extends UVolume {
     declare public readonly isPhysicsVolume: boolean;
@@ -105,15 +124,15 @@ abstract class UPhysicsVolume extends UVolume {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): GD.IWaterVolumeDecodeInfo | null {
+    public getDecodeInfo(library: DecodeLibrary): IWaterVolumeDecodeInfo | null {
         if (!this.isWaterVolume && !this.isL2WaterVolume && this.constructor.friendlyName !== "WaterVolume") return null;
         if (!this.brush) return null;
 
-        const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as GD.Vector3Arr;
-        const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as GD.Vector3Arr;
+        const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as Vector3Arr;
+        const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as Vector3Arr;
         // L2.water.trace 4621-4622: Env.int fog replaces DistanceFog unless bUseDistanceFogColor.
         const fog = this.useDistanceFogColor && this.hasDistanceFog && this.distanceFogColor ? {
-            color: this.distanceFogColor.toArray() as GD.ColorArr,
+            color: this.distanceFogColor.toArray() as ColorArr,
             start: this.distanceFogStart,
             end: this.distanceFogEnd
         } : null;
@@ -127,7 +146,7 @@ abstract class UPhysicsVolume extends UVolume {
             terminalVelocity: this.terminalVelocity ?? 2500,
             zoneVelocity,
             fog,
-            cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as GD.ColorArr : null,
+            cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as ColorArr : null,
             waitHitEffect: this.waitHitEffect ?? null,
             runHitEffect: this.runHitEffect ?? null,
             bsp: this.getWorldBspInfo()
@@ -137,3 +156,4 @@ abstract class UPhysicsVolume extends UVolume {
 
 export default UPhysicsVolume;
 export { UPhysicsVolume };
+export type { IWaterVolumeDecodeInfo };

@@ -8,6 +8,7 @@ import type AnimationComponent from "../animation-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { ICollidable } from "../objects";
+import type { Vector3Arr } from "@l2js/engine";
 
 const tmpRotator = new Rotator();
 const tmpBasePosition = new Vector3();
@@ -85,13 +86,13 @@ class TransformComponent extends ObjectComponent<BaseActor> {
             case "setrelativelocation": {
                 if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' has no relative location.`);
 
-                context.position.fromArray(call.args[0] as GD.Vector3Arr);
+                context.position.fromArray(call.args[0] as Vector3Arr);
                 return true;
             }
             case "setrelativerotation": {
                 if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' has no relative rotation.`);
 
-                const [pitch, yaw, roll] = call.args[0] as GD.Vector3Arr;
+                const [pitch, yaw, roll] = call.args[0] as Vector3Arr;
 
                 tmpRotator.set(pitch, yaw, roll).toQuaternion(context.quaternion);
                 return true;
@@ -177,11 +178,11 @@ class TransformComponent extends ObjectComponent<BaseActor> {
             if (relativeRotation !== null && !Array.isArray(relativeRotation)) throw new Error(`'${(object as any).scriptClassId}' has invalid RelativeRotation.`);
 
             if (relativeLocation === null) object.position.set(0, 0, 0);
-            else object.position.fromArray(relativeLocation as GD.Vector3Arr);
+            else object.position.fromArray(relativeLocation as Vector3Arr);
 
             if (relativeRotation === null) object.quaternion.identity();
             else {
-                const [pitch, yaw, roll] = relativeRotation as GD.Vector3Arr;
+                const [pitch, yaw, roll] = relativeRotation as Vector3Arr;
 
                 tmpRotator.set(pitch, yaw, roll).toQuaternion(object.quaternion);
             }

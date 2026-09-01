@@ -1,5 +1,16 @@
 import type { ILazyAssetHandle, IReadyAssetHandle } from "@l2js/core";
 
+type FileSystemSyncAccessHandle_T = {
+    read(buffer: BufferSource, options?: { at: number }): number;
+    write(buffer: BufferSource, options?: { at: number }): number;
+    getSize(): number;
+    truncate(newSize: number): void;
+    flush(): void;
+    close(): void;
+};
+
+type SyncFileSystemFileHandle_T = FileSystemFileHandle & { createSyncAccessHandle?(): Promise<FileSystemSyncAccessHandle_T> };
+
 async function fetchCached(path: string): Promise<ILazyAssetHandle> {
     const root = await navigator.storage.getDirectory();
 
@@ -64,11 +75,11 @@ class ReadAssetHandle implements IReadyAssetHandle {
 class LazyFileSystemHandle implements ILazyAssetHandle {
     public readonly isReadable = false;
 
-    protected readonly fh: FileSystemFileHandle;
+    protected readonly fh: SyncFileSystemFileHandle_T;
     protected readonly path: string;
 
     public constructor(fh: FileSystemFileHandle, path: string) {
-        this.fh = fh;
+        this.fh = fh as SyncFileSystemFileHandle_T;
         this.path = path;
     }
 

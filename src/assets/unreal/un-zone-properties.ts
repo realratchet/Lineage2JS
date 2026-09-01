@@ -1,7 +1,13 @@
 import { BufferValue, type APackage, type Constructable_T } from "@l2js/core";
-import type { FZoneInfo } from "./un-zone-info";
+import type { FZoneInfo, IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { ULevelInfo } from "./un-level-info";
 import type { DecodeLibrary } from "./decode-library";
+
+type IBSPZoneDecodeInfo_T = {
+    connectivity: bigint,
+    visibility: bigint,
+    zoneInfo: IBaseZoneDecodeInfo
+};
 
 class FZoneProperties implements Constructable_T {
     public connectivity: bigint;
@@ -22,7 +28,7 @@ class FZoneProperties implements Constructable_T {
         return this;
     }
 
-    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): GD.IBSPZoneDecodeInfo_T {
+    public getDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): IBSPZoneDecodeInfo_T {
         return {
             connectivity: this.connectivity,
             visibility: this.visibility,
@@ -33,3 +39,4 @@ class FZoneProperties implements Constructable_T {
 
 export default FZoneProperties;
 export { FZoneProperties };
+export type { IBSPZoneDecodeInfo_T };

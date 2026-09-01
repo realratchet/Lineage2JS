@@ -2,7 +2,49 @@ import { EEnvCycle } from "./env-consts";
 import FPlane from "./un-plane";
 import hsvToRgb from "./utils/hsv-to-rgb";
 import GMath from "./un-gmath";
-import { APackage, UExport, UObject, type ANativePackage, type EnginePackage_T, type FPrimitiveArray, type PropertyTag, type UStruct, FArray } from "@l2js/core";
+import { APackage, UExport, type ANativePackage, type EnginePackage_T, type FPrimitiveArray, type PropertyTag, type UStruct, FArray } from "@l2js/core";
+import UObject from "./un-object";
+import type { ColorArr } from "./library-types";
+
+type INTimeColorDecodeInfo = [number, number, number, number];
+
+type INTimeHSVDecodeInfo = [number, number, number, number];
+
+type INTimeScaleDecodeInfo = [number, number];
+
+type IL2NTimeLightDecodeInfo = {
+    terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] }
+};
+
+type IL2NEnvLightDecodeInfo = {
+    type: EEnvCycle,
+    light: IL2NTimeLightDecodeInfo,
+    color: {
+        sky: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        indexHaze: { type: "TypedArray", array: Int32Array },
+        haze: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        indexCloud: { type: "TypedArray", array: Int32Array },
+        cloud1: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        cloud2: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        cloud3: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        star: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        sun: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        moon: { type: "TimeColor", array: INTimeColorDecodeInfo[] }
+    },
+    ambient: {
+        terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+        actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+        staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+        bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    },
+    scale: {
+        sun: { type: "TimeScale", array: INTimeScaleDecodeInfo[] },
+        moon: { type: "TimeScale", array: INTimeScaleDecodeInfo[] }
+    }
+};
 
 
 interface IEnvTime { time: number; }
@@ -26,10 +68,10 @@ abstract class FNTimeHSV extends UObject implements IEnvTime {
         return `NTimeHSV(T=${this.time}, Hue=${this.hue}, Sat=${this.sat}, Bri=${this.bri})`;
     }
 
-    public getColor(): GD.ColorArr { return [...hsvToRgb(this.hue, this.sat, 255), 1]; }
+    public getColor(): ColorArr { return [...hsvToRgb(this.hue, this.sat, 255), 1]; }
     public toColorPlane() { return FPlane.make(...this.getColor()); }
 
-    public getDecodeInfo(): GD.INTimeHSVDecodeInfo {
+    public getDecodeInfo(): INTimeHSVDecodeInfo {
         return [this.time, this.hue, this.sat, this.bri];
     }
 }
@@ -75,7 +117,7 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
         return `NTimeScale(T=${this.time}, S=${this.s})`;
     }
 
-    public getDecodeInfo(): GD.INTimeScaleDecodeInfo {
+    public getDecodeInfo(): INTimeScaleDecodeInfo {
         return [this.time, this.s];
     }
 }
@@ -119,13 +161,13 @@ abstract class UL2NTimeLight extends UObject {
         return this;
     }
 
-    public getDecodeInfo(): GD.IL2NTimeLightDecodeInfo | unknown {
+    public getDecodeInfo(): IL2NTimeLightDecodeInfo | unknown {
         return {
             terrain: { type: "TimeHSV", array: this.lightTerrain?.map(c => c.getDecodeInfo()) ?? [] },
             actor: { type: "TimeHSV", array: this.lightActor?.map(c => c.getDecodeInfo()) ?? [] },
             staticMesh: { type: "TimeHSV", array: this.lightStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
             bsp: { type: "TimeHSV", array: this.lightBSP?.map(c => c.getDecodeInfo()) ?? [] }
-        } as GD.IL2NTimeLightDecodeInfo;
+        } as IL2NTimeLightDecodeInfo;
     }
 }
 
@@ -189,10 +231,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         return `UL2NEnvLight(EnvType=${envName})`;
     }
 
-    public getDecodeInfo(): GD.IL2NEnvLightDecodeInfo {
+    public getDecodeInfo(): IL2NEnvLightDecodeInfo {
         return {
             type: this.envType,
-            light: super.getDecodeInfo() as GD.IL2NTimeLightDecodeInfo,
+            light: super.getDecodeInfo() as IL2NTimeLightDecodeInfo,
             color: {
                 sky: { type: "TimeColor", array: this.colorSky?.map(c => c.getDecodeInfo()) ?? [] },
                 /* .slice(): the decode info must not alias the package buffer (see collect-transferables.ts) */
@@ -352,3 +394,4 @@ function loadRGB(fileContents: string, sectionName: string, pkgNative: ANativePa
 
     return array;
 }
+export type { INTimeColorDecodeInfo, INTimeHSVDecodeInfo, INTimeScaleDecodeInfo, IL2NTimeLightDecodeInfo, IL2NEnvLightDecodeInfo };

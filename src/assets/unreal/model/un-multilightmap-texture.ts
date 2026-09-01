@@ -1,8 +1,10 @@
 import { generateUUID } from "three/src/math/MathUtils";
-import { BufferValue, UObject, type APackage, type Constructable_T, type UExport, FArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
+import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
+import UObject from "../un-object";
 import decompressDDS from "../dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
+import type { ITextureDecodeInfo, DecodableTexture_T } from "../un-texture";
 
 class FStaticLightmapTexture implements Constructable_T {
     public data = new FPrimitiveArrayLazy(BufferValue.uint8);
@@ -27,7 +29,7 @@ class FStaticLightmapTexture implements Constructable_T {
         return this;
     }
 
-    public getDecodeInfo(_builder: DecodeLibraryBuilder): GD.ITextureDecodeInfo {
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): ITextureDecodeInfo {
         const firstMipmap = this.data;
         const mipCount = 1;
 
@@ -41,7 +43,7 @@ class FStaticLightmapTexture implements Constructable_T {
         const format = this.getTexturePixelFormat();
 
         let decodedBuffer: ArrayBuffer;
-        let textureType: GD.DecodableTexture_T;
+        let textureType: DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -64,7 +66,7 @@ class FStaticLightmapTexture implements Constructable_T {
             wrapS: wrapS,
             wrapT: wrapT,
             useMipmaps: mipCount > 0
-        } as GD.ITextureDecodeInfo;
+        } as ITextureDecodeInfo;
     }
 
     getTexturePixelFormat() {

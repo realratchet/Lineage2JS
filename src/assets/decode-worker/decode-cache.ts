@@ -1,19 +1,20 @@
 import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
+import type { LoadSettings_T } from "@l2js/engine";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
 
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-function isCacheEnabled(settings: GD.LoadSettings_T): boolean {
+function isCacheEnabled(settings: LoadSettings_T): boolean {
     return settings.cache === false ? false : settings.cache?.enabled ?? true;
 }
 
-function getCacheVersion(settings: GD.LoadSettings_T): number {
+function getCacheVersion(settings: LoadSettings_T): number {
     return settings.cache === false ? 0 : settings.cache?.version ?? 0;
 }
 
-function hashSettings(settings: GD.LoadSettings_T): string {
+function hashSettings(settings: LoadSettings_T): string {
     const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
@@ -23,7 +24,7 @@ function hashSettings(settings: GD.LoadSettings_T): string {
     return hash.toString(16).padStart(8, "0");
 }
 
-function cacheFileName(sectorName: string, settings: GD.LoadSettings_T): string {
+function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
     return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}.bin`;
 }
 
@@ -33,7 +34,7 @@ async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> 
     return root.getDirectoryHandle(CACHE_DIR, { create });
 }
 
-async function getCachedFile(sectorName: string, settings: GD.LoadSettings_T): Promise<File | null> {
+async function getCachedFile(sectorName: string, settings: LoadSettings_T): Promise<File | null> {
     if (!isCacheEnabled(settings)) return null;
 
     try {
@@ -60,11 +61,11 @@ async function getCachedFile(sectorName: string, settings: GD.LoadSettings_T): P
     }
 }
 
-async function hasCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<boolean> {
+async function hasCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<boolean> {
     return (await getCachedFile(sectorName, settings)) !== null;
 }
 
-async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<any | null> {
+async function loadCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<any | null> {
     const seekable = await openCachedLibrary(sectorName, settings);
 
     if (!seekable) return null;
@@ -77,7 +78,7 @@ async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T
     }
 }
 
-async function openCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<SeekableLibrary_T | null> {
+async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
     const file = await getCachedFile(sectorName, settings);
 
     if (!file) return null;
@@ -90,13 +91,13 @@ async function openCachedLibrary(sectorName: string, settings: GD.LoadSettings_T
     }
 }
 
-async function loadCachedLibraryBuffer(sectorName: string, settings: GD.LoadSettings_T): Promise<ArrayBuffer | null> {
+async function loadCachedLibraryBuffer(sectorName: string, settings: LoadSettings_T): Promise<ArrayBuffer | null> {
     const file = await getCachedFile(sectorName, settings);
 
     return file ? file.arrayBuffer() : null;
 }
 
-function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, library: any): void {
+function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
     if (!isCacheEnabled(settings)) return;
 
     let bytes: Uint8Array;
@@ -111,7 +112,7 @@ function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, lib
     void writeCacheFileSafe(cacheFileName(sectorName, settings), sectorName, bytes);
 }
 
-async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSettings_T, library: any): Promise<number> {
+async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any): Promise<number> {
     if (!isCacheEnabled(settings)) return 0;
 
     const bytes = serializeLibrary(library);
@@ -121,7 +122,7 @@ async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSe
     return bytes.length;
 }
 
-async function storeCachedLibraryBufferDurable(sectorName: string, settings: GD.LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
+async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
     if (!isCacheEnabled(settings)) return;
 
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
@@ -146,7 +147,7 @@ async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: U
     }
 }
 
-async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
+async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
     let dir: FileSystemDirectoryHandle;
 
     try {

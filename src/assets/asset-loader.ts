@@ -1,7 +1,7 @@
 // import * as _path from "path";
 
 import { AAssetLoader, APackage, type ANativePackage, type AssetListInfo_T, type CorePackageConstructor_T, type EnginePackageConstructor_T, type NativePackageConstructor_T, type PackageConstructor_T } from "@l2js/core";
-import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
+import type { UCorePackage, UEnginePackage } from "@l2js/engine";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
 

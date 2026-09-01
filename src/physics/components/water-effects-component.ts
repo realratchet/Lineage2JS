@@ -8,6 +8,7 @@ import type PhysicsManager from "../../physics/physics-manager";
 import type Player from "../../player";
 import type RenderManager from "../../rendering/render-manager";
 import type { SectorObject } from "../../objects/zone-object";
+import type { IWaterVolumeDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine";
 
 const tmpWaterSurfaceEnd = new Vector3();
 const tmpWaterFloorStart = new Vector3();
@@ -31,7 +32,7 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     protected waterHitEffect: WaterHitEffect = null;
     protected readonly underWaterPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastUnderWaterSamplingLocation = new Vector3(Infinity, Infinity, Infinity);
-    protected underWaterVolume: GD.IWaterVolumeDecodeInfo = null;
+    protected underWaterVolume: IWaterVolumeDecodeInfo = null;
     protected hasUnderWaterSample = false;
     protected wasUnderWaterDay = false;
     protected isUnderWaterDay = false;
@@ -81,7 +82,7 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
         tmpWaterHitEnd.z += height * 2 + WaterEffectsComponent.WATER_HIT_SURFACE_HEIGHT;
 
         let selectedSector: SectorObject = null;
-        let selectedVolume: GD.IWaterVolumeDecodeInfo = null;
+        let selectedVolume: IWaterVolumeDecodeInfo = null;
         let selectedTime = 0;
 
         for (const sector of this.renderManager.getLoadedSectors()) {
@@ -126,13 +127,13 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
         this.waterHitInterval = this.waterHitEffect.spawn(selectedSector, effectName, tmpWaterHitPosition, speed);
     }
 
-    protected static getWaterHitEffectName(sector: SectorObject, volume: GD.IWaterVolumeDecodeInfo, isMoving: boolean): string | null {
+    protected static getWaterHitEffectName(sector: SectorObject, volume: IWaterVolumeDecodeInfo, isMoving: boolean): string | null {
         if (!volume.scriptClassId) throw new Error(`Water volume '${volume.name}' has no UnrealScript class.`);
 
-        let waitHitEffect: GD.ScriptPropertyValue_T = null;
-        let runHitEffect: GD.ScriptPropertyValue_T = null;
-        const waitSlot = { get: () => waitHitEffect, set: (value: GD.ScriptPropertyValue_T) => waitHitEffect = value };
-        const runSlot = { get: () => runHitEffect, set: (value: GD.ScriptPropertyValue_T) => runHitEffect = value };
+        let waitHitEffect: ScriptPropertyValue_T = null;
+        let runHitEffect: ScriptPropertyValue_T = null;
+        const waitSlot = { get: () => waitHitEffect, set: (value: ScriptPropertyValue_T) => waitHitEffect = value };
+        const runSlot = { get: () => runHitEffect, set: (value: ScriptPropertyValue_T) => runHitEffect = value };
         const fn = sector.scriptVM.findFunction(volume.scriptClassId, "GetHitEffectName");
 
         sector.scriptVM.invoke(volume as any, fn, [waitSlot, runSlot]);
@@ -145,7 +146,7 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
         return effectName;
     }
 
-    protected sampleUnderWaterSunBeam(position: Vector3, volume: GD.IWaterVolumeDecodeInfo, target: Vector2): boolean {
+    protected sampleUnderWaterSunBeam(position: Vector3, volume: IWaterVolumeDecodeInfo, target: Vector2): boolean {
         tmpWaterSurfaceEnd.copy(position);
         tmpWaterSurfaceEnd.z += WaterEffectsComponent.UNDERWATER_SUN_BEAM_DEPTH;
 

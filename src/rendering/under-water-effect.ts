@@ -3,6 +3,7 @@ import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import ColorByte from "../utils/color-byte";
 import type BaseEmitter from "../objects/emitters/base-emitter";
 import Rotator from "../utils/rotator";
+import type { IWaterVolumeDecodeInfo } from "@l2js/engine";
 
 const tmpRotator = new Rotator();
 
@@ -12,7 +13,7 @@ class UnderWaterEffect extends Object3D {
     protected sunBeamEmitter: BaseEmitter = null;
     protected readonly cellophaneMaterial: MeshBasicMaterial;
     protected readonly cellophaneQuad: FullScreenQuad;
-    protected volume: GD.IWaterVolumeDecodeInfo = null;
+    protected volume: IWaterVolumeDecodeInfo = null;
 
     public constructor() {
 
@@ -43,7 +44,7 @@ class UnderWaterEffect extends Object3D {
         this.add(floatingSolid, sunBeam);
     }
 
-    public setVolume(volume: GD.IWaterVolumeDecodeInfo | null, envCellophane: ColorByte): void {
+    public setVolume(volume: IWaterVolumeDecodeInfo | null, envCellophane: ColorByte): void {
         this.volume = volume;
         this.visible = !!volume;
 
@@ -61,7 +62,7 @@ class UnderWaterEffect extends Object3D {
         this.floatingSolid.position.copy(camera.position);
     }
 
-    public getVolume(): GD.IWaterVolumeDecodeInfo | null { return this.volume; }
+    public getVolume(): IWaterVolumeDecodeInfo | null { return this.volume; }
     public hasSunBeamEffects(): boolean { return !!this.floatingSolid && !!this.sunBeam; }
     public setSunBeamVisible(visible: boolean): void { this.sunBeam.visible = visible; }
 

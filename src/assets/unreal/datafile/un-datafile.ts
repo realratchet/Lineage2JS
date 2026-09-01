@@ -1,3 +1,4 @@
+import type { IDatContainerType, ISchemaValue } from "./schema/dat-schema";
 import fetchAssetHandle from "../asset-handle";
 import { ASCFType } from "./schema/dat-container";
 import { UEncodedFile, BufferValue, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";

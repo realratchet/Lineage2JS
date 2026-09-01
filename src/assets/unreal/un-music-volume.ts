@@ -1,5 +1,17 @@
-import UVolume from "./un-volume";
-import type { DecodeLibrary } from "./decode-library";
+import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
+import type { DecodeLibrary, IAudioDecodeInfo } from "./decode-library";
+import type { IBoundsDecodeInfo } from "./un-primitive";
+
+type IMusicVolumeDecodeInfo = IAudioDecodeInfo & {
+    type: "MusicVolume",
+    musicId: number,
+    isMusicForced: boolean,
+    isMusicLooped: boolean,
+    zoneNumber: number,
+    priority: number,
+    bounds: IBoundsDecodeInfo,
+    bsp: IVolumeBspDecodeInfo
+};
 
 abstract class UMusicVolume extends UVolume {
     declare protected musicId: number;
@@ -16,7 +28,7 @@ abstract class UMusicVolume extends UVolume {
 
     public getDecodeInfo(library: DecodeLibrary) {
         const region = this.getRegion()?.loadSelf();
-        const decodeInfo: GD.IMusicVolumeDecodeInfo = {
+        const decodeInfo: IMusicVolumeDecodeInfo = {
             ...super.getDecodeInfo(),
             type: "MusicVolume",
             musicId: this.musicId,
@@ -34,3 +46,4 @@ abstract class UMusicVolume extends UVolume {
 
 export default UMusicVolume;
 export { UMusicVolume };
+export type { IMusicVolumeDecodeInfo };

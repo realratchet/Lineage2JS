@@ -1,6 +1,6 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
 import type { WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T } from "./decode-protocol";
-import type { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import type { LocalizationProperty_T, LoadSettings_T, ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
@@ -122,7 +122,7 @@ class DecodeWorkerClient {
         return best;
     }
 
-    public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<DecodeLibrary> {
+    public async decodeSector(sectorName: string, settings: LoadSettings_T): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
             const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings);
 
@@ -138,7 +138,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decode", sectorName, settings });
     }
 
-    public precacheSector(sectorName: string, settings: GD.LoadSettings_T): Promise<PrecacheResult_T> {
+    public precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
         if (this.mainThreadEngine)
             return this.mainThreadEngine.precacheSector(sectorName, settings);
 
@@ -176,7 +176,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
 
-    public async decodeCharacter(settings: GD.LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }): Promise<DecodeLibrary> {
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }): Promise<DecodeLibrary> {
         const includeAnimations = !this.characterAnimationSets.has(charIndex);
 
         if (this.mainThreadEngine) {
@@ -200,7 +200,7 @@ class DecodeWorkerClient {
         return library;
     }
 
-    public async decodeSkeletalMesh(settings: GD.LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null): Promise<DecodeLibrary> {
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null): Promise<DecodeLibrary> {
         const bundleName = npcId === null ? null : getNpcBundleName(packageName);
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);
@@ -226,7 +226,7 @@ class DecodeWorkerClient {
         return library;
     }
 
-    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
+    public async decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
             const library = await this.mainThreadEngine.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths);
 
@@ -240,7 +240,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths, soundPaths, scriptClassPaths });
     }
 
-    public resolveNpc(selector: string | number): Promise<GD.INpcDefinition> {
+    public resolveNpc(selector: string | number): Promise<INpcDefinition> {
         if (this.mainThreadEngine) return this.mainThreadEngine.resolveNpc(selector);
 
         const workerIndex = this.pickWorker();
@@ -250,7 +250,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "resolveNpc", selector });
     }
 
-    public listNpcs(): Promise<GD.INpcDefinition[]> {
+    public listNpcs(): Promise<INpcDefinition[]> {
         if (this.mainThreadEngine) return this.mainThreadEngine.listNpcs();
 
         const workerIndex = this.pickWorker();
@@ -260,7 +260,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "listNpcs" });
     }
 
-    public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
+    public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
         if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
 
         const characterWorkers = new Set(this.characterWorker.values());
@@ -282,7 +282,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "precacheCharacters", settings });
     }
 
-    public async getCharGroups(): Promise<GD.ICharacterGroup[]> {
+    public async getCharGroups(): Promise<ICharacterGroup[]> {
         if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups();
 
         const workerIndex = this.pickWorker();

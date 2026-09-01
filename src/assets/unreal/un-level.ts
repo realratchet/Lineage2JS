@@ -1,5 +1,6 @@
 import FURL from "./un-url";
-import { UObject, BufferValue, type APackage, type UExport, FObjectArray } from "@l2js/core";
+import { BufferValue, type APackage, type UExport, FObjectArray } from "@l2js/core";
+import UObject from "./un-object";
 import type { UAActor } from "./un-aactor";
 import type { UModel } from "./model/un-model";
 import type { ULevelInfo } from "./un-level-info";

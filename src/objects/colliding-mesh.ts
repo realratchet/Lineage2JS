@@ -4,6 +4,7 @@ import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
+import type { IStaticMeshCollisionDecodeInfo, IBSPCollisionModelDecodeInfo } from "@l2js/engine";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -23,7 +24,7 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     protected collisionNodes: Int32Array;
     protected collisionBounds: Float32Array;
     protected collisionProfile: ActorCollisionProfile_T;
-    protected staticMeshCollision: GD.IStaticMeshCollisionDecodeInfo;
+    protected staticMeshCollision: IStaticMeshCollisionDecodeInfo;
     protected collisionIndex: CollisionTriangleIndex_T;
     protected readonly analyticalBounds = new Box3();
     protected readonly analyticalCenter = new Vector3();
@@ -31,7 +32,7 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     protected analyticalPrimitive: CollisionPrimitive_T = null;
     protected readonly basedActors = new Set<ICollidable>();
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: GD.IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
         super(props);
 
         (this as any).isStaticMeshActor = true;
@@ -149,7 +150,7 @@ class CollidingMesh extends LitActorMesh implements ICollidable {
     }
 }
 
-function buildCollisionHulls(model: GD.IBSPCollisionModelDecodeInfo): CollisionHull_T[] {
+function buildCollisionHulls(model: IBSPCollisionModelDecodeInfo): CollisionHull_T[] {
     const hulls: CollisionHull_T[] = [];
     const cacheHulls = new Set<string>();
 

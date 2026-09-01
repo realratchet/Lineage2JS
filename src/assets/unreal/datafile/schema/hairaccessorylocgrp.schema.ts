@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { SizedContainerType } from "./dat-container";
 
 const SCHEMA_HAIRACCESSORYLOCGRP_DAT: ISchemaValue[] = [

@@ -1,4 +1,18 @@
 import UBrush from "./un-brush";
+import type { Vector4Arr, Matrix4Arr } from "./library-types";
+
+type IMusicVolumeBspNode = {
+    plane: Vector4Arr;
+    iFront: number;
+    iBack: number;
+    isCsg: boolean;
+};
+
+type IVolumeBspDecodeInfo = {
+    isRootOutside: boolean;
+    worldToLocal: Matrix4Arr;
+    nodes: IMusicVolumeBspNode[];
+};
 
 abstract class UVolume extends UBrush {
     declare protected locationPriority: number;
@@ -9,7 +23,7 @@ abstract class UVolume extends UBrush {
         })
     }
 
-    protected getWorldBspInfo(): GD.IVolumeBspDecodeInfo {
+    protected getWorldBspInfo(): IVolumeBspDecodeInfo {
         const brush = this.brush.loadSelf();
         const localToWorld = this.localToWorld();
         const matrixTA = localToWorld.transposeAdjoint();
@@ -18,7 +32,7 @@ abstract class UVolume extends UBrush {
                   - pX.y * (pY.x * pZ.z - pY.z * pZ.x)
                   + pX.z * (pY.x * pZ.y - pY.y * pZ.x);
 
-        const nodes: GD.IMusicVolumeBspNode[] = brush.getBspNodes().map((node: any) => {
+        const nodes: IMusicVolumeBspNode[] = brush.getBspNodes().map((node: any) => {
             const plane = node.plane;
             let nx = matrixTA.planeX.x * plane.x + matrixTA.planeY.x * plane.y + matrixTA.planeZ.x * plane.z;
             let ny = matrixTA.planeX.y * plane.x + matrixTA.planeY.y * plane.y + matrixTA.planeZ.y * plane.z;
@@ -43,7 +57,7 @@ abstract class UVolume extends UBrush {
             const pz = localToWorld.planeX.z * sx + localToWorld.planeY.z * sy + localToWorld.planeZ.z * sz + localToWorld.planeW.z;
 
             return {
-                plane: [nx, ny, nz, px * nx + py * ny + pz * nz] as GD.Vector4Arr,
+                plane: [nx, ny, nz, px * nx + py * ny + pz * nz] as Vector4Arr,
                 iFront: node.iFront,
                 iBack: node.iBack,
                 isCsg: brush.isCsg(node)
@@ -69,3 +83,4 @@ abstract class UVolume extends UBrush {
 
 export default UVolume;
 export { UVolume };
+export type { IMusicVolumeBspNode, IVolumeBspDecodeInfo };

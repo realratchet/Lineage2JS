@@ -1,6 +1,7 @@
 import DynamicLight from "./dynamic-light";
 import { BufferGeometry, Material, SkinnedMesh } from "three";
 import { ColorByte } from "../utils/color-byte";
+import type { IDynamicHairDecodeInfo } from "@l2js/engine";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];
@@ -12,7 +13,7 @@ class LitSkinnedMesh extends SkinnedMesh {
     public scaledGlow: number = 1;
     public ambientGlow: number = 0;
     public isUnlit: boolean = false;
-    public dynamicHairInfo: GD.IDynamicHairDecodeInfo = null;
+    public dynamicHairInfo: IDynamicHairDecodeInfo = null;
 
     public constructor(geometry: BufferGeometry, material: Material | Material[]) {
         super(geometry, material);

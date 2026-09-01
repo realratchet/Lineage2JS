@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { BufferValue } from "@l2js/core";
 import { NumberContainerType, UTF16ContainerType } from "./dat-container";
 

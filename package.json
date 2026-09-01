@@ -3,7 +3,6 @@
     "version": "1.0.0",
     "description": "",
     "main": "index.js",
-    "typings": "index.d.ts",
     "scripts": {
         "start": "node_modules/.bin/webpack serve --config configs/development.config.js --port 8080 --host 0.0.0.0",
         "build-dev": "rm -rf bin/ && node_modules/.bin/webpack --config configs/development.config.js"
@@ -14,7 +13,7 @@
     "devDependencies": {
         "@babel/core": "^7.17.9",
         "@babel/plugin-transform-runtime": "^7.17.0",
-        "@babel/plugin-transform-typescript": "^7.16.8",
+        "@babel/plugin-transform-typescript": "^7.29.7",
         "@babel/preset-env": "^7.16.11",
         "@babel/preset-typescript": "^7.16.7",
         "@types/dat.gui": "^0.7.7",

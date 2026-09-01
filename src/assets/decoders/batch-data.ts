@@ -1,8 +1,7 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
 import buildTriangleIndex from "../../physics/triangle-index";
-import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T } from "@l2js/engine/static-mesh-batch";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
+import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, DecodeLibrary, IStaticMeshSwayDecodeInfo, Vector3Arr, IBaseObjectOrInstanceDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialGroupDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo, IGeometryDecodeInfo } from "@l2js/engine";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),
@@ -16,7 +15,7 @@ type PreparedActorGeometryData_T = {
     uvs: Float32Array | null;
     colors: ColorTypedArray_T | null;
     colorsInstance: ColorTypedArray_T | null;
-    sway: GD.IStaticMeshSwayDecodeInfo | null;
+    sway: IStaticMeshSwayDecodeInfo | null;
     swayPhase: number;
     indices: ArrayLike<number> | null;
     groups: [number, number, number?][];
@@ -26,7 +25,7 @@ type PreparedActorGeometryData_T = {
     normalMatrix: Matrix3;
     reverseWinding: boolean;
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
-    ambient: { glow: number, vector: GD.Vector3Arr, isUnlit: boolean, hardwareLighting?: boolean };
+    ambient: { glow: number, vector: Vector3Arr, isUnlit: boolean, hardwareLighting?: boolean };
     scaledGlow: number;
     isSunAffected: boolean;
     collider: Uint32Array | null;
@@ -35,13 +34,13 @@ type PreparedActorGeometryData_T = {
 
 function groupActorsForBatching(
     library: DecodeLibrary,
-    uniqueActors: Map<string, GD.IBaseObjectOrInstanceDecodeInfo>,
-    unbatchable: GD.IStaticMeshActorDecodeInfo[]
-): Map<string, GD.IStaticMeshActorDecodeInfo[]> {
-    const batchGroups = new Map<string, GD.IStaticMeshActorDecodeInfo[]>();
+    uniqueActors: Map<string, IBaseObjectOrInstanceDecodeInfo>,
+    unbatchable: IStaticMeshActorDecodeInfo[]
+): Map<string, IStaticMeshActorDecodeInfo[]> {
+    const batchGroups = new Map<string, IStaticMeshActorDecodeInfo[]>();
 
     uniqueActors.forEach(actorBase => {
-        const actor = actorBase as GD.IStaticMeshActorDecodeInfo;
+        const actor = actorBase as IStaticMeshActorDecodeInfo;
         const meshMaterials = actor.instance?.mesh?.materials;
         const meshGeometry = library.geometries[actor.instance?.mesh?.geometry];
         const collision = actor.collision;
@@ -79,13 +78,13 @@ function resolveMaterialSlots(
     if (!info) return [materialUuid];
 
     if (info.materialType === "group") {
-        return (info as GD.IMaterialGroupDecodeInfo).materials.flatMap(uuid =>
+        return (info as IMaterialGroupDecodeInfo).materials.flatMap(uuid =>
             resolveMaterialSlots(library, uuid, variants, modifiers)
         );
     }
 
     if (info.materialType === "instance") {
-        const instance = info as GD.IMaterialInstancedDecodeInfo;
+        const instance = info as IMaterialInstancedDecodeInfo;
         return resolveMaterialSlots(library, instance.baseMaterial, variants, [...modifiers, ...instance.modifiers]);
     }
 
@@ -102,14 +101,14 @@ function resolveMaterialSlots(
             materialType: "instance",
             baseMaterial: materialUuid,
             modifiers
-        } as GD.IMaterialInstancedDecodeInfo;
+        } as IMaterialInstancedDecodeInfo;
     }
 
     return [variantUuid];
 }
 
 // same view-building as decodeStaticMeshActorLight minus the THREE.Matrix4, merged batch light matrix is always identity
-function prepareActorLights(info?: GD.ILightInstanceDecodeInfo): { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null {
+function prepareActorLights(info?: ILightInstanceDecodeInfo): { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null {
     if (!info) return null;
 
     const buffer = info.flags;
@@ -125,7 +124,7 @@ function prepareActorLights(info?: GD.ILightInstanceDecodeInfo): { scene: BatchL
 
 function prepareActorGeometriesData(
     library: DecodeLibrary,
-    actors: GD.IStaticMeshActorDecodeInfo[],
+    actors: IStaticMeshActorDecodeInfo[],
     variants: Map<string, string>
 ): { actorGeometries: PreparedActorGeometryData_T[], materialUuids: string[] } {
     const materialUuids: string[] = [];
@@ -411,7 +410,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
 // replaces the batched actors in the BSP leaves with a single whole-batch entry
 function rewriteLeafActors(
     library: DecodeLibrary,
-    actors: GD.IStaticMeshActorDecodeInfo[],
+    actors: IStaticMeshActorDecodeInfo[],
     batchUuid: string
 ) {
     const actorUuidSet = new Set(actors.map(a => a.uuid));
@@ -482,7 +481,7 @@ function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManife
         }
     });
 
-    const uniqueActors = new Map<string, GD.IBaseObjectOrInstanceDecodeInfo>();
+    const uniqueActors = new Map<string, IBaseObjectOrInstanceDecodeInfo>();
 
     library.leafActors.forEach(leaf => {
         leaf.forEach(actor => {
@@ -493,7 +492,7 @@ function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManife
     });
 
     if (!library.batching.staticMeshes) {
-        uniqueActors.forEach(actor => manifest.unbatchable.push(actor as GD.IStaticMeshActorDecodeInfo));
+        uniqueActors.forEach(actor => manifest.unbatchable.push(actor as IStaticMeshActorDecodeInfo));
         return manifest;
     }
 
@@ -574,12 +573,12 @@ function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManife
                 indices: mergedIndices,
                 collisionIndex: mergedColliderIndices && mergedColliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, mergedColliderIndices) : null,
                 groups: finalGroups
-            } as GD.IGeometryDecodeInfo;
+            } as IGeometryDecodeInfo;
             library.materials[batchUuid] = {
                 name: batchUuid,
                 materialType: "group",
                 materials: materialUuids
-            } as GD.IMaterialGroupDecodeInfo;
+            } as IMaterialGroupDecodeInfo;
 
             manifest.batches.push({
                 uuid: batchUuid,

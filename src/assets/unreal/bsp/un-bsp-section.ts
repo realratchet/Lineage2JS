@@ -1,13 +1,14 @@
 import { type APackage, type Constructable_T, FArray } from "@l2js/core";
 import type { UTexture } from "../un-texture";
+import type { Vector3Arr } from "../library-types";
 
 class FBSPVertex implements Constructable_T {
-    public position: GD.Vector3Arr;
+    public position: Vector3Arr;
     public u: number;
     public v: number;
     public u2: number;
     public v2: number;
-    public normal: GD.Vector3Arr | null;
+    public normal: Vector3Arr | null;
 
     public load(pkg: APackage): this {
         const hasNormal = pkg.header.getArchiveFileVersion() >= 109;

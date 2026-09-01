@@ -2,6 +2,7 @@ import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, N
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
+import type { IDecodedParameter, ParticleBlendModes_T } from "@l2js/engine";
 
 // Billboard quads never need to tile, so always clamp. Mip-disable is opt-in
 // (atlas-cropped textures only) since low mips blend neighboring atlas cells.
@@ -72,7 +73,7 @@ class ParticleMaterial extends ShaderMaterial {
 
 class AnimatedParticleMaterial extends ShaderMaterial {
     protected framerate: number;
-    protected sprites: GD.IDecodedParameter[];
+    protected sprites: IDecodedParameter[];
     public readonly isUpdatable = true;
 
     constructor({ blendingMode, opacity, name, framerate, sprites }: ParticleMaterialInitSettings_T) {
@@ -130,9 +131,10 @@ class AnimatedParticleMaterial extends ShaderMaterial {
 
 export default ParticleMaterial;
 export { ParticleMaterial, AnimatedParticleMaterial };
+export type { ParticleMaterialInitSettings_T };
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
-export function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_T) {
+export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {
     // UE2 renders these modes into a backbuffer whose alpha is irrelevant. Our
     // transparent intermediate target uses alpha for later compositing, so custom
     // RGB blends must leave destination alpha alone. Applying e.g. Darken's
@@ -190,10 +192,11 @@ export function getPartcileBlendingSettings(blendingMode: GD.ParticleBlendModes_
 }
 
 type ParticleMaterialInitSettings_T = {
+    type: "sprite" | "texture",
     map?: any,
     sprites?: any[],
     framerate?: number,
-    blendingMode: GD.ParticleBlendModes_T,
+    blendingMode: ParticleBlendModes_T,
     opacity: number,
     name: string,
     usesSubdivision?: boolean

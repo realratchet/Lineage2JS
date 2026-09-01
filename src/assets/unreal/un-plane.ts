@@ -1,8 +1,9 @@
 import FVector from "./un-vector";
-import { UObject } from "@l2js/core";
+import UObject, { type IDecodableStruct } from "./un-object";
 import type { DecodeLibrary } from "./decode-library";
+import type { Vector4Arr } from "./library-types";
 
-abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4Arr> {
+abstract class FPlane extends UObject implements IDecodableStruct<Vector4Arr> {
     declare public ["constructor"]: typeof FPlane;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -36,7 +37,7 @@ abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4A
 
     public vector() { return FVector.make(this.x, this.y, this.z); }
 
-    public getDecodeInfo(_library: DecodeLibrary): GD.Vector4Arr { return this.getElements(); }
+    public getDecodeInfo(_library: DecodeLibrary): Vector4Arr { return this.getElements(); }
 
     public set(x: number, y: number, z: number, w: number) {
         this.x = x;
@@ -72,7 +73,7 @@ abstract class FPlane extends UObject implements GD.IDecodableStruct<GD.Vector4A
         );
     }
 
-    public getElements(): GD.Vector4Arr { return [this.x, this.y, this.z, this.w]; }
+    public getElements(): Vector4Arr { return [this.x, this.y, this.z, this.w]; }
     public toString() { return `Plane=(x=${this.x.toFixed(2)}, y=${this.y.toFixed(2)}, z=${this.z.toFixed(2)}, w=${this.w.toFixed(2)})`; }
 
     public divideScalar(scalar: number) { return this.multiplyScalar(1 / scalar); }

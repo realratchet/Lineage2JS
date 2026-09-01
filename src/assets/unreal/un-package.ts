@@ -1,5 +1,6 @@
 import "./un-object-mixin";
-import { ANativePackage, APackage, UObject, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UStruct, type UObject as UObject_, addClassDependency, addPackageDependendency } from "@l2js/core";
+import { ANativePackage, APackage, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
+import UObject from "./un-object";
 import UModel from "./model/un-model";
 import ULevel from "./un-level";
 import FScale from "./un-scale";
@@ -284,8 +285,7 @@ class UEnginePackage extends UPackage implements EnginePackage_T {
 
 class UNativePackage extends ANativePackage {
 
-    public getStructConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: string): new () => T
-    public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: string): new () => T {
+    public getStructConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: string): new () => T {
         let Constructor: any;
 
         switch (constructorName) {
@@ -345,8 +345,7 @@ class UNativePackage extends ANativePackage {
         return Constructor;
     }
 
-    protected getNonNativeConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: NativeTypes_T): new () => T
-    protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: NativeClientTypes_T): new () => T {
+    protected getNonNativeConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: NativeClientTypes_T): new () => T {
         let Constructor: any;
 
         switch (constructorName) {

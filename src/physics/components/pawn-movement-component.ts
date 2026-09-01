@@ -10,6 +10,7 @@ import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from 
 import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
+import type { IWaterVolumeDecodeInfo, Vector3Arr } from "@l2js/engine";
 
 const tmpPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
@@ -112,7 +113,7 @@ class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected physicsMode: PhysicsMode_T = "falling";
     protected isWalking = false;
     protected airSpeed = AIR_SPEED;
-    protected waterVolume: GD.IWaterVolumeDecodeInfo = null;
+    protected waterVolume: IWaterVolumeDecodeInfo = null;
     protected readonly ignoredActors = new Set<ICollidable>();
     protected readonly collisionQuery: CollisionQuery_T = { location: null, delta: null, extent: null, sourceIsPlayer: false };
     protected readonly actorState = new ActorState();
@@ -705,7 +706,7 @@ class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     }
 
-    protected physSwimming(position: Vector3, deltaTime: number, volume: GD.IWaterVolumeDecodeInfo | null, iterations: number = 0) {
+    protected physSwimming(position: Vector3, deltaTime: number, volume: IWaterVolumeDecodeInfo | null, iterations: number = 0) {
         if (deltaTime < 0.0003 || iterations > 7) return;
 
         this.setBase(null);
@@ -868,14 +869,14 @@ class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return hit;
     }
 
-    protected getWaterVolume(position: Vector3): GD.IWaterVolumeDecodeInfo | null {
+    protected getWaterVolume(position: Vector3): IWaterVolumeDecodeInfo | null {
         tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
 
         return this.getWaterVolumeAt(tmpWaterPosition);
     }
 
-    protected getWaterVolumeAt(position: Vector3): GD.IWaterVolumeDecodeInfo | null {
-        let selected: GD.IWaterVolumeDecodeInfo = null;
+    protected getWaterVolumeAt(position: Vector3): IWaterVolumeDecodeInfo | null {
+        let selected: IWaterVolumeDecodeInfo = null;
 
         for (const sector of this.renderManager.getLoadedSectors()) {
             const volume = sector.getWaterVolumeAt(position);
@@ -1116,8 +1117,8 @@ class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public getVelocity(): Vector3 { return this.velocity; }
     public getAcceleration(): Vector3 { return this.acceleration; }
     public getPhysicsMode(): PhysicsMode_T { return this.physicsMode; }
-    public setVelocity(value: GD.Vector3Arr): void { this.velocity.fromArray(value); }
-    public setAcceleration(value: GD.Vector3Arr): void { this.acceleration.fromArray(value); }
+    public setVelocity(value: Vector3Arr): void { this.velocity.fromArray(value); }
+    public setAcceleration(value: Vector3Arr): void { this.acceleration.fromArray(value); }
     public setPhysicsMode(value: number): void {
         const modes: PhysicsMode_T[] = ["none", "walking", "falling", "swimming", "flying"];
         const mode = modes[value];

@@ -1,24 +1,48 @@
 import UPrimitive from "../un-primitive";
 import FVert from "./un-vert";
-import FBSPNode, { BspNodeFlags_T } from "../bsp/un-bsp-node";
+import FBSPNode, { BspNodeFlags_T, type IBSPNodeCollisionInfo_T, type IBSPNodeDecodeInfo_T } from "../bsp/un-bsp-node";
 import FBSPSurf from "../bsp/un-bsp-surf";
 import { PolyFlags_T, UPolys } from "../un-polys";
 import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
-import FZoneProperties from "../un-zone-properties";
-import FLeaf from "../un-leaf";
+import FZoneProperties, { type IBSPZoneDecodeInfo_T } from "../un-zone-properties";
+import FLeaf, { type IBSPLeafDecodeInfo_T } from "../un-leaf";
 import FBSPSection from "../bsp/un-bsp-section";
 import FLightmapIndex from "./un-lightmap-index";
 import FMultiLightmapTexture, { FStaticLightmapTexture } from "./un-multilightmap-texture";
 import { generateUUID } from "three/src/math/MathUtils";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import FVector from "../un-vector";
-import FBox from "../un-box";
-import { DoubleSide } from "three";
+import FBox, { type IBoxDecodeInfo } from "../un-box";
+import { DoubleSide, type Side } from "three";
 import type { ULevelInfo } from "../un-level-info";
 import type { FPlane } from "../un-plane";
 import type { FMatrix } from "../un-matrix";
-import type { DecodeLibrary } from "../decode-library";
+import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "../decode-library";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
+import type { IBaseMaterialDecodeInfo, SupportedBlendingTypes_T } from "../un-material";
+import type { Vector4Arr } from "../library-types";
+
+type IBSPSectionDecodeInfo_T = {
+    uuid: string,
+    sectionName: string;
+    priority: "opaque" | "transparent",
+    material: string,  // material UUID
+    lightmap: string | null,  // lightmap UUID (null if no lightmap)
+    geometry: string,  // geometry UUID
+    nodeIndices: number[],  // nodes in this section
+    isUnlit?: boolean,
+    isOutdoor?: boolean,
+    depthTest?: boolean,
+    depthWrite?: boolean,
+    side?: Side,
+    fog?: boolean,
+    blendingMode?: SupportedBlendingTypes_T
+};
+
+type IBSPCollisionModelDecodeInfo = {
+    planes: Vector4Arr[];
+    hulls: IBSPNodeCollisionInfo_T[];
+};
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
@@ -326,9 +350,9 @@ abstract class UModel extends UPrimitive {
         return result;
     }
 
-    public getCollisionModelDecodeInfo(): GD.IBSPCollisionModelDecodeInfo {
+    public getCollisionModelDecodeInfo(): IBSPCollisionModelDecodeInfo {
         const planes = this.bspNodes.map((node: FBSPNode) => node.plane.getElements());
-        const hulls: GD.IBSPNodeCollisionInfo_T[] = [];
+        const hulls: IBSPNodeCollisionInfo_T[] = [];
         const leafHulls = this.leafHulls.getTypedArray() as Int32Array;
 
         for (const node of this.bspNodes) {
@@ -383,7 +407,7 @@ abstract class UModel extends UPrimitive {
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
             const surf: FBSPSurf = this.bspSurfs[node.iSurf];
-            const nodeInfo = node.getBSPDecodeInfo(surf.flags) as GD.IBSPNodeDecodeInfo_T;
+            const nodeInfo = node.getBSPDecodeInfo(surf.flags) as IBSPNodeDecodeInfo_T;
 
             nodeInfo.zoneMask = result.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
@@ -584,7 +608,7 @@ abstract class UModel extends UPrimitive {
                     materialType: "lightmapped",
                     material: material,
                     lightmap: lightmap,
-                } as GD.IBaseMaterialDecodeInfo]);
+                } as IBaseMaterialDecodeInfo]);
             } else {
                 finalMaterialUuid = material;
             }
@@ -601,7 +625,7 @@ abstract class UModel extends UPrimitive {
                 }
             }]);
 
-            const sectionInfo: GD.IBSPSectionDecodeInfo_T & { isOutdoor: boolean } = {
+            const sectionInfo: IBSPSectionDecodeInfo_T & { isOutdoor: boolean } = {
                 uuid: generateUUID(),
                 priority,
                 material: finalMaterialUuid,
@@ -646,8 +670,8 @@ function boxPushOut(normal: FVector | FPlane, size: FVector) {
 }
 
 type PriorityGroups_T = "opaque" | "transparent";
-type ModelZoneDecodeResult_T = { bspLeaves: GD.IBSPLeafDecodeInfo_T[], bspZones: GD.IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
-type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspNodes: GD.IBSPNodeDecodeInfo_T[], bspColliders: GD.IBoxDecodeInfo[], leafActors: GD.IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: GD.IBoxDecodeInfo[], bspSections: GD.IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, GD.IGeometryDecodeInfo][], materials: [string, GD.IBaseMaterialDecodeInfo][] };
+type ModelZoneDecodeResult_T = { bspLeaves: IBSPLeafDecodeInfo_T[], bspZones: IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
+type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspNodes: IBSPNodeDecodeInfo_T[], bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
 type ObjectsForSection_T = {
     material: string,  // material UUID
     lightmap: string | null,  // lightmap UUID
@@ -712,3 +736,4 @@ type LightmapInfo_T = {
 
 //     return (basis.determinant() < 0) ? -1.0 : +1.0;
 // }
+export type { IBSPSectionDecodeInfo_T, IBSPCollisionModelDecodeInfo };

@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const LOGONGRP_RECORD_COUNT = 26;
 
 const SCHEMA_LOGONGRP_DAT: ISchemaValue[] = [

@@ -1,5 +1,6 @@
 import Terrain from "./terrain";
 import { Box3, BufferGeometry, Camera, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Material, Scene, StaticDrawUsage, Vector3, WebGLRenderer } from "three";
+import type { ITerrainDecorationDecodeInfo } from "@l2js/engine";
 
 const tmpVec = new Vector3();
 
@@ -28,7 +29,7 @@ class TerrainDecoration extends InstancedMesh {
     protected terrain?: Terrain;
     protected lightingRevision = -1;
 
-    public constructor(geometry: BufferGeometry, material: Material | Material[], info: GD.ITerrainDecorationDecodeInfo) {
+    public constructor(geometry: BufferGeometry, material: Material | Material[], info: ITerrainDecorationDecodeInfo) {
         if (!geometry.boundingSphere) geometry.computeBoundingSphere();
 
         const instanceGeometry = makeGeometry(geometry);

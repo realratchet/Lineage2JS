@@ -1,3 +1,4 @@
+import type { IDatContainerType } from "./dat-schema";
 import { BufferValue, type UEncodedFile, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";
 
 const decoderASCF = new TextDecoder("windows-1252");

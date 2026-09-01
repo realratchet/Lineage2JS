@@ -1,6 +1,6 @@
 import { WebGLRenderTarget, WebGLRenderer, ShaderMaterial, LinearFilter, RGBAFormat } from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
-import type { DisplayConfig_T } from "@l2js/engine/conf-files/un-conf-system";
+import type { DisplayConfig_T } from "@l2js/engine";
 
 const GAMMA_STEPS = [1.2, 1.0, 0.8, 0.6, 0.4];
 

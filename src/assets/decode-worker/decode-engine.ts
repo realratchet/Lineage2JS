@@ -19,19 +19,16 @@ import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
 import { getUserConfig, UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
-import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
-import type { UMaterial } from "@l2js/engine/un-material";
-import type { USound } from "@l2js/engine/un-sound";
-import type { UEmitter } from "@l2js/engine/un-emitter";
+import type { USkeletalMesh, UMaterial, USound, UEmitter, IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, ICharacterArmorSelection, INpcDefinition, LoadSettings_T, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo, ISkinnedMeshObjectDecodeInfo, IMaterialGroupDecodeInfo, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {
     name: string;
     animationSet: string;
-    animations: Record<string, GD.IKeyframeDecodeInfo_T[]>;
-    animationSequences: Record<string, GD.IAnimationSequenceDecodeInfo>;
-    animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]>;
-    skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>;
+    animations: Record<string, IKeyframeDecodeInfo_T[]>;
+    animationSequences: Record<string, IAnimationSequenceDecodeInfo>;
+    animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>;
+    skinNotifies: Record<string, ISkinNotifyDecodeInfo>;
     meshes: Record<string, string>;
     materials: Record<string, string>;
 };
@@ -95,7 +92,7 @@ function copyCharacterMaterial(target: DecodeLibrary, source: DecodeLibrary, roo
     copyMaterial(root);
 }
 
-function copyAnimationSounds(target: DecodeLibrary, source: DecodeLibrary, animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]>): void {
+function copyAnimationSounds(target: DecodeLibrary, source: DecodeLibrary, animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>): void {
     function copySound(name: string): void {
         if (!name || target.soundBlobCache.has(name)) return;
 
@@ -188,10 +185,10 @@ function splitObjectPath(path: string): [string, string] {
     return [path.slice(0, index), path.slice(index + 1)];
 }
 
-function getSkinNotifyIndices(skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>): Set<number> {
+function getSkinNotifyIndices(skinNotifies: Record<string, ISkinNotifyDecodeInfo>): Set<number> {
     const indices = new Set<number>();
 
-    function addTimeline(timeline: GD.ISkinNotifyEntryDecodeInfo[]): void {
+    function addTimeline(timeline: ISkinNotifyEntryDecodeInfo[]): void {
         for (const entry of timeline) {
             if (entry.skinIndex < 0) throw new Error(`Invalid skin notify index '${entry.skinIndex}'.`);
             indices.add(entry.skinIndex);
@@ -262,7 +259,7 @@ function getCharacterArmorLabel(armor: Record<string, any>, itemNames: Map<numbe
     return addName ? `${name} ${addName}` : name;
 }
 
-function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: CharacterHairPieces_T, armorRows: Record<string, any>[], faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection): [string[], string[]] {
+function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: CharacterHairPieces_T, armorRows: Record<string, any>[], faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection): [string[], string[]] {
     const faceMesh = row.face_mesh[0] as string;
     const faceTexture = row.face_tex[faceVariant % row.face_tex.length] as string;
     const style = hairPieces.has(hairVariant) ? hairVariant : [...hairPieces.keys()].sort((a, b) => a - b)[0];
@@ -272,7 +269,7 @@ function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: Charact
     const bodyIndices: Record<string, number> = { u: 0, l: 1, g: 2, b: 3 };
 
     for (const slot of Object.keys(SchemasC4.CHARACTER_ARMOR_SLOTS)) {
-        const id = armor[slot as keyof GD.ICharacterArmorSelection];
+        const id = armor[slot as keyof ICharacterArmorSelection];
 
         if (!id) continue;
 
@@ -311,7 +308,7 @@ class DecodeEngine {
     protected cacheCharGrpRows: Record<string, any>[] = null;
     protected cacheArmorGrpRows: Record<string, any>[] = null;
     protected cacheItemNameRows: Record<string, any>[] = null;
-    protected cacheNpcDefinitions: GD.INpcDefinition[] = null;
+    protected cacheNpcDefinitions: INpcDefinition[] = null;
     protected cacheCharacterBundles = new Map<number, CachedBundle_T>();
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
@@ -320,7 +317,7 @@ class DecodeEngine {
     protected readonly localizationFiles = new Map<string, string>();
     protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
 
-    protected async sweepCache(settings: GD.LoadSettings_T): Promise<void> {
+    protected async sweepCache(settings: LoadSettings_T): Promise<void> {
         if (this.hasSweptCache) return;
 
         await DecodeCache.sweepDecodeCache(settings);
@@ -392,7 +389,7 @@ class DecodeEngine {
         return buffers;
     }
 
-    public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
+    public async decodeSector(sectorName: string, settings: LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
         await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
@@ -405,7 +402,7 @@ class DecodeEngine {
         return result;
     }
 
-    public async decodeSectorBinary(sectorName: string, settings: GD.LoadSettings_T): Promise<BinarySector_T> {
+    public async decodeSectorBinary(sectorName: string, settings: LoadSettings_T): Promise<BinarySector_T> {
         await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
@@ -418,7 +415,7 @@ class DecodeEngine {
         return result;
     }
 
-    public async precacheSector(sectorName: string, settings: GD.LoadSettings_T): Promise<PrecacheResult_T> {
+    public async precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
         await this.sweepCache(settings);
 
         if (await DecodeCache.hasCachedLibrary(sectorName, settings))
@@ -438,7 +435,7 @@ class DecodeEngine {
         }
     }
 
-    protected async decodeSectorCore(sectorName: string, settings: GD.LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
+    protected async decodeSectorCore(sectorName: string, settings: LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
         const convertToRGBA = (settings as any).rgbaTextures !== false; // false = client uploads DDS as-is (s3tc)
 
         // Sky-level material UUIDs are session-random.
@@ -472,7 +469,7 @@ class DecodeEngine {
         return { library, fromCache: false };
     }
 
-    protected async decodeSectorBinaryCore(sectorName: string, settings: GD.LoadSettings_T): Promise<BinarySector_T> {
+    protected async decodeSectorBinaryCore(sectorName: string, settings: LoadSettings_T): Promise<BinarySector_T> {
         const convertToRGBA = (settings as any).rgbaTextures !== false;
         const cacheable = !(settings as any).isSkyLevel;
         const cachedBuffer = cacheable ? await DecodeCache.loadCachedLibraryBuffer(sectorName, settings) : null;
@@ -547,7 +544,7 @@ class DecodeEngine {
         return pkg.fetchObject<UMaterial>(entry.index + 1);
     }
 
-    protected async pullCharacterSkinMaterials(builder: DecodeLibraryBuilder, skinNotifies: Record<string, GD.ISkinNotifyDecodeInfo>, basePath: string, baseMaterial: string): Promise<Record<number, string>> {
+    protected async pullCharacterSkinMaterials(builder: DecodeLibraryBuilder, skinNotifies: Record<string, ISkinNotifyDecodeInfo>, basePath: string, baseMaterial: string): Promise<Record<number, string>> {
         const materials: Record<number, string> = { 0: baseMaterial };
 
         for (const index of getSkinNotifyIndices(skinNotifies)) {
@@ -599,7 +596,7 @@ class DecodeEngine {
         return soundName;
     }
 
-    protected async pullSwimSoundSet(builder: DecodeLibraryBuilder, config: SwimSoundSet_T): Promise<GD.IAnimationSwimSoundSetDecodeInfo> {
+    protected async pullSwimSoundSet(builder: DecodeLibraryBuilder, config: SwimSoundSet_T): Promise<IAnimationSwimSoundSetDecodeInfo> {
         return {
             sounds: await Promise.all(config.sounds.map(path => this.pullSoundPath(builder, path))),
             volume: config.volume,
@@ -608,8 +605,8 @@ class DecodeEngine {
         };
     }
 
-    protected async pullAnimationNotifyAssets(builder: DecodeLibraryBuilder, animationNotifies: Record<string, GD.IAnimationNotifyDecodeInfo[]>): Promise<void> {
-        const swimNotifies: GD.IAnimationSwimSoundNotifyDecodeInfo[] = [];
+    protected async pullAnimationNotifyAssets(builder: DecodeLibraryBuilder, animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>): Promise<void> {
+        const swimNotifies: IAnimationSwimSoundNotifyDecodeInfo[] = [];
 
         for (const notifications of Object.values(animationNotifies))
             for (const notify of notifications)
@@ -677,7 +674,7 @@ class DecodeEngine {
         if (pullScript) builder.pullScriptClasses([cls]);
     }
 
-    protected async pullWaterVolumeEffects(library: DecodeLibrary, settings: GD.LoadSettings_T): Promise<void> {
+    protected async pullWaterVolumeEffects(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
         const paths = new Set<string>();
 
         for (const volume of library.waterVolumes) {
@@ -692,7 +689,7 @@ class DecodeEngine {
         for (const path of paths) await this.pullEffectTemplate(library, builder, path, true);
     }
 
-    protected async buildNpcBundle(settings: GD.LoadSettings_T, bundleName: string): Promise<DecodeLibrary> {
+    protected async buildNpcBundle(settings: LoadSettings_T, bundleName: string): Promise<DecodeLibrary> {
         const definitions = (await this.decodeNpcDefinitions()).filter(npc => {
             if (!npc.mesh.includes(".")) return false;
 
@@ -701,7 +698,7 @@ class DecodeEngine {
             return isNpcMeshPackage(packageName) && getNpcBundleName(packageName) === bundleName;
         });
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as GD.LoadSettings_T);
+        const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as LoadSettings_T);
         const manifest: NpcBundleManifest_T = { actors: {} };
         const meshIndices = new Map<string, number>();
         const materialIds = new Map<string, string>();
@@ -718,7 +715,7 @@ class DecodeEngine {
 
             const mesh = await this.fetchSkeletalMesh(npc.mesh);
             const decodeMaterials = definitions.some(other => other.mesh.toLowerCase() === meshPath && other.textures.length === 0);
-            let info: GD.ISkinnedMeshObjectDecodeInfo;
+            let info: ISkinnedMeshObjectDecodeInfo;
 
             try {
                 info = builder.pullSkeletalMesh(mesh, true, decodeMaterials);
@@ -781,7 +778,7 @@ class DecodeEngine {
 
                     materials = `${bundleName}.materials.${materialIds.size}`;
                     materialIds.set(materialKey, materials);
-                    library.materials[materials] = { name: materials, materialType: "group", materials: materialNames } as GD.IMaterialGroupDecodeInfo;
+                    library.materials[materials] = { name: materials, materialType: "group", materials: materialNames } as IMaterialGroupDecodeInfo;
                 }
             }
 
@@ -795,7 +792,7 @@ class DecodeEngine {
         return library;
     }
 
-    protected async getNpcBundle(settings: GD.LoadSettings_T, packageName: string): Promise<CachedBundle_T> {
+    protected async getNpcBundle(settings: LoadSettings_T, packageName: string): Promise<CachedBundle_T> {
         const bundleName = getNpcBundleName(packageName);
         let bundle = this.cacheNpcBundles.get(bundleName);
 
@@ -817,7 +814,7 @@ class DecodeEngine {
         return bundle;
     }
 
-    protected async decodeNpc(settings: GD.LoadSettings_T, npcId: number, includeAnimations: boolean): Promise<DecodeLibrary> {
+    protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean): Promise<DecodeLibrary> {
         const npc = await this.resolveNpc(npcId);
         const [packageName] = splitObjectPath(npc.mesh);
         const cached = await this.getNpcBundle(settings, packageName);
@@ -866,7 +863,7 @@ class DecodeEngine {
         return library;
     }
 
-    public async decodeSkeletalMesh(settings: GD.LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<DecodeLibrary> {
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<DecodeLibrary> {
         if (npcId !== null) return this.decodeNpc(settings, npcId, includeAnimations);
 
         const mesh = await this.fetchSkeletalMesh(`${packageName}.${meshName}`);
@@ -880,7 +877,7 @@ class DecodeEngine {
         library.pawnActors.push(meshInfo);
 
         if (texturePaths.length > 0) {
-            const material = library.materials[meshInfo.materials] as GD.IMaterialGroupDecodeInfo;
+            const material = library.materials[meshInfo.materials] as IMaterialGroupDecodeInfo;
 
             if (!material || material.materialType !== "group") throw new Error(`Skeletal mesh '${packageName}.${meshName}' has no material group.`);
 
@@ -903,7 +900,7 @@ class DecodeEngine {
         return library;
     }
 
-    public async decodeEffectTemplates(settings: GD.LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
+    public async decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, settings);
 
@@ -924,7 +921,7 @@ class DecodeEngine {
         return library;
     }
 
-    protected async decodeCharacterFromSource(settings: GD.LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean): Promise<DecodeLibrary> {
+    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean): Promise<DecodeLibrary> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const library = new DecodeLibrary();
@@ -937,7 +934,7 @@ class DecodeEngine {
             const texture = await this.fetchCharacterMaterial(texturePaths[i]);
             const meshInfo = builder.pullSkeletalMesh(mesh, i === 0 && includeAnimations, false, i === 0);
             const textureUuid = builder.pullMaterial(texture);
-            const material = library.materials[meshInfo.materials] as GD.IMaterialGroupDecodeInfo;
+            const material = library.materials[meshInfo.materials] as IMaterialGroupDecodeInfo;
 
             if (!material || material.materialType !== "group")
                 throw new Error(`Skeletal mesh '${meshPaths[i]}' has no material group.`);
@@ -967,7 +964,7 @@ class DecodeEngine {
         return library;
     }
 
-    public async decodeCharacter(settings: GD.LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: GD.ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true): Promise<DecodeLibrary> {
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true): Promise<DecodeLibrary> {
         await this.sweepCache(settings);
 
         const rows = await this.decodeCharGrp();
@@ -1008,7 +1005,7 @@ class DecodeEngine {
             if (!textureUuid) throw new Error(`Character material '${texturePaths[i]}' not found in '${cacheName}'.`);
 
             const info = Object.assign({}, actor);
-            const material = bundle.materials[info.materials] as GD.IMaterialGroupDecodeInfo;
+            const material = bundle.materials[info.materials] as IMaterialGroupDecodeInfo;
 
             if (!material || material.materialType !== "group")
                 throw new Error(`Character mesh '${meshPaths[i]}' has no material group in '${cacheName}'.`);
@@ -1049,7 +1046,7 @@ class DecodeEngine {
         return library;
     }
 
-    protected async applyCharacterHairConfig(infos: GD.ISkinnedMeshObjectDecodeInfo[], meshPaths: string[]): Promise<void> {
+    protected async applyCharacterHairConfig(infos: ISkinnedMeshObjectDecodeInfo[], meshPaths: string[]): Promise<void> {
         if (!infos.some(info => dynamicHairTypes.has(info.boneSimulationType))) return;
 
         const bodyPath = meshPaths.find(path => /_u$/i.test(splitObjectPath(path)[1]));
@@ -1075,7 +1072,7 @@ class DecodeEngine {
         }
     }
 
-    protected async buildCharacterBundle(settings: GD.LoadSettings_T, charIndex: number): Promise<DecodeLibrary> {
+    protected async buildCharacterBundle(settings: LoadSettings_T, charIndex: number): Promise<DecodeLibrary> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const name = splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "");
@@ -1096,7 +1093,7 @@ class DecodeEngine {
         }
 
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as GD.LoadSettings_T);
+        const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as LoadSettings_T);
         const manifest: CharacterBundle_T = { name, animationSet: cacheName, animations: {}, animationSequences: {}, animationNotifies: {}, skinNotifies: {}, meshes: {}, materials: {} };
         const faceMesh = row.face_mesh[0] as string;
 
@@ -1137,7 +1134,7 @@ class DecodeEngine {
         return library;
     }
 
-    protected async characterPartPaths(charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection): Promise<[string[], string[]]> {
+    protected async characterPartPaths(charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection): Promise<[string[], string[]]> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const hairPieces = await this.characterHairPieces(charIndex);
@@ -1197,19 +1194,19 @@ class DecodeEngine {
         return pkg.exports.map(entry => entry.objectName as string);
     }
 
-    public async decodeCharacterBinary(settings: GD.LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: GD.ICharacterArmorSelection, includeAnimations: boolean): Promise<ArrayBuffer> {
+    public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean): Promise<ArrayBuffer> {
         return serializeLibrary(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations)).buffer as ArrayBuffer;
     }
 
-    public async decodeSkeletalMeshBinary(settings: GD.LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<ArrayBuffer> {
+    public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<ArrayBuffer> {
         return serializeLibrary(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations)).buffer as ArrayBuffer;
     }
 
-    public async decodeEffectTemplatesBinary(settings: GD.LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
+    public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
         return serializeLibrary(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths)).buffer as ArrayBuffer;
     }
 
-    public async precacheCharacters(settings: GD.LoadSettings_T): Promise<void> {
+    public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
         await this.sweepCache(settings);
 
         const groups = await this.decodeCharGroups();
@@ -1229,11 +1226,11 @@ class DecodeEngine {
         }
     }
 
-    public async decodeCharGroups(): Promise<GD.ICharacterGroup[]> {
+    public async decodeCharGroups(): Promise<ICharacterGroup[]> {
         const rows = await this.decodeCharGrp();
         const armorRows = await this.decodeArmorGrp();
         const itemNames = new Map((await this.decodeItemNames()).map(item => [item.id as number, item]));
-        const groups: GD.ICharacterGroup[] = [];
+        const groups: ICharacterGroup[] = [];
 
         for (let index = 0, len = rows.length; index < len; index++) {
             const row = rows[index];
@@ -1244,7 +1241,7 @@ class DecodeEngine {
             }
 
             const pieces = await this.characterHairPieces(index);
-            const armor = { chest: [], legs: [], gloves: [], boots: [] } as GD.ICharacterArmorOptions;
+            const armor = { chest: [], legs: [], gloves: [], boots: [] } as ICharacterArmorOptions;
 
             for (const slot of Object.keys(SchemasC4.CHARACTER_ARMOR_SLOTS) as (keyof typeof SchemasC4.CHARACTER_ARMOR_SLOTS)[]) {
                 const items = armorRows
@@ -1311,7 +1308,7 @@ class DecodeEngine {
         ]));
     }
 
-    public async resolveNpc(selector: string | number): Promise<GD.INpcDefinition> {
+    public async resolveNpc(selector: string | number): Promise<INpcDefinition> {
         const definitions = await this.decodeNpcDefinitions();
 
         if (typeof selector === "number") {
@@ -1343,11 +1340,11 @@ class DecodeEngine {
         return matches[0];
     }
 
-    public listNpcs(): Promise<GD.INpcDefinition[]> {
+    public listNpcs(): Promise<INpcDefinition[]> {
         return this.decodeNpcDefinitions();
     }
 
-    protected async decodeNpcDefinitions(): Promise<GD.INpcDefinition[]> {
+    protected async decodeNpcDefinitions(): Promise<INpcDefinition[]> {
         if (this.cacheNpcDefinitions) return this.cacheNpcDefinitions;
 
         const [groups, names, enterEvents] = await Promise.all([

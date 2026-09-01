@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_ENTEREVENTGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "uint8", name: "UNK_0" },

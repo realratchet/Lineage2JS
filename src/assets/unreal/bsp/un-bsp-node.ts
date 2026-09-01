@@ -1,5 +1,29 @@
 import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { FPlane } from "../un-plane";
+import type { Vector4Arr } from "../library-types";
+import type { IBoxDecodeInfo } from "../un-box";
+
+type IBSPNodeCollisionInfo_T = {
+    flags: number[],
+    bounds: IBoxDecodeInfo
+};
+
+type IBSPNodeDecodeInfo_T = {
+    children: [number, number],
+    plane: Vector4Arr,
+    leaves: [number, number],
+    zones: [number, number],
+    surfFlags: number,
+    iPlane: number,
+    iRenderBound: number,
+    spheres: {
+        exclusive: Vector4Arr,
+        inclusive: Vector4Arr
+    },
+    sectionIndex: number,
+    collision: IBSPNodeCollisionInfo_T,
+    zoneMask: bigint
+};
 
 // Flags associated with a Bsp node.
 enum BspNodeFlags_T {
@@ -94,10 +118,10 @@ class FBSPNode implements Constructable_T {
         return this;
     }
 
-    public getBSPDecodeInfo(surfFlags: number): Omit<GD.IBSPNodeDecodeInfo_T, "sectionIndex" | "collision" | "zoneMask"> {
+    public getBSPDecodeInfo(surfFlags: number): Omit<IBSPNodeDecodeInfo_T, "sectionIndex" | "collision" | "zoneMask"> {
         return {
             children: [this.iFront, this.iBack],
-            plane: [this.plane.x, this.plane.y, this.plane.z, this.plane.w] as GD.Vector4Arr,
+            plane: [this.plane.x, this.plane.y, this.plane.z, this.plane.w] as Vector4Arr,
             leaves: [this.iLeaf[0], this.iLeaf[1]],
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
@@ -113,3 +137,4 @@ class FBSPNode implements Constructable_T {
 
 export default FBSPNode;
 export { FBSPNode, BspNodeFlags_T };
+export type { IBSPNodeCollisionInfo_T, IBSPNodeDecodeInfo_T };

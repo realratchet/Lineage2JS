@@ -3,6 +3,7 @@ import VERTEX_SHADER from "./shader/shader-particle-instanced.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle-instanced.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { fixParticleTextureSampling, getPartcileBlendingSettings } from "./particle-material";
+import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine";
 
 class InstancedParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
@@ -62,9 +63,9 @@ export { InstancedParticleMaterial };
 
 type InstancedParticleMaterialInitSettings_T = {
     map?: any,
-    blendingMode: GD.ParticleBlendModes_T,
+    blendingMode: ParticleBlendModes_T,
     name: string,
     usesSubdivision?: boolean,
-    spriteDirection?: GD.SpriteDirections_T,
+    spriteDirection?: SpriteDirections_T,
     projectionNormal?: Vector3
 };

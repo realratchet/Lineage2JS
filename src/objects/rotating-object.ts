@@ -3,6 +3,7 @@ import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import Rotator from "../utils/rotator";
 import { RotatingComponent } from "../physics/components/physics-component";
+import type { IRotatingDecodeInfo } from "@l2js/engine";
 
 class RotatingObject extends CollidingMesh {
     public readonly isRotatingObject: boolean = true;
@@ -12,7 +13,7 @@ class RotatingObject extends CollidingMesh {
     protected readonly rateYaw: number;
     protected readonly rateRoll: number;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, rotating: GD.IRotatingDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, rotating: IRotatingDecodeInfo }) {
         super(props);
 
         this.rotator = new Rotator(...props.rotating.rotator);

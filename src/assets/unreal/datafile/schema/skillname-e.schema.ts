@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_SKILLNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "uint32", name: "level" },

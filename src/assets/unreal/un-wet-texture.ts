@@ -1,7 +1,16 @@
-import { UObject } from "@l2js/core";
-import UTexture from "./un-texture";
+import UObject from "./un-object";
+import UTexture, { type ITextureDecodeInfo, type IDataTextureDecodeInfo } from "./un-texture";
 import { convertDDSTextureInfo } from "./dds/dxt-decode";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IBaseMaterialDecodeInfo } from "./un-material";
+
+type IWetTextureDecodeInfo = IDataTextureDecodeInfo & {
+    textureType: "wet",
+    waveAmp: number,
+    dropsX: number,
+    dropsY: number,
+    drops: { type: string, depth: number, x: number, y: number, byteA: number, byteB: number, byteC: number, byteD: number }[]
+};
 
 // WetTexture: a WaterTexture whose simulated water field displaces SourceTexture
 // horizontally each tick. The simulation itself runs client side
@@ -52,7 +61,7 @@ abstract class UWetTexture extends UTexture {
         });
     }
 
-    public getDecodeInfo(builder: DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
         const source = this.sourceTexture?.loadSelf();
         const sourceUuid = source ? builder.pullMaterial(source) : null;
         const info = sourceUuid ? builder.library.materials[sourceUuid] : null;
@@ -84,7 +93,7 @@ abstract class UWetTexture extends UTexture {
                 byteD: d.byteD ?? 0
             }));
 
-        const wetInfo: GD.IWetTextureDecodeInfo = {
+        const wetInfo: IWetTextureDecodeInfo = {
             name: this.uuid,
             materialType: "texture",
             textureType: "wet",
@@ -104,7 +113,7 @@ abstract class UWetTexture extends UTexture {
     }
 }
 
-function isTextureInfo(info: GD.IBaseMaterialDecodeInfo): info is GD.ITextureDecodeInfo { return info.materialType === "texture"; }
+function isTextureInfo(info: IBaseMaterialDecodeInfo): info is ITextureDecodeInfo { return info.materialType === "texture"; }
 
 // ADrop.Type (UnFractal.h)
 enum EDropType_T {
@@ -156,3 +165,4 @@ const DROP_TYPE_NAMES: Record<EDropType_T, string> = {
 
 export default UWetTexture;
 export { UWetTexture, UADrop, EDropType_T };
+export type { IWetTextureDecodeInfo };

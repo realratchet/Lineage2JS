@@ -8,8 +8,7 @@ import { GameObject } from "../game/components";
 
 import { ColorByte } from "../utils/color-byte";
 import type UnScriptVM from "../ue-script/vm";
-import type { LightType_T, LightEffect_T } from "@l2js/engine/un-light";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
+import type { LightType_T, LightEffect_T, DecodeLibrary, Vector3Arr, ColorArr, IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, IAmbientSoundObjectDecodeInfo, IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
@@ -138,7 +137,7 @@ class ZoneObject extends Object3D {
     public readonly isZoneObject = true;
     public readonly type: "Zone" | "Sector" | "Sky" = "Zone";
 
-    public setRenderBounds(min: GD.Vector3Arr, max: GD.Vector3Arr): this {
+    public setRenderBounds(min: Vector3Arr, max: Vector3Arr): this {
 
         this.boundsRender.min.fromArray(min);
         this.boundsRender.max.fromArray(max);
@@ -147,7 +146,7 @@ class ZoneObject extends Object3D {
         return this;
     }
 
-    public setFogInfo(start: number, end: number, color: GD.ColorArr): this {
+    public setFogInfo(start: number, end: number, color: ColorArr): this {
         this.fog = new Fog(tmpColor.fromArray(color), start, end);
 
         return this;
@@ -206,11 +205,11 @@ class SectorObject extends GameObject {
     public readonly worldBounds = new Box3();
     public readonly gridBounds = new Box3();
 
-    public musicVolumes?: GD.IMusicVolumeDecodeInfo[];
-    public waterVolumes?: GD.IWaterVolumeDecodeInfo[];
-    public ambientSounds?: GD.IAmbientSoundObjectDecodeInfo[];
+    public musicVolumes?: IMusicVolumeDecodeInfo[];
+    public waterVolumes?: IWaterVolumeDecodeInfo[];
+    public ambientSounds?: IAmbientSoundObjectDecodeInfo[];
 
-    public bspSections?: GD.IBSPSectionDecodeInfo_T[];
+    public bspSections?: IBSPSectionDecodeInfo_T[];
     public nodeToSection?: number[];
     public nodeZoneMasks?: bigint[];
     public bspGroup?: THREE.Group;
@@ -300,7 +299,7 @@ class SectorObject extends GameObject {
         this.add(this.helpers, this.zones, this.pawns);
     }
 
-    public setBSPInfo(bspZones: GD.IBSPZoneDecodeInfo_T[], bspNodes: GD.IBSPNodeDecodeInfo_T[], bspLeaves: GD.IBSPLeafDecodeInfo_T[]) {
+    public setBSPInfo(bspZones: IBSPZoneDecodeInfo_T[], bspNodes: IBSPNodeDecodeInfo_T[], bspLeaves: IBSPLeafDecodeInfo_T[]) {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
@@ -428,8 +427,8 @@ class SectorObject extends GameObject {
         return { musicId: selectedMusicId, isLooped, isForced };
     }
 
-    public getWaterVolumeAt(position: THREE.Vector3): GD.IWaterVolumeDecodeInfo | null {
-        let selected: GD.IWaterVolumeDecodeInfo = null;
+    public getWaterVolumeAt(position: THREE.Vector3): IWaterVolumeDecodeInfo | null {
+        let selected: IWaterVolumeDecodeInfo = null;
 
         if (!this.waterVolumes) return selected;
 
@@ -1479,7 +1478,7 @@ class BSPZoneData {
 
     protected constructor() { }
 
-    public static fromInfo(info: GD.IBSPZoneDecodeInfo_T) {
+    public static fromInfo(info: IBSPZoneDecodeInfo_T) {
         const zone = new BSPZoneData();
 
         zone.connectivity = info.connectivity
@@ -1499,7 +1498,7 @@ class BSPLeafData {
 
     protected constructor() { }
 
-    public static fromInfo(info: GD.IBSPLeafDecodeInfo_T) {
+    public static fromInfo(info: IBSPLeafDecodeInfo_T) {
         const leaf = new BSPLeafData();
 
         leaf.zone = info.zone;

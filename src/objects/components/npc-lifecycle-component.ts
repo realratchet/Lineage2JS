@@ -6,6 +6,7 @@ import type PawnMovementComponent from "../../physics/components/pawn-movement-c
 import type { ScriptComponent } from "../../game/script-component";
 import type BaseActor from "../../base-actor";
 import type { ScriptHost_T } from "../../ue-script/vm";
+import type { INpcEnterEvent } from "@l2js/engine";
 
 class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "npcLifecycle";
@@ -16,7 +17,7 @@ class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
 
     public onDetach(): void { this.release(); }
 
-    public spawnEnter(event: GD.INpcEnterEvent): void {
+    public spawnEnter(event: INpcEnterEvent): void {
         this.getComponent<PawnMovementComponent>("pawnMovement").startEnterRise(event.isRise);
         this.getComponent<AnimationComponent>("animation").playEnter(event.animation);
         this.dispatchEvent(NPC_ENTER_EVENT, event);

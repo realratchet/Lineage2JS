@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 import { UTF16ContainerType } from "./dat-container";
 
 const SCHEMA_MUSICINFO_DAT: ISchemaValue[] = [

@@ -1,4 +1,6 @@
 import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
+import type { HTMLViewportElement_T } from "./rendering/render-manager";
+import type { LoadSettings_T } from "@l2js/engine";
 
 type PrecacheView_T = {
     progress: HTMLProgressElement,
@@ -9,7 +11,7 @@ type PrecacheView_T = {
 };
 
 function createView(): PrecacheView_T {
-    const viewport = document.querySelector("viewport") as HTMLViewportElement;
+    const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
     const viewerUrl = new URL(location.href);
 
     viewerUrl.searchParams.delete("precacheSectors");
@@ -37,7 +39,7 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-async function buildSectorCache(view: PrecacheView_T, loadSettings: GD.LoadSettings_T): Promise<void> {
+async function buildSectorCache(view: PrecacheView_T, loadSettings: LoadSettings_T): Promise<void> {
     const assetList = await (await fetch("asset-list.json")).json();
     const sectors = Object.keys(assetList.supported)
         .filter(path => /^maps\/\d+_\d+\.unr$/.test(path))
@@ -131,7 +133,7 @@ async function buildSectorCache(view: PrecacheView_T, loadSettings: GD.LoadSetti
     document.title = cancelled ? "Sector cache canceled" : "Sector cache complete";
 }
 
-async function runSectorPrecache(loadSettings: GD.LoadSettings_T): Promise<void> {
+async function runSectorPrecache(loadSettings: LoadSettings_T): Promise<void> {
     const view = createView();
 
     try {

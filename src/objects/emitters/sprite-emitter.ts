@@ -1,9 +1,10 @@
-import ParticleMaterial from "../../materials/particle-material/particle-material";
+import ParticleMaterial, { type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
 import BaseEmitter from "./base-emitter";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
+import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine";
 
 const geometry = new PlaneGeometry(2, 2);
 
@@ -26,7 +27,7 @@ const tmpNormal = new Vector3();
 const tmpMatrix = new THREE.Matrix4();
 
 class SpriteEmitter extends BaseEmitter {
-    public spriteDirection: GD.SpriteDirections_T;
+    public spriteDirection: SpriteDirections_T;
     public projectionNormal: THREE.Vector3;
 
     public constructor(config: SpriteEmitterConfig_T) {
@@ -69,7 +70,7 @@ export default SpriteEmitter;
 export { SpriteEmitter };
 
 class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
-    public spriteDirection: GD.SpriteDirections_T = "camera";
+    public spriteDirection: SpriteDirections_T = "camera";
     public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
 
     public constructor(material: ParticleMaterial) {
@@ -190,8 +191,8 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
     };
 }
 
-type SpriteEmitterConfig_T = GD.EmitterConfig_T & {
+type SpriteEmitterConfig_T = EmitterConfig_T & {
     material: ParticleMaterialInitSettings_T;
-    spriteDirection?: GD.SpriteDirections_T;
+    spriteDirection?: SpriteDirections_T;
     projectionNormal?: [number, number, number];
 };

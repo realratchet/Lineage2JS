@@ -1,3 +1,4 @@
+import type { ISchemaValue } from "./dat-schema";
 const SCHEMA_SYMBOLNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "ASCF", name: "filename" },

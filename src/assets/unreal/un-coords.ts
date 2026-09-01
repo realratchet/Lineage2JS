@@ -3,7 +3,7 @@ import FMatrix from "./un-matrix";
 import FRotator from "./un-rotator";
 import FScale from "./un-scale";
 import FVector from "./un-vector";
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 
 abstract class FCoords extends UObject {
     declare public ["constructor"]: typeof FCoords;

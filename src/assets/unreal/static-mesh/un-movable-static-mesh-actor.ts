@@ -1,6 +1,17 @@
-import UStaticMeshActor from "./un-static-mesh-actor";
-import { UObject } from "@l2js/core";
+import UStaticMeshActor, { type IStaticMeshActorDecodeInfo } from "./un-static-mesh-actor";
+import UObject from "../un-object";
 import type { FRotator } from "../un-rotator";
+import type { Vector3Arr } from "../library-types";
+
+type ISwayingDecodeInfo = {
+    tags: string[],
+    orgRotator: Vector3Arr,
+    rate: Vector3Arr,
+    max: Vector3Arr,
+    accelRatio: Vector3Arr,
+    maxRandom: boolean,
+    randomStart: boolean
+};
 
 // per-axis float triple (MovableStaticMeshActor.uc struct L2RotatorTime - PitchTime/RollTime/YawTime)
 abstract class FL2RotatorTime extends UObject {
@@ -18,7 +29,7 @@ abstract class FL2RotatorTime extends UObject {
         });
     }
 
-    public getElements(): GD.Vector3Arr { return [this.pitchTime ?? 0, this.yawTime ?? 0, this.rollTime ?? 0]; }
+    public getElements(): Vector3Arr { return [this.pitchTime ?? 0, this.yawTime ?? 0, this.rollTime ?? 0]; }
 }
 
 // bounded rotational oscillation around the placed rotation (cpp/l2_editor_leak/Engine/Classes/MovableStaticMeshActor.uc,
@@ -45,7 +56,7 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
         });
     }
 
-    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> {
+    protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> {
         if (!this.l2RotatorRate && !this.l2RotatorMax) return {};
 
         // L2OrgRotator is runtime-written by native init (bL2InitMove), zeroed in placed data - sway centers on the placed rotation
@@ -61,10 +72,11 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
                 accelRatio: this.l2AccelRatio ? this.l2AccelRatio.getElements() : [0, 0, 0],
                 maxRandom: !!this.useL2RotatorMaxRandom,
                 randomStart: this.useL2RotatorRandomStart !== false
-            } as GD.ISwayingDecodeInfo
+            } as ISwayingDecodeInfo
         };
     }
 }
 
 export default UMovableStaticMeshActor;
 export { UMovableStaticMeshActor, FL2RotatorTime };
+export type { ISwayingDecodeInfo };

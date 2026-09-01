@@ -3,7 +3,7 @@ import type BaseActor from "../base-actor";
 import type { SectorObject } from "../objects/zone-object";
 import type RenderManager from "./render-manager";
 import decodeObject3D from "../assets/decoders/object3d-decoder";
-import type { DecodeLibrary } from "@l2js/engine/decode-library";
+import type { DecodeLibrary } from "@l2js/engine";
 
 class WaterHitEffect {
     protected static readonly SIZE_SCALE = 1 / 9;

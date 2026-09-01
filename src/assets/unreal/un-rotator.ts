@@ -1,6 +1,7 @@
 import GMath from "./un-gmath";
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import { getRotatorQuaternionElements } from "./utils/rotator";
+import type { EulerArr, QuaternionArr } from "./library-types";
 
 
 const RAD2DEG = 180 / Math.PI;
@@ -42,7 +43,7 @@ abstract class FRotator extends UObject {
     public toVector() { return GMath().unitCoords.div(this).xAxis; }
     public toArray() { return [this.pitch, this.yaw, this.roll]; }
 
-    public getEulerElements(): GD.EulerArr {
+    public getEulerElements(): EulerArr {
         const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const xAxis = (this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
@@ -107,7 +108,7 @@ abstract class FRotator extends UObject {
         // M[3][3] = 1;
     }
 
-    public getQuaternionElements(): GD.QuaternionArr {
+    public getQuaternionElements(): QuaternionArr {
         return getRotatorQuaternionElements(this.pitch, this.yaw, this.roll);
     }
 }

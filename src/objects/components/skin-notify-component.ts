@@ -4,6 +4,7 @@ import { MESHES_CHANGED_EVENT } from "./animation-component";
 import type AnimationComponent from "./animation-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
+import type { ISkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IRandomSkinNotifyDecodeInfo } from "@l2js/engine";
 
 class SkinNotifyComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "skinNotify";
@@ -31,7 +32,7 @@ class SkinNotifyComponent extends ObjectComponent<BaseActor> {
         if (!action) return;
 
         const clip = action.getClip();
-        const info = (clip as any).skinNotify as GD.ISkinNotifyDecodeInfo;
+        const info = (clip as any).skinNotify as ISkinNotifyDecodeInfo;
 
         if (!info) return;
 
@@ -43,7 +44,7 @@ class SkinNotifyComponent extends ObjectComponent<BaseActor> {
                 skinIndex = selectSkinNotifyIndex(info.timeline, currentFrame);
                 break;
             case "grouped": {
-                let group: GD.IGroupedSkinNotifyDecodeInfo["groups"][number] = null;
+                let group: IGroupedSkinNotifyDecodeInfo["groups"][number] = null;
 
                 for (const next of info.groups) {
                     if (next.startFrame > currentFrame) break;
@@ -105,7 +106,7 @@ type SkinNotifyFaceState_T = {
     materials: Record<number, Material>;
 };
 
-function selectSkinNotifyIndex(timeline: GD.ISkinNotifyEntryDecodeInfo[], time: number): number {
+function selectSkinNotifyIndex(timeline: ISkinNotifyEntryDecodeInfo[], time: number): number {
     let skinIndex = 0;
 
     for (const entry of timeline) {
@@ -116,7 +117,7 @@ function selectSkinNotifyIndex(timeline: GD.ISkinNotifyEntryDecodeInfo[], time: 
     return skinIndex;
 }
 
-function randomSkinNotifyDuration(info: GD.IRandomSkinNotifyDecodeInfo): number {
+function randomSkinNotifyDuration(info: IRandomSkinNotifyDecodeInfo): number {
     const duration = info.intervalMin + Math.random() * (info.intervalMax - info.intervalMin);
 
     if (duration <= 0) throw new Error(`Invalid skin notify interval '${info.intervalMin}-${info.intervalMax}'.`);

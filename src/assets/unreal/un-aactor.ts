@@ -2,7 +2,8 @@
 // import FRotator from "./un-rotator";
 import GMath from "./un-gmath";
 import FMatrix from "./un-matrix";
-import { UObject, APackage, UExport, type FObjectArray } from "@l2js/core";
+import { APackage, UExport, type FObjectArray } from "@l2js/core";
+import UObject from "./un-object";
 import { generateUUID } from "three/src/math/MathUtils";
 import type { UTextureModifyInfo } from "./un-texture-modify-info";
 import type { ULevelInfo } from "./un-level-info";
@@ -14,6 +15,33 @@ import type { FColor } from "./un-color";
 import type { FScale } from "./un-scale";
 import type { UTexture } from "./un-texture";
 import type { UModel } from "./model/un-model";
+import type { Matrix4Arr, Vector3Arr } from "./library-types";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
+
+type IActorCollisionDecodeInfo = {
+    collideActors: boolean,
+    collideWorld: boolean,
+    blockActors: boolean,
+    blockPlayers: boolean,
+    blockZeroExtent: boolean,
+    blockNonZeroExtent: boolean,
+    worldGeometry: boolean,
+    useCylinderCollision: boolean,
+    collisionRadius: number,
+    collisionHeight: number
+};
+
+type IRotatingDecodeInfo = {
+    rotator: Vector3Arr,
+    rate: Vector3Arr
+};
+
+type IEdgesObjectDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "Edges",
+    geometry: string,
+    color?: [number, number, number],
+    ignoreDepth?: boolean
+};
 
 abstract class UAActor extends UObject {
     declare public readonly texModifyInfo: UTextureModifyInfo;
@@ -141,7 +169,7 @@ abstract class UAActor extends UObject {
         return result;
     }
 
-    public getWorldMatrixElements(): GD.Matrix4Arr {
+    public getWorldMatrixElements(): Matrix4Arr {
         const gm = GMath();
         const SR = gm.sin(this.rotation.roll),
             SP = gm.sin(this.rotation.pitch),
@@ -197,7 +225,7 @@ abstract class UAActor extends UObject {
             geometry: lineGeometryUuid,
             color,
             ignoreDepth
-        } as GD.IEdgesObjectDecodeInfo;
+        } as IEdgesObjectDecodeInfo;
 
         const geometryInfo = {
             indices: new Uint8Array([0, 1]),
@@ -367,3 +395,4 @@ export enum EL2EventCmd_T {
     LEC_Show,
     LEC_Play
 };
+export type { IActorCollisionDecodeInfo, IRotatingDecodeInfo, IEdgesObjectDecodeInfo };

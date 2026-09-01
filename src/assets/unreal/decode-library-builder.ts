@@ -1,13 +1,14 @@
-import type { UClass, UObject } from "@l2js/core";
-import DecodeLibrary from "./decode-library";
+import type { UClass } from "@l2js/core";
+import type { UObject } from "./un-object";
+import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
 import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses } from "./script-dump-loader";
-import type { HeightMapInfo_T, UTerrainSector } from "./un-terrain-sector";
+import type { HeightMapInfo_T, UTerrainSector, ITerrainSegmentDecodeInfo } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
 import type { UMaterial } from "./un-material";
 import type { FStaticLightmapTexture } from "./model/un-multilightmap-texture";
-import type { UStaticMesh } from "./static-mesh/un-static-mesh";
+import type { UStaticMesh, IStaticMeshObjectDecodeInfo } from "./static-mesh/un-static-mesh";
 import type { USound } from "./un-sound";
-import type { USkeletalMesh } from "./skeletal-mesh/un-skeletal-mesh";
+import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-mesh";
 import type { UModel } from "./model/un-model";
 import type { ULevelInfo } from "./un-level-info";
 import type { ATerrainInfo } from "./un-terrain-info";
@@ -23,15 +24,40 @@ import type { UStaticMeshActor } from "./static-mesh/un-static-mesh-actor";
 import type { ULight } from "./un-light";
 import type { UMusicVolume } from "./un-music-volume";
 import type { UAmbientSoundObject } from "./un-ambient-sound";
+import type { Vector3Arr } from "./library-types";
+
+type LoadSettings_T = {
+    loadTerrain?: boolean,
+    loadBaseModel?: boolean,
+    loadStaticModels?: boolean,
+    loadStaticModelList?: (number | string)[],
+    loadExtendedBoneInfluences?: boolean,
+    loadEmitters?: boolean,
+    loadEmitterList?: { name: string, emitters?: string[] }[],
+    loadAudio?: boolean,
+    textures: "auto" | "rgba" | "compressed",
+    helpersZoneBounds?: boolean,
+    isSkyLevel?: boolean,
+    decodeWorkerPoolSize?: number,
+    batching?: {
+        terrain?: boolean,
+        staticMeshes?: boolean
+    },
+    cache?: false | {
+        enabled?: boolean,
+        version?: number
+    },
+    [key: `_${string}`]: any // debug/testing overrides, see core.ts
+};
 
 class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
 
     protected readonly materialsLoading = new Set<string>();
-    protected readonly skeletalMeshes = new Map<string, GD.ISkinnedMeshObjectDecodeInfo>();
-    protected readonly settings: GD.LoadSettings_T;
+    protected readonly skeletalMeshes = new Map<string, ISkinnedMeshObjectDecodeInfo>();
+    protected readonly settings: LoadSettings_T;
 
-    public constructor(library: DecodeLibrary, settings: GD.LoadSettings_T) {
+    public constructor(library: DecodeLibrary, settings: LoadSettings_T) {
 
         this.library = library;
         this.settings = settings;
@@ -69,7 +95,7 @@ class DecodeLibraryBuilder {
         return lightmap.uuid;
     }
 
-    public pullStaticMesh(mesh: UStaticMesh, modifiers?: string[]): GD.IStaticMeshObjectDecodeInfo {
+    public pullStaticMesh(mesh: UStaticMesh, modifiers?: string[]): IStaticMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
 
         const result = mesh.getDecodeInfo(this, modifiers);
@@ -115,7 +141,7 @@ class DecodeLibraryBuilder {
         return soundEntry;
     }
 
-    public pullSkeletalMesh(mesh: USkeletalMesh, animations: boolean = true, materials: boolean = true, animationNotifies: boolean = animations): GD.ISkinnedMeshObjectDecodeInfo {
+    public pullSkeletalMesh(mesh: USkeletalMesh, animations: boolean = true, materials: boolean = true, animationNotifies: boolean = animations): ISkinnedMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
 
         if (this.skeletalMeshes.has(mesh.uuid)) return this.skeletalMeshes.get(mesh.uuid);
@@ -164,7 +190,7 @@ class DecodeLibraryBuilder {
             this.library.materials[uuid] = materialInfo;
     }
 
-    public pullTerrainSector(sector: UTerrainSector, info: ATerrainInfo, heightmap: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
+    public pullTerrainSector(sector: UTerrainSector, info: ATerrainInfo, heightmap: HeightMapInfo_T): ITerrainSegmentDecodeInfo {
         sector = sector.loadSelf();
 
         const result = sector.getDecodeInfo(this, info, heightmap);
@@ -196,7 +222,7 @@ class DecodeLibraryBuilder {
             const { min, max } = bounds.box;
 
             [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                     for (let i = 0; i < 3; i++)
                         arr[i] = fn(arr[i], min[i], max[i]);
                 }
@@ -388,7 +414,7 @@ class DecodeLibraryBuilder {
         zoneInfo.bounds.isValid = true;
 
         [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-            ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+            ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                 const values = fn === Math.min ? result.zoneBounds.min : result.zoneBounds.max;
 
                 for (let i = 0; i < 3; i++)
@@ -413,7 +439,7 @@ class DecodeLibraryBuilder {
         zoneInfo.children.push(result.object);
     }
 
-    protected setScriptClass(actor: UObject, info: GD.IBaseObjectDecodeInfo): void {
+    protected setScriptClass(actor: UObject, info: IBaseObjectDecodeInfo): void {
         const cls = (actor.constructor as any).hostClass as UClass;
 
         if (!cls) return;
@@ -425,3 +451,4 @@ class DecodeLibraryBuilder {
 
 export default DecodeLibraryBuilder;
 export { DecodeLibraryBuilder };
+export type { LoadSettings_T };

@@ -3,6 +3,7 @@ import { Box3, Quaternion, Vector3 } from "three";
 import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import { GameObject } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
+import type { IBSPNodeDecodeInfo_T, IBSPNodeCollisionInfo_T, Vector3Arr } from "@l2js/engine";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -25,7 +26,7 @@ class BSPCollider extends GameObject implements ICollidable {
     protected readonly colliders: RAPIER.Collider[] = [];
     protected rigidbody: RAPIER.RigidBody = null;
 
-    public constructor(nodes: GD.IBSPNodeDecodeInfo_T[]) {
+    public constructor(nodes: IBSPNodeDecodeInfo_T[]) {
         super();
 
         (this as any).isCollidable = true;
@@ -159,7 +160,7 @@ function buildHullIndex(hulls: CollisionHull_T[]): CollisionBspIndex_T {
     return { cellSize, keys, offsets, hullIndices, largeHullIndices: new Uint32Array(largeHullIndices), marks: new Uint32Array(hulls.length), queryTag: 0 };
 }
 
-function buildHullGeometry(nodes: GD.IBSPNodeDecodeInfo_T[], collision: GD.IBSPNodeCollisionInfo_T, center: Vector3): HullGeometry_T {
+function buildHullGeometry(nodes: IBSPNodeDecodeInfo_T[], collision: IBSPNodeCollisionInfo_T, center: Vector3): HullGeometry_T {
     const min = collision.bounds.min;
     const max = collision.bounds.max;
     let faces = makeBoxFaces(min, max);
@@ -225,7 +226,7 @@ function isDegenerateTriangle(vertices: number[], ia: number, ib: number, ic: nu
     return cx * cx + cy * cy + cz * cz < 1e-8;
 }
 
-function makeBoxFaces(min: GD.Vector3Arr, max: GD.Vector3Arr): Vector3[][] {
+function makeBoxFaces(min: Vector3Arr, max: Vector3Arr): Vector3[][] {
     const v000 = new Vector3(min[0], min[1], min[2]);
     const v001 = new Vector3(min[0], min[1], max[2]);
     const v010 = new Vector3(min[0], max[1], min[2]);

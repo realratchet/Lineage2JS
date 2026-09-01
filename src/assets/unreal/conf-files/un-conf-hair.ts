@@ -1,4 +1,39 @@
 import BaseConfigFile from "./un-base-config";
+import type { Vector3Arr } from "../library-types";
+
+type IDynamicHairCollisionPlaneDecodeInfo = {
+    bone: string;
+    distance: number;
+};
+
+type IDynamicHairCollisionSphereDecodeInfo = {
+    bone: string;
+    offset: Vector3Arr;
+    radius: number;
+};
+
+type IDynamicHairActionDecodeInfo = {
+    name: string;
+    initial: boolean;
+    initialOffset: Vector3Arr;
+    sphereIndices: number[];
+};
+
+type IDynamicHairConfigDecodeInfo = {
+    section: string;
+    structuralStiffness: number;
+    structuralDamping: number;
+    shearStiffness: number;
+    shearDamping: number;
+    gravity: Vector3Arr;
+    velocityDamping: number;
+    collisionResponse: number;
+    safeFactor: number;
+    drawCollisionObject: boolean;
+    planes: IDynamicHairCollisionPlaneDecodeInfo[];
+    spheres: IDynamicHairCollisionSphereDecodeInfo[];
+    actions: IDynamicHairActionDecodeInfo[];
+};
 
 function take(values: Map<string, string>, section: string, name: string): string {
     const key = name.toLowerCase();
@@ -36,20 +71,20 @@ function takeBoolean(values: Map<string, string>, section: string, name: string)
     throw new Error(`'[${section}].${name}' is not a boolean.`);
 }
 
-function takeVector(values: Map<string, string>, section: string, name: string): GD.Vector3Arr {
+function takeVector(values: Map<string, string>, section: string, name: string): Vector3Arr {
     const value = take(values, section, name);
     const match = /^\(\s*X\s*=\s*([^,]+),\s*Y\s*=\s*([^,]+),\s*Z\s*=\s*([^\)]+)\s*\)$/i.exec(value);
 
     if (!match) throw new Error(`'[${section}].${name}' is not a vector.`);
 
-    const vector = [Number(match[1]), Number(match[2]), Number(match[3])] as GD.Vector3Arr;
+    const vector = [Number(match[1]), Number(match[2]), Number(match[3])] as Vector3Arr;
 
     if (!vector.every(Number.isFinite)) throw new Error(`'[${section}].${name}' is not a vector.`);
 
     return vector;
 }
 
-function parseSection(section: string, lines: string[]): GD.IDynamicHairConfigDecodeInfo {
+function parseSection(section: string, lines: string[]): IDynamicHairConfigDecodeInfo {
     const values = new Map<string, string>();
 
     for (const line of lines) {
@@ -80,9 +115,9 @@ function parseSection(section: string, lines: string[]): GD.IDynamicHairConfigDe
     const planeCount = takeCount(values, section, "CollisionPlaneNum");
     const sphereCount = takeCount(values, section, "CollisionSphereNum");
     const actionCount = takeCount(values, section, "ActionListNum");
-    const planes = new Array<GD.IDynamicHairCollisionPlaneDecodeInfo>(planeCount);
-    const spheres = new Array<GD.IDynamicHairCollisionSphereDecodeInfo>(sphereCount);
-    const actions = new Array<GD.IDynamicHairActionDecodeInfo>(actionCount);
+    const planes = new Array<IDynamicHairCollisionPlaneDecodeInfo>(planeCount);
+    const spheres = new Array<IDynamicHairCollisionSphereDecodeInfo>(sphereCount);
+    const actions = new Array<IDynamicHairActionDecodeInfo>(actionCount);
 
     for (let i = 0; i < planeCount; i++) {
         const index = i + 1;
@@ -130,7 +165,7 @@ function parseSection(section: string, lines: string[]): GD.IDynamicHairConfigDe
 }
 
 class UConfigHair extends BaseConfigFile {
-    protected readonly sections = new Map<string, GD.IDynamicHairConfigDecodeInfo>();
+    protected readonly sections = new Map<string, IDynamicHairConfigDecodeInfo>();
 
     public load(): this {
         if (this.sections.size > 0) return this;
@@ -170,7 +205,7 @@ class UConfigHair extends BaseConfigFile {
 
     public getSectionCount(): number { return this.sections.size; }
 
-    public getDecodeInfo(hairMesh: string, bodyMesh: string): GD.IDynamicHairConfigDecodeInfo {
+    public getDecodeInfo(hairMesh: string, bodyMesh: string): IDynamicHairConfigDecodeInfo {
         if (this.sections.size === 0) throw new Error(`'${this.path}' was not loaded.`);
 
         const composite = bodyMesh ? `${hairMesh}.${bodyMesh}` : null;
@@ -184,3 +219,4 @@ class UConfigHair extends BaseConfigFile {
 
 export default UConfigHair;
 export { UConfigHair };
+export type { IDynamicHairCollisionPlaneDecodeInfo, IDynamicHairCollisionSphereDecodeInfo, IDynamicHairActionDecodeInfo, IDynamicHairConfigDecodeInfo };

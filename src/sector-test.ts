@@ -6,6 +6,7 @@ import GLOBAL_UNIFORMS from "./materials/global-uniforms";
 import InstancedSpriteBatcher from "./objects/emitters/instanced-sprite-batcher";
 import { Box3, Color, Frustum, Matrix4, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import type { SectorObject } from "./objects/zone-object";
+import type { LoadSettings_T } from "@l2js/engine";
 
 // Automated sector sweep (?sectorTest): decodes every level sector through the decode
 // worker, instantiates it, then renders + simulates a few frames (shader compilation,
@@ -343,7 +344,7 @@ async function runSectorTest(): Promise<void> {
         loadStaticModels: true,
         loadEmitters,
         loadAudio: false
-    } as GD.LoadSettings_T;
+    } as LoadSettings_T;
 
     const assetList = await (await fetch("asset-list.json")).json();
     let sectors = Object.keys(assetList.supported)

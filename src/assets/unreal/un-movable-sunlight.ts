@@ -1,6 +1,10 @@
 import { saturationToBrightness } from "./utils/hsv-to-rgb";
-import ULight from "./un-light";
+import ULight, { type ILightDecodeInfo } from "./un-light";
 import type { DecodeLibrary } from "./decode-library";
+
+type ISunLightDecodeInfo = Omit<ILightDecodeInfo, "type"> & {
+    type: "Sunlight"
+};
 
 abstract class UNMovableSunLight extends ULight {
     // public lightness: number = 128;
@@ -18,7 +22,7 @@ abstract class UNMovableSunLight extends ULight {
     //     this.readHead = pkg.tell();
     // 
 
-    public getDecodeInfo(library: DecodeLibrary): GD.ISunLightDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): ISunLightDecodeInfo {
         // no live object refs here, the transfer sanitizer nulls them anyway
         return {
             ...super.getDecodeInfo(library),
@@ -26,7 +30,7 @@ abstract class UNMovableSunLight extends ULight {
         };
     }
 
-    // public getDecodeInfo(library: GD.DecodeLibrary): any {
+    // public getDecodeInfo(library: DecodeLibrary): any {
     //     // ((color pane x (bri x 0.0039215689)) x 1.0) x scale_glow
     //     // not exactly sure why that 1.0 is constant and if it's always constant, need to trace paths
 
@@ -49,3 +53,4 @@ abstract class UNMovableSunLight extends ULight {
 
 export default UNMovableSunLight;
 export { UNMovableSunLight };
+export type { ISunLightDecodeInfo };
