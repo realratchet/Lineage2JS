@@ -1,6 +1,6 @@
-import { BufferValue, type APackage } from "@l2js/core";
+import { type APackage } from "@l2js/core";
 
-function findPattern(pkg: APackage, pattern: number[]) {
+export function findPattern(pkg: APackage, pattern: number[]) {
     const prevOffset = pkg.tell();
 
     let index = -1, patternMatch = 0, maxPattern = 0;
@@ -38,4 +38,3 @@ function findPattern(pkg: APackage, pattern: number[]) {
 }
 
 export default findPattern;
-export { findPattern };

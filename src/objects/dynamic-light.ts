@@ -15,7 +15,7 @@ const HALF_PI = Math.PI / 2;  // 1.5707963267948966
 const NEG_PI = -Math.PI;      // -3.1415927
 
 // UL2NEnvManager::GetSunModifierInfo (0x7b74a0), baseYawDegrees comes from envManager.field_0x170, returns [polar, yaw, brightness] in radians
-function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
+export function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
     let pitch: number;
@@ -32,7 +32,7 @@ function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [n
 }
 
 // UL2NEnvManager::GetMoonModifierInfo (0x7b7570), baseYawDegrees comes from envManager.field_0x170, returns [polar, yaw, brightness] in radians
-function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
+export function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
     let polar: number;
@@ -47,7 +47,7 @@ function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [
 
 const SUN_TILT = 30 * DEG2RAD; // ANMovableSunLight::Tick 0x869af0 applies envManager+0x174 about X.
 
-function sunModifierToDirection(polar: number, yaw: number, target: Vector3): Vector3 {
+export function sunModifierToDirection(polar: number, yaw: number, target: Vector3): Vector3 {
     const sinPolar = Math.sin(polar);
     const x = sinPolar * Math.cos(yaw);
     const y = sinPolar * Math.sin(yaw);
@@ -78,7 +78,7 @@ const LE_CYLINDER = 17;
 const LE_SUNLIGHT = 19;
 const LE_QUADRATIC_NON_INCIDENCE = 20;
 
-class ColorHSV {
+export class ColorHSV {
     public readonly hue: number;
     public readonly saturation: number;
     public readonly value: number;
@@ -109,7 +109,7 @@ type DynamicLightConstructor_T = {
     phase: number;
 };
 
-class DynamicLight extends Object3D {
+export class DynamicLight extends Object3D {
     public readonly lightMethod: "Light" | "Sunlight";
     public readonly isDynamic: boolean;
     public readonly colorHSV: ColorHSV;
@@ -408,4 +408,3 @@ function calculateAttenuation(distance: number, radius: number, dx: number, dy: 
 }
 
 export default DynamicLight;
-export { DynamicLight, ColorHSV, getSunModifierInfo, getMoonModifierInfo, sunModifierToDirection };

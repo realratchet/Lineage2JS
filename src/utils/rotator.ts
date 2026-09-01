@@ -2,7 +2,7 @@ import { Quaternion } from "three";
 import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 import type { QuaternionArr } from "@l2js/engine";
 
-class Rotator {
+export class Rotator {
     public pitch: number;
     public yaw: number;
     public roll: number;
@@ -28,4 +28,3 @@ class Rotator {
 }
 
 export default Rotator;
-export { Rotator };

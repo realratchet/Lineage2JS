@@ -8,7 +8,7 @@ import type BaseActor from "../../base-actor";
 import type { ScriptHost_T } from "../../ue-script/vm";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
-class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
+export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "npcLifecycle";
     protected deathAnimationFinishedHandler: ((actor: BaseActor) => void) = null;
     protected isDying = false;
@@ -71,4 +71,3 @@ class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
 }
 
 export default NpcLifecycleComponent;
-export { NpcLifecycleComponent };

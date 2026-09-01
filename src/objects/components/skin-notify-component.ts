@@ -6,7 +6,7 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { ISkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IRandomSkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
-class SkinNotifyComponent extends ObjectComponent<BaseActor> {
+export class SkinNotifyComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "skinNotify";
     protected readonly renderManager: RenderManager;
     protected cycleElapsed = 0;
@@ -126,4 +126,3 @@ function randomSkinNotifyDuration(info: IRandomSkinNotifyDecodeInfo): number {
 }
 
 export default SkinNotifyComponent;
-export { SkinNotifyComponent };

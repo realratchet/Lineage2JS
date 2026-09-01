@@ -4,7 +4,7 @@ import { DoubleSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
 import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
-class MeshEmitter extends BaseEmitter {
+export class MeshEmitter extends BaseEmitter {
     protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
     protected geometry: THREE.BufferGeometry;
 
@@ -46,7 +46,6 @@ class MeshEmitter extends BaseEmitter {
 }
 
 export default MeshEmitter;
-export { MeshEmitter };
 
 class ParticleMesh extends Mesh {
     constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]) {

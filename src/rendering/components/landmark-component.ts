@@ -12,7 +12,7 @@ const tmpNormal = new Vector3();
 
 type EffectFactory_T = (classPath: string) => Object3D;
 
-class LandmarkComponent extends ObjectComponent<Player> {
+export class LandmarkComponent extends ObjectComponent<Player> {
     protected readonly renderManager: RenderManager;
     protected readonly createEffect: EffectFactory_T;
     protected readonly retiringEffects = new Set<Object3D>();
@@ -115,4 +115,3 @@ class LandmarkComponent extends ObjectComponent<Player> {
 }
 
 export default LandmarkComponent;
-export { LandmarkComponent };

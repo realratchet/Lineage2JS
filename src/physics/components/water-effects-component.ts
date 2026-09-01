@@ -19,7 +19,7 @@ const tmpWaterHitPosition = new Vector3();
 const tmpDown = new Vector3(0, 0, -1);
 const tmpSunBeamSample = new Vector2();
 
-class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
+export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     protected static readonly UNDERWATER_SUN_BEAM_DEPTH = 2000;
     protected static readonly UNDERWATER_SUN_BEAM_TRACE_START = 200;
     protected static readonly UNDERWATER_SAMPLE_DISTANCE_SQ = 40000;
@@ -201,4 +201,3 @@ class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
 }
 
 export default WaterEffectsComponent;
-export { WaterEffectsComponent };

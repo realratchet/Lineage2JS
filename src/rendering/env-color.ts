@@ -28,7 +28,7 @@ type EnvAmbientInfo = {
 
 type EnvScaleInfo = { sun: TimeScale[]; moon: TimeScale[]; }
 
-class EnvColor {
+export class EnvColor {
     public readonly type: 0 | 1 | 2;
     public readonly light: EnvLightInfo;
     public readonly color: EnvColorInfo;
@@ -44,7 +44,7 @@ class EnvColor {
     }
 }
 
-class TimeColor {
+export class TimeColor {
     public readonly time: number;
     public readonly r: number;
     public readonly g: number;
@@ -60,7 +60,7 @@ class TimeColor {
     }
 }
 
-class TimeHSV extends ColorHSV {
+export class TimeHSV extends ColorHSV {
     public readonly time: number;
 
     public constructor(time: number, h: number, s: number, v: number) {
@@ -69,7 +69,7 @@ class TimeHSV extends ColorHSV {
     }
 }
 
-class TimeScale {
+export class TimeScale {
     public readonly time: number;
     public readonly scale: number;
 
@@ -80,4 +80,3 @@ class TimeScale {
 }
 
 export default EnvColor;
-export { EnvColor, TimeColor, TimeHSV, TimeScale };

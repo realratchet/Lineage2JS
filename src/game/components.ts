@@ -10,7 +10,7 @@ export interface IEngineComponent<T extends IEngineComponent<T>> {
     getParent(): T;
 }
 
-const COMPONENT_EVENT_NOT_HANDLED = Symbol("componentEventNotHandled");
+export const COMPONENT_EVENT_NOT_HANDLED = Symbol("componentEventNotHandled");
 
 export type ComponentEventResult_T<T> = T | typeof COMPONENT_EVENT_NOT_HANDLED;
 
@@ -134,7 +134,7 @@ class ComponentCollection<TParent extends IObject> {
     }
 }
 
-abstract class ObjectComponent<TParent extends IObject = IObject> implements IComponent<TParent> {
+export abstract class ObjectComponent<TParent extends IObject = IObject> implements IComponent<TParent> {
     public abstract readonly componentName: string;
     protected parent: TParent = null;
 
@@ -151,7 +151,7 @@ abstract class ObjectComponent<TParent extends IObject = IObject> implements ICo
     public dispatchEvent<T = unknown>(type: string, data?: unknown): ComponentEventResult_T<T> { return this.getParent().dispatchComponentEvent<T>(type, data, this); }
 }
 
-class GameObject extends Object3D implements IObject {
+export class GameObject extends Object3D implements IObject {
     public readonly isGameObject = true;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
@@ -165,7 +165,7 @@ class GameObject extends Object3D implements IObject {
     public detachComponents(): void { this.componentCollection.clear(); }
 }
 
-class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial extends Material | Material[] = Material | Material[]> extends Mesh<TGeometry, TMaterial> implements IObject {
+export class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial extends Material | Material[] = Material | Material[]> extends Mesh<TGeometry, TMaterial> implements IObject {
     public readonly isGameObject = true;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
@@ -179,4 +179,3 @@ class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial exte
     public detachComponents(): void { this.componentCollection.clear(); }
 }
 
-export { COMPONENT_EVENT_NOT_HANDLED, GameMesh, GameObject, ObjectComponent };

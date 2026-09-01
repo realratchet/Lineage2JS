@@ -10,7 +10,7 @@ const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
 const cacheMaterialKey = new WeakMap<ShaderMaterial, { textureUuid: string; key: string }>();
 
-function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
+export function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
     return material?.isInstancedParticleMaterial === true
         && material.blending === CustomBlending
         && material.blendSrc === OneFactor
@@ -284,7 +284,7 @@ class SpriteParticleBatch {
     }
 }
 
-class InstancedSpriteBatcher {
+export class InstancedSpriteBatcher {
     public readonly root = new Group();
     protected readonly batches = new Map<string, SpriteParticleBatch>();
     protected readonly groups = new Map<string, BatchGroup_T>();
@@ -358,4 +358,3 @@ class InstancedSpriteBatcher {
 }
 
 export default InstancedSpriteBatcher;
-export { InstancedSpriteBatcher, isOrderIndependentAdditive };

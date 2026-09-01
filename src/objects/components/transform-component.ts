@@ -29,7 +29,7 @@ function setScriptObjectProperty(object: Object3D, field: string, value: ScriptV
     properties.set(field, value);
 }
 
-class TransformComponent extends ObjectComponent<BaseActor> {
+export class TransformComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "transform";
     protected readonly renderManager: RenderManager;
     protected base: (ICollidable & Object3D) = null;
@@ -249,4 +249,3 @@ class TransformComponent extends ObjectComponent<BaseActor> {
 }
 
 export default TransformComponent;
-export { TransformComponent };

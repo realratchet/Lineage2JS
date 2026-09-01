@@ -206,7 +206,7 @@ function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
     return true;
 }
 
-class RenderManager implements IEngineComponent<GameManager> {
+export class RenderManager implements IEngineComponent<GameManager> {
     public readonly renderer: THREE.WebGLRenderer;
     public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
@@ -2495,4 +2495,3 @@ function reportShaderErrors(gl: WebGL2RenderingContext, program: any) {
 }
 
 export default RenderManager;
-export { RenderManager };

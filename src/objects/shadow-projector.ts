@@ -50,7 +50,7 @@ const matBias = new Matrix4().set(
     0.0, 0.0, 0.0, 1.0
 );
 
-class ShadowProjector {
+export class ShadowProjector {
     public readonly target = new WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { minFilter: LinearFilter, magFilter: LinearFilter, format: RGBAFormat, depthBuffer: true });
     protected readonly blurTarget = new WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { minFilter: LinearFilter, magFilter: LinearFilter, format: RGBAFormat, depthBuffer: false });
     protected readonly blurScene = new Scene();
@@ -188,4 +188,3 @@ function swapMaterials(root: Object3D, material: Material): void {
 }
 
 export default ShadowProjector;
-export { ShadowProjector };

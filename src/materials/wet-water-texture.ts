@@ -30,7 +30,7 @@ const LINE_DROP_DIRS: Record<string, [number, number, boolean]> = {
     "diagonalOsc2": [1, 1, true]
 };
 
-class WetWaterTexture extends DataTexture {
+export class WetWaterTexture extends DataTexture {
     public readonly isUpdatable = true;
 
     protected readonly srcPixels: Uint8Array;   // rgba, width * height ('source' is taken by Texture)
@@ -245,4 +245,3 @@ class WetWaterTexture extends DataTexture {
 }
 
 export default WetWaterTexture;
-export { WetWaterTexture };

@@ -6,7 +6,7 @@ type AttachedActor_T = { object: THREE.Object3D, relativeLocation: THREE.Vector3
 
 // PHYS_L2Movement sway per cpp/l2_editor_leak/Engine/Classes/MovableStaticMeshActor.uc; the native
 // physL2Movement body is not in the leaks - omega = (rate/max) * accelRatio is unverified vs retail (needs IDA)
-class SwayingObject extends RotatingObject {
+export class SwayingObject extends RotatingObject {
     public readonly isSwayingObject: boolean = true;
 
     protected readonly swaying: ISwayingDecodeInfo;
@@ -79,4 +79,3 @@ class SwayingObject extends RotatingObject {
 }
 
 export default SwayingObject;
-export { SwayingObject };

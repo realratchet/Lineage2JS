@@ -22,7 +22,7 @@ export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean
     if (changed) texture.needsUpdate = true;
 }
 
-class ParticleMaterial extends ShaderMaterial {
+export class ParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
     constructor({ map, blendingMode, opacity, name, usesSubdivision }: ParticleMaterialInitSettings_T) {
@@ -72,7 +72,7 @@ class ParticleMaterial extends ShaderMaterial {
     }
 }
 
-class AnimatedParticleMaterial extends ShaderMaterial {
+export class AnimatedParticleMaterial extends ShaderMaterial {
     protected framerate: number;
     protected sprites: IDecodedParameter[];
     public readonly isUpdatable = true;
@@ -131,7 +131,6 @@ class AnimatedParticleMaterial extends ShaderMaterial {
 }
 
 export default ParticleMaterial;
-export { ParticleMaterial, AnimatedParticleMaterial };
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
 export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {

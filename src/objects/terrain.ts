@@ -16,7 +16,7 @@ const tmpNormal = new Vector3();
 const cbAmbient = new ColorByte();
 const cbLight = new ColorByte();
 
-class Terrain extends GameMesh implements ICollidable {
+export class Terrain extends GameMesh implements ICollidable {
     public readonly isCollidable = true;
 
     protected rigidbodyDesc: RigidBodyDesc;
@@ -568,7 +568,6 @@ class Terrain extends GameMesh implements ICollidable {
 }
 
 export default Terrain;
-export { Terrain };
 
 export type TerrainLightingInfo_T = {
     lights: { light: string, flags: Uint8Array }[];

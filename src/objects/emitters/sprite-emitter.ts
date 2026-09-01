@@ -26,7 +26,7 @@ const tmpSpinScaled = new Vector3();
 const tmpNormal = new Vector3();
 const tmpMatrix = new THREE.Matrix4();
 
-class SpriteEmitter extends BaseEmitter {
+export class SpriteEmitter extends BaseEmitter {
     public spriteDirection: SpriteDirections_T;
     public projectionNormal: THREE.Vector3;
 
@@ -67,7 +67,6 @@ class SpriteEmitter extends BaseEmitter {
 }
 
 export default SpriteEmitter;
-export { SpriteEmitter };
 
 class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
     public spriteDirection: SpriteDirections_T = "camera";

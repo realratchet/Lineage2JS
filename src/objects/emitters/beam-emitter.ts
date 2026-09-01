@@ -81,7 +81,7 @@ const tmpBeamOldOwnerPosition = new Vector3();
 const tmpBeamWorldScale = new Vector3();
 const tmpBeamWorldQuaternion = new Quaternion();
 
-class BeamEmitter extends BaseEmitter {
+export class BeamEmitter extends BaseEmitter {
     protected beam: BeamSettings_T;
     protected sheetsUsed: number;
     protected timeSinceLastDynamicNoise = 0;
@@ -405,4 +405,3 @@ class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleM
 }
 
 export default BeamEmitter;
-export { BeamEmitter };

@@ -2,10 +2,10 @@ import { WebGLRenderTarget, WebGLRenderer, ShaderMaterial, LinearFilter, RGBAFor
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import type { DisplayConfig_T } from "@l2js/engine/contracts/config";
 
-const GAMMA_STEPS = [1.2, 1.0, 0.8, 0.6, 0.4];
+export const GAMMA_STEPS = [1.2, 1.0, 0.8, 0.6, 0.4];
 
 // C4 D3DDrv.dll UpdateGamma RVA 0x12190: (Contrast+.5)*pow(i/255,1/Gamma)*65535 + (Brightness-.5)*32768 - Contrast*32768 + 16384
-class DisplayGammaPass {
+export class DisplayGammaPass {
     protected readonly target: WebGLRenderTarget;
     protected readonly material: ShaderMaterial;
     protected readonly fsQuad: FullScreenQuad;
@@ -67,4 +67,3 @@ class DisplayGammaPass {
 }
 
 export default DisplayGammaPass;
-export { DisplayGammaPass, GAMMA_STEPS };

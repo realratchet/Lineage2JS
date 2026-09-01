@@ -7,7 +7,7 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 
-class HairSimulationComponent extends ObjectComponent<BaseActor> {
+export class HairSimulationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "hairSimulation";
     protected readonly renderManager: RenderManager;
     protected readonly simulations: DynamicHairSimulation[] = [];
@@ -87,4 +87,3 @@ class HairSimulationComponent extends ObjectComponent<BaseActor> {
 }
 
 export default HairSimulationComponent;
-export { HairSimulationComponent };

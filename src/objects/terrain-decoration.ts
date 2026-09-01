@@ -16,7 +16,7 @@ function makeGeometry(source: BufferGeometry) {
     return geometry;
 }
 
-class TerrainDecoration extends InstancedMesh {
+export class TerrainDecoration extends InstancedMesh {
     public readonly isTerrainDecoration = true;
     public readonly terrainSegment: string;
     public readonly fadeoutRadius: [number, number];
@@ -115,4 +115,3 @@ class TerrainDecoration extends InstancedMesh {
 }
 
 export default TerrainDecoration;
-export { TerrainDecoration };

@@ -1,5 +1,6 @@
 import type { APackage, Constructable_T } from "@l2js/core";
-class FStaticMeshUVStream implements Constructable_T {
+
+export class FStaticMeshUVStream implements Constructable_T {
     declare private data: DataView;
     declare private f10: number;
     declare private f1C: number; // most likely revision as it's always the last one in stream
@@ -26,4 +27,3 @@ class FStaticMeshUVStream implements Constructable_T {
 }
 
 export default FStaticMeshUVStream;
-export { FStaticMeshUVStream };

@@ -22,9 +22,9 @@ const COMPARISON_NORMAL_EPSILON = 0.001;
 const CHECK_RESULT_POOL_SIZE = 128;
 const RAY_RESULT_POOL_SIZE = 2;
 
-type CollisionBackend_T = "ue" | "rapier" | "compare";
+export type CollisionBackend_T = "ue" | "rapier" | "compare";
 
-type CollisionQuery_T = {
+export type CollisionQuery_T = {
     location: Vector3;
     delta: Vector3;
     extent: Vector3;
@@ -38,7 +38,7 @@ type CollisionQuery_T = {
     zeroExtent?: boolean;
 };
 
-type CollisionOverlapQuery_T = {
+export type CollisionOverlapQuery_T = {
     location: Vector3;
     extent: Vector3;
     sourceCollider?: RAPIER.Collider;
@@ -46,7 +46,7 @@ type CollisionOverlapQuery_T = {
     sourceIsPlayer: boolean;
 };
 
-type CheckResult_T = {
+export type CheckResult_T = {
     time: number;
     location: Vector3;
     normal: Vector3;
@@ -54,7 +54,7 @@ type CheckResult_T = {
     actor: ICollidable | null;
 };
 
-type RayCheckResult_T = {
+export type RayCheckResult_T = {
     distance: number;
     location: Vector3;
     normal: Vector3;
@@ -62,7 +62,7 @@ type RayCheckResult_T = {
     actor: ICollidable | null;
 };
 
-type CollisionStats_T = {
+export type CollisionStats_T = {
     backend: CollisionBackend_T;
     queries: number;
     analyticalQueries: number;
@@ -109,7 +109,7 @@ const defaultProfile: ActorCollisionProfile_T = {
     collisionHeight: 0
 };
 
-class CollisionWorld {
+export class CollisionWorld {
     protected readonly world: RAPIER.World;
     protected backend: CollisionBackend_T;
     protected readonly colliderOwners = new Map<number, ICollidable>();
@@ -800,4 +800,3 @@ function getTraceBackoff(primitive: CollisionPrimitive_T | null, testDistance: n
 }
 
 export default CollisionWorld;
-export { CheckResult_T, CollisionBackend_T, CollisionOverlapQuery_T, CollisionQuery_T, CollisionStats_T, CollisionWorld, RayCheckResult_T };

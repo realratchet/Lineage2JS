@@ -130,7 +130,7 @@ function op_neq_object_object(a: unknown, b: unknown) { return a !== b; }
 function op_eq_name_name(a: string, b: string) { return a.toLowerCase() === b.toLowerCase(); }
 function op_neq_name_name(a: string, b: string) { return !op_eq_name_name(a, b); }
 
-function registerNativeFuncs(registry: UNativeRegistry_T) {
+export function registerNativeFuncs(registry: UNativeRegistry_T) {
     const native = registry.registerNativeFunc.bind(registry);
 
     // boolean operators
@@ -347,4 +347,3 @@ function registerNativeFuncs(registry: UNativeRegistry_T) {
 }
 
 export default registerNativeFuncs;
-export { registerNativeFuncs };

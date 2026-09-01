@@ -28,7 +28,7 @@ type AmbientChannel_T = {
 
 type AmbientCandidate_T = { component: AmbientSoundComponent, priority: number };
 
-class AudioManager implements IEngineComponent<GameManager> {
+export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
     protected audioContext: AudioContext;
     protected masterGain: GainNode;
@@ -753,4 +753,3 @@ class AudioManager implements IEngineComponent<GameManager> {
 }
 
 export default AudioManager;
-export { AudioManager };

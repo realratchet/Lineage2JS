@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, CylinderGeometry, DoubleSide, Mesh, MeshBasicMaterial, Object3D } from "three";
 import RAPIER from "@dimforge/rapier3d";
 
-class ColliderOverlay extends Object3D {
+export class ColliderOverlay extends Object3D {
     protected readonly material = new MeshBasicMaterial({
         color: 0xff00ff, transparent: true, opacity: 0.35, depthTest: true, depthWrite: false, side: DoubleSide, wireframe: true
     });
@@ -74,4 +74,3 @@ function buildShapeGeometry(shape: RAPIER.Shape): BufferGeometry | null {
 }
 
 export default ColliderOverlay;
-export { ColliderOverlay };

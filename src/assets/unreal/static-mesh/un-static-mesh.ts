@@ -33,7 +33,7 @@ export type IStaticMeshCollisionDecodeInfo = {
 
 const triggerDebuggerOnUnsupported = true;
 
-abstract class UStaticMesh extends UPrimitive {
+export abstract class UStaticMesh extends UPrimitive {
     declare protected materials: FArray<UStaticMeshMaterial>;
 
     declare protected sections: FArray<FStaticMeshSection>;
@@ -487,4 +487,4 @@ abstract class UStaticMesh extends UPrimitive {
 }
 
 export default UStaticMesh;
-export { UStaticMesh, FStaticMeshTriangle };
+export { FStaticMeshTriangle };

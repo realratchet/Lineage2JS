@@ -1,7 +1,7 @@
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
 
-class LineagePlayerController implements ScriptHost_T {
+export class LineagePlayerController implements ScriptHost_T {
     public readonly scriptClassId: string;
     public readonly scriptProperties = new Map<string, ScriptValue_T>();
     protected readonly scriptVM: UnScriptVM;
@@ -44,4 +44,3 @@ class LineagePlayerController implements ScriptHost_T {
 }
 
 export default LineagePlayerController;
-export { LineagePlayerController };

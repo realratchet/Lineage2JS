@@ -7,7 +7,7 @@ import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
 const tmpRotator = new Rotator();
 
-class UnderWaterEffect extends Object3D {
+export class UnderWaterEffect extends Object3D {
     protected floatingSolid: Object3D = null;
     protected sunBeam: Object3D = null;
     protected sunBeamEmitter: BaseEmitter = null;
@@ -85,4 +85,3 @@ class UnderWaterEffect extends Object3D {
 }
 
 export default UnderWaterEffect;
-export { UnderWaterEffect };

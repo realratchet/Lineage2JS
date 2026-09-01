@@ -12,7 +12,7 @@ const tmpScale = new Vector3();
 const tmpSimpleBounds = new Box3();
 const HULL_FLIP = 0x40000000;
 
-class CollidingMesh extends LitActorMesh implements ICollidable {
+export class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
 
     protected colliderDesc: ColliderDesc;
@@ -181,4 +181,3 @@ function buildCollisionHulls(model: IBSPCollisionModelDecodeInfo): CollisionHull
 }
 
 export default CollidingMesh;
-export { CollidingMesh };

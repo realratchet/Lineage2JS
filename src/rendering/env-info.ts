@@ -29,7 +29,7 @@ type EnvWaterVolume = Readonly<{
     cellophaneColor: ColorByte;
 }>;
 
-class EnvInfo {
+export class EnvInfo {
     public readonly setup: EnvSetup;
     public readonly fog: EnvFog;
     public readonly waterVolume: EnvWaterVolume;
@@ -42,4 +42,3 @@ class EnvInfo {
 }
 
 export default EnvInfo;
-export { EnvInfo };

@@ -24,7 +24,7 @@ function emptyTransformStage() {
     };
 }
 
-function buildTransformStage(kind: "pan" | "rotate" | "oscillate", transform: any): any {
+export function buildTransformStage(kind: "pan" | "rotate" | "oscillate", transform: any): any {
     const stage = emptyTransformStage();
     stage.type = TRANSFORM_TYPE_CODE[kind];
     stage.matrix = transform.matrix;
@@ -61,7 +61,7 @@ function buildTransformStage(kind: "pan" | "rotate" | "oscillate", transform: an
 }
 
 // three's uniform-array setter throws on an array shorter than the GLSL-declared length
-function padTransformStages(stages: any[]): any[] {
+export function padTransformStages(stages: any[]): any[] {
     if (stages.length > MAX_TRANSFORM_STAGES)
         throw new Error(`Transform chain depth ${stages.length} exceeds MAX_TRANSFORM_STAGES (${MAX_TRANSFORM_STAGES})`);
 
@@ -70,4 +70,3 @@ function padTransformStages(stages: any[]): any[] {
     return padded;
 }
 
-export { buildTransformStage, padTransformStages };

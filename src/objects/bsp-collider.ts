@@ -17,7 +17,7 @@ type HullPlane_T = { normal: Vector3, constant: number };
 type BSPColliderDesc_T = { desc: ColliderDesc, nodeIndex: number };
 type HullGeometry_T = { vertices: Float32Array, indices: Uint32Array };
 
-class BSPCollider extends GameObject implements ICollidable {
+export class BSPCollider extends GameObject implements ICollidable {
     declare public readonly isCollidable: boolean;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
@@ -321,4 +321,3 @@ function sortCap(vertices: Vector3[], normal: Vector3): Vector3[] {
 }
 
 export default BSPCollider;
-export { BSPCollider };

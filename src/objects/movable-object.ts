@@ -20,7 +20,7 @@ const tmpEncroachMovement = new Vector3();
 const tmpEncroachBack = new Vector3();
 const tmpExtent = new Vector3();
 
-class MovableObject extends CollidingMesh {
+export class MovableObject extends CollidingMesh {
     public readonly isMovableObject: boolean = true;
 
     protected readonly mover: IMoverDecodeInfo;
@@ -264,4 +264,3 @@ class MovableObject extends CollidingMesh {
 }
 
 export default MovableObject;
-export { MovableObject };

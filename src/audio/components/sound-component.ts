@@ -8,11 +8,11 @@ import type { DecodeLibrary } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
-const ANIMATION_NOTIFY_EVENT = "animationNotify";
-const NPC_ENTER_EVENT = "npcEnter";
+export const ANIMATION_NOTIFY_EVENT = "animationNotify";
+export const NPC_ENTER_EVENT = "npcEnter";
 const tmpPosition = new Vector3();
 
-class SoundComponent extends ObjectComponent<BaseActor> {
+export class SoundComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "sound";
     protected readonly audioManager: AudioManager;
     protected library: DecodeLibrary = null;
@@ -131,4 +131,3 @@ class SoundComponent extends ObjectComponent<BaseActor> {
 }
 
 export default SoundComponent;
-export { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT, SoundComponent };

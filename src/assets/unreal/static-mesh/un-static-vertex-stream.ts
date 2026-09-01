@@ -1,5 +1,6 @@
 import type { APackage, Constructable_T } from "@l2js/core";
-class FStaticMeshVertexStream implements Constructable_T {
+
+export class FStaticMeshVertexStream implements Constructable_T {
     declare private data: DataView;
     declare private elementCount: number;
     declare private revision: number;
@@ -40,4 +41,3 @@ class FStaticMeshVertexStream implements Constructable_T {
 }
 
 export default FStaticMeshVertexStream;
-export { FStaticMeshVertexStream };

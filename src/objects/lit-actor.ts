@@ -38,7 +38,7 @@ function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart:
 
 type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, instance?: DynamicLight };
 
-class LitActorMesh extends GameMesh {
+export class LitActorMesh extends GameMesh {
     public readonly isUpdatable: boolean = true;
 
     protected lightInfo?: MeshLight_T;
@@ -469,4 +469,3 @@ export type MeshLight_T = {
 }
 
 export default LitActorMesh;
-export { LitActorMesh }

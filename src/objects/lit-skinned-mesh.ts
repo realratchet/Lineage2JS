@@ -7,7 +7,7 @@ const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];
 const arrNoAmbient = [0, 0, 0];
 
-class LitSkinnedMesh extends SkinnedMesh {
+export class LitSkinnedMesh extends SkinnedMesh {
     declare public readonly isLitSkinnedMesh: boolean;
 
     public scaledGlow: number = 1;
@@ -72,4 +72,3 @@ class LitSkinnedMesh extends SkinnedMesh {
 }
 
 export default LitSkinnedMesh;
-export { LitSkinnedMesh };

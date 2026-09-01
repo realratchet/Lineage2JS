@@ -5,7 +5,7 @@ const NATIVE: Record<string, any> = {
 
 const NATIVE_FUNCS: Record<string, Function> = {};
 
-const UNativeRegistry = new class UNativeRegistry {
+export const UNativeRegistry = new class UNativeRegistry {
     public getClass(className: string) {
         const clsName = className.toLowerCase();
 
@@ -43,4 +43,3 @@ const UNativeRegistry = new class UNativeRegistry {
 registerNativeFuncs(UNativeRegistry);
 
 export default UNativeRegistry;
-export { UNativeRegistry };

@@ -1,4 +1,4 @@
-function cyrb53(str: string, seed = 0) {
+export function cyrb53(str: string, seed = 0) {
     let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
 
     for (let i = 0, ch; i < str.length; i++) {
@@ -14,4 +14,3 @@ function cyrb53(str: string, seed = 0) {
 }
 
 export default cyrb53;
-export { cyrb53 };

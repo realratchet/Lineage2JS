@@ -16,7 +16,7 @@ import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/con
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
 
-class PhysicsManager implements IEngineComponent<GameManager> {
+export class PhysicsManager implements IEngineComponent<GameManager> {
     protected static readonly PLAYER_PHYSICS_HZ = 60;
     protected static readonly PHYSICS_HZ = 30;
     protected static readonly PLAYER_PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PLAYER_PHYSICS_HZ;
@@ -465,4 +465,3 @@ class EmitterSimulation {
     }
 }
 export default PhysicsManager;
-export { PhysicsManager };

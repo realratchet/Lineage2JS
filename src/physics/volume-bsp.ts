@@ -10,7 +10,7 @@ function childOutside(node: IMusicVolumeBspNode, front: boolean, outside: boolea
     return front ? outside || node.isCsg : outside && !node.isCsg;
 }
 
-function encompassesVolume(position: Vector3, bsp: IVolumeBspDecodeInfo): boolean {
+export function encompassesVolume(position: Vector3, bsp: IVolumeBspDecodeInfo): boolean {
     let outside = bsp.isRootOutside;
     const nodes = bsp.nodes;
 
@@ -68,7 +68,7 @@ function traceNode(nodes: IMusicVolumeBspNode[], iNode: number, startTime: numbe
     return traceNode(nodes, secondNode, middleTime, endTime, childOutside(node, !frontFirst, outside));
 }
 
-function findVolumeTransition(start: Vector3, end: Vector3, bsp: IVolumeBspDecodeInfo, startsInside: boolean = encompassesVolume(start, bsp)): number {
+export function findVolumeTransition(start: Vector3, end: Vector3, bsp: IVolumeBspDecodeInfo, startsInside: boolean = encompassesVolume(start, bsp)): number {
     if (bsp.nodes.length === 0) return 1;
 
     traceStart = start;
@@ -79,5 +79,3 @@ function findVolumeTransition(start: Vector3, end: Vector3, bsp: IVolumeBspDecod
 
     return traceTime;
 }
-
-export { encompassesVolume, findVolumeTransition };

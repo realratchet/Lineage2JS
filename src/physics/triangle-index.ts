@@ -1,6 +1,6 @@
 import type { CollisionTriangleIndex_T } from "../objects/objects";
 
-function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array): CollisionTriangleIndex_T {
+export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array): CollisionTriangleIndex_T {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     for (let i = 0, len = vertices.length; i < len; i += 3) {
@@ -56,4 +56,3 @@ function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array): Colli
 }
 
 export default buildTriangleIndex;
-export { buildTriangleIndex };

@@ -126,7 +126,7 @@ function makeParticles(count: number): Particle_T[] {
     return particles;
 }
 
-class DynamicHairSimulation {
+export class DynamicHairSimulation {
     public readonly mesh: SkinnedMesh;
     public readonly info: IDynamicHairDecodeInfo;
 
@@ -698,4 +698,3 @@ class DynamicHairSimulation {
 }
 
 export default DynamicHairSimulation;
-export { DynamicHairSimulation };

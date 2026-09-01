@@ -8,7 +8,7 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
-const MESHES_CHANGED_EVENT = "meshesChanged";
+export const MESHES_CHANGED_EVENT = "meshesChanged";
 const MOVEMENT_TWEEN_TIME = 0.1;
 const IDLE_TWEEN_TIME = MOVEMENT_TWEEN_TIME * 2;
 const cacheOnceAnimations = new WeakMap<AnimationClip, AnimationClip>();
@@ -37,7 +37,7 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
     return once;
 }
 
-class AnimationComponent extends ObjectComponent<BaseActor> {
+export class AnimationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "animation";
     protected readonly renderManager: RenderManager;
     protected meshes: Mesh[] = [];
@@ -356,4 +356,3 @@ class AnimationComponent extends ObjectComponent<BaseActor> {
 type BasicActorAnimations_T = Record<PawnMovementState_T, string>;
 
 export default AnimationComponent;
-export { AnimationComponent, MESHES_CHANGED_EVENT };

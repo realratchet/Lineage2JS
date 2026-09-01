@@ -76,7 +76,7 @@ type VelocityDirection_T = "none" | "startPositionAndOwner" | "ownerAndStartPosi
 type StartLocationShape_T = "box" | "sphere" | "polar" | "all";
 type DrawStyle_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
-abstract class BaseEmitter extends Object3D {
+export abstract class BaseEmitter extends Object3D {
     protected readonly isUpdatable = true;
 
     public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
@@ -1558,7 +1558,6 @@ abstract class BaseEmitter extends Object3D {
 }
 
 export default BaseEmitter;
-export { BaseEmitter };
 
 class Particle extends Object3D {
     protected readonly particleSystem: BaseEmitter;

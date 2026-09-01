@@ -1,6 +1,6 @@
 import cyrb53 from "./hash-cyrb";
 
-class StringSet {
+export class StringSet {
     private set = new Map<number, string>();
 
     public add(string: string) { this.set.set(cyrb53(string), string); }
@@ -21,4 +21,3 @@ class StringSet {
 }
 
 export default StringSet;
-export { StringSet as SmartSet };

@@ -1,6 +1,6 @@
 import { Matrix4, Uniform, UniformsLib, UniformsUtils, Vector3 } from "three";
 
-const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
+export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     UniformsLib.fog, {
         globalTimeSeconds: new Uniform(0),
         staticMeshSunAmbient: new Uniform(new Vector3()),
@@ -18,7 +18,7 @@ const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     }
 ]) as UniformMap_T);
 
-function appendGlobalUniforms(uniforms: UniformMap_T): UniformMap_T {
+export function appendGlobalUniforms(uniforms: UniformMap_T): UniformMap_T {
     for (let [k, v] of Object.entries(GLOBAL_UNIFORMS))
         uniforms[k] = v;
 
@@ -26,6 +26,5 @@ function appendGlobalUniforms(uniforms: UniformMap_T): UniformMap_T {
 }
 
 export default GLOBAL_UNIFORMS;
-export { appendGlobalUniforms, GLOBAL_UNIFORMS };
 
 type UniformMap_T = Record<string, Uniform>;

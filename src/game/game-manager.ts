@@ -7,7 +7,7 @@ import UIManager from "./ui-manager";
 import InputManager from "./input-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
-class GameManager implements IEngineComponent<GameManager> {
+export class GameManager implements IEngineComponent<GameManager> {
     protected manAsset: AssetManager;
     protected manRender: RenderManager;
     protected manAudio: AudioManager;
@@ -105,4 +105,3 @@ class GameManager implements IEngineComponent<GameManager> {
 }
 
 export default GameManager;
-export { GameManager };

@@ -49,7 +49,7 @@ let terrainBestItem = -1;
 let gridClipT0 = 0;
 let gridClipT1 = 1;
 
-type PrimitiveHit_T = { time: number, normal: Vector3, item: number };
+export type PrimitiveHit_T = { time: number, normal: Vector3, item: number };
 type ClipState_T = { t0: number, t1: number, normal: Vector3, item: number, hit: boolean };
 type GridCellVisitor_T = (x: number, y: number) => void;
 type HullPlane_T = [number, number, number, number, number];
@@ -283,7 +283,7 @@ function clipGridAxis(start: number, delta: number, min: number, max: number): b
     return gridClipT0 <= gridClipT1;
 }
 
-function sweptIntersectsBox(start: Vector3, end: Vector3, extent: Vector3, bounds: Box3): boolean {
+export function sweptIntersectsBox(start: Vector3, end: Vector3, extent: Vector3, bounds: Box3): boolean {
     gridClipT0 = 0;
     gridClipT1 = 1;
 
@@ -967,7 +967,7 @@ function queryBsp(primitive: Extract<CollisionPrimitive_T, { kind: "bsp" }>, sta
     return tmpBestHit;
 }
 
-function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+export function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
     if (primitive.kind === "cylinder") {
         const dz = primitive.center.z - location.z;
         const dx = primitive.center.x - location.x;
@@ -1214,7 +1214,7 @@ function pointModel(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh
     return null;
 }
 
-function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number = 1): PrimitiveHit_T | null {
+export function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number = 1): PrimitiveHit_T | null {
     if (primitive.kind === "cylinder") return queryCylinder(primitive, start, end, extent, maxTime);
     if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && (extent.lengthSq() === 0 ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
         return queryModel(primitive, start, end, extent, maxTime);
@@ -1223,11 +1223,9 @@ function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Ve
     return queryBsp(primitive, start, end, extent, maxTime);
 }
 
-function sweptBounds(start: Vector3, end: Vector3, extent: Vector3, target: Box3): Box3 {
+export function sweptBounds(start: Vector3, end: Vector3, extent: Vector3, target: Box3): Box3 {
     target.min.set(Math.min(start.x, end.x) - extent.x, Math.min(start.y, end.y) - extent.y, Math.min(start.z, end.z) - extent.z);
     target.max.set(Math.max(start.x, end.x) + extent.x, Math.max(start.y, end.y) + extent.y, Math.max(start.z, end.z) + extent.z);
 
     return target;
 }
-
-export { pointPrimitive, PrimitiveHit_T, queryPrimitive, sweptBounds, sweptIntersectsBox };

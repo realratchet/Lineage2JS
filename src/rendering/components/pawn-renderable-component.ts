@@ -6,7 +6,7 @@ import type RenderManager from "../render-manager";
 
 const tmpSphere = new Sphere();
 
-class PawnRenderableComponent extends ObjectComponent<BaseActor> {
+export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnRenderable";
     protected readonly renderManager: RenderManager;
     protected readonly localSphere = new Sphere();
@@ -52,4 +52,3 @@ class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 }
 
 export default PawnRenderableComponent;
-export { PawnRenderableComponent };

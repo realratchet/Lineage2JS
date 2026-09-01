@@ -9,7 +9,7 @@ import type { MapData_T } from "@l2js/engine/contracts/texture";
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
-const NUM_ACTOR_LIGHTS = 4;
+export const NUM_ACTOR_LIGHTS = 4;
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -506,4 +506,3 @@ type MeshStaticMaterialParameters_T = {
     }
 };
 
-export { NUM_ACTOR_LIGHTS };

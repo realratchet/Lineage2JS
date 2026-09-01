@@ -13,7 +13,7 @@ class FStaticMeshTriangleSub implements Constructable_T {
     }
 }
 
-class FStaticMeshTriangle implements Constructable_T {
+export class FStaticMeshTriangle implements Constructable_T {
     declare private data: DataView;
 
     declare public uvs: FStaticMeshTriangleSub[];
@@ -71,4 +71,3 @@ class FStaticMeshTriangle implements Constructable_T {
 }
 
 export default FStaticMeshTriangle;
-export { FStaticMeshTriangle };

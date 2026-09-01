@@ -13,7 +13,7 @@ import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();
 
-class EffectsComponent extends ObjectComponent<BaseActor> {
+export class EffectsComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "effects";
     protected readonly renderManager: RenderManager;
 
@@ -108,4 +108,3 @@ class EffectsComponent extends ObjectComponent<BaseActor> {
 }
 
 export default EffectsComponent;
-export { EffectsComponent };

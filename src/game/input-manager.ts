@@ -46,7 +46,7 @@ function isLandmarkSurface(actor: ICollidable | null): boolean {
     return !!primitive && primitive.kind === "bsp";
 }
 
-class InputManager implements IEngineComponent<GameManager> {
+export class InputManager implements IEngineComponent<GameManager> {
     public speedCameraFPS = 5;
     public readonly raycaster = new Raycaster();
     public readonly controls: { orbit: ZUpOrbitControls, fps: ZUpPointerLockControls } = { orbit: null, fps: null };
@@ -414,4 +414,3 @@ class InputManager implements IEngineComponent<GameManager> {
 }
 
 export default InputManager;
-export { InputManager };

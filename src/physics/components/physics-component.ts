@@ -17,7 +17,7 @@ export interface IPhysicsComponent<TParent extends IObject = IObject> extends IC
     onTriggerPosition?(currentTime: number, position: Vector3): void;
 }
 
-abstract class PhysicsComponent<TParent extends IObject = IObject> extends ObjectComponent<TParent> implements IPhysicsComponent<TParent> {
+export abstract class PhysicsComponent<TParent extends IObject = IObject> extends ObjectComponent<TParent> implements IPhysicsComponent<TParent> {
     declare public readonly isPhysicsComponent: boolean;
     protected physicsManager: PhysicsManager = null;
 
@@ -46,7 +46,7 @@ abstract class PhysicsComponent<TParent extends IObject = IObject> extends Objec
     }
 }
 
-class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
+export class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
     public readonly componentName = "collider";
     protected isRegistered = false;
 
@@ -77,7 +77,7 @@ class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
     }
 }
 
-class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
+export class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
     public readonly componentName = "mover";
     protected uiManager: UIManager = null;
     protected nextUpdate = -1;
@@ -117,7 +117,7 @@ class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
     }
 }
 
-class RotatingComponent extends PhysicsComponent<RotatingObject & IObject> {
+export class RotatingComponent extends PhysicsComponent<RotatingObject & IObject> {
     public readonly componentName = "rotating";
 
     public onPhysicsTick(_currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
@@ -126,5 +126,3 @@ class RotatingComponent extends PhysicsComponent<RotatingObject & IObject> {
         return true;
     }
 }
-
-export { ColliderComponent, MoverComponent, PhysicsComponent, RotatingComponent };

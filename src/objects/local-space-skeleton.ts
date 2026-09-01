@@ -9,7 +9,7 @@ function frozenUpdateMatrixWorld(): void { }
 type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolean };
 
 // three skins through world space, where float32 quantizes a vertex to ~0.03 units at level coordinates - a whole frame of idle motion
-class LocalSpaceSkeleton extends Skeleton {
+export class LocalSpaceSkeleton extends Skeleton {
     public mesh: SkinnedMesh = null;
     public posePaused: boolean = false;
 
@@ -166,4 +166,3 @@ class LocalSpaceSkeleton extends Skeleton {
 }
 
 export default LocalSpaceSkeleton;
-export { LocalSpaceSkeleton };

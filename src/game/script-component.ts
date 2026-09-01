@@ -1,13 +1,13 @@
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, IObject, ObjectComponent } from "./components";
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 
-const SCRIPT_CALL_EVENT = "scriptCall";
-const SCRIPT_NATIVE_EVENT = "scriptNative";
+export const SCRIPT_CALL_EVENT = "scriptCall";
+export const SCRIPT_NATIVE_EVENT = "scriptNative";
 
 export type ScriptCallEvent_T = { name: string, args: ScriptValue_T[] };
 export type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
 
-class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptHost_T> extends ObjectComponent<TParent> {
+export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptHost_T> extends ObjectComponent<TParent> {
     public readonly componentName = "script";
     public readonly updateOrder = -100;
     protected readonly vm: UnScriptVM;
@@ -86,4 +86,4 @@ class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptH
     public getProperties(): Map<string, ScriptValue_T> { return this.properties; }
 }
 
-export { COMPONENT_EVENT_NOT_HANDLED, SCRIPT_CALL_EVENT, SCRIPT_NATIVE_EVENT, ScriptComponent };
+export { COMPONENT_EVENT_NOT_HANDLED };

@@ -10,7 +10,7 @@ import EnvInfo from "./env-info";
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 
-class FogBlendState {
+export class FogBlendState {
     public targetColor = new ColorByte();
     public targetStart = 2000;
     public targetEnd = 8000;
@@ -83,7 +83,7 @@ class FogBlendState {
     }
 }
 
-class L2Environment {
+export class L2Environment {
     protected activeEnv: 0 | 1 | 2 = 0;
     protected env: EnvInfo;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
@@ -396,7 +396,7 @@ function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: Co
     return target.copy(vCurr).lerp(vNext, lFrac);
 }
 
-function interpolateFogInfoColor(
+export function interpolateFogInfoColor(
     timeOfDay: number,
     colors: { time: number; fogColor: number[] }[],
     target: ColorByte
@@ -439,7 +439,7 @@ function interpolateFogInfoColor(
     );
 }
 
-function interpolateFogInfoSkyColor(
+export function interpolateFogInfoSkyColor(
     timeOfDay: number,
     colors: { time: number; skyColor: number[] }[],
     target: ColorByte
@@ -482,7 +482,7 @@ function interpolateFogInfoSkyColor(
     );
 }
 
-function interpolateFogInfoHazeColor(
+export function interpolateFogInfoHazeColor(
     timeOfDay: number,
     colors: { time: number; hazeringColor: number[][] }[],
     target: ColorByte
@@ -574,7 +574,7 @@ export function interpolateFogInfoHazeColors(
     return result;
 }
 
-function interpolateFogInfoCloudColor(
+export function interpolateFogInfoCloudColor(
     timeOfDay: number,
     colors: { time: number; cloudColor: number[][] }[],
     target: ColorByte,
@@ -614,4 +614,3 @@ function interpolateFogInfoCloudColor(
 }
 
 export default L2Environment;
-export { L2Environment, FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor };

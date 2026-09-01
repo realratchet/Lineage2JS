@@ -3,7 +3,7 @@ import type { IObject } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
 
-class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Object3D> {
+export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Object3D> {
     public readonly componentName = "effectLifetime";
     protected readonly renderManager: RenderManager;
 
@@ -28,4 +28,3 @@ class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Object3D>
 }
 
 export default EffectLifetimeComponent;
-export { EffectLifetimeComponent };

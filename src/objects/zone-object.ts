@@ -126,7 +126,7 @@ type StaticMeshActorDecodeInfo_T = {
     };
 }
 
-class ZoneObject extends Object3D {
+export class ZoneObject extends Object3D {
     public fog: Fog = null;
     public isFogZone: boolean = false;
     public isSunAffected: boolean = false;
@@ -186,7 +186,7 @@ export type LightInfo_T = {
     cone: number
 }
 
-class SectorObject extends GameObject {
+export class SectorObject extends GameObject {
     public readonly isSectorObject = true;
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
@@ -1570,7 +1570,6 @@ class BSPNodeData {
 }
 
 export default ZoneObject;
-export { ZoneObject, SectorObject };
 
 type CollisionInfo_T = {
     bounds: THREE.Box3,

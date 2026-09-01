@@ -1,4 +1,4 @@
-class ColorByte {
+export class ColorByte {
     public r: number = 0;
     public g: number = 0;
     public b: number = 0;
@@ -147,4 +147,3 @@ class ColorByte {
 }
 
 export default ColorByte;
-export { ColorByte };

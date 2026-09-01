@@ -1,8 +1,8 @@
-function saturationToBrightness(s: number) {
+export function saturationToBrightness(s: number) {
     return (s & 0xff) * 0.003921569;
 }
 
-function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
     let r: number, g: number, b: number;
     let lightness = v * 0.005882353; // 1.5 / 255.0
 
@@ -49,4 +49,3 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
 }
 
 export default hsvToRgb;
-export { hsvToRgb, saturationToBrightness };

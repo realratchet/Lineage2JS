@@ -7,7 +7,7 @@ const _changeEvent = { type: "change" };
 const _startEvent = { type: "start" };
 const _endEvent = { type: "end" };
 
-class ZUpOrbitControls extends EventDispatcher {
+export class ZUpOrbitControls extends EventDispatcher {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
@@ -1218,5 +1218,4 @@ class ZUpOrbitControls extends EventDispatcher {
 
 }
 
-export { ZUpOrbitControls };
 export default ZUpOrbitControls;

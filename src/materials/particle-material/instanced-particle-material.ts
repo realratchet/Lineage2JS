@@ -5,11 +5,11 @@ import { appendGlobalUniforms } from "../global-uniforms";
 import { fixParticleTextureSampling, getPartcileBlendingSettings } from "./particle-material";
 import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine/contracts/emitter";
 
-class InstancedParticleMaterial extends ShaderMaterial {
+export class InstancedParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
-
+    
     constructor({ map, blendingMode, name, usesSubdivision, spriteDirection, projectionNormal }: InstancedParticleMaterialInitSettings_T) {
-
+        
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.fog
         ]));
@@ -59,7 +59,6 @@ class InstancedParticleMaterial extends ShaderMaterial {
 }
 
 export default InstancedParticleMaterial;
-export { InstancedParticleMaterial };
 
 type InstancedParticleMaterialInitSettings_T = {
     map?: any,

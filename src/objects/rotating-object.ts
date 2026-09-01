@@ -5,7 +5,7 @@ import Rotator from "../utils/rotator";
 import { RotatingComponent } from "../physics/components/physics-component";
 import type { IRotatingDecodeInfo } from "@l2js/engine/contracts/mesh";
 
-class RotatingObject extends CollidingMesh {
+export class RotatingObject extends CollidingMesh {
     public readonly isRotatingObject: boolean = true;
 
     protected readonly rotator: Rotator;
@@ -41,4 +41,3 @@ class RotatingObject extends CollidingMesh {
 }
 
 export default RotatingObject;
-export { RotatingObject };

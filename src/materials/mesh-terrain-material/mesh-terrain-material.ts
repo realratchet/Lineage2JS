@@ -6,7 +6,7 @@ import { appendGlobalUniforms } from "../global-uniforms";
 import type { IDecodedParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 
-class MeshTerrainMaterial extends ShaderMaterial {
+export class MeshTerrainMaterial extends ShaderMaterial {
     // @ts-ignore
     constructor(info: MeshTerrainMaterialParameters) {
         const defines: Record<string, any> = {
@@ -123,7 +123,6 @@ class MeshTerrainMaterial extends ShaderMaterial {
 }
 
 export default MeshTerrainMaterial;
-export { MeshTerrainMaterial };
 
 type MeshTerrainMaterialParameters = {
     uvs: MapData_T,

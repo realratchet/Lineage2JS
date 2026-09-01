@@ -4,7 +4,7 @@ import type BaseActor from "../../base-actor";
 
 const tmpDirection = new Vector3();
 
-class NpcSimulationComponent extends PhysicsComponent<BaseActor> {
+export class NpcSimulationComponent extends PhysicsComponent<BaseActor> {
     public static readonly DEFAULT_COUNT = 10;
     public static readonly LIFETIME = 15000;
     protected static readonly TURN_INTERVAL = 1000;
@@ -39,4 +39,3 @@ class NpcSimulationComponent extends PhysicsComponent<BaseActor> {
 }
 
 export default NpcSimulationComponent;
-export { NpcSimulationComponent };

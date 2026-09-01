@@ -5,7 +5,7 @@ import type RenderManager from "./render-manager";
 import decodeObject3D from "../assets/decoders/object3d-decoder";
 import type { DecodeLibrary } from "@l2js/engine";
 
-class WaterHitEffect {
+export class WaterHitEffect {
     protected static readonly SIZE_SCALE = 1 / 9;
 
     protected readonly owner: BaseActor;
@@ -40,4 +40,3 @@ class WaterHitEffect {
 }
 
 export default WaterHitEffect;
-export { WaterHitEffect };

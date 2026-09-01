@@ -3,7 +3,7 @@ import { ShaderMaterial, Uniform, Matrix3 } from "three";
 import VERTEX_SHADER from "./shader/shader-uv.vs";
 import FRAGMENT_SHADER from "./shader/shader-uv.fs";
 
-class MeshUVMaterial extends ShaderMaterial {
+export class MeshUVMaterial extends ShaderMaterial {
     constructor() {
         super({
             vertexShader: VERTEX_SHADER,
@@ -19,4 +19,3 @@ class MeshUVMaterial extends ShaderMaterial {
 }
 
 export default MeshUVMaterial;
-export { MeshUVMaterial };

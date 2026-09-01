@@ -191,7 +191,7 @@ function asHost(value: ScriptValue_T): ScriptHost_T {
     return value as ScriptHost_T;
 }
 
-function isScriptSlot(value: ScriptArgument_T): value is ScriptSlot_T {
+export function isScriptSlot(value: ScriptArgument_T): value is ScriptSlot_T {
     return value !== null && typeof value === "object" && "get" in value && "set" in value;
 }
 
@@ -568,7 +568,7 @@ class ScriptExecutor {
     }
 }
 
-class UnScriptVM {
+export class UnScriptVM {
     protected readonly library: DecodeLibrary;
     protected readonly functionsById = new Map<string, IScriptFunctionDecodeInfo>();
     protected readonly functionsByClass = new Map<string, Map<string, IScriptFunctionDecodeInfo>>();
@@ -722,4 +722,3 @@ class UnScriptVM {
 }
 
 export default UnScriptVM;
-export { UnScriptVM, isScriptSlot }

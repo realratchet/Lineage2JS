@@ -5,7 +5,7 @@ import InstancedParticleMaterial from "../../materials/particle-material/instanc
 // shared per-vertex quad data - only instance attributes differ per emitter
 const baseGeometry = new PlaneGeometry(2, 2);
 
-class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticleMaterial> {
+export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticleMaterial> {
     public readonly isWorldBatchCandidate: boolean;
     protected readonly positionAttr: InstancedBufferAttribute;
     protected readonly scaleAttr: InstancedBufferAttribute;
@@ -95,4 +95,3 @@ class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticl
 }
 
 export default InstancedSpriteMesh;
-export { InstancedSpriteMesh };
