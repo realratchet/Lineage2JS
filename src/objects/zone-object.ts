@@ -8,7 +8,8 @@ import { GameObject } from "../game/components";
 
 import { ColorByte } from "../utils/color-byte";
 import type UnScriptVM from "../ue-script/vm";
-import type { LightType_T, LightEffect_T, DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
+import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 import type { IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine/contracts/zone";
 
