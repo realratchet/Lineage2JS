@@ -340,7 +340,9 @@ class InputManager implements IEngineComponent<GameManager> {
         this.raycaster.setFromCamera(tmpScreenPosition, renderManager.camera);
 
         arrMouseIntersections.length = 0;
-        this.raycaster.intersectObject(renderManager.scene, true, arrMouseIntersections);
+        
+        if (!this.followPlayer) // only use fast intersect when using pawn navigation
+            this.raycaster.intersectObject(renderManager.scene, true, arrMouseIntersections);
 
         if (arrMouseIntersections.length > 0) {
             const intersection = arrMouseIntersections[0];
