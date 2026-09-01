@@ -11,7 +11,8 @@ import AnimationComponent from "./objects/components/animation-component";
 import TransformComponent from "./objects/components/transform-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
-import { COMPONENT_EVENT_NOT_HANDLED, ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
+import { COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
+import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 

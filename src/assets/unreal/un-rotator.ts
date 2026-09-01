@@ -114,4 +114,3 @@ export abstract class FRotator extends UObject {
 }
 
 export default FRotator;
-export { getRotatorQuaternionElements };

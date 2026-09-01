@@ -85,5 +85,3 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     public getClassId(): string { return this.classId; }
     public getProperties(): Map<string, ScriptValue_T> { return this.properties; }
 }
-
-export { COMPONENT_EVENT_NOT_HANDLED };

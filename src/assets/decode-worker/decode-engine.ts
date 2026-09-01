@@ -8,7 +8,7 @@ import { convertDDSMaterialsToRGBA } from "@l2js/engine/dds/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
-import { serializeLibrary, deserializeLibrary } from "./library-serializer";
+import { serializeLibrary, deserializeLibrary, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
 import type { PrecacheResult_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
@@ -44,7 +44,7 @@ type CharacterHairPieces_T = Map<number, Map<number, [string, string][]>>;
 type CharacterPartPaths_T = [string, string];
 type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null };
 type NpcBundleManifest_T = { actors: Record<number, NpcBundleEntry_T> };
-type CachedBundle_T = { library: DecodeLibrary, seekable?: DecodeCache.SeekableLibrary_T };
+type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
 
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
 
@@ -862,7 +862,7 @@ export class DecodeEngine {
 
         library.pawnActors.push(info);
 
-        if (cached.seekable) await DecodeCache.hydrateLibraryFile(cached.seekable, library);
+        if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -1047,7 +1047,7 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
 
-        if (cached.seekable) await DecodeCache.hydrateLibraryFile(cached.seekable, library);
+        if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 

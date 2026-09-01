@@ -280,8 +280,6 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
     return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
 }
 
-export { EEnvCycle };
-
 function getEnvType(fileContents: string): EEnvCycle {
     let readOffset = findSection(fileContents, "EnvType");
     let [nameMax, nameVal, _] = consumeNextValue(fileContents, readOffset);

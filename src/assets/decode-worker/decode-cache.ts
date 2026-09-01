@@ -196,6 +196,3 @@ export function refreshSoundBlobUris(library: any): void {
         entry.uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }));
     }
 }
-
-export type { SeekableLibrary_T };
-export { hydrateLibraryFile };
